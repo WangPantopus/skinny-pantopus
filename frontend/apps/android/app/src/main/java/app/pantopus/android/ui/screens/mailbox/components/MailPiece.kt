@@ -60,9 +60,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.PerforatedStamp
 import app.pantopus.android.ui.components.Postmark
-import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardRowPostage
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardRowSeal

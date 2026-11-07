@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardOnTable
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardSenderActionsViewModel
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardSenderSheets
@@ -21,6 +23,7 @@ import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableMenuItem
 import app.pantopus.android.ui.screens.mailbox.components.MailSender
 import app.pantopus.android.ui.theme.PantopusColors
+import kotlinx.coroutines.delay
 
 /**
  * A Christmas card's page with the table on (launch key `card_table`): the card opens full screen over the app, and its
@@ -41,6 +44,12 @@ internal fun HolidayCardTablePage(
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.tableNight).testTag("mailHolidayCard"))
     val busy = actionInFlight != null
     val said by senderActions.said.collectAsStateWithLifecycle()
+    LaunchedEffect(said) {
+        if (said != null) {
+            delay(toastDurationMillis(said.orEmpty(), minimumMillis = 2_600))
+            senderActions.say(null)
+        }
+    }
     var reporting by rememberSaveable { mutableStateOf(false) }
     var confirmBlock by rememberSaveable { mutableStateOf(false) }
     // Only a person can be reported or blocked: Pantopus and a piece with no known sender can't.
@@ -66,7 +75,7 @@ internal fun HolidayCardTablePage(
         onClose = onBack,
         onOpened = actions.onOpenCard,
         menu = menu,
-        message = said ?: message,
+        message = message ?: said,
     )
     if (person != null) {
         CardSenderSheets(
@@ -83,8 +92,16 @@ internal fun HolidayCardTablePage(
 
 /** The card as the table draws it, with the names on its envelope. */
 internal fun MailLetterCard.onTable(letter: MailLetter): CardOnTable =
+    tableCard(id = letter.envelope.id, from = letter.fromName.trim().ifEmpty { "Someone" }, to = letter.toName)
+
+/** The card as the table draws it, for any place that plays the moment: the Mailbox, Look it over and Sent. */
+internal fun MailLetterCard.tableCard(
+    id: String,
+    from: String,
+    to: String?,
+): CardOnTable =
     CardOnTable(
-        id = letter.envelope.id,
+        id = id,
         design = design,
         number = number,
         slug = slug,
@@ -94,8 +111,8 @@ internal fun MailLetterCard.onTable(letter: MailLetter): CardOnTable =
         year = year,
         mailedOn = mailedOn,
         note = note,
-        from = letter.fromName.trim().ifEmpty { "Someone" },
-        to = letter.toName,
+        from = from,
+        to = to,
         sealed = sealed,
         opensIn = opensIn,
         daysUntilOpen = daysUntilOpen,

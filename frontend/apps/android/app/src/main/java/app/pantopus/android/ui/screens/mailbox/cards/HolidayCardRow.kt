@@ -60,7 +60,12 @@ fun HolidayCardRow(
 ) {
     val today = cards.todaysCard
     val zone = HolidayCardTimes.zone(cards.timeZone)
-    val title = if (today != null) "Today’s card · to ${today.toName ?: "them"}" else "Send a Christmas card"
+    val title =
+        when {
+            today == null -> "Send a Christmas card"
+            today.byLink && today.status != "claimed" -> "Today’s card · by link"
+            else -> "Today’s card · to ${today.toName ?: "them"}"
+        }
     val line = if (today != null) todayLine(today, zone) else "Pick a picture and write a note. One card a day."
     val shape = RoundedCornerShape(Radii.lg)
     Row(
@@ -104,6 +109,12 @@ private fun todayLine(
     zone: ZoneId,
 ): String =
     when {
+        card.byLink ->
+            if (card.status == "claimed") {
+                "${card.toName ?: "They"} opened your link and has your card."
+            } else {
+                "Waiting for someone to open your link."
+            }
         card.byEmail -> if (card.status == "claimed") "They joined Pantopus and have it." else "Waiting for them to open the email."
         card.status == "delivered" -> "In their mailbox now."
         card.arrival == "christmas_morning" -> "Arrives on Christmas morning."

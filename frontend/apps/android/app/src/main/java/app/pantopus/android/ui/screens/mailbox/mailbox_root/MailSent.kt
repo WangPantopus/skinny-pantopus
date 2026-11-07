@@ -307,6 +307,7 @@ object MailSentWords {
     /** "To Maya O. · Christmas card"; by email "To d***@example.com · by email". */
     fun title(card: SentCard): String {
         val to = card.toName?.takeIf { it.isNotBlank() } ?: "them"
+        if (card.byLink) return if (card.status == "claimed") "To $to · by link" else "To whoever opens your link"
         val kind = if (card.kind == "letter") "Letter" else "Christmas card"
         return if (card.byEmail && card.kind != "letter") "To $to · by email" else "To $to · $kind"
     }
@@ -317,6 +318,7 @@ object MailSentWords {
         zone: ZoneId,
     ): String {
         val day = HolidayCardTimes.shortDay(card.arrivesOn ?: card.arrivesAt, zone)
+        if (card.byLink) linkLine(card)?.let { return it }
         return when (card.status) {
             "waiting" ->
                 when {
@@ -332,6 +334,15 @@ object MailSentWords {
             else -> ""
         }
     }
+
+    /** A card by link, in a line; null for a state the words below already say. */
+    private fun linkLine(card: SentCard): String? =
+        when (card.status) {
+            "email_waiting" -> "Waiting for someone to open your link"
+            "claimed" -> "${card.toName?.takeIf { it.isNotBlank() } ?: "Someone"} opened your link and has your card"
+            "expired" -> "Nobody opened your link in 90 days"
+            else -> null
+        }
 
     /** A day's heading, by the sender's clock: Today, Yesterday, a weekday within the week, else "Wednesday, December 2". */
     fun dayTitle(
@@ -354,7 +365,8 @@ object MailSentWords {
         val design = card.card?.design.orEmpty()
         val posted = card.envelope?.postmarkedOn?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
         val from = card.envelope?.from?.takeIf { it.isNotBlank() } ?: "You"
-        val to = card.toName?.takeIf { it.isNotBlank() } ?: "them"
+        val named = card.toName?.takeIf { it.isNotBlank() }
+        val to = if (card.byLink && card.status != "claimed") "Whoever opens it" else named ?: "them"
         val state = if (card.sealed) "sealed until Christmas morning" else "in its envelope"
         return MailPieceModel(
             id = card.id,

@@ -328,6 +328,7 @@ internal class CardFacePainter(
         val kept = noteCache
         if (kept != null && kept.note == face.note && kept.number == face.number && kept.u == u) return kept
         text.reset()
+        text.textAlign = Paint.Align.LEFT
         text.typeface = art.pen
         return PenNote.lay(face.note, face.number, u, text).also { noteCache = it }
     }
@@ -432,6 +433,7 @@ internal class CardFacePainter(
         spacing: Float = 0f,
     ) {
         text.reset()
+        text.textAlign = Paint.Align.LEFT
         text.isAntiAlias = true
         text.isSubpixelText = true
         text.typeface = typeface

@@ -13,7 +13,6 @@ import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -58,7 +57,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -74,11 +72,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.content.FileProvider
-import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.ui.theme.PantopusColors
@@ -122,23 +116,7 @@ fun CardShareSheet(
     onClose: () -> Unit,
     viewModel: CardShareViewModel = hiltViewModel(),
 ) {
-    Dialog(
-        onDismissRequest = onClose,
-        properties =
-            DialogProperties(
-                dismissOnClickOutside = false,
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
-    ) {
-        val view = LocalView.current
-        LaunchedEffect(view) {
-            val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
-            window.setDimAmount(0f)
-            window.setWindowAnimations(0)
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
-        }
-        BackHandler(onBack = onClose)
+    FullScreenWindow(onDismissRequest = onClose) {
         ShareSheetBody(card, mine, onClose, viewModel)
     }
 }

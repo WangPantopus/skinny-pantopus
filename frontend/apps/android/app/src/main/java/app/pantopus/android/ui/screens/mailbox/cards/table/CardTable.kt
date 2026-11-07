@@ -13,12 +13,10 @@ import android.os.PowerManager
 import android.view.HapticFeedbackConstants
 import android.view.Surface
 import android.view.View
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,6 +25,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,10 +56,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -87,41 +82,11 @@ fun CardTableDialog(
     message: String? = null,
     /** A card this person sent: the share sheet's words talk about their own note. */
     mine: Boolean = false,
+    /** Look it over shows a card that hasn't been mailed: there's nothing to share yet. */
+    canShare: Boolean = true,
 ) {
-    Dialog(
-        onDismissRequest = onClose,
-        properties =
-            DialogProperties(
-                dismissOnClickOutside = false,
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
-    ) {
-        FullWindow()
-        CardTable(card, firstOpen, onClose, onOpened, menu, message, mine)
-    }
-}
-
-/** The dialog's window fills the screen, under the bars and the camera's cut-out, with no fade or dim of its own. */
-@Composable
-private fun FullWindow() {
-    val view = LocalView.current
-    SideEffect {
-        val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
-        window.setDimAmount(0f)
-        window.setWindowAnimations(0)
-        window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes =
-                window.attributes.apply {
-                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                }
-        }
-        WindowCompat.getInsetsController(window, view).apply {
-            // The table is always dark, in light mode and dark mode.
-            isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
+    FullScreenWindow(onDismissRequest = onClose) {
+        CardTable(card, firstOpen, onClose, onOpened, menu, message, mine, canShare)
     }
 }
 
@@ -134,6 +99,7 @@ private fun CardTable(
     menu: List<CardTableMenuItem>,
     message: String?,
     mine: Boolean,
+    canShare: Boolean,
 ) {
     val reduceMotion = rememberReduceMotion()
     val scope = rememberCoroutineScope()
@@ -227,7 +193,7 @@ private fun CardTable(
         CardTableControls(
             state = state,
             insets = insets,
-            canShare = true,
+            canShare = canShare,
             menu = allItems,
             touchExploring = rememberTouchExplorationEnabled(),
             showsTurnTip = showsTurnTip,

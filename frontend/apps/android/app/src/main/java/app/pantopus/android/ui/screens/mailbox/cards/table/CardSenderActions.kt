@@ -35,7 +35,7 @@ class CardSenderActionsViewModel
         /** What to tell the person, until the next action. */
         val said: StateFlow<String?> = _said.asStateFlow()
 
-        fun say(words: String) {
+        fun say(words: String?) {
             _said.value = words
         }
 

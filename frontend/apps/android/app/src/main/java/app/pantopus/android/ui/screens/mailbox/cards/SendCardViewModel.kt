@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.mailbox.cards
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
@@ -68,6 +69,11 @@ sealed interface CardRecipient {
         val email: String,
     ) : CardRecipient {
         override val label: String get() = email
+    }
+
+    /** By a link: the first person to open it keeps the card (launch key `card_table`). */
+    data object Link : CardRecipient {
+        override val label: String = "whoever opens your link"
     }
 }
 
@@ -283,6 +289,11 @@ class SendCardViewModel
             if (EMAIL.matches(email)) choose(CardRecipient.Email(email))
         }
 
+        /** "Send it by link": there's no one to choose, so step 1 is done. */
+        fun chooseLink() {
+            choose(CardRecipient.Link)
+        }
+
         fun chooseDesign(design: String) {
             _form.update { it.copy(design = design) }
         }
@@ -359,6 +370,7 @@ class SendCardViewModel
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
                         requestId = started.requestId,
+                        toLink = to is CardRecipient.Link,
                     )
                 if (!wentEarlier(look)) showLook(look, form)
             }
@@ -407,6 +419,7 @@ class SendCardViewModel
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
                         requestId = started.requestId,
+                        toLink = to is CardRecipient.Link,
                     )
                 if (result is NetworkResult.Failure && wentEarlier(result.error)) return@launch
                 val closed = (result as? NetworkResult.Failure)?.error?.serverCode() == ARRIVAL_CLOSED
@@ -487,7 +500,7 @@ class SendCardViewModel
             theirs: HolidayCardArrivalsFor?,
         ): String? {
             val arrivals = cards.value?.arrivals ?: return current
-            val options = if (to is CardRecipient.Email) arrivals.email else (theirs?.arrivals ?: arrivals.person)
+            val options = if (to is CardRecipient.Person) (theirs?.arrivals ?: arrivals.person) else arrivals.email
             return current?.takeIf { it in options } ?: options.firstOrNull()
         }
 
@@ -518,7 +531,9 @@ class SendCardViewModel
             val to =
                 saved.get<String>(KEY_TO_USER)?.let { CardRecipient.Person(it, saved.get<String>(KEY_TO_NAME).orEmpty()) }
                     ?: saved.get<String>(KEY_TO_EMAIL)?.let { CardRecipient.Email(it) }
-            val design = saved.get<String>(KEY_DESIGN)
+                    ?: CardRecipient.Link.takeIf { saved.get<Boolean>(KEY_TO_LINK) == true }
+            // "Send this card to someone" on a public card page names the picture.
+            val design = saved.get<String>(KEY_DESIGN) ?: saved.get<String>(SEND_CARD_DESIGN_KEY)?.takeIf { LaunchFeatures.cardTable }
             val message = saved.get<String>(KEY_MESSAGE).orEmpty()
             val step =
                 when (saved.get<String>(KEY_STEP)) {
@@ -555,6 +570,7 @@ class SendCardViewModel
             saved[KEY_TO_USER] = (form.to as? CardRecipient.Person)?.userId
             saved[KEY_TO_NAME] = (form.to as? CardRecipient.Person)?.name
             saved[KEY_TO_EMAIL] = (form.to as? CardRecipient.Email)?.email
+            saved[KEY_TO_LINK] = form.to is CardRecipient.Link
             saved[KEY_DESIGN] = form.design.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_MESSAGE] = form.message.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
@@ -568,6 +584,9 @@ class SendCardViewModel
             }
 
         companion object {
+            /** The nav argument naming a picture to start with (`mailbox/cards?design=`). */
+            const val SEND_CARD_DESIGN_KEY = "design"
+
             /** An address that can take an email: the web's check, so the server's own check doesn't refuse it. */
             val EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$")
 
@@ -589,6 +608,7 @@ class SendCardViewModel
             private const val KEY_TO_USER = "sendCard.toUser"
             private const val KEY_TO_NAME = "sendCard.toName"
             private const val KEY_TO_EMAIL = "sendCard.toEmail"
+            private const val KEY_TO_LINK = "sendCard.toLink"
             private const val KEY_DESIGN = "sendCard.design"
             private const val KEY_MESSAGE = "sendCard.message"
             private const val KEY_ARRIVAL = "sendCard.arrival"

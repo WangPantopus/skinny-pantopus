@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
+import app.pantopus.android.data.api.models.mailbox.HolidayCardLinkResponse
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
@@ -39,6 +40,15 @@ interface HolidayCardsApi {
     suspend fun send(
         @Body body: SendHolidayCardBody,
     ): SendHolidayCardResponse
+
+    /**
+     * `GET /api/mailbox/cards/:id/link` (sender only, launch key `card_table`): the link of a card by link that's still
+     * waiting. 409 with what happened once it's been opened, taken back or lost; 404 for anyone else.
+     */
+    @GET("api/mailbox/cards/{id}/link")
+    suspend fun cardLink(
+        @Path("id") id: String,
+    ): HolidayCardLinkResponse
 
     /** `POST /api/mailbox/cards/shared` — counts what was shared (launch key `card_table`). Answers 204. */
     @POST("api/mailbox/cards/shared")

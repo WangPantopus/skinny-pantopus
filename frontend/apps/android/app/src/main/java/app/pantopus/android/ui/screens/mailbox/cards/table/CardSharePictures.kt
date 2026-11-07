@@ -363,6 +363,7 @@ internal class CardSharePictures(
         val start = y + (h - nameLine - secondLine) / 2f
         val left = x + h * 0.36f
         text.reset()
+        text.textAlign = Paint.Align.LEFT
         text.isAntiAlias = true
         text.typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
         text.textSize = nameSize

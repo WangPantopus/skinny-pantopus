@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.SentCard
 import app.pantopus.android.data.api.models.mailbox.SentCardStep
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
@@ -59,11 +60,15 @@ import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardFlip
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardFront
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardTimes
 import app.pantopus.android.ui.screens.mailbox.cards.TakeBackDialog
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardLinkBox
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardShareSheet
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailLetterCard
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailTrailStep
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.TrailRow
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.tableCard
 import app.pantopus.android.ui.screens.mailbox.mailbox_root.MailSentWords
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -123,6 +128,7 @@ fun MailSentCardScreen(
     if (confirmTakeBack && card != null) {
         TakeBackDialog(
             byEmail = card.byEmail,
+            byLink = card.byLink,
             onTakeBack = {
                 confirmTakeBack = false
                 viewModel.takeBack()
@@ -165,7 +171,8 @@ private fun SentCardPage(
     takeBackError: String?,
     onTakeBack: () -> Unit,
 ) {
-    val to = card.toName?.takeIf { it.isNotBlank() } ?: "them"
+    val waitingLink = card.byLink && card.status != "claimed"
+    val to = if (waitingLink) "whoever opens your link" else card.toName?.takeIf { it.isNotBlank() } ?: "them"
     // A household is said whole ("their household’s 7 a.m. mail"), a person by their first name.
     val first = if (card.toHousehold) to else to.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotEmpty() } ?: to
     val sent = HolidayCardTimes.shortDay(card.sentAt, zone)
@@ -188,7 +195,12 @@ private fun SentCardPage(
         )
     }
     val delivered = card.status == "delivered" || card.status == "claimed"
-    val mailboxLabel = if (card.byEmail) "Once they claim it" else "Addressed to $first"
+    val mailboxLabel =
+        when {
+            waitingLink -> "Once someone opens your link"
+            card.byEmail -> "Once they claim it"
+            else -> "Addressed to $first"
+        }
     PageSection(if (delivered) "In $first’s Mailbox" else mailboxLabel) {
         val envelope = MailSentWords.envelope(card)
         Box(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = envelope.accessibilityLabel }) {
@@ -204,8 +216,20 @@ private fun SentCardPage(
         }
     } else {
         sentLetterCard(card)?.let { face ->
-            PageSection("The card you sent") { BothSides(face, card.envelope?.from?.takeIf { it.isNotBlank() } ?: "You") }
+            val from = card.envelope?.from?.takeIf { it.isNotBlank() } ?: "You"
+            PageSection("The card you sent") {
+                BothSides(face, from)
+                if (LaunchFeatures.cardTable) TheWayTheyDid(card, face, from)
+            }
         }
+    }
+    if (card.byLink && card.canTakeBack) {
+        CardLinkBox(
+            cardId = card.id,
+            knownLink = null,
+            fromFirst = (card.envelope?.from?.takeIf { it.isNotBlank() } ?: "someone").trim().substringBefore(' '),
+            copyWords = "Copy link again",
+        )
     }
     Trail(card, first, zone)
     if (card.canTakeBack) ChangedYourMind(card, zone, takingBack, onTakeBack)
@@ -217,6 +241,54 @@ private fun SentCardPage(
             fontWeight = FontWeight.Medium,
             color = PantopusColors.error,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }.testTag("mailSentPieceError"),
+        )
+    }
+}
+
+/** "See it the way they did": the same full-screen moment, and Share. Nothing about it reaches them. */
+@Composable
+private fun ColumnScope.TheWayTheyDid(
+    card: SentCard,
+    face: MailLetterCard,
+    from: String,
+) {
+    var playing by rememberSaveable { mutableStateOf(false) }
+    var sharing by rememberSaveable { mutableStateOf(false) }
+    val onTable =
+        face.tableCard(
+            id = "sent-${card.id}",
+            from = from,
+            to = card.toName?.takeIf { !card.byLink || card.status == "claimed" },
+        )
+    Row(
+        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Spacing.s2),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CardButton(
+            "See it the way they did",
+            onClick = { playing = true },
+            kind = CardButtonKind.Words,
+            fill = false,
+            modifier = Modifier.testTag("mailSentPieceSeeIt"),
+        )
+        CardButton(
+            "Share",
+            onClick = { sharing = true },
+            kind = CardButtonKind.Words,
+            fill = false,
+            icon = PantopusIcon.Share,
+            modifier = Modifier.testTag("mailSentPieceShare"),
+        )
+    }
+    if (playing) {
+        CardTableDialog(card = onTable, firstOpen = true, onClose = { playing = false }, mine = true)
+    }
+    if (sharing) {
+        CardShareSheet(
+            card = onTable.copy(sealed = card.sealed, note = if (card.sealed) "" else onTable.note),
+            mine = true,
+            onClose = { sharing = false },
         )
     }
 }
@@ -255,6 +327,7 @@ private fun ColumnScope.BothSides(
                 fromName = from,
                 year = card.year,
                 message = card.note,
+                design = card.design,
                 modifier = Modifier.shadow(6.dp, shape).clip(shape),
             )
         },
@@ -323,7 +396,7 @@ private fun ChangedYourMind(
 ) {
     val until = HolidayCardTimes.parse(card.takeBackUntil)?.atZone(zone)
     val sentence =
-        if (card.byEmail || until == null) {
+        if (card.byEmail || card.byLink || until == null) {
             "You can take it back until they open it."
         } else {
             val day = HolidayCardTimes.shortDay(card.takeBackUntil, zone)
@@ -477,6 +550,9 @@ private fun sentLetterCard(card: SentCard): MailLetterCard? {
         note = card.note.orEmpty().trim(),
         firstOpen = false,
         pictureHeight = face.height,
+        number = face.number,
+        slug = face.slug,
+        table = face.table,
     )
 }
 
@@ -490,6 +566,23 @@ private fun claimStepTitle(
         if (done) "They joined Pantopus and have it" else "They join Pantopus and have it"
     }
 
+/** A card by link's own steps, in its own words; null for a step any card has. */
+private fun linkTrailTitle(
+    step: SentCardStep,
+    card: SentCard,
+): String? =
+    when (step.step) {
+        "emailed" -> "Your link was ready"
+        "joined" ->
+            if (step.done) {
+                "${card.toName?.takeIf { it.isNotBlank() } ?: "Someone"} opened your link and has your card"
+            } else {
+                "Someone opens your link and joins"
+            }
+        "returned" -> "Nobody opened your link in 90 days"
+        else -> null
+    }
+
 private fun sentTrailTitle(
     step: SentCardStep,
     card: SentCard,
@@ -498,6 +591,7 @@ private fun sentTrailTitle(
     val round = if (card.arrival == "christmas_morning") "Christmas morning" else "7 a.m."
     val contactTo = card.toName?.takeIf { card.status != "claimed" && it.isNotBlank() } ?: "them"
     val letter = card.kind == "letter"
+    if (card.byLink) linkTrailTitle(step, card)?.let { return it }
     return when (step.step) {
         "sealed" -> "Sealed by you"
         "picked_up" -> "Picked up by the carrier"
