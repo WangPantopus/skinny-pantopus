@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreviewEmail
@@ -56,6 +57,8 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardPreviewPiece
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailCard
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
+import app.pantopus.android.ui.screens.mailbox.cards.table.LinkPageOnTable
 import app.pantopus.android.ui.screens.mailbox.components.MailAddressBook
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
@@ -63,6 +66,7 @@ import app.pantopus.android.ui.screens.mailbox.components.MailPieceModel
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.HolidayCardOutOfEnvelope
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.HolidayCardSealedNotice
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailLetterCard
+import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.tableCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -117,6 +121,7 @@ internal fun LookStep(
         when (to) {
             is CardRecipient.Person -> PersonLook(to, preview, card, from, sealed)
             is CardRecipient.Email -> EmailLook(to, preview, card, from, sealed, zone)
+            CardRecipient.Link -> LinkLook(preview, card, from, sealed, zone)
         }
     }
 }
@@ -127,6 +132,8 @@ private fun lookIntro(
     preview: HolidayCardPreview,
 ): String =
     when {
+        to is CardRecipient.Link ->
+            "The page your link opens never shows the card. Whoever opens it first joins Pantopus to read it, and it’s theirs."
         to is CardRecipient.Email ->
             "They aren’t on Pantopus yet. The email never shows the card; they open it in Pantopus once they join with this " +
                 "address."
@@ -227,6 +234,68 @@ private fun EmailLook(
                 CardNoteSide(card, from, modifier = Modifier.weight(1f))
             }
         }
+        if (LaunchFeatures.cardTable) {
+            OpenTheWayTheyWill(card, from, to = null, modifier = Modifier.fillMaxWidth().padding(top = Spacing.s3))
+        }
+    }
+}
+
+/** By a link: the page it opens, and the card once they join. */
+@Composable
+private fun LinkLook(
+    preview: HolidayCardPreview,
+    card: MailLetterCard,
+    from: String,
+    sealed: Boolean,
+    zone: ZoneId,
+) {
+    preview.linkPage?.let { page ->
+        LookSection("The page your link opens", horizontal = Spacing.s3) { LinkPagePicture(page, zone) }
+    }
+    val envelope = lookEnvelope(preview, "Their name", card)
+    val state = if (sealed) "sealed until Christmas morning" else "in its envelope"
+    val spoken = "Christmas card from $from, $state."
+    LookSection("After they join", horizontal = Spacing.s3) {
+        MailboxFrame("In their Mailbox") {
+            Box(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = spoken }) { MailPiece(envelope) }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s4),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+                verticalAlignment = Alignment.Top,
+            ) {
+                CardPictureSide(card, from, modifier = Modifier.weight(1f))
+                CardNoteSide(card, from, modifier = Modifier.weight(1f))
+            }
+        }
+        OpenTheWayTheyWill(card, from, to = null, modifier = Modifier.fillMaxWidth().padding(top = Spacing.s3))
+    }
+}
+
+/** "Open it the way they will": the real moment, full screen, as the other person would. Nothing is marked as read. */
+@Composable
+private fun OpenTheWayTheyWill(
+    card: MailLetterCard,
+    from: String,
+    to: String?,
+    modifier: Modifier = Modifier,
+) {
+    var playing by rememberSaveable { mutableStateOf(false) }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        CardButton(
+            "Open it the way they will",
+            onClick = { playing = true },
+            kind = CardButtonKind.Words,
+            fill = false,
+            modifier = Modifier.testTag("sendCardLookOpenAgain"),
+        )
+    }
+    if (playing) {
+        CardTableDialog(
+            card = card.tableCard(id = "look-${card.design}", from = from, to = to),
+            firstOpen = true,
+            onClose = { playing = false },
+            canShare = false,
+        )
     }
 }
 
@@ -270,16 +339,20 @@ private fun CardComingOut(
             state = if (showBack) "Showing the back" else "Showing the picture",
             modifier = Modifier.testTag("sendCardLookTurn"),
         )
-        CardButton(
-            "Open it again",
-            onClick = {
-                showBack = false
-                replays += 1
-            },
-            kind = CardButtonKind.Words,
-            fill = false,
-            modifier = Modifier.testTag("sendCardLookOpenAgain"),
-        )
+        if (LaunchFeatures.cardTable) {
+            OpenTheWayTheyWill(card, from, envelope.to)
+        } else {
+            CardButton(
+                "Open it again",
+                onClick = {
+                    showBack = false
+                    replays += 1
+                },
+                kind = CardButtonKind.Words,
+                fill = false,
+                modifier = Modifier.testTag("sendCardLookOpenAgain"),
+            )
+        }
     }
 }
 
@@ -320,12 +393,12 @@ internal fun CardNoteSide(
         modifier =
             modifier
                 .fillMaxWidth()
-                .aspectRatio(HolidayCardArt.cardAspect(card.design, card.pictureHeight))
+                .aspectRatio(if (LaunchFeatures.cardTable) 5f / 6f else HolidayCardArt.cardAspect(card.design, card.pictureHeight))
                 .shadow(6.dp, shape)
                 .clip(shape)
                 .clearAndSetSemantics { contentDescription = "On the back: $note From ${from.removeSuffix(".")}." },
     ) {
-        HolidayCardBack(paper = card.paper, fromName = from, year = card.year, message = card.note)
+        HolidayCardBack(paper = card.paper, fromName = from, year = card.year, design = card.design, message = card.note)
     }
 }
 
@@ -519,6 +592,7 @@ private fun LinkPagePicture(
     page: HolidayCardPreviewLinkPage,
     zone: ZoneId,
 ) {
+    if (LaunchFeatures.cardTable) return LinkPageOnTable(page)
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier =
@@ -660,12 +734,13 @@ internal fun LookFooter(
     byEmail: Boolean,
     form: SendCardForm,
     onSend: () -> Unit,
+    byLink: Boolean = false,
 ) {
     Column(modifier = Modifier.fillMaxWidth().background(PantopusColors.cardDesk)) {
         HorizontalDivider(color = PantopusColors.cardNoteEdge)
         Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3, bottom = Spacing.s4)) {
             DeskNote(
-                if (byEmail) {
+                if (byEmail || byLink) {
                     "You can take it back until they open it."
                 } else {
                     "You can take it back until the carrier picks it up at 7 a.m. their time."
@@ -682,7 +757,7 @@ internal fun LookFooter(
                 )
             }
             CardButton(
-                "Seal and send",
+                if (byLink) "Seal it and get the link" else "Seal and send",
                 onClick = onSend,
                 busy = form.sending,
                 modifier = Modifier.padding(top = 10.dp).testTag("sendCardLookSend"),
@@ -715,6 +790,9 @@ private fun lookCard(
         note = preview.piece.content.orEmpty().trim(),
         firstOpen = true,
         pictureHeight = card?.height ?: design.height,
+        number = card?.number ?: design.number,
+        slug = card?.slug ?: design.slug,
+        table = card?.table ?: design.table,
     )
 }
 

@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.HolidayCardCollection
 import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
@@ -146,6 +147,23 @@ internal fun ToStep(
             icon = PantopusIcon.Mail,
             modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardByEmail"),
         )
+        if (LaunchFeatures.cardTable) {
+            CardButton(
+                "Send it by link",
+                onClick = viewModel::chooseLink,
+                kind = CardButtonKind.Words,
+                icon = PantopusIcon.Link,
+                modifier = Modifier.padding(top = Spacing.s1).testTag("sendCardByLink"),
+            )
+            Text(
+                "Text it, or paste it anywhere. The first person to open it keeps the card.",
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = PantopusColors.cardTextQuiet,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s1),
+            )
+        }
     }
 }
 
@@ -705,6 +723,7 @@ internal fun WriteStep(
                     fromName = fromName,
                     year = year,
                     modifier = Modifier.shadow(10.dp, shape).clip(shape),
+                    design = design.id,
                     writing = { style ->
                         BasicTextField(
                             value = message,
@@ -791,7 +810,7 @@ internal fun SealStep(
     onSend: () -> Unit,
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
-    val options = if (to is CardRecipient.Email) cards.arrivals.email else (form.theirs?.arrivals ?: cards.arrivals.person)
+    val options = if (to is CardRecipient.Person) (form.theirs?.arrivals ?: cards.arrivals.person) else cards.arrivals.email
     Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3)) {
         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s2).rotate(1f)) {
             MailPiece(envelopePreview(design, fromName, to, sealed = form.arrival == "sealed_christmas"))
@@ -825,15 +844,19 @@ internal fun SealStep(
         }
         // Before it's sent there's no knowing their clock; the sent card says the time on this one.
         DeskNote(
-            if (to is CardRecipient.Email) {
-                "You can take it back until they open it."
-            } else {
+            if (to is CardRecipient.Person) {
                 "You can take it back until the carrier picks it up at 7 a.m. their time."
+            } else {
+                "You can take it back until they open it."
             },
             modifier = Modifier.padding(top = 14.dp),
         )
         CardButton(
-            if (form.lookUnavailable) "Seal and send" else "Look it over",
+            when {
+                !form.lookUnavailable -> "Look it over"
+                to is CardRecipient.Link -> "Seal it and get the link"
+                else -> "Seal and send"
+            },
             onClick = if (form.lookUnavailable) onSend else onLook,
             enabled = form.arrival != null,
             busy = form.previewing || form.sending,
@@ -891,6 +914,7 @@ private fun arrivalChoice(
 ): Pair<String, String> {
     val day = HolidayCardTimes.shortDay(theirDay ?: cards.nextRoundAt, zone)
     val name = (to as? CardRecipient.Person)?.firstName ?: "they"
+    if (to is CardRecipient.Link) return linkChoice(arrival)
     return when (arrival) {
         "next_morning" -> "With the morning mail" to "$day, about 7 a.m. where $name lives. They can open it right away."
         "sealed_christmas" ->
@@ -908,6 +932,16 @@ private fun arrivalChoice(
     }
 }
 
+/** A card by link: it's ready as soon as it's sealed, and the same two choices as by email. */
+private fun linkChoice(arrival: String): Pair<String, String> =
+    if (arrival == "sealed_christmas") {
+        "Sealed until Christmas" to
+            "Once they open your link and join, it waits in their mailbox with a “Do not open until Christmas” seal. It " +
+            "opens on December 25."
+    } else {
+        "Right away" to "They can open it as soon as they open your link and join."
+    }
+
 /** The red envelope as it will go: from the sender, to them, sealed when it waits for Christmas. No postmark yet. */
 private fun envelopePreview(
     design: HolidayCardDesign,
@@ -920,7 +954,7 @@ private fun envelopePreview(
         kind = MailKind.Letter,
         from = fromName,
         fromLine = null,
-        to = to.label,
+        to = to.label.takeIf { to !is CardRecipient.Link },
         toLine = null,
         sender = MailSender.Neighbor,
         opened = false,
