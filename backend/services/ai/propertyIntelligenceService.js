@@ -472,6 +472,9 @@ function pickAttomSummaryLot(property) {
   };
 }
 
+// Where the Home is, for the area's price change. `fips`: the county its record names.
+const homeArea = (home, fips = null) => ({ state: home.state, zip: home.zipcode, fips });
+
 function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }, fetchedAts = {}) {
   const property = detailData?.property?.[0] || {};
   const building = property.building || {};
@@ -491,22 +494,25 @@ function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }
   };
 
   // ATTOM AVM is ideal, but some environments/accounts only return property/detail.
-  // Fall back to assessor-style market/assessed totals when AVM is unavailable.
+  // Fall back to the county's market total when AVM is unavailable. An assessed
+  // total is never an estimate: in many states it's a fraction of value by law.
   const fallbackMarketValue =
     toNumberOrNull(assessment?.market?.mktTtlValue)
     ?? toNumberOrNull(assessment?.market?.marketTtlValue)
     ?? toNumberOrNull(assessment?.market?.mktTotalValue);
-  const fallbackAssessedValue =
+  const assessedValue =
     toNumberOrNull(assessment?.assessed?.assdTtlValue)
     ?? toNumberOrNull(assessment?.assessed?.assessedTtlValue)
     ?? toNumberOrNull(assessment?.assessed?.assdTotalValue);
 
-  let zipMedianSalePriceTrend = 'flat';
+  // A trend nobody observed is missing, not flat.
+  let zipMedianSalePriceTrend = null;
   if (trendItem.medianSalePrice && trendItem.prevMedianSalePrice) {
     const current = parseFloat(trendItem.medianSalePrice);
     const previous = parseFloat(trendItem.prevMedianSalePrice);
     if (current > previous * 1.02) zipMedianSalePriceTrend = 'up';
     else if (current < previous * 0.98) zipMedianSalePriceTrend = 'down';
+    else zipMedianSalePriceTrend = 'flat';
   }
 
   // Facts the county record lacked that the household's own entries fill
@@ -532,14 +538,16 @@ function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }
     bathrooms: roomPick.bathrooms ?? home.bathrooms ?? null,
     lot_sqft: sl.lot_sq_ft ?? home.lot_sq_ft ?? null,
     property_type: sl.raw_property_type ?? home.home_type ?? null,
-    estimated_value: toNumberOrNull(avmAmount.value) ?? fallbackMarketValue ?? fallbackAssessedValue,
+    estimated_value: toNumberOrNull(avmAmount.value) ?? fallbackMarketValue,
     value_range_low: toNumberOrNull(avmAmount.low),
     value_range_high: toNumberOrNull(avmAmount.high),
-    value_confidence: toNumberOrNull(avm.confidence),
+    // The score Property details shows as "Confidence score" (serializers/countyRecordSerializer.js).
+    value_confidence: toNumberOrNull(avmAmount.scr),
     // When ATTOM gave the value estimate: a refresh that finds nothing keeps
     // the last one, which then shows with this date.
     value_as_of: avmAmount.value != null ? fetchedAts.attomavm_detail || null : null,
-    zip_median_value: assessment.assessed?.assdTtlValue || null,
+    assessed_value: assessedValue,
+    zip_median_value: null,
     zip_median_sale_price_trend: zipMedianSalePriceTrend,
     // The home's outline for the Today sky (services/place/houseShape.js).
     house: detailData?.property?.[0] ? houseFromAttomProperty(detailData.property[0]) : null,
@@ -547,6 +555,9 @@ function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }
     source: 'attom',
   };
 }
+
+// The facts the value card reads (services/homeValueCard.js): the confirmed owner's, like the value.
+const COUNTY_VALUE_FACTS = ['market_value', 'assessed_value', 'taxable_value', 'value_year', 'sale_price', 'sale_date', 'sale_month'];
 
 /**
  * What anyone but the confirmed owner reads of a profile: the Home's facts. The value is the owner's, as on Place.
@@ -564,7 +575,8 @@ function factsOnly(profile) {
  * show the household's own entry first (a person may know better than the roll,
  * and it is their home); year built and lot are the record's. For the apps in the
  * stores `estimated_value` is the county's own market value: a county's estimate of
- * market value, and never a fractional assessment (facts.js).
+ * market value, and never a fractional assessment (facts.js), and not a bare land
+ * parcel's value, which would read as the home's.
  */
 function buildProfileFromRecord(home, copy) {
   const facts = copy.facts || {};
@@ -582,14 +594,18 @@ function buildProfileFromRecord(home, copy) {
   const shown = {};
   const householdFields = [];
   for (const [field, county, own, ownFirst] of countyFacts) {
-    shown[field] = ownFirst ? own ?? county : county ?? own ?? null;
+    // Whole numbers: the apps in the stores decode these as integers, and a county may write 1234.5.
+    const figure = ownFirst ? own ?? county : county ?? own ?? null;
+    shown[field] = typeof figure === 'number' && field !== 'bathrooms' ? Math.round(figure) : figure;
     if (own != null && (county == null || (ownFirst && own !== county))) householdFields.push(field);
   }
   const provenance = homeRecords.provenanceOf(copy);
-  const value = facts.market_value ?? null;
+  const value = copy.match === 'parcel_only' ? null : facts.market_value ?? null;
+  const yearLead = facts.value_year ? `${facts.value_year} value. ` : '';
   return {
     home_id: home.id,
     address_summary: `${home.city}, ${home.state} ${home.zipcode}`,
+    area: homeArea(home, copy.jurisdiction),
     county_record: true,
     household_fields: householdFields,
     ...shown,
@@ -608,8 +624,12 @@ function buildProfileFromRecord(home, copy) {
     provenance: householdFields.length ? { ...provenance, label: `${provenance.label}, with details you entered` } : provenance,
     ...(value != null ? {
       value_title: 'County market value',
-      value_provenance: { ...provenance, label: `${facts.value_year ? `${facts.value_year} value. ` : ''}${provenance.label}` },
+      value_provenance: { ...provenance, label: `${yearLead}${provenance.label}` },
     } : {}),
+    county_values: Object.fromEntries(COUNTY_VALUE_FACTS.filter((name) => facts[name] !== undefined).map((name) => [name, facts[name]])),
+    value_match: copy.match,
+    // The card says for itself when only the building was found.
+    value_card_source: homeRecords.provenanceOf({ ...copy, match: 'exact' }).label,
   };
 }
 
@@ -621,6 +641,7 @@ function buildFallbackProfile(home) {
   return {
     home_id: home.id,
     address_summary: `${home.city}, ${home.state} ${home.zipcode}`,
+    area: homeArea(home),
     county_record: false,
     household_fields: [
       ['year_built', 'year_built'], ['sqft', 'sq_ft'], ['bedrooms', 'bedrooms'],
@@ -647,6 +668,22 @@ function buildFallbackProfile(home) {
 // ── Cache layer ────────────────────────────────────────────────────────────
 
 /**
+ * A row saved before the value mappings were fixed: its "ZIP median" was the home's
+ * assessed total, and that total could also be its estimate. The default "flat"
+ * can't be told apart from a measured one; those rows go with ATTOM's purge.
+ */
+function withoutOldMappings(profile) {
+  if (!profile?.zip_median_value) return profile;
+  const assessedAsEstimate = profile.estimated_value === profile.zip_median_value && !profile.value_as_of;
+  return {
+    ...profile,
+    ...(assessedAsEstimate ? { estimated_value: null } : {}),
+    assessed_value: profile.assessed_value ?? profile.zip_median_value,
+    zip_median_value: null,
+  };
+}
+
+/**
  * Read a cached PropertyProfile for the given home.
  * Returns null on cache miss or expiry.
  */
@@ -666,7 +703,7 @@ async function getCachedProfile(homeId, { allowExpired = false } = {}) {
 
     if (!data) return null;
     return {
-      profile: data.profile,
+      profile: withoutOldMappings(data.profile),
       fetchedAt: data.fetched_at,
       source: data.source,
       expired: new Date(data.expires_at).getTime() <= Date.now(),
@@ -1280,4 +1317,5 @@ module.exports = {
   getAddressAttomPropertyDetail,
   propertyDetailCacheRequest,
   buildFallbackProfile,
+  buildProfileFromRecord,
 };

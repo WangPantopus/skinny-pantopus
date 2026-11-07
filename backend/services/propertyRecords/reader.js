@@ -29,6 +29,7 @@ const PAUSE_MS = 30 * 1000;
 // Memory: the production server is small and shared. A block is ~32 KB of JSON.
 const KEPT_BLOCKS = 300;
 const KEPT_MANIFESTS = 12;
+const KEPT_FILES = 6;
 
 class StorageUnavailable extends Error {}
 
@@ -80,7 +81,7 @@ function createStorage(root = config.manifestUrl) {
   return url.protocol === 's3:' ? s3Storage(url) : fileStorage(url);
 }
 
-function createReader(storage = createStorage()) {
+function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}) {
   let failures = 0;
   let pausedUntil = 0;
 
@@ -208,7 +209,17 @@ function createReader(storage = createStorage()) {
     return records.filter((record) => record.key === sortKey);
   }
 
-  return { stateFile, recordsAt, suppressions: suppressionsFile, switchesFile };
+  // Any other small file under this root, re-read as a state's file is. The oldest goes when too many are held.
+  const files = new Map();
+  function file(name, parse) {
+    if (!files.has(name)) {
+      files.set(name, refreshed(name, parse));
+      if (files.size > keptFiles) files.delete(files.keys().next().value);
+    }
+    return files.get(name)();
+  }
+
+  return { stateFile, recordsAt, suppressions: suppressionsFile, switchesFile, file };
 }
 
 const shared = createReader();

@@ -5314,6 +5314,8 @@ const { computeHealthScore, getHealthScore, invalidateHealthScoreCache, canReadH
 const { getOrCreateChecklist, updateChecklistItem, linkGigToChecklist, getChecklistHistory } = require('../services/seasonalChecklistService');
 const { getSeasonalContext, SEASONS, OVERLAYS } = require('../services/ai/seasonalEngine');
 const { getProfile: getPropertyProfile } = require('../services/ai/propertyIntelligenceService');
+const areaTrend = require('../services/propertyRecords/areaTrend');
+const homeValueCard = require('../services/homeValueCard');
 const intelligenceAuthority = require('../services/homeDashboardService');
 
 /**
@@ -5610,24 +5612,26 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
 
     const result = await intelligenceAuthority.withCurrentAccess({ homeId, actorId: userId }, async (access) => {
       if (!access.isOwner) return NO_PROPERTY_VALUE;
-      const { profile, source } = await getPropertyProfile(homeId);
+      const { profile, source, lookup } = await getPropertyProfile(homeId);
 
       if (source === 'error') throw Object.assign(new Error('Current property information could not be loaded.'),
         { statusCode: 503, code: 'HOME_PROPERTY_UNAVAILABLE' });
       if (!profile) return NO_PROPERTY_VALUE;
 
+      const wanted = recordVocabulary.wantsRecordVocabulary(req);
+      const trend = profile.area ? await areaTrend.lookup(profile.area) : null;
       return recordVocabulary.propertyValue({
         estimated_value: profile.estimated_value || null,
         value_range_low: profile.value_range_low || null,
         value_range_high: profile.value_range_high || null,
         value_confidence: profile.value_confidence || null,
-        zip_median_sale_price_trend: profile.zip_median_sale_price_trend || null,
+        zip_median_sale_price_trend: profile.zip_median_sale_price_trend || areaTrend.oldBuildDirection(trend),
         year_built: profile.year_built || null,
         sqft: profile.sqft || null,
         // A value estimate kept after a refresh found nothing newer says when ATTOM gave it.
         last_updated: profile.value_as_of || profile.cached_at || null,
         source,
-      }, profile, recordVocabulary.wantsRecordVocabulary(req));
+      }, profile, wanted, wanted ? homeValueCard.build(profile, { trend, lookup }) : null);
     });
     res.json(result);
   } catch (err) {
