@@ -46,6 +46,13 @@ export function activeMobileTab(pathname: string): Tab['key'] | null {
   return MOBILE_TABS.find((t) => t.matches(pathname))?.key ?? null;
 }
 
+// A conversation has the whole window on a phone (founder, 2026-11-06), a
+// person's, a group's or the assistant's: leaving it brings the bar back on the
+// screen underneath. The Messages list keeps the bar.
+export function hidesMobileTabs(pathname: string): boolean {
+  return pathname.startsWith('/app/chat/');
+}
+
 export default function MobileTabBar({ unreadMail = 0, unreadMessages = 0 }: { unreadMail?: number; unreadMessages?: number }) {
   const pathname = usePathname() ?? '';
   const router = useRouter();
