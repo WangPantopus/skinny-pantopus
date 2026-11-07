@@ -403,6 +403,14 @@
           "license_url": "https://creativecommons.org/licenses/by/4.0/"
         },
         {
+          "id": "us/or/portland_metro",
+          "publisher": "Metro, Oregon",
+          "url": "https://rlisdiscovery.oregonmetro.gov",
+          "license": "RLIS Open Database End User License Agreement",
+          "license_url": "https://rlisdiscovery.oregonmetro.gov/pages/open-database-license",
+          "statement": "Regional Land Information System data are a product of Metro and made publicly available according to the license agreement found in https://rlisdiscovery.oregonmetro.gov/pages/open-database-license."
+        },
+        {
           "id": "us/md/montgomery",
           "publisher": "Montgomery County, Maryland",
           "url": "https://data.montgomerycountymd.gov/terms-of-use",
@@ -415,6 +423,13 @@
           "url": "https://data.cityofnewyork.us/City-Government/AddressPoint/uf93-f8nk",
           "license": "NYC Open Data Terms of Use",
           "license_url": "https://opendata.cityofnewyork.us/overview/#termsofuse"
+        },
+        {
+          "id": "us/id/statewide",
+          "publisher": "Oak Ridge National Laboratory and the Federal Emergency Management Agency",
+          "url": "https://www.arcgis.com/home/item.html?id=1f8a907f2b3042489c5d900ddcd2fa16",
+          "license": "U.S. government work",
+          "dataset": "Idaho's address points from building footprints"
         },
         {
           "id": "overture:us/or/statewide",
