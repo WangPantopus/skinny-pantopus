@@ -122,8 +122,13 @@ struct CardTableShareScene: View {
                 slip(CardShareSlip(x: 139, y: 606, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             }
         case .link:
-            openEnvelope(width: 196 * 1.012, x: 43, y: 72, rotation: 3)
-            front(width: 196, x: 44, y: 66, rotation: -3)
+            // A sealed card never gives away its picture.
+            if content.sealed {
+                shutEnvelope(width: 226, x: 34, y: 34, rotation: -2.4, sealWidth: 66)
+            } else {
+                openEnvelope(width: 196 * 1.012, x: 43, y: 72, rotation: 3)
+                front(width: 196, x: 44, y: 66, rotation: -3)
+            }
             linkWords
         }
     }

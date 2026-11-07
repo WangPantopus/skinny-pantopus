@@ -128,8 +128,6 @@ public final class MailDetailViewModel {
     private(set) var cardTableWasShown = false
     /// The person closed the table, and the page is on its way back.
     var cardTableClosed = false
-    /// The table stepped aside for the sender's page.
-    var cardTableAway = CardTableAway.here
     /// Where the booklet's reader is, and how far the page is scrolled, for
     /// the page a fold's new layout draws (the Mail tab keeps this model
     /// across folds). Not drawn from here.

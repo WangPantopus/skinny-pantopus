@@ -316,8 +316,10 @@ struct CardTableShareSheet: View {
 
     private func shareEmail() {
         count("email")
-        let body = "I got this Christmas card on Pantopus. You can send one too: \(cardPage)"
-        let subject = "Look what came in the mail"
+        let body = isSender
+            ? "I sent this Christmas card on Pantopus. You can send one too: \(cardPage)"
+            : "I got this Christmas card on Pantopus. You can send one too: \(cardPage)"
+        let subject = isSender ? "A Christmas card I sent" : "Look what came in the mail"
         guard MailDraft.canSendMail else {
             // No Mail account on this phone: the share sheet offers whichever mail app it has.
             var items: [Any] = []

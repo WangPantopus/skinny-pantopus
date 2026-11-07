@@ -13,11 +13,6 @@ import QuartzCore
 import SwiftUI
 import UIKit
 
-/// Whether the table has stepped aside for a page it opened, and is waiting for Back.
-enum CardTableAway {
-    case here, leaving, gone
-}
-
 /// What's on the table.
 struct CardTableContent: Equatable {
     let design: String

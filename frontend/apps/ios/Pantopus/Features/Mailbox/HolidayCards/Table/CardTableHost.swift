@@ -50,7 +50,7 @@ struct MailCardTableCover: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChange(
-                of: viewModel.cardTable == nil || viewModel.cardTableClosed || viewModel.cardTableAway != .here,
+                of: viewModel.cardTable == nil || viewModel.cardTableClosed,
                 initial: true
             ) { _, hidden in
                 var quiet = Transaction()
@@ -61,13 +61,6 @@ struct MailCardTableCover: ViewModifier {
             }
             .fullScreenCover(item: $item) { item in
                 MailCardTablePage(viewModel: viewModel, model: item.model, senderLink: senderLink, onClose: close)
-            }
-            // Back from the sender's page: the table comes back as it was.
-            .onDisappear {
-                if viewModel.cardTableAway == .leaving { viewModel.cardTableAway = .gone }
-            }
-            .onAppear {
-                if viewModel.cardTableAway == .gone { viewModel.cardTableAway = .here }
             }
     }
 
@@ -157,17 +150,19 @@ private struct MailCardTablePage: View {
             }
     }
 
-    /// The sender's page opens under the table, so the table steps aside and comes back with Back.
+    /// The sender's page takes the card's place: Back from it goes to the Mailbox, and the card opens again from there.
     private func leavingLink(_ content: MailDetailContent) -> (title: String, open: () -> Void)? {
         senderLink(content).map { link in
-            (link.title, {
-                // The sheet closes first: a cover can't leave while a sheet is on its way out of it.
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    viewModel.cardTableAway = .leaving
-                    link.open()
-                }
-            })
+            (link.title, { leave(then: link.open) })
+        }
+    }
+
+    /// The sheet closes first: a cover can't leave while a sheet is on its way out of it.
+    private func leave(then open: @escaping () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            onClose()
+            open()
         }
     }
 
