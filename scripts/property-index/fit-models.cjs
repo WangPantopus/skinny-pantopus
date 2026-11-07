@@ -49,10 +49,11 @@ function createStore({ bucket, root, prefix }) {
     };
   }
   const url = (name) => `s3://${bucket}/${prefix}/${name}`;
-  const aws = (args) => execFileSync('aws', ['s3', ...args, '--only-show-errors'], { stdio: ['ignore', 'pipe', 'inherit'] });
+  // `aws s3 ls` takes no --only-show-errors.
+  const aws = (args, quiet = true) => execFileSync('aws', ['s3', ...args, ...(quiet ? ['--only-show-errors'] : [])], { stdio: ['ignore', 'pipe', 'inherit'] });
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'value-models-'));
   return {
-    list: () => aws(['ls', url('states/')]).toString('utf8').split('\n').map((line) => line.trim().split(/\s+/).pop()).filter((name) => name?.endsWith('.json')),
+    list: () => aws(['ls', url('states/')], false).toString('utf8').split('\n').map((line) => line.trim().split(/\s+/).pop()).filter((name) => name?.endsWith('.json')),
     get: (name, file) => aws(['cp', url(name), file]),
     putJson: (name, data) => {
       const file = path.join(scratch, 'write');
