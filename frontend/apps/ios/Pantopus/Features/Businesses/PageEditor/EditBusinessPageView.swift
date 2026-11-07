@@ -25,6 +25,7 @@ import SwiftUI
 public struct EditBusinessPageView: View {
     @State private var viewModel: EditBusinessPageViewModel
     @State private var pendingExit: EditorExit?
+    private let businessId: String
 
     private enum EditorExit {
         case back
@@ -43,6 +44,7 @@ public struct EditBusinessPageView: View {
         onPreview: @escaping @MainActor () -> Void = {},
         onClosed: (@MainActor () -> Void)? = nil
     ) {
+        self.businessId = businessId
         _viewModel = State(initialValue: EditBusinessPageViewModel(
             businessId: businessId,
             preview: preview
@@ -70,6 +72,13 @@ public struct EditBusinessPageView: View {
         // Back asks before unsaved edits are dropped; the edge swipe would leave without asking.
         .swipeBackDisabled(viewModel.hasUnsavedChanges || viewModel.hasInFlightOperation)
         .task { await viewModel.load() }
+        .sheet(
+            isPresented: $viewModel.showsCatalog,
+            onDismiss: { Task { await viewModel.refreshServices() } },
+            content: {
+                BusinessCatalogView(businessId: businessId) { viewModel.showsCatalog = false }
+            }
+        )
         .alert(
             "Discard unsaved edits?",
             isPresented: Binding(
@@ -146,6 +155,11 @@ public struct EditBusinessPageView: View {
         return { viewModel.closeRequested() }
     }
 
+    private var manageServicesAction: (@MainActor () -> Void)? {
+        guard viewModel.canManageCatalog else { return nil }
+        return { Task { await viewModel.openCatalog() } }
+    }
+
     private var closingBusinessName: String {
         guard case let .loaded(payload) = viewModel.state else { return "this business" }
         let name = payload.name.original.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -203,6 +217,7 @@ public struct EditBusinessPageView: View {
                     Task { await viewModel.uploadMedia(kind, data: data, mimeType: mimeType) }
                 },
                 uploadingMedia: viewModel.uploadingMedia,
+                onManageServices: manageServicesAction,
                 onCloseBusiness: closeBusinessAction
             )
         case .empty:
@@ -264,6 +279,7 @@ public struct EditBusinessPageLoadedView: View {
     public let onBeginDescription: @MainActor () -> Void
     public let onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)?
     public let uploadingMedia: BusinessMediaKind?
+    public let onManageServices: (@MainActor () -> Void)?
     /// Owner only; nil hides the Close business section.
     public let onCloseBusiness: (@MainActor () -> Void)?
 
@@ -279,6 +295,7 @@ public struct EditBusinessPageLoadedView: View {
         onBeginDescription: @escaping @MainActor () -> Void = {},
         onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)? = nil,
         uploadingMedia: BusinessMediaKind? = nil,
+        onManageServices: (@MainActor () -> Void)? = nil,
         onCloseBusiness: (@MainActor () -> Void)? = nil
     ) {
         self.content = content
@@ -292,6 +309,7 @@ public struct EditBusinessPageLoadedView: View {
         self.onBeginDescription = onBeginDescription
         self.onPickMedia = onPickMedia
         self.uploadingMedia = uploadingMedia
+        self.onManageServices = onManageServices
         self.onCloseBusiness = onCloseBusiness
     }
 
@@ -438,10 +456,11 @@ public struct EditBusinessPageLoadedView: View {
             case let .chips(chips):
                 VStack(alignment: .leading, spacing: 6) {
                     BizLabel(label: "What you offer")
-                    EditBusinessServiceChipsEditor(chips: chips)
+                    EditBusinessServiceChipsEditor(chips: chips, onManage: onManageServices)
                 }
             case let .prompt(prompt):
-                PromptBlock(prompt: prompt)
+                PromptBlock(prompt: prompt, onTap: onManageServices)
+                    .disabled(onManageServices == nil)
             }
         }
     }

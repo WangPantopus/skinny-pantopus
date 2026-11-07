@@ -325,7 +325,7 @@ enum EditBusinessPageMapper {
         return .rows(rows: rows, footerHint: "Holiday hours can be added per date — neighbors see a banner.")
     }
 
-    private static func mapServices(_ catalog: [BusinessCatalogItemDTO]) -> EditBusinessPageServicesState {
+    static func mapServices(_ catalog: [BusinessCatalogItemDTO]) -> EditBusinessPageServicesState {
         let chips = catalog.prefix(12).map { item in
             EditBusinessPageServiceChip(
                 id: item.id,
