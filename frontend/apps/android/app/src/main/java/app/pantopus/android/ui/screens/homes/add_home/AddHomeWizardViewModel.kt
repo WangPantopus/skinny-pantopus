@@ -238,6 +238,7 @@ open class AddHomeWizardViewModel
         private var addressRevision = 0L
         private var homeTypeChosen = false
         private var addressJob: Job? = null
+        private var propertyLookupJob: Job? = null
 
         /** The search [applyInitialSearchQuery] ran: left untouched, it isn't progress to discard. */
         private var prefilledSearchQuery: String? = null
@@ -318,6 +319,8 @@ open class AddHomeWizardViewModel
             homeTypeChosen = false
             addressJob?.cancel()
             addressJob = null
+            propertyLookupJob?.cancel()
+            propertyLookupJob = null
             _state.update {
                 it.copy(
                     postalNotice = null, offersNoUnitAttestation = false, unitChoices = emptyList(), noUnitAttested = false,
@@ -1005,6 +1008,8 @@ open class AddHomeWizardViewModel
             if (!session.isCurrent) return
             val addressId = _state.value.validatedAddressId ?: return
             val revision = addressRevision
+            propertyLookupJob?.cancel()
+            propertyLookupJob = null
             _state.update { it.copy(isLoadingPropertySuggestions = true, propertyLookupPending = false, lateDetailsAdded = false) }
             val current = _state.value
             val source = current.geocodedAddress
@@ -1037,7 +1042,19 @@ open class AddHomeWizardViewModel
                                 ),
                         )
                     }
-                    if (pending) viewModelScope.launch { finishPropertyLookup(request, revision) }
+                    if (pending) {
+                        // Asked again, less and less often, while the record's storage can't be read: the fields
+                        // fill in by themselves once it answers.
+                        propertyLookupJob =
+                            viewModelScope.launch {
+                                val until = System.currentTimeMillis() + LOOKUP_RETRY_FOR_MILLIS
+                                var gap = LOOKUP_RETRY_FIRST_MILLIS
+                                while (followUpPropertyLookup(request, revision) && System.currentTimeMillis() + gap <= until) {
+                                    delay(gap)
+                                    gap = (gap * 2).coerceAtMost(LOOKUP_RETRY_MOST_MILLIS)
+                                }
+                            }
+                    }
                 }
                 is NetworkResult.Failure ->
                     _state.update {
@@ -1053,43 +1070,52 @@ open class AddHomeWizardViewModel
         }
 
         /**
-         * The one follow-up while the county record is looked up (`lookup = "check"`): the server answers when the
-         * lookup ends. The record fills only what is still empty, wherever the person is in the wizard.
+         * A follow-up while the county record is looked up (`lookup = "check"`): the server answers when the lookup
+         * ends, or after a few seconds says it's still looking (the record's storage can't be read). The record fills
+         * only what is still empty, wherever the person is in the wizard. True when it's worth asking again.
          */
-        private suspend fun finishPropertyLookup(
+        private suspend fun followUpPropertyLookup(
             request: PropertySuggestionsRequest,
             revision: Long,
-        ) {
+        ): Boolean {
+            if (!addressIsCurrent(revision) || _state.value.createdHomeId != null) return false
             val result = repository.propertySuggestions(request, LOOKUP_CHECK)
-            if (!addressIsCurrent(revision) || !_state.value.propertyLookupPending) return
-            when (result) {
-                is NetworkResult.Success -> {
-                    val answered = result.data.lookupState == LOOKUP_FOUND || result.data.lookupState == LOOKUP_NONE
-                    _state.update {
-                        val details = applySuggestions(it.form.details, result.data.suggestions, homeTypeChosen)
-                        val movedOn = it.form.currentStep.ordinal0 > AddHomeStep.Confirm.ordinal0
-                        it.copy(
-                            propertyLookupPending = false,
-                            propertySuggestions = result.data,
-                            propertyLookupComplete = true,
-                            propertyLookupMessage =
-                                if (answered) lookupMessage(result.data) else result.data.lookupMessage ?: RECORDS_UNAVAILABLE_MESSAGE,
-                            form = it.form.copy(details = details),
-                            lateDetailsAdded = it.lateDetailsAdded || (movedOn && details != it.form.details),
-                        )
+            if (!addressIsCurrent(revision)) return false
+            val again =
+                when (result) {
+                    is NetworkResult.Success -> {
+                        val stillLooking = result.data.lookupState == LOOKUP_PENDING
+                        val answered = result.data.lookupState == LOOKUP_FOUND || result.data.lookupState == LOOKUP_NONE
+                        _state.update {
+                            val details = applySuggestions(it.form.details, result.data.suggestions, homeTypeChosen)
+                            val movedOn = it.form.currentStep.ordinal0 > AddHomeStep.Confirm.ordinal0
+                            it.copy(
+                                propertyLookupPending = false,
+                                propertySuggestions = result.data,
+                                propertyLookupComplete = true,
+                                propertyLookupMessage =
+                                    if (answered) lookupMessage(result.data) else result.data.lookupMessage ?: RECORDS_UNAVAILABLE_MESSAGE,
+                                form = it.form.copy(details = details),
+                                lateDetailsAdded = it.lateDetailsAdded || (movedOn && details != it.form.details),
+                            )
+                        }
+                        stillLooking
+                    }
+                    is NetworkResult.Failure -> {
+                        _state.update {
+                            it.copy(
+                                propertyLookupPending = false,
+                                propertySuggestions = null,
+                                propertyLookupComplete = true,
+                                propertyLookupMessage = RECORDS_UNAVAILABLE_MESSAGE,
+                            )
+                        }
+                        // A refusal stays one; a dropped connection or the server's own trouble may pass.
+                        result.error.let { it is NetworkError.Server || it is NetworkError.Transport || it == NetworkError.RetriesExhausted }
                     }
                 }
-                is NetworkResult.Failure ->
-                    _state.update {
-                        it.copy(
-                            propertyLookupPending = false,
-                            propertySuggestions = null,
-                            propertyLookupComplete = true,
-                            propertyLookupMessage = RECORDS_UNAVAILABLE_MESSAGE,
-                        )
-                    }
-            }
             persist()
+            return again
         }
 
         // MARK: - Address-already-claimed modal
@@ -1636,6 +1662,12 @@ open class AddHomeWizardViewModel
             private const val LOOKUP_PENDING = "pending"
             private const val LOOKUP_FOUND = "found"
             private const val LOOKUP_NONE = "none"
+
+            // While the county record can't be read yet, Add Home asks again after 2 s, then twice as long each time
+            // up to 15 s, for half an hour. Each ask waits up to 8 s on the server.
+            private const val LOOKUP_RETRY_FIRST_MILLIS = 2_000L
+            private const val LOOKUP_RETRY_MOST_MILLIS = 15_000L
+            private const val LOOKUP_RETRY_FOR_MILLIS = 30 * 60_000L
             private const val RECORDS_UNAVAILABLE_MESSAGE =
                 "Public property records are unavailable right now. Confirm the details below."
             private const val SEARCH_DEBOUNCE_MILLIS = 300L

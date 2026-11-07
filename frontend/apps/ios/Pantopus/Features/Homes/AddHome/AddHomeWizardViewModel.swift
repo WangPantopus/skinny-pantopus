@@ -999,6 +999,8 @@ final class AddHomeWizardViewModel: WizardModel {
         isLoadingPropertySuggestions = true
         propertyLookupPending = false
         lateDetailsAdded = false
+        propertyLookupTask?.cancel()
+        propertyLookupTask = nil
         defer { if addressRevision == revision { isLoadingPropertySuggestions = false } }
         let source = geocodedAddress
         let request = PropertySuggestionsRequest(
@@ -1020,9 +1022,16 @@ final class AddHomeWizardViewModel: WizardModel {
             apply(suggestions: response.suggestions)
             if response.lookupState == Self.lookupPending {
                 propertyLookupPending = true
-                propertyLookupTask?.cancel()
+                // Asked again, less and less often, while the record's storage can't be read: the
+                // fields fill in by themselves once it answers. Nothing holds the model between asks.
                 propertyLookupTask = Task { [weak self] in
-                    await self?.finishPropertyLookup(request, revision: revision)
+                    let until = ContinuousClock.now + Self.lookupRetryFor
+                    var gap = Self.lookupRetryFirst
+                    while await self?.followUpPropertyLookup(request, revision: revision) == true,
+                          ContinuousClock.now + gap <= until {
+                        try? await Task.sleep(for: gap)
+                        gap = min(gap * 2, Self.lookupRetryMost)
+                    }
                 }
             } else {
                 propertySuggestions = response
@@ -1037,33 +1046,51 @@ final class AddHomeWizardViewModel: WizardModel {
         }
     }
 
-    /// The one follow-up while the county record is looked up (`lookup:
-    /// "check"`): the server answers when the lookup ends. The record fills
-    /// only what is still empty, wherever the person is in the wizard.
-    private func finishPropertyLookup(_ request: PropertySuggestionsRequest, revision: Int) async {
+    /// A follow-up while the county record is looked up (`lookup: "check"`):
+    /// the server answers when the lookup ends, or after a few seconds says
+    /// it's still looking (the record's storage can't be read). The record
+    /// fills only what is still empty, wherever the person is in the wizard.
+    /// True when it's worth asking again.
+    private func followUpPropertyLookup(_ request: PropertySuggestionsRequest, revision: Int) async -> Bool {
+        guard addressIsCurrent(revision), createdHomeId == nil else { return false }
+        let response: PropertySuggestionsResponse
         do {
-            let response: PropertySuggestionsResponse = try await api.request(
-                HomesEndpoints.propertySuggestions(request, lookup: Self.lookupCheck)
-            )
-            guard !Task.isCancelled, addressIsCurrent(revision), propertyLookupPending else { return }
-            let before = form.details
-            apply(suggestions: response.suggestions)
-            propertyLookupPending = false
-            propertySuggestions = response
-            propertyLookupComplete = true
-            propertyLookupMessage = [Self.lookupFound, Self.lookupNone].contains(response.lookupState ?? "")
-                ? Self.lookupMessage(for: response)
-                : response.lookupMessage ?? Self.recordsUnavailableMessage
-            if currentStep.rawValue > AddHomeStep.confirm.rawValue, form.details != before { lateDetailsAdded = true }
+            response = try await api.request(HomesEndpoints.propertySuggestions(request, lookup: Self.lookupCheck))
         } catch {
-            guard !Task.isCancelled, addressIsCurrent(revision), propertyLookupPending else { return }
-            propertyLookupPending = false
-            propertySuggestions = nil
-            propertyLookupComplete = true
-            propertyLookupMessage = Self.recordsUnavailableMessage
+            guard addressIsCurrent(revision) else { return false }
+            showRecordsUnavailable(nil)
+            // A refusal stays one; a dropped connection or the server's own trouble may pass.
+            return (error as? APIError)?.isTransient ?? false
         }
+        guard addressIsCurrent(revision) else { return false }
+        if response.lookupState == Self.lookupPending {
+            showRecordsUnavailable(response)
+            return true
+        }
+        let before = form.details
+        apply(suggestions: response.suggestions)
+        propertyLookupPending = false
+        propertySuggestions = response
+        propertyLookupComplete = true
+        propertyLookupMessage = [Self.lookupFound, Self.lookupNone].contains(response.lookupState ?? "")
+            ? Self.lookupMessage(for: response)
+            : response.lookupMessage ?? Self.recordsUnavailableMessage
+        if currentStep.rawValue > AddHomeStep.confirm.rawValue, form.details != before { lateDetailsAdded = true }
+        return false
     }
 
+    private func showRecordsUnavailable(_ response: PropertySuggestionsResponse?) {
+        propertyLookupPending = false
+        propertySuggestions = response
+        propertyLookupComplete = true
+        propertyLookupMessage = Self.recordsUnavailableMessage
+    }
+
+    /// While the county record can't be read yet, Add Home asks again after 2 s, then twice as long
+    /// each time up to 15 s, for half an hour. Each ask waits up to 8 s on the server.
+    private static let lookupRetryFirst: Duration = .seconds(2)
+    private static let lookupRetryMost: Duration = .seconds(15)
+    private static let lookupRetryFor: Duration = .seconds(30 * 60)
     private static let lookupBackground = "background"
     private static let lookupCheck = "check"
     private static let lookupPending = "pending"
