@@ -1754,6 +1754,23 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 
 // ============ v1.1 CURSOR-BASED SURFACE FEED ============
 
+// A list feed's cursor as the apps send it back: the created_at string the server gave (an ISO time, often with
+// microseconds and a "+00:00" offset) and the post's id. A "+" a client didn't encode arrives as a space and is put
+// back. Returns null when there is no cursor and false when it is malformed; the string is passed on unchanged
+// otherwise, so its microseconds still separate posts written in the same millisecond.
+const FEED_CURSOR_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/i;
+const FEED_CURSOR_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function parseFeedCursor({ cursorCreatedAt, cursorId, cursorRankBucket }) {
+  if (cursorCreatedAt == null && cursorId == null) return null;
+  if (typeof cursorCreatedAt !== 'string' || typeof cursorId !== 'string') return false;
+  const createdAt = cursorCreatedAt.trim().replace(/ (\d{2}(?::?\d{2})?)$/, '+$1');
+  if (!FEED_CURSOR_TIME.test(createdAt) || Number.isNaN(Date.parse(createdAt)) || !FEED_CURSOR_ID.test(cursorId)) {
+    return false;
+  }
+  const rankBucket = typeof cursorRankBucket === 'string' && /^\d$/.test(cursorRankBucket) ? Number(cursorRankBucket) : null;
+  return { createdAt, id: cursorId, rankBucket };
+}
+
 
 /**
  * GET /api/posts/feed — v1.1 Surface-aware feed with cursor pagination
@@ -1810,6 +1827,10 @@ router.get('/feed', verifyToken, async (req, res) => {
     if (sportsMode && !SPORTS_MODES.includes(sportsMode)) {
       return res.status(400).json({ error: `Invalid sportsMode: ${sportsMode}` });
     }
+    const cursor = parseFeedCursor({ cursorCreatedAt, cursorId, cursorRankBucket });
+    if (cursor === false) {
+      return res.status(400).json({ error: 'Invalid cursor' });
+    }
 
     const radiusMeters = radiusMiles ? Math.round(parseFloat(radiusMiles) * 1609.34) : 160934;
 
@@ -1844,7 +1865,7 @@ router.get('/feed', verifyToken, async (req, res) => {
     // and so are the cards themselves (a few reads of public area data, unused once the area has 5 posts): an area
     // with few posts shows them without waiting for the feed first. A read that isn't used waits (the catch only
     // marks it handled).
-    const isColdStart = surface === 'place' && !topic && !cursorCreatedAt && !cursorId && !postType
+    const isColdStart = surface === 'place' && !topic && !cursor && !postType
       && feedLatitude != null && feedLongitude != null;
     const dismissedRead = isColdStart ? loadDismissedSeededFactIds(userId) : null;
     const factsRead = isColdStart ? generateNeighborhoodFacts(_encodeGeohash6(feedLatitude, feedLongitude)) : null;
@@ -1856,10 +1877,10 @@ router.get('/feed', verifyToken, async (req, res) => {
       longitude: feedLongitude,
       radiusMeters,
       postType: postType || null,
-      cursorCreatedAt: cursorCreatedAt || null,
-      cursorId: cursorId || null,
-      cursorRankBucket: cursorRankBucket != null ? Number(cursorRankBucket) : null,
-      limit: Math.min(parseInt(limit) || 20, 50),
+      cursorCreatedAt: cursor?.createdAt || null,
+      cursorId: cursor?.id || null,
+      cursorRankBucket: cursor?.rankBucket ?? null,
+      limit: Math.min(Math.max(parseInt(limit, 10) || 20, 1), 50),
       tags: tags || null,
       topic: topic || null,
       sportsMode: sportsMode || null,
@@ -1867,11 +1888,14 @@ router.get('/feed', verifyToken, async (req, res) => {
       scopeAccessRead,
     });
 
-    // Cold-start seeding: inject neighborhood facts when real posts are sparse
-    // Only on first page of the place surface, when fewer than 5 real posts
-    const realPostCount = result.posts.length;
+    // Cold-start seeding: inject neighborhood facts when real posts are sparse.
+    // Only on the first page of the place surface, when the area's whole feed is fewer than 5 posts: a first page
+    // that came back short with more to read (every post above was muted, hidden or filtered out) is a busy area,
+    // not a quiet one. Global pins aren't neighbors' posts and don't count.
+    const realPostCount = result.posts.filter((post) => !post.is_global_pin).length;
+    const areaFeedEnded = !result.pagination?.hasMore;
 
-    if (isColdStart && realPostCount < 5) {
+    if (isColdStart && areaFeedEnded && realPostCount < 5) {
       try {
         // The facts and the user's dismissed fact IDs, both read alongside the feed.
         const [facts, dismissedIds] = await Promise.all([factsRead, dismissedRead]);
@@ -1920,7 +1944,7 @@ router.get('/feed', verifyToken, async (req, res) => {
 
     // Transition celebration card: when a neighborhood just crossed from cold-start
     // (< 5 posts) to active (5+ posts), inject a one-time congratulatory card
-    if (isColdStart && realPostCount >= 5 && realPostCount <= 8) {
+    if (isColdStart && areaFeedEnded && realPostCount >= 5 && realPostCount <= 8) {
       try {
         const geohash = _encodeGeohash6(feedLatitude, feedLongitude);
         const transitionId = `transition_${geohash}`;
