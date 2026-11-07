@@ -58,6 +58,7 @@ const recordVocabulary = require('./recordVocabulary');
 const homeValueCard = require('./homeValueCard');
 const areaTrend = require('./propertyRecords/areaTrend');
 const realRentService = require('./realRentService');
+const householdFacts = require('./householdFacts');
 const { locationFromCoordinates, inferTimezone } = require('./context/locationResolver');
 
 const HOME_SELECT =
@@ -1271,6 +1272,21 @@ const EXEMPTION_UNAVAILABLE_COPY = {
   LOOKUP_PENDING: "Checking the county's records for this parcel. This fills in by itself.",
 };
 
+// The Home's bedrooms, baths and size as its other screens show them (householdFacts.shownColumns), for a renter's
+// rent band and block rent. Place's row leaves niche_data out, so it's read here for them alone; a failed read keeps
+// the row as it is.
+async function withShownColumns(home) {
+  try {
+    const { data: stored, error } = await supabaseAdmin.from('Home').select('niche_data').eq('id', home.id).maybeSingle();
+    if (error || !stored) return home;
+    const row = { ...home, niche_data: stored.niche_data };
+    return { ...home, ...householdFacts.shownColumns(row, homeRecords.liveCopy(row)) };
+  } catch (err) {
+    logger.warn('placeIntelligence: Home facts read failed', { homeId: home.id, error: err.message });
+    return home;
+  }
+}
+
 // Real Rent Benchmark (Wave 3) — what verified neighbors on this
 // geohash-6 block actually pay, as opposed to `rent_band`'s HUD
 // county-wide estimate. Band D: only a proven resident sees it,
@@ -1440,8 +1456,8 @@ const COMPOSER_SECTIONS = [
   { ids: ['home_systems'], run: ({ home, tier, access }) => composeHomeSystems(home, tier, access) },
   { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
   { ids: ['exemption_check'], budget: true, run: ({ home, tier, wantsRecordVocabulary }) => composeExemptionCheck(home, tier, wantsRecordVocabulary) },
-  { ids: ['rent_band'], budget: true, run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
-  { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
+  { ids: ['rent_band'], budget: true, run: async ({ rentHome }) => placeSectionAdapters.composeRentBand(await rentHome) },
+  { ids: ['real_rent'], run: async ({ rentHome, tier, userId, access }) => composeRealRent(await rentHome, tier, userId, !nonResidentViewer(access)) },
   { ids: ['civic_districts'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
   { ids: ['civic_election'], budget: true, run: ({ home, ballot, budgetMs }) => placeSectionAdapters.composeCivicElection(home, { ballot, budgetMs }) },
 ];
@@ -1580,6 +1596,9 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // keep the plain election row and districts.
   const ballotOn = Boolean(ballot) && viewer.role !== 'nonresident';
   const subject = claimant ? { ...home, move_in_date: null } : home;
+  // A renter's rent band and block rent go by the Home's bedrooms as its other screens show them.
+  const rentHome = viewer.role === 'renter' && propertyRecordsConfig.enabled() && (requested.has('rent_band') || requested.has('real_rent'))
+    ? withShownColumns(subject) : Promise.resolve(subject);
   // The response waits for every section, so a stalled source (the Census
   // geocoder, FEMA's flood map) held the whole Place for its 8 s cutoff. The
   // provider-backed sections get the preview's per-section budget: one that runs
@@ -1594,7 +1613,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ ids, budget, run }) => {
-      const compose = () => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, wantsRecordVocabulary, claimant, countyReads, budgetMs });
+      const compose = () => run({ home: subject, rentHome, userId, tier, hubPromise, access, ballot: ballotOn, wantsRecordVocabulary, claimant, countyReads, budgetMs });
       if (!budget) return compose();
       let over = false;
       // A section past its budget keeps running to fill its cache; its real
