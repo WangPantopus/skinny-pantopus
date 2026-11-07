@@ -100,6 +100,8 @@ const FACTS = {
   assessed_building_value: { section: 'assessment', label: 'Assessed improvement value', format: 'money', scope: 'unit', value: true },
   taxable_value: { section: 'assessment', label: 'Taxable value', format: 'money', scope: 'unit', value: true },
   value_year: { section: 'assessment', label: 'Value year', format: 'year', scope: 'unit', value: true },
+  // Where a record's values come from when it isn't the record's own publisher (Miami-Dade's are the state's certified roll).
+  value_source: { section: 'assessment', format: 'none', scope: 'unit', value: true },
   value_history: { section: 'assessment', format: 'history', scope: 'unit', value: true, owner: true },
   tax_amount: { section: 'assessment', label: 'Property tax', format: 'money', scope: 'unit', value: true },
   tax_year: { section: 'assessment', label: 'Tax year', format: 'year', scope: 'unit', value: true },

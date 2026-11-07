@@ -595,6 +595,7 @@ function serializePropertyRecord(copy, estimate = null) {
   if (copy.match !== 'building_only') {
     const assessment = titled('assessment');
     addAssessment(assessment, facts);
+    if (facts.value_source && assessment.rows.length) assessment.note = `Values from ${facts.value_source}`;
     const sale = titled('sale');
     // A deed's price for several homes isn't this home's (homeValueCard.js); its date still is.
     const many = coversMoreThanHome(facts);
