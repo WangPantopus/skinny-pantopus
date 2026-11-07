@@ -15,12 +15,14 @@ on:
     - cron: "17 3 10 * *"
     - cron: "17 3 11 * *"
     - cron: "17 3 12 * *"
+    # FHFA's yearly price index: out by the end of March, and a second try in May.
+    - cron: "29 5 12 4,5 *"
   workflow_dispatch:
     inputs:
       action:
-        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates (sources are state codes)"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates (sources are state codes); or area-trends (FHFA's yearly file)"
         type: choice
-        options: [build, rollback, switch, estimates]
+        options: [build, rollback, switch, estimates, area-trends]
         default: build
       sources:
         description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates)"
@@ -138,7 +140,7 @@ jobs:
           STATE_CODE: ${{ inputs.state }}
         run: node scripts/property-index/publish.cjs --rollback "$COUNTY" --state "$STATE_CODE" --bucket "$PROPERTY_INDEX_BUCKET"
       - name: Build and publish
-        if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
+        if: (github.event_name != 'workflow_dispatch' && github.event.schedule != '29 5 12 4,5 *') || inputs.action == 'build'
         env:
           SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
           # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
@@ -170,3 +172,10 @@ jobs:
             node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/estimates
             rm -rf "$work/us-structures/$state"
           done
+      # The value card's area price change: one small file per state. A build that fails or looks wrong uploads nothing, and last year's stays.
+      - name: Build and publish area trends
+        if: inputs.action == 'area-trends' || github.event.schedule == '29 5 12 4,5 *'
+        run: |
+          out="$RUNNER_TEMP/area-trends"
+          node scripts/property-index/build-area-trends.cjs --out "$out" --work "$RUNNER_TEMP/area-trends-work"
+          aws s3 cp "$out/area-trends" "s3://$PROPERTY_INDEX_BUCKET/index/area-trends" --recursive --only-show-errors
