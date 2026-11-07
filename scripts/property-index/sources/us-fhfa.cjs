@@ -161,7 +161,9 @@ async function buildAreaTrends({ work }) {
       appraisal_year: appraisals.year,
       appraisals: {},
       census_source: census.source,
+      census_middle: census.middle,
       zip_values: {},
+      county_values: {},
     });
     return states.get(state);
   };
@@ -179,6 +181,11 @@ async function buildAreaTrends({ work }) {
   for (const [fips, value] of appraisals.medians) {
     const state = stateOfCounty(fips);
     if (state) stateFile(state).appraisals[fips] = value;
+  }
+  // A county's own figures, for estimates in a county with no sales to learn from (services/propertyRecords/valueEstimate.js).
+  for (const [fips, values] of census.counties) {
+    const state = stateOfCounty(fips);
+    if (state) stateFile(state).county_values[fips] = values;
   }
   const placed = new Set();
   const noisyZips = new Set();

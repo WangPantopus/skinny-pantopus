@@ -345,7 +345,7 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
   median, no default "flat", one confidence path); `routes/home.js` property-value (5509-5547: legacy fields and allowed
   values kept); web `PropertyValueCard.tsx`, `YourHomeDetail.tsx`; iOS and Android dashboard and Place value blocks;
   the FHFA index import (WP7's pipeline).
-- **Switches:** `VALUE_ESTIMATE_MARKETS` and a switch for neighborhood figures; all off until the founder turns them on.
+- **Switches:** levels 1 and 2 of the estimate show only in a live county whose line in the switch file says `estimates: true` (`-f action=switch -f estimates=on`, no release); `VALUE_NEIGHBORHOOD_FIGURES=1` turns on level 3; `VALUE_AREA_TREND=1` turns on the area's price change. All off until the founder turns them on.
 - **Data:** releases (sales, index); no tables.
 - **Depends on:** WP5 or WP7 for values and sales; D9 is decided.
 - **Done when:** G7 passes; a missing trend is sent as missing, not "flat"; the store builds' validators still accept
@@ -353,7 +353,7 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 - **Verify:** on all three apps as owner (value shows) and renter (it doesn't); a non-disclosure state; a county with
   no value; the store build's value card.
 - **Roll out:** with each live county; estimates market by market after T4.
-- **Roll back:** empty `VALUE_ESTIMATE_MARKETS`; the router.
+- **Roll back:** `-f action=switch -f estimates=off` for the counties; the router.
 - **Risks:** assessment practice differs by state (fractional assessments must never read as market value).
 - **Size:** M; L with an estimate.
 
