@@ -193,7 +193,7 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-app-text">Location Hours</h1>
           <p className="text-sm text-app-text-secondary mt-1">Weekly schedule and special date overrides</p>
@@ -221,10 +221,10 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
                 const label = hours.filter((row) => row.day_of_week === h.day_of_week).length > 1
                   ? `${day} interval ${hours.slice(0, idx + 1).filter((row) => row.day_of_week === h.day_of_week).length}` : day;
                 return (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-3 text-sm text-app-text-strong">{label}</div>
-                  {!h.present ? <div className="col-span-9 text-sm text-app-text-secondary">Not set · <button onClick={() => updateHour(idx, { present: true })} disabled={hours.filter((row) => row.present).length >= 7} className="underline disabled:opacity-50">Set {DAY_NAMES[h.day_of_week]} hours</button></div> : <>
-                  <label className="col-span-2 text-xs inline-flex items-center gap-1">
+                <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                  <div className="sm:col-span-3 text-sm text-app-text-strong">{label}</div>
+                  {!h.present ? <div className="sm:col-span-9 text-sm text-app-text-secondary">Not set · <button onClick={() => updateHour(idx, { present: true })} disabled={hours.filter((row) => row.present).length >= 7} className="underline disabled:opacity-50">Set {DAY_NAMES[h.day_of_week]} hours</button></div> : <>
+                  <label className="sm:col-span-2 text-xs inline-flex items-center gap-1">
                     <input
                       type="checkbox"
                       aria-label={`${label} closed`}
@@ -240,7 +240,7 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
                     disabled={h.is_closed}
                     value={h.open_time || ''}
                     onChange={(e) => updateHour(idx, { open_time: e.target.value })}
-                    className="col-span-3 rounded border border-app-border px-2 py-1 text-sm disabled:bg-app-surface-sunken"
+                    className="w-full min-w-0 sm:col-span-3 rounded border border-app-border px-2 py-1 text-sm disabled:bg-app-surface-sunken"
                   />
                   <input
                     type={timeInputType(h.close_time)}
@@ -249,9 +249,9 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
                     disabled={h.is_closed}
                     value={h.close_time || ''}
                     onChange={(e) => updateHour(idx, { close_time: e.target.value })}
-                    className="col-span-3 rounded border border-app-border px-2 py-1 text-sm disabled:bg-app-surface-sunken"
+                    className="w-full min-w-0 sm:col-span-3 rounded border border-app-border px-2 py-1 text-sm disabled:bg-app-surface-sunken"
                   />
-                  {h.notes && <p className="col-span-12 text-xs text-app-text-secondary break-words">{h.notes}</p>}
+                  {h.notes && <p className="sm:col-span-12 text-xs text-app-text-secondary break-words">{h.notes}</p>}
                   </>}
                 </div>
               ); })}
@@ -272,10 +272,10 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
             {specialLoading && <p className="text-app-text-secondary mb-3">Loading special hours...</p>}
             {specialError && <div role="alert" className="text-sm text-red-600 mb-3">{specialError} <button onClick={() => void loadSpecial()} className="underline">Retry special hours</button></div>}
             <fieldset disabled={saving || !canEdit || specialLoading || !!specialError} className="grid grid-cols-1 sm:grid-cols-5 gap-2 mb-3">
-              <input type="date" aria-label="Date" value={specialForm.date} onChange={(e) => setSpecialForm((f) => ({ ...f, date: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm" />
-              <input type="text" aria-label="Label" placeholder="Label" value={specialForm.label} onChange={(e) => setSpecialForm((f) => ({ ...f, label: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm" />
-              <input type="time" aria-label="Opening time" disabled={specialForm.is_closed} value={specialForm.open_time} onChange={(e) => setSpecialForm((f) => ({ ...f, open_time: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
-              <input type="time" aria-label="Closing time" disabled={specialForm.is_closed} value={specialForm.close_time} onChange={(e) => setSpecialForm((f) => ({ ...f, close_time: e.target.value }))} className="rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
+              <input type="date" aria-label="Date" value={specialForm.date} onChange={(e) => setSpecialForm((f) => ({ ...f, date: e.target.value }))} className="w-full min-w-0 rounded border border-app-border px-2 py-1.5 text-sm" />
+              <input type="text" aria-label="Label" placeholder="Label" value={specialForm.label} onChange={(e) => setSpecialForm((f) => ({ ...f, label: e.target.value }))} className="w-full min-w-0 rounded border border-app-border px-2 py-1.5 text-sm" />
+              <input type="time" aria-label="Opening time" disabled={specialForm.is_closed} value={specialForm.open_time} onChange={(e) => setSpecialForm((f) => ({ ...f, open_time: e.target.value }))} className="w-full min-w-0 rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
+              <input type="time" aria-label="Closing time" disabled={specialForm.is_closed} value={specialForm.close_time} onChange={(e) => setSpecialForm((f) => ({ ...f, close_time: e.target.value }))} className="w-full min-w-0 rounded border border-app-border px-2 py-1.5 text-sm disabled:bg-app-surface-sunken" />
               <label className="inline-flex items-center gap-2 text-sm">
                 <input type="checkbox" aria-label="Closed on special date" checked={specialForm.is_closed} onChange={(e) => setSpecialForm((f) => ({ ...f, is_closed: e.target.checked }))} />
                 Closed
@@ -290,7 +290,7 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
                 <div className="text-sm text-app-text-secondary">No special-hour overrides.</div>
               ) : (
                 specialHours.map((sh) => (
-                  <div key={sh.id} className="flex items-center justify-between text-sm border border-app-border rounded px-3 py-2">
+                  <div key={sh.id} className="flex flex-wrap items-center justify-between gap-2 break-words text-sm border border-app-border rounded px-3 py-2">
                     <div>
                       <span className="font-medium text-app-text">{sh.date}</span>
                       {sh.label ? <span className="text-app-text-secondary"> · {sh.label}</span> : null}
