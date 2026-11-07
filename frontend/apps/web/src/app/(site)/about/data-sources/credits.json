@@ -300,6 +300,14 @@
           "license_url": "https://creativecommons.org/licenses/by/4.0/"
         },
         {
+          "id": "us/dc/statewide",
+          "publisher": "District of Columbia, Office of the Chief Technology Officer",
+          "url": "https://opendata.dc.gov/datasets/DCGIS::address-points/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/",
+          "dataset": "Address points"
+        },
+        {
           "id": "us/ne/omaha",
           "publisher": "Douglas County GIS, Nebraska",
           "url": "https://data.dogis.org/datasets/address-points-1",
@@ -416,6 +424,13 @@
           "url": "https://data.montgomerycountymd.gov/terms-of-use",
           "license": "Asks for credit",
           "statement": "The data made available here has been modified for use from its original source, which is Montgomery County, Maryland."
+        },
+        {
+          "id": "us/nj/statewide",
+          "publisher": "NJ Office of Information Technology, Office of GIS (NJOGIS), and its county partners",
+          "url": "https://njogis-newjersey.opendata.arcgis.com/datasets/c4b6cb9caad94a569e40541457fd45f6",
+          "license": "Acknowledgement requested",
+          "dataset": "Address points for New Jersey, Next Generation 9-1-1"
         },
         {
           "id": "overture:us/ny/city_of_new_york",
