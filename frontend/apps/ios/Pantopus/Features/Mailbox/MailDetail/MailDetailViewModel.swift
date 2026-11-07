@@ -120,6 +120,14 @@ public final class MailDetailViewModel {
     /// its envelope. Decided on the first load that can open it, then kept
     /// for the visit (opening it here marks it opened).
     private(set) var cardFirstOpen: Bool?
+    /// The card on the table (`card_table`), kept here because a fold of the
+    /// Duo rebuilds the screen and nothing on the table may reset. Nil for
+    /// anything else, and once it's shredded.
+    private(set) var cardTable: CardTableModel?
+    /// The table showed on this visit, so coming back to it doesn't open the card again.
+    private(set) var cardTableWasShown = false
+    /// The person closed the table, and the page is on its way back.
+    var cardTableClosed = false
     /// Where the booklet's reader is, and how far the page is scrolled, for
     /// the page a fold's new layout draws (the Mail tab keeps this model
     /// across folds). Not drawn from here.
@@ -147,7 +155,14 @@ public final class MailDetailViewModel {
 
     // MARK: - Lifecycle
 
+    func setCardTable(_ model: CardTableModel?) {
+        cardTable = model
+        if model != nil { cardTableWasShown = true }
+    }
+
     public func load() async {
+        // A fold of the Duo rebuilds the screen; the card on the table doesn't read again.
+        if cardTable != nil { return }
         if case .loaded = state {} else { state = .loading }
         await fetch()
     }
@@ -191,6 +206,7 @@ public final class MailDetailViewModel {
             }
             needsProof = false
             isNotFound = false
+            prepareCardTable(content)
             state = .loaded(content)
             if content.letter?.kind == .bundle { await loadBundle() }
             // Certified mail is read like any letter (Received → Read); its
