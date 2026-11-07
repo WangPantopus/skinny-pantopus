@@ -24,6 +24,10 @@ const { openState, nearest, round, NSI_VERSION } = require('./us-structures.cjs'
 
 const COLUMNS = ['Shape', 'OCC_CLS', 'PRIM_OCC', 'PROP_ADDR', 'SQFEET', 'LONGITUDE', 'LATITUDE', 'PROD_DATE'];
 const OUTLINE_TOLERANCE = 1; // half a meter, in the outline's own units
+// FEMA's point is the structure's own only within this of its outline: 2,007 of Kentucky's aren't coordinates at all.
+const POINT_SLACK_DEGREES = 0.02;
+// Wider than any building is a drawing error: indexed under its own cell only, never across a county's worth of cells.
+const LARGEST_HALF_WIDTH_METERS = 2000;
 const STREET_HASH = 16777619;
 // A house number this close on the same street is the house next door, or the one after it.
 const NEXT_DOOR_NUMBERS = 20;
@@ -123,6 +127,18 @@ function outlineOf(parts, lng, lat) {
   return outline;
 }
 
+/** The middle of an outline's box, to six places, for a structure whose own point is missing or wrong. */
+function middleOf(ring) {
+  let [west, south, east, north] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [x, y] of ring) {
+    west = Math.min(west, x);
+    east = Math.max(east, x);
+    south = Math.min(south, y);
+    north = Math.max(north, y);
+  }
+  return [Number(((west + east) / 2).toFixed(6)), Number(((south + north) / 2).toFixed(6))];
+}
+
 function halfWidth(outline) {
   let widest = 0;
   for (let i = 0; i < outline.length; i += 1) widest = Math.max(widest, Math.abs(outline[i]));
@@ -154,7 +170,7 @@ function readStructures(table, inventory) {
   let count = 0;
   let used = 0;
   let newest = 0;
-  const counts = { read: 0, homes: 0, addressed: 0, joined: 0, no_shape: 0 };
+  const counts = { read: 0, homes: 0, addressed: 0, joined: 0, no_shape: 0, off_point: 0, too_wide: 0 };
   for (const row of rows(table[1], COLUMNS)) {
     counts.read += 1;
     if (!row.Shape || !row.Shape.length || !row.Shape[0].length) {
@@ -162,8 +178,10 @@ function readStructures(table, inventory) {
       continue;
     }
     if (row.PROD_DATE > newest) newest = row.PROD_DATE;
-    const lng = Number.isFinite(row.LONGITUDE) ? Number(row.LONGITUDE.toFixed(6)) : row.Shape[0][0][0];
-    const lat = Number.isFinite(row.LATITUDE) ? Number(row.LATITUDE.toFixed(6)) : row.Shape[0][0][1];
+    const corner = row.Shape[0][0];
+    const stated = Math.abs(row.LONGITUDE - corner[0]) < POINT_SLACK_DEGREES && Math.abs(row.LATITUDE - corner[1]) < POINT_SLACK_DEGREES;
+    if (!stated) counts.off_point += 1;
+    const [lng, lat] = stated ? [Number(row.LONGITUDE.toFixed(6)), Number(row.LATITUDE.toFixed(6))] : middleOf(row.Shape[0]);
     const outline = outlineOf(row.Shape, lng, lat);
     const i = count;
     count += 1;
@@ -209,7 +227,8 @@ function readStructures(table, inventory) {
     next.array[i] = heads.has(cell) ? heads.get(cell) : -1;
     heads.set(cell, i);
     const width = halfWidth(outline);
-    if (width > points.WIDE_METERS) {
+    if (width > LARGEST_HALF_WIDTH_METERS) counts.too_wide += 1;
+    else if (width > points.WIDE_METERS) {
       for (const touched of points.cellsNear(lng, lat, width + points.NEAR_METERS)) {
         if (touched !== cell) (wide.get(touched) || wide.set(touched, []).get(touched)).push(i);
       }
@@ -478,7 +497,7 @@ function buildStatePoints({ work, out, state, registry: registryRoot, built }) {
   const data = readStructures(table, inventory);
   fs.rmSync(femaDir, { recursive: true, force: true });
   const { counts } = data;
-  log(`${state}: ${counts.read} structures, ${counts.homes} homes, ${counts.addressed} with a readable address, ${counts.joined} joined to the inventory, ${counts.no_shape} with no outline`);
+  log(`${state}: ${counts.read} structures, ${counts.homes} homes, ${counts.addressed} with a readable address, ${counts.joined} joined to the inventory, ${counts.no_shape} with no outline, ${counts.off_point} whose point was off its outline, ${counts.too_wide} too wide for a building`);
   countInventory(data, inventory);
   const registry = readRegistry(registryRoot, state, work);
   const claimed = addClaims(data, inventory, registry);
