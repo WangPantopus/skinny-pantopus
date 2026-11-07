@@ -8,7 +8,7 @@
  *   2. the last recorded sale, or that prices aren't public in this state;
  *   3. the area's price change, from an index, labeled as the area's (propertyRecords/areaTrend.js);
  *   4. a Pantopus estimate, with its range and what was measured (propertyRecords/valueEstimate.js);
- *   5. with no county record, the Census Bureau's figures for the ZIP, called the neighborhood's.
+ *   5. with no estimate, the Census Bureau's figures for the ZIP, called the neighborhood's.
  *
  * Only for the confirmed owner: callers check before they send it. An answer from
  * ATTOM's stored copy has its own fields and no card.
@@ -105,7 +105,8 @@ function build(profile, { trend = null, lookup = null, neighborhood = null } = {
     rows.push(...estimateRows(estimate));
     notes.push(estimateNote(estimate));
   }
-  if (neighborhood && profile.source === 'fallback') {
+  // Any home we can't estimate: no county record, or one that has only an assessment to go on, or no value at all.
+  if (neighborhood && !estimate) {
     rows.push(
       { id: 'neighborhood_value', label: 'Typical home value in this ZIP', value: money(neighborhood.median) },
       { id: 'neighborhood_range', label: 'Middle half of homes here', value: `${money(neighborhood.low)} – ${money(neighborhood.high)}` },

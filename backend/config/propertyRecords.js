@@ -9,7 +9,7 @@
  *   PROPERTY_RECORDS_SWITCHES              Which switch file this server follows, switches/<name>.json. Default: APP_ENV.
  *   VALUE_AREA_TREND                       1: owners' value cards show the area's price change, from <root>/area-trends, in every county.
  *   VALUE_ESTIMATES                        off: no Pantopus estimate shows anywhere. Otherwise they follow each county's live switch.
- *   VALUE_NEIGHBORHOOD_FIGURES             1: owners' value cards show the Census Bureau's figures for the ZIP where a home has no county record.
+ *   VALUE_NEIGHBORHOOD_FIGURES             1: owners' value cards show the Census Bureau's figures for the ZIP where a home has no estimate.
  *   PROPERTY_INDEX_AWS_ACCESS_KEY_ID, PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY, PROPERTY_INDEX_REGION  The read-only key.
  *   ATTOM_STAND_IN                         '1' only on a local rig whose stand-in answers for ATTOM. See below.
  *
