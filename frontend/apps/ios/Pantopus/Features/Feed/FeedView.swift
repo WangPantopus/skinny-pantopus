@@ -261,8 +261,14 @@ public struct FeedView: View {
                 break
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in
-            Task { await viewModel.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { note in
+            // A reaction, a save or a reply on a post's own page changes its card where it is; a new
+            // post, an edit or a block reads the list again.
+            if let change = note.userInfo?[PulsePostsRefresh.changeKey] as? PulsePostChange {
+                viewModel.apply(change)
+            } else {
+                Task { await viewModel.refresh() }
+            }
         }
         .onAppear { Analytics.track(.screenPulseFeedViewed(intent: viewModel.activeIntent.rawValue)) }
         .confirmationDialog(
