@@ -75,20 +75,23 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
 
     public var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: Spacing.s0) {
-                ContentDetailTopBar(
-                    title: title,
-                    onBack: onBack,
-                    action: topBarAction,
-                    secondaryAction: topBarSecondaryAction,
-                    scalesType: scalesType
-                )
-                scroll
-                    .background(Theme.Color.appBg)
-                    .overlay(alignment: .top) {
-                        scrollOverlay?.padding(Spacing.s3)
-                    }
-            }
+            scroll
+                .background(Theme.Color.appBg)
+                .overlay(alignment: .top) {
+                    scrollOverlay?.padding(Spacing.s3)
+                }
+                // The page runs under the bar, which slides away while it
+                // scrolls down and comes back near its top (founder request
+                // 2026-11-07).
+                .scrollAwayHeader {
+                    ContentDetailTopBar(
+                        title: title,
+                        onBack: onBack,
+                        action: topBarAction,
+                        secondaryAction: topBarSecondaryAction,
+                        scalesType: scalesType
+                    )
+                }
             ctaContent
                 .padding(Spacing.s4)
         }

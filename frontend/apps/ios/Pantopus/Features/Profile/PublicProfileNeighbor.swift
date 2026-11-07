@@ -268,7 +268,23 @@ struct NeighborProfileLayout: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            VStack(spacing: Spacing.s0) {
+            ScrollView {
+                VStack(spacing: Spacing.s0) {
+                    NeighborHeroCard(hero: content.hero)
+                    NeighborStatStrip(stats: content.stats)
+                    NeighborTabBar(tabs: content.tabs, selected: $selectedTab)
+                    tabContent
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s3)
+                    NeighborReportBlockRow(onReport: onReport, onBlock: onBlock)
+                        .padding(.top, Spacing.s4)
+                        .padding(.bottom, 120)
+                }
+            }
+            .background(Theme.Color.appBg)
+            // The profile scrolls under the bar, which slides away while it
+            // scrolls down and comes back near the top (founder request 2026-11-07).
+            .scrollAwayHeader {
                 ContentDetailTopBar(
                     title: nil,
                     onBack: onBack,
@@ -277,20 +293,6 @@ struct NeighborProfileLayout: View {
                         accessibilityLabel: "More actions"
                     ) { Task { @MainActor in onOverflow() } }
                 )
-                ScrollView {
-                    VStack(spacing: Spacing.s0) {
-                        NeighborHeroCard(hero: content.hero)
-                        NeighborStatStrip(stats: content.stats)
-                        NeighborTabBar(tabs: content.tabs, selected: $selectedTab)
-                        tabContent
-                            .padding(.horizontal, Spacing.s4)
-                            .padding(.top, Spacing.s3)
-                        NeighborReportBlockRow(onReport: onReport, onBlock: onBlock)
-                            .padding(.top, Spacing.s4)
-                            .padding(.bottom, 120)
-                    }
-                }
-                .background(Theme.Color.appBg)
             }
             NeighborActionBar(
                 primaryLabel: content.primaryCtaLabel,
