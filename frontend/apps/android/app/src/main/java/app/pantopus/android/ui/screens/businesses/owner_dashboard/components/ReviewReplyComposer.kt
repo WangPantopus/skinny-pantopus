@@ -62,7 +62,7 @@ import app.pantopus.android.ui.theme.Spacing
 fun ReviewReplyComposer(
     review: OwnerReviewItem,
     businessName: String,
-    onSubmit: (String) -> Unit,
+    onSubmit: ((String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var composing by rememberSaveable(review.id) { mutableStateOf(false) }
@@ -91,6 +91,8 @@ fun ReviewReplyComposer(
         }
         when {
             review.reply != null -> RepliedBox(businessName = businessName, reply = review.reply)
+            // Not allowed to answer: the review reads as it does, and a draft stays saved in case that changes.
+            onSubmit == null -> Unit
             composing ->
                 Composer(
                     businessName = businessName,

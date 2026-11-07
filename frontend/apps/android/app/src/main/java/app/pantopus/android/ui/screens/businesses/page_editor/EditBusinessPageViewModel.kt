@@ -1,24 +1,34 @@
-@file:Suppress("PackageNaming", "TooManyFunctions", "MagicNumber")
+@file:Suppress("PackageNaming", "TooManyFunctions", "MagicNumber", "LargeClass")
 
 package app.pantopus.android.ui.screens.businesses.page_editor
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.businesses.BusinessAccessDto
 import app.pantopus.android.data.api.models.businesses.BusinessCatalogItemDto
 import app.pantopus.android.data.api.models.businesses.BusinessDetailResponse
 import app.pantopus.android.data.api.models.businesses.BusinessHoursDto
+import app.pantopus.android.data.api.models.businesses.BusinessPermission
 import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
 import app.pantopus.android.data.api.models.businesses.SetBusinessHoursRequest
 import app.pantopus.android.data.api.models.businesses.UpdateBusinessRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
+import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.upload.UploadFile
 import app.pantopus.android.data.upload.UploadRepository
+import app.pantopus.android.ui.screens.businesses.BusinessAccessCheck
+import app.pantopus.android.ui.screens.businesses.BusinessAccessState
+import app.pantopus.android.ui.screens.businesses.canManageCatalog
+import app.pantopus.android.ui.screens.businesses.canUsePageEditor
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +56,17 @@ private const val NO_LOCATION_MESSAGE =
  * fully functional editor for someone with no write access.
  */
 private const val NO_ACCESS_MESSAGE = "You don't have access to edit this business."
+private const val LOAD_CHECK_FAILED = "Couldn't check edit access. Please try again."
+private const val ACCESS_CHECK_FAILED = "Couldn't check edit access. Your changes are kept. Retry to continue."
+private const val SESSION_CHANGED = "Your session changed. Reopen the business to continue."
+private const val NO_PROFILE_ACCESS = "You don't have permission to edit this business's profile. Your changes are kept."
+private const val NO_LOCATION_ACCESS = "You don't have permission to edit this business's location. Your changes are kept."
+private const val NO_HOURS_ACCESS = "You don't have permission to edit business hours. Your changes are kept."
+private const val WRITE_REFUSED = "You don't have permission to make this change. Your changes are kept."
+private const val NO_CATALOG_ACCESS = "You don't have permission to manage this catalog."
+private const val CATALOG_CHECK_FAILED = "Couldn't check catalog access. Please try again."
+private const val OWNER_ONLY_CLOSE = "Only an owner can close this business."
+private const val CLOSE_CHECK_FAILED = "Couldn't check your access, so the business wasn't closed. Please try again."
 
 private const val OFFLINE_MESSAGE = "You're offline. Try again when you're back online."
 
@@ -63,6 +84,10 @@ private sealed interface SaveBlock {
 /**
  * P4.2 / WS2.3 — A13.10 Edit Business Page. Profile-form editor wired to
  * business APIs (not the RN block CMS).
+ *
+ * Current access comes from `GET /:businessId/me`, asked on entry, on every
+ * return and before a save, publish, upload or close, as on iOS. While access
+ * is off the draft stays on screen, locked, with a notice that offers a retry.
  */
 @HiltViewModel
 class EditBusinessPageViewModel
@@ -72,6 +97,8 @@ class EditBusinessPageViewModel
         private val businesses: BusinessesRepository,
         private val networkMonitor: NetworkMonitor,
         private val uploads: UploadRepository,
+        private val team: BusinessTeamRepository,
+        sessions: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
         private val businessId: String =
             requireNotNull(savedStateHandle[EDIT_BUSINESS_PAGE_BUSINESS_ID_KEY]) {
@@ -91,8 +118,17 @@ class EditBusinessPageViewModel
         private val _uploadingMedia = MutableStateFlow<EditBusinessMediaKind?>(null)
         val uploadingMedia: StateFlow<EditBusinessMediaKind?> = _uploadingMedia.asStateFlow()
 
-        private val _canClose = MutableStateFlow(false)
-        val canClose: StateFlow<Boolean> = _canClose.asStateFlow()
+        private val _access = MutableStateFlow(EditBusinessPageAccess(isChecking = true))
+        val access: StateFlow<EditBusinessPageAccess> = _access.asStateFlow()
+
+        private val _showsCatalog = MutableStateFlow(false)
+        val showsCatalog: StateFlow<Boolean> = _showsCatalog.asStateFlow()
+
+        private val session = sessions.create(viewModelScope)
+        private val accessCheck = BusinessAccessCheck(viewModelScope, { team.access(businessId) }, ::applyAccess)
+        private var loadGeneration = 0
+        private var isOpeningCatalog = false
+
         private val _isClosing = MutableStateFlow(false)
         val isClosing: StateFlow<Boolean> = _isClosing.asStateFlow()
         private val _closeError = MutableStateFlow<String?>(null)
@@ -122,7 +158,8 @@ class EditBusinessPageViewModel
         }
 
         fun closeBusiness() {
-            if (!_canClose.value || _isClosing.value || _state.value !is EditBusinessPageUiState.Loaded) return
+            // Not tied to the last answer: a failed check clears it, and the dialog's retry has to survive that.
+            if (_isClosing.value || _state.value !is EditBusinessPageUiState.Loaded) return
             if (isSaving || _uploadingMedia.value != null) {
                 _closeError.value = "Wait for the current save or upload to finish, then try again."
                 return
@@ -130,6 +167,12 @@ class EditBusinessPageViewModel
             _isClosing.value = true
             _closeError.value = null
             viewModelScope.launch {
+                val refusal = closeRefusal()
+                if (refusal != null) {
+                    _closeError.value = refusal
+                    _isClosing.value = false
+                    return@launch
+                }
                 when (val result = businesses.closeBusiness(businessId)) {
                     is NetworkResult.Success -> _businessClosed.value = true
                     is NetworkResult.Failure -> {
@@ -140,10 +183,21 @@ class EditBusinessPageViewModel
             }
         }
 
-        fun load() {
+        /** Every arrival: the first load, or a fresh check of what's allowed that keeps the draft on screen. */
+        fun resume() {
             if (localPreviewPersistenceEnabled) return
-            if (hasLoadedOnce && _state.value is EditBusinessPageUiState.Loaded) return
-            viewModelScope.launch { fetch(showLoading = true) }
+            if (hasLoadedOnce && _state.value is EditBusinessPageUiState.Loaded) {
+                retryAccess()
+            } else {
+                refresh()
+            }
+        }
+
+        /** The screen left or the app went away: what was allowed no longer counts, and no late reply can restore it. */
+        fun pause() {
+            if (localPreviewPersistenceEnabled) return
+            loadGeneration++
+            accessCheck.forget()
         }
 
         fun refresh() {
@@ -151,12 +205,82 @@ class EditBusinessPageViewModel
             viewModelScope.launch { fetch(showLoading = true) }
         }
 
+        fun retryAccess() {
+            if (localPreviewPersistenceEnabled) return
+            viewModelScope.launch { accessCheck.confirm() }
+        }
+
         /** Test-only: seed the loaded state directly. */
         fun seedForPreview(content: EditBusinessPageContent) {
             savedHours = content.hours
             localPreviewPersistenceEnabled = true
             hasLoadedOnce = true
+            _access.value = EditBusinessPageAccess.Full
             _state.value = EditBusinessPageUiState.Loaded(content)
+        }
+
+        private fun applyAccess(state: BusinessAccessState) {
+            val current = _access.value
+            // A toast held back behind the notice is out of date once the notice goes.
+            if (current.notice != null) _toast.value = null
+            _access.value =
+                when (state) {
+                    BusinessAccessState.Unknown, BusinessAccessState.Checking -> current.copy(isChecking = true, notice = null)
+                    is BusinessAccessState.Known -> accessFrom(state.access)
+                    BusinessAccessState.Refused -> EditBusinessPageAccess(notice = NO_ACCESS_MESSAGE)
+                    BusinessAccessState.Failed -> EditBusinessPageAccess(notice = ACCESS_CHECK_FAILED)
+                }
+        }
+
+        private fun accessFrom(access: BusinessAccessDto): EditBusinessPageAccess =
+            EditBusinessPageAccess(
+                canEditProfile = access.allows(BusinessPermission.PROFILE_EDIT),
+                canEditLocation = access.allows(BusinessPermission.LOCATIONS_EDIT),
+                canEditHours = access.allows(BusinessPermission.HOURS_EDIT),
+                canManageCatalog = access.canManageCatalog,
+                canClose = access.hasAccess && access.isOwner,
+                notice = NO_ACCESS_MESSAGE.takeUnless { access.canUsePageEditor },
+            )
+
+        /** What the server says now, or null when it refused, the read failed or the session changed. */
+        private suspend fun currentAccess(): BusinessAccessDto? =
+            (accessCheck.confirm() as? BusinessAccessState.Known)?.access?.takeIf { session.isCurrent }
+
+        private fun accessFailure(): String = if (session.isCurrent) _access.value.notice ?: ACCESS_CHECK_FAILED else SESSION_CHANGED
+
+        private fun showAccessNotice(message: String) {
+            _toast.value = null
+            _access.value = _access.value.copy(notice = message)
+        }
+
+        private suspend fun closeRefusal(): String? {
+            val answer = accessCheck.confirm()
+            return when {
+                !session.isCurrent -> SESSION_CHANGED
+                answer is BusinessAccessState.Known -> OWNER_ONLY_CLOSE.takeUnless { answer.access.isOwner }
+                answer == BusinessAccessState.Refused -> OWNER_ONLY_CLOSE
+                else -> CLOSE_CHECK_FAILED
+            }
+        }
+
+        /** Reuses the catalog manager without leaving unsaved profile fields, after asking whether it's still allowed. */
+        fun openCatalog() {
+            if (isOpeningCatalog || isSaving) return
+            isOpeningCatalog = true
+            viewModelScope.launch {
+                val access = currentAccess()
+                when {
+                    access == null -> _toast.value = CATALOG_CHECK_FAILED
+                    access.canManageCatalog -> _showsCatalog.value = true
+                    else -> _toast.value = NO_CATALOG_ACCESS
+                }
+                isOpeningCatalog = false
+            }
+        }
+
+        fun closeCatalog() {
+            _showsCatalog.value = false
+            reloadServices()
         }
 
         fun updateHoursDay(
@@ -186,7 +310,8 @@ class EditBusinessPageViewModel
         }
 
         private fun changeHours(transform: (List<EditBusinessPageHoursRow>) -> List<EditBusinessPageHoursRow>) {
-            if (isSaving) return
+            val access = _access.value
+            if (isSaving || access.isChecking || !access.canEditHours) return
             if (!localPreviewPersistenceEnabled && primaryLocationId == null) {
                 _toast.value = "Add a business location before setting hours."
                 return
@@ -226,6 +351,7 @@ class EditBusinessPageViewModel
             key: EditBusinessPageFieldKey,
             value: String,
         ) {
+            if (!canChange(key)) return
             val current = _state.value as? EditBusinessPageUiState.Loaded ?: return
             val content = current.content
             val next =
@@ -272,6 +398,20 @@ class EditBusinessPageViewModel
             _state.value = EditBusinessPageUiState.Loaded(EditBusinessPageMapper.withRecomputedMode(next))
         }
 
+        private fun canChange(key: EditBusinessPageFieldKey): Boolean {
+            val access = _access.value
+            val allowed =
+                when (key) {
+                    EditBusinessPageFieldKey.Address,
+                    EditBusinessPageFieldKey.City,
+                    EditBusinessPageFieldKey.State,
+                    EditBusinessPageFieldKey.Zip,
+                    -> access.canEditLocation
+                    else -> access.canEditProfile
+                }
+            return allowed && !isSaving && !access.isChecking
+        }
+
         /**
          * Applies an address-component edit while leaving the other
          * components untouched — the street line never absorbs the locality.
@@ -310,6 +450,7 @@ class EditBusinessPageViewModel
             )
 
         fun beginDescriptionEditing() {
+            if (_access.value.isChecking || !_access.value.canEditProfile) return
             val current = _state.value as? EditBusinessPageUiState.Loaded ?: return
             if (current.content.description !is EditBusinessPageDescriptionState.Prompt) return
             val next =
@@ -343,6 +484,15 @@ class EditBusinessPageViewModel
                     return@launch
                 }
                 if (!persist(successToast = null)) return@launch
+                val access = currentAccess()
+                if (access == null) {
+                    showAccessNotice(accessFailure())
+                    return@launch
+                }
+                if (!access.allows(BusinessPermission.PROFILE_EDIT)) {
+                    showAccessNotice(NO_PROFILE_ACCESS)
+                    return@launch
+                }
                 when (val result = businesses.publishBusiness(businessId)) {
                     is NetworkResult.Success -> {
                         _toast.value = "Published"
@@ -356,6 +506,8 @@ class EditBusinessPageViewModel
         }
 
         fun discardRequested() {
+            // A save in flight sends the draft it started with; discarding now would leave it saved anyway.
+            if (isSaving) return
             _showsDiscardConfirm.value = true
         }
 
@@ -389,6 +541,12 @@ class EditBusinessPageViewModel
             if (_uploadingMedia.value != null || _state.value !is EditBusinessPageUiState.Loaded) return
             _uploadingMedia.value = kind
             viewModelScope.launch {
+                val access = currentAccess()
+                if (access == null || !access.allows(BusinessPermission.PROFILE_EDIT)) {
+                    showAccessNotice(if (access == null) accessFailure() else NO_PROFILE_ACCESS)
+                    _uploadingMedia.value = null
+                    return@launch
+                }
                 // Randomised name, as in the create wizard: the picker's file
                 // name never reaches storage or access logs.
                 val file =
@@ -413,26 +571,41 @@ class EditBusinessPageViewModel
         }
 
         private suspend fun fetch(showLoading: Boolean) {
+            val request = ++loadGeneration
             if (showLoading) _state.value = EditBusinessPageUiState.Loading
-            when (val detailResult = businesses.business(businessId)) {
-                is NetworkResult.Failure -> {
-                    _state.value =
-                        if (detailResult.error is NetworkError.NotFound) {
-                            EditBusinessPageUiState.Empty
-                        } else {
-                            EditBusinessPageUiState.Error(detailResult.error.message)
-                        }
-                    hasLoadedOnce = false
+            val (detailResult, answer) =
+                coroutineScope {
+                    val accessRead = async { accessCheck.confirm() }
+                    businesses.business(businessId) to accessRead.await()
                 }
-                is NetworkResult.Success -> applyDetail(detailResult.data)
+            if (request != loadGeneration) return
+            if (detailResult is NetworkResult.Failure && detailResult.error is NetworkError.NotFound) {
+                _state.value = EditBusinessPageUiState.Empty
+                hasLoadedOnce = false
+                return
+            }
+            val access = (answer as? BusinessAccessState.Known)?.access
+            when {
+                !session.isCurrent -> showLoadError(SESSION_CHANGED)
+                answer == BusinessAccessState.Failed -> showLoadError(LOAD_CHECK_FAILED)
+                access == null || !access.canUsePageEditor -> showLoadError(NO_ACCESS_MESSAGE)
+                detailResult is NetworkResult.Failure -> showLoadError(detailResult.error.message)
+                detailResult is NetworkResult.Success -> applyDetail(detailResult.data, access, request)
             }
         }
 
-        private suspend fun applyDetail(detail: BusinessDetailResponse) {
-            _canClose.value = detail.access?.isOwner == true
+        private fun showLoadError(message: String) {
+            _state.value = EditBusinessPageUiState.Error(message)
+            hasLoadedOnce = false
+        }
+
+        private suspend fun applyDetail(
+            detail: BusinessDetailResponse,
+            access: BusinessAccessDto,
+            request: Int,
+        ) {
             if (detail.access?.hasAccess != true) {
-                _state.value = EditBusinessPageUiState.Error(NO_ACCESS_MESSAGE)
-                hasLoadedOnce = false
+                showLoadError(NO_ACCESS_MESSAGE)
                 return
             }
             val location =
@@ -445,21 +618,22 @@ class EditBusinessPageViewModel
             loadedPhoneHadCountryCode =
                 detail.profile?.publicPhone.orEmpty().trim().startsWith(COUNTRY_CODE_PREFIX)
 
-            var hours = fetchHours(location?.id)
+            // A section this person can't read is left empty; its refusal must not close the editor.
+            var hours = if (access.allows(BusinessPermission.HOURS_VIEW)) fetchHours(location?.id) else emptyList()
             // Owner-scoped catalog first. `/public/:username` 404s until the
             // profile is published, so deriving Services from it alone left
             // the setup checklist permanently short one item and made publish
             // unreachable for every unpublished business.
-            var catalog = fetchOwnerCatalog()
+            var catalog = if (access.allows(BusinessPermission.CATALOG_VIEW)) fetchOwnerCatalog() else emptyList()
             val publicPayload = fetchPublicPayload(detail.business.username)
             if (publicPayload != null) {
                 if (catalog == null) catalog = publicPayload.catalog
                 if (hours == null) hours = publicPayload.hours
             }
 
+            if (request != loadGeneration) return
             if (hours == null || catalog == null) {
-                _state.value = EditBusinessPageUiState.Error("Couldn't load business hours and services. Please try again.")
-                hasLoadedOnce = false
+                showLoadError("Couldn't load business hours and services. Please try again.")
                 return
             }
 
@@ -558,7 +732,14 @@ class EditBusinessPageViewModel
         ): Boolean {
             isSaving = true
             try {
-                val failure = pushProfile(content) ?: pushLocation(content) ?: pushHours(content)
+                saveRefusal(content)?.let { refusal ->
+                    showAccessNotice(refusal)
+                    return false
+                }
+                val failure =
+                    sessionFailure() ?: pushProfile(content)
+                        ?: sessionFailure() ?: pushLocation(content)
+                        ?: sessionFailure() ?: pushHours(content)
                 if (failure != null) {
                     _toast.value = failure
                     return false
@@ -574,12 +755,36 @@ class EditBusinessPageViewModel
             }
         }
 
+        /**
+         * Asks the server first, and refuses the whole save if any changed section is no longer allowed, so no part of
+         * it goes out and the draft stays. Null when it can go ahead.
+         */
+        private suspend fun saveRefusal(content: EditBusinessPageContent): String? {
+            val access = currentAccess() ?: return accessFailure()
+            return when {
+                patchHasValues(buildPatch(content)) && !access.allows(BusinessPermission.PROFILE_EDIT) -> NO_PROFILE_ACCESS
+                content.location.hasAddressEdits && !access.allows(BusinessPermission.LOCATIONS_EDIT) -> NO_LOCATION_ACCESS
+                EditBusinessPageMapper.hoursPayload(content.hours) != null &&
+                    !access.allows(BusinessPermission.HOURS_EDIT) -> NO_HOURS_ACCESS
+                else -> null
+            }
+        }
+
+        private fun sessionFailure(): String? = SESSION_CHANGED.takeUnless { session.isCurrent }
+
+        /** Refused after the check said yes: the draft stays, and the screen learns what's allowed now. */
+        private fun writeFailure(error: NetworkError): String {
+            if (error !is NetworkError.Forbidden) return error.message
+            retryAccess()
+            return WRITE_REFUSED
+        }
+
         /** Each `push…` returns the message to surface, or null on success. */
         private suspend fun pushProfile(content: EditBusinessPageContent): String? {
             val patch = buildPatch(content)
             if (!patchHasValues(patch)) return null
             return when (val result = businesses.updateBusiness(businessId, patch)) {
-                is NetworkResult.Failure -> result.error.message
+                is NetworkResult.Failure -> writeFailure(result.error)
                 is NetworkResult.Success -> {
                     rememberSavedPatch(patch)
                     null
@@ -609,7 +814,7 @@ class EditBusinessPageViewModel
 
         private fun <T> failureMessage(result: NetworkResult<T>): String? =
             when (result) {
-                is NetworkResult.Failure -> result.error.message
+                is NetworkResult.Failure -> writeFailure(result.error)
                 is NetworkResult.Success -> null
             }
 

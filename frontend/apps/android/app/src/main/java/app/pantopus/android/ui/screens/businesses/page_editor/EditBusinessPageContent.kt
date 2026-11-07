@@ -221,6 +221,46 @@ data class EditBusinessPageContent(
         get() = listOf(name.current, category.current).count { it.isBlank() }
 }
 
+/**
+ * What this person may change in the editor, from `GET /:businessId/me` (mirrors the flags on iOS
+ * `EditBusinessPageViewModel`). Each section has its own permission. Nothing is allowed until the first answer, and
+ * while [isChecking] nothing can be typed or sent: the last answer is only still drawn, so a quick check doesn't flicker.
+ */
+data class EditBusinessPageAccess(
+    val canEditProfile: Boolean = false,
+    val canEditLocation: Boolean = false,
+    val canEditHours: Boolean = false,
+    val canManageCatalog: Boolean = false,
+    val canClose: Boolean = false,
+    val isChecking: Boolean = false,
+    /** Why editing is off, shown above Save with Retry access. The draft stays either way. */
+    val notice: String? = null,
+) {
+    val canEditAnything: Boolean get() = canEditProfile || canEditLocation || canEditHours
+
+    companion object {
+        /** Previews and snapshots, which don't talk to a server. */
+        val Full =
+            EditBusinessPageAccess(
+                canEditProfile = true,
+                canEditLocation = true,
+                canEditHours = true,
+                canManageCatalog = true,
+            )
+    }
+}
+
+/** How one section's fields behave right now. */
+enum class EditBusinessFieldMode {
+    Editable,
+
+    /** A quick check is running: looks editable, but typing waits for its answer. */
+    Held,
+
+    /** Not allowed, or the check is taking long enough to notice. */
+    ReadOnly,
+}
+
 /** Observed UI state. */
 sealed interface EditBusinessPageUiState {
     data object Loading : EditBusinessPageUiState

@@ -66,6 +66,8 @@ internal fun BusinessCatalogCategoriesPanel(
     onRename: (String, String, (Boolean) -> Unit) -> Unit,
     onDelete: (String) -> Unit,
     errorMessage: String? = null,
+    canManage: Boolean = true,
+    accessNotice: @Composable () -> Unit = {},
 ) {
     var newName by remember { mutableStateOf("") }
     var renameTarget by remember { mutableStateOf<BusinessCatalogCategoryRow?>(null) }
@@ -81,6 +83,7 @@ internal fun BusinessCatalogCategoriesPanel(
                 .testTag("businessCatalog.categoriesSheet"),
     ) {
         ContentDetailTopBar(title = "Categories", onBack = { if (!isSaving) onClose() })
+        accessNotice()
         Column(
             modifier =
                 Modifier
@@ -110,6 +113,7 @@ internal fun BusinessCatalogCategoriesPanel(
                     categories.forEachIndexed { index, category ->
                         CategoryRow(
                             category = category,
+                            canManage = canManage,
                             onRename = {
                                 renameText = category.name
                                 renameTarget = category
@@ -126,47 +130,49 @@ internal fun BusinessCatalogCategoriesPanel(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-            ) {
-                PantopusTextField(
-                    label = "New category",
-                    value = newName,
-                    onValueChange = { newName = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = "e.g. Giving, Repairs",
-                    fieldTestTag = "businessCatalog.newCategoryName",
-                )
-                val canAdd = newName.trim().isNotEmpty() && !isSaving
-                Box(
-                    modifier =
-                        Modifier
-                            .heightIn(min = 44.dp)
-                            .clip(RoundedCornerShape(Radii.md))
-                            .background(PantopusColors.business)
-                            .alpha(if (canAdd) 1f else 0.5f)
-                            .clickable(enabled = canAdd) {
-                                onCreate(newName) { ok -> if (ok) newName = "" }
-                            }
-                            .padding(horizontal = Spacing.s4)
-                            .semantics { contentDescription = "Add category" }
-                            .testTag("businessCatalog.addCategory"),
-                    contentAlignment = Alignment.Center,
+            if (canManage) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
                 ) {
-                    Text(
-                        text = "Add",
-                        color = PantopusColors.appTextInverse,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
+                    PantopusTextField(
+                        label = "New category",
+                        value = newName,
+                        onValueChange = { newName = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = "e.g. Giving, Repairs",
+                        fieldTestTag = "businessCatalog.newCategoryName",
                     )
+                    val canAdd = newName.trim().isNotEmpty() && !isSaving
+                    Box(
+                        modifier =
+                            Modifier
+                                .heightIn(min = 44.dp)
+                                .clip(RoundedCornerShape(Radii.md))
+                                .background(PantopusColors.business)
+                                .alpha(if (canAdd) 1f else 0.5f)
+                                .clickable(enabled = canAdd) {
+                                    onCreate(newName) { ok -> if (ok) newName = "" }
+                                }
+                                .padding(horizontal = Spacing.s4)
+                                .semantics { contentDescription = "Add category" }
+                                .testTag("businessCatalog.addCategory"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "Add",
+                            color = PantopusColors.appTextInverse,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }
     }
 
-    renameTarget?.let { category ->
+    renameTarget?.takeIf { canManage }?.let { category ->
         AlertDialog(
             onDismissRequest = { if (!isSaving) renameTarget = null },
             title = { Text(text = "Rename category") },
@@ -196,7 +202,7 @@ internal fun BusinessCatalogCategoriesPanel(
         )
     }
 
-    pendingDelete?.let { category ->
+    pendingDelete?.takeIf { canManage }?.let { category ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text(text = "Delete category") },
@@ -222,6 +228,7 @@ internal fun BusinessCatalogCategoriesPanel(
 @Composable
 private fun CategoryRow(
     category: BusinessCatalogCategoryRow,
+    canManage: Boolean,
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -248,39 +255,41 @@ private fun CategoryRow(
                 Text(text = it, color = PantopusColors.appTextSecondary, fontSize = 11.sp, maxLines = 1)
             }
         }
-        Box(
-            modifier =
-                Modifier
-                    .size(30.dp)
-                    .clickable(onClick = onRename)
-                    .semantics { contentDescription = "Rename ${category.name}" }
-                    .testTag("businessCatalog.renameCategory.${category.id}"),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Pencil,
-                contentDescription = null,
-                size = 15.dp,
-                strokeWidth = 2f,
-                tint = PantopusColors.appTextSecondary,
-            )
-        }
-        Box(
-            modifier =
-                Modifier
-                    .size(30.dp)
-                    .clickable(onClick = onDelete)
-                    .semantics { contentDescription = "Delete ${category.name}" }
-                    .testTag("businessCatalog.deleteCategory.${category.id}"),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Trash2,
-                contentDescription = null,
-                size = 15.dp,
-                strokeWidth = 2f,
-                tint = PantopusColors.error,
-            )
+        if (canManage) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(30.dp)
+                        .clickable(onClick = onRename)
+                        .semantics { contentDescription = "Rename ${category.name}" }
+                        .testTag("businessCatalog.renameCategory.${category.id}"),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Pencil,
+                    contentDescription = null,
+                    size = 15.dp,
+                    strokeWidth = 2f,
+                    tint = PantopusColors.appTextSecondary,
+                )
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .size(30.dp)
+                        .clickable(onClick = onDelete)
+                        .semantics { contentDescription = "Delete ${category.name}" }
+                        .testTag("businessCatalog.deleteCategory.${category.id}"),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Trash2,
+                    contentDescription = null,
+                    size = 15.dp,
+                    strokeWidth = 2f,
+                    tint = PantopusColors.error,
+                )
+            }
         }
     }
 }

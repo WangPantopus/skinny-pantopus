@@ -82,6 +82,8 @@ private val EVIDENCE_MIME_TYPES = arrayOf("application/pdf", "image/*", "text/pl
 @Composable
 fun BusinessLegalScreen(
     onBack: () -> Unit,
+    /** Attesting and uploading documents need `profile.edit`, not the `sensitive.view` that opens this screen. */
+    canVerify: Boolean = true,
     viewModel: BusinessLegalViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -141,7 +143,7 @@ fun BusinessLegalScreen(
                     BusinessLegalUiState.Loading -> LegalLoading()
                     is BusinessLegalUiState.Loaded ->
                         LegalLoaded(
-                            content = current.content,
+                            content = current.content.withVerification(allowed = canVerify),
                             action = action,
                             legalName = legalName,
                             taxIdLast4 = taxIdLast4,
@@ -235,6 +237,9 @@ private fun LegalLoading() {
 }
 
 // ─── Loaded ───────────────────────────────────────────────────────────
+
+private fun BusinessLegalContent.withVerification(allowed: Boolean): BusinessLegalContent =
+    if (allowed) this else copy(canSelfAttest = false, selfAttestBlockedReason = null, canUploadEvidence = false)
 
 @Composable
 private fun LegalLoaded(
