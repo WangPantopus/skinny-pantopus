@@ -107,7 +107,7 @@ data class EditBusinessPageHoursRow(
         /** How a saved `24:00` close reads in a row; only a saved row can hold it. */
         const val END_OF_DAY_LABEL = "24:00"
         const val LAST_MINUTE_LABEL = "11:59 PM"
-        private const val MIDNIGHT_LABEL = "12:00 AM"
+        const val MIDNIGHT_LABEL = "12:00 AM"
         private val ALL_DAY_CLOSES = setOf(LAST_MINUTE_LABEL, END_OF_DAY_LABEL)
     }
 }
