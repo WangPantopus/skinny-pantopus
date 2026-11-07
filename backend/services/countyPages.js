@@ -28,6 +28,8 @@ const TOWNS = new Map(Object.entries(LINKED).flatMap(([fips, county]) => Object.
 // How a county's site writes the number it takes in a link, from the record's own parcel number.
 const PARCEL_FORMS = {
   digits: (parcel) => parcel.replace(/\D/g, ''),
+  // Letters and digits only, as Seminole writes 11-20-30-5KB-0000-0070 in a link.
+  alnum: (parcel) => parcel.replace(/[^0-9A-Za-z]/g, '').toUpperCase(),
   // A number the state's file writes as 3141.0.
   whole: (parcel) => parcel.replace(/\.0+$/, ''),
   as_is: (parcel) => parcel,

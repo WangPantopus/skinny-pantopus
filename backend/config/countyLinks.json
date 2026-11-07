@@ -1353,9 +1353,11 @@
   "12117": {
    "name": "Seminole County",
    "url": "https://www.scpafl.org/",
-   "kind": "search",
-   "src": "netr",
-   "ref": "Seminole Property Appraiser"
+   "deep": "https://scpafl.org/search/parcels/details/?PID={parcel}",
+   "form": "alnum",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "scpafl.org/search/parcels/details/?PID=<17-character parcel ID, dashes removed> pages listed by a search engine"
   },
   "12127": {
    "name": "Volusia County",
@@ -1930,6 +1932,13 @@
    "src": "netr",
    "ref": "Buncombe Assessor"
   },
+  "37025": {
+   "name": "Cabarrus County",
+   "url": "https://tax.cabarruscounty.us/RealEstate.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Cabarrus Assessor"
+  },
   "37051": {
    "name": "Cumberland County",
    "url": "https://taxpwa.co.cumberland.nc.us/camapwa/",
@@ -2320,6 +2329,14 @@
    "kind": "search",
    "src": "wp9"
   },
+  "47125": {
+   "name": "Montgomery County",
+   "url": "https://www.mcgtn.org/assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Montgomery Assessor",
+   "was_http": true
+  },
   "47149": {
    "name": "Rutherford County",
    "url": "https://secured.rutherfordcountytn.gov/propertydata/",
@@ -2478,6 +2495,14 @@
    "kind": "search",
    "src": "netr",
    "ref": "Nueces Appraisal District",
+   "was_http": true
+  },
+  "48423": {
+   "name": "Smith County",
+   "url": "https://www.smithcad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Smith Appraisal District",
    "was_http": true
   },
   "48439": {
