@@ -26,42 +26,43 @@ struct PlaceDetailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            content
-        }
-        .background(Theme.Color.appBg)
-        .navigationBarBackButtonHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
-        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .refreshFailureToast($viewModel.refreshFailureMessage)
-        .task { await viewModel.load() }
-        // The home or today's conditions changed: the open page re-reads, its copy staying shown.
-        .refreshesOnStoreChange(
-            affects: viewModel.isAffected(by:),
-            onBackground: viewModel.discardTemporaryCopy
-        ) { await viewModel.refreshIfStale() }
-        .onDisappear { viewModel.discardTemporaryCopy() }
-        .askPantopus($askTopic)
-        .sheet(isPresented: $viewModel.showVerify) {
-            PlaceVerifySheet(
-                address: verifyAddress,
-                homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil,
-                onStart: { method in
-                    viewModel.showVerify = false
-                    viewModel.onStartVerify?(method)
-                },
-                onClose: { viewModel.showVerify = false },
-                onOpenDocumentStatus: viewModel.onOpenVerificationStatus.map { open in
-                    {
+        content
+            // The section scrolls under its header, which slides away while it
+            // scrolls down and comes back near the top (founder request 2026-11-07).
+            .scrollAwayHeader { header }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Theme.Color.appBg)
+            .navigationBarBackButtonHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
+            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+            .refreshFailureToast($viewModel.refreshFailureMessage)
+            .task { await viewModel.load() }
+            // The home or today's conditions changed: the open page re-reads, its copy staying shown.
+            .refreshesOnStoreChange(
+                affects: viewModel.isAffected(by:),
+                onBackground: viewModel.discardTemporaryCopy
+            ) { await viewModel.refreshIfStale() }
+            .onDisappear { viewModel.discardTemporaryCopy() }
+            .askPantopus($askTopic)
+            .sheet(isPresented: $viewModel.showVerify) {
+                PlaceVerifySheet(
+                    address: verifyAddress,
+                    homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil,
+                    onStart: { method in
                         viewModel.showVerify = false
-                        open()
+                        viewModel.onStartVerify?(method)
+                    },
+                    onClose: { viewModel.showVerify = false },
+                    onOpenDocumentStatus: viewModel.onOpenVerificationStatus.map { open in
+                        {
+                            viewModel.showVerify = false
+                            open()
+                        }
                     }
-                }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
-        }
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+            }
     }
 
     private var verifyAddress: String {

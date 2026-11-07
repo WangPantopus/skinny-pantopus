@@ -28,7 +28,7 @@ const {
 const { matchBusinessesForPost } = require('../jobs/organicMatch');
 const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../utils/homePermissions');
 const { computeUtilityScore } = require('../utils/feedRanking');
-const { reactionNotice } = require('../utils/postReaction');
+const { reactionNotice, normalizePostReaction, shownReaction } = require('../utils/postReaction');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
@@ -126,6 +126,7 @@ const {
   getMuteAndHideFilters,
   applyMuteHideFilters,
   enrichFeedPosts,
+  loadReactionSummaries,
   attachIdentityAuthors,
   loadIdentityAuthorRows,
   applyPostLocationPrivacy,
@@ -737,9 +738,9 @@ const SIGNED_OUT_POST_FIELDS = ['id', 'title', 'content', 'post_type', 'state', 
 
 // A signed-in reader who isn't the author gets what the web, iOS and Android post pages read: the post, its
 // approximate place, the Lost & Found contact (phone|<digits> when the poster asked for calls), what decides whether
-// it can be shared, its counts and the viewer's own likes and saves, and the replies. Only the author, whose edit
-// form reads it, gets the rest of the row: moderation notes, geocoding, the GPS fix time, account, home and place
-// ids, audience and profile settings, and the view and delivery counts.
+// it can be shared, its counts (each reaction emoji's too) and the viewer's own reaction, save and repost, and the
+// replies. Only the author, whose edit form reads it, gets the rest of the row: moderation notes, geocoding, the GPS
+// fix time, account, home and place ids, audience and profile settings, and the view and delivery counts.
 const READER_POST_FIELDS = [
   'id', 'user_id', 'author_user_id', 'author', 'creator', 'home', 'created_at', 'is_edited',
   'title', 'content', 'post_type', 'purpose', 'tags', 'media_urls', 'media_types', 'media_thumbnails', 'media_live_urls',
@@ -749,6 +750,7 @@ const READER_POST_FIELDS = [
   'event_date', 'event_end_date', 'event_venue', 'safety_alert_kind', 'deal_business_name', 'deal_expires_at',
   'lost_found_type', 'lost_found_contact_pref', 'service_category', 'ref_task_id', 'ref_listing_id',
   'like_count', 'comment_count', 'share_count', 'userHasLiked', 'userHasSaved', 'userHasReposted', 'comments',
+  'reactions', 'userReaction',
 ];
 
 // "Photo taken here": the author's own photo or video placed the post (set at posting, in post_metadata).
@@ -2898,19 +2900,21 @@ router.get('/:id', optionalAuth, async (req, res) => {
       });
     }
 
-    // Now that the reader may see the post: the replies, their like, save and repost, the matched businesses' state and
-    // the author's names don't depend on each other, so they're read together.
+    // Now that the reader may see the post: the replies, their reaction, save and repost, each reaction emoji's count,
+    // the matched businesses' state and the author's names don't depend on each other, so they're read together.
     const blockedIds = await blocked;
-    const [commentRows, [{ data: userLike }, { data: userSave }, { data: userRepost }], authorRows] = await Promise.all([
+    const [commentRows, viewerRows, authorRows, reactionSummaries] = await Promise.all([
       readWholeThread(post, userId, blockedIds),
       Promise.all([
-        supabaseAdmin.from('PostLike').select('id').eq('post_id', id).eq('user_id', userId).single(),
+        supabaseAdmin.from('PostLike').select('id, reaction').eq('post_id', id).eq('user_id', userId).single(),
         supabaseAdmin.from('PostSave').select('id').eq('post_id', id).eq('user_id', userId).single(),
         supabaseAdmin.from('PostShare').select('id').eq('post_id', id).eq('user_id', userId).eq('share_type', 'repost').maybeSingle(),
       ]),
       loadIdentityAuthorRows([post]),
+      loadReactionSummaries([post]),
       dropUnpublishedMatches([post]),
     ]);
+    const [{ data: userLike }, { data: userSave }, { data: userRepost }] = viewerRows;
 
     // Record unique authenticated views without letting repeated refreshes inflate counts.
     const userAgent = req.get('user-agent') || '';
@@ -2940,6 +2944,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
       media_thumbnails: normalizeAlignedMediaUrls(post.media_thumbnails),
       media_live_urls: normalizeAlignedMediaUrls(post.media_live_urls),
       userHasLiked: !!userLike,
+      userReaction: userLike ? shownReaction(userLike.reaction) : null,
+      reactions: reactionSummaries.get(post.id) || [],
       userHasSaved: !!userSave,
       userHasReposted: !!userRepost,
       comments: commentRows,
@@ -3418,24 +3424,34 @@ router.post('/:id/like', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
+    // `reaction` sets the viewer's emoji (utils/postReaction.js) or, as null, takes it away. An emoji the apps don't
+    // offer is refused before anything is read.
+    const setsReaction = Boolean(req.body) && Object.prototype.hasOwnProperty.call(req.body, 'reaction');
+    const reaction = setsReaction && req.body.reaction !== null ? normalizePostReaction(req.body.reaction) : null;
+    if (setsReaction && req.body.reaction !== null && !reaction) {
+      return res.status(400).json({ error: 'Choose one of the reactions offered.', code: 'INVALID_REACTION' });
+    }
     const post = await requireVisiblePost({ postId: id, userId, res, select: `${POST_REFS_SELECT},post_type` });
     if (!post) return;
 
-    // A client that sends the state it wants gets that state, so a request re-sent after its reply
-    // was lost changes nothing instead of flipping the like back. Without it the legacy toggle runs
-    // (older app installs).
+    // A client that sends the state it wants gets that state, so a request re-sent after its reply was lost changes
+    // nothing instead of flipping the like back. Without it the legacy toggle runs (older app installs); a like from
+    // either has no emoji and shows as 👍.
     const wantsLiked = typeof req.body?.liked === 'boolean' ? req.body.liked : null;
-    const { data, error } = wantsLiked === null
-      ? await supabaseAdmin.rpc('toggle_post_like', { p_post_id: id, p_user_id: userId })
-      : await supabaseAdmin.rpc('set_post_like', { p_post_id: id, p_user_id: userId, p_liked: wantsLiked });
+    const { data, error } = setsReaction
+      ? await supabaseAdmin.rpc('set_post_reaction', { p_post_id: id, p_user_id: userId, p_reaction: reaction })
+      : wantsLiked === null
+        ? await supabaseAdmin.rpc('toggle_post_like', { p_post_id: id, p_user_id: userId })
+        : await supabaseAdmin.rpc('set_post_like', { p_post_id: id, p_user_id: userId, p_liked: wantsLiked });
     if (error) { logger.error('Error toggling like', { error: error.message, postId: id }); return res.status(500).json({ error: 'Failed to toggle like' }); }
 
-    // Notify post owner on new like (not on unlike, not on own post, not on a repeated request), in the words the
-    // apps give this kind of post's reaction ("Ben is going to your event", utils/postReaction.js).
-    if (data.liked && data.changed !== false && post.user_id !== userId) {
+    // Notify post owner when someone starts reacting (not on taking it away or switching emoji, not on own post, not
+    // on a repeated request), in the words the apps use ("Ben reacted ❤️ to your post", "Ben is going to your event").
+    const started = setsReaction ? data.added === true : data.liked && data.changed !== false;
+    if (started && post.user_id !== userId) {
       getUserDisplayName(userId).then(name => {
         const { link, extraMeta } = postEngagementNotificationLink(post, id);
-        const { title, icon } = reactionNotice(post.post_type, name);
+        const { title, icon } = reactionNotice(post.post_type, name, reaction);
         notificationService.createNotification({
           userId: post.user_id,
           type: 'post_liked',
@@ -3451,7 +3467,19 @@ router.post('/:id/like', verifyToken, async (req, res) => {
       });
     }
 
-    res.json({ message: data.liked ? 'Post liked' : 'Post unliked', liked: data.liked, likeCount: data.likeCount });
+    if (!setsReaction) {
+      return res.json({ message: data.liked ? 'Post liked' : 'Post unliked', liked: data.liked, likeCount: data.likeCount });
+    }
+    // Each emoji's count after this change, so the apps show it at once. A failed read leaves `reactions` out and the
+    // apps keep what they showed; the next read of the post has it.
+    const summaries = await loadReactionSummaries([{ id, like_count: data.likeCount }]);
+    res.json({
+      message: reaction ? 'Reaction saved' : 'Reaction removed',
+      liked: Boolean(reaction),
+      likeCount: data.likeCount,
+      reaction,
+      ...(summaries.has(id) || data.likeCount === 0 ? { reactions: summaries.get(id) || [] } : {}),
+    });
   } catch (err) {
     logger.error('Like toggle error', { error: err.message, postId: req.params.id });
     res.status(500).json({ error: 'Failed to toggle like' });

@@ -5,7 +5,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 // for a Home whose mail the caller may read). Every per-item route checks it
 // before reading or changing anything and otherwise answers its not-found.
 const {
-  getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailFilter, visibleMailIds,
+  getAccessibleHomeIds, trustedHomeIdsOrThrow, canAccessMail, readableMail, homesMailFilter, visibleMailFilter, visibleMailIds,
   removedMailInfo, sendHomeMailRemovedNotice, mailReaderIdsOrThrow, mailHomesOrThrow, sendMailUnavailable,
   onlyDelivered, restoreWindowOver,
 } = require('../utils/homeMailAccess');
@@ -237,7 +237,18 @@ function resolveSenderTrust(mail) {
 router.get('/drawers', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const homeIds = await getAccessibleHomeIds(userId);
+    // The Homes whose mail they may read, read once: the counts use them (failing closed to none, as
+    // getAccessibleHomeIds does), and the Homes below mark which of theirs are open with them. Both reads go out
+    // together.
+    const openRead = trustedHomeIdsOrThrow(userId);
+    const homesRead = mailHomesOrThrow(userId, { openHomeIds: openRead }).catch((error) => {
+      logger.error('GET /drawers: homes unavailable', { error: error.message });
+      return [];
+    });
+    const homeIds = await openRead.catch((error) => {
+      logger.error('getAccessibleHomeIds: failing closed', { userId, error: error.message });
+      return [];
+    });
     const now = new Date();
 
     // Count unread + urgent per drawer in parallel. Only incoming mail counts
@@ -270,11 +281,13 @@ router.get('/drawers', verifyToken, async (req, res) => {
       };
 
       try {
-        const [unreadCount, { data, error }] = await Promise.all([
-          mailDelivery.countPieces(unopened),
-          unopened('priority, delivered_at, bundle_id').order('delivered_at', { ascending: false }).limit(200),
-        ]);
+        // The newest unopened pieces. When that is all of them (fewer than asked for came back), they give the
+        // count too; a fuller drawer is counted.
+        const { data, error } = await unopened('priority, delivered_at, bundle_id')
+          .order('delivered_at', { ascending: false }).limit(mailDelivery.LISTED_PIECES_MAX);
         if (error) throw new Error(error.message);
+        const unreadCount = (data || []).length < mailDelivery.LISTED_PIECES_MAX
+          ? mailDelivery.countListedPieces(data || []) : await mailDelivery.countPieces(unopened);
         const urgent = (data || []).filter(m => m.priority === 'urgent' || m.priority === 'high');
         const urgentCount = urgent.filter(m => !m.bundle_id).length
           + new Set(urgent.filter(m => m.bundle_id).map(m => m.bundle_id)).size;
@@ -287,10 +300,7 @@ router.get('/drawers', verifyToken, async (req, res) => {
 
     // The Homes this person lives at, and whether each one's mail is open to them yet (D1: only after the
     // address is proven). A failed read lists none rather than failing the mailbox.
-    const homes = await mailHomesOrThrow(userId).catch((error) => {
-      logger.error('GET /drawers: homes unavailable', { error: error.message });
-      return [];
-    });
+    const homes = await homesRead;
     // Letters from Pantopus (SRV-6): the welcome letter on the first open, in the box at once, and a welcome to each
     // Home whose mail they can now open (with the morning's mail). Once each.
     await pantopusLetters.ensureWelcomeLetter(userId, { homes });

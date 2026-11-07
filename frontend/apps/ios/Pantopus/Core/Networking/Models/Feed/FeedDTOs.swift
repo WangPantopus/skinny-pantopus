@@ -36,6 +36,10 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let commentCount: Int
     public let shareCount: Int
     public let userHasLiked: Bool
+    /// Each emoji's count, most used first (`PostReactions`); empty before anyone reacted and from older servers.
+    public let reactions: [PostReactionCount]
+    /// The viewer's own emoji; nil before they react and from older servers.
+    public let userReaction: PostReactionEmoji?
     public let userHasSaved: Bool
     public let userHasReposted: Bool
     /// Connections list only: which of the viewer's connections reposted the post.
@@ -104,6 +108,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case commentCount = "comment_count"
         case shareCount = "share_count"
         case userHasLiked
+        case reactions, userReaction
         case userHasSaved
         case userHasReposted
         case repostedBy = "reposted_by"
@@ -149,6 +154,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         commentCount = c.lenient(Int.self, forKey: .commentCount) ?? 0
         shareCount = c.lenient(Int.self, forKey: .shareCount) ?? 0
         userHasLiked = c.lenient(Bool.self, forKey: .userHasLiked) ?? false
+        reactions = c.lossyList(PostReactionCount.self, forKey: .reactions)
+        userReaction = c.lenient(PostReactionEmoji.self, forKey: .userReaction)
         userHasSaved = c.lenient(Bool.self, forKey: .userHasSaved) ?? false
         userHasReposted = c.lenient(Bool.self, forKey: .userHasReposted) ?? false
         repostedBy = c.lenient(FeedRepostedBy.self, forKey: .repostedBy)

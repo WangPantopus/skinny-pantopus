@@ -194,8 +194,8 @@ public enum PlansEndpoints {
     // MARK: - Hosting
 
     /// `POST /api/plans` — returns PlanDetail (201). Errors: `not_near`
-    /// (403), `needs_verified_address` (403), `too_many_plans` (429),
-    /// validation (422). Route `backend/routes/plans.js`.
+    /// (403), `too_many_plans` (429), validation (422).
+    /// Route `backend/routes/plans.js`.
     public static func create(_ body: CreatePlanBody) -> Endpoint {
         Endpoint(method: .post, path: base, body: body)
     }

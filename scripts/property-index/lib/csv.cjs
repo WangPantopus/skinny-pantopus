@@ -1,10 +1,11 @@
 'use strict';
-// A delimited file with quoted fields that can hold line breaks, row by row, holding only the columns asked for.
+// A delimited file with quoted fields that can hold line breaks, row by row, holding only the columns asked for. A file that declares no
+// text qualifier reads its quotes as ordinary characters.
 
 const fs = require('node:fs');
 const { log } = require('./log.cjs');
 
-async function* records(stream, delimiter) {
+async function* records(stream, delimiter, qualified = true) {
   let row = [];
   let field = '';
   let quoted = false;
@@ -14,7 +15,7 @@ async function* records(stream, delimiter) {
       if (quoted) {
         if (char === '"') quoted = false;
         else field += char;
-      } else if (char === '"') {
+      } else if (char === '"' && qualified) {
         // A doubled quote inside a quoted field is one quote.
         if (previous === '"') field += '"';
         quoted = true;
@@ -42,12 +43,12 @@ async function* records(stream, delimiter) {
 /**
  * @param {string} file        The file
  * @param {string[]} columns   What this connector reads; a missing one stops the build (the source changed)
- * @param {object} [options]   { delimiter: ',', encoding: 'utf8', label }
+ * @param {object} [options]   { delimiter: ',', encoding: 'utf8', label, quoted: false for a file with no text qualifier }
  */
-async function* csvRows(file, columns, { delimiter = ',', encoding = 'utf8', label = 'file' } = {}) {
+async function* csvRows(file, columns, { delimiter = ',', encoding = 'utf8', label = 'file', quoted = true } = {}) {
   let positions = null;
   let rows = 0;
-  for await (const fields of records(fs.createReadStream(file, { encoding }), delimiter)) {
+  for await (const fields of records(fs.createReadStream(file, { encoding }), delimiter, quoted)) {
     if (!positions) {
       const header = fields.map((name) => name.replace(/^﻿/, '').trim());
       positions = columns.map((column) => header.indexOf(column));

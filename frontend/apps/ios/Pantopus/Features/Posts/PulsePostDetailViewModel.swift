@@ -2,10 +2,9 @@
 //  PulsePostDetailViewModel.swift
 //  Pantopus
 //
-//  Loads a single Pulse post, lets the user toggle reactions optimistic-
-//  style, and posts new comments inline. Tap-targets for the multi-kind
-//  reaction bar (Helpful/Heart/Going) all map to the single backend
-//  `POST /:id/like` toggle today — see PR description for the discrepancy.
+//  Loads a single Pulse post, lets the user react optimistic-style (an
+//  emoji, or Going on an Event, both `POST /:id/like`), and posts new
+//  comments inline.
 //
 
 import Foundation
@@ -230,6 +229,8 @@ public final class PulsePostDetailViewModel {
     /// being read (or that read failed).
     private var commentsPending = false
     private var commentsReadFailed = false
+    /// An emoji pick is waiting for the server; taps meanwhile are ignored.
+    @ObservationIgnored private var reactionInFlight = false
 
     init(postId: String, currentUserId: String? = nil, client: APIClient = .shared) {
         self.postId = postId
@@ -375,17 +376,18 @@ public final class PulsePostDetailViewModel {
         await fetch(force: true)
     }
 
-    /// Expand the truncated reply list.
+    /// Expand the truncated reply list. The reactions on screen stay: they
+    /// may be newer than the post read (a pick since).
     public func showMoreReplies() {
         guard case let .loaded(content) = state else { return }
         showingAllReplies = true
-        state = .loaded(rebuildContent(from: content.post))
+        state = .loaded(rebuildContent(from: content.post).replacing(reactions: content.reactions))
     }
 
-    /// Tap the post's reaction (Helpful, Going or Celebrate, by its kind):
-    /// the like toggle, optimistic, reconciled with the server's answer.
+    /// Tap an Event's Going: the like toggle, optimistic, reconciled with the
+    /// server's answer.
     public func tapReaction() async {
-        guard case var .loaded(content) = state else { return }
+        guard case var .loaded(content) = state, content.reactions.kind == .going else { return }
 
         var optimistic = content.reactions
         let wasOn = optimistic.isOn
@@ -416,6 +418,41 @@ public final class PulsePostDetailViewModel {
             rolled.isOn = wasOn
             state = .loaded(content.replacing(reactions: rolled))
         }
+    }
+
+    /// An emoji tapped (a chip) or picked under the post: sets it, switches to
+    /// it, or takes it away when it's already the viewer's. Shown at once,
+    /// sent as `{"reaction": …}`, then the server's counts replace the guess;
+    /// rolled back on failure. Taps wait while one is on its way.
+    public func pickReaction(_ emoji: PostReactionEmoji) async {
+        guard !reactionInFlight, case let .loaded(content) = state, content.reactions.kind == .emoji else { return }
+        reactionInFlight = true
+        defer { reactionInFlight = false }
+        let before = content.reactions.emoji
+        let wanted = before.request(picking: emoji)
+        let shown = before.setting(wanted)
+        showReactions(shown)
+        do {
+            let response = try await client.request(
+                PostsEndpoints.setReaction(id: postId, reaction: wanted),
+                as: PostLikeResponse.self
+            )
+            showReactions(shown.confirmed(by: response))
+            postChanged()
+            // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
+            PulsePostsRefresh.notifyPostsDidChange()
+        } catch {
+            logger.warning("Reaction failed: \(error)")
+            toastMessage = "Couldn't update your reaction"
+            showReactions(before)
+        }
+    }
+
+    /// The emoji reactions on whatever post is on screen now (a read may have
+    /// replaced it while a pick was on its way).
+    private func showReactions(_ reactions: PostReactions) {
+        guard case let .loaded(current) = state else { return }
+        state = .loaded(current.replacing(reactions: PostReactionCounts(emoji: reactions)))
     }
 
     /// Heart toggle on a single comment — optimistic, reconciled with
@@ -735,11 +772,9 @@ public final class PulsePostDetailViewModel {
             locality: post.locationName ?? post.creator?.locality ?? post.home?.city
         )
         let intent = PostIntent.from(purpose: post.purpose, postType: post.postType)
-        let reactions = PostReactionCounts(
-            kind: PostReactionKind(postType: post.postType),
-            likeCount: post.likeCount,
-            isOn: post.userHasLiked
-        )
+        let reactions = PostReactionKind(postType: post.postType) == .going
+            ? PostReactionCounts(goingCount: post.likeCount, isGoing: post.userHasLiked)
+            : PostReactionCounts(emoji: post.emojiReactions)
         let (rows, hidden) = buildCommentRows(post.comments)
         return PulsePostDetailContent(
             post: post,

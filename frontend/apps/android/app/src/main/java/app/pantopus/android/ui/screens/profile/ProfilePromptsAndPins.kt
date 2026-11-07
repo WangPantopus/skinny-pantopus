@@ -193,8 +193,8 @@ internal fun pinnedCard(post: FeedPost): PinnedCard {
 }
 
 /**
- * The count that says most about it, as on web and the iPhone: its reaction ("2 going", "4 celebrated", "3 helpful"),
- * else its replies; null when it has neither.
+ * The count that says most about it, as on web and the iPhone: its reactions ("3 reactions", "1 reaction", an Event's
+ * "2 going"), else its replies; null when it has neither.
  */
 private fun mainCount(
     reaction: PulseReaction,

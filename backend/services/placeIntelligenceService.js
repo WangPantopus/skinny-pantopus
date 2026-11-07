@@ -47,12 +47,14 @@ const addressCalendarService = require('./addressCalendarService');
 const { getHomePrivacy } = require('./homePrivacyService');
 const { buildGoodDayTiles } = require('./goodDayEngine');
 const { getDensityBucket } = require('./place/densityReader');
-const { resolveHouse } = require('./place/houseShape');
+const { resolveHouse, houseFromEstimate } = require('./place/houseShape');
 const { getSystemsLedger } = require('./homeSystemsService');
 const nfipPremiumService = require('./nfipPremiumService');
 const { isConnecticutPlanningRegion } = require('../data/connecticutTowns');
 const exemptionCheckService = require('./exemptionCheckService');
 const propertyRecordsConfig = require('../config/propertyRecords');
+const propertyEstimates = require('./propertyRecords/estimates');
+const { serializeEstimate } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
 const recordVocabulary = require('./recordVocabulary');
 const homeValueCard = require('./homeValueCard');
@@ -1026,6 +1028,29 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
     : null;
   // The value card is the confirmed owner's, and nobody else's read waits on its area figures.
   const neighborhood = wantsRecordVocabulary && viewerAccess?.isOwner && profile.area ? await areaTrend.neighborhood(profile.area) : null;
+  const ownerValueCard = async () => (wantsRecordVocabulary && viewerAccess?.isOwner && profile.area
+    ? homeValueCard.build(profile, { trend: await areaTrend.lookup(profile.area), lookup: result.lookup, neighborhood })
+    : null);
+  // No record of this home: the labeled estimates, never in a field below. New builds draw them; the sky's outline
+  // uses the footprint on every build that gets this section's data.
+  const floor = !profile.provenance && profile.source === 'fallback' && result.lookup !== 'pending' ? await propertyEstimates.forHome(home) : null;
+  const floorEstimate = floor ? serializeEstimate(floor, home) : null;
+  const estimateData = floorEstimate ? { title: floorEstimate.sections[0].title, rows: floorEstimate.sections[0].rows, note: floorEstimate.sections[0].note, footer: floorEstimate.footer } : null;
+  if (nothingYet && estimateData && wantsRecordVocabulary) {
+    return [serializePlaceSection('your_home', {
+      access,
+      status: 'ready',
+      // Its own sources, never the section's default, which names county records.
+      source: floorEstimate.footer,
+      data: {
+        year_built: null, sqft: null, bedrooms: null, bathrooms: null, lot_sqft: null, home_type: profile.property_type ?? null,
+        estimated_value: null, value_low: null, value_high: null, assessed_value: null,
+        house: resolveHouse(houseFromEstimate(floor.structure), home.home_type),
+        ...recordVocabulary.placeValueFields(profile, await ownerValueCard()),
+        estimate: estimateData,
+      },
+    })];
+  }
   if (nothingYet && !process.env.ATTOM_API_KEY && result.lookup !== 'pending' && !neighborhood) {
     return [serializePlaceSection('your_home', {
       access,
@@ -1044,9 +1069,7 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   const valueAge = Date.now() - Date.parse(profile.value_as_of);
   // A county's value keeps its own date: an annual roll isn't out of date at 30 days.
   const oldValue = !profile.provenance && Boolean(viewerAccess && viewerAccess.isOwner) && profile.estimated_value != null && valueAge >= VALUE_FRESH_MS;
-  const valueCard = wantsRecordVocabulary && viewerAccess?.isOwner && profile.area
-    ? homeValueCard.build(profile, { trend: await areaTrend.lookup(profile.area), lookup: result.lookup, neighborhood })
-    : null;
+  const valueCard = await ownerValueCard();
 
   return [serializePlaceSection('your_home', {
     access,
@@ -1071,8 +1094,9 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
       assessed_value: profile.assessed_value ?? null,
       // The home's outline for the Today sky: the county record's, with the
       // kind of home the household chose over it.
-      house: resolveHouse(profile.house, home.home_type),
+      house: resolveHouse(profile.house || houseFromEstimate(floor?.structure), home.home_type),
       ...(wantsRecordVocabulary ? recordVocabulary.placeValueFields(profile, valueCard) : {}),
+      ...(wantsRecordVocabulary && estimateData ? { estimate: estimateData } : {}),
     },
   })];
 }
@@ -1586,6 +1610,8 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
           atLocation: { latitude: ll.lat, longitude: ll.lng, label: home.address || home.name, homeId: claimant ? null : home.id },
           countyReads,
           providerBudgetMs: supportingLookupMs(sectionBudgetMs()),
+          // Place shows the providers' blocks only; its address calendar card reads the calendar itself.
+          householdContext: false,
         })
         .catch((err) => {
           logger.warn('placeIntelligence: getHubToday failed', { userId, error: err.message });

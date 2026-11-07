@@ -20,12 +20,21 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -37,6 +46,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.businesses.create_business.BusinessCategory
+import app.pantopus.android.ui.screens.businesses.create_business.CategorySearchHit
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessUiState
 import app.pantopus.android.ui.screens.businesses.create_business.WhatYouGetItem
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
@@ -54,31 +64,154 @@ import app.pantopus.android.ui.theme.pantopusShadow
  * A12.10 Frame 1 (populated) — pick-category step content. Composed
  * inside `WizardShell` whose top bar + progress + sticky CTA chrome is
  * owned by the parent screen.
+ *
+ * Composition: identity chip → headline + subcopy → search field → 2×4
+ * category grid → "What you'll get" strip (when a designed payload exists)
+ * or, under "Something else", the "Tell us what you do" field →
+ * step-preview meta row. While a search is typed the grid gives way to
+ * [PickCategorySearchStep]; the search field stays mounted so typing the
+ * first character keeps the keyboard up (as on iOS).
  */
 @Composable
 fun PickCategoryStep(
     state: CreateBusinessUiState,
     onSearchTextChanged: (String) -> Unit,
     onPickCategory: (BusinessCategory) -> Unit,
+    onPickHit: (CategorySearchHit) -> Unit = {},
+    onUseCustomCategory: () -> Unit = {},
+    onCustomCategoryChanged: (String) -> Unit = {},
 ) {
     BusinessIdentityChip()
 
     HeadlineBlock("What does your business do?")
-    SubcopyBlock(
-        "Pick the closest fit — this shapes your listings, tax setup, and the badges " +
-            "customers see. You can refine the specifics on step 3.",
-    )
+    SubcopyBlock("Choose the closest fit for your business. You'll add your profile details next.")
 
     BusinessSearchField(value = state.searchText, focused = false, onChange = onSearchTextChanged)
 
-    CategoryGrid(selected = state.selectedCategory, onPick = onPickCategory)
+    if (state.isSearchActive) {
+        PickCategorySearchStep(
+            state = state,
+            onBrowseAll = { onSearchTextChanged("") },
+            onPickHit = onPickHit,
+            onUseCustomCategory = onUseCustomCategory,
+        )
+        return
+    }
+
+    CategoryGrid(
+        selected = state.selectedCategory,
+        pickedDetail = state::pickedDetail,
+        onPick = onPickCategory,
+    )
 
     val selected = state.selectedCategory
-    if (state.whatYouGetItems.isNotEmpty() && selected != null) {
+    if (state.asksForCustomCategory) {
+        CustomCategoryField(value = state.customCategory, onChange = onCustomCategoryChanged)
+    } else if (state.whatYouGetItems.isNotEmpty() && selected != null) {
         WhatYouGetStrip(category = selected, items = state.whatYouGetItems)
     }
 
     StepPreviewMeta()
+}
+
+// MARK: - "Something else": tell us what you do
+
+/**
+ * The owner's own category, typed under the "Something else" tile. It takes
+ * the keyboard when it appears empty, since the tile asks for it. Matches
+ * iOS `CustomCategoryField`.
+ */
+@Composable
+private fun CustomCategoryField(
+    value: String,
+    onChange: (String) -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (value.isNotEmpty()) return@LaunchedEffect
+        withFrameNanos { }
+        if (runCatching { focusRequester.requestFocus() }.isSuccess) keyboard?.show()
+    }
+    val shape = RoundedCornerShape(Radii.lg)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(PantopusColors.businessBg.copy(alpha = 0.6f))
+                .border(1.dp, PantopusColors.businessBg, shape)
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
+                .testTag("createBusinessCustomCategoryCard"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PantopusIconImage(
+                icon = PantopusIcon.Sparkles,
+                contentDescription = null,
+                size = 11.dp,
+                tint = PantopusColors.businessDark,
+            )
+            Text(
+                text = "TELL US WHAT YOU DO",
+                style = PantopusTextStyle.overline,
+                color = PantopusColors.businessDark,
+            )
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText),
+            cursorBrush = SolidColor(PantopusColors.business),
+            keyboardOptions =
+                KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Done,
+                ),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { focused = it.isFocused }
+                    .semantics { contentDescription = "What your business does" }
+                    .testTag("createBusinessCustomCategoryField"),
+            decorationBox = { inner ->
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 44.dp)
+                            .clip(shape)
+                            .background(PantopusColors.appSurface)
+                            .border(
+                                1.dp,
+                                if (focused || value.isNotEmpty()) PantopusColors.business else PantopusColors.appBorder,
+                                shape,
+                            ).padding(horizontal = Spacing.s3),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = "e.g. \"web design\", \"bike repair\"",
+                            style = PantopusTextStyle.body,
+                            color = PantopusColors.appTextMuted,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+        Text(
+            text = "It shows on your business page. You can change it later.",
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.appTextSecondary,
+        )
+    }
 }
 
 // MARK: - Business identity chip (violet)
@@ -116,6 +249,8 @@ internal fun BusinessIdentityChip() {
 internal fun CategoryGrid(
     selected: BusinessCategory?,
     onPick: (BusinessCategory) -> Unit,
+    /** The picked tile's more specific choice, shown in place of its subline. */
+    pickedDetail: (BusinessCategory) -> String? = { null },
 ) {
     val rows = BusinessCategory.entries.chunked(2)
     Column(
@@ -131,6 +266,7 @@ internal fun CategoryGrid(
                     CategoryCard(
                         category = category,
                         selected = selected == category,
+                        subcopy = pickedDetail(category) ?: category.subcopy,
                         onPick = { onPick(category) },
                         modifier = Modifier.weight(1f),
                     )
@@ -147,6 +283,7 @@ internal fun CategoryGrid(
 private fun CategoryCard(
     category: BusinessCategory,
     selected: Boolean,
+    subcopy: String,
     onPick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -185,7 +322,7 @@ private fun CategoryCard(
                     onClick = onPick,
                 ).semantics {
                     role = Role.Button
-                    contentDescription = "${category.label}. ${category.subcopy}"
+                    contentDescription = "${category.label}. $subcopy"
                     this.selected = selected
                 }.testTag("createBusinessCategoryTile_${category.name.lowercase()}"),
     ) {
@@ -219,7 +356,7 @@ private fun CategoryCard(
                 color = PantopusColors.appText,
             )
             Text(
-                text = category.subcopy,
+                text = subcopy,
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
@@ -350,13 +487,13 @@ private fun StepPreviewMeta() {
             tint = PantopusColors.appTextSecondary,
         )
         Text(
-            text = "Next: legal info · profile · confirm",
+            text = "Next: basic info · profile · confirm",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextStrong,
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "~6 min",
+            text = "4 steps",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextMuted,
         )

@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -260,10 +259,10 @@ private fun BoxScope.OwnerToastOverlay(
                 verticalPadding = Spacing.s3,
                 sideMargin = 0.dp,
             ),
+        // Measured from the top of the tab bar (or its strip), which already sits below this screen.
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
                 .padding(bottom = 140.dp, start = Spacing.s4, end = Spacing.s4)
                 .testTag("businessOwner.toast"),
     )
@@ -360,10 +359,12 @@ internal fun OwnerEditFrame(
                 }
             }
         }
+        // The tab bar, or the strip it leaves over the system navigation area while slid away, already sits below this
+        // screen, so the dock goes right on it. Padding for the navigation area again floated it above the bar.
         OwnerDock(
             onPreview = onPreview,
             onEditPage = onEditProfile,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+            modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
 }

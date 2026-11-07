@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -196,7 +195,7 @@ fun BusinessCatalogScreen(
         toast?.let {
             CatalogToast(
                 toast = it,
-                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 88.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp),
             )
         }
     }
@@ -300,7 +299,8 @@ private fun CatalogListFrame(
                 }
             }
         }
-        Column(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
+        // On the tab bar, or on the strip it leaves while slid away: both already sit below this screen.
+        Column(modifier = Modifier.align(Alignment.BottomCenter)) {
             accessNotice()
             onAddItem?.let { CatalogDock(onAddItem = it) }
         }

@@ -80,7 +80,8 @@ final class PlanComposerModel {
     init(start: PlansHostStart?, api: APIClient = .shared, location: any LocationProviding = DeviceLocationProvider.shared) {
         kind = start?.kind ?? .watchParty
         kindChosen = start != nil
-        verifiedAddress = PlansStoreReads.peekMine()?.viewer?.verifiedAddress ?? true
+        // H7's "Verified" badge only: unknown means no (anyone may host a playdate since November 7).
+        verifiedAddress = PlansStoreReads.peekMine()?.viewer?.verifiedAddress ?? false
         game = start?.game
         self.api = api
         self.location = location

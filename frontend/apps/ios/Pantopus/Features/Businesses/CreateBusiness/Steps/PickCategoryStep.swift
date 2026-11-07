@@ -6,8 +6,9 @@
 //
 //  Composition: identity chip → headline + subcopy → search field
 //  → 2×4 category grid → "What you'll get" strip (when a designed
-//  payload exists) → step-preview meta row. The sticky-CTA
-//  "Continue" button is owned by `WizardShell`.
+//  payload exists) or, under "Something else", the "Tell us what you
+//  do" field → step-preview meta row. The sticky-CTA "Continue" button
+//  is owned by `WizardShell`.
 //
 //  Keep the search field mounted while replacing the grid with results,
 //  so typing the first character does not dismiss the keyboard.
@@ -31,16 +32,90 @@ struct PickCategoryStep: View {
         if viewModel.isSearchActive {
             PickCategorySearchStep(viewModel: viewModel)
         } else {
-            BusinessCategoryGrid(selectedId: viewModel.selectedCategoryId) {
+            BusinessCategoryGrid(
+                selectedId: viewModel.selectedCategoryId,
+                pickedDetail: viewModel.pickedDetail(for:)
+            ) {
                 viewModel.selectCategory($0)
             }
 
-            if !viewModel.whatYouGetItems.isEmpty,
-               let selected = viewModel.selectedCategoryId {
+            if viewModel.asksForCustomCategory {
+                CustomCategoryField(viewModel: viewModel)
+            } else if !viewModel.whatYouGetItems.isEmpty,
+                      let selected = viewModel.selectedCategoryId {
                 WhatYouGetStrip(category: selected, items: viewModel.whatYouGetItems)
             }
 
             StepPreviewMeta()
+        }
+    }
+}
+
+// MARK: - "Something else": tell us what you do
+
+/// The owner's own category, typed under the "Something else" tile. It
+/// takes the keyboard when it appears empty, since the tile asks for it.
+private struct CustomCategoryField: View {
+    @Bindable var viewModel: CreateBusinessWizardViewModel
+    @FocusState private var focused: Bool
+
+    private var text: Binding<String> {
+        Binding(
+            get: { viewModel.customCategory },
+            set: { viewModel.setCustomCategory($0) }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            HStack(spacing: Spacing.s1) {
+                Icon(.sparkles, size: 11, color: Theme.Color.businessDark)
+                Text("Tell us what you do", style: .overline)
+                    .foregroundStyle(Theme.Color.businessDark)
+            }
+            TextField("e.g. \"web design\", \"bike repair\"", text: text)
+                .font(Theme.Font.body)
+                .foregroundStyle(Theme.Color.appText)
+                .textInputAutocapitalization(.sentences)
+                .submitLabel(.done)
+                .focused($focused)
+                .accessibilityLabel("What your business does")
+                .accessibilityIdentifier("createBusinessCustomCategoryField")
+                .padding(.horizontal, Spacing.s3)
+                .frame(height: 44)
+                .typesInFieldOnTap($focused)
+                .background(Theme.Color.appSurface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                        .strokeBorder(
+                            focused || !viewModel.customCategory.isEmpty
+                                ? Theme.Color.business
+                                : Theme.Color.appBorder,
+                            lineWidth: 1
+                        )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            Text("It shows on your business page. You can change it later.")
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, Spacing.s4)
+        .padding(.vertical, Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.businessBg.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                .strokeBorder(Theme.Color.businessBg, lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("createBusinessCustomCategoryCard")
+        .task {
+            guard viewModel.customCategory.isEmpty else { return }
+            // Focus set in the same pass as the field appears is dropped.
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            focused = true
         }
     }
 }
@@ -68,6 +143,8 @@ struct BusinessIdentityChip: View {
 
 struct BusinessCategoryGrid: View {
     let selectedId: BusinessCategory?
+    /// The picked tile's more specific choice, shown in place of its subline.
+    let pickedDetail: (BusinessCategory) -> String?
     let onPick: (BusinessCategory) -> Void
 
     private let columns = [
@@ -80,7 +157,8 @@ struct BusinessCategoryGrid: View {
             ForEach(BusinessCategory.allCases) { category in
                 BusinessCategoryCard(
                     category: category,
-                    selected: selectedId == category
+                    selected: selectedId == category,
+                    subcopy: pickedDetail(category) ?? category.subcopy
                 ) {
                     onPick(category)
                 }
@@ -96,6 +174,7 @@ struct BusinessCategoryGrid: View {
 private struct BusinessCategoryCard: View {
     let category: BusinessCategory
     let selected: Bool
+    let subcopy: String
     let onPick: () -> Void
 
     var body: some View {
@@ -116,7 +195,7 @@ private struct BusinessCategoryCard: View {
                     .pantopusTextStyle(.body)
                     .foregroundStyle(Theme.Color.appText)
                     .multilineTextAlignment(.leading)
-                Text(category.subcopy)
+                Text(subcopy)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.leading)
@@ -152,7 +231,7 @@ private struct BusinessCategoryCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(category.label). \(category.subcopy)")
+        .accessibilityLabel("\(category.label). \(subcopy)")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 

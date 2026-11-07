@@ -6,8 +6,10 @@
 //  category picker; steps 2–4 collect basic info / location+hours /
 //  confirm and POST create-full.
 //
-//  Custom-category submit stays blocked until a real custom-category
-//  endpoint exists — do not invent POST /custom-categories.
+//  Step 1 settles one category name: a listed category found by search, a
+//  tile on its own, or, under "Something else", what the owner types. A
+//  custom name needs no endpoint of its own: create-full's `categories` is
+//  free text (`backend/routes/businesses.js:650`), as on the web wizard.
 //
 
 // swiftlint:disable file_length
@@ -24,6 +26,8 @@ enum CreateBusinessFieldLimits {
     static let maxName = 100
     static let maxUsername = 40
     static let maxDescription = 2000
+    /// Each `categories[]` entry is `Joi.string().max(50)`.
+    static let maxCategory = 50
 }
 
 /// View model backing `CreateBusinessWizardView`.
@@ -35,8 +39,11 @@ final class CreateBusinessWizardViewModel: WizardModel {
 
     private(set) var currentStep: CreateBusinessStep = .pickCategory
     private(set) var selectedCategoryId: BusinessCategory? = .home
+    /// The listed category picked in search, filed under `selectedCategoryId`.
+    private(set) var selectedListing: CategorySearchHit?
+    /// What the owner does, in their words, when "Something else" is picked.
+    private(set) var customCategory: String = ""
     var searchText: String = ""
-    private(set) var isSubmittingCustom: Bool = false
     private(set) var isCreating: Bool = false
     private(set) var submitError: String?
 
@@ -106,7 +113,7 @@ final class CreateBusinessWizardViewModel: WizardModel {
                     identifier: "createBusiness_saveDraft"
                 )
                 : nil,
-            isSubmitting: isSubmittingCustom || isCreating,
+            isSubmitting: isCreating,
             dirty: isDirty,
             showsProgressBar: true
         )
@@ -140,7 +147,7 @@ final class CreateBusinessWizardViewModel: WizardModel {
     func primaryTapped() {
         switch currentStep {
         case .pickCategory:
-            guard selectedCategoryId != nil else { return }
+            guard !isSearchActive, categoryName != nil else { return }
             transition(to: .legalInfo)
         case .legalInfo:
             guard validateBasicInfo() else { return }
@@ -163,28 +170,36 @@ final class CreateBusinessWizardViewModel: WizardModel {
 
     // MARK: - Selection
 
+    /// A tile on its own. Under "Something else" the owner then types what
+    /// they do; any earlier typing is kept.
     func selectCategory(_ id: BusinessCategory) {
         selectedCategoryId = id
+        selectedListing = nil
         submitError = nil
     }
 
     func selectSearchHit(_ hit: CategorySearchHit) {
         selectedCategoryId = hit.category
+        selectedListing = hit.isTile ? nil : hit
+        searchText = ""
+        submitError = nil
+    }
+
+    /// "Add "…" as a custom category": the search text becomes the owner's
+    /// own category under "Something else", where they can still edit it.
+    func useSearchTextAsCustomCategory() {
+        let typed = searchText.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !typed.isEmpty else { return }
+        Analytics.track(.ctaCreateBusinessCustomCategorySubmit(label: typed))
+        selectedCategoryId = .other
+        selectedListing = nil
+        setCustomCategory(Self.customCategoryName(from: typed))
         searchText = ""
     }
 
-    /// Custom categories stay blocked — no inventing POST /custom-categories.
-    func submitCustomCategory() {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isSubmittingCustom else { return }
-        isSubmittingCustom = true
+    func setCustomCategory(_ value: String) {
+        customCategory = String(value.prefix(CreateBusinessFieldLimits.maxCategory))
         submitError = nil
-        logger.info("custom-category submit blocked", metadata: [
-            "label": .string(trimmed)
-        ])
-        Analytics.track(.ctaCreateBusinessCustomCategorySubmit(label: trimmed))
-        isSubmittingCustom = false
-        submitError = "Custom categories aren't available yet. Pick a listed category instead."
     }
 
     func acknowledgePendingEvent() {
@@ -309,7 +324,47 @@ final class CreateBusinessWizardViewModel: WizardModel {
     }
 
     var searchHits: [CategorySearchHit] {
-        CreateBusinessSampleData.searchHits(query: searchText)
+        CreateBusinessCategoryCatalog.search(searchText)
+    }
+
+    /// The search's "Add "…" as a custom category" row, offered unless a
+    /// result already has exactly that name.
+    var offersCustomCategory: Bool {
+        let query = CreateBusinessCategoryCatalog.normalize(searchText)
+        guard !query.isEmpty else { return false }
+        return !searchHits.contains { CreateBusinessCategoryCatalog.normalize($0.name) == query }
+    }
+
+    /// The one category create-full will save, or nil while "Something
+    /// else" is picked and nothing has been typed yet.
+    var categoryName: String? {
+        guard let selected = selectedCategoryId else { return nil }
+        if let listing = selectedListing { return listing.name }
+        if let name = selected.savedCategoryName { return name }
+        let typed = customCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        return typed.isEmpty ? nil : typed
+    }
+
+    /// "Something else" on its own asks the owner to type what they do.
+    var asksForCustomCategory: Bool {
+        selectedCategoryId == .other && selectedListing == nil
+    }
+
+    /// Under the picked tile, the more specific choice in place of its
+    /// usual subline ("Plumbing", or what was typed under "Something else").
+    func pickedDetail(for category: BusinessCategory) -> String? {
+        guard category == selectedCategoryId else { return nil }
+        if let listing = selectedListing { return listing.name }
+        guard category == .other else { return nil }
+        let typed = customCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        return typed.isEmpty ? nil : typed
+    }
+
+    func isPicked(_ hit: CategorySearchHit) -> Bool {
+        if hit.isTile {
+            return selectedListing == nil && selectedCategoryId == hit.category
+        }
+        return selectedListing?.id == hit.id
     }
 
     var whatYouGetItems: [WhatYouGetItem] {
@@ -355,8 +410,10 @@ final class CreateBusinessWizardViewModel: WizardModel {
 
     private var primaryEnabled: Bool {
         switch currentStep {
+        // While searching, a result or the custom row is picked first, so
+        // Continue never carries on with a tile the owner has moved past.
         case .pickCategory:
-            selectedCategoryId != nil && !isSubmittingCustom
+            !isSearchActive && categoryName != nil
         case .legalInfo:
             isBasicInfoValid && !isCreating
         case .profile:
@@ -367,7 +424,8 @@ final class CreateBusinessWizardViewModel: WizardModel {
     }
 
     private var isDirty: Bool {
-        if currentStep == .pickCategory, selectedCategoryId == .home, !isSearchActive,
+        if currentStep == .pickCategory, selectedCategoryId == .home, selectedListing == nil,
+           customCategory.isEmpty, !isSearchActive,
            businessName.isEmpty, username.isEmpty, email.isEmpty {
             return false
         }
@@ -453,7 +511,7 @@ final class CreateBusinessWizardViewModel: WizardModel {
     private func createBusiness(publish: Bool) async {
         guard !isCreating else { return }
         guard validateBasicInfo() else { return }
-        guard let category = selectedCategoryId else {
+        guard let category = selectedCategoryId, let categoryName else {
             submitError = "Pick a category before creating your business."
             return
         }
@@ -490,7 +548,7 @@ final class CreateBusinessWizardViewModel: WizardModel {
             username: cleanedUsername,
             email: email.trimmingCharacters(in: .whitespacesAndNewlines),
             businessType: category.entityType,
-            categories: [category.backendSlug],
+            categories: [categoryName],
             description: descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             location: locationPayload,
             hours: hoursPayload
@@ -555,6 +613,13 @@ final class CreateBusinessWizardViewModel: WizardModel {
                 "error": .string(String(describing: error))
             ])
         }
+    }
+
+    /// Search is typed in lowercase, so "web design" is saved as "Web design";
+    /// anything with its own capitals ("iPhone repair", "DJ") stays as typed.
+    static func customCategoryName(from text: String) -> String {
+        guard text == text.lowercased(), let first = text.first else { return text }
+        return first.uppercased() + text.dropFirst()
     }
 
     private func usernameUnavailableMessage(_ reason: String?) -> String {

@@ -587,7 +587,7 @@ function invitedTitle(plan, hostFirst) {
 
 /**
  * The host invited someone on Pantopus: the push has I'm in / Can't make it (not for a playdate, which asks the
- * kids' ages first). Like every notice, the area only; a playdate's title stays in the app, for verified neighbors.
+ * kids' ages first). Like every notice, the area only; a playdate's title stays in the app.
  */
 async function invited({ plan, invite, userId, hostFirst }) {
   const tz = rules.timezoneForPlan(plan);

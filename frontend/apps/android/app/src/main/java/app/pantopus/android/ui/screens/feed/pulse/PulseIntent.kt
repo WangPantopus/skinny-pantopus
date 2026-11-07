@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.feed.pulse
 
 import androidx.compose.runtime.Immutable
 import app.pantopus.android.data.api.models.posts.PostReactionKind
+import app.pantopus.android.data.api.models.posts.PostReactionSummary
 import app.pantopus.android.ui.theme.PantopusIcon
 
 /**
@@ -97,31 +98,45 @@ enum class PulseIntent(
 }
 
 /**
- * The post's one reaction on its card: its kind's button (Helpful, Going, Celebrate) and how many people tapped it
- * (`POST /api/posts/:id/like`).
+ * The post's reaction on its card (`POST /api/posts/:id/like`): Going on an event, emoji on every other post
+ * ([summary]: each emoji's count and the viewer's own).
  */
 @Immutable
 data class PulseReaction(
     val kind: PostReactionKind,
+    /** How many people reacted: an event's going count, else the emoji total. */
     val likeCount: Int,
+    /** An emoji post's counts and the viewer's own emoji; empty on an event. */
+    val summary: PostReactionSummary = PostReactionSummary(),
 ) {
-    /** What TalkBack reads: "Helpful, 3", or "Helpful" before anyone tapped it. */
+    /** What TalkBack reads: "Going, 3" ("Going" before anyone tapped it), or the emoji summary's reading. */
     val accessibilityLabel: String
-        get() = if (likeCount == 0) kind.label else "${kind.label}, $likeCount"
+        get() =
+            when (kind) {
+                PostReactionKind.Going -> if (likeCount == 0) kind.label else "${kind.label}, $likeCount"
+                PostReactionKind.Emoji -> summary.accessibilityLabel
+            }
 
     companion object {
+        /** An emoji post's reaction, counted from its [summary]. */
+        fun emoji(summary: PostReactionSummary): PulseReaction = PulseReaction(PostReactionKind.Emoji, summary.total, summary)
+
         fun forPost(
             postType: String?,
             likeCount: Int,
-        ): PulseReaction = PulseReaction(PostReactionKind.fromPostType(postType), likeCount)
+            summary: PostReactionSummary,
+        ): PulseReaction =
+            when (PostReactionKind.fromPostType(postType)) {
+                PostReactionKind.Going -> PulseReaction(PostReactionKind.Going, likeCount)
+                PostReactionKind.Emoji -> emoji(summary)
+            }
     }
 }
 
-/** The reaction button's icon: a light bulb, a calendar check, a party popper. */
+/** The reaction's icon: a calendar check for Going, the smile beside "React" and a reaction count. */
 val PostReactionKind.icon: PantopusIcon
     get() =
         when (this) {
-            PostReactionKind.Helpful -> PantopusIcon.Lightbulb
             PostReactionKind.Going -> PantopusIcon.CalendarCheck
-            PostReactionKind.Celebrate -> PantopusIcon.PartyPopper
+            PostReactionKind.Emoji -> PantopusIcon.Smile
         }

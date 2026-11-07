@@ -88,17 +88,31 @@ public struct PostQuickReplyPrompt: Sendable, Identifiable, Hashable {
     }
 }
 
-/// The post's one reaction under it: its kind (Helpful, Going, Celebrate),
-/// how many people tapped it, and whether the signed-in person did.
+/// The post's reactions under it: an Event's Going (how many are going and
+/// whether the signed-in person is), or every other post's emoji reactions.
 public struct PostReactionCounts: Sendable, Hashable {
     public var kind: PostReactionKind
+    /// How many are going, or how many reacted.
     public var likeCount: Int
+    /// The signed-in person is going, or reacted.
     public var isOn: Bool
+    /// Every post but an Event: each emoji's count and the person's own.
+    public private(set) var emoji: PostReactions
 
-    public init(kind: PostReactionKind = .helpful, likeCount: Int = 0, isOn: Bool = false) {
-        self.kind = kind
-        self.likeCount = likeCount
-        self.isOn = isOn
+    /// An Event's Going.
+    public init(goingCount: Int, isGoing: Bool) {
+        kind = .going
+        likeCount = goingCount
+        isOn = isGoing
+        emoji = PostReactions()
+    }
+
+    /// Every other post's emoji reactions.
+    public init(emoji: PostReactions = PostReactions()) {
+        kind = .emoji
+        likeCount = emoji.total
+        isOn = emoji.mine != nil
+        self.emoji = emoji
     }
 }
 
@@ -128,7 +142,10 @@ public struct BodyReactionsBody: View {
     private let media: [PostMediaItem]
     private let intent: PostIntent
     private let reactions: PostReactionCounts
+    /// An Event's Going.
     private let onReactionTap: @MainActor () -> Void
+    /// An emoji picked or tapped under any other post (the viewer's own takes it away).
+    private let onReactionPick: @MainActor (PostReactionEmoji) -> Void
     private let composerAvatarURL: URL?
     private let composerAvatarName: String
     @Binding private var composerText: String
@@ -172,6 +189,7 @@ public struct BodyReactionsBody: View {
         intent: PostIntent = .share,
         reactions: PostReactionCounts,
         onReactionTap: @escaping @MainActor () -> Void,
+        onReactionPick: @escaping @MainActor (PostReactionEmoji) -> Void = { _ in },
         mediaLocationBadge: String? = nil,
         detailLine: String? = nil,
         eventDetails: PulseEventDetails? = nil,
@@ -202,6 +220,7 @@ public struct BodyReactionsBody: View {
         self.intent = intent
         self.reactions = reactions
         self.onReactionTap = onReactionTap
+        self.onReactionPick = onReactionPick
         self.mediaLocationBadge = mediaLocationBadge
         self.detailLine = detailLine
         self.eventDetails = eventDetails
@@ -274,7 +293,8 @@ public struct BodyReactionsBody: View {
                     commentCount: visibleCommentCount,
                     commentsAreFresh: threadIsEmpty,
                     postedRecently: postedRecently,
-                    onTap: onReactionTap
+                    onTap: onReactionTap,
+                    onPick: onReactionPick
                 )
                 .padding(.horizontal, Spacing.s4)
 
@@ -451,28 +471,80 @@ private struct ReactionsBar: View {
     let commentsAreFresh: Bool
     /// "just posted" follows "0 comments" only while the post is under an hour old.
     let postedRecently: Bool
+    /// An Event's Going.
     let onTap: @MainActor () -> Void
+    /// An emoji tapped or picked under any other post.
+    let onPick: @MainActor (PostReactionEmoji) -> Void
+    /// The emoji picker is open from the add-reaction button.
+    @State private var showsPicker = false
 
     var body: some View {
-        HStack(spacing: Spacing.s2) {
-            // The post's one reaction, named by its kind as on its card ("Helpful 3").
-            ReactionPill(
-                id: counts.kind.rawValue,
-                icon: counts.kind.icon,
-                label: counts.kind.label,
-                likeCount: counts.likeCount,
-                accessibilityLabel: counts.likeCount == 0 ? counts.kind.label : "\(counts.kind.label), \(counts.likeCount)",
-                isSelected: counts.isOn
-            ) { onTap() }
-            Spacer()
-            HStack(spacing: Spacing.s1) {
-                Icon(.messageCircle, size: 13, color: commentsAreFresh ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
-                Text(commentSummary)
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(commentsAreFresh ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
+        if counts.kind == .going {
+            HStack(spacing: Spacing.s2) {
+                // An Event's Going, as on its card ("Going 3").
+                ReactionPill(
+                    identifier: "pulsePostDetail-reaction-going",
+                    leading: .icon(counts.kind.icon),
+                    label: counts.kind.label,
+                    number: counts.likeCount,
+                    accessibilityLabel: counts.likeCount == 0 ? counts.kind.label : "\(counts.kind.label), \(counts.likeCount)",
+                    isSelected: counts.isOn
+                ) { onTap() }
+                Spacer()
+                commentSummaryLabel
             }
-            .accessibilityLabel(commentSummary)
+        } else {
+            // One chip per emoji ("👍 3"), most used first, then the add-reaction button; they wrap onto more lines
+            // while the comment count keeps the first line's right end.
+            HStack(alignment: .top, spacing: Spacing.s2) {
+                ContentDetailFlowLayout(spacing: Spacing.s2, lineSpacing: Spacing.s0) {
+                    ForEach(counts.emoji.counts) { entry in
+                        emojiChip(entry)
+                    }
+                    addReactionButton
+                }
+                commentSummaryLabel
+                    .frame(minHeight: 44)
+            }
         }
+    }
+
+    /// One emoji and its count; the viewer's own is selected, and tapping it
+    /// takes it away (any other sets it).
+    private func emojiChip(_ entry: PostReactionCount) -> some View {
+        ReactionPill(
+            identifier: "pulsePostDetail-reaction-\(entry.emoji.id)",
+            leading: .emoji(entry.emoji.rawValue),
+            label: nil,
+            number: entry.count,
+            accessibilityLabel: "\(entry.emoji.name), \(entry.count)",
+            isSelected: counts.emoji.mine == entry.emoji
+        ) { onPick(entry.emoji) }
+    }
+
+    /// The smile in the same pill, with "React" while nobody has reacted:
+    /// opens the emoji picker.
+    private var addReactionButton: some View {
+        let first = counts.emoji.isEmpty
+        return ReactionPill(
+            identifier: "pulsePostDetail-reactionAdd",
+            leading: .icon(PostReactionKind.emoji.icon),
+            label: first ? PostReactionKind.emoji.label : nil,
+            number: 0,
+            accessibilityLabel: first ? PostReactionKind.emoji.label : "Add a reaction",
+            isSelected: false
+        ) { showsPicker = true }
+            .pulseReactionPicker(isPresented: $showsPicker, selected: counts.emoji.mine, onPick: onPick)
+    }
+
+    private var commentSummaryLabel: some View {
+        HStack(spacing: Spacing.s1) {
+            Icon(.messageCircle, size: 13, color: commentsAreFresh ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
+            Text(commentSummary)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(commentsAreFresh ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
+        }
+        .accessibilityLabel(commentSummary)
     }
 
     private var commentSummary: String {
@@ -484,12 +556,18 @@ private struct ReactionsBar: View {
 }
 
 private struct ReactionPill: View {
-    let id: String
-    let icon: PantopusIcon
-    /// The reaction's word ("Helpful", "Going", "Celebrate").
-    let label: String
-    /// Shown after the word once someone tapped it.
-    let likeCount: Int
+    /// What comes first: an icon (Going, the add-reaction smile) or an emoji.
+    enum Leading {
+        case icon(PantopusIcon)
+        case emoji(String)
+    }
+
+    let identifier: String
+    let leading: Leading
+    /// The reaction's word ("Going", "React"); nil on an emoji's chip.
+    let label: String?
+    /// The count after the word or emoji; none while it's 0.
+    let number: Int
     let accessibilityLabel: String
     let isSelected: Bool
     var selectedForeground: Color = Theme.Color.primary700
@@ -500,19 +578,27 @@ private struct ReactionPill: View {
         Button(action: { onTap() }) { pillBody }
             .buttonStyle(.plain)
             .frame(minHeight: 44, alignment: .center)
-            .accessibilityIdentifier("pulsePostDetail-reaction-\(id)")
+            .accessibilityIdentifier(identifier)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     private var pillBody: some View {
         HStack(spacing: Spacing.s1) {
-            Icon(icon, size: 14, color: foreground)
-            Text(label)
-                .font(.system(size: PantopusTextStyle.caption.size, weight: .medium))
-                .foregroundStyle(foreground)
-            if likeCount != 0 {
-                Text("\(likeCount)")
+            switch leading {
+            case let .icon(icon):
+                Icon(icon, size: 14, color: foreground)
+            case let .emoji(emoji):
+                Text(emoji)
+                    .font(.system(size: 15))
+            }
+            if let label {
+                Text(label)
+                    .font(.system(size: PantopusTextStyle.caption.size, weight: .medium))
+                    .foregroundStyle(foreground)
+            }
+            if number != 0 {
+                Text("\(number)")
                     .font(.system(size: PantopusTextStyle.caption.size, weight: .regular))
                     .foregroundStyle(foreground)
             }
@@ -547,7 +633,12 @@ private struct ReactionPill: View {
     BodyReactionsBody(
         body: "Anyone know a reliable handyman for fixing a leaky faucet in Cambridge? Tried two on Angi already.",
         media: [],
-        reactions: PostReactionCounts(kind: .helpful, likeCount: 7, isOn: true),
+        reactions: PostReactionCounts(
+            emoji: PostReactions(
+                counts: [PostReactionCount(emoji: .like, count: 4), PostReactionCount(emoji: .love, count: 3)],
+                mine: .love
+            )
+        ),
         onReactionTap: {},
         composerAvatarURL: nil,
         composerAvatarName: "You",

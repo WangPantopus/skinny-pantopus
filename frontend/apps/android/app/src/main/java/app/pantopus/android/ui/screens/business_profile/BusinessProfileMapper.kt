@@ -189,7 +189,8 @@ object BusinessProfileMapper {
         categories.take(4).mapIndexed { index, name ->
             BusinessCategoryChip(
                 id = name,
-                label = BusinessCategory.entries.firstOrNull { it.backendSlug == name }?.label ?: name,
+                // Businesses created before the wizard saved names carry its old slugs ("home_services").
+                label = BusinessCategory.labelForLegacySlug(name) ?: name,
                 icon = categoryIcon(name),
                 accent = if (index == 0) categoryAccent(name) else BusinessCategoryAccent.Neutral,
             )

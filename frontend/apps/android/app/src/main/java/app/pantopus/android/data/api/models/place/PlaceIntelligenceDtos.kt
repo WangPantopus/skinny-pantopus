@@ -1036,6 +1036,24 @@ data class PlaceYourHomeData(
     @Json(name = "value_source") val valueSource: String? = null,
     /** The value block in the server's words, the confirmed owner's. It comes first. */
     @Json(name = "value_card") val valueCard: HomeValueCardDto? = null,
+    /** No record of this home: labeled estimates, in their own slot and never in the fields above. */
+    val estimate: PlaceHomeEstimate? = null,
+)
+
+/** "Estimate for similar homes nearby": the server words and rounds every row. */
+@JsonClass(generateAdapter = true)
+data class PlaceHomeEstimate(
+    val title: String = "",
+    val rows: List<PlaceHomeEstimateRow> = emptyList(),
+    val note: String? = null,
+    val footer: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class PlaceHomeEstimateRow(
+    val id: String = "",
+    val label: String = "",
+    val value: String = "",
 )
 
 /**

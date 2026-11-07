@@ -4,9 +4,10 @@
 //
 //  A12.10 Frame 2 (search) — Create Business wizard step 1, active
 //  typeahead results below the shared search field. Renders the
-//  ranked-results header + 3 hits with the matched substring
-//  violet-highlighted + a dashed-violet "Add as custom category"
-//  fallback row.
+//  ranked-results header + the listed categories that match, with the
+//  matched substring violet-highlighted, + a dashed-violet "Add as
+//  custom category" row that makes the search text the owner's own
+//  category (unless a result already has that exact name).
 //
 
 import SwiftUI
@@ -29,7 +30,7 @@ struct PickCategorySearchStep: View {
                 SearchResultRow(
                     hit: hit,
                     query: query,
-                    selected: viewModel.selectedCategoryId == hit.category
+                    selected: viewModel.isPicked(hit)
                 ) {
                     viewModel.selectSearchHit(hit)
                 }
@@ -37,30 +38,11 @@ struct PickCategorySearchStep: View {
             }
         }
 
-        if viewModel.searchHits.isEmpty, !query.isEmpty {
-            // No-match fallback from the design pack. Submitting is still
-            // logged-only — there is no POST /custom-categories to invent — so
-            // the row's subcopy promises exactly what happens.
-            AddCustomCategoryRow(
-                label: query,
-                isSubmitting: viewModel.isSubmittingCustom
-            ) {
-                viewModel.submitCustomCategory()
+        if viewModel.offersCustomCategory {
+            AddCustomCategoryRow(label: query) {
+                Keyboard.close()
+                viewModel.useSearchTextAsCustomCategory()
             }
-        } else {
-            Text("Custom categories aren't available yet. Pick a listed category above.")
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("createBusinessCustomCategoryBlocked")
-        }
-
-        if let submitError = viewModel.submitError {
-            Text(submitError)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.error)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("createBusinessSubmitError")
         }
     }
 }
@@ -113,13 +95,20 @@ private struct SearchResultRow: View {
                 }
                 VStack(alignment: .leading, spacing: Spacing.s1) {
                     HighlightedLabel(text: hit.label, query: query)
-                    (
-                        Text("in ")
-                            .foregroundColor(Theme.Color.appTextSecondary)
-                            + Text(hit.category.label)
-                            .foregroundColor(Theme.Color.appTextStrong)
-                    )
-                    .pantopusTextStyle(.caption)
+                    if hit.isTile {
+                        // A tile's own row: "in Home services" would repeat it.
+                        Text(hit.category.subcopy)
+                            .pantopusTextStyle(.caption)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                    } else {
+                        (
+                            Text("in ")
+                                .foregroundColor(Theme.Color.appTextSecondary)
+                                + Text(hit.category.label)
+                                .foregroundColor(Theme.Color.appTextStrong)
+                        )
+                        .pantopusTextStyle(.caption)
+                    }
                 }
                 Spacer(minLength: Spacing.s2)
                 if selected {
@@ -151,7 +140,9 @@ private struct SearchResultRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(hit.label), in \(hit.category.label)")
+        .accessibilityLabel(
+            hit.isTile ? "\(hit.label). \(hit.category.subcopy)" : "\(hit.label), in \(hit.category.label)"
+        )
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -202,7 +193,6 @@ private struct HighlightedLabel: View {
 
 private struct AddCustomCategoryRow: View {
     let label: String
-    let isSubmitting: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -218,7 +208,7 @@ private struct AddCustomCategoryRow: View {
                     Text("Add \"\(label)\" as a custom category")
                         .pantopusTextStyle(.body)
                         .foregroundStyle(Theme.Color.businessDark)
-                    Text("Custom categories aren't available yet. Choose a listed category instead.")
+                    Text(Self.subcopy)
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -240,14 +230,12 @@ private struct AddCustomCategoryRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isSubmitting)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "Add \(label) as a custom category. " +
-                "Custom categories aren't available yet. Choose a listed category instead."
-        )
+        .accessibilityLabel("Add \(label) as a custom category. \(Self.subcopy)")
         .accessibilityIdentifier("createBusinessAddCustomCategory")
     }
+
+    static let subcopy = "It shows on your business page. You can change it later."
 }
 
 #Preview {

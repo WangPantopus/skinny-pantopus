@@ -23,7 +23,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -39,7 +38,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.screens.place.HubVerificationTarget
 import app.pantopus.android.ui.screens.plans.components.LARGE_TEXT_SCALE
 import app.pantopus.android.ui.screens.plans.components.PlanLockLine
 import app.pantopus.android.ui.screens.plans.components.PlanScopeLine
@@ -52,7 +50,6 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
-import kotlinx.coroutines.launch
 
 /**
  * Host a plan: pick a type (H1), fill in its details (H2 to H5), choose a place (H6), preview (H7) and post. Posting
@@ -62,18 +59,11 @@ import kotlinx.coroutines.launch
 fun HostFlowScreen(
     onClose: () -> Unit,
     onDoneToMap: () -> Unit,
-    onOpenVerification: (HubVerificationTarget) -> Unit,
     viewModel: HostFlowViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
-    val choose: (PlanKind) -> Unit = { kind ->
-        if (kind == PlanKind.PLAYDATE && !ui.canHostPlaydates) {
-            scope.launch { onOpenVerification(viewModel.verificationTarget()) }
-        } else {
-            viewModel.choose(kind)
-        }
-    }
+    // Anyone on Pantopus may host a playdate (founder decision, November 7).
+    val choose: (PlanKind) -> Unit = { kind -> viewModel.choose(kind) }
     BackHandler { if (!viewModel.back()) onClose() }
     LaunchedEffect(ui.postedId) { ui.postedId?.let { onDoneToMap() } }
     Box(modifier = Modifier.fillMaxSize().testTag("plansHost")) {
@@ -189,7 +179,7 @@ private fun HostTypeStep(
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             rows.forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                    row.forEach { kind -> TypeCard(kind, ui.canHostPlaydates, Modifier.weight(1f)) { onChoose(kind) } }
+                    row.forEach { kind -> TypeCard(kind, Modifier.weight(1f)) { onChoose(kind) } }
                     if (row.size == 1 && !large) Spacer(modifier = Modifier.weight(1f))
                 }
             }
@@ -210,7 +200,6 @@ private fun typeBlurb(kind: PlanKind): String =
 @Composable
 private fun TypeCard(
     kind: PlanKind,
-    canHostPlaydates: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
@@ -228,10 +217,7 @@ private fun TypeCard(
         Text(text = kind.label, style = planH4, color = PantopusColors.appText)
         Text(text = typeBlurb(kind), style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
         if (kind == PlanKind.PLAYDATE) {
-            PlanLockLine(
-                if (canHostPlaydates) "Verified neighbors only" else "Verify your address to host",
-                icon = PantopusIcon.ShieldCheck,
-            )
+            PlanLockLine("You approve each family", icon = PantopusIcon.ShieldCheck)
         }
     }
 }

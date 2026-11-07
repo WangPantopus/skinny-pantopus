@@ -6,6 +6,8 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedRepostedBy
+import app.pantopus.android.data.api.models.posts.PostReactionKind
+import app.pantopus.android.data.api.models.posts.PostReactionSummary
 import app.pantopus.android.ui.screens.feed.FeedSurface
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
 import app.pantopus.android.ui.screens.shared.media.buildPostMediaItems
@@ -19,6 +21,8 @@ import java.time.Instant
 internal data class PulseCardLiveValues(
     val hasReacted: Boolean,
     val likeCount: Int,
+    /** An emoji post's counts and the viewer's own emoji (an event's reaction is its Going: the two above). */
+    val reactions: PostReactionSummary,
     val isSaved: Boolean,
     val isReposted: Boolean,
     val shareCount: Int,
@@ -28,12 +32,16 @@ internal data class PulseCardLiveValues(
     val likePending: Boolean = false,
     val savePending: Boolean = false,
 ) {
+    /** Whether the viewer reacted: Going, when [kind] is an event's; an emoji on every other post. */
+    fun viewerReacted(kind: PostReactionKind): Boolean = if (kind == PostReactionKind.Going) hasReacted else reactions.mine != null
+
     companion object {
         /** The row as the server sent it, before any tap. */
         fun of(post: FeedPost): PulseCardLiveValues =
             PulseCardLiveValues(
                 hasReacted = post.userHasLiked,
                 likeCount = post.likeCount,
+                reactions = post.reactionSummary,
                 isSaved = post.userHasSaved,
                 isReposted = post.userHasReposted,
                 shareCount = post.shareCount,
@@ -56,8 +64,10 @@ internal fun pulseCardContent(
     val intent = PulseIntent.fromPostType(post.postType)
     val authorName = post.creator?.displayName() ?: "Pantopus user"
     val isBusiness = post.creator?.accountType == "business" || post.businessAuthorId != null
-    val hasReacted = live.hasReacted
     val likeCount = live.likeCount
+    // An event's reaction is Going; every other post's is an emoji.
+    val reaction = PulseReaction.forPost(post.postType, likeCount, live.reactions)
+    val hasReacted = live.viewerReacted(reaction.kind)
     val isOwner = post.isOwnedBy(viewerId)
     val isSolved = live.isSolved
     val openAsk = LaunchFeatures.pulseRedesign && isOwner && isOpenAsk(post, isSolved)
@@ -88,8 +98,7 @@ internal fun pulseCardContent(
                 venue = post.eventVenue,
                 isPlanPost = post.isPlanPost,
             ),
-        // The post's one reaction (the backend's single like counter), named by its type: Going, Celebrate or Helpful.
-        reaction = PulseReaction.forPost(post.postType, likeCount),
+        reaction = reaction,
         attendees =
             if (intent == PulseIntent.Event) {
                 PulseAttendeeStrip(

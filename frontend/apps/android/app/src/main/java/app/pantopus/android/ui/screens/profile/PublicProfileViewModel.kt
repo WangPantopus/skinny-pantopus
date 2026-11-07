@@ -400,7 +400,7 @@ class PublicProfileViewModel
 
         /**
          * The Local profile's posts drawn as Pulse cards: photos and videos, tappable links,
-         * Helpful, Save, Repost, share and report.
+         * emoji reactions, Save, Repost, share and report.
          */
         val postCards =
             ProfilePostCards(

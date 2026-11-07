@@ -15,9 +15,13 @@ import SwiftUI
 /// and the business header chip row.
 struct ContentDetailFlowLayout: Layout {
     let spacing: CGFloat
+    /// Between rows: `spacing` unless given (children that pad themselves out
+    /// to a 44 pt tap height need less).
+    let lineSpacing: CGFloat
 
-    init(spacing: CGFloat = Spacing.s2) {
+    init(spacing: CGFloat = Spacing.s2, lineSpacing: CGFloat? = nil) {
         self.spacing = spacing
+        self.lineSpacing = lineSpacing ?? spacing
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
@@ -29,7 +33,7 @@ struct ContentDetailFlowLayout: Layout {
             let size = Self.size(of: sub, maxWidth: maxWidth)
             if x + size.width > maxWidth {
                 x = 0
-                y += lineHeight + spacing
+                y += lineHeight + lineSpacing
                 lineHeight = 0
             }
             x += size.width + spacing
@@ -46,7 +50,7 @@ struct ContentDetailFlowLayout: Layout {
             let size = Self.size(of: sub, maxWidth: bounds.width)
             if x + size.width > bounds.maxX {
                 x = bounds.minX
-                y += lineHeight + spacing
+                y += lineHeight + lineSpacing
                 lineHeight = 0
             }
             sub.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))

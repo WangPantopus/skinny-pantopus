@@ -36,7 +36,7 @@ struct ConfirmStep: View {
 
     private var summaryRows: [ReviewSummaryRow] {
         var rows: [ReviewSummaryRow] = [
-            ReviewSummaryRow(label: "Category", value: viewModel.selectedCategoryId?.label ?? "—"),
+            ReviewSummaryRow(label: "Category", value: viewModel.categoryName ?? "—"),
             ReviewSummaryRow(
                 label: "Name",
                 value: viewModel.businessName.trimmingCharacters(in: .whitespacesAndNewlines)

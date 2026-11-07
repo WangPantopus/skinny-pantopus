@@ -23,24 +23,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.data.api.models.posts.PostReactionKind
+import app.pantopus.android.data.api.models.posts.PostReactionSummary
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatar
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
@@ -130,8 +139,7 @@ data class PulsePostCardContent(
     val intent: PulseIntent,
     val title: String?,
     val body: String,
-    /** The post's one reaction (Helpful, Going, Celebrate) and its count. An Event shows it as its attendee strip's
-     *  "N going" and Going button. */
+    /** The post's reaction: its emoji counts, or an Event's Going, which its attendee strip shows ("N going" and Going). */
     val reaction: PulseReaction,
     val attendees: PulseAttendeeStrip?,
     val userHasReacted: Boolean,
@@ -188,8 +196,11 @@ fun PulsePostCard(
     content: PulsePostCardContent,
     /** Opens the post. `null` for a cold-start tip, which has no page. */
     onTap: (() -> Unit)?,
+    /** An Event's Going, where the card shows it as a pill (no [onRSVP]). */
     onPrimaryReaction: () -> Unit,
     onRSVP: (() -> Unit)? = null,
+    /** The emoji picked in the reaction pill's picker (every post but an Event). `null` leaves the pill display-only. */
+    onReact: ((PostReactionEmoji) -> Unit)? = null,
     /** Opens the card's overflow menu. `null` hides the affordance. */
     onOverflow: (() -> Unit)? = null,
     /** Dismisses a cold-start seeded fact. `null` hides the affordance. */
@@ -275,6 +286,7 @@ fun PulsePostCard(
                     // An Event's Going button sits in its attendee strip.
                     showsReaction = content.attendees == null || onRSVP == null,
                     onPrimary = onPrimaryReaction,
+                    onReact = onReact,
                     onToggleSave = onToggleSave,
                     onToggleRepost = onToggleRepost,
                 )
@@ -571,6 +583,7 @@ private fun ReactionStrip(
     content: PulsePostCardContent,
     showsReaction: Boolean,
     onPrimary: () -> Unit,
+    onReact: ((PostReactionEmoji) -> Unit)?,
     onToggleSave: (() -> Unit)? = null,
     onToggleRepost: (() -> Unit)? = null,
 ) {
@@ -580,13 +593,23 @@ private fun ReactionStrip(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (showsReaction) {
-            ReactionPill(
-                reaction = content.reaction,
-                active = content.userHasReacted,
-                onClick = onPrimary,
-                enabled = !content.likePending,
-                postId = content.id,
-            )
+            when (content.reaction.kind) {
+                PostReactionKind.Going ->
+                    GoingPill(
+                        reaction = content.reaction,
+                        active = content.userHasReacted,
+                        onClick = onPrimary,
+                        enabled = !content.likePending,
+                        postId = content.id,
+                    )
+                PostReactionKind.Emoji ->
+                    EmojiReactionPill(
+                        summary = content.reaction.summary,
+                        pending = content.likePending,
+                        postId = content.id,
+                        onPick = onReact,
+                    )
+            }
         }
         content.status?.let { PostStatusPill(status = it, postId = content.id) }
         if (!LaunchFeatures.pulseRedesign && content.actions.isSolved) {
@@ -701,9 +724,12 @@ private fun SolvedBadge(postId: String) {
     }
 }
 
-/** The post's reaction: its kind's icon and word, and the count once someone tapped it ("Helpful 3", like "Reply 3"). */
+/**
+ * An Event's Going as a pill, where its attendee strip has no Going button: the icon, the word and the count once
+ * someone tapped it ("Going 3", like "Reply 3").
+ */
 @Composable
-private fun ReactionPill(
+private fun GoingPill(
     reaction: PulseReaction,
     active: Boolean,
     onClick: () -> Unit,
@@ -740,6 +766,79 @@ private fun ReactionPill(
                 text = "${reaction.likeCount}",
                 fontSize = 11.5.sp,
                 color = tint,
+            )
+        }
+    }
+}
+
+/**
+ * The post's emoji reactions: the smile and "React" before anyone reacted, else up to three emoji (the viewer's own
+ * among them) and how many people reacted ("👍❤️😂 6"), in the active tint once the viewer reacted. A tap opens the
+ * emoji picker on the pill (not while the last pick is pending); [onPick] is null where nothing on the card reacts.
+ */
+@Composable
+private fun EmojiReactionPill(
+    summary: PostReactionSummary,
+    pending: Boolean,
+    postId: String,
+    onPick: ((PostReactionEmoji) -> Unit)?,
+) {
+    val active = summary.mine != null
+    val tint = if (active) PantopusColors.primary600 else PantopusColors.appTextSecondary
+    var picking by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier =
+                Modifier
+                    .alpha(if (pending) 0.5f else 1f)
+                    .testTag("pulseReaction_$postId")
+                    .then(
+                        if (onPick != null) {
+                            // Keeps consuming taps while pending, so they can't open the post behind it.
+                            Modifier.clickable(role = Role.Button) { if (!pending) picking = true }
+                        } else {
+                            Modifier
+                        },
+                    ).clearAndSetSemantics {
+                        contentDescription = summary.accessibilityLabel
+                        summary.accessibilityValue?.let { stateDescription = it }
+                        selected = active
+                        if (pending) disabled()
+                    },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+        ) {
+            if (summary.counts.isEmpty()) {
+                PantopusIconImage(
+                    icon = PostReactionKind.Emoji.icon,
+                    contentDescription = null,
+                    size = Radii.lg,
+                    tint = tint,
+                )
+                Text(
+                    text = PostReactionKind.Emoji.label,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = tint,
+                )
+            } else {
+                Text(text = summary.cardEmoji.joinToString("") { it.emoji }, fontSize = 12.sp)
+                Text(
+                    text = "${summary.total}",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = tint,
+                )
+            }
+        }
+        if (picking && onPick != null) {
+            PulseReactionPicker(
+                selected = summary.mine,
+                onPick = { emoji ->
+                    picking = false
+                    onPick(emoji)
+                },
+                onDismiss = { picking = false },
             )
         }
     }

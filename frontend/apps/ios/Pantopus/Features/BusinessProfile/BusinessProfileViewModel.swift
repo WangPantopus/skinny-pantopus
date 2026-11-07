@@ -89,8 +89,11 @@ public final class BusinessProfileViewModel {
         }
     }
 
+    /// Entry and every return: the view's `.task` runs again each time the page shows. Only the first load shows the
+    /// skeleton. Back on a loaded page, it stays where it was scrolled while every read runs again, so an edit or a
+    /// reply saved meanwhile shows; a failed refresh keeps the page.
     public func load() async {
-        state = .loading
+        if page == nil { state = .loading }
         await fetch()
     }
 
@@ -162,35 +165,49 @@ public final class BusinessProfileViewModel {
     }
 
     /// The page shows once its own reads answer. The reviews and a named page then load on their own, so a slow
-    /// or failed read touches only its section. Returns once both have settled (the owner dashboard reads the
-    /// finished page).
+    /// or failed read touches only its section. Returns once both have settled.
     private func fetch() async {
-        page = nil
-        let detail: BusinessDetailResponse
+        guard await readPage(), !Task.isCancelled else { return }
+        async let reviewsSettled: Void = readReviews()
+        await loadNamedPage(username: page?.detail.business.username)
+        await reviewsSettled
+    }
+
+    /// The page's own reads: the detail, the public page and the hours. The first answer shows the page and a later
+    /// one replaces it in place. A failed refresh keeps the page on screen; only a business that is gone (not
+    /// found) replaces it, as on Android. Returns whether there is a page. The owner dashboard shows once this
+    /// answers and reads the reviews on its own.
+    @discardableResult
+    func readPage() async -> Bool {
         do {
-            detail = try await loadDetail()
+            let detail = try await loadDetail()
             let publicResponse = await loadPublic(username: detail.business.username)
             let hours = try await loadHours(from: detail, publicResponse: publicResponse)
+            // Reads cut short when the page went away can pass for an unpublished page; keep what was there.
+            try Task.checkCancellation()
             page = PageReads(detail: detail, publicResponse: publicResponse, hours: hours)
             publish()
-        } catch let error as APIError {
-            switch error {
-            case .notFound:
-                logger.info("Business not found: \(self.businessId)")
-                state = .notFound
-            default:
-                logger.warning("Business detail load failed: \(error)")
-                state = .error(message: friendlyMessage(for: error))
-            }
-            return
+            return true
         } catch {
-            logger.warning("Business detail load failed: \(error)")
-            state = .error(message: "Something went wrong")
-            return
+            if case .notFound? = error as? APIError {
+                logger.info("Business not found: \(businessId)")
+                page = nil
+                state = .notFound
+                return false
+            }
+            guard page == nil else {
+                logger.debug("Business page refresh failed, keeping the page: \(error)")
+                return true
+            }
+            if let apiError = error as? APIError {
+                logger.warning("Business detail load failed: \(apiError)")
+                state = .error(message: friendlyMessage(for: apiError))
+            } else {
+                logger.warning("Business detail load failed: \(error)")
+                state = .error(message: "Something went wrong")
+            }
+            return false
         }
-        async let reviewsSettled: Void = readReviews()
-        await loadNamedPage(username: detail.business.username)
-        await reviewsSettled
     }
 
     /// `/b/:username` links (a business's shared public page) carry the
@@ -217,6 +234,8 @@ public final class BusinessProfileViewModel {
         }
     }
 
+    /// The hours and catalog. Not found means the page isn't published (or no longer is). Any other failure keeps
+    /// the public page a refresh already has, so its hours and services don't empty out.
     private func loadPublic(username: String?) async -> BusinessPublicResponse? {
         guard let username, !username.isEmpty else { return nil }
         do {
@@ -224,9 +243,11 @@ public final class BusinessProfileViewModel {
                 BusinessesEndpoints.publicBusiness(username: username),
                 as: BusinessPublicResponse.self
             )
-        } catch {
-            logger.debug("Public business fetch skipped (unpublished or error): \(error)")
+        } catch APIError.notFound {
             return nil
+        } catch {
+            logger.debug("Public business fetch failed: \(error)")
+            return page?.publicResponse
         }
     }
 
@@ -255,6 +276,8 @@ public final class BusinessProfileViewModel {
             namedPage = .none
             return
         }
+        // A named page on screen isn't read again on return: each read records a profile view.
+        if case .loaded = namedPage { return }
         // `pantopus://b/:username/:slug` routes the *username* through as the
         // id, so it is the right fallback when the detail read has no handle.
         let handle = (username?.isEmpty == false ? username : nil) ?? businessId
@@ -287,6 +310,7 @@ public final class BusinessProfileViewModel {
             )
         } catch {
             logger.debug("Named business page fetch failed: \(error)")
+            guard !Task.isCancelled else { return }
             namedPage = .failed(
                 title: pageSlug,
                 message: "This business page does not exist or is not published."
@@ -296,7 +320,7 @@ public final class BusinessProfileViewModel {
 
     /// `GET /api/users/id/:id`, on its own so a slow or failed read touches only the Reviews section. Rows already
     /// on screen stay during the read; only a section with no answer yet shows its loading state.
-    private func readReviews() async {
+    func readReviews() async {
         reviewsGeneration &+= 1
         let generation = reviewsGeneration
         reviewsRead = reviews == nil && reviewsRead != .loaded ? .loading : .loaded
@@ -508,7 +532,8 @@ extension BusinessProfileViewModel {
         categories.prefix(4).enumerated().map { index, name in
             BusinessCategoryChip(
                 id: name,
-                label: name,
+                // Businesses created before the wizard saved names carry its old slugs ("home_services").
+                label: BusinessCategory.label(forLegacySlug: name) ?? name,
                 icon: categoryIcon(name),
                 accent: index == 0 ? categoryAccent(name) : .neutral
             )

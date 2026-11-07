@@ -22,6 +22,10 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let likeCount: Int
     public let commentCount: Int
     public let userHasLiked: Bool
+    /// Each emoji's count, most used first (`PostReactions`); empty before anyone reacted and from older servers.
+    public let reactions: [PostReactionCount]
+    /// The viewer's own emoji; nil before they react and from older servers.
+    public let userReaction: PostReactionEmoji?
     public let locationName: String?
     public let eventDate: String?
     public let eventVenue: String?
@@ -62,6 +66,8 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         likeCount: Int = 0,
         commentCount: Int = 0,
         userHasLiked: Bool = false,
+        reactions: [PostReactionCount] = [],
+        userReaction: PostReactionEmoji? = nil,
         locationName: String? = nil,
         eventDate: String? = nil,
         eventVenue: String? = nil,
@@ -85,6 +91,8 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         self.likeCount = likeCount
         self.commentCount = commentCount
         self.userHasLiked = userHasLiked
+        self.reactions = reactions
+        self.userReaction = userReaction
         self.locationName = locationName
         self.eventDate = eventDate
         self.eventVenue = eventVenue
@@ -114,6 +122,7 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case likeCount = "like_count"
         case commentCount = "comment_count"
         case userHasLiked
+        case reactions, userReaction
         case locationName = "location_name"
         case eventDate = "event_date"
         case eventVenue = "event_venue"
@@ -145,6 +154,8 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         likeCount = c.lenient(Int.self, forKey: .likeCount) ?? 0
         commentCount = c.lenient(Int.self, forKey: .commentCount) ?? 0
         userHasLiked = c.lenient(Bool.self, forKey: .userHasLiked) ?? false
+        reactions = c.lossyList(PostReactionCount.self, forKey: .reactions)
+        userReaction = c.lenient(PostReactionEmoji.self, forKey: .userReaction)
         locationName = c.lenient(String.self, forKey: .locationName)
         eventDate = c.lenient(String.self, forKey: .eventDate)
         eventVenue = c.lenient(String.self, forKey: .eventVenue)

@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
-import app.pantopus.android.ui.screens.businesses.create_business.steps.PickCategorySearchStep
 import app.pantopus.android.ui.screens.businesses.create_business.steps.PickCategoryStep
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardIdentity
@@ -63,11 +62,11 @@ class CreateBusinessSnapshotTest {
             )
         paparazzi.snapshot {
             Frame {
-                PickCategorySearchStep(
+                // The step swaps its grid for the search results while a search is typed.
+                PickCategoryStep(
                     state = state,
                     onSearchTextChanged = {},
-                    onPickHit = {},
-                    onSubmitCustom = {},
+                    onPickCategory = {},
                 )
             }
         }

@@ -52,6 +52,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -131,6 +132,13 @@ fun BusinessProfileScreen(
     val sheetState = rememberModalBottomSheetState()
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showReportSheet by remember { mutableStateOf(false) }
+    // The loaded page's dock, so the toasts stay above it once large text makes it taller. The designed offsets
+    // already clear it at normal sizes.
+    var dockHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val dockHeight = if (state is BusinessProfileUiState.Loaded) with(density) { dockHeightPx.toDp() } else 0.dp
+
+    fun aboveDock(designed: Dp): Dp = maxOf(designed, dockHeight + Spacing.s2)
 
     LaunchedEffect(Unit) {
         viewModel.load()
@@ -189,6 +197,7 @@ fun BusinessProfileScreen(
                         namedPage = namedPage,
                         onReport = { showReportSheet = true },
                         onRetryReviews = viewModel::retryReviews,
+                        onDockHeightChanged = { dockHeightPx = it },
                     )
                 }
         }
@@ -205,20 +214,20 @@ fun BusinessProfileScreen(
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 100.dp),
+                        .padding(bottom = aboveDock(100.dp)),
             )
         }
         undo?.let { snapshot ->
             BusinessProfileSaveUndoSnackbar(
                 undo = snapshot,
                 onUndo = savedPlacesStore::undoRemove,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 112.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = aboveDock(112.dp)),
             )
         }
         savedPlacesToast?.let { saveToast ->
             BusinessProfileSaveToast(
                 toast = saveToast,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = aboveDock(100.dp)),
             )
         }
 
@@ -322,6 +331,8 @@ internal fun BusinessProfileLoadedFrame(
     onReport: () -> Unit = {},
     // Reads the reviews again. The owner preview never offers it.
     onRetryReviews: () -> Unit = {},
+    // The dock's height in px whenever it changes, so the host keeps its toasts above it.
+    onDockHeightChanged: (Int) -> Unit = {},
 ) {
     // The page ends clear of the dock: 132dp as designed, more once large text makes the dock taller.
     var dockHeightPx by remember { mutableIntStateOf(0) }
@@ -374,7 +385,13 @@ internal fun BusinessProfileLoadedFrame(
             onContact = onContact,
             onBook = onBook,
             onCall = onCall,
-            modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { dockHeightPx = it.height },
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .onSizeChanged {
+                        dockHeightPx = it.height
+                        onDockHeightChanged(it.height)
+                    },
         )
     }
 }

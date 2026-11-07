@@ -399,6 +399,20 @@ export async function toggleLike(postId: string, liked?: boolean): Promise<{ lik
   return post(`/api/posts/${postId}/like`, liked === undefined ? undefined : { liked });
 }
 
+/**
+ * Set the viewer's emoji reaction on a post (one of POST_REACTION_EMOJIS in @pantopus/ui-utils), or take it away with
+ * null. A repeat sets the same reaction again. `reactions` is each emoji's count afterwards; it's missing when the
+ * server couldn't read them, and then what's on screen stays.
+ */
+export async function setReaction(postId: string, reaction: string | null): Promise<{
+  liked: boolean;
+  likeCount: number;
+  reaction: string | null;
+  reactions?: { reaction: string; count: number }[];
+}> {
+  return post(`/api/posts/${postId}/like`, { reaction });
+}
+
 export async function getLikes(postId: string, params?: {
   limit?: number;
   offset?: number;

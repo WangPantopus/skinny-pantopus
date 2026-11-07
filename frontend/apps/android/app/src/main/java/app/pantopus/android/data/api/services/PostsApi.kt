@@ -25,6 +25,7 @@ import app.pantopus.android.data.api.models.posts.PostShareResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateResponse
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -122,6 +123,16 @@ interface PostsApi {
     suspend fun toggleLike(
         @Path("id") id: String,
         @Body body: PostLikeStateRequest,
+    ): PostLikeResponse
+
+    /**
+     * `POST /api/posts/:id/like` with `{"reaction": "❤️"}` (sets the viewer's emoji) or `{"reaction": null}` (takes it
+     * away), as built by `postReactionRequestBody`. Route `backend/routes/posts.js` (`router.post('/:id/like'`).
+     */
+    @POST("api/posts/{id}/like")
+    suspend fun setReaction(
+        @Path("id") id: String,
+        @Body body: RequestBody,
     ): PostLikeResponse
 
     /** `GET /api/posts/:id/comments` — route `backend/routes/posts.js:2520`. */

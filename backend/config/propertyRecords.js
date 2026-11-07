@@ -9,6 +9,9 @@
  *   PROPERTY_RECORDS_SWITCHES              Which switch file this server follows, switches/<name>.json. Default: APP_ENV.
  *   VALUE_AREA_TREND                       1: owners' value cards show the area's price change, from <root>/area-trends, in every county.
  *   VALUE_NEIGHBORHOOD_FIGURES             1: owners' value cards show the Census Bureau's figures for the ZIP where a home has no estimate.
+ *   PROPERTY_ESTIMATES_ENABLED             1: homes with no record see the labeled national estimates, from <root>/estimates.
+ *   PROPERTY_FLOOR_BY_LOCATION             on: a home FEMA's file has no address for finds its building from its own registry
+ *                                          point (<root>/estimates/points); shadow: looks, counts in the log, shows nothing. Off by default.
  *   PROPERTY_INDEX_AWS_ACCESS_KEY_ID, PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY, PROPERTY_INDEX_REGION  The read-only key.
  *   PROPERTY_RECORDS_FALLBACK_URL          A replica of the index in a second region, s3://bucket/prefix. A read's second try goes there,
  *   PROPERTY_INDEX_FALLBACK_REGION         so a regional outage costs a moment, not the lookup. Empty: one region. Same read-only key.
@@ -48,9 +51,14 @@ function listedModes() {
 const enabled = () => Boolean(manifestUrl);
 const areaTrendEnabled = () => Boolean(manifestUrl) && env('VALUE_AREA_TREND') === '1';
 const neighborhoodFiguresEnabled = () => Boolean(manifestUrl) && env('VALUE_NEIGHBORHOOD_FIGURES') === '1';
+const estimatesEnabled = () => Boolean(manifestUrl) && env('PROPERTY_ESTIMATES_ENABLED') === '1';
+const floorByLocation = () => {
+  const mode = env('PROPERTY_FLOOR_BY_LOCATION');
+  return estimatesEnabled() && (mode === 'on' || mode === 'shadow') ? mode : 'off';
+};
 
 if (manifestUrl) {
-  logger.info('property_records.config', { shadow: [...shadow], live: [...live], switches: switchesName, area_trend: areaTrendEnabled(), neighborhood_figures: neighborhoodFiguresEnabled() });
+  logger.info('property_records.config', { shadow: [...shadow], live: [...live], switches: switchesName, area_trend: areaTrendEnabled(), neighborhood_figures: neighborhoodFiguresEnabled(), estimates: estimatesEnabled(), floor_by_location: floorByLocation() });
 }
 
 module.exports = {
@@ -65,4 +73,6 @@ module.exports = {
   enabled,
   areaTrendEnabled,
   neighborhoodFiguresEnabled,
+  estimatesEnabled,
+  floorByLocation,
 };

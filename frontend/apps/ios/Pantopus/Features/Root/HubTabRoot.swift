@@ -1063,10 +1063,11 @@ public struct HubTabRoot: View {
     /// Pushed screens that draw their own header (a Back or Close of their
     /// own). The stack's system bar is hidden on them so each shows exactly
     /// one Back. Every other route keeps the system bar, which is its only
-    /// Back (lists, `.homeDashboard`, placeholders).
+    /// Back (lists, placeholders). The Home dashboard's header carries its
+    /// Back, title and settings in one row (founder request 2026-11-07).
     static func drawsOwnHeader(_ route: HubRoute) -> Bool {
         switch route {
-        case .savePlace, .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
+        case .homeDashboard, .savePlace, .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
              .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
              .homeNotifications, .privacySettings, .notificationSettings, .assistantMemory, .assistantRules, .dataExport, .blockedUsers,
@@ -1674,10 +1675,12 @@ public struct HubTabRoot: View {
         return topics.contains(ScreenTopic.homes) || topics.contains(ScreenTopic.savedPlaces)
     }
 
-    /// The bell and menu for the roots that keep the navigation bar.
+    /// The bell and menu for the roots that keep the navigation bar, which
+    /// slides away while the page scrolls down.
     private func placeRootBar(_ content: some View) -> some View {
         content
             .toolbar(.visible, for: .navigationBar)
+            .navigationBarScrollsAway()
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     PlaceBellButton(unreadCount: placeUnreadCount) { path.append(.notifications) }
@@ -1883,6 +1886,7 @@ public struct HubTabRoot: View {
         case let .homeDashboard(homeId):
             HomeDashboardView(
                 homeId: homeId,
+                onBack: { Task { @MainActor in pop() } },
                 onClaimOwnership: {
                     // The ownership-claim flow branches on whether the
                     // resident is the owner or a renter. Until the
@@ -4352,7 +4356,8 @@ extension SchedulingRoute {
 }
 
 /// Hides the enclosing stack's system bar on a pushed screen that draws its
-/// own header, so the screen shows one Back instead of two.
+/// own header, so the screen shows one Back instead of two. A screen that
+/// keeps the system bar has it slide away while its page scrolls down.
 struct OwnHeaderBar: ViewModifier {
     let drawsOwnHeader: Bool
 
@@ -4360,7 +4365,7 @@ struct OwnHeaderBar: ViewModifier {
         if drawsOwnHeader {
             content.toolbar(.hidden, for: .navigationBar)
         } else {
-            content
+            content.navigationBarScrollsAway()
         }
     }
 }

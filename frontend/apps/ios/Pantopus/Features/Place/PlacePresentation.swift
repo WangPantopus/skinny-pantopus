@@ -326,7 +326,8 @@ enum PlacePresentation {
             } else if let v = money(d.estimatedValue) {
                 parts.append("est. value \(v)")
             }
-            return .init(value: parts.isEmpty ? "Property details on file" : parts.joined(separator: " · "))
+            // A home with only an estimate has nothing on file: the estimate says what it is.
+            return .init(value: parts.isEmpty ? (d.estimate?.title ?? "Property details on file") : parts.joined(separator: " · "))
         case .flood:
             guard let d = env.flood else { return .init() }
             return .init(chip: floodChip(d.riskLevel, zoneLabel: d.zoneLabel))

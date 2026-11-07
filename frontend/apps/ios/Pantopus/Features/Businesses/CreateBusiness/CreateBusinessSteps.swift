@@ -118,9 +118,25 @@ public extension BusinessCategory {
         }
     }
 
-    /// Backend `categories[]` slug for create-full. Kept distinct from
-    /// `rawValue` so the wire format isn't coupled to the Swift case name.
-    var backendSlug: String {
+    /// What create-full saves in `categories[]` when this tile is picked
+    /// without a more specific listed category. Business pages and the page
+    /// editor show categories as written, so it's the tile's name. "Something
+    /// else" has none: it saves what the owner types.
+    var savedCategoryName: String? {
+        self == .other ? nil : label
+    }
+
+    /// The name a business page shows for a slug the wizard saved before it
+    /// saved names ("home_services" → "Home services"), or nil for any other
+    /// category. Android's `BusinessCategory.labelForLegacySlug` matches.
+    static func label(forLegacySlug slug: String) -> String? {
+        guard let category = allCases.first(where: { $0.legacySlug == slug }) else { return nil }
+        return category == .other ? "Other" : category.label
+    }
+
+    /// The slug the wizard saved before it saved names; businesses created
+    /// then still carry it.
+    private var legacySlug: String {
         switch self {
         case .home: "home_services"
         case .personal: "personal_services"
@@ -209,13 +225,51 @@ public struct WhatYouGetItem: Sendable, Equatable, Identifiable {
     public let subcopy: String
 }
 
-/// One typeahead match returned by the search frame's filter. Carries the
-/// owning category plus a sub-area sentence — what the audit calls the
-/// "tutoring · K-12, test prep, music" line under each result.
+/// One typeahead match in the search frame: a listed category
+/// (`CreateBusinessCategoryCatalog.listed`) or one of the eight tiles.
 public struct CategorySearchHit: Sendable, Equatable, Identifiable {
     public let id: String
+    /// The tile it's filed under.
     public let category: BusinessCategory
-    public let label: String
+    /// What create-full saves and business pages show ("Plumbing").
+    public let name: String
+    /// Sub-area shown after the name in results ("K-12, test prep, music").
+    public let detail: String?
+    /// Other lowercase names people search for it by ("plumber").
+    public let keywords: [String]
+    /// True for a tile's own row: picking it picks the tile alone.
+    public let isTile: Bool
+
+    public init(
+        id: String,
+        category: BusinessCategory,
+        name: String,
+        detail: String? = nil,
+        keywords: [String] = []
+    ) {
+        self.id = id
+        self.category = category
+        self.name = name
+        self.detail = detail
+        self.keywords = keywords
+        isTile = false
+    }
+
+    /// The row for a tile, so "home" or "rentals" finds the tile itself.
+    public init(tile: BusinessCategory) {
+        id = "category-\(tile.rawValue)"
+        category = tile
+        name = tile.label
+        detail = nil
+        keywords = []
+        isTile = true
+    }
+
+    /// Row text: the name, then the sub-area when there is one.
+    public var label: String {
+        guard let detail else { return name }
+        return "\(name) · \(detail)"
+    }
 }
 
 /// Outbound events the wizard view must react to.

@@ -48,14 +48,20 @@ internal const val MAX_BUSINESS_NAME_LENGTH = 100
 internal const val MAX_BUSINESS_USERNAME_LENGTH = 40
 internal const val MAX_BUSINESS_DESCRIPTION_LENGTH = 2000
 
+/** Each `categories[]` entry is `Joi.string().max(50)`. */
+internal const val MAX_BUSINESS_CATEGORY_LENGTH = 50
+
 /**
  * Aggregate UI state for the A12.10 Create Business wizard.
  */
 data class CreateBusinessUiState(
     val currentStep: CreateBusinessStep = CreateBusinessStep.PickCategory,
     val selectedCategory: BusinessCategory? = BusinessCategory.Home,
+    /** The listed category picked in search, filed under [selectedCategory]. */
+    val selectedListing: CategorySearchHit? = null,
+    /** What the owner does, in their words, when "Something else" is picked. */
+    val customCategory: String = "",
     val searchText: String = "",
-    val isSubmittingCustom: Boolean = false,
     val isCreating: Boolean = false,
     val createdBusinessId: String? = null,
     val submitError: String? = null,
@@ -89,7 +95,52 @@ data class CreateBusinessUiState(
         get() = searchText.trim().isNotEmpty()
 
     val searchHits: List<CategorySearchHit>
-        get() = CreateBusinessSampleData.searchHits(searchText)
+        get() = CreateBusinessCategoryCatalog.search(searchText)
+
+    /**
+     * The search's "Add "…" as a custom category" row, offered unless a
+     * result already has exactly that name.
+     */
+    val offersCustomCategory: Boolean
+        get() {
+            val query = CreateBusinessCategoryCatalog.normalize(searchText)
+            if (query.isEmpty()) return false
+            return searchHits.none { CreateBusinessCategoryCatalog.normalize(it.name) == query }
+        }
+
+    /**
+     * The one category create-full will save, or null while "Something
+     * else" is picked and nothing has been typed yet.
+     */
+    val categoryName: String?
+        get() {
+            val selected = selectedCategory ?: return null
+            selectedListing?.let { return it.name }
+            selected.savedCategoryName?.let { return it }
+            return customCategory.trim().ifEmpty { null }
+        }
+
+    /** "Something else" on its own asks the owner to type what they do. */
+    val asksForCustomCategory: Boolean
+        get() = selectedCategory == BusinessCategory.Other && selectedListing == null
+
+    /**
+     * Under the picked tile, the more specific choice in place of its usual
+     * subline ("Plumbing", or what was typed under "Something else").
+     */
+    fun pickedDetail(category: BusinessCategory): String? {
+        if (category != selectedCategory) return null
+        selectedListing?.let { return it.name }
+        if (category != BusinessCategory.Other) return null
+        return customCategory.trim().ifEmpty { null }
+    }
+
+    fun isPicked(hit: CategorySearchHit): Boolean =
+        if (hit.isTile) {
+            selectedListing == null && selectedCategory == hit.category
+        } else {
+            selectedListing?.id == hit.id
+        }
 
     val whatYouGetItems: List<WhatYouGetItem>
         get() =
@@ -125,8 +176,10 @@ data class CreateBusinessUiState(
  * category picker; steps 2–4 collect basic info / location+hours /
  * confirm and POST create-full.
  *
- * Custom-category submit stays blocked until a real custom-category
- * endpoint exists — do not invent POST /custom-categories.
+ * Step 1 settles one category name: a listed category found by search, a
+ * tile on its own, or, under "Something else", what the owner types. A
+ * custom name needs no endpoint of its own: create-full's `categories` is
+ * free text (`backend/routes/businesses.js:650`), as on the web wizard.
  */
 @HiltViewModel
 open class CreateBusinessWizardViewModel
@@ -175,7 +228,7 @@ open class CreateBusinessWizardViewModel
             val current = _state.value
             when (current.currentStep) {
                 CreateBusinessStep.PickCategory -> {
-                    if (current.selectedCategory == null) return
+                    if (current.isSearchActive || current.categoryName == null) return
                     transitionTo(CreateBusinessStep.LegalInfo)
                 }
                 CreateBusinessStep.LegalInfo -> {
@@ -202,13 +255,24 @@ open class CreateBusinessWizardViewModel
 
         // MARK: - Selection
 
+        /**
+         * A tile on its own. Under "Something else" the owner then types what
+         * they do; any earlier typing is kept.
+         */
         fun selectCategory(category: BusinessCategory) {
-            _state.update { it.copy(selectedCategory = category, submitError = null) }
+            _state.update {
+                it.copy(selectedCategory = category, selectedListing = null, submitError = null)
+            }
         }
 
         fun selectSearchHit(hit: CategorySearchHit) {
             _state.update {
-                it.copy(selectedCategory = hit.category, searchText = "")
+                it.copy(
+                    selectedCategory = hit.category,
+                    selectedListing = if (hit.isTile) null else hit,
+                    searchText = "",
+                    submitError = null,
+                )
             }
         }
 
@@ -216,19 +280,29 @@ open class CreateBusinessWizardViewModel
             _state.update { it.copy(searchText = value) }
         }
 
-        /** Custom categories stay blocked — no inventing POST /custom-categories. */
-        fun submitCustomCategory() {
-            val current = _state.value
-            val trimmed = current.searchText.trim()
-            if (trimmed.isEmpty() || current.isSubmittingCustom) return
+        /**
+         * "Add "…" as a custom category": the search text becomes the owner's
+         * own category under "Something else", where they can still edit it.
+         */
+        fun useSearchTextAsCustomCategory() {
+            val typed = CreateBusinessCategoryCatalog.collapseSpaces(_state.value.searchText)
+            if (typed.isEmpty()) return
+            Analytics.track(AnalyticsEvent.CtaCreateBusinessCustomCategorySubmit(label = typed))
             _state.update {
                 it.copy(
-                    isSubmittingCustom = false,
-                    submitError =
-                        "Custom categories aren't available yet. Pick a listed category instead.",
+                    selectedCategory = BusinessCategory.Other,
+                    selectedListing = null,
+                    customCategory = customCategoryName(typed).take(MAX_BUSINESS_CATEGORY_LENGTH),
+                    searchText = "",
+                    submitError = null,
                 )
             }
-            Analytics.track(AnalyticsEvent.CtaCreateBusinessCustomCategorySubmit(label = trimmed))
+        }
+
+        fun setCustomCategory(value: String) {
+            _state.update {
+                it.copy(customCategory = value.take(MAX_BUSINESS_CATEGORY_LENGTH), submitError = null)
+            }
         }
 
         fun acknowledgeEvent() {
@@ -421,7 +495,8 @@ open class CreateBusinessWizardViewModel
             }
             if (!validateBasicInfo()) return
             val category = _state.value.selectedCategory
-            if (category == null) {
+            val categoryName = _state.value.categoryName
+            if (category == null || categoryName == null) {
                 _state.update {
                     it.copy(submitError = "Pick a category before creating your business.")
                 }
@@ -462,7 +537,7 @@ open class CreateBusinessWizardViewModel
                         username = state.cleanedUsername,
                         email = state.email.trim(),
                         businessType = category.entityType,
-                        categories = listOf(category.backendSlug),
+                        categories = listOf(categoryName),
                         description = state.description.trim().ifEmpty { null },
                         location = location,
                         hours = hours,
@@ -615,7 +690,7 @@ open class CreateBusinessWizardViewModel
                     } else {
                         null
                     },
-                isSubmitting = state.isSubmittingCustom || state.isCreating,
+                isSubmitting = state.isCreating,
                 dirty = isDirty(state),
                 showsProgressBar = true,
             )
@@ -639,8 +714,9 @@ open class CreateBusinessWizardViewModel
 
         private fun primaryEnabled(state: CreateBusinessUiState): Boolean =
             when (state.currentStep) {
-                CreateBusinessStep.PickCategory ->
-                    state.selectedCategory != null && !state.isSubmittingCustom
+                // While searching, a result or the custom row is picked first, so
+                // Continue never carries on with a tile the owner has moved past.
+                CreateBusinessStep.PickCategory -> !state.isSearchActive && state.categoryName != null
                 CreateBusinessStep.LegalInfo -> state.isBasicInfoValid && !state.isCreating
                 CreateBusinessStep.Profile -> !state.isCreating
                 CreateBusinessStep.Confirm -> state.isBasicInfoValid && !state.isCreating
@@ -655,6 +731,8 @@ open class CreateBusinessWizardViewModel
             val untouchedCategoryStep =
                 state.currentStep == CreateBusinessStep.PickCategory &&
                     state.selectedCategory == BusinessCategory.Home &&
+                    state.selectedListing == null &&
+                    state.customCategory.isEmpty() &&
                     !state.isSearchActive
             return !(untouchedCategoryStep && isIdentityEmpty(state))
         }
@@ -663,6 +741,13 @@ open class CreateBusinessWizardViewModel
             state.businessName.isEmpty() &&
                 state.username.isEmpty() &&
                 state.email.isEmpty()
+
+        /**
+         * Search is typed in lowercase, so "web design" is saved as "Web design";
+         * anything with its own capitals ("iPhone repair", "DJ") stays as typed.
+         */
+        private fun customCategoryName(text: String): String =
+            if (text == text.lowercase()) text.replaceFirstChar { it.uppercase() } else text
 
         private fun usernameUnavailableMessage(reason: String?): String =
             when (reason) {

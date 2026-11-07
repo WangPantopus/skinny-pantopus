@@ -43,8 +43,11 @@ enum class BusinessCategory(
     val label: String,
     val subcopy: String,
     val icon: PantopusIcon,
-    /** Backend `categories[]` slug for create-full. */
-    val backendSlug: String,
+    /**
+     * The slug the wizard saved before it saved names; businesses created
+     * then still carry it ([labelForLegacySlug]).
+     */
+    private val legacySlug: String,
     /**
      * Sensible `business_type` entity for create-full. Home maps to
      * `home_service`; everything else defaults to `for_profit`.
@@ -55,59 +58,68 @@ enum class BusinessCategory(
         label = "Home services",
         subcopy = "Handyman · cleaning · moving",
         icon = PantopusIcon.Wrench,
-        backendSlug = "home_services",
+        legacySlug = "home_services",
         entityType = "home_service",
     ),
     Personal(
         label = "Personal services",
         subcopy = "Tutoring · childcare · pet care",
         icon = PantopusIcon.GraduationCap,
-        backendSlug = "personal_services",
+        legacySlug = "personal_services",
         entityType = "for_profit",
     ),
     Tech(
         label = "Tech & repair",
         subcopy = "Devices · networks · break-fix",
         icon = PantopusIcon.Cpu,
-        backendSlug = "tech_repair",
+        legacySlug = "tech_repair",
         entityType = "for_profit",
     ),
     Delivery(
         label = "Delivery & errands",
         subcopy = "Last-mile · courier · grocery",
         icon = PantopusIcon.Truck,
-        backendSlug = "delivery_errands",
+        legacySlug = "delivery_errands",
         entityType = "for_profit",
     ),
     Goods(
         label = "Goods & retail",
         subcopy = "Selling new or pre-loved items",
         icon = PantopusIcon.ShoppingBag,
-        backendSlug = "goods_retail",
+        legacySlug = "goods_retail",
         entityType = "for_profit",
     ),
     Rentals(
         label = "Rentals",
         subcopy = "Short or long-term · gear · vehicles",
         icon = PantopusIcon.KeyRound,
-        backendSlug = "rentals",
+        legacySlug = "rentals",
         entityType = "for_profit",
     ),
     Vehicles(
         label = "Vehicles & rideshare",
         subcopy = "Driving · towing · fleet",
         icon = PantopusIcon.Car,
-        backendSlug = "vehicles_rideshare",
+        legacySlug = "vehicles_rideshare",
         entityType = "for_profit",
     ),
     Other(
         label = "Something else",
         subcopy = "Tell us what you do",
         icon = PantopusIcon.Sparkles,
-        backendSlug = "other",
+        legacySlug = "other",
         entityType = "for_profit",
     ),
     ;
+
+    /**
+     * What create-full saves in `categories[]` when this tile is picked
+     * without a more specific listed category. Business pages and the page
+     * editor show categories as written, so it's the tile's name. "Something
+     * else" has none: it saves what the owner types.
+     */
+    val savedCategoryName: String?
+        get() = if (this == Other) null else label
 
     /**
      * Per-category accent color used for the icon tile bg, the selected
@@ -126,6 +138,18 @@ enum class BusinessCategory(
                 Vehicles -> PantopusColors.vehicles
                 Other -> PantopusColors.business
             }
+
+    companion object {
+        /**
+         * The name a business page shows for a slug the wizard saved before it
+         * saved names ("home_services" → "Home services"), or null for any other
+         * category. iOS's `BusinessCategory.label(forLegacySlug:)` matches.
+         */
+        fun labelForLegacySlug(slug: String): String? {
+            val category = entries.firstOrNull { it.legacySlug == slug } ?: return null
+            return if (category == Other) "Other" else category.label
+        }
+    }
 }
 
 /** One row inside the "What you'll get" preview strip. */
@@ -137,15 +161,37 @@ data class WhatYouGetItem(
 )
 
 /**
- * One typeahead match returned by the search frame's filter. Carries the
- * owning category plus a sub-area sentence — what the audit calls the
- * "tutoring · K-12, test prep, music" line under each result.
+ * One typeahead match in the search frame: a listed category
+ * ([CreateBusinessCategoryCatalog.listed]) or one of the eight tiles.
  */
 data class CategorySearchHit(
     val id: String,
+    /** The tile it's filed under. */
     val category: BusinessCategory,
-    val label: String,
-)
+    /** What create-full saves and business pages show ("Plumbing"). */
+    val name: String,
+    /** Sub-area shown after the name in results ("K-12, test prep, music"). */
+    val detail: String? = null,
+    /** Other lowercase names people search for it by ("plumber"). */
+    val keywords: List<String> = emptyList(),
+    /** True for a tile's own row: picking it picks the tile alone. */
+    val isTile: Boolean = false,
+) {
+    /** Row text: the name, then the sub-area when there is one. */
+    val label: String
+        get() = detail?.let { "$name · $it" } ?: name
+
+    companion object {
+        /** The row for a tile, so "home" or "rentals" finds the tile itself. */
+        fun tile(category: BusinessCategory): CategorySearchHit =
+            CategorySearchHit(
+                id = "category-${category.name.lowercase()}",
+                category = category,
+                name = category.label,
+                isTile = true,
+            )
+    }
+}
 
 /**
  * A logo picked in the wizard, held in memory until create-full returns a

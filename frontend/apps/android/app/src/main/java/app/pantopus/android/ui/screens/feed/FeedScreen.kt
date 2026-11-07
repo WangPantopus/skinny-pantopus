@@ -90,6 +90,7 @@ import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
@@ -508,6 +509,7 @@ fun FeedScreen(
                                         onToggleSave = viewModel::toggleSave,
                                         onToggleRepost = viewModel::toggleRepost,
                                         onOpenAuthor = onOpenAuthor,
+                                        onChooseReaction = viewModel::chooseReaction,
                                     ),
                             )
                         is PulseFeedUiState.Error ->
@@ -776,6 +778,8 @@ internal data class PulseFeedRowActions(
     val onToggleSave: (String) -> Unit = {},
     val onToggleRepost: (String) -> Unit = {},
     val onOpenAuthor: ((PulseAuthorLink) -> Unit)? = null,
+    /** The emoji picked in a card's reaction picker, with the post's id. */
+    val onChooseReaction: (String, PostReactionEmoji) -> Unit = { _, _ -> },
 )
 
 /**
@@ -1630,6 +1634,7 @@ private fun FeedPostRow(
         onTap = if (seeded) null else ({ onTapPost(row.id) }),
         onPrimaryReaction = { onTapReaction(row.id) },
         onRSVP = if (row.attendees == null) null else ({ onTapReaction(row.id) }),
+        onReact = { emoji -> rowActions.onChooseReaction(row.id, emoji) },
         onOverflow = if (seeded) null else ({ rowActions.onOverflow(row.id) }),
         onDismissSeeded = if (seeded) ({ rowActions.onDismissSeeded(row.id) }) else null,
         onToggleSave = if (seeded) null else ({ rowActions.onToggleSave(row.id) }),
