@@ -24,6 +24,7 @@ import app.pantopus.android.data.api.models.homes.CreatePollRequest
 import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.DeleteEmergencyResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
+import app.pantopus.android.data.api.models.homes.FloorPlanAnswerRequest
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeDocumentsResponse
@@ -180,6 +181,13 @@ interface HomesApi {
     suspend fun reportRecordProblem(
         @Path("id") id: String,
         @Body body: RecordProblemRequest,
+    ): HouseholdWriteResponse
+
+    /** "Is this your layout?", for a unit its building's sheet names. A no reaches review, and nothing shown changes. */
+    @POST("api/homes/{id}/floor-plan-answer")
+    suspend fun answerFloorPlan(
+        @Path("id") id: String,
+        @Body body: FloorPlanAnswerRequest,
     ): HouseholdWriteResponse
 
     @POST("api/homes/property-suggestions?vocabulary=2")

@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.homes.property_details
 
+import app.pantopus.android.data.api.models.homes.FloorPlanLayoutDto
 import app.pantopus.android.data.api.models.homes.HouseholdCountyPageDto
 import app.pantopus.android.data.api.models.homes.HouseholdFactDto
 import app.pantopus.android.data.api.models.homes.HouseholdGroupDto
@@ -53,8 +54,14 @@ data class PropertyHouseholdContent(
     val groups: List<HouseholdGroupDto> = emptyList(),
     val questions: List<HouseholdQuestionDto> = emptyList(),
     val countyPage: HouseholdCountyPageDto? = null,
+    /** "Is this your layout?", for a unit its building's sheet names. */
+    val floorPlan: FloorPlanLayoutDto? = null,
 ) {
     fun groupForSection(id: String): HouseholdGroupDto? = groups.firstOrNull { it.sectionId == id }
+
+    /** The layout question, if it sits at the foot of this card. */
+    fun layoutForSection(id: String): FloorPlanLayoutDto? =
+        floorPlan?.takeIf { it.sectionId == id && (it.prompt != null || it.answered != null) }
 
     /** A card of its own: nothing in the record to sit under. */
     val addDetails: List<HouseholdGroupDto>

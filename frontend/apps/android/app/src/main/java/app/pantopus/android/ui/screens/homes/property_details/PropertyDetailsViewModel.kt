@@ -122,6 +122,17 @@ class PropertyDetailsViewModel
             }
         }
 
+        /** "Is this your layout?": yes, no or undo, then show the server's answer. */
+        fun answerFloorPlan(answer: String) {
+            if (_savingFacts.value) return
+            _savingFacts.value = true
+            viewModelScope.launch {
+                val sent = homesRepository.answerFloorPlan(homeId, answer) is NetworkResult.Success
+                _savingFacts.value = false
+                if (sent) read(force = true)
+            }
+        }
+
         /** "Report a problem": it reaches review, and the page stays as it is but for saying so. */
         fun reportProblem(
             section: String,
@@ -267,6 +278,7 @@ class PropertyDetailsViewModel
                                 groups = it.groups,
                                 questions = it.questions,
                                 countyPage = it.countyPage,
+                                floorPlan = it.floorPlan,
                             )
                         },
                 )

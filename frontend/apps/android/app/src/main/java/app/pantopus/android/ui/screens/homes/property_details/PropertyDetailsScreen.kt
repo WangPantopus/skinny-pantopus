@@ -105,6 +105,7 @@ fun PropertyDetailsScreen(
                     save = { viewModel.saveFacts(it) },
                     edit = { editing = it },
                     report = { reporting = it },
+                    answerLayout = viewModel::answerFloorPlan,
                 ),
         )
     }
@@ -212,12 +213,11 @@ private fun LoadedBody(
                 // The county record comes for verified owners only,
                 // so everyone else sees just the Property card.
                 content.recordSections.forEach { section ->
-                    val group = content.household?.groupForSection(section.id)
                     PropertySection(
                         title = section.title,
                         rows = section.rows,
                         note = section.note,
-                        footer = group?.let { { HouseholdGroupFooter(group = it, section = section, actions = householdActions) } },
+                        footer = recordSectionFooter(section, content.household, householdActions),
                     )
                 }
                 content.recordFooter?.let { footer ->
@@ -248,6 +248,21 @@ private fun LoadedBody(
             }
         },
     )
+}
+
+/** The foot of a record card: "Is this your layout?" above the household's controls, or none. */
+private fun recordSectionFooter(
+    section: PropertyRecordSection,
+    household: PropertyHouseholdContent?,
+    actions: HouseholdActions,
+): (@Composable () -> Unit)? {
+    val group = household?.groupForSection(section.id)
+    val layout = household?.layoutForSection(section.id)
+    if (group == null && layout == null) return null
+    return {
+        layout?.let { FloorPlanLayoutFooter(layout = it, actions = actions) }
+        group?.let { HouseholdGroupFooter(group = it, section = section, actions = actions) }
+    }
 }
 
 @Composable
