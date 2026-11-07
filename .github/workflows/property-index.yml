@@ -1,7 +1,8 @@
 name: Property Index
 
 # Pantopus's own index of public county property records (backend/services/propertyRecords, scripts/property-index),
-# published to private storage. Weekly for Clark County's weekly file, monthly for the rest, and by hand. This
+# published to private storage. Weekly for Clark County's weekly file, monthly for the rest, and by hand, with the
+# labeled national estimates in their own index beside it, by hand (they change yearly). This
 # repository is public, so its logs and uploaded artifacts are too: a real county's run prints counts only and uploads
 # nothing here, and only master can reach the storage key. A pull request builds a made-up county and publishes nothing.
 
@@ -14,29 +15,49 @@ on:
     - cron: "17 3 10 * *"
     - cron: "17 3 11 * *"
     - cron: "17 3 12 * *"
+    # The county connectors, in groups that fit one run.
+    - cron: "17 3 13 * *"
+    - cron: "17 3 14 * *"
+    - cron: "17 3 15 * *"
+    - cron: "17 3 16 * *"
+    - cron: "17 3 17 * *"
   workflow_dispatch:
     inputs:
       action:
-        description: "build, or rollback one county to its previous release"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates (sources are state codes)"
         type: choice
-        options: [build, rollback]
+        options: [build, rollback, switch, estimates]
         default: build
       sources:
-        description: "Connectors in scripts/property-index/sources, space separated (build)"
+        description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates)"
         required: false
         default: "wa-clark"
       county:
-        description: "County FIPS (rollback)"
+        description: "County FIPS (rollback, switch)"
         required: false
         default: ""
       state:
         description: "Its state, two letters (rollback)"
         required: false
         default: ""
+      target:
+        description: "The environment that follows the change (switch)"
+        type: choice
+        options: [staging, production]
+        default: staging
+      mode:
+        description: "off, shadow or live; blank keeps it (switch)"
+        required: false
+        default: ""
+      withhold:
+        description: "Facts to keep off its screens, comma separated; none brings them back; blank keeps them (switch)"
+        required: false
+        default: ""
   pull_request:
     paths:
       - scripts/property-index/**
       - backend/services/propertyRecords/addressKey.js
+      - backend/services/propertyRecords/estimateFacts.js
       - backend/services/propertyRecords/facts.js
       - backend/services/propertyRecords/format.js
       - backend/services/propertyRecords/identity.js
@@ -45,8 +66,9 @@ on:
 permissions:
   contents: read
 
+# A county's switch only writes its own file, so it never waits behind a build that takes hours.
 concurrency:
-  group: property-index-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -73,9 +95,34 @@ jobs:
             node --disable-warning=ExperimentalWarning -e "require('./$source')"
           done
 
+  switch:
+    name: Switch a county
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'switch' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: property-index
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.PROPERTY_INDEX_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.PROPERTY_INDEX_REGION }}
+      PROPERTY_INDEX_BUCKET: ${{ vars.PROPERTY_INDEX_BUCKET }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Change the county's line
+        env:
+          COUNTY: ${{ inputs.county }}
+          MODE: ${{ inputs.mode }}
+          TARGET: ${{ inputs.target }}
+          WITHHOLD: ${{ inputs.withhold }}
+        run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --bucket "$PROPERTY_INDEX_BUCKET"
+
   publish:
     name: Build and publish
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && inputs.action != 'switch'
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     environment: property-index
@@ -99,11 +146,33 @@ jobs:
       - name: Build and publish
         if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         env:
-          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-allegheny pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'co-denver co-adams dc-dc ok-oklahoma ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-miami-dade fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || 'tx-dallas fl-roll' }}
+          # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
+          REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
         run: |
+          status=0
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
-            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work"
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET"
+            # What built still publishes; the run ends failed so someone looks.
+            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || status=1
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH || status=1
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
+          done
+          exit $status
+      # The national floor's own index, under its own prefix. Large states need room: the runner's unused tools go first.
+      - name: Build and publish estimates
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'estimates'
+        env:
+          STATES: ${{ inputs.sources }}
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
+          out="$RUNNER_TEMP/estimates"
+          work="$RUNNER_TEMP/estimates-work"
+          node scripts/property-index/build-estimates.cjs --areas --out "$out" --work "$work"
+          aws s3 cp "$out/areas" "s3://$PROPERTY_INDEX_BUCKET/index/estimates/areas" --recursive --only-show-errors
+          for state in $STATES; do
+            rm -rf "$out"
+            node --disable-warning=ExperimentalWarning --max-old-space-size=12288 scripts/property-index/build-estimates.cjs --states "$state" --out "$out" --work "$work"
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/estimates
+            rm -rf "$work/us-structures/$state"
           done

@@ -9,7 +9,7 @@ async function call(name, args = {}) {
 }
 
 // One event is leased just before sending, so a batch cannot age out in a queue.
-// Unknown transport outcomes may retry the same notification ID (at least once).
+// Unknown transport outcomes retry the same notification ID on the devices still unsettled (at least once).
 // Assignment, current preferences and current token ownership are rechecked.
 async function deliverGigAcceptance() {
   let processed = 0;
@@ -29,8 +29,10 @@ async function deliverGigAcceptance() {
           if (kind === 'gig_completion' && typeof current.pushAllowedAtCompletion !== 'boolean') {
             throw new Error('Completion preference receipt unavailable');
           }
-          const receipt = await deliverStoredGigNotification(current.notification, kind === 'gig_completion'
-            ? { pushAllowedAtCompletion: current.pushAllowedAtCompletion } : undefined);
+          const receipt = await deliverStoredGigNotification(current.notification, {
+            ...(kind === 'gig_completion' ? { pushAllowedAtCompletion: current.pushAllowedAtCompletion } : {}),
+            delivery: { p_kind: kind, ...args },
+          });
           if (!Number.isSafeInteger(receipt?.acceptedCount) || receipt.acceptedCount < 0
               || !Number.isSafeInteger(receipt?.unresolvedCount) || receipt.unresolvedCount < 0) {
             throw new Error('Acceptance delivery transport receipt unavailable');

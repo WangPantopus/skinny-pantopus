@@ -11,6 +11,7 @@
  *                                         file is what switches readers over, or back.
  *   releases/<fips>/<release>/manifest.json.gz, data.bin    one county's release, never changed once written.
  *   suppressions.json                     addresses taken down at someone's request, as salted hashes.
+ *   switches/<name>.json                  which counties an environment serves, and how (router.js).
  *
  * data.bin is the county's records as gzip'd JSON arrays, back to back, sorted by
  * street name and then house number. All the records of one name and number sit in
@@ -40,6 +41,7 @@ const KINDS = new Set(['property', 'unit', 'building', 'parcel', 'other']);
 const statePath = (state) => `states/${state}.json`;
 const releasePath = (fips, release) => `releases/${fips}/${release}`;
 const SUPPRESSIONS_PATH = 'suppressions.json';
+const switchesPath = (name) => `switches/${name}.json`;
 
 /** The block that holds this key, by its position in the manifest's first keys; -1 when the key sorts before them all. */
 function findBlock(keys, key) {
@@ -58,4 +60,4 @@ function findBlock(keys, key) {
   return found;
 }
 
-module.exports = { FORMAT, BLOCK_RAW_BYTES, KINDS, SUPPRESSIONS_PATH, statePath, releasePath, findBlock };
+module.exports = { FORMAT, BLOCK_RAW_BYTES, KINDS, SUPPRESSIONS_PATH, statePath, releasePath, switchesPath, findBlock };

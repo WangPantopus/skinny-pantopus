@@ -6,9 +6,8 @@
 // records with no facts. Sale prices aren't public in Texas.
 
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
 const { parts, zip5 } = require('../../../backend/services/propertyRecords/addressKey');
-const { download, zipTable } = require('../lib/tables.cjs');
+const { download, zipDates, zipTable } = require('../lib/tables.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -34,10 +33,8 @@ async function build({ work, today = new Date() }) {
   const year = today.getMonth() >= 7 ? today.getFullYear() : today.getFullYear() - 1;
   const zip = path.join(dir, 'DCAD_CURRENT.zip');
   download(zipUrl(year), zip);
-  const listing = execFileSync('unzip', ['-l', zip], { encoding: 'latin1' });
-  const stamp = /(\d{2})-(\d{2})-(\d{4})\s+\d{2}:\d{2}\s+ACCOUNT_INFO\.CSV/.exec(listing);
-  if (!stamp) throw new Error('The district\'s file no longer dates its account table');
-  const asOf = `${stamp[3]}-${stamp[1]}-${stamp[2]}`;
+  const asOf = zipDates(zip).get('ACCOUNT_INFO.CSV');
+  if (!asOf) throw new Error('The district\'s file no longer dates its account table');
 
   const records = new Map();
   const accounts = new Map();
@@ -95,7 +92,8 @@ async function build({ work, today = new Date() }) {
     const { facts } = record;
     put(facts, 'year_built', positive(row.YR_BUILT));
     put(facts, 'effective_year_built', positive(row.EFF_YR_BUILT));
-    put(facts, 'condition', word(row.CDU_RATING_DESC));
+    // One of the district's ratings is a note to its own appraisers.
+    if (row.CDU_RATING_DESC !== 'MANUALLY ENTER DEPRECIATION') put(facts, 'condition', word(row.CDU_RATING_DESC));
     put(facts, 'ground_floor_sqft', positive(row.TOT_MAIN_SF));
     put(facts, 'living_sqft', positive(row.TOT_LIVING_AREA_SF));
     const percent = positive(row.PCT_COMPLETE);
@@ -153,7 +151,7 @@ async function build({ work, today = new Date() }) {
     const record = usable(row.ACCOUNT_NUM);
     if (!record) continue;
     const { facts } = record;
-    if (!facts.land_use) put(facts, 'land_use', word(row.SPTD_DESC));
+    if (!facts.land_use) put(facts, 'land_use', word(row.SPTD_DESC)?.replace(/^SFR - /, 'SINGLE FAMILY: ').replace(/^MFR - /, 'MULTI-FAMILY: '));
     if (!facts.zoning) put(facts, 'zoning', word(row.ZONING));
     const area = positive(row.AREA_SIZE);
     const unit = String(row.AREA_UOM_DESC).trim();

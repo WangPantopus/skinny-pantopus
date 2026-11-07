@@ -175,7 +175,7 @@ The card always shows what is known, in this order, each with its label and date
 1. **The county's values:** market value and assessed value with the tax year (in Washington, assessed at 100% of
    market).
 2. **The last recorded sale:** date and price where sales are public; "Sale prices aren't public in <state>" otherwise.
-3. **The area's price trend:** from the FHFA House Price Index for the ZIP or tract (for example "Prices in this ZIP rose <x>% last year (FHFA index)"). It is a price-change index: never a home's value and never a ZIP median sale price.
+3. **The area's price trend:** from the FHFA House Price Index for the ZIP or, with no number of its own, its county (for example "Prices in this ZIP rose <x>% in <year> (FHFA House Price Index)"). It is a price-change index: never a home's value and never a ZIP median sale price.
 4. **A Pantopus estimate:** only in markets where its error on held-out sales meets the bar
    ([parity-and-acceptance.md](parity-and-acceptance.md#t4-values-only-if-an-estimate-ships-decision-d9)), with a range and its method. Elsewhere there is no
    estimate, and nothing pretends to be one.

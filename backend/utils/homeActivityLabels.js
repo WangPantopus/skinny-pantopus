@@ -4,6 +4,7 @@
 // transactions; a code without a label here (readable ones, cut features' and
 // future ones) reads as its own sentence.
 const HOME_ACTIVITY_LABELS = {
+  home_facts_updated: 'Home details updated',
   member_role: 'Member role changed',
   member_override: 'Member permission changed',
   member_remove: 'Member removed',

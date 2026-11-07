@@ -31,6 +31,10 @@ async function main() {
   fs.rmSync('/tmp/pantopus-worker-ready', { force: true });
   logger.info('[Worker] Starting...');
 
+  // Every call to a paid data vendor is counted, for the daily report.
+  require('./services/vendorCalls').install();
+  require('./services/propertyRecords/counts').start('worker');
+
   // Start pg-boss queue workers (Tier 2 jobs)
   let pgBossBackedJobsStarted = false;
   if (envFlagEnabled('PGBOSS_ENABLED', true)) {
@@ -79,6 +83,7 @@ const shutdown = async (signal) => {
   await stopPgBoss().catch((err) => {
     logger.error('[Worker] Error stopping pg-boss:', { error: err.message });
   });
+  await require('./services/propertyRecords/counts').flush();
   process.exit(0);
 };
 

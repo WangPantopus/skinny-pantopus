@@ -12,9 +12,11 @@ import SwiftUI
 @MainActor
 public struct EditBusinessServiceChipsEditor: View {
     private let chips: [EditBusinessPageServiceChip]
+    private let onManage: (@MainActor () -> Void)?
 
-    public init(chips: [EditBusinessPageServiceChip]) {
+    public init(chips: [EditBusinessPageServiceChip], onManage: (@MainActor () -> Void)? = nil) {
         self.chips = chips
+        self.onManage = onManage
     }
 
     public var body: some View {
@@ -22,7 +24,11 @@ public struct EditBusinessServiceChipsEditor: View {
             ForEach(chips) { chip in
                 EditServiceChip(chip: chip)
             }
-            AddServiceChip()
+            if let onManage {
+                Button(action: onManage) { AddServiceChip() }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("editBusinessPage.manageServices")
+            }
         }
         .padding(Spacing.s2)
         .background(Theme.Color.appSurface)
@@ -45,15 +51,9 @@ private struct EditServiceChip: View {
             Text(chip.label)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(foregroundColor)
-            ZStack {
-                Circle()
-                    .fill(Color.clear)
-                    .frame(width: 16, height: 16)
-                Icon(.x, size: 11, strokeWidth: 2.5, color: foregroundColor)
-            }
         }
         .padding(.leading, 11)
-        .padding(.trailing, 5)
+        .padding(.trailing, 11)
         .padding(.vertical, 7)
         .background(backgroundColor)
         .clipShape(Capsule())
@@ -81,7 +81,7 @@ private struct AddServiceChip: View {
     var body: some View {
         HStack(spacing: 4) {
             Icon(.plus, size: 12, color: Theme.Color.appTextSecondary)
-            Text("Add service")
+            Text("Manage services")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
@@ -94,8 +94,7 @@ private struct AddServiceChip: View {
                     style: StrokeStyle(lineWidth: 1, dash: [3, 3])
                 )
         )
-        .accessibilityLabel("Add a service")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("Manage services")
     }
 }
 

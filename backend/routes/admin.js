@@ -14,6 +14,7 @@ const homeClaimReviewService = require('../services/homeClaimReviewService');
 const homeClaimIdentityService = require('../services/homeClaimIdentityService');
 const { getRequestSessionScope, requireExpectedSessionScope } = require('../utils/requestSessionScope');
 const funnelReport = require('../services/funnelReport');
+const propertyRecordsReport = require('../services/propertyRecords/report');
 
 // All admin routes require auth + admin role
 router.use(verifyToken, requireAdmin);
@@ -106,6 +107,18 @@ router.get('/funnel/summary', async (req, res) => {
   } catch (err) {
     logger.error('admin.funnel.summary.error', { error: err.message });
     res.status(500).json({ error: 'Failed to build the funnel summary' });
+  }
+});
+
+// ── GET /property-records/report?days=7 — county records: what was asked for, who answered ──
+// Per county: lookups answered and unanswered, what to build next, what's ready to go live,
+// and calls to each vendor (ATTOM's must be zero). Counts only.
+router.get('/property-records/report', async (req, res) => {
+  try {
+    res.json(await propertyRecordsReport.loadReport({ days: req.query.days }));
+  } catch (err) {
+    logger.error('admin.property_records.report.error', { error: err.message });
+    res.status(500).json({ error: 'Failed to build the property records report' });
   }
 });
 

@@ -6,7 +6,7 @@
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
-const { download, zipTable } = require('../lib/tables.cjs');
+const { download, zipDates, zipTable } = require('../lib/tables.cjs');
 const { year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
@@ -74,8 +74,8 @@ function fromRow(row, sale) {
 async function* build({ work }) {
   const zip = path.join(work, 'fl-seminole', 'SeminoleCounty.zip');
   download(FILE, zip);
-  const stamp = /(\d{2})-(\d{2})-(\d{4})\s+\d{2}:\d{2}\s+Parcels\.csv/.exec(require('node:child_process').execFileSync('unzip', ['-l', zip], { encoding: 'utf8' }));
-  if (!stamp) throw new Error('The file no longer says when it was made');
+  const asOf = zipDates(zip).get('Parcels.csv');
+  if (!asOf) throw new Error('The file no longer says when it was made');
   const sales = new Map();
   for await (const row of zipTable(zip, 'AllSales.csv', ['Parcel', 'SaleDate', 'SaleAmt'])) {
     const [date, price] = [isoDate(row.SaleDate), positive(row.SaleAmt)];
@@ -98,7 +98,7 @@ async function* build({ work }) {
   log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
-    fips: FIPS, state: 'FL', name: COUNTY, publisher: 'Seminole County Property Appraiser', dataset: 'appraisal data', method: 'county', source: 'fl-seminole', as_of: `${stamp[3]}-${stamp[1]}-${stamp[2]}`, stale_after_days: 450, records,
+    fips: FIPS, state: 'FL', name: COUNTY, publisher: 'Seminole County Property Appraiser', dataset: 'appraisal data', method: 'county', source: 'fl-seminole', as_of: asOf, stale_after_days: 450, records,
   };
 }
 

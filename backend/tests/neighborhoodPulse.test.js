@@ -304,7 +304,7 @@ describe('NeighborhoodPulseComposer', () => {
       mockGetNeighborhoodProfile.mockResolvedValue({ profile: { walk_score: 62, cached_at: '2026-03-07T00:00:00Z' }, source: 'live' });
       mockGetNearbyBusinessCounts.mockResolvedValue({ total: 12, by_category: { Handyman: 8, Cleaning: 4 } });
 
-      const result = await compose({ homeId: MOCK_HOME_ID, userId: MOCK_USER_ID });
+      const result = await compose({ homeId: MOCK_HOME_ID, userId: MOCK_USER_ID, viewerIsOwner: true });
 
       expect(result.pulse).toBeDefined();
       expect(result.pulse.greeting).toBeDefined();

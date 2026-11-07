@@ -5,9 +5,9 @@
 // An address holding "XXX" is the county's estimate from its map, and isn't used. The files have no ZIP, so the county's come from the Census.
 
 const path = require('node:path');
-const { spawn, execFileSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
-const { download, streamLines } = require('../lib/tables.cjs');
+const { download, streamLines, zipDates } = require('../lib/tables.cjs');
 const { year, isoDate, onRecord } = require('../lib/addresses.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
@@ -131,10 +131,10 @@ async function* build({ work }) {
   }
   log(`${COUNTY}: ${records.length} parcels, ${noAddress} without an address`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
-  const stamp = /(\d{2})-(\d{2})-(\d{4})/.exec(execFileSync('unzip', ['-l', path.join(work, 'wa-pierce', 'tax_account.zip')], { encoding: 'utf8' }));
-  if (!stamp) throw new Error('The file no longer says when it was made');
+  const asOf = zipDates(path.join(work, 'wa-pierce', 'tax_account.zip')).get('tax_account.txt');
+  if (!asOf) throw new Error('The file no longer says when it was made');
   yield {
-    fips: FIPS, state: 'WA', name: COUNTY, publisher: 'Pierce County Assessor-Treasurer', dataset: 'Data Mart', method: 'county', source: 'wa-pierce', as_of: `${stamp[3]}-${stamp[1]}-${stamp[2]}`, stale_after_days: 450, extra_zips: zipsByCounty(work, ['53']).get(FIPS) || [], records,
+    fips: FIPS, state: 'WA', name: COUNTY, publisher: 'Pierce County Assessor-Treasurer', dataset: 'Data Mart', method: 'county', source: 'wa-pierce', as_of: asOf, stale_after_days: 450, extra_zips: zipsByCounty(work, ['53']).get(FIPS) || [], records,
   };
 }
 

@@ -52,7 +52,11 @@ const { getSystemsLedger } = require('./homeSystemsService');
 const nfipPremiumService = require('./nfipPremiumService');
 const { isConnecticutPlanningRegion } = require('../data/connecticutTowns');
 const exemptionCheckService = require('./exemptionCheckService');
+const propertyRecordsConfig = require('../config/propertyRecords');
+const homeRecords = require('./propertyRecords/homeRecord');
 const recordVocabulary = require('./recordVocabulary');
+const homeValueCard = require('./homeValueCard');
+const areaTrend = require('./propertyRecords/areaTrend');
 const realRentService = require('./realRentService');
 const { locationFromCoordinates, inferTimezone } = require('./context/locationResolver');
 
@@ -110,7 +114,7 @@ const NOT_BY_MAIL_REASON = 'Available once your address is verified.';
 const verifyReason = (id) => (mailVendorService.canSendPostcards() ? VERIFY_BY_MAIL_REASONS[id] : NOT_BY_MAIL_REASON);
 const OWNERSHIP_PENDING_REASON = 'Available once your ownership is confirmed.';
 const CLAIM_REVIEW_REASON = 'Available once your claim is approved.';
-const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value', 'value_source', 'value_title'];
+const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value', 'value_source', 'value_title', 'value_card'];
 
 function resolveViewer(access, tier, ownershipPending) {
   const base = (access && (access.effective_role_base || access.role_base)) || null;
@@ -997,19 +1001,16 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
       unavailableReason: "Claim your place to see your home's exact details and value.",
     })];
   }
-  // Band B is ATTOM-paid — without a key there is no exact data (area teaser only).
-  // The gap is ours, not the area's, so the copy doesn't blame the area.
-  if (!process.env.ATTOM_API_KEY) {
-    return [serializePlaceSection('your_home', {
-      access,
-      status: 'unavailable',
-      unavailableReason: "We can't read county property records yet, so exact details and value aren't shown here.",
-    })];
-  }
-
   let result = null;
   try {
-    result = await propertyIntelligenceService.getProfile(home.id);
+    // Without ATTOM's key and with no county record, only what the household entered is shown, and no stored
+    // ATTOM copy is read. The gap is ours, not the area's, so the copy doesn't blame the area.
+    if (!process.env.ATTOM_API_KEY && !propertyRecordsConfig.enabled()) {
+      homeRecords.noteLookup('home', homeRecords.homeAddress(home), null);
+      result = { profile: propertyIntelligenceService.buildFallbackProfile(home), source: 'fallback', lookup: null };
+    } else {
+      result = await propertyIntelligenceService.getProfile(home.id);
+    }
   } catch (err) {
     logger.warn('placeIntelligence: propertyIntelligence failed', { homeId: home.id, error: err.message });
     return [serializePlaceSection('your_home', { access, status: 'error' })];
@@ -1023,6 +1024,13 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   // lookup that just failed) offer Try again.
   const nothingYet = profile.source === 'fallback'
     && !(profile.household_fields || []).some((field) => field !== 'property_type');
+  if (nothingYet && !process.env.ATTOM_API_KEY && result.lookup !== 'pending') {
+    return [serializePlaceSection('your_home', {
+      access,
+      status: 'unavailable',
+      unavailableReason: "We can't read county property records yet, so exact details and value aren't shown here.",
+    })];
+  }
   if (nothingYet && result.lookup === 'pending') {
     return [serializePlaceSection('your_home', { access, status: 'unavailable', unavailableReason: YOUR_HOME_LOOKING_UP })];
   }
@@ -1032,7 +1040,12 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   // A value estimate past its 30 days (ATTOM had nothing newer, or the refresh
   // is still running) is kept and shown with its own date, to whoever sees it.
   const valueAge = Date.now() - Date.parse(profile.value_as_of);
-  const oldValue = Boolean(viewerAccess && viewerAccess.isOwner) && profile.estimated_value != null && valueAge >= VALUE_FRESH_MS;
+  // A county's value keeps its own date: an annual roll isn't out of date at 30 days.
+  const oldValue = !profile.provenance && Boolean(viewerAccess && viewerAccess.isOwner) && profile.estimated_value != null && valueAge >= VALUE_FRESH_MS;
+  // The value card is the confirmed owner's, and nobody else's read waits on its area trend.
+  const valueCard = wantsRecordVocabulary && viewerAccess?.isOwner && profile.area
+    ? homeValueCard.build(profile, { trend: await areaTrend.lookup(profile.area), lookup: result.lookup })
+    : null;
 
   return [serializePlaceSection('your_home', {
     access,
@@ -1056,7 +1069,7 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
       // The home's outline for the Today sky: the county record's, with the
       // kind of home the household chose over it.
       house: resolveHouse(profile.house, home.home_type),
-      ...(wantsRecordVocabulary ? recordVocabulary.placeValueFields(profile) : {}),
+      ...(wantsRecordVocabulary ? recordVocabulary.placeValueFields(profile, valueCard) : {}),
     },
   })];
 }

@@ -6,7 +6,7 @@
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
-const { download, zipTable } = require('../lib/tables.cjs');
+const { download, zipDates, zipTable } = require('../lib/tables.cjs');
 const { year, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
@@ -55,9 +55,8 @@ function fromRow(row) {
 async function* build({ work }) {
   const zip = path.join(work, 'tx-hidalgo', 'HCADShapefiles.zip');
   download(FILE, zip);
-  const stamp = require('node:child_process').execFileSync('unzip', ['-l', zip], { encoding: 'utf8', maxBuffer: 1 << 24 }).split('\n').find((line) => line.endsWith(TABLE));
-  const dated = /(\d{2})-(\d{2})-(\d{4})/.exec(stamp || '');
-  if (!dated) throw new Error('The export no longer says when its table was made');
+  const asOf = zipDates(zip).get(TABLE);
+  if (!asOf) throw new Error('The export no longer says when its table was made');
   const records = [];
   const seen = new Set();
   let [noAddress, hidden] = [0, 0];
@@ -77,7 +76,7 @@ async function* build({ work }) {
   log(`${COUNTY}: ${records.length} accounts, ${noAddress} without a street number, ${hidden} protected`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
-    fips: FIPS, state: 'TX', name: COUNTY, publisher: 'Hidalgo County Appraisal District', dataset: 'appraisal export', method: 'county', source: 'tx-hidalgo', as_of: `${dated[3]}-${dated[1]}-${dated[2]}`, stale_after_days: 450, extra_zips: zipsByCounty(work, ['48']).get(FIPS) || [], records,
+    fips: FIPS, state: 'TX', name: COUNTY, publisher: 'Hidalgo County Appraisal District', dataset: 'appraisal export', method: 'county', source: 'tx-hidalgo', as_of: asOf, stale_after_days: 450, extra_zips: zipsByCounty(work, ['48']).get(FIPS) || [], records,
   };
 }
 

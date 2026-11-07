@@ -27,4 +27,34 @@ function zipsByCounty(work, stateFips) {
   return found;
 }
 
-module.exports = { zipsByCounty };
+/** ZIP to its largest county by land in each state it reaches: Map(zip -> [fips, ...]), the largest first. */
+function largestCountiesByZip(work) {
+  const file = path.join(work, 'census', 'zcta-county.txt');
+  download(FILE, file);
+  const lines = fs.readFileSync(file, 'latin1').split('\n');
+  const header = lines[0].replace(/^\uFEFF|^ï»¿/, '').trim().split('|');
+  const [zcta, county, land] = ['GEOID_ZCTA5_20', 'GEOID_COUNTY_20', 'AREALAND_PART'].map((name) => header.indexOf(name));
+  if (zcta < 0 || county < 0 || land < 0) throw new Error('The Census relationship file changed');
+  const parts = new Map();
+  for (const line of lines.slice(1)) {
+    const fields = line.split('|');
+    const zip = fields[zcta];
+    const fips = fields[county];
+    const area = Number(fields[land]);
+    if (!zip || !fips || !(area > 0)) continue;
+    if (!parts.has(zip)) parts.set(zip, []);
+    parts.get(zip).push([fips, area]);
+  }
+  const found = new Map();
+  for (const [zip, counties] of parts) {
+    const largest = new Map();
+    for (const [fips] of counties.sort((a, b) => b[1] - a[1])) {
+      const state = fips.slice(0, 2);
+      if (!largest.has(state)) largest.set(state, fips);
+    }
+    found.set(zip, [...largest.values()]);
+  }
+  return found;
+}
+
+module.exports = { zipsByCounty, largestCountiesByZip };

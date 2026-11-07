@@ -6,7 +6,7 @@
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
-const { download, zipTable } = require('../lib/tables.cjs');
+const { download, zipDates, zipTable } = require('../lib/tables.cjs');
 const { year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
@@ -76,8 +76,8 @@ function fromRow(row, uses, subdivisions) {
 async function* build({ work }) {
   const zip = path.join(work, 'fl-sarasota', 'SCPA_Parcels_Sales_CSV.zip');
   download(FILE, zip);
-  const stamp = /(\d{2})-(\d{2})-(\d{4})\s+\d{2}:\d{2}\s+Parcel_Sales_CSV\/Sarasota\.csv/.exec(require('node:child_process').execFileSync('unzip', ['-l', zip], { encoding: 'utf8' }));
-  if (!stamp) throw new Error('The file no longer says when it was made');
+  const asOf = zipDates(zip).get(TABLE);
+  if (!asOf) throw new Error('The file no longer says when it was made');
   const [uses, subdivisions] = [new Map(), new Map()];
   for await (const row of zipTable(zip, 'Parcel_Sales_CSV/LandUseCodes.csv', ['Code', 'Description'])) uses.set(row.Code, word(row.Description));
   for await (const row of zipTable(zip, 'Parcel_Sales_CSV/SubdivisionCodes.csv', ['Code', 'Description'])) subdivisions.set(row.Code, word(row.Description));
@@ -95,7 +95,7 @@ async function* build({ work }) {
   log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
-    fips: FIPS, state: 'FL', name: COUNTY, publisher: 'Sarasota County Property Appraiser', dataset: 'parcel file', method: 'county', source: 'fl-sarasota', as_of: `${stamp[3]}-${stamp[1]}-${stamp[2]}`, stale_after_days: 450, records,
+    fips: FIPS, state: 'FL', name: COUNTY, publisher: 'Sarasota County Property Appraiser', dataset: 'parcel file', method: 'county', source: 'fl-sarasota', as_of: asOf, stale_after_days: 450, records,
   };
 }
 

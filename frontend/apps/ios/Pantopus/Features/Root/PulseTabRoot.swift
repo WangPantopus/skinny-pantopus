@@ -229,6 +229,7 @@ public struct PulseTabRoot: View {
                 },
                 onBack: onClose,
                 header: header,
+                scrollToTop: rootTabs.pulseHomeReselected,
                 asksPantopus: true
             )
         }

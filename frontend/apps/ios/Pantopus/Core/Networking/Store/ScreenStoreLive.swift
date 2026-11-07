@@ -190,8 +190,13 @@ private struct RefreshOnStoreChange: ViewModifier {
         content
             .background(WindowProbeView(probe: probe, onAttach: attached, onDetach: detached))
             .onReceive(NotificationCenter.default.publisher(for: .screenStoreChanged)) { note in
-                guard canRefresh, UIApplication.shared.applicationState == .active, affects(note) else { return }
-                performIfVisible()
+                guard affects(note) else { return }
+                // A signal that lands while the app is away is read on coming back.
+                guard UIApplication.shared.applicationState == .active else {
+                    recheckOnResume = true
+                    return
+                }
+                if canRefresh { performIfVisible() }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                 // Clear before the app snapshot and even if UIKit already

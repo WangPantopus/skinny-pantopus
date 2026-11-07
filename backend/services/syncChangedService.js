@@ -94,6 +94,29 @@ function hasConnectedUsers() {
   return Boolean(_io && _connectedUsers && _connectedUsers.size > 0);
 }
 
+// A home's change the writer has marked as its own housekeeping: "<table>|<home id>" → when the mark lapses.
+const QUIET_MS = 5_000;
+const quietChanges = new Map();
+
+/**
+ * The next signal for this table and home reaches the server's memos but no phone or browser. For rows a read
+ * generates, which its own reply carries: telling the home's open screens would only make them read everything again.
+ * One statement sends one signal per home, so one mark covers one write; a mark nobody used lapses.
+ */
+function expectQuietHomeChange(table, homeId) {
+  const now = Date.now();
+  for (const [key, lapses] of quietChanges) if (lapses <= now) quietChanges.delete(key);
+  quietChanges.set(`${table}|${String(homeId).toLowerCase()}`, now + QUIET_MS);
+}
+
+function takeQuietChange(change) {
+  const key = `${change.t}|${String(change.h).toLowerCase()}`;
+  const lapses = quietChanges.get(key);
+  if (lapses === undefined) return false;
+  quietChanges.delete(key);
+  return lapses > Date.now();
+}
+
 // In-process listeners (server memos) hear every change, whoever is connected.
 const changeListeners = new Set();
 function onChange(listener) {
@@ -109,6 +132,7 @@ function handleNotification(raw) {
   for (const listener of changeListeners) {
     try { listener(change); } catch (err) { logger.warn('sync:changed listener failed', { error: err.message }); }
   }
+  if (takeQuietChange(change)) return;
   if (!hasConnectedUsers()) return;
   const rule = RULES[change.t];
   if (!rule || (rule.when && !rule.when(change))) return;
@@ -449,4 +473,4 @@ function currentEpoch() {
 }
 
 module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES, publishChatTyping, publishChatSignal,
-  publishHomeChange };
+  publishHomeChange, expectQuietHomeChange };

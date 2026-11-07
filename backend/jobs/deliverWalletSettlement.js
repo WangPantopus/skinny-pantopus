@@ -9,7 +9,7 @@ async function call(name, args = {}) {
 }
 
 // One event is leased just before sending, so a batch cannot age out in a queue.
-// Unknown transport outcomes may retry the same notification ID (at least once).
+// Unknown transport outcomes retry the same notification ID on the devices still unsettled (at least once).
 // Exact financial proof, current preferences and current token ownership are rechecked.
 async function deliverWalletSettlement() {
   let processed = 0;
@@ -28,8 +28,10 @@ async function deliverWalletSettlement() {
         if (!current || current.error) throw new Error('Payment delivery lease unavailable');
         if (!current.eligible) outcome = 'suppressed';
         else {
-          const receipt = await deliverStoredGigNotification(current.notification, kind === 'gig_tip'
-            ? { pushAllowedAtCapture: current.pushAllowedAtCapture } : undefined);
+          const receipt = await deliverStoredGigNotification(current.notification, {
+            ...(kind === 'gig_tip' ? { pushAllowedAtCapture: current.pushAllowedAtCapture } : {}),
+            delivery: { p_kind: kind, ...args },
+          });
           if (!Number.isSafeInteger(receipt?.acceptedCount) || receipt.acceptedCount < 0
               || !Number.isSafeInteger(receipt?.unresolvedCount) || receipt.unresolvedCount < 0) {
             throw new Error('Payment delivery transport receipt unavailable');

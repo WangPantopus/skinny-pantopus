@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,7 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -76,7 +77,7 @@ internal fun BookingFilterSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag(BOOKING_FILTER_TAG),
+        modifier = Modifier.sheetKeyboardRules().testTag(BOOKING_FILTER_TAG),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4)) {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.s3), verticalAlignment = Alignment.CenterVertically) {
@@ -123,7 +124,7 @@ internal fun BookingFilterSheet(
  * generated `@Composable` method exceeds the JVM 64KB method-size limit.
  */
 @Composable
-private fun FilterSheetContent(
+private fun ColumnScope.FilterSheetContent(
     draft: BookingFilters,
     search: String,
     count: Int?,
@@ -137,8 +138,9 @@ private fun FilterSheetContent(
     onCustomTo: (String) -> Unit,
     onClearAll: () -> Unit,
 ) {
+    // Takes what the Show button leaves, so the keyboard can't squeeze the button.
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
         // Search + active-filters summary stay visible above the

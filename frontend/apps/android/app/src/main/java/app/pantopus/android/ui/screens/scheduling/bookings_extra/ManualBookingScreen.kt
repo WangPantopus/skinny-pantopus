@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,6 +36,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,12 +57,17 @@ import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingTopBar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingTopBarLeading
 import app.pantopus.android.ui.screens.scheduling._shared.SlotTimeList
+import app.pantopus.android.ui.screens.scheduling._shared.TimezoneOption
+import app.pantopus.android.ui.screens.scheduling._shared.TimezonePickerSheet
+import app.pantopus.android.ui.screens.scheduling._shared.defaultTimezoneOptions
+import app.pantopus.android.ui.screens.scheduling._shared.timezoneOption
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.time.ZoneId
 
 const val MANUAL_BOOKING_TAG = "scheduling.manualBooking"
 
@@ -71,6 +80,7 @@ fun ManualBookingScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.start() }
     val accent = state.pillar.accent
+    var showTimezones by remember { mutableStateOf(false) }
 
     val handleBack = { if (!viewModel.back()) onBack() }
 
@@ -113,6 +123,7 @@ fun ManualBookingScreen(
                                 TimeStep(
                                     state = state,
                                     accent = accent,
+                                    onChangeTimezone = { showTimezones = true },
                                     onSelectDay = viewModel::selectDay,
                                     onSelectSlot = viewModel::selectSlot,
                                 )
@@ -156,6 +167,35 @@ fun ManualBookingScreen(
             accent = accent,
         )
     }
+    if (showTimezones) {
+        var query by remember { mutableStateOf("") }
+        val deviceZone = remember { ZoneId.systemDefault().id }
+        val options = remember { timezoneChoices(state.zone.id, deviceZone) }
+        TimezonePickerSheet(
+            options = options,
+            selectedId = state.zone.id,
+            query = query,
+            onQueryChange = { query = it },
+            onSelect = { option ->
+                viewModel.selectTimezone(option.id)
+                showTimezones = false
+            },
+            onDismiss = { showTimezones = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            detectedId = deviceZone,
+            accent = accent,
+        )
+    }
+}
+
+/** The common zones, plus the chosen and device zones when they aren't common, so both stay one tap away. */
+private fun timezoneChoices(
+    chosenId: String,
+    deviceId: String,
+): List<TimezoneOption> {
+    val common = defaultTimezoneOptions()
+    val others = listOf(chosenId, deviceId).distinct().filter { id -> common.none { it.id == id } }
+    return common + others.mapNotNull { timezoneOption(it) }
 }
 
 @Composable
@@ -234,7 +274,7 @@ private fun EventTypeStep(
 ) {
     StepScaffold(title = "Pick an event type") {
         if (state.loadingEventTypes) {
-            SchedulingLoadingSkeleton(rows = 3)
+            SchedulingLoadingSkeleton(modifier = Modifier.heightIn(max = STEP_SKELETON_HEIGHT), rows = 3)
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 state.eventTypes.forEach { option ->
@@ -308,13 +348,14 @@ private fun EventTypeTile(
 private fun TimeStep(
     state: ManualBookingUiState,
     accent: Color,
+    onChangeTimezone: () -> Unit,
     onSelectDay: (java.time.LocalDate) -> Unit,
     onSelectSlot: (String) -> Unit,
 ) {
     StepScaffold(title = "Choose a time") {
-        TzChip(label = state.tzLabel)
+        TzChip(label = state.tzLabel, onClick = onChangeTimezone)
         when {
-            state.loadingSlots -> SchedulingLoadingSkeleton(rows = 3)
+            state.loadingSlots -> SchedulingLoadingSkeleton(modifier = Modifier.heightIn(max = STEP_SKELETON_HEIGHT), rows = 3)
             state.slotsError != null ->
                 Text(
                     text = state.slotsError.orEmpty(),
@@ -389,12 +430,17 @@ private fun DayChip(
 }
 
 @Composable
-private fun TzChip(label: String) {
+private fun TzChip(
+    label: String,
+    onClick: () -> Unit,
+) {
     Row(
         modifier =
-            Modifier.clip(
-                RoundedCornerShape(Radii.pill),
-            ).background(PantopusColors.appSurfaceSunken).padding(horizontal = Spacing.s3, vertical = Spacing.s2),
+            Modifier
+                .clip(RoundedCornerShape(Radii.pill))
+                .background(PantopusColors.appSurfaceSunken)
+                .clickable(onClickLabel = "Change time zone", onClick = onClick)
+                .padding(horizontal = Spacing.s3, vertical = Spacing.s2),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
@@ -488,7 +534,7 @@ private fun ReviewStep(
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
             SummaryRow(label = "Event", value = eventName)
-            SummaryRow(label = "Time", value = BookingsExtrasFormatting.dayAndTime(state.selectedSlotStart))
+            SummaryRow(label = "Time", value = pickedTimeSummary(state))
             SummaryRow(label = "Invitee", value = state.inviteeName.ifBlank { "—" })
             SummaryRow(label = "Contact", value = contact.ifBlank { "—" })
         }
@@ -509,6 +555,12 @@ private fun ReviewStep(
         )
         state.createError?.let { ExtrasInlineError(message = it) }
     }
+}
+
+/** The time as it was picked, naming the zone when it isn't the device's. */
+private fun pickedTimeSummary(state: ManualBookingUiState): String {
+    val time = BookingsExtrasFormatting.dayAndTime(state.selectedSlotStart, state.zone)
+    return if (state.zone == ZoneId.systemDefault()) time else "$time · ${state.zoneName}"
 }
 
 @Composable
@@ -613,5 +665,7 @@ private fun InviteByRow(
     }
 }
 
+// The skeleton scrolls itself: inside a step's scrolling page it needs a height, or the screen crashes as it opens.
+private val STEP_SKELETON_HEIGHT = 260.dp
 private const val TILE_BG_ALPHA = 0.08f
 private const val TILE_ICON_ALPHA = 0.16f

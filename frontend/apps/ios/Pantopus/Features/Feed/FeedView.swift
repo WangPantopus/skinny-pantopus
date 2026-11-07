@@ -47,6 +47,9 @@ public struct FeedTopMenu {
 
 /// Pulse tab entry point.
 public struct FeedView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
+    @State private var wasInBackground = false
     @State private var viewModel: PulseFeedViewModel
     /// Map-mode engine. Lazily activated the first time the Map segment
     /// is selected (`FeedMapView.task`).
@@ -69,8 +72,9 @@ public struct FeedView: View {
     /// The assistant, opened from the header about what's nearby.
     @State private var askTopic: AIAskTopic?
     @FocusState private var searchFieldFocused: Bool
-    /// The header has slid away: scrolling down hides it, scrolling up (or
-    /// the map's reveal capsule) brings it back (founder request 2026-10-22).
+    /// The header has slid away: scrolling down hides it, and it comes back
+    /// at the top of the list (founder request 2026-11-06), or on the map with
+    /// a drag down or the reveal capsule (founder request 2026-10-22).
     @State private var headerHidden = false
     @State private var quickReturn = PulseHeaderQuickReturn()
     /// The header block's height and the status bar's: the list starts below
@@ -108,6 +112,9 @@ public struct FeedView: View {
     /// Drawn above the top bar: the Nearby tab's segment header (the Pulse |
     /// Neighborhood switch and the side menu, founder decision 2026-10-20).
     private let header: AnyView?
+    /// Changes when the feed's tab is tapped again: on this screen (not with a
+    /// post open over it) the list goes back to the top, where the header is.
+    private let scrollToTop: UUID?
 
     init(
         viewModel: PulseFeedViewModel? = nil,
@@ -124,6 +131,7 @@ public struct FeedView: View {
         topCard: AnyView? = nil,
         onRefresh: (@MainActor () async -> Void)? = nil,
         header: AnyView? = nil,
+        scrollToTop: UUID? = nil,
         asksPantopus: Bool = false
     ) {
         // Swift 5.10 crashes while lowering PulseFeedViewModel() in a default-argument thunk.
@@ -149,13 +157,15 @@ public struct FeedView: View {
         self.topCard = topCard
         self.onRefresh = onRefresh
         self.header = header
+        self.scrollToTop = scrollToTop
         self.asksPantopus = asksPantopus
     }
 
     public var body: some View {
         ZStack(alignment: .bottomTrailing) {
             // The list or the map fills the screen; the header floats over
-            // its top and slides away as it scrolls (founder request 2026-10-22).
+            // its top and slides away as it scrolls (founder request 2026-10-22),
+            // coming back over the list only at its top (founder request 2026-11-06).
             ZStack(alignment: .top) {
                 if viewMode == .map {
                     FeedMapView(
@@ -203,13 +213,20 @@ public struct FeedView: View {
         .onChange(of: viewModel.activeIntent) { _, _ in showHeader() }
         .onChange(of: viewModel.activeTopic) { _, _ in showHeader() }
         .onChange(of: isSearchVisible) { _, _ in showHeader() }
+        .onChange(of: scrollToTop) { _, _ in
+            if listScroll.scrollToTop() { viewModel.readsFeedTop = true }
+        }
         .onAppear {
-            showHeader()
+            isVisible = true
+            // Back on the list from a post or another tab, the reader's place
+            // decides: down the feed the header stays away.
+            if viewMode == .map { showHeader() }
             viewModel.screens.screenDidAppear()
         }
         // Back from a post or another tab, the search box isn't still typing:
         // the keyboard came back by itself (founder report 2026-10-29).
         .onDisappear {
+            isVisible = false
             searchFieldFocused = false
             viewModel.screens.screenDidDisappear()
         }
@@ -230,6 +247,19 @@ public struct FeedView: View {
         // Back on Nearby from Connections, or loaded after an error.
         .onChange(of: showsNearbyPosts) { _, shown in
             if shown { Task { await NearbyFeedSeen.feedShown() } }
+        }
+        // Back in the app, `.task` doesn't run again, and "Set an area" has nothing else that reads.
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            switch phase {
+            case .background:
+                wasInBackground = true
+            case .active where wasInBackground:
+                wasInBackground = false
+                Task { await viewModel.cameBackToApp() }
+            default:
+                break
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in
             Task { await viewModel.refresh() }
@@ -285,8 +315,9 @@ public struct FeedView: View {
     // MARK: - Header
 
     /// Every item above the posts or the map, in one block that slides away
-    /// as the content scrolls down and comes back as it scrolls up. Over the
-    /// map a flick up on any of it tucks it away.
+    /// as the content scrolls down. It comes back at the top of the list, or
+    /// as the map is dragged down; over the map a flick up on any of it tucks
+    /// it away.
     private var headerBlock: some View {
         VStack(spacing: Spacing.s0) {
             VStack(spacing: Spacing.s0) {
@@ -1561,6 +1592,15 @@ private final class FeedListScroll {
     var isScrolling: Bool {
         guard let scrollView else { return false }
         return scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating
+    }
+
+    /// All the way up from anywhere in the list, as a tap on the status bar
+    /// does; false when the list isn't on screen.
+    func scrollToTop() -> Bool {
+        guard let scrollView, scrollView.window != nil else { return false }
+        let top = CGPoint(x: scrollView.contentOffset.x, y: -scrollView.adjustedContentInset.top)
+        scrollView.setContentOffset(top, animated: true)
+        return true
     }
 }
 

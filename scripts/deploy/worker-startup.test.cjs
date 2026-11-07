@@ -15,6 +15,8 @@ async function boot({ nodeEnv = 'production', enabled = 'true', result = {}, ini
     './jobs/pgBossManager': { initPgBoss: async () => { events.push('init'); if (initError) throw initError; return result; }, stopPgBoss: async () => {} },
     './jobs/pgBossJobs': { registerPgBossJobs: async () => { events.push('register'); if (registerError) throw registerError; } },
     './jobs': { startJobs: options => events.push(['cron', options.skipPgBossBackedJobs]) },
+    './services/vendorCalls': { install() {} },
+    './services/propertyRecords/counts': { start() {}, flush: async () => {} },
   };
   vm.runInNewContext(source, {
     require: name => { assert.ok(Object.hasOwn(modules, name), name); return modules[name]; },

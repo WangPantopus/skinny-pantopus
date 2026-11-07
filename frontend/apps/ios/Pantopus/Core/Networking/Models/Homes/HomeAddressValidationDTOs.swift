@@ -17,6 +17,13 @@ public struct HomeAddressValidationResponse: Decodable, Sendable {
         public let status: String
         public let reasons: [String]?
         public let normalized: Address?
+        /// The units the check found at this address, when there are few enough to offer.
+        public let unitChoices: [String]?
+
+        private enum CodingKeys: String, CodingKey {
+            case status, reasons, normalized
+            case unitChoices = "unit_choices"
+        }
     }
 
     public struct Address: Decodable, Sendable {

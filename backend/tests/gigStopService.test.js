@@ -183,7 +183,8 @@ describe('durable stop notice relay', () => {
   test('exact transport receipt acknowledges the original stored identity', async () => {
     delivery(); notifications.deliverStoredGigNotification.mockResolvedValue({ acceptedCount: 1, unresolvedCount: 0 });
     expect(await stop.deliverPending()).toEqual({ delivered: 1 });
-    expect(notifications.deliverStoredGigNotification).toHaveBeenCalledWith({ id: 'original-notice', type: 'gig_cancelled' });
+    expect(notifications.deliverStoredGigNotification).toHaveBeenCalledWith({ id: 'original-notice', type: 'gig_cancelled' },
+      { delivery: { p_kind: 'gig_stop', p_id: 'event', p_lease_id: 'lease' } });
   });
 });
 describe('reserved poster no-show fee recovery', () => {

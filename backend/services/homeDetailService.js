@@ -5,7 +5,12 @@ const invitations = require('./homeInvitationService');
 const claimConfig = require('../config/householdClaims');
 const claimPolicy = require('./homeClaimRoutingService');
 const property = require('./ai/propertyIntelligenceService');
-const { serializeCountyRecord } = require('../serializers/countyRecordSerializer');
+const { serializeCountyRecord, serializePropertyRecord } = require('../serializers/countyRecordSerializer');
+const homeRecords = require('./propertyRecords/homeRecord');
+const householdFacts = require('./householdFacts');
+const addressReview = require('./addressValidation/addressReviewService');
+const countyPages = require('./countyPages');
+const logger = require('../utils/logger');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
@@ -34,8 +39,11 @@ const settledValue = result => {
   return result.value;
 };
 function failure(code = 'HOME_DETAIL_UNAVAILABLE', statusCode = 503) {
-  return Object.assign(new Error(code === 'HOME_MEMBER_HISTORY_DENIED'
-    ? 'You do not have permission to view household history.' : 'Could not load this Home information. Please retry.'), { code, statusCode });
+  return Object.assign(new Error({
+    HOME_MEMBER_HISTORY_DENIED: 'You do not have permission to view household history.',
+    HOME_RECORD_PROBLEM_DENIED: 'Only this home\'s verified owner can report a problem with its record.',
+    HOME_RECORD_PROBLEM_INVALID: 'That detail isn\'t on this home\'s record.',
+  }[code] || 'Could not load this Home information. Please retry.'), { code, statusCode });
 }
 async function checked(query) {
   let result;
@@ -193,18 +201,57 @@ async function detail(homeId, actorId) {
   });
 }
 
+// Of these people who wrote facts while unverified, the ones verified at this Home now: their entries count again.
+async function verifiedWritersAt(homeId, userIds) {
+  if (!userIds.length) return new Set();
+  const [occupants, owners] = await Promise.all([
+    rows(db.from('HomeOccupancy').select('user_id').eq('home_id', homeId).in('user_id', userIds).eq('is_active', true).eq('verification_status', 'verified')),
+    rows(db.from('HomeOwner').select('subject_id').eq('home_id', homeId).in('subject_id', userIds).eq('subject_type', 'user').eq('owner_status', 'verified')),
+  ]);
+  return new Set([...occupants.map(row => row.user_id), ...owners.map(row => row.subject_id)]);
+}
+
+// What the household has said, for someone it's meant for. A failed read leaves the page as it is without it.
+async function householdPart({ homeId, home, raw, access, actorId, copy = null, countyRecord = null }) {
+  try {
+    const canEdit = access.permissions.includes('home.edit');
+    const [verifiedWriters, reports, countyPage] = await Promise.all([
+      verifiedWritersAt(homeId, householdFacts.unverifiedWriters(raw.niche_data, actorId)),
+      copy && canEdit ? addressReview.openRecordProblems(homeId, actorId) : null,
+      canEdit ? countyPages.forHome({ copy, home }) : null,
+    ]);
+    return householdFacts.project({ home, nicheData: raw.niche_data, copy, countyRecord, canEdit, viewerId: actorId, verifiedWriters, reports, countyPage });
+  } catch (error) {
+    logger.warn('Home household facts unavailable', { homeId, error: error.message });
+    return null;
+  }
+}
+
 async function propertyDetail(homeId, actorId) {
   return authority.withCurrentAccess({ homeId, actorId }, async access => {
     // The county record is the verified owner's, as the Home's value is on Place. Everyone else who can open
-    // the Home sees its own facts, and their visit never asks ATTOM.
+    // the Home sees its own facts and, in the household, what the household has entered; their visit never asks ATTOM.
     if (!access.isOwner) {
-      const { home } = await readHome(homeId, access);
-      return { home, attom_property_detail: null, source: 'unavailable', unavailable_reason: 'OWNER_ONLY', county_record: null };
+      const sees = householdFacts.seesHousehold(access);
+      const { home, raw } = await readHome(homeId, access, { provider: sees });
+      return { home, attom_property_detail: null, source: 'unavailable', unavailable_reason: 'OWNER_ONLY', county_record: null,
+        household: sees ? await householdPart({ homeId, home, raw, access, actorId }) : null };
     }
     // ATTOM's value estimate comes from the cache only, read alongside the Home. A Home without its record gets it
     // looked up in the background (LOOKUP_PENDING): this answer never waits for ATTOM, and the record's arrival on
     // the Home tells the page to read again.
-    const [{ home, raw }, avm] = await Promise.all([readHome(homeId, access, { provider: true }), property.getCachedAttomValue(homeId)]);
+    const { home, raw } = await readHome(homeId, access, { provider: true });
+    // A Home with a county record answers from it; a live county never reads ATTOM's copies.
+    const record = await homeRecords.forHome(raw);
+    if (record) {
+      const county = record.copy ? serializePropertyRecord(record.copy) : null;
+      return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
+        unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : 'NO_PROPERTY_FOUND'), county_record: county,
+        ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}),
+        // While the record is still being read, nothing asks for what it may answer.
+        household: record.lookup === 'pending' ? null : await householdPart({ homeId, home, raw, access, actorId, copy: county ? record.copy : null, countyRecord: county }) };
+    }
+    const avm = await property.getCachedAttomValue(homeId);
     const result = await property.getHomeAttomPropertyDetail(raw);
     if (!result || !['home', 'cache', 'attom', 'unavailable'].includes(result.source)
       || !(result.attomPayload === null || object(result.attomPayload))
@@ -212,7 +259,46 @@ async function propertyDetail(homeId, actorId) {
     // Only the property bundle is returned, never the rest of niche_data or
     // unrelated raw Home fields. Deeper vendor-content validation is separate.
     return { home, attom_property_detail: result.attomPayload, source: result.source,
-      unavailable_reason: result.unavailableReason || null, county_record: serializeCountyRecord(result.attomPayload, avm) };
+      unavailable_reason: result.unavailableReason || null, county_record: serializeCountyRecord(result.attomPayload, avm),
+      household: await householdPart({ homeId, home, raw, access, actorId }) };
+  });
+}
+
+// PATCH /api/homes/:id: a change to the household's facts, ready to write with the rest of the edit. Null when the
+// edit touches none. `household_facts` is checked here (home.edit, current); a plain edit's check stays the settings
+// transaction's, and only keeps who and when for the columns it changes.
+async function factChange({ homeId, actorId, asked, fields }) {
+  if (!asked && !householdFacts.COLUMN_FACTS.some(([, column]) => Object.hasOwn(fields, column))) return null;
+  const access = asked ? await authority.withCurrentAccess({ homeId, actorId, permission: 'home.edit' }, async current => current) : null;
+  try {
+    const home = await checked(db.from('Home').select(`id, address, address2, city, state, zipcode, home_type, niche_data, ${householdFacts.COLUMN_FACTS.map(([, column]) => column).join(', ')}`)
+      .eq('id', homeId).maybeSingle());
+    if (!object(home)) throw failure();
+    return householdFacts.plan({ home, copy: homeRecords.liveCopy(home), seesRecord: !access || access.isOwner, asked, fields, actorId });
+  } catch (error) {
+    // A plain edit goes on without its who and when; asking for the facts themselves has to be answered.
+    if (asked) throw error;
+    logger.warn('Home facts unread for a plain edit', { homeId, error: error.message });
+    return null;
+  }
+}
+
+// "Report a problem": a person says a parcel or tax fact looks wrong. It goes to Pantopus review with what the
+// record said, and nothing on the page changes.
+async function reportRecordProblem(homeId, actorId, { section, field = null, note = null }) {
+  return authority.withCurrentAccess({ homeId, actorId }, async access => {
+    if (!access.isOwner) throw failure('HOME_RECORD_PROBLEM_DENIED', 403);
+    const { raw } = await readHome(homeId, access, { provider: true });
+    const copy = homeRecords.liveCopy(raw);
+    const shown = copy ? serializePropertyRecord(copy)?.sections.find(candidate => candidate.id === section) : null;
+    const row = field ? shown?.rows.find(candidate => candidate.id === field) : null;
+    if (!shown || (field && !row)) throw failure('HOME_RECORD_PROBLEM_INVALID', 400);
+    const caseId = await addressReview.flagRecordProblem({ homeId, userId: actorId, reason: {
+      kind: 'record_problem', section, field: row?.id ?? null, label: row?.label ?? null, shown: row?.value ?? null, note: note || null,
+      jurisdiction: copy.jurisdiction, release: copy.release, at: new Date().toISOString(),
+    } });
+    if (!caseId) throw failure();
+    return { reported: true };
   });
 }
 
@@ -265,7 +351,7 @@ async function withClaimReview(homeId, actorId, occupants) {
 }
 function sendError(res, error) {
   if (['HOME_DASHBOARD_DENIED', 'HOME_DASHBOARD_ACCESS_CHANGED', 'HOME_RESOURCE_DENIED'].includes(error?.code)) return authority.sendError(res, error);
-  const safe = ['HOME_DETAIL_UNAVAILABLE', 'HOME_MEMBER_HISTORY_DENIED'].includes(error?.code) ? error : failure();
+  const safe = ['HOME_DETAIL_UNAVAILABLE', 'HOME_MEMBER_HISTORY_DENIED', 'HOME_RECORD_PROBLEM_DENIED', 'HOME_RECORD_PROBLEM_INVALID', 'HOME_FACTS_INVALID'].includes(error?.code) ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { detail, propertyDetail, members, sendError };
+module.exports = { detail, propertyDetail, members, factChange, reportRecordProblem, sendError };

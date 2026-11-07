@@ -104,6 +104,16 @@ function zipMembers(zip) {
 }
 
 /** Every row of a public map layer, page by page, holding only `fields` (and with `points`, each point as _lng and _lat). */
+/** When each of a zip's files was written, YYYY-MM-DD by name. `unzip -l` prints MM-DD-YYYY on a Mac and YYYY-MM-DD on Linux. */
+function zipDates(zip, listing = execFileSync('unzip', ['-l', zip], { encoding: 'latin1' })) {
+  const dates = new Map();
+  for (const line of listing.split('\n')) {
+    const row = /^\s*\d+\s+(?:(\d{2})-(\d{2})-(\d{4})|(\d{4})-(\d{2})-(\d{2}))\s+\d{2}:\d{2}\s+(.+?)\s*$/.exec(line);
+    if (row) dates.set(row[7], row[3] ? `${row[3]}-${row[1]}-${row[2]}` : `${row[4]}-${row[5]}-${row[6]}`);
+  }
+  return dates;
+}
+
 async function* mapLayer(url, fields, { points = false } = {}) {
   let offset = 0;
   for (;;) {
@@ -146,4 +156,4 @@ async function* cachedLayer(file, url, fields) {
   }
 }
 
-module.exports = { download, zipTable, zipMembers, streamLines, splitQuoted, mapLayer, cachedLayer, USER_AGENT };
+module.exports = { download, zipTable, zipMembers, zipDates, streamLines, splitQuoted, mapLayer, cachedLayer, USER_AGENT };

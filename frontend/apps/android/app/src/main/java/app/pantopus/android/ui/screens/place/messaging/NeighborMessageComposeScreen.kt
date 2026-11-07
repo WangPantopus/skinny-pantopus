@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,7 +27,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,7 +52,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 /**
  * D1 — the verified-neighbor composer. Template-only (no free-text field
  * exists), delivered anonymously ("from a verified neighbor nearby"), scoped
- * to a verified home on your block, rate-limited, and blockable — the trust-
+ * to an address on your block, rate-limited, and blockable — the trust-
  * and-safety constraints ARE the UI. Parity twin of iOS
  * `NeighborMessageComposeView`.
  */
@@ -65,7 +69,7 @@ fun NeighborMessageComposeScreen(
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
         PlaceDetailHeader(
             title = if (sent) "Message sent" else "New message",
-            address = "To a verified neighbor on your block",
+            address = "To a home on your block",
             onBack = onBack,
         )
         when {
@@ -104,7 +108,7 @@ private fun Composer(viewModel: NeighborMessageComposeViewModel) {
             PlaceDetailSectionLabel(text = "To")
             val chosen = recipient
             if (chosen != null) {
-                RecipientCard(recipient = chosen, onChange = viewModel::changeRecipient)
+                RecipientCard(recipient = chosen, viewModel = viewModel)
             } else {
                 ChooseHomeCard(viewModel = viewModel)
             }
@@ -150,36 +154,49 @@ private fun Composer(viewModel: NeighborMessageComposeViewModel) {
 @Composable
 private fun RecipientCard(
     recipient: ComposeRecipient,
-    onChange: () -> Unit,
+    viewModel: NeighborMessageComposeViewModel,
 ) {
-    Row(
+    val unit by viewModel.recipientUnit.collectAsStateWithLifecycle()
+    Column(
         modifier = Modifier.fillMaxWidth().placeCard().padding(14.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        PlaceIconTile(icon = PantopusIcon.Home, tone = PlaceTileTone.HOME, size = 38.dp)
-        Column(modifier = Modifier.weight(1f)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PlaceIconTile(icon = PantopusIcon.Home, tone = PlaceTileTone.HOME, size = 38.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = recipient.address,
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = (-0.15).sp,
+                    color = PantopusColors.appText,
+                    maxLines = 1,
+                )
+                Text(
+                    text = recipient.relativeLabel,
+                    fontSize = 13.sp,
+                    color = PantopusColors.appTextMuted,
+                    maxLines = 1,
+                )
+            }
             Text(
-                text = recipient.address,
-                fontSize = 15.5.sp,
+                text = "Change",
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.15).sp,
-                color = PantopusColors.appText,
-                maxLines = 1,
-            )
-            Text(
-                text = recipient.relativeLabel,
-                fontSize = 13.sp,
-                color = PantopusColors.appTextMuted,
-                maxLines = 1,
+                color = PantopusColors.primary600,
+                modifier = Modifier.clickable(onClick = viewModel::changeRecipient),
             )
         }
-        Text(
-            text = "Change",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.primary600,
-            modifier = Modifier.clickable(onClick = onChange),
+        OutlinedTextField(
+            value = unit,
+            onValueChange = viewModel::updateRecipientUnit,
+            placeholder = { Text("Apt or unit (optional)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Done),
+            modifier = Modifier.fillMaxWidth().testTag("neighbor.recipientUnit"),
         )
     }
 }
@@ -522,7 +539,7 @@ private fun SendBar(
                 tint = PantopusColors.appTextMuted,
             )
             Text(
-                text = "Delivered anonymously · a few messages a week",
+                text = "Sent anonymously · a few messages a week",
                 fontSize = 12.sp,
                 color = PantopusColors.appTextMuted,
             )
@@ -543,7 +560,7 @@ private fun SentConfirmation(onDone: () -> Unit) {
         ) {
             PlaceIconTile(icon = PantopusIcon.Check, tone = PlaceTileTone.HOME, size = 48.dp)
             Text(
-                text = "Delivered anonymously",
+                text = "Sent anonymously",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.18).sp,
@@ -551,7 +568,9 @@ private fun SentConfirmation(onDone: () -> Unit) {
                 modifier = Modifier.padding(top = 12.dp),
             )
             Text(
-                text = "Your verified neighbor received it as “from a verified neighbor nearby” — never your name or address.",
+                text =
+                    "If a verified household lives there, they'll get it as “from a verified neighbor nearby” — " +
+                        "never your name or address.",
                 fontSize = 13.5.sp,
                 lineHeight = 19.sp,
                 color = PantopusColors.appTextSecondary,

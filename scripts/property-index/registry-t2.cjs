@@ -9,6 +9,7 @@
 //   premises      Federal housing records (HUD: tax-credit, assisted multifamily, public housing). Independent of address
 //                 points: each publishes its own address and location. Must reach the right building: 95% of them.
 //   unit links    Unit records from the county's assessor, a different publication from the points. Linked ones must be right.
+//   roll homes    Homes on the same rolls: confirmed premises of the ordinary kind, where the federal list is mostly apartments.
 //   adjacent      Two units of one building must be two subjects, each the unit asked for.
 //   out of range  A unit number made up here, offline, one per building: must not match.
 //   towers        A unit typed at an address with no units on record: the building, never a unit.
@@ -23,7 +24,7 @@ const zlib = require('node:zlib');
 const crypto = require('node:crypto');
 const { answer } = require('../../backend/services/propertyRecords/registryLookup');
 const { releasePath, findBlock } = require('../../backend/services/propertyRecords/format');
-const { parts, stateOfCounty } = require('../../backend/services/propertyRecords/addressKey');
+const { parse, parts, stateOfCounty } = require('../../backend/services/propertyRecords/addressKey');
 const { USER_AGENT } = require('./lib/tables.cjs');
 const { log } = require('./lib/log.cjs');
 
@@ -223,8 +224,13 @@ async function controls(report, registry, state) {
         for (const [zip, group] of zips) {
           // A record with no direction or type is what a bare line means; every one of these needs one to tell them apart.
           const allSaySomething = group.every(({ address }) => address.pre || address.suffix || address.post);
-          if (zip && group.length > 1 && allSaySomething && !group.some((record) => record.address.urbanization) && counts.ambiguous < PER_PART_PER_COUNTY) {
-            const found = await answer({ line1: `${base.number} ${base.name}`, city: group[0].address.city, state, zip }, registry.read);
+          // Two towns in one ZIP: the city the person gave tells them apart, so that's not a line that must ask.
+          const oneTown = new Set(group.map((record) => record.address.city)).size === 1;
+          if (zip && group.length > 1 && allSaySomething && oneTown && !group.some((record) => record.address.urbanization) && counts.ambiguous < PER_PART_PER_COUNTY) {
+            const bare = `${base.number} ${base.name}`;
+            // A name ending in a street word reads as another street once its type is left off; that isn't this line.
+            if (parse(bare, '', { state, zip })?.name !== base.name) continue;
+            const found = await answer({ line1: bare, city: group[0].address.city, state, zip }, registry.read);
             counts.ambiguous += 1;
             report.ambiguous.n += 1;
             if (found.match === 'exact') report.ambiguous.wrong += 1;
@@ -248,18 +254,34 @@ async function unitLinks(report, unitsDir, state, read) {
       const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), unit: where.unit, city: address.city, state, zip: address.zip }, read);
       report.unit_links.n += 1;
       if (found.match === 'exact' && found.subject.kind === 'unit') {
-        if (found.record.address.unit === where.unit) report.unit_links.right += 1;
+        // A building letter can sit in the unit on one side and in its own column on the other: A101 and BLDG A UNIT 101.
+        const got = found.record.address;
+        if (got.unit === where.unit || `${got.building || ''}${got.unit}` === `${where.building || ''}${where.unit}`) report.unit_links.right += 1;
         else report.unit_links.wrong += 1;
       } else report.unit_links.not_linked += 1;
+    }
+    const homesFile = path.join(unitsDir, fips, 'homes.jsonl.gz');
+    if (!fs.existsSync(homesFile)) continue;
+    for (const line of zlib.gunzipSync(fs.readFileSync(homesFile)).toString('utf8').split('\n').filter(Boolean)) {
+      const address = JSON.parse(line);
+      const where = parts(address);
+      if (!where) continue;
+      const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), city: address.city, state, zip: address.zip }, read);
+      report.roll_homes.n += 1;
+      if (found.match === 'exact' || found.match === 'building_only') report.roll_homes.reached += 1;
+      else if (found.match === 'ambiguous') report.roll_homes.asked += 1;
+      else report.roll_homes.no_record += 1;
     }
   }
 }
 
 function verdict(report) {
-  const cases = report.premises.n + report.adjacent.n + report.invalid.n + report.towers.n + report.ambiguous.n + report.unit_links.n;
+  const cases = report.premises.n + report.roll_homes.n + report.adjacent.n + report.invalid.n + report.towers.n + report.ambiguous.n + report.unit_links.n;
   // Far from a federal point isn't proof of a wrong answer (the tax-credit layer's points are often a town off), so it's counted and read by hand.
   const wrong = report.adjacent.wrong + report.invalid.wrong + report.towers.wrong + report.ambiguous.wrong + report.unit_links.wrong;
-  const reached = report.premises.n ? (report.premises.right + report.premises.near + report.premises.coarse) / report.premises.n : null;
+  // Confirmed premises, whichever list confirmed them.
+  const confirmed = report.premises.n + report.roll_homes.n;
+  const reached = confirmed ? (report.premises.right + report.premises.near + report.premises.coarse + report.roll_homes.reached) / confirmed : null;
   report.cases = cases;
   report.wrong = wrong;
   report.premises_reached = reached;
@@ -285,9 +307,9 @@ function wilson(right, n) {
 
 function summarize(dir) {
   const reports = fs.readdirSync(dir).filter((name) => /^t2-[A-Z]{2}\.json$/.test(name)).map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
-  const tally = { premises: {}, adjacent: {}, invalid: {}, towers: {}, ambiguous: {}, unit_links: {} };
+  const tally = { premises: {}, roll_homes: {}, adjacent: {}, invalid: {}, towers: {}, ambiguous: {}, unit_links: {} };
   for (const report of reports) {
-    log(`${report.state}: ${report.verdict}; ${report.cases} cases, ${report.wrong} wrong; premises ${report.premises.right + report.premises.near + report.premises.coarse}/${report.premises.n} reached, ${report.premises.asked} asked, ${report.premises.no_record} no record, ${report.premises.unreadable} unreadable, ${report.premises.wrong_place} far; adjacent ${report.adjacent.n} (${report.adjacent.wrong} wrong, ${report.adjacent.asked} asked); made-up units ${report.invalid.n} (${report.invalid.wrong} matched); towers ${report.towers.n} (${report.towers.wrong} wrong); must-ask ${report.ambiguous.n} (${report.ambiguous.wrong} wrong); unit links ${report.unit_links.right}/${report.unit_links.n} (${report.unit_links.wrong} wrong, ${report.unit_links.not_linked} not linked); untested: ${report.untested.join(' ') || 'none'}`);
+    log(`${report.state}: ${report.verdict}; ${report.cases} cases, ${report.wrong} wrong; premises ${report.premises.right + report.premises.near + report.premises.coarse}/${report.premises.n} reached, ${report.premises.asked} asked, ${report.premises.no_record} no record, ${report.premises.unreadable} unreadable, ${report.premises.wrong_place} far; adjacent ${report.adjacent.n} (${report.adjacent.wrong} wrong, ${report.adjacent.asked} asked); made-up units ${report.invalid.n} (${report.invalid.wrong} matched); towers ${report.towers.n} (${report.towers.wrong} wrong); must-ask ${report.ambiguous.n} (${report.ambiguous.wrong} wrong); unit links ${report.unit_links.right}/${report.unit_links.n} (${report.unit_links.wrong} wrong, ${report.unit_links.not_linked} not linked); roll homes ${report.roll_homes.reached}/${report.roll_homes.n} reached, ${report.roll_homes.asked} asked; premises in all ${Math.round((report.premises_reached ?? 0) * 100)}%; untested: ${report.untested.join(' ') || 'none'}`);
     for (const part of Object.keys(tally)) for (const [key, value] of Object.entries(report[part])) tally[part][key] = (tally[part][key] || 0) + value;
   }
   const links = tally.unit_links;
@@ -319,6 +341,7 @@ async function main() {
     towers: blank(),
     ambiguous: blank(),
     unit_links: blank({ right: 0, not_linked: 0 }),
+    roll_homes: { n: 0, reached: 0, asked: 0, no_record: 0 },
   };
   await premises(report, await truthRows(opts.truth), opts.state, registry.read, opts.dev);
   await controls(report, registry, opts.state);

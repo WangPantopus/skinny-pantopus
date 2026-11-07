@@ -365,6 +365,7 @@ app.get('/api/health/metrics', (req, res) => {
     memory_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     routes: getMetrics(),
     address_verification: getAddressVerificationMetrics(),
+    vendor_calls_today: require('./services/propertyRecords/counts').vendorsToday(),
   });
 });
 
@@ -611,6 +612,10 @@ require('./config/addressVerification').validate();
 // Notes event-loop lag each second, for the slow-request line (utils/dbTiming.js).
 dbTiming.startLagMonitor();
 
+// Every call to a paid data vendor is counted, for the daily report.
+require('./services/vendorCalls').install();
+require('./services/propertyRecords/counts').start('api');
+
 server.listen(PORT, HOST, async () => {
   logger.info(`🚀 Pantopus Backend Server started`, {
     host: HOST,
@@ -694,6 +699,7 @@ const gracefulShutdown = async (signal) => {
   });
   require('./services/chatPushDelivery').stop();
   await require('./services/syncChangedService').stop();
+  await require('./services/propertyRecords/counts').flush();
 
   // Disconnect Socket.io clients first: an open socket would keep the HTTP
   // server from closing until the timeout. They reconnect, to the new process

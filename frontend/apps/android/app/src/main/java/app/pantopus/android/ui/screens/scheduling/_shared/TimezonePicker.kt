@@ -3,6 +3,7 @@
 
 package app.pantopus.android.ui.screens.scheduling._shared
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
@@ -29,9 +31,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -60,7 +62,7 @@ data class TimezoneOption(
 /**
  * The IANA timezone selector — a searchable bottom sheet opened from the slot
  * picker's timezone chip. Mirrors the searchable settings-list: a search field,
- * a pinned Detected row for the device zone, and a Common list. The selected
+ * a Detected row for the device zone, and a Common list. The selected
  * checkmark uses the host's pillar [accent]; all other chrome stays neutral.
  *
  * Stateless over [query]/[selectedId]; the caller owns the text + selection and
@@ -83,7 +85,7 @@ fun TimezonePickerSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = modifier.closesKeyboardOnTapOrScroll().testTag(TIMEZONE_PICKER_TAG),
+        modifier = modifier.sheetKeyboardRules().testTag(TIMEZONE_PICKER_TAG),
     ) {
         Header(accent = accent, onDone = onDismiss)
         SearchBox(query = query, onQueryChange = onQueryChange)
@@ -91,26 +93,29 @@ fun TimezonePickerSheet(
         // Non-blank queries search the full IANA database (capped), so any city
         // is findable; blank keeps the curated Common list.
         val filtered = remember(query, options) { searchTimezoneOptions(query, options) }
-        when {
-            filtered.isEmpty() -> NoMatch(query)
-            query.isNotBlank() -> {
-                SectionLabel("Results")
-                ZoneList(rows = filtered, selectedId = selectedId, detectedId = detectedId, accent = accent, onSelect = onSelect)
-            }
-            else -> {
-                val detected = options.firstOrNull { it.id == detectedId }
-                if (detected != null) {
-                    SectionLabel("Detected")
-                    ZoneList(
-                        rows = listOf(detected),
-                        selectedId = selectedId,
-                        detectedId = detectedId,
-                        accent = accent,
-                        onSelect = onSelect,
-                    )
+        // The header and search box stay put; the rows take what they leave and scroll. Each new query starts at the top.
+        Column(modifier = Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(remember(query) { ScrollState(0) })) {
+            when {
+                filtered.isEmpty() -> NoMatch(query)
+                query.isNotBlank() -> {
+                    SectionLabel("Results")
+                    ZoneList(rows = filtered, selectedId = selectedId, detectedId = detectedId, accent = accent, onSelect = onSelect)
                 }
-                SectionLabel("Common")
-                ZoneList(rows = filtered, selectedId = selectedId, detectedId = detectedId, accent = accent, onSelect = onSelect)
+                else -> {
+                    val detected = options.firstOrNull { it.id == detectedId }
+                    if (detected != null) {
+                        SectionLabel("Detected")
+                        ZoneList(
+                            rows = listOf(detected),
+                            selectedId = selectedId,
+                            detectedId = detectedId,
+                            accent = accent,
+                            onSelect = onSelect,
+                        )
+                    }
+                    SectionLabel("Common")
+                    ZoneList(rows = filtered, selectedId = selectedId, detectedId = detectedId, accent = accent, onSelect = onSelect)
+                }
             }
         }
     }

@@ -11,13 +11,14 @@
  *   shadow(address)  the same lookup for counties being watched: logs counts,
  *                    returns nothing, never throws
  *
- * Which counties serve is configuration (config/propertyRecords.js), per FIPS.
+ * Which counties serve is the router's answer (router.js), per FIPS.
  * Addresses, record IDs and Home IDs never go in the log: county, answer, time.
  */
 
 const crypto = require('crypto');
 const logger = require('../../utils/logger');
-const config = require('../../config/propertyRecords');
+const router = require('./router');
+const counts = require('./counts');
 const reader = require('./reader');
 const identity = require('./identity');
 const { parse, sortKey, zip5, city: cityKey, stateCode } = require('./addressKey');
@@ -40,7 +41,7 @@ function countiesFor(stateFile, zip, city) {
  * @param {(fips: string) => boolean} [options.serves] Which counties may answer; by default the ones that are live
  * @returns {Promise<object>} { match, jurisdiction, county, release, ... } (identity.js)
  */
-async function lookup(address, { serves = (fips) => config.modeFor(fips) === 'live' } = {}) {
+async function lookup(address, { serves = (fips) => router.modeFor(fips) === 'live' } = {}) {
   const state = stateCode(address.state);
   const parsed = parse(address.line1, address.unit, { state, zip: address.zip });
   if (!parsed) return { match: 'unsupported', reason: 'unreadable_address' };
@@ -69,13 +70,29 @@ async function lookup(address, { serves = (fips) => config.modeFor(fips) === 'li
   return answers[0];
 }
 
+// One answer per address an hour is all watching needs: screens read a Home's profile far more often than that.
+const SHADOW_EVERY_MS = 60 * 60 * 1000;
+const SHADOW_REMEMBERED = 5000;
+const shadowed = new Map();
+
+function shadowDue(address) {
+  const key = crypto.createHash('sha256').update(JSON.stringify([address.line1, address.unit, address.zip])).digest('hex');
+  const now = Date.now();
+  if (now - (shadowed.get(key) || 0) < SHADOW_EVERY_MS) return false;
+  shadowed.delete(key);
+  shadowed.set(key, now);
+  if (shadowed.size > SHADOW_REMEMBERED) shadowed.delete(shadowed.keys().next().value);
+  return true;
+}
+
 /** Watches a county: what the record would have answered. No facts leave this function. */
 async function shadow(address) {
-  if (!config.anyShadow()) return;
+  if (!router.anyShadow() || !shadowDue(address)) return;
   const started = Date.now();
   try {
-    const result = await lookup(address, { serves: (fips) => config.modeFor(fips) === 'shadow' });
+    const result = await lookup(address, { serves: (fips) => router.modeFor(fips) === 'shadow' });
     if (result.jurisdiction) {
+      counts.noteShadow(result.jurisdiction, result.match);
       logger.info('property_records.shadow', {
         fips: result.jurisdiction,
         match: result.match,

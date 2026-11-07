@@ -883,6 +883,8 @@ const supabaseAdmin = {
     // The real function replays the delete in a rolled-back transaction and is
     // verified against a live stack.
     if (args[0] === 'account_deletion_dry_run') return { data: { ok: true }, error: null };
+    // A relay's lease with no device settled yet. The real function's guard is verified against a live stack.
+    if (args[0] === 'merge_delivery_device_receipts') return { data: args[1].p_accepted, error: null };
     if (args[0] === 'admit_mail_verification') return require('./mailAdmission')(args[1], getTable);
     if (args[0] === 'confirm_mail_verification') return require('./mailConfirmation')(args[1], getTable);
     if (['claim_mail_verification_dispatch', 'record_mail_verification_webhook'].includes(args[0])) {

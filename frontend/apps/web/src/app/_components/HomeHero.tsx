@@ -130,7 +130,7 @@ export default function HomeHero() {
         <div className={styles.heroCopy}>
           <span className={styles.heroEyebrow}>Your home and neighborhood, connected</span>
           <h1 className={styles.heroTitle}>
-            Your place, <em>alive.</em>
+            Your <span className={styles.heroTitleEnd}>place, <em>alive.</em></span>
           </h1>
           <p className={styles.heroSub}>
             Pantopus starts with your address. See what’s true about it, keep your household’s everyday on track, and make

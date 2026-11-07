@@ -247,7 +247,7 @@ function buildSummary(propertyProfile, aqiSignal, weatherSignals, seasonalCtx, a
  * @param {string} params.userId  UUID of the requesting user
  * @returns {Promise<{ pulse: object }>}
  */
-async function compose({ homeId, userId }) {
+async function compose({ homeId, userId, viewerIsOwner = false }) {
   const computedAt = new Date().toISOString();
   const partialFailures = [];
 
@@ -365,8 +365,9 @@ async function compose({ homeId, userId }) {
   const property = propertyProfile ? {
     year_built: propertyProfile.year_built,
     sqft: propertyProfile.sqft,
-    estimated_value: propertyProfile.estimated_value,
-    zip_median_value: propertyProfile.zip_median_value,
+    // The Home's value is its confirmed owner's, as on Place. zip_median_value is really this Home's assessed total.
+    estimated_value: viewerIsOwner ? propertyProfile.estimated_value : null,
+    zip_median_value: viewerIsOwner ? propertyProfile.zip_median_value : null,
     property_type: propertyProfile.property_type,
   } : null;
 
@@ -386,7 +387,7 @@ async function compose({ homeId, userId }) {
   // 8. Build sources list
   const sources = [];
   if (propertyProfile && propertyProfile.source !== 'fallback') {
-    sources.push({ provider: 'ATTOM', updated_at: propertyProfile.cached_at });
+    sources.push({ provider: propertyProfile.provenance?.publisher || 'ATTOM', updated_at: propertyProfile.cached_at });
   }
   if (aqiData && aqiData.fetchedAt && aqiData.source !== 'error') {
     sources.push({ provider: 'AIRNOW_AQI', updated_at: aqiData.fetchedAt });

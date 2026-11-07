@@ -143,6 +143,10 @@ public struct UserProfile: Decodable, Sendable, Hashable, Identifiable {
     public let updatedAt: String
     /// Your "Get to know" answers in saved order (PRF SRV-2); nil from an older server.
     public let prompts: [ProfilePrompt]?
+    /// The account-wide Push switch (`MailPreferences.push_notifications`,
+    /// `backend/routes/users.js:2845`). The server answers true for an account
+    /// that never changed it, so nil means only a reply without the key.
+    public let pushNotifications: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case id, email, username, usernameIsGenerated, firstName, middleName, lastName, name
@@ -158,6 +162,7 @@ public struct UserProfile: Decodable, Sendable, Hashable, Identifiable {
         case gigsCompleted = "gigs_completed"
         case profileVisibility, showEmail, showPhone, createdAt, updatedAt
         case prompts
+        case pushNotifications = "push_notifications"
     }
 }
 
@@ -206,12 +211,16 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
     /// The whole list of "Get to know" answers, in order (PRF SRV-2): it
     /// replaces the saved one; `[]` removes them all, nil leaves them.
     public var profilePrompts: [ProfilePrompt]?
+    /// The account-wide Push switch; sent under the name the web sends it
+    /// (`backend/routes/users.js:2949`).
+    public var pushNotifications: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case username, firstName, middleName, lastName, phoneNumber, address, city, state, zipcode, dateOfBirth
         case bio, tagline, profileVisibility, showEmail, showPhone
         case website, linkedin, twitter, instagram, facebook
         case profilePrompts = "profile_prompts"
+        case pushNotifications = "push_notifications"
     }
 
     public init(
@@ -235,7 +244,8 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
         twitter: String? = nil,
         instagram: String? = nil,
         facebook: String? = nil,
-        profilePrompts: [ProfilePrompt]? = nil
+        profilePrompts: [ProfilePrompt]? = nil,
+        pushNotifications: Bool? = nil
     ) {
         self.username = username
         self.firstName = firstName
@@ -258,6 +268,7 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
         self.instagram = instagram
         self.facebook = facebook
         self.profilePrompts = profilePrompts
+        self.pushNotifications = pushNotifications
     }
 }
 

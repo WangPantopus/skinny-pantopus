@@ -1,7 +1,7 @@
 # Pantopus — Privacy Data Inventory
 
 **Status:** Pre-launch (Bucket 2, Block RR-A)
-**Last reviewed:** 2026-10-20 (AI processing by Anthropic §2.11, §4, §5; draft for the founder's review). Before that 2026-10-06 (launch review: health details in emergency info §2.10, location wired §2.4, system boot time and App Group defaults §3)
+**Last reviewed:** 2026-11-06 (AI assistant phase 3: what Pantopus remembers, check-backs, standing rules, the assistant's record, Needs you, Siri and notification buttons §2.11, §5; draft for the founder's review). Before that 2026-10-20 (AI processing by Anthropic §2.11, §4, §5), and 2026-10-06 (launch review: health details in emergency info §2.10, location wired §2.4, system boot time and App Group defaults §3)
 **Owner:** Mobile / Compliance
 
 This is the single source of truth for **what personal data the Pantopus
@@ -85,6 +85,12 @@ track across apps/sites owned by other companies (always *No* here).
 |-------|----------|---------|
 | Coarse / precise location | Maps + "near you" surfaces (Nearby, Explore, Gigs/Tasks map, Mailbox map). iOS purpose strings `NSLocationWhenInUseUsageDescription` / `…AlwaysAndWhenInUse…` in `project.yml`. Android `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` in `AndroidManifest.xml`. | Backend (lat/lng query params on nearby/gig reads) |
 
+> **2026-11-06:** The apps and the web read where an attached photo or video was taken, on the device, and send it
+> with a post to a place as `mediaLocations` (the capture point and time). The backend uses it for the place check and
+> the post's pin, keeps `post_metadata.location_basis` and `photo_taken_at`, and keeps no other copy of the points.
+> Android's post composer holds `ACCESS_MEDIA_LOCATION` only if the person allows it, and asks only after they attach
+> a photo whose location Android hides. It gives the app no other photos, despite the wording of Android's prompt.
+>
 > **2026-10-06:** iOS device location is wired (`Core/Location/DeviceLocationProvider.swift`
 > requests when-in-use authorization for address lookup and nearby surfaces), so the
 > location entries describe the shipped binary. The app never requests "always" access.
@@ -93,7 +99,7 @@ track across apps/sites owned by other companies (always *No* here).
 
 | Field | Evidence | Apple type |
 |-------|----------|-----------|
-| Photos / videos | Camera + photo library (profile photos, listing images, mail capture). iOS `NSCameraUsageDescription` / `NSPhotoLibraryUsageDescription`; Android `CAMERA`; photos and videos come from the system pickers, which need no media permission (the manifest removes `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`). Upload via `MultipartUploader`. | Photos or Videos |
+| Photos / videos | Camera + photo library (profile photos, listing images, mail capture). iOS `NSCameraUsageDescription` / `NSPhotoLibraryUsageDescription`; Android `CAMERA`; photos and videos come from the system pickers, which need no media permission (the manifest removes `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`). `ACCESS_MEDIA_LOCATION` reads only where a picked file was taken (§2.4). Upload via `MultipartUploader`. | Photos or Videos |
 | Audio (voice messages) | Chat voice messages. iOS `NSMicrophoneUsageDescription`; Android — recorded in-chat. | Audio Data |
 | Messages (direct / chat) | `Features/Chat`, Socket.IO realtime + `ChatEndpoints` | Emails or Text Messages |
 | Other user content (posts, gigs, listings, reviews, documents, profile bio, polls, home records) | Compose flows (`Features/Compose/**`), Homes documents (`UploadDocumentFormViewModel`), posts/listings/gigs/reviews endpoints | Other User Content |
@@ -205,10 +211,19 @@ Anthropic themselves; no Anthropic code ships in them.
 | Draft requests (posts, Support Trains, tasks; property suggestions only when `PROPERTY_SUGGESTIONS_LLM=1`) | `/api/ai/draft/*`, `services/ai/supportTrainDraftService.js`, `services/magicTaskService.js`, `services/ai/propertySuggestionsService.js` | Anthropic | the draft only, if the person saves it |
 | Optional Suggestions | `services/ai/nudges/*` and `services/ai/background.js`: enabled by the account switch; one brief and up to two nudges per local day; Fewer like this mutes a kind for 30 days | Anthropic only for triggers that need a model | `Notification` and `AIConversation`; suggestion preferences and mute expirations in `UserNotificationPreferences` |
 | Request log (no message content) | `AIRequestLog`: feature, model, tokens, latency, status, error message | — | kept; `user_id` set to null when the account is deleted |
+| What Pantopus remembers (phase 3) | `AgentMemoryItem` via `services/ai/memory.js`: saved only from a `memory_save` card the person tapped, from the server's stored copy of that card; refuses 9 or more digits in a row and passwords, PINs and codes; at most 100 items. Each chat turn adds up to 8 items (1,500 characters); items marked sensitive come back only through `recall_memory` | Anthropic, with the chat turn | until the person deletes it (Settings → What Pantopus remembers, or Forget everything); a yearly review notification (`assistant_memory_review`); never shown to the household |
+| Plans you'd like (phase 3) | `AgentMemoryItem` kind `plan_alert`; `services/ai/nudges/planAlerts.js` matches new public plans by kind, any teams the person chose and distance from their home, in code | Anthropic only as a memory item with a chat turn; the matching uses no model | as memory items |
+| Check-backs (phase 3) | `AgentRequest` with `origin = 'follow_up'` (`services/ai/followUps.js`): what to check (at most 140 characters, the person's words), when (10 minutes to 30 days ahead) and the post, plan or task it is about; the job writes the notification from facts | Anthropic only when the person asks about them in chat (`list_follow_ups`); no model when it runs | as long as its conversation; deleting the conversation also cancels one still waiting |
+| Standing rules (phase 3) | `AgentRule` (`services/ai/rules.js`): the rule's sentence and settings (the plan, weekday and time; or the household member and pickup kinds), turned on only from a `rule_save` card; each run is an `AgentRequest` (`origin = 'rule'`) with one `action` step | Anthropic only when the person asks about them in chat (`list_rules`); no model when one runs | until the person deletes it (Settings → What Pantopus does for you); runs kept a year |
+| The assistant's record (phase 3) | `AgentRequest` and `AgentStep` (`services/ai/agentRecord.js`): one request per chat turn, nudge or check-back; tool steps (name, status line, ok or error, time taken; never inputs or outputs); each card as it was shown, with what ran on it (`POST /api/ai/cards/:cardId/state`) so it shows as done on every device | — | cards with their conversation; tool and push steps 90 days (`assistantAgentPurge`) |
+| Needs you (phase 3) | `GET /api/ai/needs-you` and the `needs_you` read tool (`services/ai/needsYou.js`), worked out when read, as the person, from the screens' own services: "Still coming?", plan requests, overdue and assigned tasks, home invitations, household and connection requests (with the senders' names), open nudge cards, answered questions | Anthropic, when the assistant's tool reads it | nothing stored |
+| Siri and launcher shortcuts (phase 3) | iOS App Shortcuts in the app target; reads call `GET /api/ai/glance/:topic` (written from facts, no model, nothing stored), shown by Siri only on an unlocked iPhone (`requiresAuthentication`); writes open the assistant with the words as a normal chat turn. Apple handles the spoken request; the phrases carry no personal data. Android launcher shortcuts open the app at fixed links with nobody's words; the catch-up one also sends a fixed question as a chat turn | Anthropic only for the chat turns these start | as chat turns |
+| Notification buttons (phase 3) | Mark done (`PUT /api/homes/:id/tasks/:id` with `{ status: "done" }`), Mark solved (`PATCH /api/posts/:id/solve`) and Fewer like this (`POST /api/ai/nudges/:id/fewer`) on the assistant's pushes; the push data carries the card's own request (`assistant_action`), checked by the app against a narrow allowlist | — | as the same actions in the app |
 
 **Not sent:** passwords, payment details, emergency and medical info (the assistant has
-no tool that reads it), chat messages between people (phase 1 doesn't read chats),
-and the exact address of anyone else's home.
+no tool that reads it), chat messages between people (phases 1 to 3 don't read chats),
+and the exact address of anyone else's home. Memory items are never used in background
+model calls (briefs and nudges); only the person's own chat turns use them.
 
 > **Labels:** no new data type. Messages, photos and other user content (§2.5) and
 > location (§2.4) are already declared. Anthropic is a service provider processing on
@@ -225,7 +240,7 @@ manifests and are **out of scope** for this file.
 
 | Apple category | Used by app code? | Evidence | Reason code in manifest |
 |----------------|-------------------|----------|-------------------------|
-| **UserDefaults** (`NSPrivacyAccessedAPICategoryUserDefaults`) | **Yes** | Hub banner-dismissed flag (`Features/Hub/HubViewModel.swift`); per-surface search recents (`Features/Shared/SearchList/SearchListState.swift`, `RecentQueriesStore`); the widget snapshot in the `group.app.pantopus.ios` App Group (`Core/Widgets/GigWidgetSnapshot.swift`, read by the `PantopusWidgets` extension) | **`CA92.1`** (app only) and **`1C8F.1`** (App Group); the widget extension's own manifest declares `1C8F.1` |
+| **UserDefaults** (`NSPrivacyAccessedAPICategoryUserDefaults`) | **Yes** | Hub banner-dismissed flag (`Features/Hub/HubViewModel.swift`); per-surface search recents (`Features/Shared/SearchList/SearchListState.swift`, `RecentQueriesStore`); the widget snapshot in the `group.app.pantopus.ios` App Group (`Core/Widgets/GigWidgetSnapshot.swift`, read by the `PantopusWidgets` extension); which account is signed in, in the same App Group (`Core/Auth/PushAccountMarker.swift`, read by the `PantopusNotificationService` extension) | **`CA92.1`** (app only) and **`1C8F.1`** (App Group); each extension's own manifest declares `1C8F.1` |
 | File timestamp (`…FileTimestamp`) | **No** | The only `FileManager.attributesOfItem(atPath:)` call (`Features/Homes/Documents/UploadDocumentFormViewModel.swift:286`) reads **`.size` only** — no `.modificationDate`/`.creationDate`/`stat` timestamp symbol is referenced. Not triggered. | — |
 | System boot time (`…SystemBootTime`) | **Yes** (since 2026-10) | `ProcessInfo.processInfo.systemUptime` in `Core/Analytics/PilotEvents.swift` measures time between foreground and background for pilot session events. | **`35F9.1`** — time elapsed between in-app events |
 | Disk space (`…DiskSpace`) | **No** | No `volumeAvailableCapacity` / `systemFreeSize` / `statfs`. (`.size` of a single picked file is not the disk-space category.) | — |
@@ -317,6 +332,15 @@ manifests and are **out of scope** for this file.
   (`ai-chat/`) are deleted after the read; a periodic cleanup removes leftovers
   older than an hour (#2458), so the interval is not a strict one-hour SLA. At
   Anthropic: per the account's retention setting (founder to confirm, §4).
+- **AI phase 3 (2026-11):** `AgentMemoryItem`, `AgentRequest`, `AgentStep` and
+  `AgentRule` are deleted with the account (`ON DELETE CASCADE` from `User`).
+  Memory items stay until the person deletes them (one item, or Forget
+  everything); deleting a conversation keeps them (their `source_request_id`
+  becomes null) and deletes its requests, cards and waiting check-backs
+  (`AgentRequest.conversation_id ON DELETE CASCADE`). Cards (`proposal` steps)
+  live as long as their conversation; tool and push steps are purged after 90
+  days; a rule's runs after a year. All four tables are service-role only
+  (RLS on, no policies).
 
 ---
 

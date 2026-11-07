@@ -1,9 +1,10 @@
 'use client';
 
-// Quick return for the Pulse header (founder request 2026-10-22, spec §3), as in Facebook:
-// scrolling the list down, or dragging the map's content up, slides the header away; scrolling
-// back up, or a deliberate drag down, brings it back. Over the map the header itself can be
-// flicked up out of the way, and the reveal capsule pulled down (or clicked) to bring it back.
+// When the Pulse header shows. Scrolling the list down, or dragging the map's content up, slides
+// it away (founder request 2026-10-22, spec §3). Over the list it comes back only at the top of
+// the page (founder request 2026-11-06); over the map a deliberate drag down brings it back, the
+// header itself can be flicked up out of the way, and the reveal capsule pulled down (or clicked)
+// to bring it back.
 // It never hides while there is nothing to scroll, while the keyboard or the area search is
 // inside it, or on a surface that keeps it.
 
@@ -16,8 +17,9 @@ import {
   type RefObject,
 } from 'react';
 
-/** List mode: scroll travel in one direction before the header toggles. */
-const SCROLL_HYSTERESIS_PX = 12;
+/** List mode: how far past the top the page goes before the header slides away, so resting at
+ *  the line doesn't flap it. */
+const LIST_HIDE_MARGIN_PX = 12;
 /** Map mode: content dragged up this far (mostly vertically) hides the header… */
 const PAN_HIDE_PX = 16;
 /** …and dragged down this far shows it again: panning around doesn't keep bringing it back. */
@@ -125,7 +127,6 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
   const headerHeightRef = useRef(headerHeight);
   headerHeightRef.current = headerHeight;
   const settleUntil = useRef(0);
-  const scrollAcc = useRef(0);
   const panAcc = useRef({ x: 0, y: 0 });
 
   const show = useCallback(() => setHideRequested(false), []);
@@ -141,7 +142,6 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
   // Mode, surface, filter, topic or area changes, and opening the area search, show it again.
   useEffect(() => {
     setHideRequested(false);
-    scrollAcc.current = 0;
     panAcc.current = { x: 0, y: 0 };
     settleUntil.current = Date.now() + SETTLE_MS;
   }, [resetKey]);
@@ -268,7 +268,7 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
   useEffect(() => () => observer.current?.disconnect(), []);
 
   // List mode: the window scrolls the header's flow space, the posts and the cards above them;
-  // the posts list scrolls inside its own box. Both count, with one accumulator.
+  // the posts list scrolls inside its own box. Either scrolling checks where the window is.
   useEffect(() => {
     if (mode !== 'list') return undefined;
     let lastWindowY = window.scrollY;
@@ -293,20 +293,11 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
         return;
       }
       if (delta === 0 || Date.now() < settleUntil.current) return;
-      // Near the top the header is still in its place in the page: it always shows there.
+      // At the top the header is still in its place in the page: it shows there, and nowhere else.
       if (window.scrollY < headerHeightRef.current) {
-        scrollAcc.current = 0;
         setHideRequested(false);
-        return;
-      }
-      if (scrollAcc.current !== 0 && (delta > 0) !== (scrollAcc.current > 0)) scrollAcc.current = 0;
-      scrollAcc.current += delta;
-      if (scrollAcc.current >= SCROLL_HYSTERESIS_PX) {
-        scrollAcc.current = SCROLL_HYSTERESIS_PX;
+      } else if (window.scrollY >= headerHeightRef.current + LIST_HIDE_MARGIN_PX) {
         hideIfAllowed();
-      } else if (scrollAcc.current <= -SCROLL_HYSTERESIS_PX) {
-        scrollAcc.current = -SCROLL_HYSTERESIS_PX;
-        setHideRequested(false);
       }
     };
     document.addEventListener('scroll', onScroll, { capture: true, passive: true });

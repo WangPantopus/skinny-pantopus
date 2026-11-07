@@ -125,6 +125,8 @@ final class AddHomeWizardViewModel: WizardModel {
     private(set) var postalNotice: AddHomePostalNotice?
     /// USPS says this building needs a unit, and a home without one can say so.
     private(set) var offersNoUnitAttestation = false
+    /// The units the address check found here, to pick from.
+    private(set) var unitChoices: [String] = []
     private var noUnitAttested = false
     /// True while the check-address call is in flight.
     private(set) var isCheckingAddress: Bool = false
@@ -404,6 +406,7 @@ final class AddHomeWizardViewModel: WizardModel {
         geocodedAddress = nil
         postalNotice = nil
         offersNoUnitAttestation = false
+        unitChoices = []
         noUnitAttested = false
         existingHomeId = nil
         isClaimingExistingHome = false
@@ -845,6 +848,11 @@ final class AddHomeWizardViewModel: WizardModel {
         Task { await runCheckAddress(attestingNoUnit: true) }
     }
 
+    func chooseUnit(_ unit: String) {
+        form.address.unit = unit
+        Task { await runCheckAddress() }
+    }
+
     private func runCheckAddress(attestingNoUnit: Bool = false) async {
         guard isCurrent, form.address.isComplete, !isCheckingAddress else { return }
         invalidateAddress()
@@ -869,6 +877,7 @@ final class AddHomeWizardViewModel: WizardModel {
             guard Self.continuingStatuses.contains(status) || (status == "MISSING_UNIT" && attestingNoUnit) else {
                 errorMessage = Self.addressValidationMessage(status, reasons: validation.verdict.reasons ?? [])
                 offersNoUnitAttestation = status == "MISSING_UNIT"
+                unitChoices = validation.verdict.unitChoices ?? []
                 return
             }
             guard let addressId = validation.addressId, UUID(uuidString: addressId) != nil,

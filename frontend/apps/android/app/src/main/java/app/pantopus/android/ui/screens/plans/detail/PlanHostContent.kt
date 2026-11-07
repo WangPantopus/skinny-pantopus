@@ -47,7 +47,7 @@ import app.pantopus.android.data.plans.planState
 import app.pantopus.android.ui.components.DestructiveButton
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PantopusTextField
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
@@ -449,7 +449,7 @@ internal fun PlanCancelSheet(
         onDismissRequest = onKeep,
         sheetState = sheet,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6).navigationBarsPadding(),

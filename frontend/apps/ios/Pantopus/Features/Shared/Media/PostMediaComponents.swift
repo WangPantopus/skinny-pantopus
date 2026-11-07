@@ -192,14 +192,8 @@ struct LivePhotoTileView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
-        .simultaneousGesture(pressAndHold)
-        .onChange(of: isPressing) { _, pressing in
-            if pressing {
-                startPlayback()
-            } else if !isPlayingOnce {
-                stopPlayback()
-            }
-        }
+        .holdsLivePhoto(before18: pressAndHold, onChange: pressChanged)
+        .onChange(of: isPressing) { _, pressing in pressChanged(pressing) }
         .onChange(of: isActive) { _, active in
             if !active { stopPlayback() }
         }
@@ -265,9 +259,9 @@ struct LivePhotoTileView: View {
         .accessibilityIdentifier("livePhotoReplay")
     }
 
-    /// Press-and-hold: a 0.3s long press chains into an open-ended
-    /// second stage that never completes, so `isPressing` stays true
-    /// exactly while the finger is down and resets on lift. Built this
+    /// Press-and-hold before iOS 18: a 0.3s long press chains into an
+    /// open-ended second stage that never completes, so `isPressing` stays
+    /// true exactly while the finger is down and resets on lift. Built this
     /// way (vs. LongPress + Drag with `.gesture`) because it keeps
     /// working inside ScrollView feeds, the paging TabView, and the
     /// card's outer Button. A plain tap never reaches the long-press
@@ -278,6 +272,14 @@ struct LivePhotoTileView: View {
             .updating($isPressing) { value, state, _ in
                 if case .second = value { state = true }
             }
+    }
+
+    private func pressChanged(_ pressing: Bool) {
+        if pressing {
+            startPlayback()
+        } else if !isPlayingOnce {
+            stopPlayback()
+        }
     }
 
     private func startPlayback() {
@@ -329,6 +331,79 @@ struct LivePhotoTileView: View {
         isPlayingOnce = false
         player?.pause()
         isShowingVideo = false
+    }
+}
+
+private extension View {
+    /// From iOS 18 SwiftUI's long press held every scroll that started on a
+    /// Live Photo, so the feed wouldn't move under a finger on one and the
+    /// viewer wouldn't page. UIKit's long press leaves the drag to the page.
+    @ViewBuilder
+    func holdsLivePhoto(before18 press: some Gesture, onChange: @escaping (Bool) -> Void) -> some View {
+        if #available(iOS 18, *) {
+            gesture(LivePhotoPress(onChange: onChange))
+        } else {
+            simultaneousGesture(press)
+        }
+    }
+}
+
+/// A Live Photo's touch and hold (0.3 s), until the finger lifts or the page
+/// under it moves. A drag that starts on the tile is the page's, and one that
+/// starts after a hold is too: the page moves and the clip stops.
+@available(iOS 18, *)
+private struct LivePhotoPress: UIGestureRecognizerRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeCoordinator(converter _: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let recognizer = UILongPressGestureRecognizer()
+        recognizer.minimumPressDuration = 0.3
+        recognizer.delegate = context.coordinator
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began:
+            onChange(true)
+        case .changed:
+            guard context.coordinator.pageMoved else { return }
+            // Ends the press: the recognizer comes back here cancelled.
+            recognizer.isEnabled = false
+            recognizer.isEnabled = true
+        case .ended, .cancelled, .failed:
+            onChange(false)
+        default:
+            break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        /// The pages that could take this touch, and where each was before it moved.
+        private var pages: [(page: UIScrollView, offset: CGPoint)] = []
+
+        var pageMoved: Bool {
+            pages.contains { $0.page.contentOffset != $0.offset }
+        }
+
+        func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {
+            pages = []
+            return true
+        }
+
+        /// Alongside the page's scrolling and nothing else: the hold is what the
+        /// finger did, so the lift isn't a tap on the tile or the card around it.
+        func gestureRecognizer(_: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            guard let page = other.view as? UIScrollView, other === page.panGestureRecognizer else { return false }
+            if !pages.contains(where: { $0.page === page }) {
+                pages.append((page, page.contentOffset))
+            }
+            return true
+        }
     }
 }
 

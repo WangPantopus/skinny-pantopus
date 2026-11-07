@@ -15,6 +15,7 @@ import Image from 'next/image';
 
 import { useState, useEffect, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { BusinessUser, BusinessProfile, BusinessLocation, BusinessHours, BusinessPage, CatalogItem, BusinessReview, PageBlock } from '@pantopus/types';
 import { PublicBlock } from './PublicBlockRenderer';
@@ -23,6 +24,7 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { EndorsementSummary, EndorsementButton } from '@/components/endorsement';
 import { toast } from '@/components/ui/toast-store';
 import { authPageHref } from '@/lib/auth-utils';
+import { queryKeys } from '@/lib/query-keys';
 import ErrorState from '@/components/ui/ErrorState';
 import { chosenUsername } from '@pantopus/utils';
 
@@ -54,9 +56,15 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
 
   const [activeTab, setActiveTab] = useState<string>('overview');
 
-  // Reviews
-  const [reviews, setReviews] = useState<BusinessReview[]>([]);
-  const [reviewsLoaded, setReviewsLoaded] = useState(false);
+  // Keep each business's reviews separate. A return visit shows the last read
+  // immediately while checking for replies saved by the owner in another view.
+  const reviewsQuery = useQuery({
+    queryKey: queryKeys.personReviews(business?.id || ''),
+    queryFn: () => api.reviews.getUserReviews(business!.id, { limit: 50 }),
+    enabled: activeTab === 'reviews' && !!business?.id && !loading,
+    staleTime: 0,
+    retry: false,
+  });
 
   const loadBusinessProfile = useCallback(async () => {
     setLoading(true);
@@ -92,21 +100,6 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
   useEffect(() => {
     loadBusinessProfile();
   }, [loadBusinessProfile]);
-
-  const loadReviews = useCallback(async () => {
-    if (reviewsLoaded || !business?.id) return;
-    try {
-      const res = await api.reviews.getUserReviews(business.id, { limit: 50 });
-      setReviews(res.reviews || []);
-    } catch {
-      // ignore
-    }
-    setReviewsLoaded(true);
-  }, [reviewsLoaded, business?.id]);
-
-  useEffect(() => {
-    if (activeTab === 'reviews') loadReviews();
-  }, [activeTab, business, loadReviews]);
 
   useEffect(() => {
     let ignore = false;
@@ -487,7 +480,21 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
 
         {/* Reviews */}
         {activeTab === 'reviews' && (
-          <ReviewsTab business={business} reviews={reviews} currentUser={currentUser} />
+          <>
+            {reviewsQuery.isPending && (
+              <p role="status" className="py-8 text-center text-sm text-app-text-secondary">Loading reviews...</p>
+            )}
+            {reviewsQuery.isError && !reviewsQuery.isFetching && (
+              <ErrorState
+                title={reviewsQuery.data ? "Couldn't refresh reviews" : "Couldn't load reviews"}
+                message="Please try again."
+                onRetry={() => void reviewsQuery.refetch()}
+              />
+            )}
+            {reviewsQuery.data && (
+              <ReviewsTab business={business} reviews={reviewsQuery.data.reviews || []} />
+            )}
+          </>
         )}
 
         {/* Custom pages */}
@@ -663,7 +670,7 @@ function CatalogTab({ catalog }: { catalog: CatalogItem[] }) {
 
 /* ─── Reviews Tab ──────────────────────────── */
 
-function ReviewsTab({ business, reviews }: { business: BusinessUser; reviews: BusinessReview[]; currentUser?: { id?: string } | null }) {
+function ReviewsTab({ business, reviews }: { business: BusinessUser; reviews: BusinessReview[] }) {
   const rating = business?.average_rating || 0;
   const count = business?.review_count || 0;
 
@@ -717,7 +724,13 @@ function ReviewsTab({ business, reviews }: { business: BusinessUser; reviews: Bu
               </div>
             </div>
             {review.comment && (
-              <p className="text-sm text-app-text-secondary leading-relaxed">{review.comment}</p>
+              <p className="text-sm text-app-text-secondary leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{review.comment}</p>
+            )}
+            {review.owner_response && (
+              <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3 [overflow-wrap:anywhere]">
+                <div className="text-[11px] font-semibold text-violet-700 mb-1">Response from {business.name}</div>
+                <p className="text-sm text-app-text-secondary whitespace-pre-wrap">{review.owner_response}</p>
+              </div>
             )}
           </div>
         ))

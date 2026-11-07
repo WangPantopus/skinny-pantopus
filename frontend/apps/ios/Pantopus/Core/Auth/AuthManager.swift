@@ -255,6 +255,7 @@ final class AuthManager {
 
     func setState(_ newState: State) {
         state = newState
+        publishPushAccount(newState)
     }
 
     func setAccessToken(_ token: String?) {
@@ -385,6 +386,8 @@ final class AuthManager {
             scheduleLocalLogout(accessToken: supersededAccess, refreshToken: supersededRefresh)
         }
         scheduleDeviceRegistration(enrolStepUpKey: true)
+        // The sign-out before this one unregistered the phone with APNs.
+        registerForPushIfAllowed()
     }
 
     // MARK: - Sign up

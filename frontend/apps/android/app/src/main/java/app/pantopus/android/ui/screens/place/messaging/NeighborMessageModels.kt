@@ -33,18 +33,18 @@ import app.pantopus.android.ui.theme.PantopusIcon
  */
 
 /**
- * A recipient home on your block — an address, never a name. Carried into
- * the composer so it can target a verified send. Null when opened without a
- * chosen neighbor (the "choose a neighbor" empty state), mirroring the web
- * `recipient: null` path. (Native has no block-home picker yet — k-anon
- * density hides membership — so the dashboard opens the composer recipient-
- * less; a future block deep-link would populate this.)
+ * An address on your block — never a name. Null until one is chosen on the
+ * composer's Choose a home card.
  */
 data class ComposeRecipient(
-    val homeId: String,
     val address: String,
-    val relativeLabel: String,
-)
+    val city: String?,
+    val state: String?,
+    val zipcode: String?,
+) {
+    /** Caption under the address, e.g. "Camas, WA". */
+    val relativeLabel: String get() = listOfNotNull(city, state).joinToString(", ")
+}
 
 /** The recipient-side manage toggles — each one-way, never notifies sender. */
 data class NeighborManageFlags(

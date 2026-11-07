@@ -4,8 +4,8 @@
 //
 //  The tab bar steps aside while you read (founder request 2026-10-30):
 //  scrolling down a page slides it away and scrolling up brings it back,
-//  after the same 12 points as the Pulse header's quick return, so on Pulse
-//  the two go and come back together. It also comes back at the top and the
+//  after 12 points. On Pulse the header goes with it but comes back only at
+//  the top of the feed. It also comes back at the top and the
 //  end of the page, on another tab or page, and when the page that sent it
 //  away closes or another screen opens over it. Only pages that run under the bar send
 //  it away: a chat's thread ends above its composer, and a page with its own
@@ -23,7 +23,7 @@ import UIKit
 @MainActor
 final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
     /// Scrolling this far down sends the bar away, and this far up brings
-    /// it back (the Pulse header's `PulseHeaderQuickReturn` distances).
+    /// it back.
     static let travelToMove: CGFloat = 12
     /// A page that scrolls less than this keeps the bar: there's little
     /// under it to uncover.

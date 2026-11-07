@@ -4,7 +4,7 @@
 //
 //  D1 — the verified-neighbor composer. Template-only (no free-text field
 //  exists), delivered anonymously ("from a verified neighbor nearby"),
-//  scoped to a verified home on your block, rate-limited, and blockable —
+//  scoped to an address on your block, rate-limited, and blockable —
 //  the trust-and-safety constraints ARE the UI. Ported from the design kit
 //  `place-message-compose.jsx` / web `NeighborMessageComposeView`.
 //
@@ -55,8 +55,12 @@ struct NeighborMessageComposeView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     PlaceDetailSectionLabel(text: "To")
                     if let recipient = viewModel.recipient {
-                        ComposeRecipientCard(recipient: recipient, onChange: viewModel.changeRecipient)
-                            .disabled(viewModel.sending)
+                        ComposeRecipientCard(
+                            recipient: recipient,
+                            unit: $viewModel.recipientUnit,
+                            onChange: viewModel.changeRecipient
+                        )
+                        .disabled(viewModel.sending)
                     } else {
                         ChooseNeighborCard(viewModel: viewModel)
                     }
@@ -99,27 +103,40 @@ struct NeighborMessageComposeView: View {
 
 private struct ComposeRecipientCard: View {
     let recipient: ComposeRecipient
+    @Binding var unit: String
     var onChange: () -> Void
+    @FocusState private var unitFocused: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            PlaceIconTile(icon: .home, tone: .home, size: 38)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(recipient.address)
-                    .font(.system(size: 15.5, weight: .semibold))
-                    .kerning(-0.15)
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
-                Text(recipient.relativeLabel)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.Color.appTextMuted)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                PlaceIconTile(icon: .home, tone: .home, size: 38)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(recipient.address)
+                        .font(.system(size: 15.5, weight: .semibold))
+                        .kerning(-0.15)
+                        .foregroundStyle(Theme.Color.appText)
+                        .lineLimit(1)
+                    Text(recipient.relativeLabel)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Button("Change", action: onChange)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primaryInk)
+                    .buttonStyle(.plain)
             }
-            Spacer(minLength: 0)
-            Button("Change", action: onChange)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.Color.primaryInk)
-                .buttonStyle(.plain)
+            TextField("Apt or unit (optional)", text: $unit)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .focused($unitFocused)
+                .padding(12)
+                .typesInFieldOnTap($unitFocused)
+                .background(Theme.Color.appBg)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .accessibilityIdentifier("neighbor.recipientUnit")
         }
         .padding(14)
         .placeCard()
@@ -389,7 +406,7 @@ private struct SendBar: View {
             .disabled(!enabled)
             HStack(spacing: 6) {
                 Icon(.eyeOff, size: 13, strokeWidth: 2, color: Theme.Color.appTextMuted)
-                Text("Delivered anonymously · a few messages a week")
+                Text("Sent anonymously · a few messages a week")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
@@ -418,13 +435,16 @@ private struct SentConfirmation: View {
                     .kerning(-0.18)
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.top, 12)
-                Text("Your note was submitted without your name or address. Delivery follows the recipient’s messaging controls.")
-                    .font(.system(size: 13.5))
-                    .lineSpacing(2)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .padding(.top, 6)
-                    .padding(.horizontal, 8)
+                Text(
+                    "If a verified household lives there, they’ll get it as “from a verified neighbor nearby” — "
+                        + "never your name or address."
+                )
+                .font(.system(size: 13.5))
+                .lineSpacing(2)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .padding(.top, 6)
+                .padding(.horizontal, 8)
                 Button(action: onDone) {
                     Text("Done")
                         .font(.system(size: 15, weight: .semibold))

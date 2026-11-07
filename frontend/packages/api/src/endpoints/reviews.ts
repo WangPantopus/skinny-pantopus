@@ -41,6 +41,8 @@ export async function getUserReviews(
     reviewee_id: string;
     rating: number;
     comment: string | null;
+    owner_response?: string | null;
+    owner_responded_at?: string | null;
     created_at: string;
     reviewer_name: string;
     reviewer_avatar: string | null;

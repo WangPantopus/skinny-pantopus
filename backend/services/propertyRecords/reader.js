@@ -20,7 +20,7 @@ const { fileURLToPath } = require('url');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const logger = require('../../utils/logger');
 const config = require('../../config/propertyRecords');
-const { FORMAT, SUPPRESSIONS_PATH, statePath, releasePath, findBlock } = require('./format');
+const { FORMAT, SUPPRESSIONS_PATH, statePath, releasePath, switchesPath, findBlock } = require('./format');
 
 const READ_TIMEOUT_MS = 3000;
 const STATE_FRESH_MS = 5 * 60 * 1000;
@@ -29,6 +29,7 @@ const PAUSE_MS = 30 * 1000;
 // Memory: the production server is small and shared. A block is ~32 KB of JSON.
 const KEPT_BLOCKS = 300;
 const KEPT_MANIFESTS = 12;
+const KEPT_FILES = 6;
 
 class StorageUnavailable extends Error {}
 
@@ -80,7 +81,7 @@ function createStorage(root = config.manifestUrl) {
   return url.protocol === 's3:' ? s3Storage(url) : fileStorage(url);
 }
 
-function createReader(storage = createStorage()) {
+function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}) {
   let failures = 0;
   let pausedUntil = 0;
 
@@ -112,7 +113,6 @@ function createReader(storage = createStorage()) {
       if (!job && (heldAt === 0 || now - heldAt >= freshMs)) {
         job = read(name, { etag })
           .then((result) => {
-            heldAt = Date.now();
             if (!result) {
               held = null;
               etag = null;
@@ -120,13 +120,17 @@ function createReader(storage = createStorage()) {
               held = parse(result.bytes);
               etag = result.etag;
             }
-          }, (err) => {
+            heldAt = Date.now();
+          })
+          .catch((err) => {
             logger.warn('property_records.refresh_failed', { error: err.message });
             if (held === null) throw err;
             // Keep the last good copy; ask again in a minute.
             heldAt = Date.now() - freshMs + 60 * 1000;
           })
           .finally(() => { job = null; });
+        // Whoever is waiting hears of a first read's failure; in the background it's only logged.
+        job.catch(() => {});
       }
       if (heldAt === 0 && job) await job;
       return held;
@@ -147,6 +151,8 @@ function createReader(storage = createStorage()) {
   }
 
   const suppressionsFile = refreshed(SUPPRESSIONS_PATH, (bytes) => JSON.parse(bytes.toString('utf8')));
+
+  const switchesFile = (name, parse, freshMs) => refreshed(switchesPath(name), parse, freshMs);
 
   const manifests = new Map();
   function manifest(fips, release) {
@@ -203,9 +209,19 @@ function createReader(storage = createStorage()) {
     return records.filter((record) => record.key === sortKey);
   }
 
-  return { stateFile, recordsAt, suppressions: suppressionsFile };
+  // Any other small file under this root, re-read as a state's file is. The oldest goes when too many are held.
+  const files = new Map();
+  function file(name, parse) {
+    if (!files.has(name)) {
+      files.set(name, refreshed(name, parse));
+      if (files.size > keptFiles) files.delete(files.keys().next().value);
+    }
+    return files.get(name)();
+  }
+
+  return { stateFile, recordsAt, suppressions: suppressionsFile, switchesFile, file };
 }
 
 const shared = createReader();
 
-module.exports = { stateFile: shared.stateFile, recordsAt: shared.recordsAt, suppressions: shared.suppressions, createReader, createStorage, StorageUnavailable };
+module.exports = { stateFile: shared.stateFile, recordsAt: shared.recordsAt, suppressions: shared.suppressions, switchesFile: shared.switchesFile, createReader, createStorage, StorageUnavailable };

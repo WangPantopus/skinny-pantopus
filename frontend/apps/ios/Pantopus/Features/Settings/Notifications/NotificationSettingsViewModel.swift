@@ -3,10 +3,14 @@
 //  Pantopus
 //
 //  A14.5 — Notification & briefing preferences, backed by
-//  `GET/PUT /api/hub/preferences` (`backend/routes/hub.js:648` / `:716`).
+//  `GET/PUT /api/hub/preferences` (`backend/routes/hub.js:648` / `:716`),
+//  and the account-wide Push switch, backed by `GET/PATCH /api/users/profile`
+//  (`backend/routes/users.js:2765` / `:2891`), the route the web saves it on.
 //
-//  Five cards, projected onto the shared GroupedList archetype and
+//  Six cards, projected onto the shared GroupedList archetype and
 //  mirrored row-for-row in the Android `NotificationSettingsViewModel`:
+//    Account          — the Push switch. Off, nothing below reaches a phone,
+//                       and a helper line under the card says so.
 //    Briefings        — morning + evening enable toggles, each revealing
 //                       a send-time chip strip when on.
 //    Suggestions      — "Suggestions from Pantopus" (AI assistant phase 2
@@ -63,6 +67,13 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     /// Server truth, mutated optimistically ahead of the debounced PUT.
     public private(set) var preferences: NotificationPreferencesDTO?
 
+    /// The account-wide Push switch (`MailPreferences.push_notifications`), also
+    /// mutated optimistically. Nil until the server's value is known: the row
+    /// shows then, and never guesses.
+    private var accountPush: Bool?
+    /// What the server last confirmed: where a failed save goes back to.
+    private var confirmedAccountPush: Bool?
+
     /// iOS has notifications turned off for Pantopus, so nothing below can
     /// arrive until they are back on in Settings.
     public private(set) var systemNotificationsDenied = false
@@ -77,6 +88,10 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     /// than replaced so a burst of taps on different rows all persist.
     private var pendingPatch: [String: JSONValue] = [:]
     private var pendingPatchGeneration = 0
+    /// The switch's value waiting to save, beside the patch. It goes to its own
+    /// route, whose failure touches only this row, so it counts its own edits.
+    private var pendingAccountPush: Bool?
+    private var accountPushEdits = 0
     private var saveTask: Task<Void, Never>?
     private var saveInFlight = false
     private var saveRevision = 0
@@ -95,6 +110,8 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         self.saveDebounce = saveDebounce
         self.systemAuthorization = systemAuthorization
         preferences = storedPreferences()
+        accountPush = storedAccountPush()
+        confirmedAccountPush = accountPush
         if preferences != nil { state = .loaded(groups()) }
     }
 
@@ -129,10 +146,12 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             if preferencesScopeIsCurrent { canChooseTeams = games?.sports?.canChoose == true }
         }
         await fetch(force: false)
+        await fetchAccountPush()
     }
 
     public func refresh() async {
         await fetch(force: true)
+        await fetchAccountPush()
     }
 
     /// `profile:me` while the screen is open (a change on another device, or
@@ -141,6 +160,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     public func refreshFromSignal() async {
         guard saveTask == nil, !saveInFlight, pendingPatch.isEmpty else { return }
         await fetch(force: false)
+        await fetchAccountPush()
     }
 
     /// "Reset 'Fewer like this'": every kind of suggestion comes back.
@@ -161,6 +181,14 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     public func toggleRow(_ rowId: String, isOn: Bool) async {
         guard preferencesScopeIsCurrent, preferences != nil else { return }
+        if rowId == RowID.pushNotifications {
+            await setAccountPush(isOn)
+        } else {
+            togglePreference(rowId, isOn: isOn)
+        }
+    }
+
+    private func togglePreference(_ rowId: String, isOn: Bool) {
         switch rowId {
         case RowID.morningBriefing:
             preferences?.dailyBriefingEnabled = isOn
@@ -256,11 +284,48 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         }
     }
 
+    /// The switch's value from the server. Not while a change here waits to
+    /// save or is saving: its reply is the newer value.
+    private func fetchAccountPush(afterFailedSave: Bool = false) async {
+        guard preferencesScopeIsCurrent, afterFailedSave || (pendingAccountPush == nil && !saveInFlight) else { return }
+        let edits = accountPushEdits
+        do {
+            guard let value = try await readAccountPush(), edits == accountPushEdits else { return }
+            accountPush = value
+            confirmedAccountPush = value
+            if preferences != nil { state = .loaded(groups()) }
+        } catch {
+            // Offline with the row showing, it stays as it is, quietly. Only a
+            // row that can't show at all says so, like the screen's own read.
+            guard accountPush == nil, preferences != nil, !afterFailedSave, !(error is CancellationError) else { return }
+            toast = ToastMessage(text: "Failed to load preferences", kind: .error)
+        }
+    }
+
+    /// Saved at once, not after the screen's debounce: turning it off and going
+    /// straight back must still count, and this save outlives the screen.
+    private func setAccountPush(_ isOn: Bool) async {
+        dropPendingFromAnEarlierGeneration()
+        accountPushEdits += 1
+        accountPush = isOn
+        pendingAccountPush = isOn
+        state = .loaded(groups())
+        await flushPendingSave()
+    }
+
+    /// Clear cache since the last edit: what was waiting belonged to it.
+    private func dropPendingFromAnEarlierGeneration() {
+        if pendingPatchGeneration != store.generation {
+            pendingPatch = [:]
+            pendingAccountPush = nil
+        }
+        pendingPatchGeneration = store.generation
+    }
+
     /// Apply locally, re-project, and (re)arm the debounce timer.
     private func enqueue(_ patch: [String: JSONValue]) {
         saveRevision += 1
-        if pendingPatchGeneration != store.generation { pendingPatch = [:] }
-        pendingPatchGeneration = store.generation
+        dropPendingFromAnEarlierGeneration()
         for (key, value) in patch {
             pendingPatch[key] = value
         }
@@ -287,10 +352,15 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         guard !saveInFlight else { return }
         saveInFlight = true
         defer { saveInFlight = false }
-        while !pendingPatch.isEmpty {
+        while !pendingPatch.isEmpty || pendingAccountPush != nil {
             guard preferencesScopeIsCurrent, pendingPatchGeneration == store.generation, !Task.isCancelled else {
                 pendingPatch = [:]
+                pendingAccountPush = nil
                 return
+            }
+            if let isOn = pendingAccountPush {
+                await flushAccountPush(isOn, generation: pendingPatchGeneration)
+                continue
             }
             let patch = pendingPatch
             let revision = saveRevision
@@ -321,6 +391,28 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         }
     }
 
+    /// One save of the switch. A failure rolls back to what the server last
+    /// confirmed, toasts and re-reads, like the rest of the screen.
+    private func flushAccountPush(_ isOn: Bool, generation: Int) async {
+        let edits = accountPushEdits
+        pendingAccountPush = nil
+        do {
+            let saved = try await saveAccountPush(isOn, generation: generation)
+            confirmedAccountPush = saved
+            guard edits == accountPushEdits else { return }
+            accountPush = saved
+            state = .loaded(groups())
+            toast = ToastMessage(text: "Saved", kind: .success)
+        } catch {
+            guard preferencesScopeIsCurrent, generation == store.generation,
+                  edits == accountPushEdits, !(error is CancellationError) else { return }
+            accountPush = confirmedAccountPush
+            state = .loaded(groups())
+            toast = ToastMessage(text: "Failed to save", kind: .error)
+            await fetchAccountPush(afterFailedSave: true)
+        }
+    }
+
     private func setQuietHours(enabled: Bool) {
         if enabled {
             preferences?.quietHoursStartLocal = Self.defaultQuietStart
@@ -343,7 +435,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     private func groups() -> [GroupedListGroup] {
         guard let prefs = preferences else { return [] }
-        var groups: [GroupedListGroup] = [briefingsGroup(prefs)]
+        var groups: [GroupedListGroup] = []
+        if let accountPush { groups.append(pushGroup(isOn: accountPush)) }
+        groups.append(briefingsGroup(prefs))
         if prefs.suggestionsSupported {
             groups.append(suggestionsGroup(prefs))
         }
@@ -356,6 +450,24 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             ]))
         }
         return groups
+    }
+
+    /// The same switch as Profile → Settings on the web. It isn't the phone's
+    /// own notification permission, which is the banner above.
+    private func pushGroup(isOn: Bool) -> GroupedListGroup {
+        GroupedListGroup(
+            id: GroupID.push,
+            overline: "Account",
+            helper: isOn ? nil : "Push is off, so nothing below will reach your phone.",
+            rows: [
+                GroupedListRow(
+                    id: RowID.pushNotifications,
+                    label: "Push notifications",
+                    subtext: "Alerts on all your devices",
+                    control: .toggle(isOn: isOn)
+                )
+            ]
+        )
     }
 
     private func briefingsGroup(_ prefs: NotificationPreferencesDTO) -> GroupedListGroup {
@@ -546,6 +658,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     // MARK: - Stable identifiers (parity contract — mirrored on Android)
 
     public enum GroupID {
+        public static let push = "push"
         public static let briefings = "briefings"
         public static let suggestions = "suggestions"
         public static let alerts = "alerts"
@@ -554,6 +667,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
     }
 
     public enum RowID {
+        public static let pushNotifications = "push.enabled"
         public static let morningBriefing = "briefings.morning"
         public static let morningTime = "briefings.morningTime"
         public static let eveningBriefing = "briefings.evening"

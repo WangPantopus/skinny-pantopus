@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.data.api.models.homes.HouseholdGroupDto
 import app.pantopus.android.ui.components.DataRow
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.RefreshFailedLine
@@ -84,6 +85,9 @@ fun PropertyDetailsScreen(
     ReportContentShown("home_property_details", state is PropertyDetailsUiState.Clean || state is PropertyDetailsUiState.Mismatch)
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val savingFacts by viewModel.savingFacts.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf<HouseholdGroupDto?>(null) }
+    var reporting by remember { mutableStateOf<PropertyRecordSection?>(null) }
 
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
 
@@ -95,6 +99,28 @@ fun PropertyDetailsScreen(
             onRequestCorrection = onRequestCorrection,
             refreshNotice = refreshNotice,
             refreshing = refreshing,
+            householdActions =
+                HouseholdActions(
+                    saving = savingFacts,
+                    save = { viewModel.saveFacts(it) },
+                    edit = { editing = it },
+                    report = { reporting = it },
+                ),
+        )
+    }
+    editing?.let { group ->
+        HouseholdFactEditorSheet(
+            group = group,
+            saving = savingFacts,
+            onSave = { changes, onDone -> viewModel.saveFacts(changes, onDone) },
+            onDismiss = { editing = null },
+        )
+    }
+    reporting?.let { section ->
+        HouseholdReportSheet(
+            section = section,
+            onSend = { field, note, onDone -> viewModel.reportProblem(section.id, field, note, onDone) },
+            onDismiss = { reporting = null },
         )
     }
 }
@@ -109,6 +135,7 @@ internal fun PropertyDetailsScreenContent(
     renderGoogleMap: Boolean = true,
     refreshNotice: RefreshNotice? = null,
     refreshing: Boolean = false,
+    householdActions: HouseholdActions = HouseholdActions(),
 ) {
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -125,6 +152,7 @@ internal fun PropertyDetailsScreenContent(
                     onRequestCorrection = onRequestCorrection,
                     renderGoogleMap = renderGoogleMap,
                     refreshNotice = refreshNotice,
+                    householdActions = householdActions,
                 )
             is PropertyDetailsUiState.Mismatch ->
                 LoadedBody(
@@ -134,6 +162,7 @@ internal fun PropertyDetailsScreenContent(
                     onRequestCorrection = onRequestCorrection,
                     renderGoogleMap = renderGoogleMap,
                     refreshNotice = refreshNotice,
+                    householdActions = householdActions,
                 )
             is PropertyDetailsUiState.Error ->
                 ErrorBody(message = state.message, onBack = onBack, onRetry = onRetry)
@@ -149,6 +178,7 @@ private fun LoadedBody(
     onRequestCorrection: () -> Unit,
     renderGoogleMap: Boolean,
     refreshNotice: RefreshNotice?,
+    householdActions: HouseholdActions,
 ) {
     ContentDetailShell(
         title = "Property details",
@@ -176,10 +206,19 @@ private fun LoadedBody(
                     MismatchBanner(data = content.banner)
                 }
                 PropertySection(title = "Property", rows = content.propertyFacts)
+                content.household?.takeIf { it.questions.isNotEmpty() }?.let { household ->
+                    HouseholdQuestionsCard(household = household, actions = householdActions)
+                }
                 // The county record comes for verified owners only,
                 // so everyone else sees just the Property card.
                 content.recordSections.forEach { section ->
-                    PropertySection(title = section.title, rows = section.rows, note = section.note)
+                    val group = content.household?.groupForSection(section.id)
+                    PropertySection(
+                        title = section.title,
+                        rows = section.rows,
+                        note = section.note,
+                        footer = group?.let { { HouseholdGroupFooter(group = it, section = section, actions = householdActions) } },
+                    )
                 }
                 content.recordFooter?.let { footer ->
                     Text(
@@ -188,6 +227,15 @@ private fun LoadedBody(
                         color = PantopusColors.appTextSecondary,
                         modifier = Modifier.testTag("propertyDetails_recordFooter"),
                     )
+                }
+                content.household?.let { household ->
+                    household.sections.forEach { section ->
+                        PropertySection(title = section.title, rows = section.rows, note = section.note)
+                    }
+                    household.countyPage?.takeIf { household.questions.isEmpty() }?.let { HouseholdCountyPageLink(it) }
+                    household.addDetails.forEach { group ->
+                        HouseholdAddDetailsCard(group = group, actions = householdActions)
+                    }
                 }
                 // Verification sources have no clean backend mapping today,
                 // so they're hidden when the projection leaves them empty.
@@ -396,6 +444,7 @@ private fun PropertySection(
     title: String,
     rows: List<PropertyFactRow>,
     note: String? = null,
+    footer: (@Composable () -> Unit)? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         SectionHeader(title)
@@ -411,6 +460,7 @@ private fun PropertySection(
                 )
                 if (index < rows.lastIndex) RowDivider()
             }
+            footer?.invoke()
         }
         note?.let {
             Text(text = it, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)

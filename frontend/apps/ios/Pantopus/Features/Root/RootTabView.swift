@@ -126,6 +126,8 @@ public final class RootTabModel {
     public var placeReselectedAtRoot: UUID?
     /// Changes each time the Today tab is tapped again: its page scrolls back to the top.
     public var todayReselected: UUID?
+    /// Changes each time the tab with the feed (Nearby, or Pulse) is tapped again.
+    public var pulseHomeReselected: UUID?
     /// "Open your ballot" (Today, or Place's Today page): this Home's Your
     /// Place scrolls to its ballot card once, then clears it (as on Android).
     public var placeBallotHomeId: String?
@@ -521,6 +523,7 @@ public struct RootTabView: View {
                     model.placeReselectedAtRoot = UUID()
                 }
                 if tab == .today, model.selected == .today { model.todayReselected = UUID() }
+                if tab == RootTab.pulseHome, model.selected == tab { model.pulseHomeReselected = UUID() }
                 model.selected = tab
             }
         )
@@ -661,7 +664,7 @@ extension RootTabView {
     }
 
     /// A tap on the drawn bar. Tapping the tab you're on takes its stack back
-    /// to its root; on Place's root it scrolls to the top.
+    /// to its root; on Place's root, or the feed, it scrolls to the top.
     private func select(_ tab: RootTab) {
         guard tab == model.selected else {
             model.selected = tab
@@ -669,6 +672,7 @@ extension RootTabView {
         }
         if tab == .place, model.placeAtRoot { model.placeReselectedAtRoot = UUID() }
         if tab == .today { model.todayReselected = UUID() }
+        if tab == RootTab.pulseHome { model.pulseHomeReselected = UUID() }
         model.reselection = RootTabReselection(tab: tab)
     }
 
@@ -808,6 +812,9 @@ final class ChatBadgeStore {
     private var refreshRequestId: UUID?
     private var hasAuthoritativeCount = false
     private var cachedRows: [ConversationRowContent] = []
+    /// When the server last answered the count.
+    private var countReadAt: Date?
+    private static let justReadWindow: TimeInterval = 5
 
     init(
         api: APIClient = .shared,
@@ -840,8 +847,10 @@ final class ChatBadgeStore {
         await refresh()
     }
 
-    /// Warm the list through its screen store, but read counts directly from
-    /// the server so an offline fallback cannot become badge authority.
+    /// The server's count, never a kept copy, so an offline fallback cannot
+    /// become badge authority. The read goes through the screen store only to
+    /// share one request with the list opening beside it. A server without
+    /// the unmuted total also needs the rows, to take the muted ones off.
     func refresh() async {
         guard refreshRequestId == nil else { return }
         let requestId = UUID()
@@ -851,13 +860,23 @@ final class ChatBadgeStore {
         await preferences.migrateLegacyMutes(api: api)
         guard generation == countGeneration, !Task.isCancelled else { return }
         let store = ScreenStore.store(for: api)
-        let statsTask = Task { [self] in
-            await optional {
-                try await api.request(ChatEndpoints.stats(), as: ChatStatsResponse.self)
-            }
+        let stats = await optional {
+            try await store.load(
+                ChatEndpoints.stats(),
+                as: ChatStatsResponse.self,
+                kind: .messagesList,
+                topics: [ScreenTopic.chats],
+                force: true
+            ).value
         }
-        let conversationsTask = Task { [self] in
-            await optional {
+        guard let stats else {
+            logger.warning("Chat badge refresh failed: stats unavailable")
+            return
+        }
+        countReadAt = Date()
+        var conversations: UnifiedConversationsResponse?
+        if stats.stats.totalUnmutedUnread == nil {
+            conversations = await optional {
                 try await store.load(
                     ChatEndpoints.unifiedConversations(),
                     as: UnifiedConversationsResponse.self,
@@ -866,11 +885,6 @@ final class ChatBadgeStore {
                 ).value
             }
         }
-        guard let stats = await statsTask.value else {
-            logger.warning("Chat badge refresh failed: stats unavailable")
-            return
-        }
-        let conversations = await conversationsTask.value
         // A newer socket count (or account reset) wins over an older HTTP read.
         guard generation == countGeneration, !Task.isCancelled else { return }
         hasAuthoritativeCount = true
@@ -914,6 +928,7 @@ final class ChatBadgeStore {
         serverTotalUnmutedUnread = nil
         hasAuthoritativeCount = false
         cachedRows = []
+        countReadAt = nil
         unreadMessages = 0
     }
 
@@ -978,6 +993,9 @@ final class ChatBadgeStore {
             reconnectTask = Task { [weak self] in
                 guard let self else { return }
                 for await state in socket.connectionStates() where state == .connected {
+                    // Just read (the launch's own read, a moment before the socket
+                    // connects): the server also sends the count on connect.
+                    if let countReadAt, Date().timeIntervalSince(countReadAt) < Self.justReadWindow { continue }
                     await refresh()
                 }
             }

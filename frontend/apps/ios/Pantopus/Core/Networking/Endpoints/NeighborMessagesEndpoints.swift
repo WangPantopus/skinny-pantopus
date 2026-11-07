@@ -17,10 +17,17 @@ public enum NeighborMessagesEndpoints {
         Endpoint(method: .get, path: "/api/neighbor-messages/templates")
     }
 
+    /// `POST /api/neighbor-messages/address-check` — is this address on
+    /// the sender's block? Says nothing about who lives there.
+    public static func checkAddress(_ request: NeighborAddressCheckRequest) -> Endpoint {
+        Endpoint(method: .post, path: "/api/neighbor-messages/address-check", body: request)
+    }
+
     /// `POST /api/neighbor-messages` — route
     /// `backend/routes/neighborMessages.js:102`. Send a template-only
-    /// note to a verified home on your block. Server enforces the T4
-    /// sender gate, same-block recipient, and the weekly cap.
+    /// note to an address on your block. Server enforces the T4 sender
+    /// gate, same-block address, and the weekly cap. The answer is the
+    /// same whether or not a verified household lives there.
     public static func send(_ request: SendNeighborMessageRequest) -> Endpoint {
         Endpoint(method: .post, path: "/api/neighbor-messages", body: request)
     }

@@ -68,6 +68,9 @@ async function answer(address, { stateFile: readState, recordsAt, suppressions: 
   // Two counties with something at this line: a ZIP across a county line, and the line in both. Not ours to pick,
   // and one county's clean answer doesn't outrank the other's "which one?".
   const claiming = answers.filter(({ match }) => ['exact', 'building_only', 'ambiguous'].includes(match));
+  // Only one of them says this ZIP on its record: the other just has no ZIP on file, and that isn't a second place.
+  const namesZip = claiming.filter(({ record }) => zip && record?.address?.zip === zip);
+  if (claiming.length > 1 && namesZip.length === 1) return namesZip[0];
   if (claiming.length > 1) return { match: 'ambiguous', reason: 'two_counties', jurisdiction: claiming[0].jurisdiction, ...facts };
   return answers[0];
 }

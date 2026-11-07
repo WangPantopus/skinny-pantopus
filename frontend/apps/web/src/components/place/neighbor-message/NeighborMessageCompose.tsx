@@ -6,10 +6,10 @@
 //     verified resident (T4) sees the compose form, others get a calm
 //     verify gate (the same VerifyPromptSheet that frames the Band-D
 //     unlock). The backend enforces this too.
-//   * recipient by address within the block — the recipient home is passed
-//     in via query params (the home you opened on your block); there is no
-//     enumeration of who's verified (that would leak membership the k-anon
-//     density model hides).
+//   * recipient by address within the block — any address on your block can
+//     be chosen, and the note reaches a verified household if one lives there.
+//     Nothing tells the sender either way, so nobody can enumerate who's
+//     verified (that would leak membership the k-anon density model hides).
 //   * template-only send — picks a server template id; no free text.
 //
 // Mobile-web-first single column with a comfortable desktop max-width.
@@ -31,7 +31,7 @@ import { DetailHeader, IconTile } from '@/components/archetypes/place';
 import { detailAddress } from '@/components/place/detail/sections';
 import VerifyPromptSheet from '@/components/place/VerifyPromptSheet';
 import NeighborMessageComposeView, { type ComposeRecipient } from './NeighborMessageComposeView';
-import ChooseHomeCard, { type ChosenHome } from './ChooseHomeCard';
+import ChooseHomeCard, { type ChosenAddress } from './ChooseHomeCard';
 import { usePrimaryHome } from '@/lib/primaryHome';
 import { myHomesQuery as sharedMyHomesQuery, useHomeCenter } from '@/lib/myHomes';
 import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
@@ -63,9 +63,10 @@ export default function NeighborMessageCompose() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [sent, setSent] = useState(false);
-  // A home chosen on this screen (Choose a home). Kept in state, not the URL: a neighbor's address
+  // An address chosen on this screen (Choose a home). Kept in state, not the URL: a neighbor's address
   // doesn't belong in the browser's history.
-  const [chosen, setChosen] = useState<ChosenHome | null>(null);
+  const [chosen, setChosen] = useState<ChosenAddress | null>(null);
+  const [unit, setUnit] = useState('');
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -103,7 +104,7 @@ export default function NeighborMessageCompose() {
     if (!to || !addr) return null;
     return { address: addr, relativeLabel: searchParams.get('rel') || 'On your block' };
   }, [chosen, searchParams]);
-  const recipientHomeId = chosen?.homeId ?? searchParams.get('to');
+  const linkedHomeId = searchParams.get('to');
 
   const homeAddress = home ? [home.address, home.city].filter(Boolean).join(' · ') : undefined;
   const address = intelligence ? detailAddress(intelligence.place) : homeAddress;
@@ -114,7 +115,17 @@ export default function NeighborMessageCompose() {
     mutationFn: () =>
       api.neighborMessages.sendNeighborMessage({
         senderHomeId: homeId as string,
-        recipientHomeId: recipientHomeId as string,
+        ...(chosen
+          ? {
+              recipientAddress: {
+                address: chosen.address,
+                unit: unit.trim() || null,
+                city: chosen.city,
+                state: chosen.state,
+                zipcode: chosen.zipcode,
+              },
+            }
+          : { recipientHomeId: linkedHomeId as string }),
         templateId: selectedId as string,
       }),
     onSuccess: () => setSent(true),
@@ -175,10 +186,10 @@ export default function NeighborMessageCompose() {
         <div className="px-4 sm:px-5 pt-6">
           <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-5 flex flex-col items-center text-center">
             <IconTile icon={Check} tone="home" size={48} />
-            <h2 className="text-lg font-bold text-app-text mt-3 -tracking-[0.01em]">Delivered anonymously</h2>
-            <p className="text-[13.5px] text-app-text-secondary mt-1.5 leading-[19px] max-w-[28ch]">
-              Your verified neighbor received it as &ldquo;from a verified neighbor nearby&rdquo; — never your name or
-              address.
+            <h2 className="text-lg font-bold text-app-text mt-3 -tracking-[0.01em]">Sent anonymously</h2>
+            <p className="text-[13.5px] text-app-text-secondary mt-1.5 leading-[19px] max-w-[32ch]">
+              If a verified household lives there, they&apos;ll get it as &ldquo;from a verified neighbor nearby&rdquo; —
+              never your name or address.
             </p>
             <button
               type="button"
@@ -227,6 +238,8 @@ export default function NeighborMessageCompose() {
       <NeighborMessageComposeView
         templates={templatesQuery.data?.templates ?? []}
         recipient={recipient}
+        unit={chosen ? unit : undefined}
+        onUnitChange={setUnit}
         selectedId={selectedId}
         onSelect={setSelectedId}
         onSend={() => sendMutation.mutate()}
@@ -234,6 +247,7 @@ export default function NeighborMessageCompose() {
           if (sendMutation.isPending) return;
           if (chosen) {
             setChosen(null);
+            setUnit('');
             sendMutation.reset();
           } else {
             router.back();
@@ -243,8 +257,8 @@ export default function NeighborMessageCompose() {
           <ChooseHomeCard
             senderHomeId={homeId}
             near={homeCenter}
-            onChoose={(home) => {
-              setChosen(home);
+            onChoose={(address) => {
+              setChosen(address);
               sendMutation.reset();
             }}
           />

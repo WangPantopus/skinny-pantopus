@@ -6,7 +6,9 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusEventModifierNode
 import androidx.compose.ui.focus.FocusRequesterModifierNode
+import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.requestFocus
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -18,17 +20,23 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
+import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.PointerInputModifierNode
 import androidx.compose.ui.node.TraversableNode
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.findNearestAncestor
+import androidx.compose.ui.node.invalidateMeasurement
 import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -37,8 +45,8 @@ import androidx.navigation.NavController
 import kotlin.math.abs
 
 /**
- * The app's keyboard rules (founder, 2026-10-29 and 2026-11-05) for one window: the activity's, and each sheet or dialog
- * that holds a text field (pass it as the sheet's or dialog's `modifier`). While a text box has focus:
+ * The app's keyboard rules (founder, 2026-10-29 and 2026-11-05) for one window: the activity's, and each dialog that
+ * holds a text field (pass it as the dialog's `modifier`); a sheet uses [sheetKeyboardRules]. While a text box has focus:
  * - a tap anywhere outside it puts the keyboard away, and the tap still does what it does, so Save or Log in work on
  *   the first tap; a tap on another text box moves the keyboard there;
  * - a drag that starts outside it, scrolling a list or the page, puts the keyboard away too, and so does one that
@@ -49,6 +57,15 @@ import kotlin.math.abs
  * box [firstTapClosesKeyboard].
  */
 fun Modifier.closesKeyboardOnTapOrScroll(): Modifier = this then KeyboardRulesElement
+
+/**
+ * The same rules for a ModalBottomSheet that holds a text field: pass it first in the sheet's `modifier`. That modifier
+ * sits outside the offset that slides the sheet up, at the top of the window, so at the sheet's size it would also cover
+ * the dim above the sheet and a tap there could never close the sheet. So the rules take no height here and hear only the
+ * sheet's own touches. While something in the sheet has focus they cover the dim as well: a tap above the sheet then
+ * puts the keyboard away and keeps what was typed, and the next one closes the sheet.
+ */
+fun Modifier.sheetKeyboardRules(): Modifier = this then KeyboardRulesElement then SheetRulesHeightElement
 
 /**
  * A tap here never puts the keyboard away: a field's box around its line of text, the controls of a composer, a code's
@@ -206,6 +223,34 @@ private class KeyboardRulesNode :
     private fun closeKeyboard() {
         currentValueOf(LocalFocusManager).clearFocus()
         currentValueOf(LocalView).hideKeyboard()
+    }
+}
+
+private data object SheetRulesHeightElement : ModifierNodeElement<SheetRulesHeightNode>() {
+    override fun create() = SheetRulesHeightNode()
+
+    override fun update(node: SheetRulesHeightNode) = Unit
+}
+
+/** Sizes the rules placed just before it in a sheet's modifier; the sheet under it keeps its own size and place. */
+private class SheetRulesHeightNode :
+    Modifier.Node(),
+    LayoutModifierNode,
+    FocusEventModifierNode {
+    private var sheetHasFocus = false
+
+    override fun onFocusEvent(focusState: FocusState) {
+        if (focusState.hasFocus == sheetHasFocus) return
+        sheetHasFocus = focusState.hasFocus
+        invalidateMeasurement()
+    }
+
+    override fun MeasureScope.measure(
+        measurable: Measurable,
+        constraints: Constraints,
+    ): MeasureResult {
+        val sheet = measurable.measure(constraints)
+        return layout(sheet.width, if (sheetHasFocus) constraints.maxHeight else 0) { sheet.place(0, 0) }
     }
 }
 

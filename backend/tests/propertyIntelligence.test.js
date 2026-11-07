@@ -73,8 +73,7 @@ const MOCK_ATTOM_DETAIL = {
 const MOCK_ATTOM_AVM = {
   property: [{
     avm: {
-      amount: { value: 385000, low: 365000, high: 405000 },
-      confidence: 0.85,
+      amount: { value: 385000, low: 365000, high: 405000, scr: 85 },
     },
   }],
 };
@@ -174,7 +173,7 @@ describe('PropertyIntelligenceService', () => {
       expect(result.profile.estimated_value).toBe(385000);
       expect(result.profile.value_range_low).toBe(365000);
       expect(result.profile.value_range_high).toBe(405000);
-      expect(result.profile.value_confidence).toBe(0.85);
+      expect(result.profile.value_confidence).toBe(85);
       expect(result.profile.year_built).toBe(1978);
       expect(result.profile.sqft).toBe(1650);
       expect(result.profile.bedrooms).toBe(3);
@@ -303,12 +302,16 @@ describe('PropertyIntelligenceService', () => {
       process.env.ATTOM_API_KEY = 'test-key';
       mockMaybeSingle.mockResolvedValue({ data: null, error: null });
 
-      const updateEq = jest.fn().mockResolvedValue({ error: null });
+      // The write changes only its own key on the row as it stands, and only if the row hasn't moved since.
+      const updateEq = jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({ select: jest.fn().mockResolvedValue({ data: [{ id: MOCK_HOME_ID }], error: null }) }),
+      });
       const update = jest.fn().mockReturnValue({ eq: updateEq });
+      const homeRow = { maybeSingle: jest.fn().mockResolvedValue({ data: { niche_data: {}, updated_at: '2026-11-06T00:00:00+00:00' }, error: null }) };
 
       mockFrom.mockImplementation((table) => {
         if (table === 'Home') {
-          return { update };
+          return { update, select: jest.fn().mockReturnValue({ eq: jest.fn().mockReturnValue(homeRow) }) };
         }
         return {
           select: mockSelect,

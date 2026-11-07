@@ -7,7 +7,7 @@ async function rpc(name, args = {}) {
   return data;
 }
 
-/** Bounded, leased relay. Retries keep the original Notification/event identity. */
+/** Bounded, leased relay. Retries keep the original Notification/event identity and skip devices already settled. */
 async function deliverPending(limit = 25) {
   const bound = Number.isSafeInteger(limit) ? Math.min(Math.max(limit, 1), 100) : 25;
   const stats = { selected: 0, delivered: 0, suppressed: 0, retry: 0, leaseLost: 0 };
@@ -25,6 +25,7 @@ async function deliverPending(limit = 25) {
       else if (current?.eligible === true && typeof current.push_allowed_at_assignment === 'boolean') {
         const receipt = await deliverStoredHomeTaskNotification(current.notification, {
           pushAllowedAtAssignment: current.push_allowed_at_assignment,
+          delivery: { p_kind: 'home_task_assignment', ...args },
         });
         if (!Number.isSafeInteger(receipt?.acceptedCount) || receipt.acceptedCount < 0
           || !Number.isSafeInteger(receipt?.unresolvedCount) || receipt.unresolvedCount < 0) {

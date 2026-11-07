@@ -2,6 +2,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const requireCi = require('./require-ci.cjs');
 const sha = 'a'.repeat(40);
+const ROLLOUT = 'Deploy API and worker';
+// A finished rollout step, as the jobs API reports it.
+function rollout(hoursAgo, conclusion = 'success') {
+  const at = new Date(Date.now() - hoursAgo * 3600000).toISOString();
+  return { name: ROLLOUT, status: 'completed', conclusion, started_at: at, completed_at: at };
+}
 function fixture(overrides = {}) {
   const output = {};
   return {
@@ -12,13 +18,13 @@ function fixture(overrides = {}) {
         getBranch: async () => ({ data: { commit: { sha: overrides.head || sha } } }),
         listDeployments: async () => ({ data: (overrides.deployments || []).map((deployment) => ({
           performed_via_github_app: { slug: 'github-actions' }, ...deployment })) }),
-        listDeploymentStatuses: async () => ({ data: [{ state: 'success', log_url: 'https://github.com/example/app/actions/runs/5/job/6' }] }),
-        compareCommitsWithBasehead: async () => ({ data: { status: 'ahead', files: (overrides.changed || []).map((filename) => ({ filename })) } }),
+        listDeploymentStatuses: async ({ deployment_id: id }) => ({ data: [{ state: 'success', log_url: `https://github.com/example/app/actions/runs/5/job/${id}` }] }),
+        compareCommitsWithBasehead: async ({ basehead }) => ({ data: { status: overrides.comparison?.(basehead) || 'ahead', files: (overrides.changed || []).map((filename) => ({ filename })) } }),
       },
       actions: {
         listWorkflowRuns: async () => ({ data: { workflow_runs: overrides.runs || [{ id: 1, event: 'push', status: 'completed', conclusion: 'success' }] } }),
-        getJobForWorkflowRun: async () => ({ data: { steps: [{ name: 'Deploy API and worker', conclusion: 'success' }] } }),
-        getWorkflowRun: async () => ({ data: { path: '.github/workflows/deploy-backend.yml',
+        getJobForWorkflowRun: async ({ job_id: id }) => ({ data: { steps: [overrides.rollouts?.[id] || rollout(1)] } }),
+        getWorkflowRun: async () => ({ data: { path: overrides.releasedBy || '.github/workflows/deploy-backend.yml',
           display_title: `Deploy Backend to production (master ${'c'.repeat(40)})` } }),
       },
     } },
@@ -39,13 +45,34 @@ test('older green runs do not override a newer failed run', async () => {
     { id: 2, event: 'workflow_dispatch', status: 'completed', conclusion: 'failure' },
   ] })), /CI must succeed/);
 });
-test('a superseded commit skips quietly; feature branches cannot release', async () => {
-  const f = fixture({ head: 'b'.repeat(40) });
-  assert.equal((await requireCi(f)).skipped, 'superseded');
-  assert.equal(f.output.deploy, 'false');
+const pushRun = { head_branch: 'master', head_sha: sha, event: 'push', conclusion: 'success', head_repository: { full_name: 'example/app' } };
+test('a superseded commit skips quietly until the release is overdue; feature branches cannot release', async () => {
+  const overdue = { head: 'b'.repeat(40), context: { payload: { workflow_run: pushRun } }, deployments: [{ id: 7 }],
+    rollouts: { 7: rollout(3) }, changed: ['backend/app.js'] };
+  for (const notOverdue of [
+    { deployments: [] }, { rollouts: { 7: rollout(1) } }, { rollouts: { 7: rollout(3, 'failure') } },
+    { releasedBy: '.github/workflows/rollback-backend.yml' },
+    { comparison: () => 'behind' }, { comparison: () => 'identical' }, { comparison: () => 'diverged' },
+    { comparison: (basehead) => (basehead.startsWith(sha) ? 'diverged' : 'ahead') }, // No longer on the branch.
+  ]) {
+    const f = fixture({ ...overdue, ...notOverdue });
+    assert.equal((await requireCi(f)).skipped, 'superseded');
+    assert.equal(f.output.deploy, 'false');
+  }
+  const preflight = fixture(overdue);
+  await requireCi(preflight);
+  assert.deepEqual([preflight.output.deploy, preflight.output.sha, preflight.output.target], ['true', sha, 'production']);
+  // During the recheck the newest job is the release job itself, with its rollout step still pending.
+  const pending = { name: ROLLOUT, status: 'pending', conclusion: null, started_at: null, completed_at: null };
+  const cutover = fixture({ ...overdue, deployments: [{ id: 8 }, { id: 7 }], rollouts: { 8: pending, 7: rollout(3) } });
+  await requireCi(cutover, { recheck: true });
+  assert.equal(cutover.output.deploy, 'true');
+  // The other gates still apply to an overdue release.
+  const runs = [{ id: 1, event: 'push', status: 'completed', conclusion: 'failure' }];
+  await assert.rejects(requireCi(fixture({ ...overdue, runs })), /CI must succeed/);
+  assert.equal((await requireCi(fixture({ ...overdue, changed: ['docs/release/notes.md'] }))).skipped, 'unchanged');
   await assert.rejects(requireCi(fixture({ context: { ref: 'refs/heads/topic' } })), /master or dev/);
 });
-const pushRun = { head_branch: 'master', head_sha: sha, event: 'push', conclusion: 'success', head_repository: { full_name: 'example/app' } };
 test('an automatic deploy skips when no backend file changed since the last deployment', async () => {
   const f = fixture({ context: { payload: { workflow_run: pushRun } }, deployments: [{ id: 7 }],
     changed: ['docs/release/notes.md', 'frontend/apps/web/src/app/page.tsx'] });

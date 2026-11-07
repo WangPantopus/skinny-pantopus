@@ -454,6 +454,10 @@ data class PropertySuggestionsResponse(
     val provenance: RecordProvenanceDto? = null,
     /** A short tag per field ("County"), once the record names its source. */
     @Json(name = "field_tags") val fieldTags: Map<String, String>? = null,
+    /** One-tap answers for what the record lacks, once the lookup has had its say. */
+    val questions: List<HouseholdQuestionDto>? = null,
+    /** The county's own page, where a person can check what's missing. */
+    @Json(name = "county_page") val countyPage: HouseholdCountyPageDto? = null,
 ) {
     /** Where the lookup stands, under either name. */
     val lookupState: String?

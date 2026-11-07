@@ -130,13 +130,16 @@ struct PlaceDashboardView: View {
             // it again, which left Home tools without its shortcuts. The reads
             // finish outside the task.
             await Task {
-                await viewModel.load()
                 // Also on coming back from the notifications list, so a read bell loses its dot.
-                await viewModel.refreshUnread()
+                async let unread: Void = viewModel.refreshUnread()
+                await viewModel.load()
+                await unread
             }.value
         }
         .refreshable { await viewModel.refresh() }
-        .refreshesOnStoreChange(onBackground: viewModel.discardTemporaryCopy) { if isActive { await viewModel.load() } }
+        .refreshesOnStoreChange(affects: PlaceStoreReads.affects(homeId: viewModel.homeId), onBackground: viewModel.discardTemporaryCopy) {
+            if isActive { await viewModel.load() }
+        }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .askPantopus($askTopic)
         .sheet(isPresented: $showSwitcher) {

@@ -46,6 +46,8 @@ import app.pantopus.android.data.api.models.homes.HomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.HomePackageResponse
 import app.pantopus.android.data.api.models.homes.HomePollResponse
 import app.pantopus.android.data.api.models.homes.HomePublicProfileResponse
+import app.pantopus.android.data.api.models.homes.HouseholdFactsRequest
+import app.pantopus.android.data.api.models.homes.HouseholdWriteResponse
 import app.pantopus.android.data.api.models.homes.InviteOwnerRequest
 import app.pantopus.android.data.api.models.homes.InviteOwnerResponse
 import app.pantopus.android.data.api.models.homes.MoveOutResponse
@@ -56,6 +58,7 @@ import app.pantopus.android.data.api.models.homes.PrimaryHomeResponse
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
+import app.pantopus.android.data.api.models.homes.RecordProblemRequest
 import app.pantopus.android.data.api.models.homes.RemoveOwnerResponse
 import app.pantopus.android.data.api.models.homes.SetDefaultHomeBody
 import app.pantopus.android.data.api.models.homes.SetDefaultHomeResponse
@@ -80,6 +83,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Multipart
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Part
@@ -163,6 +167,19 @@ interface HomesApi {
      * record up meanwhile (`attom_lookup: pending`); `"check"` is the one follow-up, answered when that
      * lookup ends. Without it the server waits for the record, as it does for older builds.
      */
+    @PATCH("api/homes/{id}")
+    suspend fun updateHouseholdFacts(
+        @Path("id") id: String,
+        @Body body: HouseholdFactsRequest,
+    ): HouseholdWriteResponse
+
+    /** "Report a problem" on a fact a household can't correct: it reaches Pantopus review, and nothing on the page changes. */
+    @POST("api/homes/{id}/record-problem")
+    suspend fun reportRecordProblem(
+        @Path("id") id: String,
+        @Body body: RecordProblemRequest,
+    ): HouseholdWriteResponse
+
     @POST("api/homes/property-suggestions?vocabulary=2")
     suspend fun propertySuggestions(
         @Body body: PropertySuggestionsRequest,

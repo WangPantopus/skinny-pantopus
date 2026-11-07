@@ -52,8 +52,12 @@ public enum BusinessesEndpoints {
     /// published, so the editor's setup checklist can tick "Services" on a
     /// business that has never been published.
     /// Route `backend/routes/businesses.js:2386`.
-    public static func catalogItems(businessId: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/businesses/\(businessId)/catalog/items")
+    public static func catalogItems(businessId: String, status: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/businesses/\(businessId)/catalog/items",
+            query: status.map { ["status": $0] } ?? [:]
+        )
     }
 
     /// `GET /api/businesses/:businessId/dashboard` — the owner-scoped fetch.

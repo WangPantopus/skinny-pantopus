@@ -216,7 +216,7 @@ async function deliverPending(limit = 25) {
       const current = await rpc('read_gig_stop_delivery', args);
       if (!current.eligible) outcome = 'suppressed';
       else {
-        const receipt = await deliverStoredGigNotification(current.notification);
+        const receipt = await deliverStoredGigNotification(current.notification, { delivery: { p_kind: 'gig_stop', ...args } });
         if (!Number.isSafeInteger(receipt?.acceptedCount) || receipt.acceptedCount < 0
             || !Number.isSafeInteger(receipt?.unresolvedCount) || receipt.unresolvedCount < 0) throw new Error('Missing notification transport receipt');
         outcome = receipt.unresolvedCount > 0 ? 'retry' : receipt.suppressed ? 'suppressed' : 'done';

@@ -12,6 +12,7 @@
 
 import Foundation
 import Logging
+import UIKit
 import UserNotifications
 
 // MARK: - Presence gate
@@ -79,6 +80,16 @@ extension AuthManager {
         Analytics.identify(userId: user.id)
         SocketClient.shared.connect(token: token)
         if apiClient === APIClient.shared { ChatOutbox.shared.start(account: user.id) }
+    }
+
+    /// Tells `PantopusNotificationService` who is signed in. `.resumable` leaves
+    /// it as it was: the account is still on this phone, one gesture away.
+    func publishPushAccount(_ state: State) {
+        switch state {
+        case let .signedIn(user): PushAccountMarker.write(userId: user.id)
+        case .signedOut: PushAccountMarker.write(userId: nil)
+        case .unknown, .resumable: break
+        }
     }
 
     // MARK: - Session restore (cold start)
@@ -634,6 +645,13 @@ extension AuthManager {
         // notifications on the lock screen or in Notification Center.
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        // Nor keep getting its pushes: the logout that deletes this phone's token
+        // on the server may never get there, and a session that ended some other
+        // way sends none. Dropping the token too means the next sign-in can't hand
+        // the server one that's dead (`registerForPushIfAllowed` gets a live one).
+        UIApplication.shared.unregisterForRemoteNotifications()
+        pendingPushToken = nil
+        logger.info("APNs registration dropped")
         guard hadSession else { return false }
         SocketClient.shared.disconnect()
         Observability.shared.identify(userId: nil)

@@ -155,6 +155,69 @@ async function flagAddressWatch({ homeId, userId = null, signals, source = null 
   }
 }
 
+const RECORD_PROBLEM = 'record_problem';
+const MAX_RECORD_PROBLEMS = 30;
+
+async function openRecordProblemCase(homeId, userId) {
+  const { data, error } = await supabaseAdmin
+    .from('AddressReviewCase')
+    .select('id, reasons')
+    .eq('trigger', RECORD_PROBLEM)
+    .eq('home_id', homeId)
+    .eq('user_id', userId)
+    .in('status', OPEN_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+/** What this person has open about a Home's record, oldest first, for the page to say so. A failed read says nothing. */
+async function openRecordProblems(homeId, userId) {
+  try {
+    return (await openRecordProblemCase(homeId, userId))?.reasons || [];
+  } catch (error) {
+    logger.warn('addressReview: record problems unread', { homeId, error: error.message });
+    return [];
+  }
+}
+
+/**
+ * Something on a Home's county record looks wrong: a person reported it ("Report a problem"), or a household's entry
+ * disagrees with a fact the record keeps showing (services/householdFacts.js). Nothing on the page changes; a person
+ * here looks at it. One open case per person and Home, as with the address watch, and with no address_id, so it never
+ * takes the slot of a validation case (idx_address_review_case_one_open). A new case emails the admins.
+ *
+ * Never throws. Returns the case id, or null when nothing was written.
+ */
+async function flagRecordProblem({ homeId, userId, reason }) {
+  try {
+    const open = await openRecordProblemCase(homeId, userId);
+    if (open) {
+      const { error } = await supabaseAdmin
+        .from('AddressReviewCase')
+        .update({ reasons: [...(open.reasons || []), reason].slice(-MAX_RECORD_PROBLEMS), updated_at: new Date().toISOString() })
+        .eq('id', open.id)
+        .in('status', OPEN_STATUSES);
+      if (error) throw error;
+      return open.id;
+    }
+    const { data, error } = await supabaseAdmin
+      .from('AddressReviewCase')
+      .insert({ home_id: homeId, user_id: userId, verdict_status: 'RECORD_PROBLEM', reasons: [reason], trigger: RECORD_PROBLEM, status: 'open' })
+      .select('id')
+      .single();
+    if (error) throw error;
+    logger.info('addressReview: record problem case opened', { caseId: data.id, homeId });
+    const { data: home } = await supabaseAdmin.from('Home').select('city, state').eq('id', homeId).maybeSingle();
+    adminAlerts.notifyRecordProblemToReview({ caseId: data.id, home }).catch(() => {});
+    return data.id;
+  } catch (error) {
+    logger.error('addressReview: record problem not written', { homeId, error: error.message });
+    return null;
+  }
+}
+
 /** Oldest-first page of cases awaiting a reviewer. */
 async function listOpenCases({ limit = 50, offset = 0, status = null } = {}) {
   let query = supabaseAdmin
@@ -212,4 +275,4 @@ async function resolveCase({ caseId, reviewerId, outcome, note = null }) {
   return { success: true };
 }
 
-module.exports = { needsReview, openCase, flagAddressWatch, listOpenCases, resolveCase, OPEN_STATUSES };
+module.exports = { needsReview, openCase, flagAddressWatch, flagRecordProblem, openRecordProblems, listOpenCases, resolveCase, OPEN_STATUSES };

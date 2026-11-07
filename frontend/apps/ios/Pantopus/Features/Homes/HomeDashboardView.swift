@@ -383,9 +383,12 @@ struct HomeDashboardView: View {
             onGenerate: { Task { await viewModel.generateChecklist() } },
             onRetry: { Task { await viewModel.generateChecklist() } }
         )
-        PropertyValueCard(
-            state: viewModel.propertyValue
-        ) { Task { await viewModel.retryPropertyValue() } }
+        // The Home's value is its confirmed owner's, as on Place.
+        if viewModel.access?.isOwner == true {
+            PropertyValueCard(
+                state: viewModel.propertyValue
+            ) { Task { await viewModel.retryPropertyValue() } }
+        }
         BillTrendsCard(
             state: viewModel.billTrends,
             currency: viewModel.billCurrency,

@@ -49,8 +49,8 @@ import app.pantopus.android.data.api.models.listing_offers.ListingOfferDto
 import app.pantopus.android.data.api.models.listing_offers.ListingOfferUserDto
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.transaction_reviews.TransactionReviewSheetContent
@@ -116,7 +116,7 @@ fun ListingOffersScreen(
         if (target != null) {
             val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             ModalBottomSheet(
-                modifier = Modifier.closesKeyboardOnTapOrScroll(),
+                modifier = Modifier.sheetKeyboardRules(),
                 onDismissRequest = { viewModel.cancelCounter() },
                 sheetState = sheetState,
                 containerColor = PantopusColors.appSurface,
@@ -133,7 +133,7 @@ fun ListingOffersScreen(
         if (reviewTarget != null) {
             val reviewSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             ModalBottomSheet(
-                modifier = Modifier.closesKeyboardOnTapOrScroll(),
+                modifier = Modifier.sheetKeyboardRules(),
                 onDismissRequest = { viewModel.cancelLeaveReview() },
                 sheetState = reviewSheetState,
                 containerColor = PantopusColors.appBg,

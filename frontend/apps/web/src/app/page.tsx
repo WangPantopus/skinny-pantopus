@@ -28,11 +28,15 @@ import HomeFooter from './_components/HomeFooter';
 import { HERO_ID, skyPhaseScript } from './_components/skyScene';
 import styles from './_components/home.module.css';
 
-// Newsreader with every weight, optical size and both styles. The page preloads a cut of Google's Latin file holding
+// Newsreader with every weight, optical size and both styles. The page loads a cut of Google's Latin file holding
 // every English letter and digit and the punctuation headings use, with all its axes, kerning and figure styles, so
 // those glyphs draw exactly as from the whole file at about half the bytes. Every other character still draws in
 // Newsreader, from Google's own files in home.module.css, fetched only when a text uses one; its fallback while
 // loading is there too. Files and ranges come from scripts/newsreader-subset.py.
+//
+// Not preloaded: first paint waits for the stylesheets, and on a slow connection these 152 KB, requested alongside
+// them, usually reach the wire first (about a second's delay at 1.5 Mbit/s). A first visit paints the heading in its
+// size-matched fallback and swaps when the font lands; a return visit has the font from the cache before first paint.
 const serif = localFont({
   src: [
     { path: './_components/fonts/newsreader-core.woff2', weight: '200 800', style: 'normal' },
@@ -43,6 +47,7 @@ const serif = localFont({
   variable: '--home-serif',
   display: 'swap',
   adjustFontFallback: false,
+  preload: false,
 });
 // Plex Mono's fallbacks are in home.module.css (adjustFontFallback is off): next/font's Arial-based one has wider
 // capitals than Plex Mono, so when the page painted before Plex Mono arrived, the hero's eyebrow wrapped

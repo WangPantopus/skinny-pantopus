@@ -228,6 +228,27 @@ function houseFromAttomProperty(property) {
 }
 
 /**
+ * The same outline from a Home's copy of its county record (services/propertyRecords): the record's facts read through
+ * the rules above, so every county's words go through one place. Null when the copy has no shape facts to read.
+ */
+function houseFromRecord(copy) {
+  if (!copy || !copy.facts) return null;
+  const facts = { ...copy.building, ...copy.facts };
+  const kinds = { house: 'SFR', townhouse: 'TOWNHOUSE', condo: 'CONDOMINIUM', apartment: 'APARTMENT', multi_unit: 'MULTI-FAMILY', mobile_home: 'MOBILE HOME' };
+  return houseFromAttomProperty({
+    summary: { propertyType: kinds[copy.home_type] || null },
+    building: {
+      summary: { levels: facts.stories ?? null },
+      size: { livingSize: facts.living_sqft ?? facts.usable_sqft ?? null, groundFloorSize: facts.ground_floor_sqft ?? null },
+      construction: { roofCover: facts.roof_cover ?? null, roofShape: facts.roof_shape ?? null },
+      parking: { garageType: facts.garage ?? null, prkgSpaces: facts.parking_spaces ?? null, prkgSize: facts.garage_sqft ?? null },
+      interior: { fplcCount: facts.fireplaces ?? null },
+    },
+    lot: { poolType: facts.pool ? 'POOL' : null },
+  });
+}
+
+/**
  * What the apps draw: the county record's outline, with the kind of home the
  * household chose (if they chose one) over the record's. `kind` is always set.
  */
@@ -245,4 +266,4 @@ function resolveHouse(records, homeType) {
   };
 }
 
-module.exports = { houseFromAttomProperty, resolveHouse };
+module.exports = { houseFromAttomProperty, houseFromRecord, resolveHouse };
