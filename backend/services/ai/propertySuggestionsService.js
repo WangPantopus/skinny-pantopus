@@ -362,7 +362,7 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
   // confirm on, so can everything where no county record answers, and the record's parcel number opens the home's own page.
   const linking = countyLinks.enabled();
   const where = linking
-    ? { parcel: record?.copy?.facts?.parcel_number ?? null, municipality: record?.copy?.facts?.municipality ?? homeAddressRow?.city_norm ?? city ?? null }
+    ? { parcel: record?.copy?.facts?.parcel_number ?? null, municipality: record?.copy?.facts?.municipality ?? null, city: homeAddressRow?.city_norm ?? city ?? null }
     : {};
   const countyPage = attomLookup !== 'pending' && (merged.bedrooms == null || merged.bathrooms == null || (linking && !record?.copy))
     ? await countyPages.forAddress({ jurisdiction: record?.answer?.jurisdiction, state: homeAddressRow?.state || state, lat: homeAddressRow?.geocode_lat, lng: homeAddressRow?.geocode_lng, ...where })
