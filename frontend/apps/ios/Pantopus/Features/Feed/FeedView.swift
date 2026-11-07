@@ -1130,6 +1130,14 @@ public struct FeedView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.s3)
+            } else if viewModel.canLoadMore {
+                // The list's end asks for the next page as it comes on screen, and again after every read: a
+                // load-more a refresh held off or dropped, or a page that added nothing to show, goes on from here.
+                Color.clear
+                    .frame(height: 1)
+                    .id(viewModel.loadMoreKey)
+                    .onAppear { Task { await viewModel.loadMoreAtEnd() } }
+                    .accessibilityHidden(true)
             }
             Spacer(minLength: 80)
         }

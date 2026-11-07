@@ -233,6 +233,9 @@ public struct FeedPagination: Decodable, Sendable, Hashable {
     /// Companion timestamp for keyset pagination — both `cursorCreatedAt`
     /// and `cursorId` must ride on the next request.
     public let nextCursorCreatedAt: String?
+    /// The Sports lane's third cursor field: the next request sends it back
+    /// as `cursorRankBucket`, as web does (`useFeedData.ts`). Nil elsewhere.
+    public let nextCursorRankBucket: Int?
     public let hasMore: Bool?
 
     private enum CodingKeys: String, CodingKey {
@@ -243,6 +246,18 @@ public struct FeedPagination: Decodable, Sendable, Hashable {
     private struct CursorObject: Decodable {
         let createdAt: String
         let id: String
+        let rankBucket: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case createdAt, id, rankBucket
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            createdAt = try c.decode(String.self, forKey: .createdAt)
+            id = try c.decode(String.self, forKey: .id)
+            rankBucket = c.lenient(Int.self, forKey: .rankBucket)
+        }
     }
 
     public init(from decoder: any Decoder) throws {
@@ -251,12 +266,15 @@ public struct FeedPagination: Decodable, Sendable, Hashable {
         if let cursorString = try? container.decode(String.self, forKey: .nextCursor) {
             nextCursor = cursorString
             nextCursorCreatedAt = nil
+            nextCursorRankBucket = nil
         } else if let cursorObject = try? container.decode(CursorObject.self, forKey: .nextCursor) {
             nextCursor = cursorObject.id
             nextCursorCreatedAt = cursorObject.createdAt
+            nextCursorRankBucket = cursorObject.rankBucket
         } else {
             nextCursor = nil
             nextCursorCreatedAt = nil
+            nextCursorRankBucket = nil
         }
     }
 }
