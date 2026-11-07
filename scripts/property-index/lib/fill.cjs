@@ -1,6 +1,6 @@
 'use strict';
-// A county's own building facts added to the records another file already gives that county (Florida's roll), matched by
-// parcel number. Only homes take them (a house, a mobile home, a condo unit), only facts a record lacks, and only from a
+// A county's own building facts added to the records another file already gives that county (Florida's roll, or the county's
+// own parcel layer), matched by parcel number. Only homes take them (a house, a mobile home, a condo unit), only facts a record lacks, and only from a
 // parcel with one dwelling: a guest house's rooms or a duplex's sum isn't the home's own count. Every record and account
 // stays as it was, so a county already serving loses nothing it had.
 
