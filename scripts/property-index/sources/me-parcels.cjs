@@ -33,6 +33,9 @@ function useOf(row) {
   return positive(row?.BLDG_VAL) ? ['property', null] : ['parcel', null];
 }
 
+// What every record carries whether or not its assessor row says anything.
+const IDENTITY = new Set(['parcel_number', 'county', 'fips', 'municipality', 'address_on_record']);
+
 function fromRow(parcel, assessor, fips, county, town) {
   const line = word(parcel.PROP_LOC);
   const parsed = line ? parse(/^\d/.test(line) || !word(parcel.PROPLOCNUM) ? line : `${word(parcel.PROPLOCNUM)} ${line}`) : null;
@@ -87,6 +90,7 @@ async function* build({ work }) {
     const seen = new Set();
     let noAddress = 0;
     let noAssessor = 0;
+    let emptyAssessor = 0;
     const rows = cached(path.join(work, 'me-parcels', `${fips}.jsonl.gz`), () => layerRows(`${SERVICE}/10`, PARCEL_COLUMNS, { where: `COUNTY = '${name}'` }));
     for await (const parcel of rows) {
       const assessor = assessors.get(parcel.STATE_ID);
@@ -97,12 +101,14 @@ async function* build({ work }) {
       const town = String(word(parcel.TOWN) || '').toLowerCase().replace(/(^|\s)\S/g, (first) => first.toUpperCase());
       const record = fromRow(parcel, assessor, fips, county, town);
       if (!record) noAddress += 1;
+      // An assessor row with nothing in it says no more than no row at all (York has 5,153): not written either.
+      else if (!Object.keys(record.facts).some((key) => !IDENTITY.has(key))) emptyAssessor += 1;
       else if (!seen.has(record.id)) {
         seen.add(record.id);
         records.push(record);
       }
     }
-    log(`${county}: ${records.length} records, ${noAssessor} parcels without an assessor row, ${noAddress} without a street number`);
+    log(`${county}: ${records.length} records, ${noAssessor} parcels without an assessor row, ${emptyAssessor} with an empty one, ${noAddress} without a street number`);
     if (!records.length) continue;
     for (const building of condoBuildings(records, { fips, county })) records.push(building);
     yield {
