@@ -30,6 +30,7 @@ import { authPageHref } from '@/lib/auth-utils';
 import UsernamePrompt, { markAskedForUsername, shouldAskForUsername } from '@/components/profile/UsernamePrompt';
 import { fetchMe, useOwnLocalProfile } from '@/lib/me';
 import { queryKeys } from '@/lib/query-keys';
+import { removeUserFromFeedCaches } from '@/hooks/useFeedData';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 type ProfileTab = 'posts' | 'about' | 'work' | 'missions';
@@ -818,6 +819,8 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
     try {
       await api.blocks.blockUser(targetId);
       forgetPerson(targetId);
+      // Their posts leave every kept Pulse list too, as a mute's do, so going back to the feed doesn't show them.
+      void removeUserFromFeedCaches(queryClient, targetId);
       if (!current()) return;
       // Mirrors the native clients: the connection edge drops to `blocked`
       // on the same success, which hides Connect, Message and Follow.

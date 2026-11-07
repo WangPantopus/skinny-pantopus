@@ -302,9 +302,10 @@ function PostCard({
             {publicAuthor?.type === 'persona' && !(launchFeatures.beacon && launchFeatures.personas) ? (
               <span className="text-sm font-semibold text-app truncate">{creatorName}</span>
             ) : publicAuthor?.href ? (
-              <a href={publicAuthor.href} className="text-sm font-semibold text-app hover:underline truncate">
+              // In place, as the photo beside it: a plain <a> loaded a new document and dropped the kept screens.
+              <Link href={publicAuthor.href} className="text-sm font-semibold text-app hover:underline truncate">
                 {creatorName}
-              </a>
+              </Link>
             ) : (publicAuthor?.handle || post.creator?.username) ? (
               <UserIdentityLink
                 userId={authorUserId}
