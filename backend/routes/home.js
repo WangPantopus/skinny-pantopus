@@ -5681,7 +5681,7 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
         // A value estimate kept after a refresh found nothing newer says when ATTOM gave it.
         last_updated: profile.value_as_of || profile.cached_at || null,
         source,
-      }, profile, wanted, wanted ? homeValueCard.build(profile, { trend, lookup }) : null);
+      }, profile, wanted, wanted ? homeValueCard.build(profile, { trend, lookup, neighborhood: await areaTrend.neighborhood(profile.area || {}) }) : null);
     });
     res.json(result);
   } catch (err) {

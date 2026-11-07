@@ -5,6 +5,7 @@ const invitations = require('./homeInvitationService');
 const claimConfig = require('../config/householdClaims');
 const claimPolicy = require('./homeClaimRoutingService');
 const property = require('./ai/propertyIntelligenceService');
+const valueEstimate = require('./propertyRecords/valueEstimate');
 const { serializeCountyRecord, serializePropertyRecord } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
 const householdFacts = require('./householdFacts');
@@ -244,7 +245,7 @@ async function propertyDetail(homeId, actorId) {
     // A Home with a county record answers from it; a live county never reads ATTOM's copies.
     const record = await homeRecords.forHome(raw);
     if (record) {
-      const county = record.copy ? serializePropertyRecord(record.copy) : null;
+      const county = record.copy ? serializePropertyRecord(record.copy, await valueEstimate.forCopy(record.copy, raw)) : null;
       return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
         unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : 'NO_PROPERTY_FOUND'), county_record: county,
         ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}),

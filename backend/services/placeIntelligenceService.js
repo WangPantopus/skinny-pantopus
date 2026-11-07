@@ -1044,7 +1044,7 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   const oldValue = !profile.provenance && Boolean(viewerAccess && viewerAccess.isOwner) && profile.estimated_value != null && valueAge >= VALUE_FRESH_MS;
   // The value card is the confirmed owner's, and nobody else's read waits on its area trend.
   const valueCard = wantsRecordVocabulary && viewerAccess?.isOwner && profile.area
-    ? homeValueCard.build(profile, { trend: await areaTrend.lookup(profile.area), lookup: result.lookup })
+    ? homeValueCard.build(profile, { trend: await areaTrend.lookup(profile.area), lookup: result.lookup, neighborhood: await areaTrend.neighborhood(profile.area) })
     : null;
 
   return [serializePlaceSection('your_home', {
