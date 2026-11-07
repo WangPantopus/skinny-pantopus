@@ -170,6 +170,9 @@ class ChatConversationViewModel
         private val _sendLimitNotice = MutableStateFlow<String?>(null)
         val sendLimitNotice: StateFlow<String?> = _sendLimitNotice.asStateFlow()
 
+        /** The notice the outbox last raised, so a notice from anywhere else outlives the outbox's own clearing. */
+        private var outboxNotice: String? = null
+
         /**
          * The line shown in place of the composer when the conversation takes no messages from you (the server's
          * `sendRefusal` sentence: a direct chat with a draft or closed business), or null.
@@ -1482,12 +1485,14 @@ class ChatConversationViewModel
                         outboxClientIds.clear()
                         outboxClientIds.addAll(ids)
                         val confirmed = messages.mapNotNullTo(mutableSetOf()) { it.clientMessageId }
-                        held.filterNot { it.clientId in confirmed }.forEach { entry ->
+                        val unconfirmed = held.filterNot { it.clientId in confirmed }
+                        unconfirmed.forEach { entry ->
                             pendingByClientId[entry.clientId] = entry.pending
                             restoreLocalPhotos(queue, entry)
                             if (entry.error != null) failedClientIds.add(entry.clientId) else failedClientIds.remove(entry.clientId)
                             if (entry.refused) refusedClientIds.add(entry.clientId) else refusedClientIds.remove(entry.clientId)
                         }
+                        showOutboxNotice(unconfirmed)
                         if (held.isNotEmpty() || _state.value is ChatConversationUiState.Loaded) rebuild()
                     }
                 }
@@ -1513,6 +1518,29 @@ class ChatConversationViewModel
                         scheduleMarkRead()
                     }
                 }
+        }
+
+        /**
+         * Show why the newest send the outbox holds can't go now: a final failure (refused or failed) or a rate limit's
+         * wait. A send it retries on its own (a server error, a timeout, offline) raises nothing: "Please try again"
+         * while it retries asks people to send it twice. A refusal reads as a direct send's does ([markRefused]): the
+         * outbox keeps a 403's message, which is the server's own sentence or, when the body had none, the generic 403
+         * copy. The notice clears once no such send is held, unless it came from somewhere else.
+         */
+        private fun showOutboxNotice(held: List<ChatOutboxEntry>) {
+            val entry = held.lastOrNull { it.error != null && (it.terminal || it.rateLimited) }
+            val failure =
+                when {
+                    entry == null -> null
+                    entry.refused -> entry.error.takeUnless { it == NetworkError.Forbidden.message } ?: SEND_REFUSED_NOTICE
+                    else -> entry.error
+                }
+            if (failure != null) {
+                _sendLimitNotice.value = failure
+            } else if (_sendLimitNotice.value == outboxNotice) {
+                _sendLimitNotice.value = null
+            }
+            outboxNotice = failure
         }
 
         /**
