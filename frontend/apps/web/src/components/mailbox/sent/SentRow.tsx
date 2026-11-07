@@ -13,7 +13,7 @@ import type { SentPiece } from '@pantopus/api';
 import { Loader2 } from 'lucide-react';
 import MailPiece from '../MailPiece';
 import { cardPicture } from '../cards/cardArt';
-import { sentEnvelope, sentStatusLine, sentToLine } from './sentWords';
+import { sentEnvelope, sentEnvelopeName, sentStatusLine, sentToLine } from './sentWords';
 
 export default function SentRow({
   piece,
@@ -31,7 +31,9 @@ export default function SentRow({
   const toLine = sentToLine(piece);
   const statusLine = sentStatusLine(piece);
   // Read out as a sentence: "Your card to Maya O. In their mailbox since Sat, Oct 31."
-  const who = `your ${piece.kind === 'letter' ? 'letter' : 'card'} to ${(piece.to_name || 'them').replace(/\.$/, '')}${piece.by_email && piece.kind !== 'letter' ? ' by email' : ''}`;
+  const who = piece.by_link
+    ? `your card by link`
+    : `your ${piece.kind === 'letter' ? 'letter' : 'card'} to ${(piece.to_name || 'them').replace(/\.$/, '')}${piece.by_email && piece.kind !== 'letter' ? ' by email' : ''}`;
 
   // Wider screens keep Sent in place beside the card (as Incoming does); phones open it as its own screen.
   const open = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -51,7 +53,7 @@ export default function SentRow({
           selected ? 'ring-2 ring-primary-500 ring-offset-2 ring-offset-app-bg' : ''
         }`}
       >
-        <MailPiece item={sentEnvelope(piece)} recipientName={piece.to_name || ''} opened={false} />
+        <MailPiece item={sentEnvelope(piece)} recipientName={sentEnvelopeName(piece)} opened={false} />
         <span aria-hidden="true" className={`mt-2 flex items-center gap-2.5 ${piece.can_take_back ? 'pr-[124px]' : ''}`}>
           {piece.card.design ? (
             // eslint-disable-next-line @next/next/no-img-element

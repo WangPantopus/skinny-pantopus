@@ -649,9 +649,11 @@ export type HolidayCardArrival = 'next_morning' | 'sealed_christmas' | 'christma
 export interface SentHolidayCard {
   id: string;
   design: string;
-  /** Their name as they show it, or the masked email address. */
+  /** Their name as they show it, or the masked email address. By link: "them" until someone opens it. */
   to_name: string | null;
   by_email: boolean;
+  /** Sent as a link anyone can open (launch key card_table). `by_email` is true too, so older apps still show something sensible. */
+  by_link?: boolean;
   arrival: HolidayCardArrival;
   /** When it goes into their mailbox; null by email (when they open the email). */
   arrives_at: string | null;
@@ -705,20 +707,28 @@ export async function getHolidayCardArrivals(userId: string): Promise<HolidayCar
   return get<HolidayCardArrivalsFor>('/api/mailbox/cards/arrivals', { to: userId });
 }
 
-/** POST /api/mailbox/cards: send today's card, to one person found by name or by email to someone not on Pantopus. */
+/** POST /api/mailbox/cards: send today's card, to one person found by name, by email to someone not on Pantopus, or as a link (launch key card_table). */
 export async function sendHolidayCard(data: {
   design: string;
   message: string;
   arrival: HolidayCardArrival;
-  to: { user_id: string } | { email: string };
+  to: { user_id: string } | { email: string } | { link: true };
   /**
    * One per card draft, sent again with every look and retry of it: a repeat of a send answers with the card it
    * stored (200), CARD_TAKEN_BACK once that card was taken back, or CARD_REQUEST_SENT (with `card`) when the draft
    * changed after it went.
    */
   request_id?: string;
-}): Promise<{ card: SentHolidayCard }> {
-  return post<{ card: SentHolidayCard }>('/api/mailbox/cards', data);
+}): Promise<{ card: SentHolidayCard; link?: string }> {
+  return post<{ card: SentHolidayCard; link?: string }>('/api/mailbox/cards', data);
+}
+
+/**
+ * GET /api/mailbox/cards/:id/link (its sender only): the link of a card sent by link, while nobody has opened it. A 409
+ * says, in words to show as they come, what happened to it instead.
+ */
+export async function getHolidayCardLink(cardId: string): Promise<{ link: string }> {
+  return get<{ link: string }>(`/api/mailbox/cards/${encodeURIComponent(cardId)}/link`);
 }
 
 /**
@@ -737,7 +747,7 @@ export interface HolidayCardPreview {
   /** By email: the email they get, in its own words. */
   email: { subject: string; heading: string; lines: string[]; button: string; footnote: string; footer?: string[] } | null;
   /** By email: the page its link opens (the address masked, as on that page). */
-  link_page: { sender_name: string; sender_verified: boolean; sealed: boolean; sent_to: string; sent_on: string } | null;
+  link_page: { sender_name: string; sender_verified: boolean; sealed: boolean; sent_to: string; sent_on: string; by_link?: boolean } | null;
 }
 
 /** POST /api/mailbox/cards/preview */
@@ -761,6 +771,8 @@ export interface SentPiece {
   /** A letter to a Home itself: `to_name` ("their household", "your household") is said whole, never as a first name. */
   to_household?: boolean;
   by_email: boolean;
+  /** Sent as a link anyone can open (launch key card_table). `to_name` is "them" until someone opens it. */
+  by_link?: boolean;
   arrival: HolidayCardArrival | null;
   /** To a person: before the 7 a.m. pickup, picked up (a Christmas-morning card on its way), in their mailbox. */
   status: 'waiting' | 'picked_up' | 'delivered' | 'claimed' | 'expired' | 'email_waiting';
@@ -786,6 +798,7 @@ export interface SentTrailStep {
   at?: string | null;
   on?: string | null;
   done: boolean;
+  by_link?: boolean;
 }
 
 /** One card in Sent, with the sender's own note (also while it's sealed for them) and its trail. */
