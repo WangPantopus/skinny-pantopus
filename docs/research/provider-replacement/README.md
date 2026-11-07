@@ -59,6 +59,7 @@ landing built work first and D9. Open, with recommendations: D6-D8, D10-D12 and 
 | [county-survey.md](county-survey.md) | All 150 largest counties and the 100-county national sample | Checking a county |
 | [property-fields.md](property-fields.md) | The 46 Property details fields, measured by property type | Mapping fields |
 | [unit-facts.md](unit-facts.md) | Condo and apartment units: how listing sites get them, the floor-plan sheet design | Building unit facts |
+| [fill-routes.md](fill-routes.md) | Every route to fill records' missing facts, ranked by homes; what Zillow, Redfin and other listing sites and data vendors allow; what's filled | Filling bedrooms, baths and the rest |
 | [architecture.md](architecture.md) | The pieces, data flow, identity contract, fact precedence, postal adapter, mail, reliability, privacy, app compatibility | Designing or reviewing |
 | [experience.md](experience.md) | What each screen shows on web, iOS and Android, and the "same or better" gates G1-G7 | Building any screen change |
 | [parity-and-acceptance.md](parity-and-acceptance.md) | Truth sets, exact-unit precision, service objectives, sample design, how a switch is made | Proving a package |
