@@ -49,6 +49,11 @@ public final class BusinessOwnerViewModel {
         "business.foundingBanner.dismissed.\(businessId)"
     }
 
+    private var isLoaded: Bool {
+        if case .loaded = state { return true }
+        return false
+    }
+
     /// - Parameters:
     ///   - businessId: The owned business id.
     ///   - content: Pre-built content for previews / snapshots / tests. When
@@ -75,12 +80,15 @@ public final class BusinessOwnerViewModel {
         profile = BusinessProfileViewModel(businessId: businessId, client: client)
     }
 
+    /// Entry and every return: the view's `.task` runs again each time the dashboard shows. Only the first load shows
+    /// the placeholder. Back on a loaded dashboard, it stays as it was (Preview, the catalog or the inbox included)
+    /// while every read runs again, so an edit saved meanwhile shows.
     public func load() async {
-        state = .loading
         if let injectedContent {
             state = .loaded(injectedContent)
             return
         }
+        if !isLoaded { state = .loading }
         await fetch()
     }
 
@@ -242,14 +250,7 @@ public final class BusinessOwnerViewModel {
             dashboard = try await dashboardRead
         } catch {
             guard generation == readGeneration, !Task.isCancelled else { return }
-            switch error as? APIError {
-            case .forbidden:
-                state = .error(message: "You don't have access to this business.")
-            case .notFound:
-                state = .notFound
-            default:
-                state = .error(message: "Couldn't load your business")
-            }
+            dashboardReadFailed(error)
             return
         }
         guard generation == readGeneration, !Task.isCancelled else { return }
@@ -268,6 +269,22 @@ public final class BusinessOwnerViewModel {
         }
         state = .loaded(content)
         await loadAdditionalContent(generation: generation, includesFoundingOffer: isOwner)
+    }
+
+    /// A refusal or a missing business replaces the dashboard. Any other failure keeps a loaded one.
+    private func dashboardReadFailed(_ error: Error) {
+        switch error as? APIError {
+        case .forbidden:
+            state = .error(message: "You don't have access to this business.")
+        case .notFound:
+            state = .notFound
+        default:
+            if isLoaded {
+                logger.debug("Business dashboard refresh failed, keeping the dashboard: \(error)")
+            } else {
+                state = .error(message: "Couldn't load your business")
+            }
+        }
     }
 
     private enum AdditionalContent {
