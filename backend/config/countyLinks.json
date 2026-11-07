@@ -30,6 +30,14 @@
    "src": "netr",
    "ref": "Mobile Revenue Commission"
   },
+  "02020": {
+   "name": "Anchorage Municipality",
+   "url": "https://www.muni.org/pw/public.html",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Anchorage Assessor",
+   "was_http": true
+  },
   "04013": {
    "name": "Maricopa County",
    "url": "https://mcassessor.maricopa.gov/",
@@ -66,6 +74,13 @@
    "ref": "Pulaski Assessor",
    "was_http": true
   },
+  "05143": {
+   "name": "Washington County",
+   "url": "https://www.actdatascout.com/State/AR/Washington?isPP=False",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Washington Assessor"
+  },
   "06001": {
    "name": "Alameda County",
    "url": "https://www.acassessor.org/homeowners/assessed-value-look-up/",
@@ -99,6 +114,13 @@
    "kind": "deep",
    "src": "webmap",
    "ref": "County of Los Angeles web map be2583be09e44bbea27c7750f597cb10: parcel popup links parceldetail/{AIN}"
+  },
+  "06047": {
+   "name": "Merced County",
+   "url": "https://common1.mptsweb.com/mbap/Merced/asr",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Merced Assessor"
   },
   "06053": {
    "name": "Monterey County",
@@ -159,6 +181,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "San Joaquin Assessor"
+  },
+  "06079": {
+   "name": "San Luis Obispo County",
+   "url": "https://propertyinquiryportal.slocounty.ca.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "San Luis Obispo Assessor"
   },
   "06081": {
    "name": "San Mateo County",
@@ -1001,6 +1030,13 @@
      "src": "ct-cama",
      "url": "https://gis.vgsi.com/lisbonct/Search.aspx"
     },
+    "New London": {
+     "name": "New London",
+     "url": "https://gis.vgsi.com/newlondonct//",
+     "url_src": "netr",
+     "kind": "search",
+     "src": "netr"
+    },
     "Norwich": {
      "name": "Norwich",
      "deep": "https://gis.vgsi.com/norwichct/Parcel.aspx?Pid={parcel}",
@@ -1116,12 +1152,26 @@
     }
    }
   },
+  "10005": {
+   "name": "Sussex County",
+   "url": "https://property.sussexcountyde.gov/PT/forms/htmlframe.aspx?mode=content%2Fhome.htm",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Sussex Assessor"
+  },
   "11001": {
    "name": "the District of Columbia",
    "url": "https://otr.cfo.dc.gov/page/real-property-tax-database-search",
    "kind": "search",
    "src": "search-index",
    "ref": "Office of Tax and Revenue's Real Property Tax Database Search page listed by a search engine"
+  },
+  "12001": {
+   "name": "Alachua County",
+   "url": "https://qpublic.schneidercorp.com/Application.aspx?AppID=1081&LayerID=26490&PageTypeID=2&PageID=10768",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Alachua Property Appraiser"
   },
   "12009": {
    "name": "Brevard County",
@@ -1294,6 +1344,20 @@
    "ref": "Chatham Assessor",
    "was_http": true
   },
+  "13057": {
+   "name": "Cherokee County",
+   "url": "https://property.spatialest.com/ga/cherokee/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Cherokee Assessor"
+  },
+  "13063": {
+   "name": "Clayton County",
+   "url": "https://www.claytoncountyga.gov/government/tax-assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Clayton Assessor"
+  },
   "13067": {
    "name": "Cobb County",
    "url": "https://gis.cobbcounty.org/PropertySearch.html",
@@ -1306,6 +1370,14 @@
    "kind": "search",
    "src": "netr",
    "ref": "DeKalb Property Appraisal"
+  },
+  "13117": {
+   "name": "Forsyth County",
+   "url": "https://www.qpublic.net/ga/forsyth/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Forsyth Assessor",
+   "was_http": true
   },
   "13121": {
    "name": "Fulton County",
@@ -1330,6 +1402,13 @@
    "url": "https://adacounty.id.gov/assessor/property-assessments-records/assessors-property-records/",
    "kind": "search",
    "src": "wp9"
+  },
+  "16027": {
+   "name": "Canyon County",
+   "url": "https://id-canyon.publicaccessnow.com/Assessor/PropertySearch.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Canyon Assessor"
   },
   "17031": {
    "name": "Cook County",
@@ -1372,6 +1451,14 @@
    "kind": "search",
    "src": "wp9"
   },
+  "17201": {
+   "name": "Winnebago County",
+   "url": "https://rockfordtownshipassessor.net/parcelsearch/sd/rt/assessordb/Search.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Rockford Township Assessor",
+   "was_http": true
+  },
   "18003": {
    "name": "Allen County",
    "url": "https://www.allencounty.in.gov/186/Property-Record-Card-Search",
@@ -1399,6 +1486,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Marion Assessor"
+  },
+  "18141": {
+   "name": "St. Joseph County",
+   "url": "https://engage.xsoftinc.com/stjoseph/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "St Joseph Assessor"
   },
   "19153": {
    "name": "Polk County",
@@ -1468,6 +1562,20 @@
    "src": "netr",
    "ref": "Baltimore County Assessor"
   },
+  "24021": {
+   "name": "Frederick County",
+   "url": "https://sdat.dat.maryland.gov/RealProperty/Pages/default.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Frederick Assessor"
+  },
+  "24025": {
+   "name": "Harford County",
+   "url": "https://sdat.dat.maryland.gov/RealProperty/Pages/default.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Harford Assessor"
+  },
   "24027": {
    "name": "Howard County",
    "url": "https://sdat.dat.maryland.gov/RealProperty/Pages/default.aspx",
@@ -1508,6 +1616,21 @@
    "kind": "search",
    "src": "netr",
    "ref": "Genesee Equalization Office"
+  },
+  "26065": {
+   "name": "Ingham County",
+   "url": "https://bsaonline.com/?unitUrlName=inghamco&sitetransition=true&uid=383",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Ingham Equalization Office"
+  },
+  "26077": {
+   "name": "Kalamazoo County",
+   "url": "https://www.kalcounty.com/equalization/parcel_search.php",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Kalamazoo Equalization Office",
+   "was_http": true
   },
   "26081": {
    "name": "Kent County",
@@ -1576,6 +1699,13 @@
    "src": "netr",
    "ref": "Ramsey Assessor"
   },
+  "27163": {
+   "name": "Washington County",
+   "url": "https://mn-washington.publicaccessnow.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Washington Assessor"
+  },
   "29077": {
    "name": "Greene County",
    "url": "https://www.greenecountymo.org/assessor/index.php",
@@ -1603,6 +1733,14 @@
    "url": "https://assessor.stlouiscountymo.gov/realestate/searchinput.aspx",
    "kind": "search",
    "src": "wp9"
+  },
+  "29510": {
+   "name": "the City of St. Louis",
+   "url": "https://stlouis-mo.gov/data/address-search/index.cfm",
+   "kind": "search",
+   "src": "netr",
+   "ref": "St. Louis City Assessor",
+   "was_http": true
   },
   "31055": {
    "name": "Douglas County",
@@ -1646,6 +1784,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Albany Real Property Tax Service"
+  },
+  "36027": {
+   "name": "Dutchess County",
+   "url": "https://gis.dutchessny.gov/parcelaccess/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Dutchess Real Property Tax Service"
   },
   "36029": {
    "name": "Erie County",
@@ -1708,6 +1853,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Westchester Real Property Tax Service"
+  },
+  "37021": {
+   "name": "Buncombe County",
+   "url": "https://tax.buncombecounty.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Buncombe Assessor"
   },
   "37051": {
    "name": "Cumberland County",
@@ -1876,10 +2028,15 @@
   },
   "42003": {
    "name": "Allegheny County",
-   "url": "https://www2.alleghenycounty.us/RealEstate/search.aspx",
-   "kind": "search",
-   "src": "netr",
-   "ref": "Allegheny Assessor"
+   "url": "https://realestate.alleghenycounty.us/search",
+   "deep": "https://realestate.alleghenycounty.us/GeneralInfo?ID={parcel}&SearchType=3&SearchParcel={parcel10}",
+   "form": "as_is",
+   "extra": {
+    "parcel10": "lower10"
+   },
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "realestate.alleghenycounty.us/GeneralInfo?ID=<16-character parcel ID>&SearchType=3&SearchParcel=<its first 10, lowercase> pages listed by a search engine"
   },
   "42011": {
    "name": "Berks County",
@@ -1901,11 +2058,32 @@
    "src": "netr",
    "ref": "Chester Assessor"
   },
+  "42041": {
+   "name": "Cumberland County",
+   "url": "https://www.cumberlandcountypa.gov/3429/Property-Assessment-Tools-Services",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Cumberland Assessor"
+  },
+  "42043": {
+   "name": "Dauphin County",
+   "url": "https://dauphinpa.devnetwedge.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Dauphin Assessor"
+  },
   "42045": {
    "name": "Delaware County",
    "url": "https://www.delcopa.gov/treasurer/propertyassessment",
    "kind": "search",
    "src": "wp9"
+  },
+  "42049": {
+   "name": "Erie County",
+   "url": "https://public.eriecountypa.gov/property-tax-records/property-records/property-tax-search.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Erie Assessor"
   },
   "42071": {
    "name": "Lancaster County",
@@ -2055,6 +2233,13 @@
    "kind": "search",
    "src": "wp9"
   },
+  "47187": {
+   "name": "Williamson County",
+   "url": "https://www.williamsoncounty-tn.gov/64/Property-Assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Williamson Assessor"
+  },
   "48027": {
    "name": "Bell County",
    "url": "https://bellcad.org/",
@@ -2134,6 +2319,14 @@
    "src": "search-index",
    "ref": "HCAD Property Search listed by a search engine"
   },
+  "48209": {
+   "name": "Hays County",
+   "url": "https://hayscad.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Hays Appraisal District",
+   "was_http": true
+  },
   "48215": {
    "name": "Hidalgo County",
    "url": "https://hidalgoad.org/",
@@ -2147,6 +2340,14 @@
    "kind": "search",
    "src": "netr",
    "ref": "Lubbock Appraisal District"
+  },
+  "48309": {
+   "name": "McLennan County",
+   "url": "https://www.mclennancad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "McLennan Appraisal District",
+   "was_http": true
   },
   "48339": {
    "name": "Montgomery County",
@@ -2177,6 +2378,13 @@
    "src": "netr",
    "ref": "Travis Appraisal District"
   },
+  "48479": {
+   "name": "Webb County",
+   "url": "https://www.webbcad.org/property-search",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Webb Appraisal District"
+  },
   "48491": {
    "name": "Williamson County",
    "url": "https://www.wcad.org/",
@@ -2205,6 +2413,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Utah Assessor"
+  },
+  "49057": {
+   "name": "Weber County",
+   "url": "https://webercountyutah.gov/parcelsearch/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Weber Assessor"
   },
   "51041": {
    "name": "Chesterfield County",
@@ -2257,6 +2472,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "King Assessor"
+  },
+  "53035": {
+   "name": "Kitsap County",
+   "url": "https://psearch.kitsapgov.com/pdetails/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Kitsap Assessor"
   },
   "53053": {
    "name": "Pierce County",
