@@ -311,7 +311,8 @@ function formatSearchResult(row) {
  *
  * Query params:
  *   south, west, north, east — bounding box (required)
- *   categories               — comma-separated filter
+ *   categories               — comma-separated filter; any one matches, however
+ *                              either side is spelled (SQL business_category_key)
  *   open_now                 — boolean
  *   limit                    — max results (default 500)
  */
@@ -451,7 +452,8 @@ router.get('/map', async (req, res) => {
  *   lat / longitude        — center point (required if no home)
  *   lon / latitude         — center point
  *   radius_miles           — search radius (default 5, max 25)
- *   categories             — comma-separated category filter (array overlap)
+ *   categories             — comma-separated category filter; any one matches, however
+ *                            either side is spelled (SQL business_category_key)
  *   sort                   — Trust Lens: relevance | distance | rating | fastest_response
  *   rating_min             — minimum average rating (1-5)
  *   open_now               — boolean, filter to currently open businesses
