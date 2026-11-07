@@ -126,7 +126,8 @@ function tabCounty({ fips, county, publisher, source, page, pattern, table = 'ex
     build,
     dictionary: {
       columns: [...asked, 'Number of Bedrooms', 'Plumbing', 'Acreage'],
-      facts: { year_built: names.built, living_sqft: names.living, gross_sqft: names.living, bedrooms: 'Number of Bedrooms', bathrooms: 'Plumbing', full_baths: 'Plumbing', half_baths: 'Plumbing', lot_sqft: names.landSqft, lot_acres: 'Acreage', market_value: names.market, market_land_value: names.landValue, market_building_value: names.building, value_year: names.market },
+      // The value year is the export's own date, not a column.
+      facts: Object.fromEntries(Object.entries({ year_built: names.built, living_sqft: names.living, gross_sqft: names.living, bedrooms: 'Number of Bedrooms', bathrooms: 'Plumbing', full_baths: 'Plumbing', half_baths: 'Plumbing', lot_sqft: names.landSqft, lot_acres: names.acres || 'Acreage', market_value: names.market, market_land_value: names.landValue, market_building_value: names.building }).filter(([, column]) => column)),
     },
   };
 }

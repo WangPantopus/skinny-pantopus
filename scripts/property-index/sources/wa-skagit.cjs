@@ -43,6 +43,12 @@ function bathsIn(text) {
   return counts.full + counts.threeQuarter + counts.half ? counts : null;
 }
 
+// Construction columns mix words with a few bare codes ("CCP"): only words are shown.
+const words = (text) => {
+  const value = word(text);
+  return value && (/[\s-]/.test(value) || value.length >= 5) ? value : null;
+};
+
 function fromRow(row) {
   const unit = realUnit(word(row.Unit));
   const address = streetParts({ number: row.SitusStNo, name: word(row.SitusStName), unit });
@@ -58,9 +64,9 @@ function fromRow(row) {
   if (home || kind === 'building') {
     put(facts, 'year_built', year(row.YearBuilt));
     put(facts, 'effective_year_built', year(row.EffYearBuilt));
-    put(facts, 'foundation', word(row.Foundation));
-    put(facts, 'exterior_walls', word(row.ExteriorWalls));
-    put(facts, 'roof_cover', word(row.RoofCovering));
+    put(facts, 'foundation', words(row.Foundation));
+    put(facts, 'exterior_walls', words(row.ExteriorWalls));
+    put(facts, 'roof_cover', words(row.RoofCovering));
   }
   if (home) {
     put(facts, 'living_sqft', positive(row.LivingArea));
@@ -73,7 +79,7 @@ function fromRow(row) {
       put(facts, 'three_quarter_baths', baths.threeQuarter || null);
       put(facts, 'half_baths', baths.half || null);
     }
-    put(facts, 'heating', word(row.HeatAirCond));
+    put(facts, 'heating', words(row.HeatAirCond));
     put(facts, 'garage_sqft', positive(row.GarageSqFt));
     const basement = (positive(row.FinishedBasement) || 0) + (positive(row.UnfinishedBasement) || 0);
     put(facts, 'basement_sqft', basement || null);

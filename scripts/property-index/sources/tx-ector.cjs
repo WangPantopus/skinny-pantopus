@@ -89,6 +89,6 @@ module.exports = {
   build,
   dictionary: {
     columns: COLUMNS,
-    facts: { year_built: 'YEAR_BUILT', living_sqft: 'IMPROVEMENT_AREA', gross_sqft: 'IMPROVEMENT_AREA', lot_acres: 'ACREAGE', market_value: 'TOTAL_VALUE', market_land_value: 'LAND_VALUE', market_building_value: 'BUILDING_VALUE', value_year: 'TOTAL_VALUE' },
+    facts: { year_built: 'YEAR_BUILT', living_sqft: 'IMPROVEMENT_AREA', gross_sqft: 'IMPROVEMENT_AREA', lot_acres: 'ACREAGE', market_value: 'TOTAL_VALUE', market_land_value: 'LAND_VALUE', market_building_value: 'BUILDING_VALUE' },
   },
 };
