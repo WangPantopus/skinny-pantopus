@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -415,16 +416,7 @@ private fun MemberRowCard(
         ) {
             TeamAvatar(name = row.name, gradient = row.avatarGradient)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                    Text(
-                        text = row.name,
-                        style = PantopusTextStyle.body,
-                        color = PantopusColors.appText,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                    )
-                    RolePill(role = row.role)
-                }
+                NameWithRole(name = row.name, role = row.role)
                 row.email?.takeIf { it.isNotEmpty() }?.let { MetaLine(text = it, icon = PantopusIcon.Mail) }
                 row.joinedText?.let { MetaLine(text = it, icon = PantopusIcon.Clock) }
             }
@@ -459,16 +451,7 @@ private fun PendingRowCard(
     ) {
         TeamAvatar(name = row.name, gradient = BusinessTeamAvatarTone.toneFor(row.seatId).gradient, icon = PantopusIcon.Mail)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                Text(
-                    text = row.name,
-                    style = PantopusTextStyle.body,
-                    color = PantopusColors.appText,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                )
-                RolePill(role = row.role)
-            }
+            NameWithRole(name = row.name, role = row.role)
             row.email?.takeIf { it.isNotEmpty() }?.let { MetaLine(text = it, icon = PantopusIcon.Mail) }
             row.invitedText?.let { MetaLine(text = it, icon = PantopusIcon.Mailbox) }
         }
@@ -544,6 +527,46 @@ private fun OverflowButton(
     }
 }
 
+/** The list shell's large-text step (`LARGE_FONT_SCALE` in ListOfRowsScreen), where Members rows stack their chip. */
+private const val LARGE_FONT_SCALE = 1.3f
+
+/**
+ * A row's name and role chip, stacked as the per-home Members rows stack theirs. Below the large-text step they share a
+ * line, and a long name wraps beside the chip. From that step the chip goes under the name, so the chip is never
+ * squeezed into breaking inside its word ("Ad / min" at 200%). The name has no line limit, so none of it is cut off.
+ */
+@Composable
+private fun NameWithRole(
+    name: String,
+    role: BusinessRole,
+) {
+    if (LocalDensity.current.fontScale >= LARGE_FONT_SCALE) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            RowName(name = name)
+            RolePill(role = role)
+        }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+            RowName(name = name, modifier = Modifier.weight(1f, fill = false))
+            RolePill(role = role)
+        }
+    }
+}
+
+@Composable
+private fun RowName(
+    name: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = name,
+        style = PantopusTextStyle.body,
+        color = PantopusColors.appText,
+        fontWeight = FontWeight.SemiBold,
+        modifier = modifier,
+    )
+}
+
 @Composable
 private fun RolePill(role: BusinessRole) {
     val palette = role.palette
@@ -568,7 +591,9 @@ private fun MetaLine(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         PantopusIconImage(icon = icon, contentDescription = null, size = 11.dp, tint = PantopusColors.appTextSecondary)
-        Text(text = text, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary, maxLines = 1)
+        // No line limit: Android breaks an email address before its dots, so a one-line cap showed only the part
+        // before the first dot at large text, and an invitee's address can need three lines in a pending row.
+        Text(text = text, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
     }
 }
 
