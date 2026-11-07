@@ -57,6 +57,10 @@ on:
         description: "Facts to keep off its screens, comma separated; none brings them back; blank keeps them (switch)"
         required: false
         default: ""
+      estimates:
+        description: "on or off: a live county's owners see a Pantopus value estimate; blank keeps it (switch)"
+        required: false
+        default: ""
   pull_request:
     paths:
       - scripts/property-index/**
@@ -124,7 +128,8 @@ jobs:
           MODE: ${{ inputs.mode }}
           TARGET: ${{ inputs.target }}
           WITHHOLD: ${{ inputs.withhold }}
-        run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --bucket "$PROPERTY_INDEX_BUCKET"
+          ESTIMATES: ${{ inputs.estimates }}
+        run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --estimates "$ESTIMATES" --bucket "$PROPERTY_INDEX_BUCKET"
 
   publish:
     name: Build and publish
