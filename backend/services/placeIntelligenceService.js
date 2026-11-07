@@ -65,6 +65,11 @@ const { locationFromCoordinates, inferTimezone } = require('./context/locationRe
 
 const HOME_SELECT =
   'id, owner_id, address, address2, city, state, zipcode, map_center_lat, map_center_lng, year_built, sq_ft, bedrooms, bathrooms, lot_sq_ft, home_type, move_in_date';
+// The sections that read the property record's columns: Your home (propertyIntelligenceService.getProfile), the
+// exemption check and a renter's rent sections. Those columns come with Place's row when the response can show one,
+// and never reach the row the composers get, which may go into a payload.
+const RECORD_SELECT = `${HOME_SELECT}, address_id, niche_data`;
+const RECORD_SECTIONS = ['your_home', 'exemption_check', 'rent_band', 'real_rent'];
 
 // k-anon density bucket labels (mirror @pantopus/types PLACE_DENSITY_LABELS).
 const DENSITY_LABELS = {
@@ -996,7 +1001,7 @@ function yourHomeProvenance(profile) {
 const YOUR_HOME_LOOKING_UP = "Looking up this home's county record. It fills in here by itself.";
 const VALUE_FRESH_MS = propertyIntelligenceService.CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary = false) {
+async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary, recordRow, attomReads) {
   const access = bandAccess('B', tier);
   if (access === 'locked') {
     return [serializePlaceSection('your_home', {
@@ -1008,7 +1013,8 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   try {
     // With no index, getProfile never reaches the record's lookup, so this visit is counted here.
     if (!propertyRecordsConfig.enabled()) homeRecords.noteLookup('home', homeRecords.homeAddress(home), null);
-    result = await propertyIntelligenceService.getProfile(home.id);
+    const { data: row } = await recordRow();
+    result = await propertyIntelligenceService.getProfile(home.id, { home: row, reads: attomReads });
   } catch (err) {
     logger.warn('placeIntelligence: propertyIntelligence failed', { homeId: home.id, error: err.message });
     return [serializePlaceSection('your_home', { access, status: 'error' })];
@@ -1303,11 +1309,11 @@ const EXEMPTION_UNAVAILABLE_COPY = {
 };
 
 // The Home's bedrooms, baths and size as its other screens show them (householdFacts.shownColumns), for a renter's
-// rent band and block rent. Place's row leaves niche_data out, so it's read here for them alone; a failed read keeps
-// the row as it is.
-async function withShownColumns(home) {
+// rent band and block rent. The composers' row leaves niche_data out, so it comes from the record's row; a failed
+// read keeps the row as it is.
+async function withShownColumns(home, recordRow) {
   try {
-    const { data: stored, error } = await supabaseAdmin.from('Home').select('niche_data').eq('id', home.id).maybeSingle();
+    const { data: stored, error } = await recordRow();
     if (error || !stored) return home;
     const row = { ...home, niche_data: stored.niche_data };
     return { ...home, ...householdFacts.shownColumns(row, homeRecords.liveCopy(row)) };
@@ -1403,7 +1409,7 @@ async function composeRealRent(home, tier, userId, canVerify = true) {
   }
 }
 
-async function composeExemptionCheck(home, tier, wantsRecordVocabulary = false) {
+async function composeExemptionCheck(home, tier, wantsRecordVocabulary, recordRow, attomReads) {
   const access = bandAccess('B', tier);
   if (access === 'locked') {
     return [serializePlaceSection('exemption_check', {
@@ -1412,15 +1418,15 @@ async function composeExemptionCheck(home, tier, wantsRecordVocabulary = false) 
     })];
   }
   try {
-    // The check answers from the county record the Home stores. Place's Home
-    // row leaves niche_data out, so it's read here for this section only;
-    // without it the check asked ATTOM again and rewrote the record on every load.
-    const { data: stored, error } = await supabaseAdmin
-      .from('Home').select('niche_data, address_id').eq('id', home.id).maybeSingle();
+    // The check answers from the county record the Home stores. The composers'
+    // row leaves niche_data out, so it comes from the record's row, for this
+    // section only; without it the check asked ATTOM again and rewrote the
+    // record on every load.
+    const { data: stored, error } = await recordRow();
     if (error) throw error;
     const result = await exemptionCheckService.getExemptionCheck({
       ...home, niche_data: stored ? stored.niche_data : null, address_id: stored ? stored.address_id : null,
-    });
+    }, { reads: attomReads });
     if (result.status === 'partial') {
       // not_checked: only the state's program is shown, so it is the source.
       return [serializePlaceSection('exemption_check', {
@@ -1482,10 +1488,10 @@ const COMPOSER_SECTIONS = [
   { ids: ['drinking_water'], budget: true, run: ({ home }) => placeSectionAdapters.composeDrinkingWater(home) },
   { ids: ['environmental_hazards'], budget: true, run: ({ home }) => placeSectionAdapters.composeEnvironmentalHazards(home) },
   { ids: ['block_density'], run: ({ home }) => composeDensity(home) },
-  { ids: ['your_home'], budget: true, run: ({ home, tier, access, wantsRecordVocabulary }) => composeYourHome(home, tier, access, wantsRecordVocabulary) },
+  { ids: ['your_home'], budget: true, run: ({ home, tier, access, wantsRecordVocabulary, recordRow, attomReads }) => composeYourHome(home, tier, access, wantsRecordVocabulary, recordRow, attomReads) },
   { ids: ['home_systems'], run: ({ home, tier, access }) => composeHomeSystems(home, tier, access) },
   { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
-  { ids: ['exemption_check'], budget: true, run: ({ home, tier, wantsRecordVocabulary }) => composeExemptionCheck(home, tier, wantsRecordVocabulary) },
+  { ids: ['exemption_check'], budget: true, run: ({ home, tier, wantsRecordVocabulary, recordRow, attomReads }) => composeExemptionCheck(home, tier, wantsRecordVocabulary, recordRow, attomReads) },
   { ids: ['rent_band'], budget: true, run: async ({ rentHome }) => placeSectionAdapters.composeRentBand(await rentHome) },
   { ids: ['real_rent'], run: async ({ rentHome, tier, userId, access }) => composeRealRent(await rentHome, tier, userId, !nonResidentViewer(access)) },
   { ids: ['civic_districts'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
@@ -1539,12 +1545,16 @@ function buildPlaceRef(home, privacy) {
  */
 // The Home row this response is composed from. The route starts it alongside
 // its access check (one round trip fewer) and uses it only once access holds.
-function readHome(homeId) {
+// Given the request's `sectionIds` (null: every section), the row carries the
+// property record's columns when one of those sections reads them (`record`).
+function readHome(homeId, { sectionIds } = {}) {
+  const record = sectionIds !== undefined && (!sectionIds || sectionIds.some((id) => RECORD_SECTIONS.includes(id)));
   return Promise.resolve(supabaseAdmin
     .from('Home')
-    .select(HOME_SELECT)
+    .select(record ? RECORD_SELECT : HOME_SELECT)
     .eq('id', homeId)
     .maybeSingle())
+    .then((result) => (record ? { ...result, record } : result))
     .catch((error) => ({ data: null, error }));
 }
 
@@ -1552,12 +1562,22 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // Owner-only sections depend on whether the viewer's ownership is still
   // pending; read it alongside the Home.
   const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
-  const { data: home, error } = await (homeRead || readHome(homeId));
+  const { data: row, error, record } = await (homeRead || readHome(homeId));
 
-  if (error || !home) {
+  if (error || !row) {
     if (error) logger.warn('placeIntelligence: home fetch failed', { homeId, error: error.message });
     return null;
   }
+  // The record's sections read its columns from `recordRow`: this row when it
+  // came with them, else one read for all of them. The composers get the row
+  // without them.
+  const { address_id: _addressId, niche_data: _nicheData, ...placeRow } = row;
+  const home = record ? placeRow : row;
+  let recordRead = record ? Promise.resolve({ data: row, error: null }) : null;
+  const recordRow = () => (recordRead ??= Promise.resolve(supabaseAdmin.from('Home').select(RECORD_SELECT).eq('id', homeId).maybeSingle())
+    .catch((err) => ({ data: null, error: err })));
+  // Your home and the exemption check read the Home's ATTOM copies once between them.
+  const attomReads = new Map();
 
   const tier = resolveTier(access);
   const viewer = resolveViewer(access, tier, await ownershipPending);
@@ -1630,7 +1650,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   const subject = claimant ? { ...home, move_in_date: null } : home;
   // A renter's rent band and block rent go by the Home's bedrooms as its other screens show them.
   const rentHome = viewer.role === 'renter' && propertyRecordsConfig.enabled() && (requested.has('rent_band') || requested.has('real_rent'))
-    ? withShownColumns(subject) : Promise.resolve(subject);
+    ? withShownColumns(subject, recordRow) : Promise.resolve(subject);
   // The response waits for every section, so a stalled source (the Census
   // geocoder, FEMA's flood map) held the whole Place for its 8 s cutoff. The
   // provider-backed sections get the preview's per-section budget: one that runs
@@ -1645,7 +1665,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ ids, budget, run }) => {
-      const compose = () => run({ home: subject, rentHome, userId, tier, hubPromise, access, ballot: ballotOn, wantsRecordVocabulary, claimant, countyReads, budgetMs });
+      const compose = () => run({ home: subject, rentHome, userId, tier, hubPromise, access, ballot: ballotOn, wantsRecordVocabulary, claimant, countyReads, budgetMs, recordRow, attomReads });
       if (!budget) return compose();
       let over = false;
       // A section past its budget keeps running to fill its cache; its real

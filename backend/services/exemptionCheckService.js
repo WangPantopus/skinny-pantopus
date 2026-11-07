@@ -180,8 +180,10 @@ function notChecked(home, unavailableReason) {
  *   status 'ready' with the parcel's ladder, 'partial' (not_checked, with
  *   a reason key the composer maps to honest copy) when no parcel line
  *   was read, or 'error'.
+ * `reads`: the request's shared reads of the Home's ATTOM copies
+ *   (propertyIntelligenceService readOnce).
  */
-async function getExemptionCheck(home) {
+async function getExemptionCheck(home, { reads = null } = {}) {
   // From the county's own fields when the Home has its record: an exact match's own account, nothing about a building.
   const record = await homeRecords.forHome(home);
   if (record) {
@@ -202,7 +204,7 @@ async function getExemptionCheck(home) {
   }
   let result;
   try {
-    result = await propertyIntelligenceService.getHomeAttomPropertyDetail(home);
+    result = await propertyIntelligenceService.getHomeAttomPropertyDetail(home, { reads });
   } catch (err) {
     logger.warn('exemptionCheck: property detail failed', { homeId: home.id, error: err.message });
     return { status: 'error' };
