@@ -8,9 +8,8 @@
 //    - intent mapping from post_type (ask_local → ask, recommendation →
 //      recommend, event → event, lost_found → lost, local_update →
 //      announce, unknown → announce)
-//    - engagement strip mapping per intent (event uses "going",
-//      recommend uses "helpful", lost uses "seen", ask/announce use
-//      "likes")
+//    - engagement strip mapping per intent (event uses "going", every
+//      other kind counts its emoji "reactions")
 //    - row projection: intent chip in headerChips, time meta combines
 //      relative time + locality, body uses primary emphasis, archived
 //      highlight + ARCHIVED chip on archived rows
@@ -174,16 +173,16 @@ final class MyPostsViewModelTests: XCTestCase {
         XCTAssertEqual(events.map(\.label), ["12 going", "5 replies"])
 
         let recommend = MyPostsViewModel.engagementItems(for: post("recommendation"), intent: .recommend)
-        XCTAssertEqual(recommend.map(\.label), ["12 helpful", "5 replies"])
+        XCTAssertEqual(recommend.map(\.label), ["12 reactions", "5 replies"])
 
         let win = MyPostsViewModel.engagementItems(for: post("neighborhood_win"), intent: .neighborhoodWin)
-        XCTAssertEqual(win.map(\.label), ["5 replies", "12 celebrated"])
+        XCTAssertEqual(win.map(\.label), ["5 replies", "12 reactions"])
 
         let lost = MyPostsViewModel.engagementItems(for: post("lost_found"), intent: .lost)
-        XCTAssertEqual(lost.map(\.label), ["5 replies", "12 helpful"])
+        XCTAssertEqual(lost.map(\.label), ["5 replies", "12 reactions"])
 
         let singleReply = MyPostsViewModel.engagementItems(for: post("ask_local", likes: 1, replies: 1), intent: .ask)
-        XCTAssertEqual(singleReply.map(\.label), ["1 reply", "1 helpful"])
+        XCTAssertEqual(singleReply.map(\.label), ["1 reply", "1 reaction"])
     }
 
     func testTimeMetaCombinesRelativeTimeAndLocality() {

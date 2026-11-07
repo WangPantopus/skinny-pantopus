@@ -948,9 +948,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// Engagement strip items: the replies and the post's reaction, named
-    /// by its type as on its card ("X going", "X celebrated", "X helpful").
-    /// Events and recommendations lead with the reaction, the rest with replies.
+    /// Engagement strip items: the replies and the post's reactions, as on
+    /// its card ("X going" on an Event, else "1 reaction" / "X reactions").
+    /// Events and recommendations lead with the reactions, the rest with replies.
     public static func engagementItems(
         for dto: MyPostDTO,
         intent: PulseIntent
@@ -961,7 +961,8 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             label: "\(dto.commentCount) \(dto.commentCount == 1 ? "reply" : "replies")"
         )
         let kind = PostReactionKind(postType: dto.postType)
-        let reaction = RowEngagementItem(id: kind.rawValue, icon: kind.icon, label: kind.countText(dto.likeCount))
+        let reacted = kind == .going ? dto.likeCount : dto.emojiReactions.total
+        let reaction = RowEngagementItem(id: kind.rawValue, icon: kind.icon, label: kind.countText(reacted))
         switch intent {
         case .event, .recommend:
             return [reaction, replies]

@@ -739,6 +739,7 @@ export default function FeedPage() {
                             <PostCard
                               post={post}
                               onLike={feed.handleLike}
+                              onReact={feed.handleReact}
                               onSave={feed.handleSave}
                               onDelete={feed.handleDelete}
                               onEdit={setEditingPost}

@@ -1166,7 +1166,7 @@ public struct FeedView: View {
         return PulsePostCard(
             content: row,
             onTap: { onOpenPost(row.id) },
-            onPrimaryReaction: { react(to: row.id) },
+            onPickReaction: { emoji in run { await viewModel.pickReaction(postId: row.id, emoji: emoji) } },
             onRSVP: onRSVP,
             onOverflow: onOverflow,
             onDismissSeeded: onDismissSeeded,

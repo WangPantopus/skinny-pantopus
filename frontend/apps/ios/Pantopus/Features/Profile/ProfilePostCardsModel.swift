@@ -4,7 +4,7 @@
 //
 //  A person's posts on their profile, drawn with the Pulse card
 //  (`PulsePostCard`): photos and videos, event times, tappable links,
-//  Helpful, Save, Repost and the post menu (share, report). The rows come
+//  reactions, Save, Repost and the post menu (share, report). The rows come
 //  from `GET /api/posts/user/:id`, which uses the feed's serializer, and each
 //  tap calls the endpoint the Pulse feed calls for it
 //  (`PulseFeedViewModel`).
@@ -45,6 +45,7 @@ public final class ProfilePostCardsModel {
     private struct Override {
         var hasReacted: Bool?
         var likeCount: Int?
+        var reactions: PostReactions?
         var isSaved: Bool?
         var isReposted: Bool?
         var shareCount: Int?
@@ -93,10 +94,11 @@ public final class ProfilePostCardsModel {
 
     // MARK: - Taps
 
-    /// Helpful (or Going on an Event): `POST /api/posts/:id/like`, shown at
-    /// once and rolled back if the server refuses.
+    /// Going on an Event: `POST /api/posts/:id/like`, shown at once and
+    /// rolled back if the server refuses.
     func tapReaction(postId: String) async {
-        guard let post = post(postId), begin(.reaction, postId: postId) else { return }
+        guard let post = post(postId), PostReactionKind(postType: post.postType) == .going,
+              begin(.reaction, postId: postId) else { return }
         let current = overrides[postId]?.hasReacted ?? post.userHasLiked
         let currentCount = overrides[postId]?.likeCount ?? post.likeCount
         let toggled = !current
@@ -115,6 +117,32 @@ public final class ProfilePostCardsModel {
         } catch {
             overrides[postId, default: Override()].hasReacted = current
             overrides[postId, default: Override()].likeCount = currentCount
+            onToast?("Couldn't update your reaction.")
+        }
+    }
+
+    /// An emoji picked on a card (every post but an Event), as in the Pulse
+    /// feed: set, switched, or taken away when it's already the viewer's;
+    /// shown at once, the server's counts replace the guess, rolled back on
+    /// failure.
+    func pickReaction(postId: String, emoji: PostReactionEmoji) async {
+        guard let post = post(postId), PostReactionKind(postType: post.postType) == .emoji,
+              begin(.reaction, postId: postId) else { return }
+        let before = overrides[postId]?.reactions ?? post.emojiReactions
+        let wanted = before.request(picking: emoji)
+        let shown = before.setting(wanted)
+        overrides[postId, default: Override()].reactions = shown
+        rebuild()
+        defer { finish(.reaction, postId: postId) }
+        do {
+            let response = try await client.request(
+                PostsEndpoints.setReaction(id: postId, reaction: wanted),
+                as: PostLikeResponse.self
+            )
+            overrides[postId, default: Override()].reactions = shown.confirmed(by: response)
+            store.markStale(topics: [ScreenTopic.posts, ScreenTopic.post(postId)])
+        } catch {
+            overrides[postId, default: Override()].reactions = before
             onToast?("Couldn't update your reaction.")
         }
     }
@@ -261,6 +289,7 @@ public final class ProfilePostCardsModel {
             if let value = overrides[post.id] {
                 live.hasReacted = value.hasReacted ?? live.hasReacted
                 live.likeCount = value.likeCount ?? live.likeCount
+                live.reactions = value.reactions ?? live.reactions
                 live.isSaved = value.isSaved ?? live.isSaved
                 live.isReposted = value.isReposted ?? live.isReposted
                 live.shareCount = value.shareCount ?? live.shareCount

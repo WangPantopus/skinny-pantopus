@@ -9,7 +9,7 @@ import type { Post, MatchedBusiness } from '@pantopus/api';
 import type { User } from '@pantopus/types';
 import {
   MessageCircle, Star, CalendarDays, Search as SearchIcon, Megaphone, AlertTriangle,
-  Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon, ShieldAlert, Pin, PinOff,
+  Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon, ShieldAlert, Pin, PinOff, CalendarCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { CommentThread, EditPostDialog } from '@/components/feed';
@@ -19,9 +19,9 @@ import { PostMediaPreview, resolvePostMediaSlots } from '@/components/feed/PostM
 import PostMediaLightbox from '@/components/feed/PostMediaLightbox';
 import { PostLinkContent } from '@/components/feed/LinkPreviewCard';
 import {
-  formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, POST_REACTION_LABEL, postReaction,
+  formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, postReaction,
 } from '@pantopus/ui-utils';
-import { postReactionIcon } from '@/components/feed/PostCard';
+import { PostReactionBar, reactedPostPatch, reactionFieldsOf, serverReactionPatch } from '@/components/feed/PostReactions';
 import { getErrorMessage, chosenUsername } from '@pantopus/utils';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -161,6 +161,30 @@ export default function PostDetailPage() {
     if (!post) return;
     likeMutation.mutate({ postId: post.id, liked: !post.userHasLiked });
   }, [post, likeMutation]);
+
+  // An emoji on any kind but an event (whose Going is the like above): shown at once, put back if refused.
+  const reactMutation = useMutation({
+    mutationFn: ({ postId, reaction }: { postId: string; reaction: string | null }) => api.posts.setReaction(postId, reaction),
+    onMutate: ({ reaction }) => {
+      const previous = post ? reactionFieldsOf(post) : null;
+      setPost((p: Post | null) => (p ? { ...p, ...reactedPostPatch(p, reaction) } : p));
+      return { previous };
+    },
+    onSuccess: (res, { postId }) => {
+      setPost((p: Post | null) => (p ? { ...p, ...serverReactionPatch(res, p.reactions) } : p));
+      patchPostInFeedCaches(queryClient, postId, serverReactionPatch(res, post?.reactions));
+    },
+    onError: (_err, _vars, context) => {
+      showToast("Couldn't update your reaction. Please try again.");
+      const previous = context?.previous;
+      if (previous) setPost((p: Post | null) => (p ? { ...p, ...previous } : p));
+    },
+  });
+
+  const handleReact = useCallback((reaction: string | null) => {
+    if (!post || reactMutation.isPending) return;
+    reactMutation.mutate({ postId: post.id, reaction });
+  }, [post, reactMutation]);
 
   const saveMutation = useMutation({
     mutationFn: ({ postId, saved }: { postId: string; saved: boolean }) => api.posts.toggleSave(postId, saved),
@@ -341,8 +365,7 @@ export default function PostDetailPage() {
   // ─── Derived ───────────────────────────────────────────────
   const config = getPostTypeConfig(post?.post_type || 'general');
   const TypeIcon = getTypeIcon(post?.post_type || 'general');
-  const reactionLabel = POST_REACTION_LABEL[postReaction(post?.post_type)];
-  const ReactionIcon = postReactionIcon(post?.post_type);
+  const isEvent = postReaction(post?.post_type) === 'going';
   const isOwn = post?.user_id === user?.id;
   // A plan's own post is changed or cancelled from the plan, which tells everyone (the server refuses it here).
   const isPlanPost = post?.post_metadata?.plan === true;
@@ -716,23 +739,30 @@ export default function PostDetailPage() {
             </div>
           )}
 
+          {/* Each emoji's count and the button for the picker; an event's Going is in the bar below */}
+          {!isEvent && (
+            <PostReactionBar post={post} pending={reactMutation.isPending} onReact={handleReact} className="px-4 pb-3" />
+          )}
+
           {/* Action bar: on a phone, icons and counts as on the feed cards; the words show from sm up
               and are always read to screen readers. */}
           <div className="flex items-center gap-1 px-4 py-3 border-t border-app whitespace-nowrap">
-            {/* The post's one reaction, named by its kind (Going, Celebrate, Helpful), as on its card */}
-            <button
-              onClick={handleLike}
-              aria-pressed={!!post.userHasLiked}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                post.userHasLiked
-                  ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300'
-                  : 'text-app-muted hover-bg-app'
-              }`}
-            >
-              <ReactionIcon className="w-4 h-4" aria-hidden="true" />
-              <span>{reactionLabel}</span>
-              {post.like_count > 0 && <span>{post.like_count}</span>}
-            </button>
+            {/* Going on an event, as on its card */}
+            {isEvent && (
+              <button
+                onClick={handleLike}
+                aria-pressed={!!post.userHasLiked}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                  post.userHasLiked
+                    ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300'
+                    : 'text-app-muted hover-bg-app'
+                }`}
+              >
+                <CalendarCheck className="w-4 h-4" aria-hidden="true" />
+                <span>Going</span>
+                {post.like_count > 0 && <span>{post.like_count}</span>}
+              </button>
+            )}
 
             {/* Comment count */}
             <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-app-muted">

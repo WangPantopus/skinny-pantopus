@@ -5,8 +5,8 @@
 //  Backs the Pulse feed (Hub → Pulse pillar). Fetches
 //  `GET /api/posts/feed?surface=place|connections` and refetches when the
 //  surface toggle, the topic chips (Nearby: `topic`, Pulse S4) or the
-//  chip-row filter changes. Reactions optimistically toggle the local count
-//  and hit `POST /api/posts/:id/like`; the card overflow menu drives save /
+//  chip-row filter changes. Reactions (an emoji, or an Event's Going) show
+//  at once and hit `POST /api/posts/:id/like`; the card overflow menu drives save /
 //  repost / share / hide / mute / topic mute / not-helpful / solve / report /
 //  delete against `backend/routes/posts.js`.
 //
@@ -34,6 +34,8 @@ private struct PulsePostOverride {
     var isSolved: Bool?
     var hasReacted: Bool?
     var likeCount: Int?
+    /// Every post but an Event: its emoji reactions after the viewer's pick.
+    var reactions: PostReactions?
     /// The asker kept the Ask open; `expiresAt` is its new end (Pulse S7).
     var keptOpen: Bool?
     var expiresAt: String?
@@ -43,8 +45,11 @@ private struct PulsePostOverride {
 /// The feed and a person's profile (`ProfilePostCardsModel`) build the same
 /// card from a row plus these.
 struct PulseCardLiveValues {
+    /// An Event's Going: whether the viewer is going, and how many are.
     var hasReacted: Bool
     var likeCount: Int
+    /// Every other post's emoji reactions.
+    var reactions: PostReactions
     var isSaved: Bool
     var isReposted: Bool
     var shareCount: Int
@@ -57,6 +62,7 @@ struct PulseCardLiveValues {
     init(_ post: FeedPostDTO) {
         hasReacted = post.userHasLiked
         likeCount = post.likeCount
+        reactions = post.emojiReactions
         isSaved = post.userHasSaved
         isReposted = post.userHasReposted
         shareCount = post.shareCount
@@ -455,11 +461,12 @@ public final class PulseFeedViewModel {
         await fetchNextPage()
     }
 
-    /// Tap on a post's primary reaction. Optimistically toggles the
-    /// per-post `userHasReacted` flag + helpful count, then hits
+    /// Going on an Event. Optimistically toggles the per-post
+    /// `userHasReacted` flag + going count, then hits
     /// `POST /api/posts/:id/like`. Rolls back on failure.
     public func tapReaction(postId: String) async {
         guard let item = loadedItems.first(where: { $0.id == postId }),
+              PostReactionKind(postType: item.postType) == .going,
               beginAction(.reaction, postId: postId) else { return }
         let current = effectiveHasReacted(item)
         let currentCount = effectiveLikeCount(item)
@@ -483,6 +490,37 @@ public final class PulseFeedViewModel {
         } catch {
             overrides[postId, default: PulsePostOverride()].hasReacted = current
             overrides[postId, default: PulsePostOverride()].likeCount = currentCount
+            toastMessage = "Couldn't update your reaction."
+        }
+    }
+
+    /// An emoji picked on a post's card (every post but an Event): sets it,
+    /// switches to it, or takes it away when it's already the viewer's. Shown
+    /// at once, sent as `{"reaction": …}`, then the server's counts replace
+    /// the guess; rolled back on failure. Taps wait while one is on its way.
+    public func pickReaction(postId: String, emoji: PostReactionEmoji) async {
+        guard let item = loadedItems.first(where: { $0.id == postId }), !item.isSeeded,
+              PostReactionKind(postType: item.postType) == .emoji,
+              beginAction(.reaction, postId: postId) else { return }
+        let before = effectiveReactions(item)
+        let wanted = before.request(picking: emoji)
+        let shown = before.setting(wanted)
+        overrides[postId, default: PulsePostOverride()].reactions = shown
+        rebuildLoadedState()
+        defer {
+            finishAction(.reaction, postId: postId)
+            rebuildLoadedState()
+        }
+
+        do {
+            let response = try await api.request(
+                PostsEndpoints.setReaction(id: postId, reaction: wanted),
+                as: PostLikeResponse.self
+            )
+            overrides[postId, default: PulsePostOverride()].reactions = shown.confirmed(by: response)
+            store.markStale(topics: [ScreenTopic.posts, ScreenTopic.post(postId)])
+        } catch {
+            overrides[postId, default: PulsePostOverride()].reactions = before
             toastMessage = "Couldn't update your reaction."
         }
     }
@@ -589,6 +627,7 @@ public final class PulseFeedViewModel {
             guard var value = overrides[post.id] else { continue }
             value.hasReacted = nil
             value.likeCount = nil
+            value.reactions = nil
             value.isSaved = nil
             value.isReposted = nil
             value.shareCount = nil
@@ -1214,12 +1253,17 @@ public final class PulseFeedViewModel {
         overrides[post.id]?.likeCount ?? post.likeCount
     }
 
+    private func effectiveReactions(_ post: FeedPostDTO) -> PostReactions {
+        overrides[post.id]?.reactions ?? post.emojiReactions
+    }
+
     // MARK: - Projection
 
     private func project(_ post: FeedPostDTO) -> PulsePostCardContent {
         var live = PulseCardLiveValues(post)
         live.hasReacted = effectiveHasReacted(post)
         live.likeCount = effectiveLikeCount(post)
+        live.reactions = effectiveReactions(post)
         live.isSaved = effectiveIsSaved(post)
         live.isReposted = effectiveIsReposted(post)
         live.shareCount = effectiveShareCount(post)
@@ -1241,8 +1285,12 @@ public final class PulseFeedViewModel {
         let intent = PulseIntent.from(postType: post.postType)
         let initials = Self.initials(from: post.creator?.displayName ?? "?")
         let isBusiness = post.creator?.accountType == "business" || post.businessAuthorId != nil
-        let hasReacted = live.hasReacted
         let likeCount = live.likeCount
+        // An Event's Going (the backend's like counter), every other post's emoji.
+        let reaction = PostReactionKind(postType: post.postType) == .going
+            ? PulseReaction(kind: .going, likeCount: likeCount)
+            : PulseReaction(emoji: live.reactions)
+        let hasReacted = reaction.kind == .going ? live.hasReacted : live.reactions.mine != nil
         let attendees: PulseAttendeeStrip? = intent == .event
             ? PulseAttendeeStrip(
                 avatars: [],
@@ -1282,9 +1330,7 @@ public final class PulseFeedViewModel {
                 venue: post.eventVenue,
                 isPlanPost: post.isPlanPost
             ),
-            // The post's one reaction (the backend's single like counter),
-            // named by its type: Going, Celebrate or Helpful.
-            reaction: PulseReaction(postType: post.postType, likeCount: likeCount),
+            reaction: reaction,
             attendees: attendees,
             userHasReacted: hasReacted,
             // Image tiles render the full-size stills (thumbnails are

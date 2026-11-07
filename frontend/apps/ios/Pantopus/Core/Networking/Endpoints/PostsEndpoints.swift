@@ -106,9 +106,17 @@ public enum PostsEndpoints {
 
     /// `POST /api/posts/:id/like` — sets the like to `liked` (the state the person chose; a
     /// re-sent request can't flip it back), or toggles when it's nil; returns the new
-    /// `{liked, likeCount}` state. Route `backend/routes/posts.js:2595`.
+    /// `{liked, likeCount}` state. An Event's Going. Route `backend/routes/posts.js:3423`.
     public static func toggleLike(id: String, liked: Bool? = nil) -> Endpoint {
         Endpoint(method: .post, path: "/api/posts/\(id)/like", body: liked.map { PostLikeStateRequest(liked: $0) })
+    }
+
+    /// `POST /api/posts/:id/like` with `{"reaction": "❤️"}` — sets the viewer's emoji on any
+    /// post but an Event (adding it, or switching from another), or with `{"reaction": null}`
+    /// takes it away; a re-sent request leaves the same state. Returns `{liked, likeCount,
+    /// reaction, reactions}` (`PostLikeResponse`). Route `backend/routes/posts.js:3423`.
+    public static func setReaction(id: String, reaction: PostReactionEmoji?) -> Endpoint {
+        Endpoint(method: .post, path: "/api/posts/\(id)/like", body: PostReactionRequest(reaction: reaction))
     }
 
     /// `GET /api/posts/:id/comments` — paged. Route
