@@ -6,7 +6,7 @@
 
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
-const { download, zipTable, zipMembers, zipDates, USER_AGENT } = require('../lib/tables.cjs');
+const { download, zipTable, zipMembers, USER_AGENT } = require('../lib/tables.cjs');
 const { number, positive } = require('../lib/values.cjs');
 const { fillHomes, bathFacts, describe } = require('../lib/fill.cjs');
 const { log } = require('../lib/log.cjs');
@@ -78,7 +78,7 @@ async function* build({ work, today }) {
     ...roll,
     name: COUNTY,
     publisher: 'Florida Department of Revenue and the Osceola County Property Appraiser',
-    dataset: `${roll.dataset}, with bedrooms, baths, floors and heated area from the Property Appraiser's ${year} certified roll data (${zipDates(zip).get(member('vw_mdbld'))})`,
+    dataset: `${roll.dataset} and ${year} certified building data`,
     method: 'county',
     source: 'fl-osceola',
     title: 'County records',

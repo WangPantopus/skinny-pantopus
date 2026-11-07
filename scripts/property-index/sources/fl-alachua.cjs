@@ -79,7 +79,7 @@ async function* build({ work, today }) {
     ...roll,
     name: COUNTY,
     publisher: 'Florida Department of Revenue and the Alachua County Property Appraiser',
-    dataset: `${roll.dataset}, with bedrooms, baths, floors, heated area, roof and walls from the Property Appraiser's CAMA data (${zipDates(zip).get('Improvements.txt')})`,
+    dataset: `${roll.dataset} and building data of ${zipDates(zip).get('Improvements.txt')}`,
     method: 'county',
     source: 'fl-alachua',
     title: 'County records',
