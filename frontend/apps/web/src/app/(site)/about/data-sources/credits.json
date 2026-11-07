@@ -153,6 +153,22 @@
           "license": "CC BY 4.0",
           "license_url": "https://creativecommons.org/licenses/by/4.0/",
           "dataset": "Land Information Records parcels"
+        },
+        {
+          "id": "ca-sonoma",
+          "publisher": "County of Sonoma, California",
+          "url": "https://socogis.sonomacounty.ca.gov/map/rest/services/CRAPublic/ParcelsPublic/FeatureServer/0",
+          "license": "County of Sonoma terms: share for any purpose with credit, changes noted",
+          "license_url": "https://socogis.sonomacounty.ca.gov/map/rest/services/CRAPublic/ParcelsPublic/FeatureServer/0",
+          "dataset": "Parcels Public, reformatted"
+        },
+        {
+          "id": "pa-berks",
+          "publisher": "County of Berks, Pennsylvania",
+          "url": "https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer",
+          "license": "County of Berks GIS Data General Agreement and Terms",
+          "license_url": "https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer",
+          "dataset": "Information is based on geospatial data from the County of Berks (CAMA residential file)"
         }
       ]
     },
