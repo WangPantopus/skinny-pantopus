@@ -35,15 +35,19 @@ const EMPTY_MESSAGES = {
   none: 'We don\'t have county records for this home yet.',
 };
 
+/** Whether a record's sale price is for more than this home: the deed's price, not the home's. */
+const coversMoreThanHome = (facts) => facts.market_value > 0 && facts.sale_price > MOST_SALE_TIMES_VALUE * facts.market_value;
+const COVERS_MORE_NOTE = 'The recorded price for this sale covers more than this home, so it isn\'t shown.';
+
 function lastSale(facts, state) {
-  const many = facts.market_value > 0 && facts.sale_price > MOST_SALE_TIMES_VALUE * facts.market_value;
+  const many = coversMoreThanHome(facts);
   const price = facts.sale_price >= LOWEST_SALE_PRICE && !many ? money(facts.sale_price) : null;
   const when = (facts.sale_date && dateLabel(facts.sale_date)) || facts.sale_month || null;
   // A price too small to be a sale means the date is a transfer's too.
   const row = price || (when && (!facts.sale_price || many))
     ? { id: 'last_sale', label: 'Last sale', value: [price, when].filter(Boolean).join(' · ') }
     : null;
-  if (many) return { row, note: 'The recorded price for this sale covers more than this home, so it isn\'t shown.' };
+  if (many) return { row, note: COVERS_MORE_NOTE };
   const place = price ? null : SALE_PRICES_NOT_PUBLIC[state];
   return { row, note: place ? `Sale prices aren't public in ${place}.` : null };
 }
@@ -106,4 +110,4 @@ function build(profile, { trend = null, lookup = null } = {}) {
   };
 }
 
-module.exports = { build };
+module.exports = { build, coversMoreThanHome, COVERS_MORE_NOTE };
