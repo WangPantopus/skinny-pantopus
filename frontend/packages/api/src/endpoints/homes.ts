@@ -203,6 +203,8 @@ export interface CountyRecord {
   /** Names the source and date: "From Clark County Assessor's weekly file · updated Oct 31, 2026" */
   footer: string | null;
   as_of: string | null;
+  /** The labeled national floor: modeled figures, not a record of this home. */
+  estimate?: boolean;
 }
 
 export interface HomePropertyDetailResponse {
