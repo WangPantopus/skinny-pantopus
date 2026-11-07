@@ -316,6 +316,12 @@ class PulseFeedViewModel
         /** All pages loaded so far — search filters project from this. */
         private var loadedPosts: List<FeedPost> = emptyList()
         private var heldPosts: List<FeedPost> = emptyList()
+
+        /**
+         * A first page that doesn't reach the rows on screen (more posts came in than a page holds), waiting while the
+         * reader is below the top: it replaces those rows when they go back up, so the posts in between load in order.
+         */
+        private var heldFirstPage: FeedResponse? = null
         private var readingAtTop = true
         private val _newPostCount = MutableStateFlow(0)
         val newPostCount: StateFlow<Int> = _newPostCount.asStateFlow()
@@ -327,6 +333,12 @@ class PulseFeedViewModel
         }
 
         fun showNewPosts() {
+            heldFirstPage?.let { page ->
+                replaceList(page.posts)
+                applyPagination(page.pagination)
+                rebuildLoadedState()
+                return
+            }
             if (heldPosts.isEmpty()) return
             loadedPosts = (heldPosts + loadedPosts).distinctBy { it.id }
             heldPosts = emptyList()
@@ -336,7 +348,11 @@ class PulseFeedViewModel
 
         private var nextCursorCreatedAt: String? = null
         private var nextCursorId: String? = null
+        private var nextCursorRankBucket: Int? = null
         private var hasMore = false
+
+        /** The page read in flight; bumped when the list is replaced, so a page of the old list is dropped when it lands. */
+        private var pageReads = 0
 
         /** Optimistic per-post state layered over [loadedPosts]. */
         private var overrides: Map<String, PulsePostOverride> = emptyMap()
@@ -1075,17 +1091,25 @@ class PulseFeedViewModel
 
         // ── Fetch ───────────────────────────────────────────────────────
 
+        /**
+         * Reads the page after the rows on screen. A quiet first-page read (a store change, coming back) leaves it
+         * running: only a list that was replaced meanwhile (a pull, a new query, a first page that didn't reach these
+         * rows) drops it.
+         */
         private fun fetchNextPage() {
             val cursorCreatedAt = nextCursorCreatedAt ?: return
             val cursorId = nextCursorId ?: return
+            val cursorRankBucket = nextCursorRankBucket
             val generation = fetchGeneration
+            val read = ++pageReads
             _loadMoreError.value = null
             _isLoadingMore.value = true
             viewModelScope.launch {
+                var readsOn = false
                 try {
                     // Later pages continue the first page's query: its area and filters.
                     val query = lastQuery ?: feedQuery(lastArea ?: resolvedArea())
-                    if (generation != fetchGeneration) return@launch
+                    if (read != pageReads) return@launch
                     when (
                         val result =
                             repo.feed(
@@ -1099,35 +1123,96 @@ class PulseFeedViewModel
                                 sportsMode = query.sportsMode,
                                 eventKey = query.eventKey,
                                 radiusMiles = query.radiusMiles,
+                                cursorRankBucket = cursorRankBucket,
                             )
                     ) {
                         is NetworkResult.Success -> {
-                            if (generation != fetchGeneration) return@launch
-                            acceptRestoredAsks(result.data.posts, generation)
-                            val known = loadedPosts.map { it.id }.toSet()
-                            loadedPosts = loadedPosts + result.data.posts.filter { it.id !in known }
-                            applyPagination(result.data.pagination)
-                            rebuildLoadedState()
+                            if (read != pageReads) return@launch
+                            readsOn = appendPage(result.data, cursorId, generation)
                         }
                         is NetworkResult.Failure -> {
-                            if (generation != fetchGeneration) return@launch
-                            _loadMoreError.value = result.error.displayMessage("Couldn't load more posts.")
+                            if (read != pageReads) return@launch
+                            pageFailed(result.error.displayMessage("Couldn't load more posts."))
                         }
                     }
                 } catch (error: NetworkError) {
-                    if (generation == fetchGeneration) {
-                        _loadMoreError.value = error.displayMessage("Couldn't load your viewing area. Try again.")
-                    }
+                    if (read == pageReads) pageFailed(error.displayMessage("Couldn't load your viewing area. Try again."))
                 } finally {
-                    if (generation == fetchGeneration) _isLoadingMore.value = false
+                    if (read == pageReads) _isLoadingMore.value = false
                 }
+                if (readsOn && read == pageReads) fetchNextPage()
+            }
+        }
+
+        /**
+         * Adds a page below the rows on screen. True when it showed nothing new while the server has more past it: it
+         * crosses a long run of posts it leaves out (muted, hidden, politics) with short or empty pages, and with no new
+         * last row to come into view and ask for more, the next page is read at once.
+         */
+        private fun appendPage(
+            page: FeedResponse,
+            cursorId: String,
+            generation: Int,
+        ): Boolean {
+            acceptRestoredAsks(page.posts, generation)
+            val shownBefore = visiblePosts().size
+            val known = loadedPosts.map { it.id }.toSet()
+            loadedPosts = loadedPosts + page.posts.filter { it.id !in known }
+            applyPagination(page.pagination)
+            rebuildLoadedState()
+            val readsOn = hasMore && visiblePosts().size == shownBefore && nextCursorId != cursorId
+            // Every page so far was left out, the first one included, and no more will come: the area is empty after all.
+            if (!readsOn && loadedPosts.isEmpty() && _state.value is PulseFeedUiState.Loading) {
+                _state.value = emptyState(noAreaSearched = false)
+            }
+            return readsOn
+        }
+
+        /**
+         * A first page the server left empty while it crosses posts it leaves out (the skeleton stays up): reads on, or
+         * says why it can't when that page was only the stored copy of a read that failed.
+         */
+        private fun readOnPastEmptyFirstPage(failure: NetworkError?) {
+            if (_state.value !is PulseFeedUiState.Loading) return
+            if (failure == null) {
+                fetchNextPage()
+            } else {
+                _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
+            }
+        }
+
+        /** A page that couldn't load: the list's footer says so, or the screen while nothing is shown yet. */
+        private fun pageFailed(message: String) {
+            if (_state.value is PulseFeedUiState.Loading) {
+                _state.value = PulseFeedUiState.Error(message)
+            } else {
+                _loadMoreError.value = message
             }
         }
 
         private fun applyPagination(pagination: app.pantopus.android.data.api.models.feed.FeedPagination?) {
             nextCursorCreatedAt = pagination?.nextCursor?.createdAt
             nextCursorId = pagination?.nextCursor?.id
+            // The Sports lane orders by rank bucket first: its next page needs the bucket the cursor is in.
+            nextCursorRankBucket = pagination?.nextCursor?.rankBucket
             hasMore = pagination?.hasMore == true && nextCursorCreatedAt != null
+        }
+
+        /** The list starts again from [posts]: held rows go, and a page read for the old rows is dropped when it lands. */
+        private fun replaceList(posts: List<FeedPost>) {
+            pageReads++
+            _isLoadingMore.value = false
+            _loadMoreError.value = null
+            heldPosts = emptyList()
+            heldFirstPage = null
+            _newPostCount.value = 0
+            loadedPosts = posts
+        }
+
+        /** A query no longer on show: nothing redraws its rows (a rebuild) or reads on from them (the next page). */
+        private fun dropList() {
+            replaceList(emptyList())
+            applyPagination(null)
         }
 
         private fun visiblePosts(): List<FeedPost> =
@@ -1195,23 +1280,26 @@ class PulseFeedViewModel
                     val response = stored.data
                     val failure = stored.failure
                     when {
+                        // A failed read keeps the posts on screen, later pages too (the store's copy it returns holds
+                        // only the first page); a pull says why.
+                        failure != null && !failure.refusesStoredCopy && _state.value is PulseFeedUiState.Loaded &&
+                            query == lastQuery -> {
+                            if (isRefresh) _toastMessage.value = failure.displayMessageOr("Couldn't refresh Pulse.")
+                        }
                         response != null -> {
                             if (failure == null && repo.feedFirstPageIsCurrent(query)) {
                                 acceptRestoredAsks(response.posts, generation)
                                 reconcileActions(response.posts, revision)
                             }
                             applyFirstPage(response, area, query, inPlace = !isRefresh)
+                            readOnPastEmptyFirstPage(failure)
                             if (response.requiresViewingLocation == true) keepLookingForFix()
                         }
-                        failure.refusesStoredCopy -> {
-                            loadedPosts = emptyList()
+                        else -> {
+                            // The error belongs to this query: the last one's rows can't come back under it.
+                            dropList()
                             _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
                         }
-                        // A failed read keeps the posts on screen; a pull says why.
-                        _state.value is PulseFeedUiState.Loaded && query == lastQuery -> {
-                            if (isRefresh) _toastMessage.value = failure.displayMessageOr("Couldn't refresh Pulse.")
-                        }
-                        else -> _state.value = PulseFeedUiState.Error(failure.displayMessageOr("Couldn't load Pulse."))
                     }
                 } catch (error: NetworkError) {
                     if (generation == fetchGeneration) showAreaFailure(error, isRefresh)
@@ -1230,17 +1318,24 @@ class PulseFeedViewModel
         ) {
             if (!quiet) {
                 heldPosts = emptyList()
+                heldFirstPage = null
                 _newPostCount.value = 0
+                // A pull or a new query starts the list again; a quiet read keeps the rows, so a page read for them
+                // goes on (and the next one may start meanwhile).
+                pageReads++
+                _isLoadingMore.value = false
+                _loadMoreError.value = null
+                loading = true
             }
-            _isLoadingMore.value = false
-            _loadMoreError.value = null
-            loading = true
             if (isRefresh) _isRefreshing.value = true
             if (!isRefresh && !quiet) {
                 // A different query must recreate the list, including its page-boundary effects.
                 _radiusSuggestion.value = null
                 postsLoaded = false
-                if (!showStoredFirstPage()) _state.value = PulseFeedUiState.Loading
+                if (!showStoredFirstPage()) {
+                    dropList()
+                    _state.value = PulseFeedUiState.Loading
+                }
             } else if (_state.value !is PulseFeedUiState.Loaded) {
                 _state.value = PulseFeedUiState.Loading
             }
@@ -1254,7 +1349,7 @@ class PulseFeedViewModel
             if (_state.value !is PulseFeedUiState.Loaded ||
                 error.refusesStoredCopy
             ) {
-                loadedPosts = emptyList()
+                dropList()
                 _state.value = PulseFeedUiState.Error(message)
             } else if (isRefresh) {
                 _toastMessage.value = message
@@ -1309,33 +1404,40 @@ class PulseFeedViewModel
             updateFallbackAreaLabel(response.fallbackArea?.label, area)
             scopeLabel = response.posts.firstOrNull()?.locationName ?: scopeLabel
             val hasBothPages = loadedPosts.isNotEmpty() && response.posts.isNotEmpty()
-            if (inPlace && query == lastQuery && hasBothPages) {
-                keepReadingPosition(response)
-                return
-            }
-            heldPosts = emptyList()
-            _newPostCount.value = 0
+            val mergesInPlace = inPlace && query == lastQuery && hasBothPages
+            if (mergesInPlace && keepReadingPosition(response)) return
+            replaceList(response.posts)
             lastQuery = query
-            loadedPosts = response.posts
             postsLoaded = true
             applyPagination(response.pagination)
             recomputeRadiusSuggestion()
             _state.value =
-                if (response.posts.isEmpty()) {
-                    emptyState(noAreaSearched = response.requiresViewingLocation == true)
-                } else {
-                    PulseFeedUiState.Loaded(rows = emptyList())
+                when {
+                    response.posts.isNotEmpty() -> PulseFeedUiState.Loaded(rows = emptyList())
+                    // Every post at the top was left out (muted, hidden, politics): later pages say whether any remain.
+                    hasMore -> PulseFeedUiState.Loading
+                    else -> emptyState(noAreaSearched = response.requiresViewingLocation == true)
                 }
             if (response.posts.isNotEmpty()) rebuildLoadedState()
         }
 
-        private fun keepReadingPosition(response: FeedResponse) {
+        /**
+         * Merges a fresh first page into the rows on screen, keeping the reader's place. A page whose next page starts
+         * outside those rows doesn't reach them: more posts came in than it holds, and merging would leave the posts in
+         * between unread (or read later below older rows). At the top it replaces them instead (false); below the top it
+         * waits whole for the reader to go back up.
+         */
+        private fun keepReadingPosition(response: FeedResponse): Boolean {
             val shownIds = loadedPosts.map { it.id }.toSet()
+            val nextId = response.pagination?.nextCursor?.id
+            val reachesShownRows = response.pagination?.hasMore != true || nextId == null || nextId in shownIds
+            if (!reachesShownRows && readingAtTop) return false
             val incoming = response.posts.filter { it.id !in shownIds }
             if (readingAtTop) {
                 heldPosts = emptyList()
                 loadedPosts = (response.posts + loadedPosts).distinctBy { it.id }
             } else {
+                heldFirstPage = response.takeUnless { reachesShownRows }
                 val newFromOthers = incoming.filter { it.userId != viewerId }
                 heldPosts = (newFromOthers + heldPosts).distinctBy { it.id }.take(MAX_HELD_POSTS)
                 // Update known rows in their existing order: server ranking changes must not move the reading anchor.
@@ -1344,8 +1446,9 @@ class PulseFeedViewModel
                 loadedPosts = (incoming.filter { it.userId == viewerId } + confirmedRows).distinctBy { it.id }
             }
             _newPostCount.value = heldPosts.size
-            if (!hasMore && response.pagination?.hasMore == true) applyPagination(response.pagination)
+            if (!hasMore && reachesShownRows && response.pagination?.hasMore == true) applyPagination(response.pagination)
             rebuildLoadedState()
+            return true
         }
 
         /** The stored first page for what is already known (no waiting), on screen at once. False without one. */
