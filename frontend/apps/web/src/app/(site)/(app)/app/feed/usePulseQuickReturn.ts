@@ -51,6 +51,8 @@ interface Options {
   listScrollRef: RefObject<HTMLElement | null>;
   /** Reduce Motion: a flick fades the header out instead of the header following the finger. */
   reducedMotion: boolean;
+  /** The screen reopened on a list it left with the header away (usePulseKeptPlace): it starts away, until a change. */
+  startHidden?: boolean;
 }
 
 /** A drag that starts in a text field, or in a list that scrolls up and down inside the header
@@ -115,8 +117,8 @@ function isKeyboardOrTextFocus(el: Element): boolean {
   }
 }
 
-export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, reducedMotion }: Options) {
-  const [hideRequested, setHideRequested] = useState(false);
+export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, reducedMotion, startHidden = false }: Options) {
+  const [hideRequested, setHideRequested] = useState(startHidden);
   const [focusInside, setFocusInside] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const hideAllowed = canHide && !focusInside;
@@ -139,9 +141,14 @@ export function usePulseQuickReturn({ mode, canHide, resetKey, listScrollRef, re
     if (!hideAllowed) setHideRequested(false);
   }, [hideAllowed]);
 
-  // Mode, surface, filter, topic or area changes, and opening the area search, show it again.
+  // Mode, surface, filter, topic or area changes, and opening the area search, show it again
+  // (a screen that reopened with it away keeps it away until the first change).
+  const keptAwayFor = useRef(startHidden ? resetKey : null);
   useEffect(() => {
-    setHideRequested(false);
+    if (resetKey !== keptAwayFor.current) {
+      keptAwayFor.current = null;
+      setHideRequested(false);
+    }
     panAcc.current = { x: 0, y: 0 };
     settleUntil.current = Date.now() + SETTLE_MS;
   }, [resetKey]);

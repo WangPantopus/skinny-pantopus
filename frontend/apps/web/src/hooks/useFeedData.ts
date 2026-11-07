@@ -696,6 +696,8 @@ export function useFeedData({
   return {
     user,
     posts,
+    /** The list shown (its cache key): surface, post-type filter, area and topic lane. */
+    listKey: currentKey,
     surface,
     filter,
     setFilter,

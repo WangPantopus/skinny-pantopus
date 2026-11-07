@@ -43,6 +43,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import NearbyTabs from '@/components/nearby/NearbyTabs';
 import { useReducedMotion } from '@/components/scheduling/polish/a11y';
 import { usePulseQuickReturn } from './usePulseQuickReturn';
+import { useKeepPulsePlace, useKeptPulsePlace } from './usePulseKeptPlace';
 import { useHydrated } from '@/hooks/useHydrated';
 import { mapFilterLabel } from './pulseMapFilters';
 import './pulse.css';
@@ -60,6 +61,8 @@ const ReportModal = dynamic(() => import('@/components/ui/ReportModal'), { ssr: 
 const REVEAL_CAPSULE_BOTTOM_PX = 40;
 /** Before the phone tab bar is measured: its 54 px row plus the home-indicator inset. */
 const TAB_BAR_FALLBACK = 'calc(3.375rem + env(safe-area-inset-bottom))';
+/** A post card's height before it has been measured. */
+const CARD_ESTIMATE_PX = 400;
 
 /** The phone tab bar's height (AppShell draws it below md), so the Map fills exactly the space above it. */
 function useMobileTabBarHeight(active: boolean): number | null {
@@ -285,13 +288,18 @@ export default function FeedPage() {
   // Measured heights follow each post, not its place in the list: a card added or taken out doesn't hand its height
   // to the cards after it, which made the list jump.
   const getItemKey = useCallback((index: number) => listed.posts[index]?.id ?? index, [listed.posts]);
+  // Back on Nearby (from a profile, a post's page or another tab), the list opens on the card it was left on.
+  const listKey = feed.listKey.join('|');
+  const keptPlace = useKeptPulsePlace(listKey, listed.posts, CARD_ESTIMATE_PX);
   const virtualizer = useVirtualizer({
     count: listed.posts.length,
     getScrollElement: () => feedScrollRef.current,
-    estimateSize: () => 400,
+    estimateSize: () => CARD_ESTIMATE_PX,
     getItemKey,
     initialRect: hydrated ? undefined : { width: 0, height: 800 },
     overscan: 5,
+    initialOffset: keptPlace?.offset,
+    initialMeasurementsCache: keptPlace?.measurements,
   });
 
   // Trigger infinite scroll when the last virtual item is near the viewport
@@ -338,6 +346,16 @@ export default function FeedPage() {
     ].join('|'),
     listScrollRef: feedScrollRef,
     reducedMotion,
+    // Reopened on a list read past the header: it is still away, as it was left.
+    startHidden: keptPlace?.headerHidden,
+  });
+  useKeepPulsePlace({
+    restore: keptPlace,
+    listKey,
+    virtualizer,
+    listScrollRef: feedScrollRef,
+    listShown: viewMode === 'list' && listed.posts.length > 0,
+    headerHidden: quick.hidden,
   });
   const headerElement = useRef<HTMLDivElement | null>(null);
   const quickHeaderRef = quick.headerRef;
