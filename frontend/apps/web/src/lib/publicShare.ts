@@ -49,6 +49,23 @@ async function fetchPublicJson<T>(
 // (page.tsx + generateMetadata both fetch the same resource — cache ensures
 // they share one network call instead of two).
 
+export type PublicCardDesigns = {
+  year: number;
+  collections?: { id: string; name: string; designs: string[] }[];
+  designs: { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string }[];
+};
+
+/** Every Christmas card, for the public card pages (launch key card_table; 404 while it's off). */
+export const fetchPublicCardDesigns = cache(async (): Promise<PublicFetchResult<PublicCardDesigns>> => (
+  fetchPublicJson<PublicCardDesigns>('/api/mailbox/cards/designs')
+));
+
+/** The invite code a shared card's link carries in `ref`, if it looks like one. It's only ever passed on to sign-up. */
+export function shareRefFrom(value: string | string[] | undefined): string | null {
+  const ref = Array.isArray(value) ? value[0] : value;
+  return ref && /^[A-Za-z0-9]{4,32}$/.test(ref) ? ref : null;
+}
+
 export const fetchPublicGig = cache(async (id: string): Promise<PublicFetchResult<any>> => {
   const result = await fetchPublicJson<{ gig: any }>(`/api/gigs/${encodeURIComponent(id)}`);
   return { data: result.data?.gig ?? null, status: result.status };

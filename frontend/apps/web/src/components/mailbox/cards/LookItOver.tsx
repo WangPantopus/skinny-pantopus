@@ -5,8 +5,9 @@
 // card is sent, drawn with the parts their own Mailbox draws it with: the
 // envelope in their Mailbox and the line under it, the sealed notice, the card
 // sliding out of its envelope and its back. By email: the email, the page its
-// link opens, and the card once they join with that address. It comes from
-// the server's preview, which runs every check sending runs and keeps nothing.
+// link opens, and the card once they join with that address. By link: the
+// page and the card once they join. It comes from the server's preview, which
+// runs every check sending runs and keeps nothing.
 // ============================================================
 
 import { useState, type ReactNode } from 'react';
@@ -15,7 +16,8 @@ import { Mail } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import MailPiece, { pieceSentence } from '../MailPiece';
 import { PieceLine, pieceLineBits } from '../MailRow';
-import { LINK_PAGE_PANEL, LinkPageSignIn, LinkPageSummary, type LinkPageLetter } from '../OpenLetterView';
+import { CardLinkSignIn, CardLinkWords, LINK_PAGE_PANEL, LinkPageSignIn, LinkPageSummary, type LinkPageLetter } from '../OpenLetterView';
+import CardLinkScene from './CardLinkScene';
 import CardFront from './CardFront';
 import CardBack from './CardBack';
 import CardFlip from './CardFlip';
@@ -67,12 +69,15 @@ export default function LookItOver({
   toName,
   toFirstName,
   byEmail,
+  byLink = false,
 }: {
   preview: HolidayCardPreview;
   /** Their name as step 1 showed it, or the address typed for them. */
   toName: string;
   toFirstName: string;
+  /** Not to a person: by email, or (`byLink`) as a link. */
   byEmail: boolean;
+  byLink?: boolean;
 }) {
   const { piece, email } = preview;
   const card = piece.card!;
@@ -111,7 +116,9 @@ export default function LookItOver({
     </div>
   ) : null;
 
-  const intro = byEmail
+  const intro = byLink
+    ? 'The first person to open your link keeps the card. The page it opens never shows the card; they open it in Pantopus once they join.'
+    : byEmail
     ? 'They aren’t on Pantopus yet. The email never shows the card; they open it in Pantopus once they join with this address.'
     : sealed
       ? 'It comes sealed and stays shut until Christmas morning. Use Back to change anything.'
@@ -128,7 +135,7 @@ export default function LookItOver({
     outcomeDescription: null,
     sentTo: preview.link_page.sent_to,
     createdAt: preview.link_page.sent_on,
-    card: { holiday: card.holiday, year: card.year, sealed: preview.link_page.sealed },
+    card: { holiday: card.holiday, year: card.year, sealed: preview.link_page.sealed, by_link: preview.link_page.by_link },
   } : null;
 
   return (
@@ -178,15 +185,24 @@ export default function LookItOver({
           {linkPage ? (
             <section aria-label="The page its link opens" data-testid="sendCardLookLinkPage" className="mx-3 mt-[26px]">
               <h3 className={`${label} px-1`}>The page its link opens</h3>
-              <div className={`mt-2 ${LINK_PAGE_PANEL}`}>
-                <LinkPageSummary letter={linkPage} />
-                <LinkPageSignIn letter={linkPage} />
-              </div>
+              {launchFeatures.cardTable ? (
+                <div className="mt-2">
+                  <CardLinkScene framed>
+                    <CardLinkWords letter={linkPage} />
+                    <CardLinkSignIn letter={linkPage} />
+                  </CardLinkScene>
+                </div>
+              ) : (
+                <div className={`mt-2 ${LINK_PAGE_PANEL}`}>
+                  <LinkPageSummary letter={linkPage} />
+                  <LinkPageSignIn letter={linkPage} />
+                </div>
+              )}
             </section>
           ) : null}
 
-          <section aria-label="After they join with that address" className="mx-3 mt-[26px]">
-            <h3 className={`${label} px-1`}>After they join with that address</h3>
+          <section aria-label={byLink ? 'After they join' : 'After they join with that address'} className="mx-3 mt-[26px]">
+            <h3 className={`${label} px-1`}>{byLink ? 'After they join' : 'After they join with that address'}</h3>
             <MailboxFrame day="In their Mailbox">
               <div role="img" aria-label={pieceSentence(piece, false)}>
                 <MailPiece item={piece} recipientName={addressee} opened={false} />

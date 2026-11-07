@@ -44,6 +44,12 @@ export function tableTint(hex: string | null | undefined): string {
   return `rgb(${channel(r)}, ${channel(g)}, ${channel(b)})`;
 }
 
+/** The table's colour at the darkened edge of the screen, for the browser's own bars. */
+export function tableEdge(hex: string | null | undefined): string {
+  const [r, g, b] = (tableTint(hex).match(/\d+/g) ?? ['45', '60', '89']).map((c) => Math.round(Number(c) * 0.5));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 /** The first name of a shown name ("Juniper H." is Juniper). */
 export function firstNameOf(name: string | null | undefined): string {
   return (name || '').trim().split(/\s+/)[0] || 'Someone';

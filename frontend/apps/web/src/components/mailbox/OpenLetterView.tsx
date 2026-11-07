@@ -6,7 +6,8 @@
 // address it was sent to comes back here, and "Read the letter" puts
 // it in that person's own mailbox, where they read it. A letter sent
 // as a business names only the business. Plain state, not react-query,
-// like the other public token pages.
+// like the other public token pages. With launch key card_table, a
+// Christmas card's page is the table and its shut envelope.
 // ============================================================
 
 'use client';
@@ -18,16 +19,23 @@ import * as api from '@pantopus/api';
 import type { EscrowClaimErrorCode, EscrowedMailView } from '@pantopus/api';
 import { BadgeCheck, Clock, Loader2, Mail, MailCheck, MailX, type LucideIcon } from 'lucide-react';
 import { confirmStore } from '@/components/ui/confirm-store';
+import { launchFeatures } from '@/lib/featureFlags';
+import CardLinkScene, { cardLinkStyles as table } from './cards/CardLinkScene';
 
 type Letter = EscrowedMailView['mail'];
 type ClosedCode = Extract<EscrowClaimErrorCode, 'MAIL_LINK_INVALID' | 'MAIL_CLAIMED' | 'MAIL_EXPIRED' | 'MAIL_WITHDRAWN'> | 'UNAVAILABLE';
 type ViewState =
   | { phase: 'loading' }
-  | { phase: 'closed'; code: ClosedCode; card?: boolean }
+  | { phase: 'closed'; code: ClosedCode; card?: boolean; said?: string }
   | { phase: 'ready'; letter: Letter };
 
 // A Christmas card (holiday_cards) closes in card words: the server marks its answer `card: true`.
 const closedForCard = (err: unknown): boolean => Boolean((err as { data?: { card?: unknown } } | null)?.data?.card);
+// What the server said about it, for the card on the table's page: "Someone already opened this card. A card goes to one person."
+const serverWords = (err: unknown): string | undefined => {
+  const said = (err as { message?: unknown } | null)?.message;
+  return typeof said === 'string' && said ? said : undefined;
+};
 const cardWords = (text: string) => text.replace(/\bletter\b/g, 'card').replace(/\bread\b/g, 'open');
 
 const CLOSED: Record<ClosedCode, { title: string; detail: string; icon: LucideIcon }> = {
@@ -141,6 +149,7 @@ export function LinkPageSummary({ letter }: { letter: LinkPageLetter }) {
  */
 export function LinkPageSignIn({ letter, loginHref, registerHref }: { letter: LinkPageLetter; loginHref?: string; registerHref?: string }) {
   const card = letter.card ?? null;
+  const byLink = Boolean(card?.by_link);
   const byNumber = !letter.sentTo.includes('@');
   const sentToLabel = `${letter.sentTo}, the ${byNumber ? 'number' : 'address'} this ${card ? 'card' : 'letter'} was sent to`;
   const signIn = card ? 'Sign in to open it' : 'Sign in to read it';
@@ -150,9 +159,38 @@ export function LinkPageSignIn({ letter, loginHref, registerHref }: { letter: Li
       {registerHref
         ? <Link href={registerHref} className={secondaryButton}>Create a free account</Link>
         : <span className={secondaryButton}>Create a free account</span>}
-      <p className="text-[13px] text-app-text-secondary leading-[19px] text-center mt-1">
-        Use {sentToLabel}.
-      </p>
+      {byLink ? null : (
+        <p className="text-[13px] text-app-text-secondary leading-[19px] text-center mt-1">
+          Use {sentToLabel}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The card on the table's page: who it's from, in words that say nothing of the card itself. Look it over draws these too. */
+export function CardLinkWords({ letter }: { letter: LinkPageLetter }) {
+  return (
+    <div className={table.words}>
+      <h1>A Christmas card for you</h1>
+      <p className={table.from}>From {letter.senderName}</p>
+      {letter.senderVerified ? <span className={table.badge}>{letter.senderKind === 'business' ? 'Verified business' : 'Verified neighbor'}</span> : null}
+      {letter.card?.sealed ? <p className={table.sealed}>It’s sealed until Christmas morning.</p> : null}
+    </div>
+  );
+}
+
+/** Signed out, on the table: sign in or join. By email with the address it was sent to, by link with any account. */
+export function CardLinkSignIn({ letter, loginHref, registerHref }: { letter: LinkPageLetter; loginHref?: string; registerHref?: string }) {
+  const byLink = Boolean(letter.card?.by_link);
+  const byNumber = !letter.sentTo.includes('@');
+  return (
+    <div className={table.actions}>
+      <h2>Open your card</h2>
+      <p className={table.line}>You’ll need a free Pantopus account to open it and keep it.</p>
+      {loginHref ? <Link href={loginHref} className={table.primary}>Sign in</Link> : <span className={table.primary}>Sign in</span>}
+      {registerHref ? <Link href={registerHref} className={table.secondary}>Create a free account</Link> : <span className={table.secondary}>Create a free account</span>}
+      {byLink ? null : <p className={table.small}>Use {letter.sentTo}, the {byNumber ? 'number' : 'address'} this card was sent to.</p>}
     </div>
   );
 }
@@ -171,7 +209,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function OpenLetterView({ mailId, token }: { mailId: string; token: string }) {
+export default function OpenLetterView({ mailId, token, isCard = false }: {
+  mailId: string;
+  token: string;
+  /** The server already knows it's a card on the table (launch key card_table): it starts on the table. */
+  isCard?: boolean;
+}) {
   const router = useRouter();
   const signedIn = useSignedIn();
   const [state, setState] = useState<ViewState>({ phase: 'loading' });
@@ -182,6 +225,8 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
   const [wrongAccount, setWrongAccount] = useState(false);
   const [account, setAccount] = useState('');
   const [switching, setSwitching] = useState(false);
+  // A card by link someone already has: signed in, the person who has it goes on to it.
+  const [checkingTaken, setCheckingTaken] = useState(false);
 
   const here = `/open/${mailId}?token=${encodeURIComponent(token)}`;
   const loginHref = `/login?redirectTo=${encodeURIComponent(here)}`;
@@ -197,9 +242,27 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
     setState({ phase: 'loading' });
     api.mailCompose.getEscrowedMailPublic(mailId, token)
       .then((res) => { if (!cancelled) setState({ phase: 'ready', letter: res.mail }); })
-      .catch((err: unknown) => { if (!cancelled) setState({ phase: 'closed', code: closedCode(err), card: closedForCard(err) }); });
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setState({ phase: 'closed', code: closedCode(err), card: closedForCard(err) || (isCard && closedCode(err) === 'UNAVAILABLE'), said: closedCode(err) === 'UNAVAILABLE' ? undefined : serverWords(err) });
+      });
     return () => { cancelled = true; };
+    // `isCard` is what the server said when the page was made; it doesn't change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mailId, token, attempt]);
+
+  // Already opened: the person who has it, opening its link again, goes on to their card. Anyone else is told.
+  const taken = launchFeatures.cardTable && state.phase === 'closed' && state.code === 'MAIL_CLAIMED' && Boolean(state.card);
+  useEffect(() => {
+    if (!taken || !signedIn) return undefined;
+    let cancelled = false;
+    setCheckingTaken(true);
+    api.mailCompose.claimEscrowedMail(mailId, token)
+      .then(() => { if (!cancelled) router.replace(letterHref); })
+      .catch(() => { if (!cancelled) setCheckingTaken(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taken, signedIn, mailId, token]);
 
   const claim = async () => {
     setClaiming(true);
@@ -210,7 +273,10 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
     } catch (err: unknown) {
       const code = (err as { code?: unknown } | null)?.code;
       if (typeof code === 'string' && CLOSED_CODES.has(code)) {
-        setState({ phase: 'closed', code: code as ClosedCode, card: closedForCard(err) || Boolean(state.phase === 'ready' && state.letter.card) });
+        setState({ phase: 'closed', code: code as ClosedCode, card: closedForCard(err) || Boolean(state.phase === 'ready' && state.letter.card), said: serverWords(err) });
+      } else if (code === 'MAIL_UNAVAILABLE' && state.phase === 'ready' && state.letter.card) {
+        // Refused for a reason it doesn't name (one of them has blocked the other): the server's words, on the same page as a closed card.
+        setState({ phase: 'closed', code: 'MAIL_WITHDRAWN', card: true, said: serverWords(err) });
       } else if (code === 'MAIL_CONTACT_MISMATCH') {
         setWrongAccount(true);
         api.users.getMyProfile().then((profile) => setAccount(profile.email || '')).catch(() => setAccount(''));
@@ -243,13 +309,49 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
     setSwitching(false);
   };
 
-  if (state.phase === 'loading') {
+  if (state.phase === 'loading' || (taken && checkingTaken)) {
+    if (launchFeatures.cardTable && isCard) {
+      return (
+        <CardLinkScene>
+          <div role="status" className={table.status}><Loader2 size={17} className="animate-spin" /> Opening your card…</div>
+        </CardLinkScene>
+      );
+    }
     return (
       <main className="min-h-screen bg-app-bg flex items-center justify-center">
         <div role="status" className="flex items-center gap-2.5 text-[14px] text-app-text-secondary">
           <Loader2 size={17} className="animate-spin text-app-text-muted" /> Opening your letter…
         </div>
       </main>
+    );
+  }
+
+  if (state.phase === 'closed' && launchFeatures.cardTable && state.card) {
+    // On the table, in the server's own sentence where it sent one: "Someone already opened this card. A card goes to one person."
+    const title = state.code === 'UNAVAILABLE' ? 'Couldn’t open the card' : (state.said ?? cardWords(CLOSED[state.code].title));
+    return (
+      <CardLinkScene>
+        <div className={table.words}>
+          <h1>{title}</h1>
+        </div>
+        <div className={table.actions}>
+          {state.code === 'MAIL_EXPIRED' ? <p className={table.line}>Ask the sender to send it again.</p> : null}
+          {state.code === 'UNAVAILABLE' ? (
+            <>
+              <p className={table.line}>Check your connection and try again.</p>
+              <button type="button" onClick={() => setAttempt((n) => n + 1)} className={table.primary}>Try again</button>
+            </>
+          ) : null}
+          {state.code === 'MAIL_CLAIMED' && signedIn !== null ? (
+            <>
+              {signedIn ? <Link href="/app/mailbox/personal" className={table.secondary}>Open my mailbox</Link> : null}
+              {signedIn ? null : <p className={table.line}>If it’s yours, sign in and it opens.</p>}
+              {signedIn ? null : <Link href={loginHref} className={table.secondary}>Sign in</Link>}
+            </>
+          ) : null}
+          <p className={table.small}>Pantopus — your household, organized. <Link href="/start">What is Pantopus?</Link></p>
+        </div>
+      </CardLinkScene>
     );
   }
 
@@ -288,6 +390,53 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
   const card = letter.card ?? null;
   const noun = card ? 'card' : 'letter';
   const byNumber = !letter.sentTo.includes('@');
+  const byLink = Boolean(card?.by_link);
+  const ownWords = byLink ? 'This is your own card. Send the link to the person it’s for.' : `You sent this ${noun}. It’s waiting for the person you wrote to.`;
+
+  if (launchFeatures.cardTable && card) {
+    return (
+      <CardLinkScene>
+        <CardLinkWords letter={letter} />
+
+        {signedIn === false && (
+          <CardLinkSignIn letter={letter} loginHref={loginHref} registerHref={`/register?redirectTo=${encodeURIComponent(here)}`} />
+        )}
+
+        {signedIn === true && wrongAccount && (
+          <div className={table.actions}>
+            <div role="alert" className={table.alert}>
+              This card was sent to {letter.sentTo}
+              {account ? <>, and you’re signed in as <b>{account}</b></> : null}.
+              {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to open it.
+            </div>
+            <button type="button" onClick={() => void switchAccount()} disabled={switching} className={table.primary}>
+              {switching && <Loader2 size={18} className="animate-spin" />}
+              Use another account
+            </button>
+            {problem === 'SIGN_OUT' && <p role="alert" className={table.line}>Sign-out couldn’t be confirmed. Try again before using another account.</p>}
+          </div>
+        )}
+
+        {signedIn === true && !wrongAccount && (
+          <div className={table.actions}>
+            <button type="button" data-testid="cardLinkOpen" onClick={() => void claim()} disabled={claiming} className={table.primary}>
+              {claiming ? <Loader2 size={18} className="animate-spin" /> : null}
+              Open your card
+            </button>
+            <p className={table.line}>It goes into your Pantopus mailbox, where only you can open it.</p>
+            {problem === 'MAIL_OWN_LETTER' && <div role="alert" className={table.alert}>{ownWords}</div>}
+            {problem === 'FAILED' && <div role="alert" className={table.alert}>Couldn’t add the card to your mailbox. Check your connection and try again.</div>}
+          </div>
+        )}
+
+        <p className={table.small}>
+          {letter.expiresAt ? `It waits until ${fmtDate(letter.expiresAt)}. ` : ''}
+          {byLink ? 'The first person to open it keeps it. ' : `Only the account with that ${byNumber ? 'number' : 'address'} can add it to a mailbox. `}
+          <Link href="/start">What is Pantopus?</Link>
+        </p>
+      </CardLinkScene>
+    );
+  }
 
   return (
     <Shell>
@@ -327,7 +476,7 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
           </p>
           {problem === 'MAIL_OWN_LETTER' && (
             <div role="alert" className="rounded-xl border border-app-border bg-app-surface-sunken p-3.5 text-[13px] text-app-text leading-[19px]">
-              You sent this {noun}. It’s waiting for the person you wrote to.
+              {ownWords}
             </div>
           )}
           {problem === 'FAILED' && (
@@ -339,9 +488,9 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
       )}
 
       <p className="text-[12px] text-app-text-muted leading-[17px] mt-5 pt-4 border-t border-app-border-subtle">
-        {signedIn ? `Sent to ${letter.sentTo}. ` : ''}
+        {signedIn && !byLink ? `Sent to ${letter.sentTo}. ` : ''}
         {letter.expiresAt ? `It waits for you until ${fmtDate(letter.expiresAt)}. ` : ''}
-        Only the account with that {byNumber ? 'number' : 'address'} can add it to a mailbox.
+        {byLink ? 'The first person to open it keeps it.' : <>Only the account with that {byNumber ? 'number' : 'address'} can add it to a mailbox.</>}
       </p>
     </Shell>
   );

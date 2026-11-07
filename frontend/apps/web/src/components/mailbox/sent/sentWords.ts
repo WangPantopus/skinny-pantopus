@@ -20,13 +20,24 @@ export function sentFirst(piece: SentPiece): string {
   return (piece.to_household ? piece.to_name : firstName(piece.to_name)) || 'them';
 }
 
-/** "To Maya O. · Christmas card", or by email "To d***@example.com · by email". */
+/** Someone has opened its link: only then does a card by link have a person's name. */
+export function linkOpened(piece: SentPiece): boolean {
+  return piece.status === 'claimed';
+}
+
+/** "To Maya O. · Christmas card", by email "To d***@example.com · by email", by link "To whoever opens your link". */
 export function sentToLine(piece: SentPiece): string {
+  if (piece.by_link) return linkOpened(piece) ? `To ${piece.to_name || 'them'} · by link` : 'To whoever opens your link';
   return `To ${piece.to_name || 'them'} · ${piece.kind === 'letter' ? 'Letter' : (piece.by_email ? 'by email' : 'Christmas card')}`;
 }
 
 /** Where it is now, in a line. Their 7 a.m. mail comes by their clock, so only their day is said. */
 export function sentStatusLine(piece: SentPiece): string {
+  if (piece.by_link) {
+    if (piece.status === 'claimed') return `${sentFirst(piece)} opened your link and has your card`;
+    if (piece.status === 'expired') return 'Nobody opened your link in 90 days';
+    return 'Waiting for someone to open your link';
+  }
   const day = shortDay(piece.arrives_on ?? piece.arrives_at);
   switch (piece.status) {
     case 'waiting':
@@ -66,6 +77,12 @@ export function sentDayLabel(sentAt: string, timeZone?: string, now = new Date()
   }
 }
 
+/** The name on the envelope: a card by link has none until someone opens it. */
+export function sentEnvelopeName(piece: SentPiece): string {
+  if (piece.by_link && !linkOpened(piece)) return 'Their name';
+  return piece.to_name || '';
+}
+
 /**
  * The envelope as it reached them, for the Mailbox's own drawing: the name on its card, the stamp it got (picked by
  * the card's id, as theirs), and a postmark only once the carrier has it. Never torn or opened.
@@ -96,6 +113,15 @@ export function sentEnvelope(piece: SentPiece): MailItemV2 {
 /** A step of its trail in words; one not reached yet adds "· not yet". */
 export function trailLabel(step: SentTrailStep, piece: SentPiece): string {
   const first = sentFirst(piece);
+  if (step.by_link) {
+    const linkWords: Partial<Record<SentTrailStep['step'], string>> = {
+      sealed: 'Sealed by you',
+      emailed: 'Your link was ready',
+      joined: step.done ? `${first} opened your link and has your card` : 'Someone opens your link',
+      returned: 'Nobody opened your link in 90 days',
+    };
+    return step.done ? (linkWords[step.step] ?? '') : `${linkWords[step.step] ?? ''} · not yet`;
+  }
   let label: string;
   switch (step.step) {
     case 'sealed': label = 'Sealed by you'; break;

@@ -214,7 +214,7 @@ function invalidateSentCards(qc: ReturnType<typeof useQueryClient>) {
 
 export function useSendHolidayCard() {
   const qc = useQueryClient();
-  return useMutation<{ card: SentHolidayCard }, MailboxApiError, Parameters<typeof api.sendHolidayCard>[0]>({
+  return useMutation<{ card: SentHolidayCard; link?: string }, MailboxApiError, Parameters<typeof api.sendHolidayCard>[0]>({
     mutationFn: api.sendHolidayCard,
     onSettled: () => invalidateSentCards(qc),
   });

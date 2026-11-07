@@ -4,8 +4,8 @@
 // A card in your Mailbox on the table (launch key card_table): the table, and
 // the things you can do with the card from its ⋯ menu: who sent it and its
 // trail, the Vault, Shred, Open it again, Report and Block. Each comes back to
-// the table; Shred goes back to the Mailbox, as the card has gone. Sharing
-// joins them with the share sheet.
+// the table; Shred goes back to the Mailbox, as the card has gone. Share opens
+// its sheet over the table.
 // ============================================================
 
 import { useMemo, useState } from 'react';
@@ -20,6 +20,7 @@ import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
 import SenderSheet from '../SenderSheet';
 import { mailLoadMessage } from '../mailLoadMessage';
+import CardShareSheet from './CardShareSheet';
 import CardTable, { type TableMenuItem } from './CardTable';
 
 const DONE_WORDS: Partial<Record<MailActionName, string>> = {
@@ -83,7 +84,7 @@ export default function CardTablePiece({
   const from = piece.sender_display || 'Someone';
   const action = useMailAction(piece.id);
   const [replay, setReplay] = useState(0);
-  const [sheet, setSheet] = useState<'sender' | 'vault' | 'report' | null>(null);
+  const [sheet, setSheet] = useState<'sender' | 'vault' | 'report' | 'share' | null>(null);
   const [asking, setAsking] = useState(false);
   const filed = piece.lifecycle === 'filed';
   const archived = Boolean(piece.archived) && !filed;
@@ -159,9 +160,17 @@ export default function CardTablePiece({
       replay={replay}
       paused={sheet !== null || asking}
       menu={menu}
+      onShare={() => setSheet('share')}
       onClose={onClose}
       overlay={(
         <>
+          {sheet === 'share' ? (
+            <CardShareSheet
+              details={{ card, note: piece.content || '', fromName: from, mailedOn: piece.postmark?.date || piece.created_at }}
+              slug={card.slug}
+              onClose={() => setSheet(null)}
+            />
+          ) : null}
           {sheet === 'sender' ? <SenderSheet piece={piece} recipientName={recipientName} recipientLine={recipientLine} onClose={() => setSheet(null)} /> : null}
           {sheet === 'vault' ? <VaultSheet piece={piece} onFile={(folderId) => run('file', folderId)} onClose={() => setSheet(null)} /> : null}
           {sheet === 'report' && piece.sender_user_id ? (
