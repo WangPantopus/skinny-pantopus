@@ -26,7 +26,6 @@ const {
   serializeLocalProfileForViewer,
   serializeUserAsLocalIdentity,
   serializeBusinessSeatForViewer,
-  serializeHomeIdentityForViewer,
   sanitizePersonaPostForViewer,
 } = require('../serializers/identitySerializers');
 
@@ -629,12 +628,13 @@ async function loadBusinessAuthors(ids) {
 }
 
 // The persona, local profile and user rows of these posts' authors, and the businesses of business posts.
+// Every post but a persona's or a business's is credited to the person who wrote it, a Home post included.
 function loadIdentityAuthorRows(posts) {
   const personaIds = [...new Set(posts
     .filter(p => p.identity_context_type === 'persona' && p.identity_context_id)
     .map(p => p.identity_context_id))];
   const localUserIds = [...new Set(posts
-    .filter(p => !p.identity_context_type || p.identity_context_type === 'local' || p.post_as === 'personal')
+    .filter(p => p.identity_context_type !== 'persona' && !isBusinessPost(p))
     .map(p => p.author_user_id || p.user_id)
     .filter(Boolean))];
   const businessIds = [...new Set(posts.filter(isBusinessPost).map(businessIdOfPost).filter(Boolean).map(String))];
@@ -684,13 +684,9 @@ async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
         display_avatar_url: business?.profile_picture_url || post.business_author?.profile_picture_url || null,
         role_base: 'business',
       });
-    } else if (post.identity_context_type === 'home' || post.post_as === 'home') {
-      author = serializeHomeIdentityForViewer(post.home || {
-        id: post.home_id || post.identity_context_id || 'home',
-        city: null,
-        state: null,
-      });
     } else {
+      // A person's post shows its writer's name and photo, a Home post included: the apps' "Home Area" picks where a
+      // post goes, not who it's from, and a home's only public name is its city.
       const authorUserId = post.author_user_id || post.user_id;
       const authorUserKey = String(authorUserId || '');
       const local = localsByUserId.get(authorUserKey);
