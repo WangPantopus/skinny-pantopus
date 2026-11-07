@@ -3902,6 +3902,9 @@ public struct HubTabRoot: View {
                 },
                 onBack: { pop() }
             )
+            // A link to another Home's page replaces this one in place (`openPlaceRoot` empties the path and
+            // pushes again): without its own identity SwiftUI keeps the first Home's view model and shows its facts.
+            .id("\(homeId)/\(group.rawValue)")
         case let .placePulse(homeId):
             PlacePulseView(
                 viewModel: PlacePulseViewModel(homeId: homeId)
