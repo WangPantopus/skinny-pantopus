@@ -1610,6 +1610,8 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
           atLocation: { latitude: ll.lat, longitude: ll.lng, label: home.address || home.name, homeId: claimant ? null : home.id },
           countyReads,
           providerBudgetMs: supportingLookupMs(sectionBudgetMs()),
+          // Place shows the providers' blocks only; its address calendar card reads the calendar itself.
+          householdContext: false,
         })
         .catch((err) => {
           logger.warn('placeIntelligence: getHubToday failed', { userId, error: err.message });
