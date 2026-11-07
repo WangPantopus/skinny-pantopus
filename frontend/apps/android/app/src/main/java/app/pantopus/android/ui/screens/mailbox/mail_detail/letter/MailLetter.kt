@@ -57,6 +57,12 @@ data class MailLetterCard(
     val firstOpen: Boolean,
     /** The picture's height at 960 pixels wide, from the server, for a picture the app doesn't carry. */
     val pictureHeight: Int? = null,
+    /** The picture's own number, its name on its public page and its table colour (launch key `card_table`). */
+    val number: Int? = null,
+    val slug: String? = null,
+    val table: String? = null,
+    /** Days until it opens, while it's sealed. */
+    val daysUntilOpen: Int? = null,
 )
 
 /**
@@ -173,6 +179,10 @@ data class MailLetter(
                 note = (detail.contentText ?: detail.content).orEmpty().trim(),
                 firstOpen = firstOpen,
                 pictureHeight = card.height,
+                number = card.number,
+                slug = card.slug,
+                table = card.table,
+                daysUntilOpen = HolidayCardTimes.daysUntil(card.sealedUntil, zone, now).takeIf { card.sealed },
             )
         }
 

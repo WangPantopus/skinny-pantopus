@@ -105,6 +105,10 @@ data class MailCard(
     val sealed: Boolean = false,
     /** The picture's height at 960 pixels wide (null for a picture the server doesn't know). */
     val height: Int? = null,
+    /** The picture's name on its public page (launch key `card_table`). */
+    val slug: String? = null,
+    /** The picture's table colour, a colour like `#3b4c6e` (launch key `card_table`). */
+    val table: String? = null,
 )
 
 /**
