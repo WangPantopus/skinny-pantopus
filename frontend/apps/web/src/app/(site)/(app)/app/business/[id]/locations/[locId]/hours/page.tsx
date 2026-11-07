@@ -17,14 +17,18 @@ type WeeklyHour = {
   present: boolean;
 };
 
+// A time input can't hold a saved 24:00 or a mistyped value; those stay text so the owner sees them.
+const timeInputType = (value: string) => (!value || /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?$/.test(value) ? 'time' : 'text');
+
 function editableHours(saved: api.businesses.BusinessHours[]): WeeklyHour[] {
   return DAY_NAMES.flatMap((_, day) => {
     const intervals = saved.filter((h) => h.day_of_week === day);
     if (intervals.length) {
       return intervals.map((h) => ({
         day_of_week: day,
-        open_time: h.open_time || '',
-        close_time: h.close_time || '',
+        // A closed row has no times saved; unchecking Closed starts from the usual draft again.
+        open_time: h.open_time || (h.is_closed ? '09:00' : ''),
+        close_time: h.close_time || (h.is_closed ? '17:00' : ''),
         is_closed: h.is_closed,
         notes: h.notes ?? undefined,
         present: true,
@@ -57,7 +61,9 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
   const specialRequest = useRef(0);
   const mutationPending = useRef(false);
   const access = useQuery({ ...businessAccessQuery(businessId), retry: false });
-  const canEdit = !access.isFetching && !access.isError && !!access.data?.hasAccess
+  // A background refresh (tabbing back to the window) keeps the last answer, so it can't interrupt typing.
+  // The server checks every write, and a refresh that fails or loses access turns editing off.
+  const canEdit = !access.isError && !!access.data?.hasAccess
     && (access.data.isOwner || access.data.permissions.includes('hours.edit'));
   const [specialForm, setSpecialForm] = useState({
     date: '',
@@ -200,8 +206,8 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
       {error && <div role="alert" className="text-sm text-red-600 mb-3">{error}</div>}
       {notice && <p role="status" className="text-sm text-green-700 mb-3">{notice}</p>}
       {access.isError && <div role="alert" className="text-sm text-red-600 mb-3">Editing access could not be checked. <button onClick={() => void access.refetch()} className="underline">Retry access check</button></div>}
-      {access.isFetching && <p className="text-sm text-app-text-secondary mb-3">Checking editing access...</p>}
-      {!access.isFetching && !access.isError && access.data && !canEdit && <p className="text-sm text-app-text-secondary mb-3">You can view these hours. Editing access is required to make changes.</p>}
+      {access.isPending && <p className="text-sm text-app-text-secondary mb-3">Checking editing access...</p>}
+      {access.isSuccess && !canEdit && <p className="text-sm text-app-text-secondary mb-3">You can view these hours. Editing access is required to make changes.</p>}
 
         <div className="space-y-5">
           <div className="bg-app-surface border border-app-border rounded-xl p-5">
@@ -228,7 +234,7 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
                     Closed
                   </label>
                   <input
-                    type={h.open_time.startsWith('24:') ? 'text' : 'time'}
+                    type={timeInputType(h.open_time)}
                     step="any"
                     aria-label={`${label} opening time`}
                     disabled={h.is_closed}
@@ -237,7 +243,7 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
                     className="col-span-3 rounded border border-app-border px-2 py-1 text-sm disabled:bg-app-surface-sunken"
                   />
                   <input
-                    type={h.close_time.startsWith('24:') ? 'text' : 'time'}
+                    type={timeInputType(h.close_time)}
                     step="any"
                     aria-label={`${label} closing time`}
                     disabled={h.is_closed}
