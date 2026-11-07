@@ -13,13 +13,14 @@
 //   Leave out --mode to keep its mode.
 //
 // A list changes every county in it or none: one refused county refuses the whole run, and the file is written once.
+// Shadow and live take only a county whose release holds homes; off takes any county.
 'use strict';
 
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { statePath, switchesPath } = require('../../backend/services/propertyRecords/format');
+const { statePath, releasePath, switchesPath } = require('../../backend/services/propertyRecords/format');
 const { FACTS } = require('../../backend/services/propertyRecords/facts');
 const { stateOfCounty } = require('../../backend/services/propertyRecords/addressKey');
 const { log } = require('./lib/log.cjs');
@@ -72,7 +73,15 @@ const known = counties.filter((county) => {
   return false;
 });
 
-// A wrong code would quietly do nothing, so a county with no release can't be turned on.
+/** How many houses and units a release's report counts: its other records are land, buildings and non-homes. Null with no report. */
+function homesIn(county, release) {
+  const report = read(`${releasePath(county, release)}/report.json`);
+  if (!report) return null;
+  return Object.entries(JSON.parse(report).fill || {}).filter(([group]) => /^(property|unit):/.test(group)).reduce((sum, [, { records }]) => sum + records, 0);
+}
+
+// A wrong code would quietly do nothing, so a county with no release can't be turned on. Nor can one whose release holds
+// no homes, only parcels or other records: every lookup there would find no home.
 const releases = new Map();
 if (mode === 'shadow' || mode === 'live') {
   const stateFiles = new Map();
@@ -80,8 +89,11 @@ if (mode === 'shadow' || mode === 'live') {
     const state = stateOfCounty(county);
     if (!stateFiles.has(state)) stateFiles.set(state, JSON.parse(read(statePath(state)) || '{}'));
     const entry = stateFiles.get(state).jurisdictions?.[county];
+    const homes = entry && entry.status !== 'withdrawn' ? homesIn(county, entry.release) : null;
     if (!entry) problems.push(`${county} has no release in ${state}'s file`);
     else if (entry.status === 'withdrawn') problems.push(`${county}'s source was withdrawn`);
+    else if (homes === null) problems.push(`${county}'s release ${entry.release} has no report to show it holds homes`);
+    else if (!homes) problems.push(`${county}'s release ${entry.release} holds no homes, only parcels or other records`);
     else releases.set(county, entry);
   }
 }
