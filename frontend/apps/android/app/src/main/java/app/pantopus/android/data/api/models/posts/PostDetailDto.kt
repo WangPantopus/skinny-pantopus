@@ -121,6 +121,10 @@ data class PostDetailDto(
     val creator: PostCreatorDto? = null,
     val home: PostHomeRefDto? = null,
     val userHasLiked: Boolean = false,
+    /** Each emoji's count, the most used first; missing from older servers. */
+    val reactions: List<PostReactionCountDto>? = null,
+    /** The signed-in person's own emoji ("❤️"), or null; older servers leave it out. */
+    val userReaction: String? = null,
     val userHasSaved: Boolean = false,
     val userHasReposted: Boolean = false,
     val comments: List<PostCommentDto> = emptyList(),
@@ -163,4 +167,8 @@ data class PostDetailDto(
         get() =
             !isRemovedByModerator &&
                 permitsExternalPostShare(readScope, visibility, audience, allowExternalShare, moderationState)
+
+    /** Its emoji reactions as the page shows them (an event's are its Going, counted in [likeCount]). */
+    val reactionSummary: PostReactionSummary
+        get() = PostReactionSummary.of(reactions, likeCount, userReaction, userHasLiked)
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -33,7 +34,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,13 +58,16 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.data.api.models.posts.PostReactionKind
+import app.pantopus.android.data.api.models.posts.PostReactionSummary
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetailRows
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
+import app.pantopus.android.ui.screens.feed.pulse.PulseReactionPicker
 import app.pantopus.android.ui.screens.feed.pulse.icon
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
@@ -97,13 +104,23 @@ data class PostQuickReplyPrompt(
     val icon: PantopusIcon,
 )
 
-/** The post's one reaction under it: its kind (Helpful, Going, Celebrate), how many people tapped it, and whether the
- *  signed-in person did. */
+/**
+ * The post's reaction under it: an Event's Going, or every other post's emoji ([emoji]: each emoji's count and the
+ * signed-in person's own). [likeCount] is how many people reacted (are going) and [isOn] whether the signed-in person
+ * did (is).
+ */
 data class PostReactionCounts(
-    val kind: PostReactionKind = PostReactionKind.Helpful,
+    val kind: PostReactionKind = PostReactionKind.Emoji,
     val likeCount: Int = 0,
     val isOn: Boolean = false,
-)
+    val emoji: PostReactionSummary = PostReactionSummary(),
+) {
+    companion object {
+        /** An emoji post's reactions, counted from its [summary]. */
+        fun emoji(summary: PostReactionSummary): PostReactionCounts =
+            PostReactionCounts(kind = PostReactionKind.Emoji, likeCount = summary.total, isOn = summary.mine != null, emoji = summary)
+    }
+}
 
 /** The optional line under the post text; selectable, so a phone number can be copied. */
 @Composable
@@ -133,7 +150,10 @@ fun BodyReactionsBody(
     media: List<PostMediaItem>,
     intent: PostIntent = PostIntent.Share,
     reactions: PostReactionCounts,
+    /** An Event's Going. */
     onReactionTap: () -> Unit,
+    /** An emoji tapped (a chip, or the picker's): sets the signed-in person's reaction, or takes theirs away. */
+    onChooseReaction: (PostReactionEmoji) -> Unit = {},
     composerAvatarUrl: String?,
     composerAvatarName: String,
     composerText: String,
@@ -214,6 +234,7 @@ fun BodyReactionsBody(
             commentsAreFresh = comments.isEmpty() && !placeholders,
             postedRecently = postedRecently,
             onTap = onReactionTap,
+            onChoose = onChooseReaction,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
         HorizontalDivider(
@@ -341,57 +362,136 @@ private fun ReactionsBar(
     commentsAreFresh: Boolean,
     postedRecently: Boolean,
     onTap: () -> Unit,
+    onChoose: (PostReactionEmoji) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
-        // The post's one reaction, named by its kind as on its card ("Helpful 3").
-        ReactionPill(
-            id = counts.kind.key,
-            icon = counts.kind.icon,
-            label = counts.kind.label,
-            likeCount = counts.likeCount,
-            isSelected = counts.isOn,
-            onTap = onTap,
-            accessibilityLabel = if (counts.likeCount == 0) counts.kind.label else "${counts.kind.label}, ${counts.likeCount}",
-        )
-        Spacer(Modifier.weight(1f))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-            modifier = Modifier.semantics { contentDescription = commentSummary(commentCount, commentsAreFresh, postedRecently) },
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.MessageCircle,
-                contentDescription = null,
-                size = 13.dp,
-                tint = if (commentsAreFresh) PantopusColors.appTextMuted else PantopusColors.appTextSecondary,
-            )
-            Text(
-                text = commentSummary(commentCount, commentsAreFresh, postedRecently),
-                fontSize = 11.sp,
-                color = if (commentsAreFresh) PantopusColors.appTextMuted else PantopusColors.appTextSecondary,
-            )
+        when (counts.kind) {
+            // An Event keeps its Going pill ("Going 3").
+            PostReactionKind.Going -> {
+                ReactionPill(
+                    testTag = "pulsePostDetail-reaction-${counts.kind.key}",
+                    isSelected = counts.isOn,
+                    onTap = onTap,
+                    accessibilityLabel = if (counts.likeCount == 0) counts.kind.label else "${counts.kind.label}, ${counts.likeCount}",
+                ) { foreground ->
+                    PantopusIconImage(icon = counts.kind.icon, contentDescription = null, size = 14.dp, tint = foreground)
+                    Text(
+                        text = counts.kind.label,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = foreground,
+                    )
+                    if (counts.likeCount != 0) {
+                        Text(
+                            text = "${counts.likeCount}",
+                            fontSize = 12.sp,
+                            color = foreground.copy(alpha = 0.85f),
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+            }
+            PostReactionKind.Emoji -> EmojiReactionChips(summary = counts.emoji, onChoose = onChoose, modifier = Modifier.weight(1f))
+        }
+        // Level with the first line of reactions, which wrap below it.
+        Box(modifier = Modifier.heightIn(min = 44.dp), contentAlignment = Alignment.Center) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                modifier = Modifier.semantics { contentDescription = commentSummary(commentCount, commentsAreFresh, postedRecently) },
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.MessageCircle,
+                    contentDescription = null,
+                    size = 13.dp,
+                    tint = if (commentsAreFresh) PantopusColors.appTextMuted else PantopusColors.appTextSecondary,
+                )
+                Text(
+                    text = commentSummary(commentCount, commentsAreFresh, postedRecently),
+                    fontSize = 11.sp,
+                    color = if (commentsAreFresh) PantopusColors.appTextMuted else PantopusColors.appTextSecondary,
+                )
+            }
         }
     }
 }
 
+/**
+ * An emoji post's reactions: a chip per emoji someone used ("👍 3", the most used first, the signed-in person's
+ * selected), wrapping onto more lines as needed, then the add-reaction button (the smile, with "React" while nobody has
+ * reacted), which opens the emoji picker. A chip sets its emoji, or takes the signed-in person's reaction away when it's
+ * theirs.
+ */
+@Composable
+private fun EmojiReactionChips(
+    summary: PostReactionSummary,
+    onChoose: (PostReactionEmoji) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var picking by remember { mutableStateOf(false) }
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        summary.counts.forEach { (emoji, count) ->
+            ReactionPill(
+                testTag = "pulsePostDetail-reaction-${emoji.key}",
+                isSelected = emoji == summary.mine,
+                onTap = { onChoose(emoji) },
+                accessibilityLabel = "${emoji.label}, $count",
+            ) { foreground ->
+                Text(text = emoji.emoji, fontSize = 14.sp)
+                Text(text = "$count", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = foreground)
+            }
+        }
+        Box {
+            val nobodyReacted = summary.counts.isEmpty()
+            ReactionPill(
+                testTag = "pulsePostDetail-reactionAdd",
+                isSelected = false,
+                onTap = { picking = true },
+                accessibilityLabel = if (nobodyReacted) PostReactionKind.Emoji.label else "Add a reaction",
+            ) { foreground ->
+                PantopusIconImage(icon = PostReactionKind.Emoji.icon, contentDescription = null, size = 14.dp, tint = foreground)
+                if (nobodyReacted) {
+                    Text(
+                        text = PostReactionKind.Emoji.label,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = foreground,
+                    )
+                }
+            }
+            if (picking) {
+                PulseReactionPicker(
+                    selected = summary.mine,
+                    onPick = { emoji ->
+                        picking = false
+                        onChoose(emoji)
+                    },
+                    onDismiss = { picking = false },
+                )
+            }
+        }
+    }
+}
+
+/** One pill under the post: the selected one (the signed-in person's) tinted and outlined in the primary colour. */
 @Composable
 private fun ReactionPill(
-    id: String,
-    icon: PantopusIcon,
-    /** The reaction's word ("Helpful", "Going", "Celebrate"). */
-    label: String,
-    /** Shown after the word once someone tapped it. */
-    likeCount: Int,
+    testTag: String,
     isSelected: Boolean,
-    selectedForeground: Color = PantopusColors.primary700,
-    selectedBackground: Color = PantopusColors.primary50,
     onTap: () -> Unit,
     accessibilityLabel: String,
+    selectedForeground: Color = PantopusColors.primary700,
+    selectedBackground: Color = PantopusColors.primary50,
+    content: @Composable RowScope.(foreground: Color) -> Unit,
 ) {
     val background = if (isSelected) selectedBackground else PantopusColors.appSurface
     val foreground = if (isSelected) selectedForeground else PantopusColors.appTextSecondary
@@ -410,7 +510,7 @@ private fun ReactionPill(
                 }.sizeIn(minHeight = 44.dp)
                 .clickable(onClick = onTap)
                 .padding(horizontal = Spacing.s3, vertical = 6.dp)
-                .testTag("pulsePostDetail-reaction-$id")
+                .testTag(testTag)
                 .semantics {
                     contentDescription = accessibilityLabel
                     selected = isSelected
@@ -421,20 +521,7 @@ private fun ReactionPill(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
-            PantopusIconImage(icon = icon, contentDescription = null, size = 14.dp, tint = foreground)
-            Text(
-                text = label,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = foreground,
-            )
-            if (likeCount != 0) {
-                Text(
-                    text = "$likeCount",
-                    fontSize = 12.sp,
-                    color = foreground.copy(alpha = 0.85f),
-                )
-            }
+            content(foreground)
         }
     }
 }

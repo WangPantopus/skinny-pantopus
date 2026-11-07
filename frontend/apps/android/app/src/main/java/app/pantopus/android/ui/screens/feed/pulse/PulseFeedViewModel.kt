@@ -17,6 +17,9 @@ import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.location.ViewingLocationDto
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
+import app.pantopus.android.data.api.models.posts.PostReactionKind
+import app.pantopus.android.data.api.models.posts.PostReactionSummary
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -91,6 +94,8 @@ private data class PulsePostOverride(
     val isSolved: Boolean? = null,
     val hasReacted: Boolean? = null,
     val likeCount: Int? = null,
+    /** An emoji post's counts and the viewer's emoji after their pick. */
+    val reactions: PostReactionSummary? = null,
 )
 
 /** Pulse feed view-model. */
@@ -658,13 +663,57 @@ class PulseFeedViewModel
         }
 
         /**
-         * Tap on a post's primary reaction. Optimistically toggles the
-         * per-post `userHasReacted` + helpful count, then hits
-         * `POST /api/posts/:id/like`. Rolls back on failure.
+         * An emoji picked on a post's card: it becomes the viewer's reaction, or takes theirs away when it already is.
+         * Shown at once (counts, total, selection), then `POST /api/posts/:id/like` `{"reaction": …}` and the server's
+         * counts; rolled back on failure. A pick while one is pending does nothing. An Event takes Going ([tapReaction]).
+         */
+        fun chooseReaction(
+            postId: String,
+            emoji: PostReactionEmoji,
+        ) {
+            val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (PostReactionKind.fromPostType(post.postType) != PostReactionKind.Emoji || !liking.add(postId)) return
+            actionRevision++
+            val original = effectiveReactions(post)
+            val originalHasReacted = effectiveHasReacted(post)
+            val originalCount = effectiveLikeCount(post)
+            val next = original.afterPicking(emoji)
+            val optimistic = original.withMine(next)
+            putOverride(postId) { it.copy(reactions = optimistic, hasReacted = next != null, likeCount = optimistic.total) }
+            rebuildLoadedState()
+            viewModelScope.launch {
+                try {
+                    when (val result = repo.setReaction(postId, next)) {
+                        is NetworkResult.Success ->
+                            putOverride(postId) {
+                                it.copy(
+                                    reactions = optimistic.settled(result.data),
+                                    hasReacted = result.data.liked,
+                                    likeCount = result.data.likeCount,
+                                )
+                            }
+                        is NetworkResult.Failure -> {
+                            putOverride(postId) {
+                                it.copy(reactions = original, hasReacted = originalHasReacted, likeCount = originalCount)
+                            }
+                            _toastMessage.value = "Couldn't update your reaction. Try again."
+                        }
+                    }
+                } finally {
+                    liking.remove(postId)
+                    actionRevision++
+                    rebuildLoadedState()
+                }
+            }
+        }
+
+        /**
+         * Tap on an Event's Going. Optimistically toggles the per-post `userHasReacted` + going count, then hits
+         * `POST /api/posts/:id/like` `{"liked": …}`. Rolls back on failure.
          */
         fun tapReaction(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
-            if (!liking.add(postId)) return
+            if (PostReactionKind.fromPostType(post.postType) != PostReactionKind.Going || !liking.add(postId)) return
             actionRevision++
             val original = effectiveHasReacted(post)
             val originalCount = effectiveLikeCount(post)
@@ -795,7 +844,7 @@ class PulseFeedViewModel
                 if (post.id in liking || post.id in saving || post.id in reposting) return@forEach
                 if (post.id !in overrides) return@forEach
                 putOverride(post.id) {
-                    it.copy(hasReacted = null, likeCount = null, isSaved = null, isReposted = null, shareCount = null)
+                    it.copy(hasReacted = null, likeCount = null, reactions = null, isSaved = null, isReposted = null, shareCount = null)
                 }
             }
         }
@@ -1465,6 +1514,8 @@ class PulseFeedViewModel
 
         private fun effectiveLikeCount(post: FeedPost): Int = overrides[post.id]?.likeCount ?: post.likeCount
 
+        private fun effectiveReactions(post: FeedPost): PostReactionSummary = overrides[post.id]?.reactions ?: post.reactionSummary
+
         // ── Projection ──────────────────────────────────────────────────
 
         private fun projectCard(post: FeedPost): PulsePostCardContent =
@@ -1476,6 +1527,7 @@ class PulseFeedViewModel
                     PulseCardLiveValues(
                         hasReacted = effectiveHasReacted(post),
                         likeCount = effectiveLikeCount(post),
+                        reactions = effectiveReactions(post),
                         isSaved = effectiveIsSaved(post),
                         isReposted = effectiveIsReposted(post),
                         shareCount = effectiveShareCount(post),

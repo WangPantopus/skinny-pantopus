@@ -46,6 +46,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.posts.PostDetailDto
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.RefreshFailedLine
@@ -273,6 +274,7 @@ fun PulsePostDetailScreen(
                     nearbyProviders = nearbyProviders,
                     onOpenBusiness = onOpenBusiness,
                     onReactionTap = { viewModel.tapReaction() },
+                    onChooseReaction = viewModel::chooseReaction,
                     onSendTap = { viewModel.sendComment() },
                     onShowMoreReplies = { viewModel.showMoreReplies() },
                     replyingToName = replyTarget?.authorName,
@@ -512,7 +514,10 @@ fun PulsePostDetailLoadedContent(
     /** Organically matched local businesses — empty hides the card. */
     nearbyProviders: List<NearbyProviderRow> = emptyList(),
     onOpenBusiness: (String) -> Unit = {},
+    /** An Event's Going. */
     onReactionTap: () -> Unit = {},
+    /** An emoji tapped under the post (a chip, or the picker's). */
+    onChooseReaction: (PostReactionEmoji) -> Unit = {},
     onSendTap: () -> Unit = {},
     onShowMoreReplies: () -> Unit = {},
     replyingToName: String? = null,
@@ -592,6 +597,7 @@ fun PulsePostDetailLoadedContent(
                 intent = content.intent,
                 reactions = content.reactions,
                 onReactionTap = onReactionTap,
+                onChooseReaction = onChooseReaction,
                 composerAvatarUrl = null,
                 composerAvatarName = "You",
                 composerText = composerText,

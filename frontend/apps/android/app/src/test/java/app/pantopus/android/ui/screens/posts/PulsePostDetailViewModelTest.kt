@@ -9,6 +9,8 @@ import app.pantopus.android.data.api.models.posts.PostCreatorDto
 import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
+import app.pantopus.android.data.api.models.posts.PostReactionCountDto
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -130,7 +132,7 @@ class PulsePostDetailViewModelTest {
             val loaded = vm.state.value as PulsePostDetailUiState.Loaded
             assertEquals("Alex Rivera", loaded.content.authorDisplayName)
             assertEquals(PostIntent.Ask, loaded.content.intent)
-            assertEquals(PostReactionKind.Helpful, loaded.content.reactions.kind)
+            assertEquals(PostReactionKind.Emoji, loaded.content.reactions.kind)
             assertEquals(3, loaded.content.reactions.likeCount)
             assertFalse(loaded.content.reactions.isOn)
         }
@@ -165,31 +167,44 @@ class PulsePostDetailViewModelTest {
 
     @Test fun reaction_optimistic_then_reconcile() =
         runTest {
-            // A like tells lists showing the post to refetch, this screen included: the refetch then
-            // returns the liked post.
+            // A reaction tells lists showing the post to refetch, this screen included: the refetch then
+            // returns the post with the reaction.
+            val reacted =
+                samplePost(likeCount = 4, userHasLiked = true).copy(
+                    reactions = listOf(PostReactionCountDto(PostReactionEmoji.Like.emoji, 4)),
+                    userReaction = PostReactionEmoji.Like.emoji,
+                )
             coEvery { repo.detailStored("p1", any()) } returnsMany
                 listOf(
                     stored(sampleResponse()),
-                    stored(PostDetailResponse(post = samplePost(likeCount = 4, userHasLiked = true))),
+                    stored(PostDetailResponse(post = reacted)),
                 )
-            coEvery { repo.toggleLike("p1", any()) } returns
-                NetworkResult.Success(PostLikeResponse(liked = true, likeCount = 4))
+            coEvery { repo.setReaction("p1", PostReactionEmoji.Like) } returns
+                NetworkResult.Success(
+                    PostLikeResponse(
+                        liked = true,
+                        likeCount = 4,
+                        reaction = PostReactionEmoji.Like.emoji,
+                        reactions = listOf(PostReactionCountDto(PostReactionEmoji.Like.emoji, 4)),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
-            vm.tapReaction()
+            vm.chooseReaction(PostReactionEmoji.Like)
             val loaded = vm.state.value as PulsePostDetailUiState.Loaded
             assertEquals(4, loaded.content.reactions.likeCount)
             assertTrue(loaded.content.reactions.isOn)
+            assertEquals(PostReactionEmoji.Like, loaded.content.reactions.emoji.mine)
         }
 
     @Test fun reaction_rollback_on_failure() =
         runTest {
             coEvery { repo.detailStored("p1", any()) } returns stored(sampleResponse())
-            coEvery { repo.toggleLike("p1", any()) } returns
+            coEvery { repo.setReaction("p1", any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVm()
             vm.load()
-            vm.tapReaction()
+            vm.chooseReaction(PostReactionEmoji.Love)
             val loaded = vm.state.value as PulsePostDetailUiState.Loaded
             assertEquals(3, loaded.content.reactions.likeCount)
             assertFalse(loaded.content.reactions.isOn)

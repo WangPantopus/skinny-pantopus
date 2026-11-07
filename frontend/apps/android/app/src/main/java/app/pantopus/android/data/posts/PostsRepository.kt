@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
 import app.pantopus.android.data.api.models.posts.PostLikeStateRequest
 import app.pantopus.android.data.api.models.posts.PostMediaLocation
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.data.api.models.posts.PostReportRequest
 import app.pantopus.android.data.api.models.posts.PostSaveResponse
 import app.pantopus.android.data.api.models.posts.PostSaveStateRequest
@@ -29,6 +30,7 @@ import app.pantopus.android.data.api.models.posts.PostShareResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateResponse
 import app.pantopus.android.data.api.models.posts.SavedPostsResponse
+import app.pantopus.android.data.api.models.posts.postReactionRequestBody
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
@@ -190,6 +192,16 @@ class PostsRepository
             liked: Boolean,
         ): NetworkResult<PostLikeResponse> =
             safeApiCall { api.toggleLike(id, PostLikeStateRequest(liked)) }.also { markPostChanged(id, it) }
+
+        /**
+         * `POST /api/posts/:id/like` `{"reaction": …}`: sets the viewer's emoji to [reaction] (adding it, or switching
+         * from another), or takes their reaction away when it's null. Events keep [toggleLike] (Going).
+         */
+        suspend fun setReaction(
+            id: String,
+            reaction: PostReactionEmoji?,
+        ): NetworkResult<PostLikeResponse> =
+            safeApiCall { api.setReaction(id, postReactionRequestBody(reaction)) }.also { markPostChanged(id, it) }
 
         /** `GET /api/posts/:id/comments`. */
         suspend fun comments(
@@ -421,6 +433,8 @@ private fun FeedPost.detailSeed(): PostDetailResponse? {
                     )
                 },
             userHasLiked = userHasLiked,
+            reactions = reactions,
+            userReaction = userReaction,
             userHasSaved = userHasSaved,
             userHasReposted = userHasReposted,
             visibility = visibility,

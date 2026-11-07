@@ -2,7 +2,8 @@ package app.pantopus.android.ui.screens.posts
 
 import app.pantopus.android.data.api.models.posts.PostCreatorDto
 import app.pantopus.android.data.api.models.posts.PostDetailDto
-import app.pantopus.android.data.api.models.posts.PostReactionKind
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
+import app.pantopus.android.data.api.models.posts.PostReactionSummary
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostCommentRow
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostReactionCounts
@@ -77,7 +78,12 @@ object PulsePostDetailSampleData {
                     ),
                 ),
             reactions =
-                PostReactionCounts(kind = PostReactionKind.Helpful, likeCount = 18, isOn = true),
+                PostReactionCounts.emoji(
+                    PostReactionSummary.from(
+                        mapOf(PostReactionEmoji.Like to 9, PostReactionEmoji.Love to 6, PostReactionEmoji.Thanks to 3),
+                        mine = PostReactionEmoji.Love,
+                    ),
+                ),
         )
 
     fun empty(intent: PostIntent = PostIntent.Ask): PulsePostDetailContent =

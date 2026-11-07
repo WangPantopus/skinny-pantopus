@@ -157,6 +157,7 @@ fun PublicProfileScreen(
             ProfilePostCardActions(
                 onOpen = onOpenPost,
                 onReact = viewModel.postCards::tapReaction,
+                onChooseReaction = viewModel.postCards::chooseReaction,
                 onOptions = viewModel.postCards::openOptions,
                 onToggleSave = viewModel.postCards::toggleSave,
                 onToggleRepost = viewModel.postCards::toggleRepost,

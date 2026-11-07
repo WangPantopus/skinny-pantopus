@@ -11,6 +11,7 @@ import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.posts.PostCommentDto
 import app.pantopus.android.data.api.models.posts.PostCommentRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -392,10 +393,55 @@ class PulsePostDetailViewModel
             _replyTarget.value = null
         }
 
-        /** Tap the post's reaction (Helpful, Going or Celebrate, by its kind): the like toggle, optimistic. */
+        /**
+         * The emoji tapped under the post (a chip, or the picker's): it becomes the signed-in person's reaction, or
+         * takes theirs away when it already is. Shown at once, then the server's counts; rolled back on failure. A tap
+         * while one is pending does nothing; an Event's reaction is its Going ([tapReaction]).
+         */
+        fun chooseReaction(emoji: PostReactionEmoji) {
+            val loaded = _state.value as? PulsePostDetailUiState.Loaded ?: return
+            val initialReactions = loaded.content.reactions
+            if (initialReactions.kind != PostReactionKind.Emoji || _likePending.value) return
+            _likePending.value = true
+            reactionRevision++
+            val next = initialReactions.emoji.afterPicking(emoji)
+            val optimistic = PostReactionCounts.emoji(initialReactions.emoji.withMine(next))
+            _state.value = PulsePostDetailUiState.Loaded(loaded.content.copy(reactions = optimistic))
+
+            viewModelScope.launch {
+                try {
+                    when (val result = repo.setReaction(postId, next)) {
+                        is NetworkResult.Success -> {
+                            val reconciled = PostReactionCounts.emoji(optimistic.emoji.settled(result.data))
+                            _state.update { current ->
+                                (current as? PulsePostDetailUiState.Loaded)?.let {
+                                    PulsePostDetailUiState.Loaded(it.content.copy(reactions = reconciled))
+                                } ?: current
+                            }
+                            // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
+                            postsRefresh.notifyPostsDidChange()
+                        }
+                        is NetworkResult.Failure -> {
+                            _toastMessage.value = "Couldn't update your reaction"
+                            _state.update { current ->
+                                (current as? PulsePostDetailUiState.Loaded)?.let {
+                                    PulsePostDetailUiState.Loaded(it.content.copy(reactions = initialReactions))
+                                } ?: current
+                            }
+                        }
+                    }
+                } finally {
+                    _likePending.value = false
+                    reactionRevision++
+                    load()
+                }
+            }
+        }
+
+        /** Tap an Event's Going: the like toggle, optimistic. Every other post takes an emoji ([chooseReaction]). */
         fun tapReaction() {
             val loaded = _state.value as? PulsePostDetailUiState.Loaded ?: return
-            if (_likePending.value) return
+            if (loaded.content.reactions.kind != PostReactionKind.Going || _likePending.value) return
             _likePending.value = true
             reactionRevision++
             val initialReactions = loaded.content.reactions
@@ -726,11 +772,10 @@ class PulsePostDetailViewModel
                         liveUrls = post.mediaLiveUrls,
                     ),
                 reactions =
-                    PostReactionCounts(
-                        kind = PostReactionKind.fromPostType(post.postType),
-                        likeCount = post.likeCount,
-                        isOn = post.userHasLiked,
-                    ),
+                    when (val kind = PostReactionKind.fromPostType(post.postType)) {
+                        PostReactionKind.Going -> PostReactionCounts(kind = kind, likeCount = post.likeCount, isOn = post.userHasLiked)
+                        PostReactionKind.Emoji -> PostReactionCounts.emoji(post.reactionSummary)
+                    },
                 comments = rows,
                 hiddenReplyCount = hidden,
                 // No status word on the October 13 page (the Pulse redesign off).
