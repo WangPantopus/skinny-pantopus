@@ -4,7 +4,7 @@
 // value (Virginia assesses at full market value), deeded acres and last sale. Owner, mailing and exemption columns are never asked for.
 
 const path = require('node:path');
-const { layerRows, getJson, cached } = require('../lib/services.cjs');
+const { layerRows, layerAreas, cached } = require('../lib/services.cjs');
 const { streetParts, year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
@@ -22,26 +22,6 @@ function useOf(code) {
   if (c === 'TH' || c === 'TN' || c === 'CD' || c === 'CN') return ['property', 'townhouse'];
   if (c === 'DU') return ['building', 'multi_unit'];
   return ['other', null];
-}
-
-// A lot's area from the parcel's own shape, asked for in Virginia State Plane South (US feet): the layer's own area column is in Web Mercator,
-// which overstates areas this far north. Rings are summed with their signs, so holes come out.
-async function* parcelAreas() {
-  let last = -1;
-  for (;;) {
-    const query = new URLSearchParams({ where: `OBJECTID > ${last}`, outFields: 'OBJECTID', returnGeometry: 'true', outSR: '2284', orderByFields: 'OBJECTID', resultRecordCount: '1000', f: 'json' });
-    const page = await getJson(`${LAYER}/query?${query}`, 'A parcel shape page');
-    const features = page.features || [];
-    if (!features.length) return;
-    for (const feature of features) {
-      let signed = 0;
-      for (const ring of feature.geometry?.rings || []) {
-        for (let i = 0; i < ring.length - 1; i += 1) signed += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
-      }
-      yield { OBJECTID: feature.attributes.OBJECTID, area: Math.round(Math.abs(signed) / 2) };
-      last = Math.max(last, feature.attributes.OBJECTID);
-    }
-  }
 }
 
 function fromRow(row) {
@@ -86,7 +66,8 @@ async function* build({ work, today }) {
   const records = new Map();
   let noAddress = 0;
   const areas = new Map();
-  for await (const row of cached(path.join(work, 'va-chesterfield', 'areas.jsonl.gz'), () => parcelAreas())) areas.set(row.OBJECTID, row.area);
+  // A lot's area from the parcel's own shape in Virginia State Plane South (US feet): the layer's own area column is in Web Mercator.
+  for await (const row of cached(path.join(work, 'va-chesterfield', 'areas.jsonl.gz'), () => layerAreas(LAYER, '2284'))) areas.set(row.OBJECTID, row.area);
   for await (const row of cached(path.join(work, 'va-chesterfield', 'parcels.jsonl.gz'), () => layerRows(LAYER, COLUMNS, { pageSize: 1000 }))) {
     const record = fromRow({ ...row, area: areas.get(row.OBJECTID) });
     if (!record) noAddress += 1;

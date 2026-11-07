@@ -58,6 +58,31 @@ async function* layerRows(url, fields, { where = '1=1', oid = 'OBJECTID', pageSi
   }
 }
 
+/**
+ * Each parcel's area in square feet from its own shape, asked for in a state plane system in feet (a layer's own area column is often in Web
+ * Mercator, which overstates areas away from the equator). Rings are summed with their signs, so holes come out.
+ * @param {string} url    The layer, ending in its number
+ * @param {string} outSR  The state plane system's code, in US feet
+ * @returns {AsyncGenerator<{ OBJECTID: number, area: number }>}
+ */
+async function* layerAreas(url, outSR, { pageSize = 1000 } = {}) {
+  let last = -1;
+  for (;;) {
+    const query = new URLSearchParams({ where: `OBJECTID > ${last}`, outFields: 'OBJECTID', returnGeometry: 'true', outSR, orderByFields: 'OBJECTID', resultRecordCount: String(pageSize), f: 'json' });
+    const page = await getJson(`${url}/query?${query}`, 'A parcel shape page');
+    const features = page.features || [];
+    if (!features.length) return;
+    for (const feature of features) {
+      let signed = 0;
+      for (const ring of feature.geometry?.rings || []) {
+        for (let i = 0; i < ring.length - 1; i += 1) signed += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+      }
+      yield { OBJECTID: feature.attributes.OBJECTID, area: Math.round(Math.abs(signed) / 2) };
+      last = Math.max(last, feature.attributes.OBJECTID);
+    }
+  }
+}
+
 /** A table's rows by page offset, for a table whose object ID column can't be paged on. */
 async function* offsetRows(url, fields, { where = '1=1', orderBy, pageSize = 1000 } = {}) {
   let offset = 0;
@@ -135,4 +160,4 @@ async function* cached(file, source) {
   }
 }
 
-module.exports = { getJson, layerRows, offsetRows, socrataRows, cartoRows, ckanRows, cached };
+module.exports = { getJson, layerRows, layerAreas, offsetRows, socrataRows, cartoRows, ckanRows, cached };

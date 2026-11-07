@@ -7,7 +7,7 @@
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { download, zipDates, zipTable } = require('../lib/tables.cjs');
-const { year, isoDate, onRecord } = require('../lib/addresses.cjs');
+const { year, isoDate, monthDate, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { isHomeSale } = require('../lib/sales.cjs');
@@ -31,15 +31,6 @@ function useOf(code, unit) {
   if (/^4[0-9]1$/.test(c)) return ['building', 'apartment'];
   if (c === '500') return ['parcel', null];
   return ['other', null];
-}
-
-// Transfers are dated like "15-OCT-19"; a two-digit year past next year's is in the 1900s.
-const MONTHS = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
-function transferDate(text, thisYear = new Date().getFullYear()) {
-  const match = /^(\d{1,2})-([A-Z]{3})-(\d{2})$/.exec(String(text || '').trim().toUpperCase());
-  if (!match || !MONTHS[match[2]]) return isoDate(text);
-  const yy = Number(match[3]);
-  return `${(yy > (thisYear + 1) % 100 ? 1900 : 2000) + yy}-${MONTHS[match[2]]}-${match[1].padStart(2, '0')}`;
 }
 
 const inRange = (value, most) => {
@@ -144,7 +135,7 @@ async function* build({ work }) {
   // The latest single-parcel transfer at a home's price; a transfer of several parcels names one price for all of them.
   const transfers = new Map();
   for await (const row of read('SC_EXP_TRANSFERS.csv', TRANSFER_COLUMNS)) {
-    const date = transferDate(row.TRANSFER_DATE);
+    const date = monthDate(row.TRANSFER_DATE);
     if (!date || !isHomeSale(positive(row.STATED_VALUE)) || (positive(row.NUMBER_OF_PARCELS) || 1) > 1) continue;
     const was = transfers.get(row.PARCEL_ID);
     if (!was || date > was.date) transfers.set(row.PARCEL_ID, { ...row, date });

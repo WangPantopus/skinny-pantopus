@@ -95,6 +95,15 @@ function realUnit(value) {
 }
 
 /** The address as a record states it, with a bare unit marked so it still reads as a unit. */
+// A date written like "15-OCT-19"; a two-digit year past next year's is in the 1900s. Anything else is read by isoDate.
+const MONTHS = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
+function monthDate(text, thisYear = new Date().getFullYear()) {
+  const match = /^(\d{1,2})-([A-Z]{3})-(\d{2})$/.exec(String(text || '').trim().toUpperCase());
+  if (!match || !MONTHS[match[2]]) return isoDate(text);
+  const yy = Number(match[3]);
+  return `${(yy > (thisYear + 1) % 100 ? 1900 : 2000) + yy}-${MONTHS[match[2]]}-${match[1].padStart(2, '0')}`;
+}
+
 function onRecord(line, unit) {
   const street = String(line ?? '').replace(/\s+/g, ' ').trim();
   const secondary = realUnit(unit);
@@ -102,4 +111,4 @@ function onRecord(line, unit) {
   return /^[A-Z0-9-]{1,8}$/i.test(secondary) ? `${street} UNIT ${secondary}` : `${street} ${secondary}`;
 }
 
-module.exports = { houseNumbers, streetParts, situsParts, readAddresses, year, isoDate, zipCode, realUnit, onRecord, unitAfterStreet };
+module.exports = { houseNumbers, streetParts, situsParts, readAddresses, year, isoDate, monthDate, zipCode, realUnit, onRecord, unitAfterStreet };
