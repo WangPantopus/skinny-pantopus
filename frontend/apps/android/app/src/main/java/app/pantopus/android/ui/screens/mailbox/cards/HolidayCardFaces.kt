@@ -46,8 +46,11 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt.agedEdges
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt.paperGrain
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableBack
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableFront
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.rememberReduceMotion
 import coil.compose.AsyncImage
@@ -84,6 +87,7 @@ fun HolidayCardFront(
     thumb: Boolean = false,
     pictureHeight: Int? = null,
 ) {
+    if (LaunchFeatures.cardTable && !thumb) return CardTableFront(design, caption, paper, year, mailedOn, modifier)
     val paperColor = remember(paper) { HolidayCardArt.paper(paper) }
     BoxWithConstraints(
         modifier =
@@ -225,7 +229,10 @@ fun HolidayCardBack(
     modifier: Modifier = Modifier,
     message: String? = null,
     writing: (@Composable (TextStyle) -> Unit)? = null,
+    /** The picture on its other side: with the table, how the pen falls goes with it. */
+    design: String? = null,
 ) {
+    if (LaunchFeatures.cardTable) return CardTableBack(design, paper, fromName, year, message, writing, modifier)
     val paperColor = remember(paper) { HolidayCardArt.paper(paper) }
     BoxWithConstraints(modifier = modifier.fillMaxSize().background(paperColor)) {
         val scale = CardScale(constraints.maxWidth.toFloat(), LocalDensity.current)
