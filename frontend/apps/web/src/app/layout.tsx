@@ -3,6 +3,7 @@ import QueryProvider from '@/lib/query-provider';
 import ToastContainer from '@/components/ui/ToastContainer';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import StylesheetsFirst from '@/components/StylesheetsFirst';
+import { SITE_TITLE } from '@/lib/siteTitle';
 import './globals.css';
 // Leaflet's stylesheet is imported by the map components themselves (components/map/leaflet-setup.ts and
 // each map that doesn't use it), so it loads with a map instead of blocking every page's first paint.
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
   // Mirrors the wedge copy on /start, which is the canonical promise. This
   // is only the inherited default — /start and the other routes that carry
   // their own generateMetadata still win.
-  title: "Pantopus - Know what matters for your home",
+  title: SITE_TITLE,
   description:
     "Public records, local risks, and who's verified nearby - free, no account. Look up any U.S. address, then save your place to get daily updates.",
   // public/favicon.ico is the fallback for clients that probe the document

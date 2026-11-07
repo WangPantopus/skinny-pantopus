@@ -6,13 +6,13 @@ import { AUTH_SESSION_CHANGE_KEY, getApiBaseUrl, getAuthToken, onTokenChange } f
 import { useSocket } from '@/contexts/SocketContext';
 import { useBadges } from '@/contexts/BadgeContext';
 import { isHiddenOnWeb, resolveWebNotificationPath } from '@/lib/notificationRoutes';
+import { APP_TITLE, SITE_TITLE } from '@/lib/siteTitle';
 import type { Notification as AppNotification } from '@pantopus/types';
-
-const BASE_TITLE = 'Pantopus';
 
 /**
  * Hook that manages desktop notification features:
- * 1. Updates tab title with unread count: "Pantopus (3)"
+ * 1. Adds the unread count to the tab title: "Bob Tester | Pantopus (3)", or "Pantopus (3)" on a
+ *    page with no title of its own
  * 2. Shows native browser notifications for new items
  */
 export function useDesktopNotifications() {
@@ -20,14 +20,43 @@ export function useDesktopNotifications() {
   const router = useRouter();
   const { notifications: unreadCount } = useBadges();
   const seen = useRef(new Set<string>());
+  const unread = useRef(unreadCount);
+  const updateTitle = useRef<(() => void) | null>(null);
 
-  // Update tab title when unread count changes
+  // Next writes each page's own title from its metadata: on every navigation, when streamed
+  // metadata arrives, and as hydration claims the server's title. This shell also mounts again
+  // between the /app and profile layouts. So add the count to whatever title Next last wrote, and
+  // again each time it writes one, instead of replacing it.
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-    document.title = unreadCount > 0 ? `${BASE_TITLE} (${unreadCount})` : BASE_TITLE;
-    return () => {
-      document.title = BASE_TITLE;
+    let pageTitle = '';
+    let shown = '';
+    const update = () => {
+      const current = document.title;
+      if (current !== shown) pageTitle = current;
+      // Nothing to add the count to yet. Writing now would add a <title> of our own, which can
+      // hide the page's title when it streams in.
+      if (!pageTitle) return;
+      const base = pageTitle === SITE_TITLE ? APP_TITLE : pageTitle;
+      const next = unread.current > 0 ? `${base} (${unread.current})` : base;
+      if (next !== current) document.title = next;
+      shown = document.title;
     };
+    updateTitle.current = update;
+    // The whole document: a title streamed in after the first paint sits in the body.
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { childList: true, characterData: true, subtree: true });
+    update();
+    return () => {
+      observer.disconnect();
+      updateTitle.current = null;
+      // Give the page back its own title, unless the next page has already written one.
+      if (shown !== pageTitle && document.title === shown) document.title = pageTitle;
+    };
+  }, []);
+
+  useEffect(() => {
+    unread.current = unreadCount;
+    updateTitle.current?.();
   }, [unreadCount]);
 
   // Permission is asked for from Settings → Notification Preferences → Desktop alerts:
