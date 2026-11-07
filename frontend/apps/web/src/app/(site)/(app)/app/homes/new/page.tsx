@@ -15,6 +15,7 @@ import AddressAutocomplete from '@/components/AddressAutocomplete';
 import MailVerificationFlow from '@/components/address/MailVerificationFlow';
 import PrivacyPromise from '@/components/place/PrivacyPromise';
 import { useHomeCreation } from '@/components/homes/creation/useHomeCreation';
+import { CountyPageLink, QuickQuestion } from '@/components/homes/HouseholdFacts';
 import { validHomeCreationInput, type HomeCreationInput } from '@/components/homes/creation/homeCreationModel';
 import HomeCreationRecoveryView from '@/components/homes/creation/HomeCreationRecoveryView';
 import { validHomeResidencyInput, type HomeResidencyInput } from '@/components/homes/creation/homeResidencySubmissionModel';
@@ -163,6 +164,9 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   const [propertySuggestionNote, setPropertySuggestionNote] = useState('');
   // Once the record names its source: what it said and how to tag it, for the tag under each field.
   const [namedRecord, setNamedRecord] = useState<PropertySuggestionsResponse | null>(null);
+  // One-tap answers for what the record lacks, and the county's own page, when the server sends them.
+  const [factQuestions, setFactQuestions] = useState<NonNullable<PropertySuggestionsResponse['questions']>>([]);
+  const [countyPage, setCountyPage] = useState<PropertySuggestionsResponse['county_page'] | null>(null);
   // The county record is looked up while the person is already on this step ('pending': the fields say
   // "Looking up…"); it fills only what is still empty. Details that land after the person moved on say
   // so on the later steps, with a way back to check them.
@@ -259,6 +263,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setPropertyLookup('idle');
     setLateDetails(false);
     setNamedRecord(null);
+    setFactQuestions([]);
+    setCountyPage(null);
   };
 
   // The first answer fills the new step's fields; a county record that lands later fills only what is
@@ -285,6 +291,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   };
   const suggestionNote = (res: PropertySuggestionsResponse | undefined) => {
     setNamedRecord(res?.provenance ? res : null);
+    setFactQuestions(res?.questions ?? []);
+    setCountyPage(res?.county_page ?? null);
     if (res?.provenance) {
       return res.provenance.scope === 'building' && res.lookup_message ? `${res.lookup_message} ${res.provenance.label}` : res.provenance.label;
     }
@@ -1176,11 +1184,24 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 </div>
               </div>
 
+              {/* What the record lacks: a tap fills the same field below. */}
+              {factQuestions.length ? (
+                <div className="space-y-3">
+                  {factQuestions.map((question) => (
+                    <QuickQuestion key={question.key} question={question}
+                      value={question.key === 'bedrooms' ? bedrooms : bathrooms}
+                      onAnswer={(value) => (question.key === 'bedrooms' ? setBedrooms : setBathrooms)(value)}
+                      onOther={() => document.getElementById(`add-home-${question.key}`)?.focus()} />
+                  ))}
+                  {countyPage ? <CountyPageLink page={countyPage} /> : null}
+                </div>
+              ) : null}
+
               {/* Bedrooms / Bathrooms / SqFt / Year */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Bedrooms</label>
-                  <input type="number" min="0" value={bedrooms} onChange={e => setBedrooms(e.target.value)} placeholder={lookingUpPlaceholder}
+                  <input id="add-home-bedrooms" type="number" min="0" value={bedrooms} onChange={e => setBedrooms(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('bedrooms')}
                   {...fieldA11y('bedrooms')} />
                   {fieldErrors.bedrooms ? <p id="err-bedrooms" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.bedrooms}</p> : null}
@@ -1188,7 +1209,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Bathrooms</label>
-                  <input type="number" min="0" step="0.5" value={bathrooms} onChange={e => setBathrooms(e.target.value)} placeholder={lookingUpPlaceholder}
+                  <input id="add-home-bathrooms" type="number" min="0" step="0.5" value={bathrooms} onChange={e => setBathrooms(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('bathrooms')}
                   {...fieldA11y('bathrooms')} />
                   {fieldErrors.bathrooms ? <p id="err-bathrooms" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.bathrooms}</p> : null}
