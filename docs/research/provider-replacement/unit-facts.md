@@ -91,6 +91,21 @@ existence doesn't show who asked for it.
 facts, beginning with large rental towers in counties that don't record units (Cook, New York City). The county's
 commercial file can show a tower's unit mix, labeled as the building's, until a sheet arrives.
 
+### As built (November 7, WP11, off behind `FLOOR_PLAN_SHEETS_ENABLED`)
+
+- **Intake:** `POST /api/floor-plan-sheets` checks a sheet and puts it in the existing review queue (`AddressReviewCase`), with who
+  granted permission. Nothing is on a screen until a person builds a release:
+  `scripts/property-index/build-floor-plans.cjs`. `scripts/property-index/check-floor-plans.cjs` prints how a made-up tower answers.
+- **Where it lives:** `floor-plans/` beside `registry/` in the index: a state's file says which release each sheet serves, and
+  replacing it publishes, withdraws or rolls back. No new table. A Home keeps its answer in `niche_data.floor_plan`, and the
+  resident's in `niche_data.floor_plan_answer`.
+- **A "no":** goes to review and changes nothing shown, for anyone. The household's own answer shows the way any household entry
+  does: "Fix something", "From your household", with "Floor plan: 2" underneath.
+- **Who answers:** any resident, renters included, since this is mostly for rental towers. A renter without `home.edit` writes the
+  answer and nothing else. A yes fills the Home's empty bedrooms, baths and size for someone who can edit the Home.
+- **Images:** not built. The permission's scope is recorded, and a release holds facts only.
+- **Originals:** kept only with permission, in a local stand-in until P4 is decided.
+
 ## Later, and only by the founder's decision
 
 - **Rental feeds:** only if Pantopus shows rentals; needs partner agreements with property managers and rental

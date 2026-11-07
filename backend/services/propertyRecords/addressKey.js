@@ -252,8 +252,8 @@ const KILOMETER = /^((?:CARR|CARRETERA|RD|ROUTE|PR)\s*-?\s*\d+[A-Z]?(?:\s+R\d+)?
 const HOUSE = /^(\d+[A-Z]?(?:-\d+[A-Z]?)?|[NSEW]\d+\s?[NSEW]\d+)(?:\s+(\d\/\d))?\s+(.+)$/;
 const POST_OFFICE_BOX = /^(?:P ?O ?BOX|POST OFFICE BOX|POB|BOX|APARTADO|APDO)\s*#?\s*([A-Z0-9-]+)$/;
 const ROUTE_BOX = /^((?:RR|R R|RURAL ROUTE|RURAL RTE|RFD|R F D|RT|RTE|ROUTE|HC|HCR|H C R|HIGHWAY CONTRACT ROUTE|HIGHWAY CONTRACT|STAR ROUTE))\s*(\d+)\s+(?:BOX|BX)\s*#?\s*([A-Z0-9-]+(?:\s[A-Z])?)$/;
-// PSC 3 BOX 1234, CMR 450 BOX 123, UNIT 2050 BOX 4190, OMC 1 BOX 3.
-const MILITARY = /^(PSC|CMR|OMC|UMR|UNIT)\s*#?\s*(\d+[A-Z]?)\s+BOX\s*#?\s*([A-Z0-9-]+)$/;
+// PSC 3 BOX 1234, CMR 450 BOX 123, UNIT 2050 BOX 4190, OMC 1 BOX 3, OPC 1 BOX 3 (as USPS writes some, through Google).
+const MILITARY = /^(PSC|CMR|OMC|OPC|UMR|UNIT)\s*#?\s*(\d+[A-Z]?)\s+BOX\s*#?\s*([A-Z0-9-]+)$/;
 const MILITARY_SHIP = /^(?:USS|USNS|USCGC)\s+(.+)$/;
 const MILITARY_STATES = new Set(['AA', 'AE', 'AP']);
 

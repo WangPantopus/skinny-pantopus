@@ -1,6 +1,7 @@
 'use strict';
-// Denver, Colorado: the City and County's residential characteristics on its open data service, updated daily. Its use constraints
-// are disclaimers. The table carries owner columns; they're never asked for, and neither are exemption amounts. TOTAL_VALUE is the
+// Denver, Colorado: the City and County's residential characteristics on its open data service, updated daily. The catalog is CC BY
+// 3.0, crediting "City of Denver Open Data Catalog" (web's data sources page); each item's use constraints are disclaimers. The table
+// carries owner columns; they're never asked for, and neither are exemption amounts. TOTAL_VALUE is the
 // Assessor's actual value, Colorado's market value on its reappraisal date. Sale prices come from the city's own sales table.
 
 const path = require('node:path');

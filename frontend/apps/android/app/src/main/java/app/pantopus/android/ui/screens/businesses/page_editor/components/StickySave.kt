@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber", "PackageNaming", "LongMethod", "MatchingDeclarationName")
+@file:Suppress("MagicNumber", "PackageNaming", "LongMethod", "LongParameterList", "MatchingDeclarationName")
 
 package app.pantopus.android.ui.screens.businesses.page_editor.components
 
@@ -56,6 +56,8 @@ fun EditBusinessStickySave(
     onSaveDraft: () -> Unit = {},
     onPublish: () -> Unit = {},
     modifier: Modifier = Modifier,
+    canSave: Boolean = true,
+    canPublish: Boolean = true,
 ) {
     Column(
         modifier =
@@ -74,10 +76,13 @@ fun EditBusinessStickySave(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             when (mode) {
-                is EditBusinessStickySaveMode.Dirty -> DirtyRow(count = mode.count, onDiscard = onDiscard, onSave = onSave)
+                is EditBusinessStickySaveMode.Dirty ->
+                    DirtyRow(count = mode.count, canSave = canSave, onDiscard = onDiscard, onSave = onSave)
                 is EditBusinessStickySaveMode.Setup ->
                     SetupRow(
                         remaining = mode.remaining,
+                        canSave = canSave,
+                        canPublish = canPublish,
                         onSaveDraft = onSaveDraft,
                         onPublish = onPublish,
                     )
@@ -89,6 +94,7 @@ fun EditBusinessStickySave(
 @Composable
 private fun RowScope.DirtyRow(
     count: Int,
+    canSave: Boolean,
     onDiscard: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -113,9 +119,9 @@ private fun RowScope.DirtyRow(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(Radii.lg))
-                .pantopusShadow(PantopusElevations.md, RoundedCornerShape(Radii.lg))
-                .background(PantopusColors.business)
-                .clickable(onClick = onSave)
+                .then(if (canSave) Modifier.pantopusShadow(PantopusElevations.md, RoundedCornerShape(Radii.lg)) else Modifier)
+                .background(if (canSave) PantopusColors.business else PantopusColors.appSurfaceSunken)
+                .then(if (canSave) Modifier.clickable(onClick = onSave) else Modifier)
                 .heightIn(min = 42.dp)
                 .padding(horizontal = 22.dp)
                 .testTag("editBusinessPage.save"),
@@ -126,12 +132,12 @@ private fun RowScope.DirtyRow(
             icon = PantopusIcon.Check,
             contentDescription = null,
             size = 15.dp,
-            tint = PantopusColors.appTextInverse,
+            tint = if (canSave) PantopusColors.appTextInverse else PantopusColors.appTextMuted,
         )
         Text(
             text = "Save",
             style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
-            color = PantopusColors.appTextInverse,
+            color = if (canSave) PantopusColors.appTextInverse else PantopusColors.appTextMuted,
         )
     }
 }
@@ -139,13 +145,16 @@ private fun RowScope.DirtyRow(
 @Composable
 private fun RowScope.SetupRow(
     remaining: Int,
+    canSave: Boolean,
+    canPublish: Boolean,
     onSaveDraft: () -> Unit,
     onPublish: () -> Unit,
 ) {
+    val draftTint = if (canSave) PantopusColors.business else PantopusColors.appTextMuted
     Row(
         modifier =
             Modifier
-                .clickable(onClick = onSaveDraft)
+                .then(if (canSave) Modifier.clickable(onClick = onSaveDraft) else Modifier)
                 .heightIn(min = 42.dp)
                 .padding(horizontal = Spacing.s3)
                 .testTag("editBusinessPage.saveDraft"),
@@ -156,16 +165,16 @@ private fun RowScope.SetupRow(
             icon = PantopusIcon.Upload,
             contentDescription = null,
             size = 14.dp,
-            tint = PantopusColors.business,
+            tint = draftTint,
         )
         Text(
             text = "Save draft",
             style = TextStyle(fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold),
-            color = PantopusColors.business,
+            color = draftTint,
         )
     }
     Spacer(modifier = Modifier.weight(1f))
-    val isLocked = remaining > 0
+    val isLocked = remaining > 0 || !canPublish
     val bg = if (isLocked) PantopusColors.appSurfaceSunken else PantopusColors.business
     val shadowMod =
         if (isLocked) Modifier else Modifier.pantopusShadow(PantopusElevations.md, RoundedCornerShape(Radii.lg))
@@ -190,7 +199,7 @@ private fun RowScope.SetupRow(
                 tint = PantopusColors.appTextMuted,
             )
             Text(
-                text = "Publish · $remaining to go",
+                text = if (remaining > 0) "Publish · $remaining to go" else "Publish",
                 style = TextStyle(fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appTextMuted,
             )

@@ -122,9 +122,9 @@ public struct EditBusinessPageHoursRow: Sendable, Hashable, Identifiable {
 }
 
 public extension EditBusinessPageHoursRow.State {
-    /// Saved as 00:00–23:59, which store builds, the web and Android all read
-    /// correctly. They read a `24:00` close as noon, and Android's editor would
-    /// save it back that way.
+    /// Saved as 00:00–23:59, which every build of every app reads correctly.
+    /// Builds from before November 2026 read a `24:00` close as noon, and
+    /// Android's editor would save it back that way.
     static let allDay = Self.open(openLabel: "12:00 AM", closeLabel: "11:59 PM")
 
     /// A `24:00` close saved elsewhere also means the whole day.

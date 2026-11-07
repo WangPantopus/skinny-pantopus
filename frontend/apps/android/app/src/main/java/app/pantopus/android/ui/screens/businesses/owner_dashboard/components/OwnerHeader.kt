@@ -47,15 +47,17 @@ private val LOGO_SIZE = 68.dp
 private val LOGO_PROTRUDE = 34.dp
 
 /**
- * A10.7 — "Business" + violet "Owner view" eyebrow with chart / settings
+ * A10.7 — "Business" + violet role eyebrow ("OWNER VIEW") with chart / settings
  * actions. Sits below the status bar. Mirrors iOS `OwnerTopBar`. A null
- * [onOpenInsights] hides the chart action (no native Insights screen yet).
+ * [onOpenInsights] hides the chart action (no native Insights screen yet); a
+ * null [onOpenSettings] hides settings from someone who can't edit the page.
  */
 @Composable
 fun OwnerTopBar(
     onBack: () -> Unit,
     onOpenInsights: (() -> Unit)?,
-    onOpenSettings: () -> Unit,
+    onOpenSettings: (() -> Unit)?,
+    roleLabel: String = "BUSINESS",
 ) {
     Column(
         modifier =
@@ -86,15 +88,17 @@ fun OwnerTopBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Edit2,
-                        contentDescription = null,
-                        size = 9.dp,
-                        strokeWidth = 2.5f,
-                        tint = PantopusColors.business,
-                    )
+                    if (onOpenSettings != null) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Edit2,
+                            contentDescription = null,
+                            size = 9.dp,
+                            strokeWidth = 2.5f,
+                            tint = PantopusColors.business,
+                        )
+                    }
                     Text(
-                        text = "OWNER VIEW",
+                        text = roleLabel,
                         color = PantopusColors.business,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -105,7 +109,12 @@ fun OwnerTopBar(
             if (onOpenInsights != null) {
                 IconButton(icon = PantopusIcon.BarChart3, label = "Insights", onClick = onOpenInsights)
             }
-            IconButton(icon = PantopusIcon.SlidersHorizontal, label = "Settings", onClick = onOpenSettings)
+            if (onOpenSettings != null) {
+                IconButton(icon = PantopusIcon.SlidersHorizontal, label = "Settings", onClick = onOpenSettings)
+            } else {
+                // Keeps the title centered under the Back button's width.
+                Box(modifier = Modifier.size(34.dp))
+            }
         }
         HairlineBottom()
     }
@@ -169,7 +178,8 @@ fun OwnerLiveBar(
 /**
  * A10.7 — the `BizBannerHeader` look with edit fabs overlaid (camera on the
  * banner, pencil on the logo, pencil beside the name), each opening Edit
- * Business Page. Mirrors iOS `OwnerHeaderBanner`.
+ * Business Page. A null [onEdit] draws none of them. Mirrors iOS
+ * `OwnerHeaderBanner`.
  */
 @Composable
 fun OwnerHeaderBanner(
@@ -178,7 +188,7 @@ fun OwnerHeaderBanner(
     locality: String,
     logoIcon: PantopusIcon?,
     status: BizStatusBadge?,
-    onEdit: () -> Unit,
+    onEdit: (() -> Unit)?,
     isVerified: Boolean = true,
     logoUrl: String? = null,
     bannerUrl: String? = null,
@@ -213,8 +223,10 @@ fun OwnerHeaderBanner(
                 onEdit = onEdit,
                 modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp).offset(y = LOGO_PROTRUDE),
             )
-            Box(modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)) {
-                EditFab(icon = PantopusIcon.Camera, diameter = 28.dp, label = "Edit banner", onClick = onEdit)
+            if (onEdit != null) {
+                Box(modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)) {
+                    EditFab(icon = PantopusIcon.Camera, diameter = 28.dp, label = "Edit banner", onClick = onEdit)
+                }
             }
         }
         Column(
@@ -224,7 +236,12 @@ fun OwnerHeaderBanner(
                     .padding(start = 18.dp, end = 18.dp, bottom = Spacing.s4, top = LOGO_PROTRUDE + 10.dp),
         ) {
             Row(
-                modifier = Modifier.clickable(onClick = onEdit).semantics { contentDescription = "Edit name, $name" },
+                modifier =
+                    if (onEdit != null) {
+                        Modifier.clickable(onClick = onEdit).semantics { contentDescription = "Edit name, $name" }
+                    } else {
+                        Modifier
+                    },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
             ) {
@@ -235,7 +252,9 @@ fun OwnerHeaderBanner(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-0.5).sp,
                 )
-                PantopusIconImage(icon = PantopusIcon.Pencil, contentDescription = null, size = 14.dp, tint = PantopusColors.business)
+                if (onEdit != null) {
+                    PantopusIconImage(icon = PantopusIcon.Pencil, contentDescription = null, size = 14.dp, tint = PantopusColors.business)
+                }
             }
             Row(
                 modifier = Modifier.padding(top = Spacing.s1),
@@ -296,7 +315,7 @@ private fun OwnerLogo(
     logoIcon: PantopusIcon?,
     logoUrl: String?,
     name: String,
-    onEdit: () -> Unit,
+    onEdit: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(18.dp)
@@ -313,13 +332,15 @@ private fun OwnerLogo(
         ) {
             BizLogoContent(logoIcon = logoIcon, initials = deriveInitials(name), imageUrl = logoUrl)
         }
-        EditFab(
-            icon = PantopusIcon.Pencil,
-            diameter = 24.dp,
-            label = "Edit logo",
-            onClick = onEdit,
-            modifier = Modifier.offset(x = 6.dp, y = 6.dp),
-        )
+        if (onEdit != null) {
+            EditFab(
+                icon = PantopusIcon.Pencil,
+                diameter = 24.dp,
+                label = "Edit logo",
+                onClick = onEdit,
+                modifier = Modifier.offset(x = 6.dp, y = 6.dp),
+            )
+        }
     }
 }
 

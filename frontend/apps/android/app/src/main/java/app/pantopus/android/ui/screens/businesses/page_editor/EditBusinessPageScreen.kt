@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.AddressSuggestionList
 import app.pantopus.android.ui.components.EmptyState
@@ -74,6 +76,7 @@ import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.rememberAddressSuggestions
 import app.pantopus.android.ui.components.toastDurationMillis
+import app.pantopus.android.ui.screens.businesses.BusinessAccessNotice
 import app.pantopus.android.ui.screens.businesses.catalog.BusinessCatalogScreen
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessBannerLogoEditor
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessCompletionStrip
@@ -83,6 +86,7 @@ import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBus
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessServiceChipsEditor
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessStickySave
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessStickySaveMode
+import app.pantopus.android.ui.screens.businesses.rememberSlowAccessCheck
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -110,7 +114,8 @@ fun EditBusinessPageScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     val showsDiscard by viewModel.showsDiscardConfirm.collectAsStateWithLifecycle()
     val uploadingMedia by viewModel.uploadingMedia.collectAsStateWithLifecycle()
-    val canClose by viewModel.canClose.collectAsStateWithLifecycle()
+    val access by viewModel.access.collectAsStateWithLifecycle()
+    val showsCatalog by viewModel.showsCatalog.collectAsStateWithLifecycle()
     val isClosing by viewModel.isClosing.collectAsStateWithLifecycle()
     val closeError by viewModel.closeError.collectAsStateWithLifecycle()
     val businessClosed by viewModel.businessClosed.collectAsStateWithLifecycle()
@@ -133,18 +138,17 @@ fun EditBusinessPageScreen(
         viewModel.cancelDiscard()
     }
     val pickMedia = rememberBusinessMediaPicker(onPicked = viewModel::uploadMedia)
-    var showsCatalog by remember { mutableStateOf(false) }
+    // Current access is read on every arrival and forgotten on every departure, so it stays above the catalog's return.
+    LifecycleResumeEffect(Unit) {
+        viewModel.resume()
+        onPauseOrDispose { viewModel.pause() }
+    }
     if (showsCatalog) {
-        val closeCatalog = {
-            showsCatalog = false
-            viewModel.reloadServices()
-        }
-        BackHandler(onBack = closeCatalog)
-        BusinessCatalogScreen(onBack = closeCatalog)
+        BackHandler(onBack = viewModel::closeCatalog)
+        BusinessCatalogScreen(onBack = viewModel::closeCatalog)
         return
     }
 
-    LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(businessClosed) { if (businessClosed) onBusinessClosed() }
     BackHandler(enabled = isClosing || hasUnsavedEdits, onBack = requestBack)
 
@@ -181,9 +185,9 @@ fun EditBusinessPageScreen(
                     onBeginDescription = viewModel::beginDescriptionEditing,
                     onDayChange = viewModel::updateHoursDay,
                     onApplyWeekdays = viewModel::applyWeekdayHours,
-                    onManageServices = { showsCatalog = true },
+                    onManageServices = viewModel::openCatalog,
                     onCloseBusiness =
-                        if (canClose) {
+                        if (access.canClose) {
                             {
                                 viewModel.prepareClosure()
                                 showsCloseConfirm = true
@@ -193,6 +197,8 @@ fun EditBusinessPageScreen(
                         },
                     uploadingMedia = uploadingMedia,
                     onPickMedia = pickMedia,
+                    access = access,
+                    onRetryAccess = viewModel::retryAccess,
                 )
             EditBusinessPageUiState.Empty ->
                 EmptyLayout(
@@ -207,7 +213,8 @@ fun EditBusinessPageScreen(
                 )
         }
 
-        toast?.let { message ->
+        // The notice takes the toast's place, and says more.
+        toast?.takeIf { access.notice == null }?.let { message ->
             Toast(
                 text = message,
                 appearance =
@@ -316,9 +323,25 @@ internal fun EditBusinessPageLoadedFrame(
     onCloseBusiness: (() -> Unit)? = null,
     uploadingMedia: EditBusinessMediaKind? = null,
     onPickMedia: (EditBusinessMediaKind) -> Unit = {},
+    access: EditBusinessPageAccess = EditBusinessPageAccess.Full,
+    onRetryAccess: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val isSetup = content.mode is EditBusinessPageMode.Setup
+    // A check too slow to go unnoticed counts as no access: fields lock and the notice says why.
+    val isSlowCheck = rememberSlowAccessCheck(access.isChecking)
+    val modeFor = { allowed: Boolean ->
+        when {
+            !allowed || isSlowCheck -> EditBusinessFieldMode.ReadOnly
+            access.isChecking -> EditBusinessFieldMode.Held
+            else -> EditBusinessFieldMode.Editable
+        }
+    }
+    val profileMode = modeFor(access.canEditProfile)
+    val notice = access.notice ?: "Checking edit access…".takeIf { isSlowCheck }
+    // Locked for real, not held for a quick check: the keyboard goes, and Retry access doesn't bring it back over Save.
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(notice != null) { if (notice != null) focusManager.clearFocus() }
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             EditBusinessTopBar(
@@ -352,20 +375,26 @@ internal fun EditBusinessPageLoadedFrame(
                     logo = content.logo,
                     modifier = Modifier.padding(horizontal = Spacing.s4).padding(top = Spacing.s4),
                     uploading = uploadingMedia,
-                    onPick = onPickMedia,
+                    onPick = onPickMedia.takeUnless { profileMode == EditBusinessFieldMode.ReadOnly },
                 )
-                NameAndTaglineSection(content = content, onFieldChange = onFieldChange)
+                NameAndTaglineSection(content = content, mode = profileMode, onFieldChange = onFieldChange)
                 DescriptionSection(
                     content = content,
+                    mode = profileMode,
                     onFieldChange = onFieldChange,
                     onBeginDescription = onBeginDescription,
                 )
-                HoursSection(content = content, onDayChange = onDayChange, onApplyWeekdays = onApplyWeekdays)
-                ServicesSection(content = content, onManage = onManageServices)
+                HoursSection(
+                    content = content,
+                    mode = modeFor(access.canEditHours),
+                    onDayChange = onDayChange,
+                    onApplyWeekdays = onApplyWeekdays,
+                )
+                ServicesSection(content = content, canManage = access.canManageCatalog && !isSlowCheck, onManage = onManageServices)
                 // No gallery backend yet: the Gallery section only held add tiles
                 // that did nothing, so it stays hidden until one exists (as on iOS).
-                ContactSection(content = content, onFieldChange = onFieldChange)
-                LocationSection(content = content, onFieldChange = onFieldChange)
+                ContactSection(content = content, mode = profileMode, onFieldChange = onFieldChange)
+                LocationSection(content = content, mode = modeFor(access.canEditLocation), onFieldChange = onFieldChange)
                 onCloseBusiness?.let { close ->
                     TextButton(onClick = close, modifier = Modifier.padding(horizontal = Spacing.s4)) {
                         Text("Close business", color = PantopusColors.error)
@@ -374,14 +403,25 @@ internal fun EditBusinessPageLoadedFrame(
                 Spacer(modifier = Modifier.height(40.dp))
             }
         }
-        EditBusinessStickySave(
-            mode = stickyMode(content),
-            onDiscard = onDiscard,
-            onSave = onSave,
-            onSaveDraft = onSaveDraft,
-            onPublish = onPublish,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+        Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+            notice?.let {
+                BusinessAccessNotice(
+                    message = it,
+                    canRetry = !access.isChecking,
+                    onRetry = onRetryAccess,
+                    testTag = "editBusinessPage.accessNotice",
+                )
+            }
+            EditBusinessStickySave(
+                mode = stickyMode(content),
+                onDiscard = onDiscard,
+                onSave = onSave,
+                onSaveDraft = onSaveDraft,
+                onPublish = onPublish,
+                canSave = access.canEditAnything && !isSlowCheck,
+                canPublish = access.canEditProfile && !isSlowCheck,
+            )
+        }
     }
 }
 
@@ -521,6 +561,7 @@ private fun SectionWrapper(
 @Composable
 private fun NameAndTaglineSection(
     content: EditBusinessPageContent,
+    mode: EditBusinessFieldMode,
     onFieldChange: (EditBusinessPageFieldKey, String) -> Unit,
 ) {
     SectionWrapper(overline = "Business name & tagline") {
@@ -530,12 +571,14 @@ private fun NameAndTaglineSection(
                 required = true,
                 field = content.name,
                 state = BizFieldState.Valid,
+                mode = mode,
                 onValueChange = { onFieldChange(EditBusinessPageFieldKey.Name, it) },
             )
             BizField(
                 label = "Tagline",
                 hint = "Shows in search and on map pins",
                 field = content.tagline,
+                mode = mode,
                 onValueChange = { onFieldChange(EditBusinessPageFieldKey.Tagline, it) },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
@@ -545,6 +588,7 @@ private fun NameAndTaglineSection(
                         required = content.categoryRequired,
                         field = content.category,
                         trailing = BizFieldTrailing.Chevron,
+                        mode = mode,
                         onValueChange = { onFieldChange(EditBusinessPageFieldKey.Category, it) },
                     )
                 }
@@ -552,6 +596,7 @@ private fun NameAndTaglineSection(
                     BizField(
                         label = "Price",
                         field = content.price,
+                        mode = mode,
                         onValueChange = { onFieldChange(EditBusinessPageFieldKey.Price, it) },
                     )
                 }
@@ -563,6 +608,7 @@ private fun NameAndTaglineSection(
 @Composable
 private fun DescriptionSection(
     content: EditBusinessPageContent,
+    mode: EditBusinessFieldMode,
     onFieldChange: (EditBusinessPageFieldKey, String) -> Unit,
     onBeginDescription: () -> Unit,
 ) {
@@ -574,12 +620,21 @@ private fun DescriptionSection(
                     BizTextarea(
                         field = desc.field,
                         charLimit = desc.charLimit,
+                        mode = mode,
                         onValueChange = { onFieldChange(EditBusinessPageFieldKey.Description, it) },
                     )
                 }
             }
             is EditBusinessPageDescriptionState.Prompt ->
-                PromptBlock(prompt = desc.prompt, onTap = onBeginDescription)
+                if (mode == EditBusinessFieldMode.ReadOnly) {
+                    Text(
+                        text = "No description yet.",
+                        style = TextStyle(fontSize = 13.sp),
+                        color = PantopusColors.appTextSecondary,
+                    )
+                } else {
+                    PromptBlock(prompt = desc.prompt, onTap = onBeginDescription)
+                }
         }
     }
 }
@@ -587,25 +642,33 @@ private fun DescriptionSection(
 @Composable
 private fun HoursSection(
     content: EditBusinessPageContent,
+    mode: EditBusinessFieldMode,
     onDayChange: (String, EditBusinessPageHoursRow.State) -> Unit,
     onApplyWeekdays: () -> Unit,
 ) {
     SectionWrapper(overline = "Hours") {
-        EditBusinessHoursEditor(state = content.hours, onDayChange = onDayChange, onApplyWeekdays = onApplyWeekdays)
+        EditBusinessHoursEditor(state = content.hours, onDayChange = onDayChange, onApplyWeekdays = onApplyWeekdays, mode = mode)
     }
 }
 
 @Composable
 private fun ServicesSection(
     content: EditBusinessPageContent,
+    canManage: Boolean,
     onManage: () -> Unit,
 ) {
+    // Nothing to show and nothing this person can do about it.
+    if (!canManage && content.services is EditBusinessPageServicesState.Prompt) return
     SectionWrapper(overline = "Services") {
         when (val svc = content.services) {
             is EditBusinessPageServicesState.Chips -> {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     BizLabel(label = "What you offer")
-                    EditBusinessServiceChipsEditor(chips = svc.chips, modifier = Modifier.clickable(onClick = onManage))
+                    EditBusinessServiceChipsEditor(
+                        chips = svc.chips,
+                        modifier = if (canManage) Modifier.clickable(onClick = onManage) else Modifier,
+                        canManage = canManage,
+                    )
                 }
             }
             is EditBusinessPageServicesState.Prompt -> PromptBlock(prompt = svc.prompt, onTap = onManage)
@@ -616,6 +679,7 @@ private fun ServicesSection(
 @Composable
 private fun ContactSection(
     content: EditBusinessPageContent,
+    mode: EditBusinessFieldMode,
     onFieldChange: (EditBusinessPageFieldKey, String) -> Unit,
 ) {
     SectionWrapper(overline = "Contact") {
@@ -625,18 +689,21 @@ private fun ContactSection(
                 field = content.phone,
                 leading = "+1",
                 state = BizFieldState.Valid,
+                mode = mode,
                 onValueChange = { onFieldChange(EditBusinessPageFieldKey.Phone, it) },
             )
             BizField(
                 label = "Email",
                 field = content.email,
                 state = BizFieldState.Valid,
+                mode = mode,
                 onValueChange = { onFieldChange(EditBusinessPageFieldKey.Email, it) },
             )
             BizField(
                 label = "Website",
                 field = content.website,
                 leading = "https://",
+                mode = mode,
                 onValueChange = { onFieldChange(EditBusinessPageFieldKey.Website, it) },
             )
             content.bookingLink?.let { booking ->
@@ -645,6 +712,7 @@ private fun ContactSection(
                     hint = "Public on profile",
                     field = booking,
                     leading = "https://",
+                    mode = mode,
                     onValueChange = { onFieldChange(EditBusinessPageFieldKey.BookingLink, it) },
                 )
             }
@@ -655,6 +723,7 @@ private fun ContactSection(
 @Composable
 private fun LocationSection(
     content: EditBusinessPageContent,
+    mode: EditBusinessFieldMode,
     onFieldChange: (EditBusinessPageFieldKey, String) -> Unit,
 ) {
     val addressSuggestions = rememberAddressSuggestions()
@@ -668,6 +737,7 @@ private fun LocationSection(
                     content.location.error?.let { BizFieldState.Error(it) }
                         ?: BizFieldState.Valid,
                 trailing = BizFieldTrailing.MapPin,
+                mode = mode,
                 testTag = "editBusinessPage.field.address",
                 onValueChange = {
                     onFieldChange(EditBusinessPageFieldKey.Address, it)
@@ -685,6 +755,7 @@ private fun LocationSection(
                 required = true,
                 field = content.location.city,
                 state = BizFieldState.Valid,
+                mode = mode,
                 testTag = "editBusinessPage.field.city",
                 onValueChange = { onFieldChange(EditBusinessPageFieldKey.City, it) },
             )
@@ -693,6 +764,7 @@ private fun LocationSection(
                     BizField(
                         label = "State",
                         field = content.location.state,
+                        mode = mode,
                         testTag = "editBusinessPage.field.state",
                         onValueChange = { onFieldChange(EditBusinessPageFieldKey.State, it) },
                     )
@@ -702,13 +774,14 @@ private fun LocationSection(
                         label = "ZIP code",
                         field = content.location.zip,
                         keyboardType = KeyboardType.Number,
+                        mode = mode,
                         testTag = "editBusinessPage.field.zip",
                         onValueChange = { onFieldChange(EditBusinessPageFieldKey.Zip, it) },
                     )
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                BizLabel(label = "Map", hint = "Drag the pin to refine")
+                BizLabel(label = "Map", hint = "Drag the pin to refine".takeUnless { mode == EditBusinessFieldMode.ReadOnly })
                 EditBusinessMapPreview(
                     verified = content.location.mapVerified,
                     pinDirty = content.location.pinDirty,
@@ -783,11 +856,15 @@ private fun BizField(
     leading: String? = null,
     trailing: BizFieldTrailing = BizFieldTrailing.None,
     keyboardType: KeyboardType = KeyboardType.Text,
+    mode: EditBusinessFieldMode = EditBusinessFieldMode.Editable,
     testTag: String? = null,
     onValueChange: ((String) -> Unit)? = null,
 ) {
+    val isReadOnly = mode == EditBusinessFieldMode.ReadOnly
+    // A field this person can't change isn't "valid" or a picker, only a value.
+    val shownState = if (isReadOnly && state == BizFieldState.Valid) BizFieldState.Default else state
     val borderColor =
-        when (state) {
+        when (shownState) {
             BizFieldState.Valid -> PantopusColors.success
             is BizFieldState.Error -> PantopusColors.error
             BizFieldState.Default -> PantopusColors.appBorder
@@ -798,7 +875,8 @@ private fun BizField(
             if (required) append(", required")
             if (field.current.isNotEmpty()) append(", value: ${field.current}")
             if (field.isDirty) append(", unsaved")
-            if (state is BizFieldState.Error) append(", error: ${state.message}")
+            if (isReadOnly) append(", read only")
+            if (shownState is BizFieldState.Error) append(", error: ${shownState.message}")
         }
     Column(
         modifier =
@@ -815,7 +893,7 @@ private fun BizField(
                     .keepsKeyboard()
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.md))
-                    .background(PantopusColors.appSurface)
+                    .background(if (isReadOnly) PantopusColors.appSurfaceSunken else PantopusColors.appSurface)
                     .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(Radii.md))
                     .heightIn(min = 44.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -832,8 +910,11 @@ private fun BizField(
                 value = field.current,
                 onValueChange = { onValueChange?.invoke(it) },
                 enabled = onValueChange != null,
+                // Read-only, not disabled: a field held for a quick check keeps its focus and keyboard.
+                readOnly = mode != EditBusinessFieldMode.Editable,
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                textStyle = TextStyle(fontSize = 14.sp, color = PantopusColors.appText),
+                textStyle =
+                    TextStyle(fontSize = 14.sp, color = if (isReadOnly) PantopusColors.appTextSecondary else PantopusColors.appText),
                 cursorBrush = SolidColor(PantopusColors.business),
                 decorationBox = { inner ->
                     if (field.current.isEmpty()) {
@@ -854,11 +935,11 @@ private fun BizField(
                             bottom = 11.dp,
                         ),
             )
-            TrailingIcon(state = state, trailing = trailing)
+            TrailingIcon(state = shownState, trailing = if (isReadOnly) BizFieldTrailing.None else trailing)
         }
-        if (state is BizFieldState.Error) {
+        if (shownState is BizFieldState.Error) {
             Text(
-                text = state.message,
+                text = shownState.message,
                 style = TextStyle(fontSize = 11.sp),
                 color = PantopusColors.error,
             )
@@ -912,8 +993,10 @@ private fun TrailingIcon(
 private fun BizTextarea(
     field: EditBusinessPageField,
     charLimit: Int,
+    mode: EditBusinessFieldMode,
     onValueChange: (String) -> Unit,
 ) {
+    val isReadOnly = mode == EditBusinessFieldMode.ReadOnly
     Box(
         modifier =
             Modifier
@@ -921,7 +1004,7 @@ private fun BizTextarea(
                 .fillMaxWidth()
                 .heightIn(min = 124.dp)
                 .clip(RoundedCornerShape(Radii.md))
-                .background(PantopusColors.appSurface)
+                .background(if (isReadOnly) PantopusColors.appSurfaceSunken else PantopusColors.appSurface)
                 .border(width = 1.dp, color = PantopusColors.appBorder, shape = RoundedCornerShape(Radii.md))
                 .padding(12.dp)
                 .semantics {
@@ -932,7 +1015,9 @@ private fun BizTextarea(
         BasicTextField(
             value = field.current,
             onValueChange = onValueChange,
-            textStyle = TextStyle(fontSize = 13.sp, color = PantopusColors.appText),
+            readOnly = mode != EditBusinessFieldMode.Editable,
+            textStyle =
+                TextStyle(fontSize = 13.sp, color = if (isReadOnly) PantopusColors.appTextSecondary else PantopusColors.appText),
             cursorBrush = SolidColor(PantopusColors.business),
             modifier =
                 Modifier

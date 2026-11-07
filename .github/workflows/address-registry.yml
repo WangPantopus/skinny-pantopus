@@ -48,8 +48,9 @@ on:
 permissions:
   contents: read
 
+# A rollback has its own line: on the publish line it would wait behind a national build (hours), and a newer waiting run would replace it.
 concurrency:
-  group: address-registry-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  group: address-registry-${{ github.event_name == 'pull_request' && github.ref || inputs.action == 'rollback' && 'rollback' || 'publish' }}
   cancel-in-progress: false
 
 jobs:
