@@ -283,10 +283,14 @@ export default function FeedPage() {
   // The server's HTML (first content) and its hydration lay out the same cards for a
   // typical window; the list measures the real one once hydrated.
   const hydrated = useHydrated();
+  // Measured heights follow each post, not its place in the list: a card added or taken out doesn't hand its height
+  // to the cards after it, which made the list jump.
+  const getItemKey = useCallback((index: number) => listed.posts[index]?.id ?? index, [listed.posts]);
   const virtualizer = useVirtualizer({
     count: listed.posts.length,
     getScrollElement: () => feedScrollRef.current,
     estimateSize: () => 400,
+    getItemKey,
     initialRect: hydrated ? undefined : { width: 0, height: 800 },
     overscan: 5,
   });
