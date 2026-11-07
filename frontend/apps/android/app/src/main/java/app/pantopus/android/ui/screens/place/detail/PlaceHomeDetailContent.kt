@@ -30,6 +30,7 @@ import app.pantopus.android.data.api.models.homedashboard.HomeValueCardDto
 import app.pantopus.android.data.api.models.place.PlaceHomeEstimate
 import app.pantopus.android.data.api.models.place.PlaceHomeSystemsData
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceYourHomeData
 import app.pantopus.android.ui.components.PrimaryButton
@@ -73,17 +74,7 @@ fun PlaceHomeDetailContent(
             PlaceDetailSectionLabel("Property")
             // A home with only estimates has no facts to show: the empty grid would read as a record.
             val hasFacts = listOf(data.yearBuilt, data.sqft, data.bedrooms, data.bathrooms, data.lotSqft).any { it != null }
-            if (data.estimate == null || hasFacts) {
-                FactsCard(data)
-                // The server names where the facts came from: county records, or
-                // the details the household entered.
-                val label = env.provenance?.label
-                if (label != null) {
-                    PlaceSourceNote(label)
-                } else {
-                    PlaceSourceNote(env.source?.takeIf { it.isNotBlank() } ?: "County public records · estimate model", asOf)
-                }
-            }
+            if (data.estimate == null || hasFacts) FactsWithSource(data, env, asOf)
             // The estimate's own last line names where its figures came from.
             data.estimate?.let { EstimateCard(it) }
 
@@ -203,6 +194,23 @@ private fun EstimateCard(estimate: PlaceHomeEstimate) {
                 Text(line, fontSize = 12.sp, color = PantopusColors.appTextMuted)
             }
         }
+    }
+}
+
+@Composable
+private fun FactsWithSource(
+    data: PlaceYourHomeData,
+    env: PlaceSectionEnvelope,
+    asOf: String?,
+) {
+    FactsCard(data)
+    // The server names where the facts came from: county records, or
+    // the details the household entered.
+    val label = env.provenance?.label
+    if (label != null) {
+        PlaceSourceNote(label)
+    } else {
+        PlaceSourceNote(env.source?.takeIf { it.isNotBlank() } ?: "County public records · estimate model", asOf)
     }
 }
 
