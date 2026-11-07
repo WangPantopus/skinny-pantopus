@@ -24,6 +24,8 @@ const { stateOfCounty } = require('./addressKey');
 
 const READ_EVERY_MS = 60 * 1000;
 const CHECK_EVERY_MS = 10 * 1000;
+// Storage answers the switch file's read every minute, so a server that hasn't heard from it in this long can't read it.
+const ANSWERED_WITHIN_MS = 3 * 60 * 1000;
 const MODES = new Set(['off', 'shadow', 'live']);
 
 let counties = {};
@@ -32,6 +34,7 @@ let liveStates = new Set();
 let anyShadowCounty = false;
 let fileRead = false;
 let loggedAs = null;
+let missingLive = [];
 
 function apply(file) {
   counties = file?.counties || {};
@@ -66,6 +69,21 @@ function parseFile(bytes) {
 
 const readFile = reader.switchesFile(config.switchesName, parseFile, READ_EVERY_MS);
 
+/**
+ * Live counties missing from their state's file: a wrong index address, or a county switched on before it was
+ * published. Read on the reader's own schedule, so after a restart a lookup finds its state's file already held.
+ */
+async function checkLive() {
+  const live = [...modes].filter(([, mode]) => mode === 'live').map(([fips]) => fips);
+  const missing = [];
+  for (const state of new Set(live.map(stateOfCounty))) {
+    const stateFile = await reader.stateFile(state);
+    missing.push(...live.filter((fips) => stateOfCounty(fips) === state && !stateFile?.jurisdictions?.[fips]));
+  }
+  if (missing.join() !== missingLive.join() && missing.length) logger.warn('property_records.live_county_missing', { counties: missing });
+  missingLive = missing;
+}
+
 async function follow() {
   try {
     const file = await readFile();
@@ -74,6 +92,14 @@ async function follow() {
   } catch (err) {
     logger.info('property_records.switches_later', { error: err.name });
   }
+  await checkLive().catch(() => {});
+}
+
+/** For /health, which the outside monitor reads every minute: 'ok', 'unreachable' or 'missing' (a live county isn't in its state's file). */
+function health() {
+  const storage = reader.health();
+  if (storage.paused || storage.answered_ms_ago === null || storage.answered_ms_ago > ANSWERED_WITHIN_MS) return 'unreachable';
+  return missingLive.length ? 'missing' : 'ok';
 }
 
 apply(null);
@@ -119,4 +145,4 @@ function served(copy) {
   return { ...copy, facts: without(copy.facts, withheld), ...(copy.building ? { building: without(copy.building, withheld) } : {}) };
 }
 
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served, listed, summary };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, listed, summary, health };
