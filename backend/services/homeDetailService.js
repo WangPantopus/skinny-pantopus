@@ -14,6 +14,7 @@ const floorPlans = require('./propertyRecords/floorPlans');
 const { changeNicheData } = require('./homeNicheData');
 const addressReview = require('./addressValidation/addressReviewService');
 const countyPages = require('./countyPages');
+const countyLinks = require('../config/countyLinks');
 const logger = require('../utils/logger');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
@@ -232,7 +233,7 @@ async function householdPart({ homeId, home, raw, access, actorId, problems, cop
     ]);
     return householdFacts.project({ home, nicheData: raw.niche_data, copy, countyRecord, canEdit, viewerId: actorId, verifiedWriters, reports, countyPage,
       // The county's record goes first for everyone, including those who don't see it.
-      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries });
+      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries, countyCheck: countyLinks.enabled() });
   } catch (error) {
     logger.warn('Home household facts unavailable', { homeId, error: error.message });
     return null;
@@ -320,7 +321,8 @@ async function factChange({ homeId, actorId, asked, fields }) {
       .eq('id', homeId).maybeSingle());
     if (!object(home)) throw failure();
     const copy = homeRecords.liveCopy(home);
-    return householdFacts.plan({ home, copy, seesRecord: !access || access.isOwner, asked, fields, actorId, floorPlan: householdFacts.usableFloorPlan(floorPlans.storedCopy(home), copy) });
+    return householdFacts.plan({ home, copy, seesRecord: !access || access.isOwner, asked, fields, actorId, floorPlan: householdFacts.usableFloorPlan(floorPlans.storedCopy(home), copy),
+      check: countyLinks.enabled() });
   } catch (error) {
     // A plain edit goes on without its who and when; asking for the facts themselves has to be answered.
     if (asked) throw error;

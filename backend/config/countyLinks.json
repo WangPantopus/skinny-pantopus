@@ -1,0 +1,1831 @@
+{
+ "v": 1,
+ "built": "2026-11-07",
+ "note": "Built from published patterns and public directories only. Pantopus never reads these pages: a person opens them in their own browser.",
+ "sources": {
+  "webmap": "The county's own published ArcGIS web map: its parcel popup links to this page (ref names the map).",
+  "search-index": "Pages on the county's own site as a public search engine lists them, read Nov 7, 2026. The pages were never opened.",
+  "ct-cama": "Connecticut's 2026 Parcel and CAMA Data (data.ct.gov, ibe8-9i3q), column cama_site_link: \"The web link to access the web hosted property card.\"",
+  "netr": "NETR Online's public records directory (publicrecords.netronline.com): the county's assessor entry, read at its robots.txt pace. The county's link itself was never opened.",
+  "wp9": "WP9's list (config/countyPages.js): searches restricted to the county's own domain. The pages were never opened."
+ },
+ "counties": {
+  "01073": {
+   "name": "Jefferson County",
+   "url": "https://eringcapture.jccal.org/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "01089": {
+   "name": "Madison County",
+   "url": "https://madisonproperty.countygovservices.com/Property/Property/Search",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Madison Tax Assessor"
+  },
+  "04013": {
+   "name": "Maricopa County",
+   "url": "https://mcassessor.maricopa.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Maricopa Assessor"
+  },
+  "04019": {
+   "name": "Pima County",
+   "url": "https://www.asr.pima.gov/ParcelSearch",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "04021": {
+   "name": "Pinal County",
+   "url": "https://www.pinalcountyaz.gov/Assessor/Pages/home.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Pinal Assessor"
+  },
+  "06001": {
+   "name": "Alameda County",
+   "url": "https://www.acassessor.org/homeowners/assessed-value-look-up/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06013": {
+   "name": "Contra Costa County",
+   "url": "https://www.contracosta.ca.gov/191/Assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Contra Costa Assessor"
+  },
+  "06019": {
+   "name": "Fresno County",
+   "url": "https://www.fresnocountyca.gov/Departments/Assessor/Value",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06029": {
+   "name": "Kern County",
+   "url": "https://www.kerncounty.com/government/departments/assessor-recorder/property/assessor-property-search",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06037": {
+   "name": "Los Angeles County",
+   "url": "https://portal.assessor.lacounty.gov/",
+   "deep": "https://portal.assessor.lacounty.gov/parceldetail/{parcel}",
+   "form": "digits",
+   "kind": "deep",
+   "src": "webmap",
+   "ref": "County of Los Angeles web map be2583be09e44bbea27c7750f597cb10: parcel popup links parceldetail/{AIN}"
+  },
+  "06053": {
+   "name": "Monterey County",
+   "url": "https://www.countyofmonterey.gov/government/departments-a-h/assessor/assessor/real-property/on-line-parcel-info",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Monterey Assessor"
+  },
+  "06059": {
+   "name": "Orange County",
+   "url": "https://assessedvalue.ocassessor.gov/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06061": {
+   "name": "Placer County",
+   "url": "https://www.placer.ca.gov/5866/Property-Details",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Placer Assessor"
+  },
+  "06065": {
+   "name": "Riverside County",
+   "url": "https://ca-riverside-acr.publicaccessnow.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Riverside Assessor"
+  },
+  "06067": {
+   "name": "Sacramento County",
+   "url": "https://assessor.saccounty.gov/content/assessor/us/en/maps-property-data-and-records/assessor-parcel-viewer.html",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06071": {
+   "name": "San Bernardino County",
+   "url": "https://arc.sbcounty.gov/property-information/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06073": {
+   "name": "San Diego County",
+   "url": "https://arcc.sandiegocounty.gov/content/arcc/home/divisions/assessor/parcel-quest-disclaimer.html",
+   "kind": "search",
+   "src": "netr",
+   "ref": "San Diego Assessor"
+  },
+  "06075": {
+   "name": "San Francisco County",
+   "url": "https://sfplanninggis.org/pim/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "San Francisco Assessor"
+  },
+  "06077": {
+   "name": "San Joaquin County",
+   "url": "https://www.sjgov.org/department/assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "San Joaquin Assessor"
+  },
+  "06081": {
+   "name": "San Mateo County",
+   "url": "https://smcacre.gov/assessor/property-tax-look",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06083": {
+   "name": "Santa Barbara County",
+   "url": "https://sbcassessor.com/assessor/AssessorParcelMap.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Santa Barbara Assessor"
+  },
+  "06085": {
+   "name": "Santa Clara County",
+   "url": "https://www.sccassessor.org/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06095": {
+   "name": "Solano County",
+   "url": "https://ca-solano.publicaccessnow.com/Assessor/PropertySearch.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Solano Assessor"
+  },
+  "06097": {
+   "name": "Sonoma County",
+   "url": "https://common1.mptsweb.com/mbap/sonoma/asr",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Sonoma Assessor"
+  },
+  "06099": {
+   "name": "Stanislaus County",
+   "url": "https://www.stancounty.com/assessor/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "06107": {
+   "name": "Tulare County",
+   "url": "https://common1.mptsweb.com/mbap/tulare/asr",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Tulare Assessor"
+  },
+  "06111": {
+   "name": "Ventura County",
+   "url": "https://assessor.venturacounty.gov/assessor-data/property-search/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "08001": {
+   "name": "Adams County",
+   "url": "https://gisapp.adcogov.org/PropertySearch",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Adams Assessor"
+  },
+  "08005": {
+   "name": "Arapahoe County",
+   "url": "https://arapahoeco.gov/your_county/county_departments/assessor/property_search/index.php",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Arapahoe Assessor"
+  },
+  "08031": {
+   "name": "the City and County of Denver",
+   "url": "https://www.denvergov.org/Property",
+   "deep": "https://www.denvergov.org/Property/realproperty/summary/{parcel}",
+   "form": "as_is",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "denvergov.org/Property/realproperty/summary/<13-digit schedule number> pages listed by a search engine"
+  },
+  "08041": {
+   "name": "El Paso County",
+   "url": "https://property.spatialest.com/co/elpaso/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "El Paso Assessor"
+  },
+  "08059": {
+   "name": "Jefferson County",
+   "url": "https://ats.jeffco.us/ats/splash.do",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Jefferson Assessor",
+   "was_http": true
+  },
+  "09110": {
+   "name": "the Capitol Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Andover": {
+     "name": "Andover",
+     "url": "https://gis.vgsi.com/andoverct/Search.aspx",
+     "deep": "https://gis.vgsi.com/andoverct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Berlin": {
+     "name": "Berlin",
+     "url": "https://gis.vgsi.com/berlinct/Search.aspx",
+     "deep": "https://gis.vgsi.com/berlinct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Bloomfield": {
+     "name": "Bloomfield",
+     "url": "https://gis.vgsi.com/bloomfieldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/bloomfieldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Bolton": {
+     "name": "Bolton",
+     "url": "https://gis.vgsi.com/boltonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/boltonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Canton": {
+     "name": "Canton",
+     "url": "https://gis.vgsi.com/cantonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/cantonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Coventry": {
+     "name": "Coventry",
+     "url": "https://gis.vgsi.com/coventryct/Search.aspx",
+     "deep": "https://gis.vgsi.com/coventryct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Enfield": {
+     "name": "Enfield",
+     "url": "https://gis.vgsi.com/enfieldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/enfieldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Glastonbury": {
+     "name": "Glastonbury",
+     "url": "https://gis.vgsi.com/glastonburyct/Search.aspx",
+     "deep": "https://gis.vgsi.com/glastonburyct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Granby": {
+     "name": "Granby",
+     "url": "https://gis.vgsi.com/granbyct/Search.aspx",
+     "deep": "https://gis.vgsi.com/granbyct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Hartford": {
+     "name": "Hartford",
+     "url": "https://gis.vgsi.com/west hartfordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/west hartfordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Mansfield": {
+     "name": "Mansfield",
+     "url": "https://gis.vgsi.com/mansfieldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/mansfieldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "New Britain": {
+     "name": "New Britain",
+     "url": "https://gis.vgsi.com/new britainct/Search.aspx",
+     "deep": "https://gis.vgsi.com/new britainct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Somers": {
+     "name": "Somers",
+     "url": "https://gis.vgsi.com/somersct/Search.aspx",
+     "deep": "https://gis.vgsi.com/somersct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "South Windsor": {
+     "name": "South Windsor",
+     "url": "https://gis.vgsi.com/southburyct/Search.aspx",
+     "deep": "https://gis.vgsi.com/southburyct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Southington": {
+     "name": "Southington",
+     "url": "https://gis.vgsi.com/south windsorct/Search.aspx",
+     "deep": "https://gis.vgsi.com/south windsorct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Stafford": {
+     "name": "Stafford",
+     "url": "https://gis.vgsi.com/staffordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/staffordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Tolland": {
+     "name": "Tolland",
+     "url": "https://gis.vgsi.com/tollandct/Search.aspx",
+     "deep": "https://gis.vgsi.com/tollandct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Vernon": {
+     "name": "Vernon",
+     "url": "https://gis.vgsi.com/vernonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/vernonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "West Hartford": {
+     "name": "West Hartford",
+     "url": "https://gis.vgsi.com/westbrookct/Search.aspx",
+     "deep": "https://gis.vgsi.com/westbrookct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Willington": {
+     "name": "Willington",
+     "url": "https://gis.vgsi.com/willingtonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/willingtonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Windsor": {
+     "name": "Windsor",
+     "url": "https://gis.vgsi.com/windsorct/Search.aspx",
+     "deep": "https://gis.vgsi.com/windsorct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "09120": {
+   "name": "the Greater Bridgeport Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Bridgeport": {
+     "name": "Bridgeport",
+     "url": "https://gis.vgsi.com/bridgeportct/Search.aspx",
+     "deep": "https://gis.vgsi.com/bridgeportct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Easton": {
+     "name": "Easton",
+     "url": "https://gis.vgsi.com/east windsorct/Search.aspx",
+     "deep": "https://gis.vgsi.com/east windsorct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Fairfield": {
+     "name": "Fairfield",
+     "url": "https://gis.vgsi.com/fairfieldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/fairfieldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Monroe": {
+     "name": "Monroe",
+     "url": "https://gis.vgsi.com/monroect/Search.aspx",
+     "deep": "https://gis.vgsi.com/monroect/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Stratford": {
+     "name": "Stratford",
+     "url": "https://gis.vgsi.com/stratfordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/stratfordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Trumbull": {
+     "name": "Trumbull",
+     "url": "https://gis.vgsi.com/trumbullct/Search.aspx",
+     "deep": "https://gis.vgsi.com/trumbullct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "09130": {
+   "name": "the Lower Connecticut River Valley Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Chester": {
+     "name": "Chester",
+     "url": "https://gis.vgsi.com/manchesterct/Search.aspx",
+     "deep": "https://gis.vgsi.com/manchesterct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Clinton": {
+     "name": "Clinton",
+     "url": "https://gis.vgsi.com/clintonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/clintonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Deep River": {
+     "name": "Deep River",
+     "url": "https://gis.vgsi.com/deep riverct/Search.aspx",
+     "deep": "https://gis.vgsi.com/deep riverct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "East Haddam": {
+     "name": "East Haddam",
+     "url": "https://gis.vgsi.com/east granbyct/Search.aspx",
+     "deep": "https://gis.vgsi.com/east granbyct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "East Hampton": {
+     "name": "East Hampton",
+     "url": "https://gis.vgsi.com/east haddamct/Search.aspx",
+     "deep": "https://gis.vgsi.com/east haddamct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Essex": {
+     "name": "Essex",
+     "url": "https://gis.vgsi.com/essexct/Search.aspx",
+     "deep": "https://gis.vgsi.com/essexct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Lyme": {
+     "name": "Lyme",
+     "url": "https://gis.vgsi.com/lymect/Search.aspx",
+     "deep": "https://gis.vgsi.com/lymect/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Middlefield": {
+     "name": "Middlefield",
+     "url": "https://gis.vgsi.com/middlefieldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/middlefieldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Middletown": {
+     "name": "Middletown",
+     "url": "https://gis.vgsi.com/middletownct/Search.aspx",
+     "deep": "https://gis.vgsi.com/middletownct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Old Saybrook": {
+     "name": "Old Saybrook",
+     "url": "https://gis.vgsi.com/old saybrookct/Search.aspx",
+     "deep": "https://gis.vgsi.com/old saybrookct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Westbrook": {
+     "name": "Westbrook",
+     "url": "https://gis.vgsi.com/west havenct/Search.aspx",
+     "deep": "https://gis.vgsi.com/west havenct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "09140": {
+   "name": "the Naugatuck Valley Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Bethlehem": {
+     "name": "Bethlehem",
+     "url": "https://gis.vgsi.com/bethlehemct/Search.aspx",
+     "deep": "https://gis.vgsi.com/bethlehemct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Bristol": {
+     "name": "Bristol",
+     "url": "https://gis.vgsi.com/bristolct/Search.aspx",
+     "deep": "https://gis.vgsi.com/bristolct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Middlebury": {
+     "name": "Middlebury",
+     "url": "https://gis.vgsi.com/middleburyct/Search.aspx",
+     "deep": "https://gis.vgsi.com/middleburyct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Southbury": {
+     "name": "Southbury",
+     "url": "https://gis.vgsi.com/southingtonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/southingtonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Wolcott": {
+     "name": "Wolcott",
+     "url": "https://gis.vgsi.com/wolcottct/Search.aspx",
+     "deep": "https://gis.vgsi.com/wolcottct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "09150": {
+   "name": "the Northeastern Connecticut Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Brooklyn": {
+     "name": "Brooklyn",
+     "url": "https://gis.vgsi.com/brooklynct/Search.aspx",
+     "deep": "https://gis.vgsi.com/brooklynct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Canterbury": {
+     "name": "Canterbury",
+     "url": "https://gis.vgsi.com/canterburyct/Search.aspx",
+     "deep": "https://gis.vgsi.com/canterburyct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Chaplin": {
+     "name": "Chaplin",
+     "url": "https://gis.vgsi.com/chaplinct/Search.aspx",
+     "deep": "https://gis.vgsi.com/chaplinct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Hampton": {
+     "name": "Hampton",
+     "url": "https://gis.vgsi.com/hamptonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/hamptonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Plainfield": {
+     "name": "Plainfield",
+     "url": "https://gis.vgsi.com/plainfieldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/plainfieldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Pomfret": {
+     "name": "Pomfret",
+     "url": "https://gis.vgsi.com/pomfretct/Search.aspx",
+     "deep": "https://gis.vgsi.com/pomfretct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Putnam": {
+     "name": "Putnam",
+     "url": "https://gis.vgsi.com/putnamct/Search.aspx",
+     "deep": "https://gis.vgsi.com/putnamct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Sterling": {
+     "name": "Sterling",
+     "url": "https://gis.vgsi.com/sterlingct/Search.aspx",
+     "deep": "https://gis.vgsi.com/sterlingct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Thompson": {
+     "name": "Thompson",
+     "url": "https://gis.vgsi.com/thompsonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/thompsonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Union": {
+     "name": "Union",
+     "url": "https://gis.vgsi.com/unionct/Search.aspx",
+     "deep": "https://gis.vgsi.com/unionct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Woodstock": {
+     "name": "Woodstock",
+     "url": "https://gis.vgsi.com/woodstockct/Search.aspx",
+     "deep": "https://gis.vgsi.com/woodstockct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "09160": {
+   "name": "the Northwest Hills Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Barkhamsted": {
+     "name": "Barkhamsted",
+     "url": "https://gis.vgsi.com/barkhamstedct/Search.aspx",
+     "deep": "https://gis.vgsi.com/barkhamstedct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Burlington": {
+     "name": "Burlington",
+     "url": "https://gis.vgsi.com/burlingtonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/burlingtonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Goshen": {
+     "name": "Goshen",
+     "url": "https://gis.vgsi.com/goshenct/Search.aspx",
+     "deep": "https://gis.vgsi.com/goshenct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Harwinton": {
+     "name": "Harwinton",
+     "url": "https://gis.vgsi.com/harwintonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/harwintonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Kent": {
+     "name": "Kent",
+     "url": "https://gis.vgsi.com/kentct/Search.aspx",
+     "deep": "https://gis.vgsi.com/kentct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Litchfield": {
+     "name": "Litchfield",
+     "url": "https://gis.vgsi.com/litchfieldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/litchfieldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Morris": {
+     "name": "Morris",
+     "url": "https://gis.vgsi.com/morrisct/Search.aspx",
+     "deep": "https://gis.vgsi.com/morrisct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Sharon": {
+     "name": "Sharon",
+     "url": "https://gis.vgsi.com/sharonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/sharonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "09170": {
+   "name": "the South Central Connecticut Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Branford": {
+     "name": "Branford",
+     "url": "https://gis.vgsi.com/branfordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/branfordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "East Haven": {
+     "name": "East Haven",
+     "url": "https://gis.vgsi.com/east hartfordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/east hartfordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Guilford": {
+     "name": "Guilford",
+     "url": "https://www.propertyrecordcards.com/SearchMaster.aspx?towncode=060",
+     "kind": "search",
+     "src": "netr",
+     "url_src": "netr"
+    },
+    "Hamden": {
+     "name": "Hamden",
+     "url": "https://gis.vgsi.com/hamdenct/Search.aspx",
+     "deep": "https://gis.vgsi.com/hamdenct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Madison": {
+     "name": "Madison",
+     "url": "https://gis.vgsi.com/madisonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/madisonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Meriden": {
+     "name": "Meriden",
+     "url": "https://gis.vgsi.com/meridenct/Search.aspx",
+     "deep": "https://gis.vgsi.com/meridenct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Milford": {
+     "name": "Milford",
+     "url": "https://gis.vgsi.com/milfordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/milfordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "New Haven": {
+     "name": "New Haven",
+     "url": "https://gis.vgsi.com/new havenct/Search.aspx",
+     "deep": "https://gis.vgsi.com/new havenct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Orange": {
+     "name": "Orange",
+     "url": "https://gis.vgsi.com/orangect/Search.aspx",
+     "deep": "https://gis.vgsi.com/orangect/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Wallingford": {
+     "name": "Wallingford",
+     "url": "https://gis.vgsi.com/wallingfordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/wallingfordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "09180": {
+   "name": "the Southeastern Connecticut Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Griswold": {
+     "name": "Griswold",
+     "url": "https://gis.vgsi.com/griswoldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/griswoldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Lebanon": {
+     "name": "Lebanon",
+     "url": "https://gis.vgsi.com/lebanonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/lebanonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Ledyard": {
+     "name": "Ledyard",
+     "url": "https://gis.vgsi.com/ledyardct/Search.aspx",
+     "deep": "https://gis.vgsi.com/ledyardct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Lisbon": {
+     "name": "Lisbon",
+     "url": "https://gis.vgsi.com/lisbonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/lisbonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Norwich": {
+     "name": "Norwich",
+     "url": "https://gis.vgsi.com/norwichct/Search.aspx",
+     "deep": "https://gis.vgsi.com/norwichct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Preston": {
+     "name": "Preston",
+     "url": "https://gis.vgsi.com/prestonct/Search.aspx",
+     "deep": "https://gis.vgsi.com/prestonct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Salem": {
+     "name": "Salem",
+     "url": "https://gis.vgsi.com/salemct/Search.aspx",
+     "deep": "https://gis.vgsi.com/salemct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Waterford": {
+     "name": "Waterford",
+     "url": "https://gis.vgsi.com/waterfordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/waterfordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Windham": {
+     "name": "Windham",
+     "url": "https://gis.vgsi.com/windhamct/Search.aspx",
+     "deep": "https://gis.vgsi.com/windhamct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "09190": {
+   "name": "the Western Connecticut Planning Region",
+   "kind": "deep",
+   "src": "ct-cama",
+   "towns": {
+    "Brookfield": {
+     "name": "Brookfield",
+     "url": "https://gis.vgsi.com/brookfieldct/Search.aspx",
+     "deep": "https://gis.vgsi.com/brookfieldct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Newtown": {
+     "name": "Newtown",
+     "url": "https://gis.vgsi.com/newtownct/Search.aspx",
+     "deep": "https://gis.vgsi.com/newtownct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Norwalk": {
+     "name": "Norwalk",
+     "url": "https://gis.vgsi.com/norwalkct/Search.aspx",
+     "deep": "https://gis.vgsi.com/norwalkct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Redding": {
+     "name": "Redding",
+     "url": "https://gis.vgsi.com/reddingct/Search.aspx",
+     "deep": "https://gis.vgsi.com/reddingct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Stamford": {
+     "name": "Stamford",
+     "url": "https://gis.vgsi.com/stamfordct/Search.aspx",
+     "deep": "https://gis.vgsi.com/stamfordct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    },
+    "Westport": {
+     "name": "Westport",
+     "url": "https://gis.vgsi.com/westportct/Search.aspx",
+     "deep": "https://gis.vgsi.com/westportct/Parcel.aspx?Pid={parcel}",
+     "form": "whole",
+     "kind": "deep",
+     "src": "ct-cama"
+    }
+   }
+  },
+  "11001": {
+   "name": "the District of Columbia",
+   "url": "https://otr.cfo.dc.gov/page/real-property-tax-database-search",
+   "kind": "search",
+   "src": "search-index",
+   "ref": "Office of Tax and Revenue's Real Property Tax Database Search page listed by a search engine"
+  },
+  "12009": {
+   "name": "Brevard County",
+   "url": "https://www.bcpao.us/PropertySearch/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Brevard Property Appraiser"
+  },
+  "12011": {
+   "name": "Broward County",
+   "url": "https://web.bcpa.net/BcpaClient/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Broward Property Appraiser"
+  },
+  "12021": {
+   "name": "Collier County",
+   "url": "https://www.collierappraiser.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Collier Property Appraiser"
+  },
+  "12031": {
+   "name": "Duval County",
+   "url": "https://paopropertysearch.coj.net/Basic/Search.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Duval Property Appraiser"
+  },
+  "12057": {
+   "name": "Hillsborough County",
+   "url": "https://gis.hcpafl.org/PropertySearch/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Hillsborough Property Appraiser"
+  },
+  "12069": {
+   "name": "Lake County",
+   "url": "https://www.lakecopropappr.com/property-disclaimer.aspx?to=%2Fproperty-search.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Lake Property Appraiser"
+  },
+  "12071": {
+   "name": "Lee County",
+   "url": "https://www.leepa.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Lee Property Appraiser"
+  },
+  "12081": {
+   "name": "Manatee County",
+   "url": "https://www.manateepao.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Manatee Property Appraiser"
+  },
+  "12083": {
+   "name": "Marion County",
+   "url": "https://www.pa.marion.fl.us/SearchAgree.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Marion Property Appraiser"
+  },
+  "12086": {
+   "name": "Miami-Dade County",
+   "url": "https://www.miamidade.gov/Apps/PA/propertysearch/",
+   "kind": "search",
+   "src": "search-index",
+   "ref": "Property Appraiser's Property Search page listed by a search engine"
+  },
+  "12095": {
+   "name": "Orange County",
+   "url": "https://ocpaweb.ocpafl.org/parcelsearch",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Orange Property Appraiser"
+  },
+  "12097": {
+   "name": "Osceola County",
+   "url": "https://search.property-appraiser.org/Search/MainSearch",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Osceola Property Appraiser"
+  },
+  "12099": {
+   "name": "Palm Beach County",
+   "url": "https://www.pbcgov.org/PAPA/index.htm",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Palm Beach Property Appraiser"
+  },
+  "12101": {
+   "name": "Pasco County",
+   "url": "https://search.pascopa.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Pasco Property Appraiser"
+  },
+  "12103": {
+   "name": "Pinellas County",
+   "url": "https://www.pcpao.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Pinellas Property Appraiser"
+  },
+  "12105": {
+   "name": "Polk County",
+   "url": "https://www.polkflpa.gov/CamaSearch.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Polk Property Appraiser"
+  },
+  "12115": {
+   "name": "Sarasota County",
+   "url": "https://www.sc-pa.com/search/",
+   "deep": "https://www.sc-pa.com/propertysearch/parcel/details/{parcel}",
+   "form": "digits",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "sc-pa.com/propertysearch/parcel/details/<10-digit account> pages listed by a search engine"
+  },
+  "12117": {
+   "name": "Seminole County",
+   "url": "https://www.scpafl.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Seminole Property Appraiser"
+  },
+  "12127": {
+   "name": "Volusia County",
+   "url": "https://vcpa.vcgov.org/searches.html",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Volusia Property Appraiser"
+  },
+  "13067": {
+   "name": "Cobb County",
+   "url": "https://gis.cobbcounty.org/PropertySearch.html",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "13089": {
+   "name": "DeKalb County",
+   "url": "https://propertyappraisal.dekalbcountyga.gov/Search/Disclaimer.aspx?FromUrl=..%2Fsearch%2Fcommonsearch.aspx%3Fmode%3Drealprop",
+   "kind": "search",
+   "src": "netr",
+   "ref": "DeKalb Property Appraisal"
+  },
+  "13121": {
+   "name": "Fulton County",
+   "url": "https://iaspublicaccess.fultoncountyga.gov/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "13135": {
+   "name": "Gwinnett County",
+   "url": "https://gwinnettassessor.manatron.com/IWantTo/PropertyGISSearch.aspx",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "15003": {
+   "name": "the City and County of Honolulu",
+   "url": "https://realproperty.honolulu.gov/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "16001": {
+   "name": "Ada County",
+   "url": "https://adacounty.id.gov/assessor/property-assessments-records/assessors-property-records/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "17031": {
+   "name": "Cook County",
+   "url": "https://www.cookcountyassessoril.gov/address-search",
+   "deep": "https://www.cookcountyassessoril.gov/pin/{parcel}",
+   "form": "digits",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "cookcountyassessoril.gov/pin/<14-digit PIN> pages listed by a search engine"
+  },
+  "17043": {
+   "name": "DuPage County",
+   "url": "https://propertylookup.dupagecounty.gov/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "17089": {
+   "name": "Kane County",
+   "url": "https://assessments.kanecountyil.gov/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "17097": {
+   "name": "Lake County",
+   "url": "https://tax.lakecountyil.gov/Search/Disclaimer.aspx?FromUrl=..%2Fsearch%2Fcommonsearch.aspx%3Fmode%3Drealprop",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Lake Assessor"
+  },
+  "17197": {
+   "name": "Will County",
+   "url": "https://www.willcountysoa.com/PropertySearchPortal",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "18089": {
+   "name": "Lake County",
+   "url": "https://engage.xsoftinc.com/lake",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Lake Assessor"
+  },
+  "18097": {
+   "name": "Marion County",
+   "url": "https://maps.indy.gov/AssessorPropertyCards/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Marion Assessor"
+  },
+  "19153": {
+   "name": "Polk County",
+   "url": "https://web.assess.co.polk.ia.us/cgi-bin/web/tt/infoqry.cgi?tt=home%2Findex",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Polk Assessor",
+   "was_http": true
+  },
+  "20091": {
+   "name": "Johnson County",
+   "url": "https://www.jocogov.org/item/service-listing/search-property-values",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "20173": {
+   "name": "Sedgwick County",
+   "url": "https://www.sedgwickcounty.org/appraiser/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "21111": {
+   "name": "Jefferson County",
+   "url": "https://jeffersonpva.ky.gov/property-search/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "22033": {
+   "name": "East Baton Rouge Parish",
+   "url": "https://eastbatonrouge.smartcama.com/Assessments/Search",
+   "kind": "search",
+   "src": "netr",
+   "ref": "East Baton Rouge Assessor"
+  },
+  "22051": {
+   "name": "Jefferson Parish",
+   "url": "https://www.jpassessor.net/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Jefferson Assessor"
+  },
+  "24003": {
+   "name": "Anne Arundel County",
+   "url": "https://sdat.dat.maryland.gov/RealProperty/Pages/default.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Anne Arundel Assessor"
+  },
+  "24005": {
+   "name": "Baltimore County",
+   "url": "https://sdat.dat.maryland.gov/RealProperty/Pages/default.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Baltimore County Assessor"
+  },
+  "24031": {
+   "name": "Montgomery County",
+   "url": "https://sdat.dat.maryland.gov/RealProperty/Pages/default.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Montgomery Assessor"
+  },
+  "24033": {
+   "name": "Prince George's County",
+   "url": "https://sdat.dat.maryland.gov/RealProperty/Pages/default.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Prince Georges Assessor"
+  },
+  "24510": {
+   "name": "the City of Baltimore",
+   "url": "https://sdat.dat.maryland.gov/RealProperty/Pages/default.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Baltimore City Assessor"
+  },
+  "25025": {
+   "name": "the City of Boston",
+   "url": "https://www.boston.gov/departments/assessing",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "26081": {
+   "name": "Kent County",
+   "url": "https://app.kentcountymi.gov/PropertySearch/appStart",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "26099": {
+   "name": "Macomb County",
+   "url": "https://www.macombgov.org/departments/planning-and-economic-development/mapping-and-data-services",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "26125": {
+   "name": "Oakland County",
+   "url": "https://bsaonline.com/?uid=525",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Oakland Equalization Office"
+  },
+  "26163": {
+   "name": "Wayne County",
+   "url": "https://www.waynecountymi.gov/Government/Departments/Management-Budget/Assessment-Equalization/Assessment-Data",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "27037": {
+   "name": "Dakota County",
+   "url": "https://gis.co.dakota.mn.us/Webappbuilder/PropertyInformationPublic/index.html",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Dakota Assessor"
+  },
+  "27053": {
+   "name": "Hennepin County",
+   "url": "https://www.minneapolismn.gov/government/departments/assessing",
+   "kind": "search",
+   "src": "netr",
+   "ref": "City of Minneapolis (city only) Assessor"
+  },
+  "27123": {
+   "name": "Ramsey County",
+   "url": "https://www.ramseycounty.us/residents/property-home/property-tax-and-value-lookup",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Ramsey Assessor"
+  },
+  "29095": {
+   "name": "Jackson County",
+   "url": "https://jcgis.jacksongov.org/parcelviewer/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Jackson Assessor"
+  },
+  "29183": {
+   "name": "St. Charles County",
+   "url": "https://lookups.sccmo.org/assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "St Charles Assessor"
+  },
+  "29189": {
+   "name": "St. Louis County",
+   "url": "https://assessor.stlouiscountymo.gov/realestate/searchinput.aspx",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "31055": {
+   "name": "Douglas County",
+   "url": "https://www.dcassessor.org/valuation-lookup",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Douglas Assessor",
+   "was_http": true
+  },
+  "32003": {
+   "name": "Clark County",
+   "url": "https://maps.clarkcountynv.gov/assessor/AssessorParcelDetail/site.aspx",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "32031": {
+   "name": "Washoe County",
+   "url": "https://www.washoecounty.gov/assessor/cama/index.php",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Washoe Assessor"
+  },
+  "35001": {
+   "name": "Bernalillo County",
+   "url": "https://assessor.bernco.gov/public.access/search/commonsearch.aspx?mode=realprop",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Bernalillo Assessor"
+  },
+  "36029": {
+   "name": "Erie County",
+   "url": "https://paytax.erie.gov/(S(soh5mudql30cin1n11wqn5az))/WebPortal/WEB_PT_MAIN.aspx?command=REPORTPARAMETERSTYLE&style=&group=Group1",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Erie Real Property Tax Service"
+  },
+  "36055": {
+   "name": "Monroe County",
+   "url": "https://www2.monroecounty.gov/etc/rp/search.php",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Monroe Real Property Tax Service"
+  },
+  "36059": {
+   "name": "Nassau County",
+   "url": "https://lrv.nassaucountyny.gov/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "36061": {
+   "name": "New York County",
+   "url": "https://www.nyc.gov/site/taxcommission/index.page",
+   "kind": "search",
+   "src": "netr",
+   "ref": "New York NYC Tax Commission"
+  },
+  "36067": {
+   "name": "Onondaga County",
+   "url": "https://www.ongov.net/rpts/propertyTaxInfo.html",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Onondaga Real Property Tax Service",
+   "was_http": true
+  },
+  "36103": {
+   "name": "Suffolk County",
+   "url": "https://www.suffolkcountyny.gov/Departments/Real-Property-Tax-Service-Agency",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "36119": {
+   "name": "Westchester County",
+   "url": "https://www.westchestercountyny.gov/online-data",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Westchester Real Property Tax Service"
+  },
+  "37081": {
+   "name": "Guilford County",
+   "url": "https://taxcama.guilfordcountync.gov/camapwa/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Guilford Assessor",
+   "was_http": true
+  },
+  "37119": {
+   "name": "Mecklenburg County",
+   "url": "https://cao.mecknc.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Mecklenburg Assessor"
+  },
+  "37183": {
+   "name": "Wake County",
+   "url": "https://services.wake.gov/realestate/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Wake Revenue Department (Assessor)"
+  },
+  "39049": {
+   "name": "Franklin County",
+   "url": "https://franklincountyauditor.com/",
+   "deep": "https://audr-apps.franklincountyohio.gov/redir/Link/Parcel/{parcel}",
+   "form": "as_is",
+   "kind": "deep",
+   "src": "webmap",
+   "ref": "Franklin County, Ohio web map d13b23ebafa24b3798e40c305380a49b: parcel popup links redir/Link/Parcel/{PARCELID}",
+   "url_src": "netr"
+  },
+  "39061": {
+   "name": "Hamilton County",
+   "url": "https://wedge3.hcauditor.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Hamilton Auditor",
+   "was_http": true
+  },
+  "39095": {
+   "name": "Lucas County",
+   "url": "https://icare.co.lucas.oh.us/LucasCare/search/commonsearch.aspx?mode=address",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Lucas Auditor",
+   "was_http": true
+  },
+  "39113": {
+   "name": "Montgomery County",
+   "url": "https://www.mcrealestate.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Montgomery Auditor",
+   "was_http": true
+  },
+  "39153": {
+   "name": "Summit County",
+   "url": "https://propertyaccess.summitoh.net/search/commonsearch.aspx?mode=realprop",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Summit Auditor"
+  },
+  "40109": {
+   "name": "Oklahoma County",
+   "url": "https://docs.oklahomacounty.org/AssessorWP5/DefaultSearch.asp",
+   "kind": "search",
+   "src": "search-index",
+   "ref": "Assessor's search page listed by a search engine and a public list of county assessor links"
+  },
+  "40143": {
+   "name": "Tulsa County",
+   "url": "https://assessor.tulsacounty.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Tulsa Assessor"
+  },
+  "41005": {
+   "name": "Clackamas County",
+   "url": "https://www.clackamas.us/at/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Clackamas Assessor",
+   "was_http": true
+  },
+  "41051": {
+   "name": "Multnomah County",
+   "url": "https://www.portlandmaps.com/advanced/?action=assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "City of Portland Assessor"
+  },
+  "41067": {
+   "name": "Washington County",
+   "url": "https://washcotax.co.washington.or.us/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Washington Assessor"
+  },
+  "42003": {
+   "name": "Allegheny County",
+   "url": "https://www2.alleghenycounty.us/RealEstate/search.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Allegheny Assessor"
+  },
+  "42011": {
+   "name": "Berks County",
+   "url": "https://gis.co.berks.pa.us/ParcelSearch/Search.aspx?id=Owner",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Berks Assessor"
+  },
+  "42017": {
+   "name": "Bucks County",
+   "url": "https://www.buckscounty.gov/RealEstate.aspx",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "42029": {
+   "name": "Chester County",
+   "url": "https://www.chesco.org/199/Assessment",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Chester Assessor"
+  },
+  "42045": {
+   "name": "Delaware County",
+   "url": "https://www.delcopa.gov/treasurer/propertyassessment",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "42071": {
+   "name": "Lancaster County",
+   "url": "https://co.lancaster.pa.us/154/Property-Assessment",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "42091": {
+   "name": "Montgomery County",
+   "url": "https://propertyrecords.montcopa.org/pt/forms/htmlframe.aspx?mode=content%2Fhome.htm",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Montgomery Assessor",
+   "was_http": true
+  },
+  "42101": {
+   "name": "Philadelphia County",
+   "url": "https://property.phila.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Philadelphia Property Assessment Office"
+  },
+  "42133": {
+   "name": "York County",
+   "url": "https://assessmentpublic.yorkcountypa.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "York Assessor"
+  },
+  "44007": {
+   "name": "Providence County",
+   "url": "https://data.nereval.com/SearchInfo.aspx?town=Providence",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Providence City Assessor"
+  },
+  "45019": {
+   "name": "Charleston County",
+   "url": "https://sc-charleston.publicaccessnow.com/RealPropertyRecordSearch.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Charleston Assessor"
+  },
+  "45045": {
+   "name": "Greenville County",
+   "url": "https://www.greenvillecounty.org/appsas400/RealProperty/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "45079": {
+   "name": "Richland County",
+   "url": "https://richlandcountysc.gov/Government/Departments/Taxes/Assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Richland Assessor"
+  },
+  "47037": {
+   "name": "Davidson County",
+   "url": "https://www.padctn.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Davidson Assessor",
+   "was_http": true
+  },
+  "47093": {
+   "name": "Knox County",
+   "url": "https://www.kgis.org/kgismaps/",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "47157": {
+   "name": "Shelby County",
+   "url": "https://www.assessor.shelbycountytn.gov/propertySearch",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "48029": {
+   "name": "Bexar County",
+   "url": "https://bcad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Bexar Appraisal District"
+  },
+  "48061": {
+   "name": "Cameron County",
+   "url": "https://cameron.prodigycad.com/property-search",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Cameron Appraisal District"
+  },
+  "48085": {
+   "name": "Collin County",
+   "url": "https://www.collincad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Collin Appraisal District",
+   "was_http": true
+  },
+  "48113": {
+   "name": "Dallas Central Appraisal District",
+   "url": "https://www.dallascad.org/SearchAddr.aspx",
+   "deep": "https://www.dallascad.org/AcctDetailRes.aspx?ID={parcel}",
+   "form": "as_is",
+   "kind": "deep",
+   "src": "wp9"
+  },
+  "48121": {
+   "name": "the Denton Central Appraisal District",
+   "url": "https://esearch.dentoncad.com/",
+   "kind": "search",
+   "src": "search-index",
+   "ref": "Denton CAD Property Search listed by a search engine"
+  },
+  "48141": {
+   "name": "El Paso County",
+   "url": "https://epcad.org/Search",
+   "kind": "search",
+   "src": "netr",
+   "ref": "El Paso Appraisal District"
+  },
+  "48157": {
+   "name": "Fort Bend County",
+   "url": "https://www.fbcad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Fort Bend Appraisal District"
+  },
+  "48201": {
+   "name": "the Harris Central Appraisal District",
+   "url": "https://search.hcad.org/",
+   "kind": "search",
+   "src": "search-index",
+   "ref": "HCAD Property Search listed by a search engine"
+  },
+  "48215": {
+   "name": "Hidalgo County",
+   "url": "https://hidalgoad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Hidalgo Appraisal District"
+  },
+  "48339": {
+   "name": "Montgomery County",
+   "url": "https://mcad-tx.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Montgomery Appraisal District"
+  },
+  "48439": {
+   "name": "Tarrant County",
+   "url": "https://www.tad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Tarrant Appraisal District"
+  },
+  "48453": {
+   "name": "Travis County",
+   "url": "https://www.traviscad.org/propertysearch",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Travis Appraisal District"
+  },
+  "48491": {
+   "name": "Williamson County",
+   "url": "https://www.wcad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Williamson Appraisal District",
+   "was_http": true
+  },
+  "49035": {
+   "name": "Salt Lake County",
+   "url": "https://www.slco.org/assessor/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Salt Lake Assessor"
+  },
+  "49049": {
+   "name": "Utah County",
+   "url": "https://www.utahcounty.gov/landrecords/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Utah Assessor"
+  },
+  "51153": {
+   "name": "Prince William County",
+   "url": "https://pwc.publicaccessnow.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Prince William Assessor",
+   "was_http": true
+  },
+  "51540": {
+   "name": "the City of Charlottesville",
+   "url": "https://gisweb.charlottesville.org/GisViewer/",
+   "kind": "search",
+   "src": "search-index",
+   "ref": "Charlottesville Property Site (search by address or parcel ID) listed by a search engine"
+  },
+  "51810": {
+   "name": "the City of Virginia Beach",
+   "url": "https://assessor.virginiabeach.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Virginia Beach City Assessor"
+  },
+  "53011": {
+   "name": "Clark County",
+   "url": "https://gis.clark.wa.gov/gishome/property/",
+   "deep": "https://gis.clark.wa.gov/gishome/Property/?pid=findSN&account={parcel}",
+   "form": "digits",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "gis.clark.wa.gov/gishome/Property/?pid=findSN&account=<number> listed by a search engine; the county's Property Information Center guide"
+  },
+  "53033": {
+   "name": "King County",
+   "url": "https://blue.kingcounty.com/Assessor/eRealProperty/default.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "King Assessor"
+  },
+  "53053": {
+   "name": "Pierce County",
+   "url": "https://atip.piercecountywa.gov/",
+   "deep": "https://atip.piercecountywa.gov/app/v2/propertyDetail/{parcel}/summary",
+   "form": "digits",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "atip.piercecountywa.gov/app/v2/propertyDetail/<10-digit parcel>/summary pages listed by a search engine"
+  },
+  "53061": {
+   "name": "Snohomish County",
+   "url": "https://www.snohomishcountywa.gov/175/Assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Snohomish Assessor",
+   "was_http": true
+  },
+  "53063": {
+   "name": "Spokane County",
+   "url": "https://www.spokanecounty.gov/1879/Online-Services",
+   "kind": "search",
+   "src": "wp9"
+  },
+  "55025": {
+   "name": "Dane County",
+   "url": "https://accessdane.danecounty.gov/",
+   "deep": "https://accessdane.danecounty.gov/{parcel}",
+   "form": "digits",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "accessdane.danecounty.gov/<12-digit parcel> pages listed by a search engine"
+  },
+  "55079": {
+   "name": "the City of Milwaukee",
+   "url": "https://assessments.milwaukee.gov/",
+   "kind": "search",
+   "src": "search-index",
+   "ref": "City of Milwaukee Assessor's Real Property Search listed by a search engine (the county's records here are the City's)"
+  }
+ }
+}
