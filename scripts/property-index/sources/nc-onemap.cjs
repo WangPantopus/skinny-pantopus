@@ -71,6 +71,9 @@ const WALLS = { CONCRETE: 'Concrete', MANUFCHOME: 'Manufactured', MASONRY: 'Maso
 const FOOTINGS = { BASEMENT: 'Basement', 'CRAWL SPACE': 'Crawl space', FILL: 'Fill', PIER: 'Pier', PILE: 'Pile', 'SLAB ON GRADE': 'Slab', 'SOLID WALL': 'Solid wall' };
 
 // Each parcel's largest building, in the county's own figures. How many it has goes on the record too.
+// Counties with a connector of their own, for the bedrooms and baths these parcels lack.
+const OWN_CONNECTOR = new Set(['37081', '37119']);
+
 async function buildingsOf(work, fips, lists) {
   const parcels = new Map();
   const rows = cached(path.join(work, 'nc-onemap', `buildings-${fips}.jsonl.gz`), () => layerRows(BUILDINGS, BUILDING_COLUMNS, { where: `BLDG_ID LIKE '${fips}%'` }));
@@ -159,7 +162,7 @@ async function* build({ work }) {
       continue;
     }
     const fips = `37${String(place * 2 + 1).padStart(3, '0')}`;
-    if (only.length && !only.includes(fips)) continue;
+    if (OWN_CONNECTOR.has(fips) || (only.length && !only.includes(fips))) continue;
     const buildings = await buildingsOf(work, fips, lists);
     const zip = path.join(work, 'nc-onemap', `${name}.zip`);
     download(`${BUCKET}/${key}`, zip);
