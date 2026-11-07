@@ -10,6 +10,13 @@
   "wp9": "WP9's list (config/countyPages.js): searches restricted to the county's own domain. The pages were never opened."
  },
  "counties": {
+  "01003": {
+   "name": "Baldwin County",
+   "url": "https://baldwincountyal.gov/Government/revenue-commission",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Baldwin Revenue Commission"
+  },
   "01073": {
    "name": "Jefferson County",
    "url": "https://eringcapture.jccal.org/",
@@ -57,6 +64,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Pinal Assessor"
+  },
+  "04025": {
+   "name": "Yavapai County",
+   "url": "https://experience.arcgis.com/experience/0a56d3069744419a8642dfe042f745b7",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Yavapai Assessor"
   },
   "05007": {
    "name": "Benton County",
@@ -114,6 +128,13 @@
    "kind": "deep",
    "src": "webmap",
    "ref": "County of Los Angeles web map be2583be09e44bbea27c7750f597cb10: parcel popup links parceldetail/{AIN}"
+  },
+  "06041": {
+   "name": "Marin County",
+   "url": "https://www.marincounty.org/depts/ar/property-information/assessment-and-property",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Marin Assessor"
   },
   "06047": {
    "name": "Merced County",
@@ -207,6 +228,13 @@
    "url": "https://www.sccassessor.org/",
    "kind": "search",
    "src": "wp9"
+  },
+  "06087": {
+   "name": "Santa Cruz County",
+   "url": "https://sccounty01.co.santa-cruz.ca.us/ASR/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Santa Cruz Assessor"
   },
   "06095": {
    "name": "Solano County",
@@ -1391,6 +1419,14 @@
    "kind": "search",
    "src": "wp9"
   },
+  "13151": {
+   "name": "Henry County",
+   "url": "https://www.qpublic.net/ga/henry/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Henry Assessor",
+   "was_http": true
+  },
   "15003": {
    "name": "the City and County of Honolulu",
    "url": "https://realproperty.honolulu.gov/",
@@ -1451,6 +1487,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Madison Assessor"
+  },
+  "17163": {
+   "name": "St. Clair County",
+   "url": "https://stclairil.devnetwedge.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "St Clair Assessor"
   },
   "17197": {
    "name": "Will County",
@@ -1547,6 +1590,14 @@
    "kind": "search",
    "src": "netr",
    "ref": "Jefferson Assessor"
+  },
+  "22055": {
+   "name": "Lafayette Parish",
+   "url": "https://www.lafayetteassessor.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Lafayette Assessor",
+   "was_http": true
   },
   "22071": {
    "name": "Orleans Parish",
@@ -1730,10 +1781,12 @@
   },
   "29095": {
    "name": "Jackson County",
-   "url": "https://jcgis.jacksongov.org/parcelviewer/",
-   "kind": "search",
-   "src": "netr",
-   "ref": "Jackson Assessor"
+   "url": "https://ascendweb.jacksongov.org/default.aspx",
+   "deep": "https://ascendweb.jacksongov.org/ParcelInfo.aspx?parcel_number={parcel}",
+   "form": "ascend17",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "ascendweb.jacksongov.org/ParcelInfo.aspx?parcel_number=<99-999-99-99-99-9-99-999> pages listed by a search engine (real estate numbers need the dashes)"
   },
   "29183": {
    "name": "St. Charles County",
@@ -1816,9 +1869,11 @@
   "36055": {
    "name": "Monroe County",
    "url": "https://www2.monroecounty.gov/etc/rp/search.php",
-   "kind": "search",
-   "src": "netr",
-   "ref": "Monroe Real Property Tax Service"
+   "deep": "https://www.monroecounty.gov/etc/rp/report.php?a={parcel}",
+   "form": "swis_dash",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "monroecounty.gov/etc/rp/report.php?a=<6-digit town code>-<20-character parcel key> pages listed by a search engine; the county's parcel layer writes the same 26 digits without the dash"
   },
   "36059": {
    "name": "Nassau County",
@@ -1905,6 +1960,13 @@
    "ref": "Guilford Assessor",
    "was_http": true
   },
+  "37101": {
+   "name": "Johnston County",
+   "url": "https://www.johnstonnc.gov/tax2/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Johnston Assessor"
+  },
   "37119": {
    "name": "Mecklenburg County",
    "url": "https://polaris3g.mecklenburgcountync.gov/",
@@ -1990,6 +2052,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Summit Auditor"
+  },
+  "39165": {
+   "name": "Warren County",
+   "url": "https://auditor.warrencountyohio.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Warren Auditor"
   },
   "40027": {
    "name": "Cleveland County",
@@ -2292,6 +2361,14 @@
    "src": "netr",
    "ref": "Brazoria Appraisal District"
   },
+  "48041": {
+   "name": "Brazos County",
+   "url": "https://www.brazoscad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Brazos Appraisal District",
+   "was_http": true
+  },
   "48061": {
    "name": "Cameron County",
    "url": "https://cameron.prodigycad.com/property-search",
@@ -2364,6 +2441,14 @@
    "kind": "search",
    "src": "netr",
    "ref": "Hidalgo Appraisal District"
+  },
+  "48245": {
+   "name": "Jefferson County",
+   "url": "https://www.jcad.org/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Jefferson Appraisal District",
+   "was_http": true
   },
   "48303": {
    "name": "Lubbock County",
@@ -2481,6 +2566,13 @@
    "src": "search-index",
    "ref": "Charlottesville Property Site (search by address or parcel ID) listed by a search engine"
   },
+  "51550": {
+   "name": "the City of Chesapeake",
+   "url": "https://chesapeake.civ.quest/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Chesapeake City Assessor"
+  },
   "51810": {
    "name": "the City of Virginia Beach",
    "url": "https://assessor.virginiabeach.gov/",
@@ -2540,6 +2632,14 @@
    "kind": "search",
    "src": "netr",
    "ref": "Thurston Assessor",
+   "was_http": true
+  },
+  "53077": {
+   "name": "Yakima County",
+   "url": "https://www.co.yakima.wa.us/assessor/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Yakima Assessor",
    "was_http": true
   },
   "55025": {
