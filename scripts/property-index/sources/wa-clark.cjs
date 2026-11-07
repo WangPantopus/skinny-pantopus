@@ -106,6 +106,11 @@ const GARAGE_WORDS = new Map([
 const BASEMENT_FINISHED = new Set(['FINISHED BASEMENT', 'DAY FINISHED BASEMENT']);
 const BASEMENT_ALL = new Set(['FINISHED BASEMENT', 'DAY FINISHED BASEMENT', 'UNFINISHED BASEMENT', 'DAY UNFINISHED BASEMENT']);
 const STORY_LINES = new Map([['MAIN', 1], ['SECOND', 2], ['THIRD', 3]]);
+// The county's reasons a priced line in its sales table isn't this home changing hands at that price. Last sale skips them
+// and keeps the sale before. Its other reasons (estate, family, new construction and so on) are still real sales.
+const NOT_A_SALE = new Set(['EASEMENT', '$1000 SALE OR LESS', 'QUIT CLAIM DEED', 'PARTIAL INTEREST', 'SEGREGATION', 'GIFT', 'CORPORATE TRANSFER', 'TIMBER']);
+// The sales table starts here, so only the map layer can say an older sale.
+const SALES_TABLE_STARTS = '2016-01-01';
 const PARKING_WORDS = new Map([
   ['ATTACHED GARAGE', 'Attached garage'], ['BUILT-IN GARAGE', 'Built-in garage'], ['DETACHED GARAGE', 'Detached garage'],
   ['BASEMENT GARAGE', 'Basement garage'], ['MH ATTACHED GARAGE', 'Attached garage'], ['CARPORT', 'Carport'], ['MH CARPORT', 'Carport'],
@@ -308,8 +313,8 @@ async function readFacts(zip, records, today) {
   }
 
   const sales = new Map();
-  for await (const row of zipTable(zip, 'PropSalesInfoOnlyVw.txt', ['prop_id', 'SalePrice', 'SaleDate', 'deed_num'], TABLE)) {
-    if (!records.has(row.prop_id) || !positive(row.SalePrice)) continue;
+  for await (const row of zipTable(zip, 'PropSalesInfoOnlyVw.txt', ['prop_id', 'SalePrice', 'SaleDate', 'deed_num', 'sl_ratio_desc'], TABLE)) {
+    if (!records.has(row.prop_id) || !positive(row.SalePrice) || NOT_A_SALE.has(row.sl_ratio_desc)) continue;
     const date = dateOnly(row.SaleDate);
     const held = sales.get(row.prop_id);
     if (date && (!held || date > held.date)) sales.set(row.prop_id, { date, row });
@@ -321,7 +326,7 @@ async function readFacts(zip, records, today) {
     put(facts, 'sale_document', word(row.deed_num));
   }
   for (const record of records.values()) {
-    if (record.layerSale && !record.facts.sale_price) {
+    if (record.layerSale && !record.facts.sale_price && record.layerSale.date < SALES_TABLE_STARTS) {
       record.facts.sale_price = record.layerSale.price;
       record.facts.sale_date = record.layerSale.date;
     }
