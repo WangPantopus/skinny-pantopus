@@ -2,6 +2,7 @@
 // Broward County, Florida: the Property Appraiser's tax roll on the county's GIS (BCGIS) open service. It gives this county the bedrooms
 // and baths the state's roll lacks. No terms are stated on the item. Owner, mailing and exemption columns are in the layer and never
 // asked for. JUST_* is Florida's just value, its market value. The layer gives a last sale's date; its stamp tax isn't turned into a price.
+// The layer has one row a parcel shape, so most condos, stacked on one shape, aren't in it. Those homes come from the state's roll.
 
 const path = require('node:path');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
@@ -9,6 +10,7 @@ const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
+const { countyRoll } = require('./fl-roll.cjs');
 
 const FIPS = '12011';
 const COUNTY = 'Broward County';
@@ -62,7 +64,7 @@ function fromRow(row) {
   return { id: `pp:${kind}:${FIPS}:${folio}`, kind, home_type: homeType, address: { ...address, city: String(word(row.SITUS_CITY) || '').toUpperCase(), zip: zipCode(row.SITUS_ZIP_CODE) }, facts };
 }
 
-async function* build({ work }) {
+async function* build({ work, today }) {
   const info = await getJson(`${LAYER}?f=json`, 'The layer\'s description');
   const asOf = isoDate(info.editingInfo?.dataLastEditDate || info.editingInfo?.lastEditDate);
   if (!asOf) throw new Error('The layer no longer says when it changed');
@@ -78,9 +80,17 @@ async function* build({ work }) {
     }
   }
   log(`${COUNTY}: ${records.length} folios, ${noAddress} without a street number`);
+  const folios = new Set(records.map((record) => record.facts.parcel_number));
+  const fromRoll = (await countyRoll(work, FIPS, today)).records.filter((record) => !folios.has(record.facts.parcel_number) && !(record.kind === 'building' && record.home_type === 'condo'));
+  for (const record of fromRoll) {
+    // As in the layer's records: nothing that could hint at a homestead.
+    for (const fact of ['assessed_value', 'taxable_value', 'exemptions']) delete record.facts[fact];
+    records.push(record);
+  }
+  log(`${COUNTY}: ${fromRoll.length} more from the state's roll`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
-    fips: FIPS, state: 'FL', name: COUNTY, publisher: 'Broward County Property Appraiser', dataset: 'tax roll, county GIS', method: 'county', source: 'fl-broward', as_of: asOf, stale_after_days: 450, records,
+    fips: FIPS, state: 'FL', name: COUNTY, publisher: 'Broward County Property Appraiser', dataset: 'tax roll, with the state roll for condos', method: 'county', source: 'fl-broward', as_of: asOf, stale_after_days: 450, records,
   };
 }
 

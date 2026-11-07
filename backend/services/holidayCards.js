@@ -126,6 +126,22 @@ function requestRowId(senderId, requestId) {
   return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 }
 
+/**
+ * A card sent by link (launch key card_table): the token its link carries, made from its id and the server's secret (the
+ * same one as services/mailEnclosures, under its own label), so its sender can ask for the link again while the Mail row
+ * keeps only the token's hash. Empty when the server has no secret.
+ */
+function cardLinkToken(mailId) {
+  const secret = process.env.MAIL_ENCLOSURE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!secret) return '';
+  return crypto.createHmac('sha256', secret).update(`pantopus:card-link:v1:${mailId}`).digest('base64url');
+}
+
+/** Whether this card went out as a link: it waits like a card by email, for whoever opens it first. */
+function isByLink(mail) {
+  return Boolean(mail?.mail_extracted?.card?.by_link);
+}
+
 /** What a send asked for, as one digest: the same request ID with other content asks for another card. */
 function requestDigest({ design, message, arrival, toUserId, toEmail }) {
   return crypto.createHash('sha256')
@@ -242,6 +258,8 @@ function sentSummary(mail, now = new Date()) {
     design: card.design || null,
     to_name: card.to_name || null,
     by_email: byEmail,
+    // By link it also counts as by email (older apps read it that way); newer apps say it in link words.
+    ...(card.by_link ? { by_link: true } : {}),
     arrival: card.arrival || null,
     arrives_at: byEmail ? null : mail.delivered_at,
     // The day it reaches them by their clock (cards sent before this was kept: null; the apps read arrives_at).
@@ -315,6 +333,7 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = 
     to_name: toName || null,
     to_household: Boolean(toHousehold),
     by_email: byEmail,
+    ...(card.by_link ? { by_link: true } : {}),
     arrival: card.arrival || null,
     status,
     arrives_at: byEmail ? null : instant(mail.delivered_at),
@@ -335,7 +354,7 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = 
  * A sent card's trail, in order: [{ step, at | on, done }], `at` an instant (shown by the sender's clock), `on` a day by
  * the recipient's (`zone`, as in sentPiece). A step not reached yet is not done. To a person: sealed → delivered, then
  * opens for a sealed card; a Christmas-morning card: sealed → picked_up → delivered. By email: sealed → emailed →
- * joined (at the claim) or returned (on the day its 90 days ended).
+ * joined (at the claim) or returned (on the day its 90 days ended). By link, the same steps, each marked `by_link`.
  */
 function sentTrail(mail, { zone, now = new Date() }) {
   const card = mail.mail_extracted?.card || {};
@@ -347,7 +366,7 @@ function sentTrail(mail, { zone, now = new Date() }) {
     if (status === 'claimed') trail.push({ step: 'joined', at: instant(mail.delivered_at), done: true });
     else if (status === 'expired') trail.push({ step: 'returned', on: dayIn(mail.escrow_expires_at, zone), done: true });
     else trail.push({ step: 'joined', at: null, done: false });
-    return trail;
+    return card.by_link ? trail.map((step) => ({ ...step, by_link: true })) : trail;
   }
   if (card.arrival === 'christmas_morning') {
     trail.push({ step: 'picked_up', on: dayIn(pickupAt(mail), zone), done: reached(pickupAt(mail)) });
@@ -381,7 +400,7 @@ async function sentLine(userId, now = new Date()) {
 
 module.exports = {
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
-  designById, isCard, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
+  designById, isCard, isByLink, cardLinkToken, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
   daysBetween, arrivalsFor,
   personDelivery, cardView, pickupAt, sentSummary, sentCards, sentStatus, sentPiece, sentTrail, sentLine,
 };

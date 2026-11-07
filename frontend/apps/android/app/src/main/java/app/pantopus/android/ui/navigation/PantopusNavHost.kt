@@ -27,7 +27,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.routing.PendingDeepLinkStore
 import app.pantopus.android.core.security.AppLockHost
-import app.pantopus.android.core.security.AppLockSetupPromptDialog
 import app.pantopus.android.core.security.StepUpHost
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.ui.components.ToastController
@@ -126,12 +125,6 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
                         onSignOut = { viewModel.signOutFromAppLock() },
                     ) {
                         RootTabScreen()
-                        // One-time offer to turn app lock on, after the first sensitive
-                        // action the person verifies (RN raised it right after sign-in).
-                        AppLockSetupPromptDialog(
-                            manager = viewModel.appLockManager,
-                            isSignedIn = true,
-                        )
                         // One-time "What should we call you?" for an account with no name.
                         NamePromptHost(userId = state.user.id)
                         // Step-up coordinator (device_key biometric / password
