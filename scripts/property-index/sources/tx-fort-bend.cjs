@@ -1,11 +1,14 @@
 'use strict';
 // Fort Bend County, Texas: the Fort Bend Central Appraisal District's public parcel data on its Open Data Hub, which it publishes
-// without warranty. Year built, living area, land and market values; no bedrooms or baths; sale prices aren't public in Texas.
+// without warranty. Year built, living area, land and market values; bedrooms and baths from its residential segments file, on its
+// certified data page; sale prices aren't public in Texas.
 // Owner, mailing, deed and exemption columns are never asked for: the owner column is only used to ask which accounts are
 // marked protected (Tax Code 25.025).
 
 const path = require('node:path');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
+const { download, zipMembers, zipTable } = require('../lib/tables.cjs');
+const { newestFile, whole } = require('../lib/pacs-county.cjs');
 const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { CATEGORY_WORDS, protectedWhere, useOf } = require('../lib/texas.cjs');
@@ -23,7 +26,24 @@ function placeOf(text) {
   return match ? { city: match[1].trim().toUpperCase(), zip: match[2] } : { city: '', zip: null };
 }
 
-function fromRow(row) {
+// Bedrooms and baths aren't on the parcel layer: the district's residential segments file has them on each home's main segment.
+const DATA_PAGE = 'https://www.fbcad.org/certified-and-supplements-reports/';
+async function roomsByAccount(work) {
+  const url = await newestFile(DATA_PAGE, String.raw`href="([^"]*Website_?Residential_?Seg[^"]*\.zip)"`);
+  const zip = path.join(work, 'tx-fort-bend', path.basename(new URL(url).pathname));
+  download(url, zip);
+  const member = zipMembers(zip).find((name) => /\.csv$/i.test(name));
+  if (!member) throw new Error('The residential segments file is no longer a CSV');
+  const rooms = new Map();
+  for await (const row of zipTable(zip, member, ['QuickRefID', 'fBedrooms', 'fPlumbing', 'fNumHalfBath'], { headerHas: 'QuickRefID' })) {
+    if (!row.fBedrooms && !row.fPlumbing) continue;
+    const id = String(row.QuickRefID).trim();
+    if (!rooms.has(id)) rooms.set(id, row);
+  }
+  return rooms;
+}
+
+function fromRow(row, rooms) {
   const address = streetParts({ number: row.SITUSSNO, pre: row.SITUSPRDIR, name: row.SITUSSNM, suffix: row.SITUSSTP, post: row.SITUSPODIR, unit: realUnit(String(row.SITUSAPT ?? '').replace(/^#\s*/, '')) });
   const account = word(row.QUICKREFID) || word(row.PROPNUMBER);
   if (!address || !account) return null;
@@ -38,7 +58,19 @@ function fromRow(row) {
   put(facts, 'county_use_code', code);
   put(facts, 'legal_description', word(row.LEGAL)?.slice(0, 300));
   if (kind === 'property' || kind === 'unit' || kind === 'building') put(facts, 'year_built', built);
-  if (kind === 'property' || kind === 'unit') put(facts, 'living_sqft', living);
+  if (kind === 'property' || kind === 'unit') {
+    put(facts, 'living_sqft', living);
+    const room = rooms?.get(account);
+    if (room) {
+      put(facts, 'bedrooms', whole(room.fBedrooms, 15));
+      const [full, half] = [whole(room.fPlumbing, 12), whole(room.fNumHalfBath, 6)];
+      if (full) {
+        facts.full_baths = full;
+        facts.bathrooms = full + (half || 0) * 0.5;
+        put(facts, 'half_baths', half);
+      }
+    }
+  }
   else if (kind === 'building') put(facts, 'gross_sqft', living);
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.LANDSIZEAC) || (positive(row.LANDSIZEFT) ? Number((positive(row.LANDSIZEFT) / 43560).toFixed(4)) : null));
   put(facts, 'market_value', positive(row.TOTALVALUE));
@@ -48,6 +80,8 @@ function fromRow(row) {
 }
 
 async function* build({ work }) {
+  const rooms = await roomsByAccount(work);
+  log(`${rooms.size} accounts with bedrooms or baths in the residential segments`);
   const about = await getJson(`${LAYER}?f=json`, 'The layer\'s description');
   const asOf = isoDate(about.editingInfo?.dataLastEditDate || about.editingInfo?.lastEditDate);
   if (!asOf) throw new Error('The layer no longer says when it changed');
@@ -59,7 +93,7 @@ async function* build({ work }) {
   let noAddress = 0;
   for await (const row of cached(path.join(work, 'tx-fort-bend', 'parcels.jsonl.gz'), () => layerRows(LAYER, COLUMNS))) {
     if (hidden.has(String(row.QUICKREFID))) continue;
-    const record = fromRow(row);
+    const record = fromRow(row, rooms);
     if (!record) noAddress += 1;
     else if (!seen.has(record.id)) {
       seen.add(record.id);
@@ -77,6 +111,7 @@ module.exports = {
   build,
   dictionary: {
     layer: [LAYER],
-    facts: { year_built: 'YEARBUILT', living_sqft: 'TOTSQFTLVG', gross_sqft: 'TOTSQFTLVG', lot_acres: 'LANDSIZEAC', market_value: 'TOTALVALUE', market_land_value: 'LANDVALUE', market_building_value: 'IMPVALUE', legal_description: 'LEGAL' },
+    columns: ['fBedrooms', 'fPlumbing', 'fNumHalfBath'],
+    facts: { bedrooms: 'fBedrooms', bathrooms: 'fPlumbing', full_baths: 'fPlumbing', half_baths: 'fNumHalfBath', year_built: 'YEARBUILT', living_sqft: 'TOTSQFTLVG', gross_sqft: 'TOTSQFTLVG', lot_acres: 'LANDSIZEAC', market_value: 'TOTALVALUE', market_land_value: 'LANDVALUE', market_building_value: 'IMPVALUE', legal_description: 'LEGAL' },
   },
 };
