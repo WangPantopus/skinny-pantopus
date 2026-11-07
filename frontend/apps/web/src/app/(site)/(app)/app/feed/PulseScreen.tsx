@@ -643,7 +643,8 @@ export default function FeedPage() {
               />
             )}
 
-            {feed.error && (
+            {/* A next page that failed says so at the end of the list, where the reader is. */}
+            {feed.error && !(feed.loadMoreError && feed.posts.length > 0) && (
               <div role="alert" aria-busy={feed.retrying}>
                 <ErrorState
                   message="We couldn't load your feed. Please try again."
@@ -772,6 +773,19 @@ export default function FeedPage() {
                   {feed.loadingMore && (
                     <div className="flex justify-center py-4">
                       <div className="w-6 h-6 border-2 border-app border-t-primary-500 rounded-full animate-spin" />
+                    </div>
+                  )}
+
+                  {feed.loadMoreError && !feed.loadingMore && (
+                    <div role="alert" className="flex flex-col items-center gap-2 py-6 text-center">
+                      <span className="text-xs text-app-muted">We couldn&apos;t load more posts.</span>
+                      <button
+                        type="button"
+                        onClick={feed.retryFeed}
+                        className="px-3 py-1.5 rounded-full text-xs font-medium border border-app-border-strong bg-surface text-app-text-strong hover-bg-app"
+                      >
+                        Try again
+                      </button>
                     </div>
                   )}
 

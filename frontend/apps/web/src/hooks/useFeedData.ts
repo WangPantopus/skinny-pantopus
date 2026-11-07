@@ -647,6 +647,8 @@ export function useFeedData({
     loading,
     loadingMore,
     error: feedQuery.isError,
+    /** The next page failed (the pages already read are still listed); retryFeed asks for it again. */
+    loadMoreError: feedQuery.isFetchNextPageError,
     retrying: feedQuery.isFetching,
     retryFeed,
     hasMore,
