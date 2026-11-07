@@ -7,7 +7,7 @@
 const path = require('node:path');
 const { download, zipTable, zipDates } = require('../lib/tables.cjs');
 const { number, positive } = require('../lib/values.cjs');
-const { fillHomes, bathFacts, describe } = require('../lib/fill.cjs');
+const { fillHomes, bathFacts, describe, monthOf } = require('../lib/fill.cjs');
 const { log } = require('../lib/log.cjs');
 const { countyRoll } = require('./fl-roll.cjs');
 
@@ -79,7 +79,7 @@ async function* build({ work, today }) {
     ...roll,
     name: COUNTY,
     publisher: 'Florida Department of Revenue and the Alachua County Property Appraiser',
-    dataset: `${roll.dataset} and building data of ${zipDates(zip).get('Improvements.txt')}`,
+    dataset: `${roll.dataset} and ${monthOf(zipDates(zip).get('Improvements.txt'))} building data`,
     method: 'county',
     source: 'fl-alachua',
     title: 'County records',

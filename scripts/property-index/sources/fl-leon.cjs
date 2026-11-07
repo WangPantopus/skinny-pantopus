@@ -8,7 +8,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { download, zipDates, streamLines } = require('../lib/tables.cjs');
 const { number, positive } = require('../lib/values.cjs');
-const { fillHomes, bathFacts, describe } = require('../lib/fill.cjs');
+const { fillHomes, bathFacts, describe, monthOf } = require('../lib/fill.cjs');
 const { log } = require('../lib/log.cjs');
 const { countyRoll } = require('./fl-roll.cjs');
 
@@ -82,7 +82,7 @@ async function* build({ work, today }) {
     ...roll,
     name: COUNTY,
     publisher: 'Florida Department of Revenue and the Leon County Property Appraiser',
-    dataset: `${roll.dataset} and building data of ${zipDates(zip).get(TABLE)}`,
+    dataset: `${roll.dataset} and ${monthOf(zipDates(zip).get(TABLE))} building data`,
     method: 'county',
     source: 'fl-leon',
     title: 'County records',
