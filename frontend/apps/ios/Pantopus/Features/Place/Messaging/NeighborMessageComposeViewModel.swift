@@ -4,10 +4,11 @@
 //
 //  D1 — composing a verified-neighbor heads-up. Loads the server template
 //  catalog (the only thing you can send — no free text), tracks the
-//  selection, and sends a template-only note to a recipient home on your
-//  block. The verified-only (T4) gate is enforced upstream: the dashboard
-//  only surfaces the composer for verified residents, and the backend
-//  re-checks. Mirrors web `NeighborMessageCompose` + `…ComposeView`.
+//  selection, and sends a template-only note to an address on your block.
+//  The note reaches a verified household if one lives there; nothing here
+//  says whether one does. The verified-only (T4) gate is enforced upstream:
+//  the dashboard only surfaces the composer for verified residents, and the
+//  backend re-checks. Mirrors web `NeighborMessageCompose` + `…ComposeView`.
 //
 
 import SwiftUI
@@ -21,11 +22,10 @@ final class NeighborMessageComposeViewModel {
         case error(message: String)
     }
 
-    enum RecipientSearchState: Equatable {
+    enum AddressCheckState: Equatable {
         case idle
-        case loading
-        case loaded([DiscoveredHomeDTO])
-        case error(String)
+        case checking
+        case refused(String)
     }
 
     private(set) var state: State = .loading
@@ -39,17 +39,19 @@ final class NeighborMessageComposeViewModel {
     let senderHomeId: String
     let address: String
     private(set) var recipient: ComposeRecipient?
+    /// The chosen address's apartment or unit, if it has one.
+    var recipientUnit = ""
     var recipientQuery = "" {
         didSet {
-            searchGeneration += 1
-            recipientSearchState = .idle
+            checkGeneration += 1
+            addressCheckState = .idle
         }
     }
 
-    private(set) var recipientSearchState: RecipientSearchState = .idle
-    private var searchGeneration = 0
+    private(set) var addressCheckState: AddressCheckState = .idle
+    private var checkGeneration = 0
     /// Address suggestions while typing, nearest your home first; picking
-    /// one looks that exact address up (`chooseSuggestion`).
+    /// one checks that exact address (`chooseSuggestion`).
     let addressSuggestions = AddressSuggestions()
 
     private let api: APIClient
@@ -80,54 +82,52 @@ final class NeighborMessageComposeViewModel {
         recipient != nil && selectedTemplate != nil && !sending
     }
 
-    var canSearchRecipients: Bool {
+    var canUseTypedAddress: Bool {
         let query = recipientQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return query.count >= 4 && query.rangeOfCharacter(from: .decimalDigits) != nil
-            && query.rangeOfCharacter(from: .letters) != nil && recipientSearchState != .loading
+            && query.rangeOfCharacter(from: .letters) != nil && addressCheckState != .checking
     }
 
-    func searchRecipients() async {
-        guard canSearchRecipients else { return }
+    func useTypedAddress() async {
+        guard canUseTypedAddress else { return }
         addressSuggestions.dismiss()
-        searchGeneration += 1
-        let generation = searchGeneration
         let query = recipientQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        recipientSearchState = .loading
-        do {
-            let response: HomeDiscoverResponse = try await api.request(
-                HomeDiscoveryEndpoints.discover(query: query, limit: 50)
-            )
-            guard generation == searchGeneration, !Task.isCancelled else { return }
-            // Reuse discovery's privacy contract. Never select a redacted or
-            // ambiguous address, enumerate verification, or name a resident.
-            let homes = response.homes.filter {
-                $0.id != senderHomeId && !$0.isMember && $0.addressRedacted == false
-                    && $0.visibility == "public_preview" && !($0.address?.isEmpty ?? true)
-            }
-            recipientSearchState = .loaded(homes)
-        } catch {
-            guard generation == searchGeneration, !Task.isCancelled else { return }
-            recipientSearchState = .error("Couldn't search homes. Check your connection and try again.")
-        }
+        await checkAddress(street: query, city: nil, state: nil, zipcode: nil)
     }
 
-    /// A picked address suggestion is the exact address: search for it at once.
+    /// A picked address suggestion is the exact address: check it at once.
     func chooseSuggestion(_ suggestion: GeoSuggestion) async {
         guard !sending, let address = await addressSuggestions.choose(suggestion),
               let street = address.address, !street.isEmpty else { return }
         recipientQuery = street
-        await searchRecipients()
+        await checkAddress(street: street, city: address.city, state: address.state, zipcode: address.zipcode)
     }
 
-    func selectRecipient(_ home: DiscoveredHomeDTO) {
-        guard !sending, case let .loaded(homes) = recipientSearchState,
-              homes.contains(where: { $0.id == home.id }), let address = home.address else { return }
-        recipient = ComposeRecipient(
-            homeId: home.id,
-            address: address,
-            relativeLabel: [home.city, home.state].compactMap { $0 }.joined(separator: ", ")
+    /// Asks the server whether the address is on your block, and chooses it if so.
+    private func checkAddress(street: String, city: String?, state: String?, zipcode: String?) async {
+        checkGeneration += 1
+        let generation = checkGeneration
+        addressCheckState = .checking
+        let request = NeighborAddressCheckRequest(
+            senderHomeId: senderHomeId, address: street, city: city, state: state, zipcode: zipcode
         )
-        sendError = nil
+        do {
+            let result: NeighborAddressCheck = try await api.request(NeighborMessagesEndpoints.checkAddress(request))
+            guard generation == checkGeneration, !Task.isCancelled else { return }
+            if result.status == "on_block", let address = result.address {
+                recipient = ComposeRecipient(
+                    address: address, city: result.city, state: result.state, zipcode: result.zipcode
+                )
+                recipientUnit = ""
+                sendError = nil
+                addressCheckState = .idle
+            } else {
+                addressCheckState = .refused(result.message ?? "Couldn't use that address. Check the number and street.")
+            }
+        } catch {
+            guard generation == checkGeneration, !Task.isCancelled else { return }
+            addressCheckState = .refused("Couldn't check that address. Check your connection and try again.")
+        }
     }
 
     func changeRecipient() {
@@ -157,9 +157,16 @@ final class NeighborMessageComposeViewModel {
         sending = true
         sendError = nil
         do {
+            let unit = recipientUnit.trimmingCharacters(in: .whitespacesAndNewlines)
             let request = SendNeighborMessageRequest(
                 senderHomeId: senderHomeId,
-                recipientHomeId: recipient.homeId,
+                recipientAddress: NeighborRecipientAddress(
+                    address: recipient.address,
+                    unit: unit.isEmpty ? nil : unit,
+                    city: recipient.city,
+                    state: recipient.state,
+                    zipcode: recipient.zipcode
+                ),
                 templateId: template.id
             )
             _ = try await api.request(NeighborMessagesEndpoints.send(request)) as SentNeighborMessage
