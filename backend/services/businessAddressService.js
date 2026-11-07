@@ -332,9 +332,17 @@ async function findHouseholdAtAddress(hash, normalized) {
       const wanted = householdMatchKey(
         normalized.line1, normalized.line2, normalized.city, normalized.state, zip5,
       );
-      const fieldMatches = (fieldHomes || []).filter((h) => (
-        householdMatchKey(h.address, h.address2, h.city, h.state, h.zipcode) === wanted
-      ));
+      // A suite doesn't make a house a different place: a home recorded with no
+      // unit matches its street address with any unit, so typing "Suite 1" at
+      // someone's house can't walk past this probe. A home in another unit of
+      // the same building is still a different premises.
+      const wantedWithoutUnit = householdMatchKey(
+        normalized.line1, '', normalized.city, normalized.state, zip5,
+      );
+      const fieldMatches = (fieldHomes || []).filter((h) => {
+        const homeKey = householdMatchKey(h.address, h.address2, h.city, h.state, h.zipcode);
+        return homeKey === wanted || (foldUnit(h.address2) === '' && homeKey === wantedWithoutUnit);
+      });
       candidateIds = [...new Set([...candidateIds, ...fieldMatches.map((h) => h.id)])];
     }
   }
