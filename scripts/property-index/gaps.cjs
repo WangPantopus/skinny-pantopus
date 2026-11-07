@@ -10,6 +10,7 @@
 //
 //   node scripts/property-index/gaps.cjs --bucket <name> [--prefix index] [--all | --counties "<fips> ..."] [--budget-minutes <n>]
 //   node scripts/property-index/gaps.cjs --root <local index, or a build's --out> ...   the same on a local copy
+//   node scripts/property-index/gaps.cjs --bucket <name> --out <dir> ...   reads storage, writes the ledger to a local folder
 //     (default)         counties whose serving release has no ledger yet, newest first
 //     --all             every county again, as after the rule changes
 //     --counties        only these
@@ -40,18 +41,24 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--bucket') opts.bucket = argv[++i];
     else if (argv[i] === '--root') opts.root = argv[++i];
+    else if (argv[i] === '--out') opts.out = argv[++i];
     else if (argv[i] === '--prefix') opts.prefix = argv[++i];
     else if (argv[i] === '--all') opts.all = true;
     else if (argv[i] === '--counties') opts.counties = new Set(argv[++i].split(/[\s,]+/).filter(Boolean));
     else if (argv[i] === '--budget-minutes') opts.budgetMinutes = Number(argv[++i]);
     else throw new Error('usage: see the top of gaps.cjs');
   }
-  if (!opts.bucket === !opts.root) throw new Error('usage: see the top of gaps.cjs');
+  if (!opts.bucket === !opts.root || (opts.out && !opts.bucket)) throw new Error('usage: see the top of gaps.cjs');
   return opts;
 }
 
-/** The index's files, in storage or in a local folder. */
-function createStore({ bucket, root, prefix }) {
+/** The index's files, in storage or in a local folder; with `out`, storage's releases and a local folder's ledger. */
+function createStore({ bucket, root, prefix, out }) {
+  if (out) {
+    const remote = createStore({ bucket, prefix });
+    const local = createStore({ root: out });
+    return { ...local, counties: remote.counties, getRelease: remote.getRelease, text: (name) => (name.startsWith('gaps/') ? local : remote).text(name) };
+  }
   if (root) {
     const file = (name) => path.join(root, name);
     const walk = (dir) => (fs.existsSync(file(dir)) ? fs.readdirSync(file(dir), { recursive: true }).map((name) => `${dir}${name}`) : []);
