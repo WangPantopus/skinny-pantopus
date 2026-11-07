@@ -2625,8 +2625,8 @@ public struct YouTabRoot: View {
                 },
                 onShare: { text in systemSheet = .share(items: [text]) },
                 onOpenWebsite: { url in openURL(url) },
-                onEdit: {
-                    Task { @MainActor in path.append(.editBusinessPage(businessId: businessId)) }
+                onEdit: { id in
+                    Task { @MainActor in path.append(.editBusinessPage(businessId: id)) }
                 }
             )
         case let .editBusinessPage(businessId):
