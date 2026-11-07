@@ -269,6 +269,16 @@ public struct BusinessLocationDTO: Decodable, Sendable, Hashable, Identifiable {
     public var isApproximateHome: Bool {
         isHomeBased == true || (locationType == "home_based_private" && showExactLocation != true)
     }
+
+    /// The street line with the suite, as the owner typed it ("805 Broadway Street, Suite 500"), or nil
+    /// when there's no street (a private home-based business's public location has neither).
+    public var streetLine: String? {
+        let line = [address, address2]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        return line.isEmpty ? nil : line
+    }
 }
 
 /// `BusinessProfile.service_area` — backend stores jsonb that may be a legacy

@@ -762,8 +762,9 @@ extension BusinessProfileViewModel {
         let cityState = [location.city, location.state]
             .compactMap { $0?.isEmpty == false ? $0 : nil }
             .joined(separator: ", ")
-        let title = cityState.isEmpty ? (location.address ?? "Service area") : cityState
-        let detail = (location.address?.isEmpty == false && !cityState.isEmpty) ? location.address : nil
+        let street = location.streetLine
+        let title = cityState.isEmpty ? (street ?? "Service area") : cityState
+        let detail = cityState.isEmpty ? nil : street
         return BusinessServiceArea(
             title: title,
             detail: detail,
