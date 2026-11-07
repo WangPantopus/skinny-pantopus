@@ -107,6 +107,13 @@ data class AddHomeUiState(
     val propertySuggestions: PropertySuggestionsResponse? = null,
     /** "Is this your layout?", answered on the form: goes with the new Home. */
     val floorPlanAnswer: String? = null,
+    /**
+     * Link and confirm, with no county record: the address the county's page was opened for, and the one "Is this
+     * right?" was answered for. Going to the browser sends the wizard back to the address step, which retires the
+     * address check; these stay, so once the same address is checked again the question is still there.
+     */
+    val countyPageOpenedFor: String? = null,
+    val countyCheckedFor: String? = null,
     /** True once the lookup has finished, success or not. */
     val propertyLookupComplete: Boolean = false,
     /** Copy under the public-records card (RN `useHomeForm.ts:641-647`). */
@@ -125,6 +132,11 @@ data class AddHomeUiState(
     /** Non-null while the Wi-Fi QR scanner is open; carries the target row. */
     val scannerTargetItemId: String? = null,
 ) {
+    /** Whether the county's page was opened, and "Is this right?" answered, for the address on the form now. */
+    val countyPageOpened: Boolean get() = countyPageOpenedFor != null && countyPageOpenedFor == form.address.countyKey()
+
+    val countyChecked: Boolean get() = countyCheckedFor != null && countyCheckedFor == form.address.countyKey()
+
     /**
      * Finishing opens Your Place for the new Home (from the Place tab). A residency request, or a creation recovered
      * without its id, opens My homes.
@@ -590,6 +602,11 @@ open class AddHomeWizardViewModel
         }
 
         fun answerFloorPlan(answer: String?) = _state.update { it.copy(floorPlanAnswer = answer) }
+
+        fun openedCountyPage() = _state.update { it.copy(countyPageOpenedFor = it.form.address.countyKey()) }
+
+        fun answerCountyCheck(checked: Boolean) =
+            _state.update { it.copy(countyCheckedFor = it.form.address.countyKey().takeIf { checked }) }
 
         fun updateBedrooms(value: String) = updateDetails { it.copy(bedrooms = digitsOnly(value)) }
 
@@ -1297,6 +1314,7 @@ open class AddHomeWizardViewModel
                     role = role.claimedRole,
                     noUnitAttestation = if (_state.value.noUnitAttested) true else null,
                     floorPlanAnswer = _state.value.floorPlanAnswer.takeIf { _state.value.propertySuggestions?.floorPlan?.prompt != null },
+                    countyChecked = true.takeIf { _state.value.countyChecked && _state.value.propertySuggestions?.countyCheck != null },
                 )
             _state.update { it.copy(showsCreationRecovery = true) }
             try {
@@ -1747,3 +1765,6 @@ open class AddHomeWizardViewModel
 
 /** The five user-facing input fields in step 1. */
 enum class AddressField { Street, Unit, City, State, Zip }
+
+/** An address as link and confirm remembers it: street, unit and ZIP. */
+internal fun AddHomeAddressFields.countyKey(): String = listOf(street, unit, zipCode).joinToString("|") { it.trim().uppercase() }

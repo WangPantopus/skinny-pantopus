@@ -63,6 +63,8 @@ data class HouseholdActions(
     val report: (PropertyRecordSection) -> Unit = {},
     /** "Is this your layout?": yes, no or undo. */
     val answerLayout: (String) -> Unit = {},
+    /** The Home, for what this device remembers about it (link and confirm). */
+    val homeId: String = "",
 )
 
 /** "Bedrooms? 1 2 3 4 Other". A tap answers it; Other is the person's own number. Also on Add Home. */
@@ -96,9 +98,15 @@ internal fun HouseholdQuestionRow(
     }
 }
 
-/** The county's own page: a person checks a fact at the source and comes back to confirm it. */
+/**
+ * The county's own page: a person checks a fact at the source and comes back to confirm it. [onOpen] (link and
+ * confirm) is told when they open it, so "Is this right?" can wait for them to come back.
+ */
 @Composable
-internal fun HouseholdCountyPageLink(page: HouseholdCountyPageDto) {
+internal fun HouseholdCountyPageLink(
+    page: HouseholdCountyPageDto,
+    onOpen: () -> Unit = {},
+) {
     if (!page.url.startsWith("https://")) return
     val uriHandler = LocalUriHandler.current
     Text(
@@ -107,7 +115,10 @@ internal fun HouseholdCountyPageLink(page: HouseholdCountyPageDto) {
         color = PantopusColors.primary600,
         modifier =
             Modifier
-                .clickable(role = Role.Button) { uriHandler.openUri(page.url) }
+                .clickable(role = Role.Button) {
+                    onOpen()
+                    uriHandler.openUri(page.url)
+                }
                 .heightIn(min = 48.dp)
                 .padding(vertical = Spacing.s1)
                 .testTag("household_countyPage"),
@@ -133,7 +144,7 @@ internal fun HouseholdQuestionsCard(
                     onOther = { household.fact(question.key)?.let { fact -> actions.edit(fact.asGroup()) } },
                 )
             }
-            household.countyPage?.let { HouseholdCountyPageLink(it) }
+            household.countyLink?.let { HouseholdCountyPageLink(it) }
         }
     }
 }
@@ -142,12 +153,12 @@ internal fun HouseholdQuestionsCard(
 private fun HouseholdFactDto.asGroup() = HouseholdGroupDto(id = key, title = label, facts = listOf(copy(options = emptyList())))
 
 @Composable
-private fun Modifier.householdCard(): Modifier =
+internal fun Modifier.householdCard(): Modifier =
     background(PantopusColors.appSurface, RoundedCornerShape(Radii.lg))
         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.lg))
 
 @Composable
-private fun HouseholdAction(
+internal fun HouseholdAction(
     title: String,
     enabled: Boolean,
     tag: String,
@@ -283,13 +294,21 @@ internal fun HouseholdFactEditorSheet(
     saving: Boolean,
     onSave: (List<HouseholdFactChange>, (Boolean) -> Unit) -> Unit,
     onDismiss: () -> Unit,
+    /** Opened from "Is this right?" after the county's page: what's saved is checked there, the facts left as they were too. */
+    checkGroup: String? = null,
 ) {
     val drafts = remember(group.id) { mutableStateMapOf<String, String>() }
     val typing = remember(group.id) { mutableStateMapOf<String, Boolean>() }
     var failed by remember(group.id) { mutableStateOf(false) }
     val changes =
         group.facts.mapNotNull { fact ->
-            drafts[fact.key]?.trim()?.takeIf { it.isNotEmpty() && it != fact.current }?.let { HouseholdFactChange.correct(fact.key, it) }
+            drafts[fact.key]?.trim()?.takeIf { it.isNotEmpty() && it != fact.current }?.let {
+                if (checkGroup == null) {
+                    HouseholdFactChange.correct(fact.key, it)
+                } else {
+                    HouseholdFactChange.correctFromCountyPage(fact.key, it)
+                }
+            }
         }
     val save = { list: List<HouseholdFactChange> ->
         failed = false
@@ -334,7 +353,7 @@ internal fun HouseholdFactEditorSheet(
             }
             PrimaryButton(
                 title = "Save",
-                onClick = { save(changes) },
+                onClick = { save(checkGroup?.let { changes + HouseholdFactChange.confirm(it) } ?: changes) },
                 modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s3).testTag("household_editor_save"),
                 isLoading = saving,
                 isEnabled = changes.isNotEmpty() && !saving,
