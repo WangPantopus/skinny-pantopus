@@ -44,10 +44,12 @@ class CardSenderActionsViewModel
             name: String,
         ) {
             viewModelScope.launch {
+                // A name can end in its own period ("Theo B.").
+                val who = name.trimEnd('.')
                 _said.value =
                     when (blocks.block(userId)) {
-                        is NetworkResult.Success -> "You blocked $name. You won't get mail from them. You can unblock them in Settings."
-                        is NetworkResult.Failure -> "Couldn't block $name. Check your connection and try again."
+                        is NetworkResult.Success -> "You blocked $who. You won't get mail from them. You can unblock them in Settings."
+                        is NetworkResult.Failure -> "Couldn't block $who. Check your connection and try again."
                     }
             }
         }
