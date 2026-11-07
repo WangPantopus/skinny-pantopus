@@ -22,6 +22,8 @@ data class PublicProfileReview(
     @Json(name = "reviewer_username") val reviewerUsername: String?,
     /** The review's text, as the server sends it (the Review row's `comment`); [content] is an older name for it. */
     val comment: String? = null,
+    /** The reviewed business's published reply (the Review row's `owner_response`); null until it answers. */
+    @Json(name = "owner_response") val ownerResponse: String? = null,
 )
 
 /**

@@ -485,6 +485,7 @@ object BusinessProfileMapper {
             body = (review.comment ?: review.content).orEmpty(),
             timestamp = relativeTimestamp(review.createdAt),
             verified = false,
+            ownerReply = review.ownerResponse?.takeIf { it.isNotBlank() },
         )
 
     private fun relativeTimestamp(iso: String?): String {

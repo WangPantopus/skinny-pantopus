@@ -90,7 +90,7 @@ fun ReviewReplyComposer(
             Text(text = review.body, color = PantopusColors.appTextStrong, fontSize = 12.5.sp)
         }
         when {
-            review.reply != null -> RepliedBox(businessName = businessName, reply = review.reply)
+            review.reply != null -> RepliedBox(title = "$businessName replied", reply = review.reply)
             composing ->
                 Composer(
                     businessName = businessName,
@@ -154,9 +154,10 @@ private fun HeaderRow(review: OwnerReviewItem) {
     }
 }
 
+/** A business's published reply to a review, on its owner frame and on the public page. */
 @Composable
-private fun RepliedBox(
-    businessName: String,
+internal fun RepliedBox(
+    title: String,
     reply: String,
 ) {
     Row(
@@ -181,7 +182,7 @@ private fun RepliedBox(
                     tint = PantopusColors.businessDark,
                 )
                 Text(
-                    text = "$businessName replied",
+                    text = title,
                     color = PantopusColors.businessDark,
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
