@@ -255,6 +255,14 @@
           "license_url": "https://creativecommons.org/licenses/by/4.0/"
         },
         {
+          "id": "us/wi/city_of_milwaukee",
+          "publisher": "City of Milwaukee, Wisconsin",
+          "url": "https://data.milwaukee.gov/dataset/mai",
+          "license": "CC BY",
+          "license_url": "http://www.opendefinition.org/licenses/cc-by",
+          "dataset": "Address points (Master Address Index)"
+        },
+        {
           "id": "us/ca/city_of_mountain_view",
           "publisher": "City of Mountain View, California",
           "url": "https://data-mountainview.opendata.arcgis.com/datasets/MountainView::address-points/about",
