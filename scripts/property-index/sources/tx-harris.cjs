@@ -60,6 +60,23 @@ async function buildingFacts(zip) {
     else if (type === 'STY') held.stories = units;
     else if (type.startsWith('FP')) held.fireplaces = (held.fireplaces || 0) + (units || 0);
   }
+  // The building's sketch: an attached garage or carport is part of it.
+  for await (const row of zipTable(zip, 'exterior.txt', ['acct', 'bld_num', 'sar_dscr', 'area'], TAB)) {
+    const held = buildings.get(row.acct);
+    if (!held || held.number !== row.bld_num) continue;
+    const part = String(row.sar_dscr ?? '').trim();
+    if (/GARAGE/.test(part)) held.garage = (held.garage || 0) + (positive(row.area) || 0);
+    else if (/^CARPORT/.test(part)) held.carport = (held.carport || 0) + (positive(row.area) || 0);
+  }
+  // Features of the account: a detached garage, a carport, a pool.
+  for await (const row of zipTable(zip, 'extra_features.txt', ['acct', 'cat', 'l_dscr'], TAB)) {
+    const held = buildings.get(row.acct);
+    if (!held) continue;
+    const text = String(row.l_dscr ?? '');
+    if (/Detached Garage/i.test(text)) held.detached = true;
+    else if (/^Carport/i.test(text)) held.carportFeature = true;
+    else if (String(row.cat).trim() === 'PL' && /pool/i.test(text)) held.pool = true;
+  }
   for await (const row of zipTable(zip, 'structural_elem1.txt', ['acct', 'bld_num', 'type_dscr', 'category_dscr'], TAB)) {
     const held = buildings.get(row.acct);
     if (!held || held.number !== row.bld_num) continue;
@@ -137,7 +154,16 @@ async function* build({ work, today = new Date() }) {
       if (held.full || held.half) facts.bathrooms = (held.full || 0) + (held.half || 0) * 0.5;
       put(facts, 'fireplaces', held.fireplaces);
       put(facts, 'condition', held.condition);
-      put(facts, 'heating', held.heat);
+      // "Central Heat/AC", "Central Heat", "A/C Only".
+      if (/Heat/.test(held.heat || '')) facts.heating = 'Central heat';
+      if (/AC|A\/C/.test(held.heat || '')) facts.cooling = 'Central air';
+      put(facts, 'garage_sqft', held.garage);
+      put(facts, 'carport_sqft', held.carport);
+      const garages = [held.garage && 'Attached', held.detached && 'Detached'].filter(Boolean);
+      if (garages.length) facts.garage = garages.join(', ');
+      const parking = [held.garage && 'Attached garage', held.detached && 'Detached garage', (held.carport || held.carportFeature) && 'Carport'].filter(Boolean);
+      if (parking.length) facts.parking_type = parking.join(', ');
+      if (held.pool) facts.pool = 'Yes';
     } else if (home) put(facts, 'living_sqft', positive(row.bld_ar));
     if (kind !== 'unit') {
       put(facts, 'lot_sqft', positive(row.land_ar));
