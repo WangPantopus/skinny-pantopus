@@ -330,6 +330,13 @@ function PickStep({
     return () => window.removeEventListener('resize', reveal);
   }, [shownId]);
 
+  // A picture chosen on a public card page is in sight when the step opens.
+  useEffect(() => {
+    if (launchFeatures.cardTable && chosen) document.querySelector('[role="radio"][aria-checked="true"]')?.scrollIntoView({ block: 'center' });
+    // Only as the step opens: choosing another card doesn't move the page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Arrow keys, Home and End move along the row, as tabs do.
   const onRowKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const at = shelves.findIndex((c) => c.id === shown?.id);
@@ -739,7 +746,10 @@ function SentCard({
 
 // ── The flow ─────────────────────────────────────────────────
 
-export default function SendCardFlow() {
+export default function SendCardFlow({ chosenDesign = null }: {
+  /** The picture a public card page sent them here with (launch key card_table). */
+  chosenDesign?: string | null;
+}) {
   const router = useRouter();
   const cards = useHolidayCards();
   const { data: own } = useOwnLocalProfile();
@@ -759,7 +769,7 @@ export default function SendCardFlow() {
   const [to, setTo] = useState<Recipient | null>(null);
   // A person's arrivals and day go by their clock, read once they're chosen and again on the last step.
   const theirs = useCardArrivals(to?.kind === 'person' ? to.userId : null);
-  const [designId, setDesignId] = useState<string | null>(null);
+  const [designId, setDesignId] = useState<string | null>(launchFeatures.cardTable ? chosenDesign : null);
   const [message, setMessage] = useState('');
   const [arrival, setArrival] = useState<HolidayCardArrival | null>(null);
   const [sent, setSent] = useState<SentHolidayCard | null>(null);
