@@ -75,4 +75,4 @@ async function answer(address, { stateFile: readState, recordsAt, suppressions: 
   return answers[0];
 }
 
-module.exports = { answer, complete };
+module.exports = { answer, complete, suppressionHash };
