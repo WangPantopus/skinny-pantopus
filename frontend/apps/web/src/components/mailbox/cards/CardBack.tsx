@@ -7,9 +7,17 @@
 // ============================================================
 
 import type { CSSProperties, ReactNode } from 'react';
+import { launchFeatures } from '@/lib/featureFlags';
 import { INK, paperStyle, SERIF } from './cardArt';
+import { cardPen } from './cardFont';
+import { PaperBack } from './CardPaper';
 
-export const BACK_TEXT: CSSProperties = {
+export const BACK_TEXT: CSSProperties = launchFeatures.cardTable ? {
+  fontFamily: `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`,
+  fontSize: '6cqw',
+  lineHeight: '7.6cqw',
+  color: '#1b2a5c',
+} : {
   fontFamily: SERIF,
   fontStyle: 'italic',
   fontSize: '4.7cqw',
@@ -19,11 +27,14 @@ export const BACK_TEXT: CSSProperties = {
 
 /** Faint ruled lines under the writing, one per line of text. */
 export const RULED: CSSProperties = {
-  backgroundImage: 'repeating-linear-gradient(180deg, transparent 0 calc(7.6cqw - 1px), rgba(120, 100, 70, 0.22) calc(7.6cqw - 1px) 7.6cqw)',
+  backgroundImage: launchFeatures.cardTable
+    ? 'repeating-linear-gradient(180deg, transparent 0 calc(7.6cqw - 1px), rgba(74, 84, 118, 0.2) calc(7.6cqw - 1px) 7.6cqw)'
+    : 'repeating-linear-gradient(180deg, transparent 0 calc(7.6cqw - 1px), rgba(120, 100, 70, 0.22) calc(7.6cqw - 1px) 7.6cqw)',
   backgroundAttachment: 'local',
 };
 
 export default function CardBack({
+  number,
   paper,
   fromName,
   year,
@@ -31,6 +42,8 @@ export default function CardBack({
   children,
   className = '',
 }: {
+  /** The picture's number: the new pen's small shifts are seeded from it. */
+  number?: number | null;
   paper: string;
   fromName: string;
   year: number;
@@ -39,6 +52,9 @@ export default function CardBack({
   children?: ReactNode;
   className?: string;
 }) {
+  if (launchFeatures.cardTable) {
+    return <PaperBack number={number} paper={paper} fromName={fromName} year={year} note={message} writing={children} className={className} />;
+  }
   return (
     <div className={`relative h-full w-full overflow-hidden ${className}`} style={{ ...paperStyle(paper), containerType: 'inline-size' }}>
       <div className="absolute flex flex-col" style={{ left: '8cqw', right: '8cqw', top: '8cqw', bottom: '15cqw' }}>

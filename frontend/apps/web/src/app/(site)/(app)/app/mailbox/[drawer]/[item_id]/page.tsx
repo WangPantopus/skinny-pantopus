@@ -30,6 +30,7 @@ import GigCreationModal from '@/components/mailbox/GigCreationModal';
 import FamilyMailParty from '@/components/mailbox/FamilyMailParty';
 import CertifiedMailDetail from '@/components/mailbox/CertifiedMailDetail';
 import HolidayCardView from '@/components/mailbox/cards/HolidayCardView';
+import CardTablePiece from '@/components/mailbox/cards/CardTablePiece';
 import SentPieceView from '@/components/mailbox/sent/SentPieceView';
 import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername } from '@pantopus/utils';
@@ -412,6 +413,15 @@ function ItemDetailPage() {
               onDownload={bookletData.download_url ? () => { void api.mailboxV2P2.downloadBooklet(piece.id).catch(() => {}); } : undefined}
             />
           </div>
+        ) : piece.card && launchFeatures.cardTable && !piece.removed ? (
+          <CardTablePiece
+            key={piece.id}
+            piece={piece}
+            recipientName={to.name}
+            recipientLine={to.line}
+            firstOpen={cardFirstOpen?.id === itemId ? cardFirstOpen.first : Boolean(piece.just_opened) || !detail.wrapper.opened_at}
+            onClose={() => router.push(`/app/mailbox/${drawer}`)}
+          />
         ) : piece.card ? (
           <HolidayCardView
             key={piece.id}
@@ -478,8 +488,8 @@ function ItemDetailPage() {
         )}
       </div>
 
-      {/* What to do with it, in mail words */}
-      <LetterActions piece={piece} />
+      {/* What to do with it, in mail words (on the table, a card keeps these in its menu) */}
+      {piece.card && launchFeatures.cardTable && !piece.removed ? null : <LetterActions piece={piece} />}
 
       {sheetOpen && (
         <SenderSheet piece={piece} recipientName={to.name} recipientLine={to.line} onClose={() => setSheetOpen(false)} />

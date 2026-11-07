@@ -21,6 +21,8 @@ import CardBack from './CardBack';
 import CardFlip from './CardFlip';
 import { CardFromEnvelope, SealedNotice, useCardOpening } from './HolidayCardView';
 import { daysAway, longDay, SERIF } from './cardArt';
+import CardTable from './CardTable';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // Their morning mail comes at 7 a.m. where they live: that's when it's in their Mailbox.
 const MORNING = '7:00 a.m.';
@@ -49,7 +51,7 @@ function Back({ piece }: { piece: MailItemV2 }) {
     <CardFlip
       showBack
       front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />}
-      back={<CardBack paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} className={shadow} />}
+      back={<CardBack number={card.number} paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} className={shadow} />}
     />
   );
 }
@@ -81,8 +83,33 @@ export default function LookItOver({
   const addressee = piece.recipient_name || toName;
   const { stage, plays, open } = useCardOpening(false);
   const [showBack, setShowBack] = useState(false);
+  const [onTable, setOnTable] = useState(false);
   // On Christmas morning the seal is off: the card leaves its envelope the way an unsealed one does.
   const unsealed: MailItemV2 = sealed ? { ...piece, card: { ...card, sealed: false } } : piece;
+  // The real moment, full screen, as the other person would have it. Nothing is marked as read: nothing is sent yet.
+  const theWayTheyWill = onTable ? (
+    <CardTable
+      card={{ ...card, sealed: false }}
+      note={piece.content || ''}
+      fromName={from}
+      toName={addressee}
+      mailedOn={piece.postmark?.date || piece.created_at}
+      closeLabel="Back to Look it over"
+      onClose={() => setOnTable(false)}
+    />
+  ) : null;
+  const openOnTable = launchFeatures.cardTable ? (
+    <div className="mt-4 flex justify-center">
+      <button
+        type="button"
+        data-testid="sendCardLookOnTable"
+        onClick={() => setOnTable(true)}
+        className={`${button} border border-[#d6cbb6] bg-[#fffdf8] text-[#374151] hover:bg-[#f5efe3]`}
+      >
+        Open it the way they will
+      </button>
+    </div>
+  ) : null;
 
   const intro = byEmail
     ? 'They aren’t on Pantopus yet. The email never shows the card; they open it in Pantopus once they join with this address.'
@@ -168,6 +195,7 @@ export default function LookItOver({
                 <CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />
                 <Back piece={piece} />
               </div>
+              {openOnTable}
             </MailboxFrame>
           </section>
         </>
@@ -213,14 +241,25 @@ export default function LookItOver({
                   >
                     {showBack ? 'Turn it back' : 'Turn it over'}
                   </button>
-                  <button
-                    type="button"
-                    data-testid="sendCardLookOpenAgain"
-                    onClick={() => { setShowBack(false); open(); }}
-                    className={`${button} px-3.5 text-[#7c4a2d] hover:bg-black/5 [@media(prefers-color-scheme:dark)]:text-[#e8b996]`}
-                  >
-                    Open it again
-                  </button>
+                  {launchFeatures.cardTable ? (
+                    <button
+                      type="button"
+                      data-testid="sendCardLookOnTable"
+                      onClick={() => setOnTable(true)}
+                      className={`${button} px-3.5 text-[#7c4a2d] hover:bg-black/5 [@media(prefers-color-scheme:dark)]:text-[#e8b996]`}
+                    >
+                      Open it the way they will
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      data-testid="sendCardLookOpenAgain"
+                      onClick={() => { setShowBack(false); open(); }}
+                      className={`${button} px-3.5 text-[#7c4a2d] hover:bg-black/5 [@media(prefers-color-scheme:dark)]:text-[#e8b996]`}
+                    >
+                      Open it again
+                    </button>
+                  )}
                 </div>
               </CardFromEnvelope>
             </div>
@@ -234,6 +273,7 @@ export default function LookItOver({
           </section>
         </>
       )}
+      {theWayTheyWill}
     </div>
   );
 }

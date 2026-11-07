@@ -130,8 +130,6 @@ A stale lock or an ambiguous request requires inspection, not an automatic retry
 After reconciling usage, an operator can mark an unresolved ledger entry
 `abandoned`; it is skipped while its credit reservation remains consumed.
 
-The [published ATTOM trial terms](https://api.developer.attomdata.com/legal)
-restrict evaluation use, database building and retention beyond 24 hours.
 A quota allowance by itself does not establish production or retention rights.
 The relevant agreement must be considered separately from these technical
 spending controls. Prefilling a database also does not deploy the reader code:

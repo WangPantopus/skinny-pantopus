@@ -35,6 +35,8 @@
 	<array>
 		<string>tel</string>
 		<string>mailto</string>
+		<string>instagram-stories</string>
+		<string>facebook-stories</string>
 		<string>sms</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
@@ -66,6 +68,8 @@
 	<string>$(PANTOPUS_API_BASE_URL)</string>
 	<key>PantopusLaunchFeatures</key>
 	<string>$(PANTOPUS_LAUNCH_FEATURES)</string>
+	<key>PantopusMetaAppID</key>
+	<string>$(PANTOPUS_META_APP_ID)</string>
 	<key>PantopusPublicWebURL</key>
 	<string>$(PANTOPUS_PUBLIC_WEB_URL)</string>
 	<key>PantopusSocketURL</key>
@@ -81,6 +85,7 @@
 	<key>UIAppFonts</key>
 	<array>
 		<string>NothingYouCouldDo.ttf</string>
+		<string>LaBelleAurore.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

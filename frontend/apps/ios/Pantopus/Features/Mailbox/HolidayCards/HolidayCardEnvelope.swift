@@ -28,10 +28,17 @@ struct HolidayCardEnvelopePiece: View {
                 .padding(.leading, Spacing.s4)
                 .padding(.top, Spacing.s4)
 
-                MailPostage(model: model)
-                    .frame(maxWidth: .infinity, alignment: .topTrailing)
-                    .padding(.trailing, 14)
-                    .padding(.top, Spacing.s3)
+                if LaunchFeatures.cardTable {
+                    CardTableRowPostage(model: model)
+                        .frame(maxWidth: .infinity, alignment: .topTrailing)
+                        .padding(.trailing, 14)
+                        .padding(.top, Spacing.s3)
+                } else {
+                    MailPostage(model: model)
+                        .frame(maxWidth: .infinity, alignment: .topTrailing)
+                        .padding(.trailing, 14)
+                        .padding(.top, Spacing.s3)
+                }
 
                 VStack(alignment: .leading, spacing: Spacing.s0) {
                     Text(model.to).lineLimit(1)
@@ -44,7 +51,7 @@ struct HolidayCardEnvelopePiece: View {
                 .offset(x: geo.size.width * 0.38, y: 72)
 
                 if model.card?.sealed == true {
-                    ChristmasSeal()
+                    sealMark
                         .frame(width: 58, height: 58)
                         .frame(maxHeight: .infinity, alignment: .bottomLeading)
                         .padding(.leading, Spacing.s3)
@@ -62,12 +69,44 @@ struct HolidayCardEnvelopePiece: View {
             }
         }
         .frame(height: 150)
-        // The faint light flecks of the red paper.
-        .background(CardGrain(color: .white.opacity(0.05)))
+        .background { paperBackground }
         .mailPaper(MailPaper.cardEnvelope, edge: MailPaper.cardSealInk.opacity(0.35), radius: 6, torn: model.isOpened)
         // Its picture, before it's opened: the card never slides out blank.
         .task(id: model.card?.design) {
-            if let design = model.card?.design { HolidayCardPicture.loadAhead([design]) }
+            guard let design = model.card?.design else { return }
+            if LaunchFeatures.cardTable {
+                await CardTableSmallArt.shared.load()
+                CardTablePicture.loadAhead(design)
+            } else {
+                HolidayCardPicture.loadAhead([design])
+            }
+        }
+    }
+
+    /// The real red paper with the key on; otherwise the faint light flecks of the drawn red paper.
+    @ViewBuilder
+    private var paperBackground: some View {
+        if LaunchFeatures.cardTable {
+            if let paper = CardTableSmallArt.shared.envelopePaper {
+                Image(uiImage: paper)
+                    .resizable()
+                    .scaledToFill()
+                    .clipped()
+            }
+        } else {
+            CardGrain(color: .white.opacity(0.05))
+        }
+    }
+
+    @ViewBuilder
+    private var sealMark: some View {
+        if LaunchFeatures.cardTable, let wax = CardTableSmallArt.shared.wax {
+            Image(uiImage: wax)
+                .resizable()
+                .scaledToFit()
+                .accessibilityHidden(true)
+        } else {
+            ChristmasSeal()
         }
     }
 }

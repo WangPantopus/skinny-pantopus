@@ -146,7 +146,7 @@ struct HolidayCardView: View {
             .shadow(color: MailPaper.cardShadow.opacity(0.28), radius: 15, x: 0, y: 14)
         } back: {
             HolidayCardBack(paper: card.card.paper, fromName: from, year: card.card.year) { width in
-                HolidayCardNoteText(text: .constant(card.note), cardWidth: width)
+                HolidayCardReadNote(text: card.note, number: card.card.number, cardWidth: width)
             }
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .shadow(color: MailPaper.cardShadow.opacity(0.28), radius: 15, x: 0, y: 14)

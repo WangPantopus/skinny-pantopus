@@ -623,6 +623,10 @@ export interface HolidayCardDesign {
   collection?: string | null;
   /** The picture's height in px at 960 px wide. */
   height?: number | null;
+  /** Its public page, /cards/<slug> (launch key card_table). */
+  slug?: string | null;
+  /** The colour of the cloth it lies on (launch key card_table). */
+  table?: string | null;
 }
 
 /** A collection "Pick a card" shows: its name, who it's for, and its pictures in grid order. */
@@ -772,7 +776,10 @@ export interface SentPiece {
   envelope: { from: string; postmarked_on: string | null };
   card: { design: string | null; number: number | null; caption: string | null; paper: string | null; year: number | null;
     /** The picture's height in px at 960 px wide. */
-    height?: number | null };
+    height?: number | null;
+    /** Its public page, and the colour of the cloth it lies on (launch key card_table). */
+    slug?: string | null;
+    table?: string | null };
 }
 
 /** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */

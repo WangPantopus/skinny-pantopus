@@ -17,3 +17,4 @@ SENTRY_DSN =
 // separated (e.g. `marketplace,open_gigs`, or `all`). Empty keeps every cut
 // feature hidden. Read through Info.plist `PantopusLaunchFeatures`.
 PANTOPUS_LAUNCH_FEATURES =
+PANTOPUS_META_APP_ID =
