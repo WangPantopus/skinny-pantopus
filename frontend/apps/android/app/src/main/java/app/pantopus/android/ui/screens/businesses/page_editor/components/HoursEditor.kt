@@ -189,7 +189,7 @@ private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
                         style = TextStyle(fontSize = 11.sp),
                         color = PantopusColors.appTextMuted,
                     )
-                    TimePill(value = state.closeLabel)
+                    TimePill(value = closeForDisplay(state.closeLabel))
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 PantopusIconImage(
@@ -342,7 +342,8 @@ private fun QuickApplyButton(
 private fun a11yLabel(row: EditBusinessPageHoursRow): String {
     val state =
         when (val s = row.state) {
-            is EditBusinessPageHoursRow.State.Open -> if (s.isAllDay) OPEN_ALL_DAY_LABEL else "${s.openLabel} to ${s.closeLabel}"
+            is EditBusinessPageHoursRow.State.Open ->
+                if (s.isAllDay) OPEN_ALL_DAY_LABEL else "${s.openLabel} to ${closeForDisplay(s.closeLabel)}"
             EditBusinessPageHoursRow.State.Closed -> "Closed"
             EditBusinessPageHoursRow.State.NotSet -> "Not set"
         }
@@ -427,6 +428,10 @@ internal fun BusinessHoursDayDialog(
 }
 
 private const val OPEN_ALL_DAY_LABEL = "Open 24 hours"
+
+/** A saved `24:00` close is midnight at the end of the day. */
+private fun closeForDisplay(close: String): String =
+    if (close == EditBusinessPageHoursRow.END_OF_DAY_LABEL) EditBusinessPageHoursRow.MIDNIGHT_LABEL else close
 
 private fun openingTime(
     state: EditBusinessPageHoursRow.State.Open?,
