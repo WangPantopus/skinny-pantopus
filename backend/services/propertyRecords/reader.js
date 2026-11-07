@@ -174,6 +174,7 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
   let pausedSince = 0;
   let pausedUntil = 0;
   let checking = false;
+  let answeredAt = 0;
 
   function failed(err, wasChecking) {
     failures += 1;
@@ -196,6 +197,7 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
     try {
       const result = await firstAnswer(storage, name, options);
       failures = 0;
+      answeredAt = Date.now();
       if (pausedSince) logger.info('property_records.storage_back', { ms: Date.now() - pausedSince });
       pausedSince = 0;
       pausedUntil = 0;
@@ -221,7 +223,7 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
     let heldAt = 0;
     let etag = null;
     let job = null;
-    return async () => {
+    const get = async () => {
       const now = Date.now();
       if (!job && (heldAt === 0 || now - heldAt >= freshMs)) {
         job = read(name, { etag })
@@ -248,6 +250,8 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
       if (heldAt === 0 && job) await job;
       return held;
     };
+    get.held = () => held;
+    return get;
   }
 
   function parseState(bytes) {
@@ -261,6 +265,13 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
     if (!/^[A-Z]{2}$/.test(state || '')) return Promise.resolve(null);
     if (!states.has(state)) states.set(state, refreshed(statePath(state), parseState));
     return states.get(state)();
+  }
+
+  /** A state's file as held now, without waiting: null until it has been read once. A read that's due starts behind it. */
+  function heldStateFile(state) {
+    if (!/^[A-Z]{2}$/.test(state || '')) return null;
+    stateFile(state).catch(() => {});
+    return states.get(state).held();
   }
 
   const suppressionsFile = refreshed(SUPPRESSIONS_PATH, (bytes) => JSON.parse(bytes.toString('utf8')));
@@ -341,9 +352,12 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
     return files.get(name)();
   }
 
-  return { stateFile, recordsAt, suppressions: suppressionsFile, switchesFile, file };
+  /** For /health: whether storage is paused, and how long since it last answered. */
+  const health = () => ({ paused: Boolean(pausedSince), answered_ms_ago: answeredAt ? Date.now() - answeredAt : null });
+
+  return { stateFile, heldStateFile, recordsAt, suppressions: suppressionsFile, switchesFile, file, health };
 }
 
 const shared = createReader();
 
-module.exports = { stateFile: shared.stateFile, recordsAt: shared.recordsAt, suppressions: shared.suppressions, switchesFile: shared.switchesFile, createReader, createStorage, StorageUnavailable };
+module.exports = { stateFile: shared.stateFile, heldStateFile: shared.heldStateFile, health: shared.health, recordsAt: shared.recordsAt, suppressions: shared.suppressions, switchesFile: shared.switchesFile, createReader, createStorage, StorageUnavailable };
