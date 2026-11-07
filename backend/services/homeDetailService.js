@@ -251,23 +251,29 @@ async function propertyDetail(homeId, actorId) {
       const sees = householdFacts.seesHousehold(access);
       // A renter gets a household part only for the building's floor plan, which is theirs as much as anyone's.
       const planOnly = !sees && householdFacts.isResident(access) && floorPlans.enabled();
-      const { home, raw } = await readHome(homeId, access, { provider: sees || planOnly, early });
-      return { home, attom_property_detail: null, source: 'unavailable', unavailable_reason: 'OWNER_ONLY', county_record: null,
+      // The household and its residents see the Home's facts as Place shows them to them: a bedrooms, baths or size
+      // column Add Home only filled from ATTOM's copy reads as a live county's record (householdFacts.shownColumns).
+      const facts = sees || householdFacts.isResident(access);
+      const { home, raw } = await readHome(homeId, access, { provider: facts, early });
+      return { home: facts ? { ...home, ...householdFacts.shownColumns(raw, homeRecords.liveCopy(raw)) } : home,
+        attom_property_detail: null, source: 'unavailable', unavailable_reason: 'OWNER_ONLY', county_record: null,
         household: sees || planOnly ? await householdPart({ homeId, home, raw, access, actorId, problems, seesEntries: sees }) : null };
     }
     // ATTOM's value estimate comes from the cache only, read alongside the Home. A Home without its record gets it
     // looked up in the background (LOOKUP_PENDING): this answer never waits for ATTOM, and the record's arrival on
     // the Home tells the page to read again.
-    const { home, raw } = await readHome(homeId, access, { provider: true, early });
+    const { home: columns, raw } = await readHome(homeId, access, { provider: true, early });
     // A Home with a county record answers from it; a live county never reads ATTOM's copies.
     const record = await homeRecords.forHome(raw);
+    // Bedrooms, baths and size as Place shows them (householdFacts.shownColumns); the household part reads the columns.
+    const home = { ...columns, ...householdFacts.shownColumns(raw, record?.copy) };
     if (record) {
       const county = record.copy ? serializePropertyRecord(record.copy) : null;
       return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
         unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : (record.reason === 'withdrawn' ? 'SOURCE_WITHDRAWN' : 'NO_PROPERTY_FOUND')), county_record: county,
         ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}),
         // While the record is still being read, nothing asks for what it may answer.
-        household: record.lookup === 'pending' ? null : await householdPart({ homeId, home, raw, access, actorId, problems, copy: county ? record.copy : null, countyRecord: county }) };
+        household: record.lookup === 'pending' ? null : await householdPart({ homeId, home: columns, raw, access, actorId, problems, copy: county ? record.copy : null, countyRecord: county }) };
     }
     const avm = await property.getCachedAttomValue(homeId);
     const result = await property.getHomeAttomPropertyDetail(raw);

@@ -155,6 +155,17 @@ function assessorAddress(row) {
   return address && { ...address, city: String(row.SitusCity || '').trim().toUpperCase(), zip: zip5(row.SitusZip) };
 }
 
+/** Where the Assessor's own text says an account is: this file's street columns, and the unit that follows them in its address line. */
+function assessorAddress(row) {
+  if (!row.Situs_PACS) return null;
+  const head = row.Situs_PACS.split(',')[0].replace(/\s+/g, ' ').trim();
+  const street = [row.SitusNum, row.SitusStPre, row.SitusSt, row.SitusSuf].filter(Boolean).join(' ');
+  let unit = head.startsWith(street) ? head.slice(street.length).trim() : '';
+  if (row.SitusCity && unit.endsWith(row.SitusCity)) unit = unit.slice(0, -row.SitusCity.length).trim();
+  const address = parse(street, unit);
+  return address && { ...address, city: String(row.SitusCity || '').trim().toUpperCase(), zip: zip5(row.SitusZip) };
+}
+
 async function readFacts(zip, records, today) {
   const unmappedCodes = {};
   for await (const row of zipTable(zip, 'PropBldgSumInfoVw.txt', ['prop_id', 'BldgStyle', 'YrBlt', 'LivingArea', 'Condition', 'Class', 'Bedrooms', 'FullBaths', 'HalfBaths', 'ThrQtrsBaths', 'Fireplaces'], TABLE)) {

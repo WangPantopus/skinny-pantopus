@@ -76,9 +76,9 @@ function lastGoodLookup() {
   };
 }
 
-function s3Storage(url) {
+function s3Storage(url, region = config.region) {
   const client = new S3Client({
-    region: config.region,
+    region,
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
     maxAttempts: 1,
     requestHandler: { httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 50, lookup: lastGoodLookup() }) },
@@ -119,10 +119,20 @@ function fileStorage(url) {
   };
 }
 
+function storageAt(root, region) {
+  const url = new URL(root);
+  return url.protocol === 's3:' ? s3Storage(url, region) : fileStorage(url);
+}
+
+/** The index at a root, with its replica in the second region beside it when one is set (PROPERTY_RECORDS_FALLBACK_URL). */
 function createStorage(root = config.manifestUrl) {
   if (!root) return null;
-  const url = new URL(root);
-  return url.protocol === 's3:' ? s3Storage(url) : fileStorage(url);
+  const storage = storageAt(root);
+  const base = config.manifestUrl.replace(/\/+$/, '');
+  if (config.fallbackUrl && base && root.startsWith(base)) {
+    storage.fallback = storageAt(`${config.fallbackUrl.replace(/\/+$/, '')}${root.slice(base.length)}`, config.fallbackRegion);
+  }
+  return storage;
 }
 
 // Refused or not found: a second try gets the same answer.
@@ -131,7 +141,7 @@ const lasting = (err) => {
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
 };
 
-/** One read with at most two tries: the first answer wins and the other try is let go. */
+/** One read with at most two tries: the first answer wins and the other try is let go. The second goes to the replica when there is one. */
 function firstAnswer(storage, name, options) {
   const letGo = new AbortController();
   return new Promise((resolve, reject) => {
@@ -143,7 +153,7 @@ function firstAnswer(storage, name, options) {
       timer = null;
       tries += 1;
       running += 1;
-      storage(name, { ...options, signal: letGo.signal }).then((result) => {
+      (tries > 1 && storage.fallback ? storage.fallback : storage)(name, { ...options, signal: letGo.signal }).then((result) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
