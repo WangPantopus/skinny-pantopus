@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
+import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardResponse
@@ -23,6 +24,12 @@ interface HolidayCardsApi {
     /** `GET /api/mailbox/cards` — route `backend/routes/mailbox.js:1776`: the season's pictures and today's card. */
     @GET("api/mailbox/cards")
     suspend fun cards(): HolidayCardsResponse
+
+    /** `POST /api/mailbox/cards/shared` — counts what was shared (launch key `card_table`). Answers 204. */
+    @POST("api/mailbox/cards/shared")
+    suspend fun shared(
+        @Body body: HolidayCardSharedBody,
+    ): Response<Unit>
 
     /**
      * `GET /api/mailbox/cards/arrivals?to=` — route `backend/routes/mailbox.js:1809`: when a card to this person can
