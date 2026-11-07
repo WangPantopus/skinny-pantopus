@@ -216,7 +216,8 @@ public struct BusinessProfileView: View {
                 onContact: { Task { await openContact() } },
                 onBook: onBook,
                 onCall: callBusiness,
-                onReport: openReport
+                onReport: openReport,
+                onRetryReviews: retryReviews
             )
         case .notFound:
             NotFoundLayout(onBack: onBack) { Task { await viewModel.refresh() } }
@@ -231,6 +232,10 @@ public struct BusinessProfileView: View {
 
     private func openReport() {
         showsReportSheet = true
+    }
+
+    private func retryReviews() {
+        Task { await viewModel.retryReviews() }
     }
 
     /// Contact dock → `POST …/inbox/start` → host chat push.
@@ -270,6 +275,8 @@ struct BusinessProfileLoadedView: View {
     let onCall: @MainActor () -> Void
     /// Opens the report sheet from the footer. The owner preview leaves it inert.
     var onReport: @MainActor () -> Void = {}
+    /// Reads the reviews again. The owner preview has none, so its Reviews section offers no retry.
+    var onRetryReviews: (@MainActor () -> Void)?
     /// The status bar's height. The banner runs under it, so the floating Back, Share and More buttons sit on the
     /// banner instead of on the logo (no status bar above the screen, as on the iPhone Duo's side strip: 0).
     @State private var topInset: CGFloat = 0
@@ -299,7 +306,8 @@ struct BusinessProfileLoadedView: View {
                         content: content,
                         onContact: onContact,
                         onShare: onShare,
-                        onReport: onReport
+                        onReport: onReport,
+                        onRetryReviews: onRetryReviews
                     )
                     .padding(.horizontal, Spacing.s4)
                     .padding(.top, 14)
@@ -345,6 +353,7 @@ private struct BusinessProfileSections: View {
     let onContact: @MainActor () -> Void
     let onShare: @MainActor () -> Void
     let onReport: @MainActor () -> Void
+    let onRetryReviews: (@MainActor () -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
@@ -452,27 +461,61 @@ private struct BusinessProfileSections: View {
 
     // Reviews
 
+    /// The review cards come from their own read (`BusinessReviewsRead`), so this section says where that read
+    /// stands and only it retries. The summary comes from the business itself and shows whatever the read does.
     @ViewBuilder private var reviewsSection: some View {
         let total = content.reviewSummary?.count ?? 0
-        BizSectionHeader(title: "Reviews", seeAll: total > 0 ? "See all \(total)" : nil)
-        if let summary = content.reviewSummary, total > 0 {
+        let summary = total > 0 ? content.reviewSummary : nil
+        // Below a summary, a state starts where the first card would.
+        let belowSummary = summary == nil ? Spacing.s0 : Spacing.s2
+        BizSectionHeader(title: "Reviews", seeAll: summary.map { "See all \($0.count)" })
+        if let summary {
             RatingDistribution(
                 average: summary.average,
                 count: summary.count,
                 distribution: summary.distribution
             )
-            ForEach(content.reviews) { review in
-                BizReviewCard(card: review)
-                    .padding(.top, Spacing.s2)
-            }
-        } else {
+        }
+        if case let .refreshFailed(shownAt) = content.reviewsRead, let retry = onRetryReviews {
+            RefreshNotice(text: RefreshNotice.text(shownAt: shownAt)) { retry() }
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                .padding(.top, Spacing.s2)
+        }
+        switch content.reviewsRead {
+        case .loading:
+            ReviewsLoading()
+                .padding(.top, belowSummary)
+        case let .failed(message):
             EmptyBlock(
-                icon: .messageSquarePlus,
-                title: "No reviews yet",
-                message: "Be the first to hire \(content.header.displayName). Your review helps "
-                    + "the next neighbor decide.",
-                cta: EmptyBlock.CTA(label: "Hire to review", icon: .pencil, action: onContact)
+                icon: .alertCircle,
+                title: "Couldn't load reviews",
+                message: message,
+                cta: onRetryReviews.map {
+                    EmptyBlock.CTA(label: "Try again", icon: .refreshCw, identifier: "businessProfile.reviews.cta", action: $0)
+                }
             )
+            .padding(.top, belowSummary)
+            .accessibilityIdentifier("businessProfile.reviews.failed")
+        case .loaded, .refreshFailed:
+            if summary != nil {
+                ForEach(content.reviews) { review in
+                    BizReviewCard(card: review, businessName: content.header.displayName)
+                        .padding(.top, Spacing.s2)
+                }
+            } else {
+                EmptyBlock(
+                    icon: .messageSquarePlus,
+                    title: "No reviews yet",
+                    message: "Be the first to hire \(content.header.displayName). Your review helps "
+                        + "the next neighbor decide.",
+                    cta: EmptyBlock.CTA(
+                        label: "Hire to review",
+                        icon: .pencil,
+                        identifier: "businessProfile.reviews.cta",
+                        action: onContact
+                    )
+                )
+            }
         }
     }
 
@@ -700,6 +743,7 @@ private struct ServiceAreaCard: View {
 @MainActor
 private struct BizReviewCard: View {
     let card: BusinessReviewCard
+    let businessName: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -742,6 +786,9 @@ private struct BizReviewCard: View {
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let reply = card.ownerReply {
+                ReviewReplyBox(title: "Response from \(businessName)", reply: reply)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
@@ -753,7 +800,34 @@ private struct BizReviewCard: View {
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(card.reviewerName), \(card.rating) star review, \(card.timestamp)")
+        .accessibilityLabel(accessibilityText)
+    }
+
+    /// The card reads as one element: who, the stars and when, then the text and the business's reply.
+    private var accessibilityText: String {
+        var text = "\(card.reviewerName), \(card.rating) star review, \(card.timestamp)"
+        let reply = card.ownerReply.map { "Response from \(businessName): \($0)" }
+        for part in [card.body, reply ?? ""] where !part.isEmpty {
+            // A pause between parts, without doubling a sentence's own full stop.
+            let ended = text.last.map { ".!?".contains($0) } ?? false
+            text += ended ? " \(part)" : ". \(part)"
+        }
+        return text
+    }
+}
+
+/// Stands in for the review cards while their read is out.
+@MainActor
+private struct ReviewsLoading: View {
+    var body: some View {
+        VStack(spacing: Spacing.s2) {
+            Shimmer(height: 92, cornerRadius: Radii.lg)
+            Shimmer(height: 92, cornerRadius: Radii.lg)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading reviews")
+        .accessibilityIdentifier("businessProfile.reviews.loading")
     }
 }
 

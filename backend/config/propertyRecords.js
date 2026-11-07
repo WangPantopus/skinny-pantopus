@@ -10,6 +10,8 @@
  *   VALUE_AREA_TREND                       1: owners' value cards show the area's price change, from <root>/area-trends, in every county.
  *   VALUE_NEIGHBORHOOD_FIGURES             1: owners' value cards show the Census Bureau's figures for the ZIP where a home has no estimate.
  *   PROPERTY_INDEX_AWS_ACCESS_KEY_ID, PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY, PROPERTY_INDEX_REGION  The read-only key.
+ *   PROPERTY_RECORDS_FALLBACK_URL          A replica of the index in a second region, s3://bucket/prefix. A read's second try goes there,
+ *   PROPERTY_INDEX_FALLBACK_REGION         so a regional outage costs a moment, not the lookup. Empty: one region. Same read-only key.
  *   ATTOM_STAND_IN                         '1' only on a local rig whose stand-in answers for ATTOM. See below.
  *
  * Both lists are empty by default, and a county on both is live.
@@ -54,6 +56,8 @@ if (manifestUrl) {
 module.exports = {
   manifestUrl,
   region: env('PROPERTY_INDEX_REGION') || 'us-west-2',
+  fallbackUrl: env('PROPERTY_RECORDS_FALLBACK_URL'),
+  fallbackRegion: env('PROPERTY_INDEX_FALLBACK_REGION') || 'us-east-2',
   accessKeyId: env('PROPERTY_INDEX_AWS_ACCESS_KEY_ID'),
   secretAccessKey: env('PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY'),
   switchesName,

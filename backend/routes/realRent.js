@@ -25,6 +25,8 @@ const verifyToken = require('../middleware/verifyToken');
 const { checkHomePermission, isVerifiedResident } = require('../utils/homePermissions');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const realRentService = require('../services/realRentService');
+const householdFacts = require('../services/householdFacts');
+const homeRecords = require('../services/propertyRecords/homeRecord');
 const logger = require('../utils/logger');
 
 // PUT /api/homes/:id/rent-report — contribute or update
@@ -45,13 +47,14 @@ router.put('/:id/rent-report', verifyToken, async (req, res) => {
 
     const { data: home } = await supabaseAdmin
       .from('Home')
-      .select('id, bedrooms, map_center_lat, map_center_lng')
+      .select('id, address, address2, city, state, zipcode, bedrooms, map_center_lat, map_center_lng, niche_data')
       .eq('id', id)
       .maybeSingle();
     if (!home) return res.status(404).json({ error: 'Home not found.' });
 
     const report = await realRentService.setReport({
-      home,
+      // The report's size is the Home's bedrooms as every other screen shows them (householdFacts.shownColumns).
+      home: { ...home, ...householdFacts.shownColumns(home, homeRecords.liveCopy(home)) },
       userId,
       monthlyRent: req.body && req.body.monthly_rent,
       bedrooms: req.body && req.body.bedrooms,

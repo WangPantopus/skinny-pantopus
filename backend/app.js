@@ -326,6 +326,8 @@ app.get('/', (req, res) => {
   });
 });
 
+const propertyRecordsConfig = require('./config/propertyRecords');
+const propertyRecordsRouter = require('./services/propertyRecords/router');
 // Docker's readiness check (scripts/healthcheck.js) asks from inside the container every 5 seconds.
 // Its healthy answer is reused for 15 seconds, and checks that arrive together share one query, so it
 // costs the database 4 queries a minute instead of 12. A check from outside the container (the proxy,
@@ -361,6 +363,8 @@ app.get('/health', async (req, res) => {
     res.json({
       status: 'healthy',
       database: 'connected',
+      // Pantopus's own property index, where it's on: a reading for the monitor, never a reason to call the API unhealthy.
+      ...(propertyRecordsConfig.enabled() ? { property_index: propertyRecordsRouter.health() } : {}),
       timestamp: new Date().toISOString()
     });
   } catch (err) {

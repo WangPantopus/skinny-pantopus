@@ -123,6 +123,7 @@ class BusinessProfileViewModel
         private var isStartingInquiry = false
 
         private var loadJob: Job? = null
+        private var quietJob: Job? = null
         private var page: BusinessProfilePage? = null
 
         private var reviewsJob: Job? = null
@@ -130,10 +131,13 @@ class BusinessProfileViewModel
         private var reviewsFetchedAt = 0L
         private var reviewsRead: BusinessReviewsRead = BusinessReviewsRead.Loading
 
-        /** Entry and every return. Back on a loaded page, it stays while the reviews check for a reply saved meanwhile. */
+        /**
+         * Entry and every return. Back on a loaded page, it stays as it is while its reads check for what changed
+         * meanwhile: an edit saved in the page editor, a reply saved by the owner.
+         */
         fun load() {
             if (_state.value is BusinessProfileUiState.Loaded) {
-                readReviews()
+                refreshQuietly()
                 return
             }
             refresh()
@@ -141,6 +145,7 @@ class BusinessProfileViewModel
 
         fun refresh() {
             loadJob?.cancel()
+            quietJob?.cancel()
             page = null
             _state.value = BusinessProfileUiState.Loading
             loadJob = viewModelScope.launch { fetch() }
@@ -259,6 +264,41 @@ class BusinessProfileViewModel
                     }
                 }
             }
+        }
+
+        /**
+         * The page's reads again, behind what it shows. A failed read leaves the page as it was; a business that's
+         * gone shows as not found, as a first read would. The named page isn't read again: its read counts a view.
+         */
+        private fun refreshQuietly() {
+            readReviews()
+            quietJob?.cancel()
+            quietJob =
+                viewModelScope.launch {
+                    when (val detail = businesses.business(businessId)) {
+                        is NetworkResult.Success -> {
+                            val payload = detail.data
+                            val previous = page?.publicResponse
+                            val publicResponse =
+                                payload.business.username
+                                    ?.takeIf { it.isNotEmpty() }
+                                    ?.let { username ->
+                                        when (val result = businesses.publicBusiness(username)) {
+                                            is NetworkResult.Success -> result.data
+                                            // No public page any more (unpublished) shows as a first read would.
+                                            is NetworkResult.Failure -> previous.takeUnless { result.error == NetworkError.NotFound }
+                                        }
+                                    }
+                            page = BusinessProfilePage(payload, publicResponse)
+                            publish()
+                        }
+                        is NetworkResult.Failure ->
+                            if (detail.error == NetworkError.NotFound) {
+                                page = null
+                                _state.value = BusinessProfileUiState.NotFound
+                            }
+                    }
+                }
         }
 
         /**

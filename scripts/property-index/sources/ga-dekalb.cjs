@@ -26,7 +26,11 @@ function useOf(code, hasUnit) {
 
 function fromRow(row) {
   const unit = realUnit(word(row.UNIT_NO) || word(row.UNIT));
-  const line = String(row.SITEADDRES ?? '').split(',')[0].replace(/\s+/g, ' ').trim();
+  // The site address carries its city after the street, before the comma ("1234 X RD DECATUR, GA ..."): left there, the city reads as part of
+  // the street's name, and a person's own address finds nothing.
+  const city = String(word(row.CITY) || '').toUpperCase();
+  let line = String(row.SITEADDRES ?? '').split(',')[0].replace(/\s+/g, ' ').trim();
+  if (city && line.toUpperCase().endsWith(` ${city}`)) line = line.slice(0, -(city.length + 1)).trim();
   const address = line ? parse(line, unit) : null;
   const parcel = word(row.PARCELID) || word(row.LOWPARCELI);
   if (!address || !parcel) return null;

@@ -143,7 +143,7 @@ public struct BusinessOwnerView: View {
                     )
                     .transition(.opacity)
                 case .preview:
-                    OwnerPreviewFrame(content: payload.publicProfile) {
+                    OwnerPreviewFrame(content: payload.previewProfile) {
                         mode = .owner
                     }
                     .transition(.opacity)
