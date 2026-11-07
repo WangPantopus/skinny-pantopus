@@ -448,7 +448,7 @@ class CanonicalAddressService {
     if (
       place?.building_type
       && place.building_type !== 'unknown'
-      && !(googlePostal && place.building_type === 'mixed_use')
+      && place.building_type !== 'mixed_use'
     ) {
       fields.building_type = place.building_type;
     }
