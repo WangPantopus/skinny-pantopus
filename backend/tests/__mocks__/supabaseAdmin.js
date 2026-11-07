@@ -299,6 +299,17 @@ function setAuthMocks(overrides = {}) {
   _authMocks = { ..._authMocks, ...overrides };
 }
 
+// One-to-many embeds the mock answers, by parent table: the child table and its column pointing at the parent's id.
+// As PostgREST embeds them, `alias:Child(...)` keeps the parent row and puts the matching child rows under `alias`;
+// `alias.column` filters and `limit(n, { referencedTable: alias })` apply to those rows only.
+const EMBEDDED_CHILDREN = {
+  Home: { HomeOccupancy: 'home_id', HomeOwner: 'home_id', HomePermissionOverride: 'home_id', HomeQuorumAction: 'home_id' },
+};
+const embeddedValue = (row, column) => {
+  const [name, jsonKey] = column.split('->>');
+  return jsonKey ? row[name]?.[jsonKey] : row[name];
+};
+
 /**
  * Chainable query builder that mimics supabaseAdmin.from(table)
  */
@@ -314,6 +325,16 @@ function createQueryBuilder(tableName) {
   let filters = viewAlias ? [membershipVisibleInPersonaFollow] : [];
   let selectFields = '*';
   const postShareEmbeds = new Map();
+  const childEmbeds = new Map(); // alias → { table, column, filters, limit } (EMBEDDED_CHILDREN)
+  // A filter on `alias.column` of a child embed goes to that embed; null for any other field.
+  const childFilter = (field, test) => {
+    const dot = String(field).indexOf('.');
+    const embed = dot > 0 ? childEmbeds.get(field.slice(0, dot)) : null;
+    if (!embed) return null;
+    const column = field.slice(dot + 1);
+    embed.filters.push((row) => test(embeddedValue(row, column)));
+    return builder;
+  };
   let updatePayload = null;
   let insertPayload = null;
   let isSingle = false;
@@ -342,11 +363,18 @@ function createQueryBuilder(tableName) {
           postShareEmbeds.set(match[1], []);
         }
       }
+      const children = EMBEDDED_CHILDREN[tableName];
+      if (children) {
+        for (const match of String(fields).matchAll(/(\w+):(\w+)\(/g)) {
+          if (children[match[2]]) childEmbeds.set(match[1], { table: match[2], column: children[match[2]], filters: [], limit: null });
+        }
+      }
       if (options?.count) isCountMode = true;
       if (options?.head) isHeadMode = true;
       return builder;
     },
     eq(field, value) {
+      if (childFilter(field, (actual) => actual === value)) return builder;
       const [embed, childField] = field.split('.');
       if (postShareEmbeds.has(embed)) {
         postShareEmbeds.get(embed).push(row => row[childField] === value);
@@ -376,11 +404,13 @@ function createQueryBuilder(tableName) {
       return builder;
     },
     neq(field, value) {
+      if (childFilter(field, (actual) => actual !== value)) return builder;
       const f = fieldFor(field);
       filters.push((row) => row[f] !== value);
       return builder;
     },
     in(field, values) {
+      if (childFilter(field, (actual) => values.includes(actual))) return builder;
       const [embed, childField] = field.split('.');
       if (postShareEmbeds.has(embed)) {
         postShareEmbeds.get(embed).push(row => values.includes(row[childField]));
@@ -422,6 +452,7 @@ function createQueryBuilder(tableName) {
       return builder;
     },
     gt(field, value) {
+      if (childFilter(field, (actual) => actual > value)) return builder;
       const f = fieldFor(field);
       filters.push((row) => row[f] > value);
       return builder;
@@ -546,7 +577,9 @@ function createQueryBuilder(tableName) {
     order(field, opts = {}) {
       return builder;
     },
-    limit(n) {
+    limit(n, options) {
+      const embed = childEmbeds.get(options?.referencedTable || options?.foreignTable);
+      if (embed) embed.limit = n;
       return builder;
     },
     range(from, to) {
@@ -775,7 +808,16 @@ function createQueryBuilder(tableName) {
       }
 
       // SELECT
-      const projectedMatched = matched.map(projectOut);
+      const withChildren = (row) => {
+        if (!childEmbeds.size) return row;
+        const out = { ...row };
+        for (const [alias, { table: child, column, filters: childFilters, limit: max }] of childEmbeds) {
+          const rows = getTable(child).filter((c) => c[column] === row.id && childFilters.every((fn) => fn(c)));
+          out[alias] = (max == null ? rows : rows.slice(0, max)).map((c) => ({ ...c }));
+        }
+        return out;
+      };
+      const projectedMatched = matched.map(projectOut).map(withChildren);
       let result;
       if (isSingle) {
         const only = projectedMatched[0] || null;
