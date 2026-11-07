@@ -35,8 +35,10 @@ function postTargets(post: Post): string[] {
   return post.distribution_targets ?? [post.visibility === 'connections' ? 'connections' : 'place'];
 }
 
-/** Whether a just-created post belongs in the feed list for this surface and post-type filter. */
+/** Whether a just-created post belongs in the feed list for this surface and post-type filter. The Connections feed
+ * lists your connections' posts, never your own, so yours doesn't go on top of it to vanish at the next read. */
 function postBelongsToList(post: Post, surface: FeedSurface, filter: FilterType): boolean {
+  if (surface === 'connections') return false;
   if (!postTargets(post).some((target) => SURFACE_TARGETS[surface].includes(target))) return false;
   return filter === 'all' || post.post_type === filter;
 }
