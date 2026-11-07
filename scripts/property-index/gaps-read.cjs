@@ -18,6 +18,7 @@
 
 const fs = require('node:fs');
 const os = require('node:os');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const readline = require('node:readline');
@@ -54,6 +55,12 @@ function awsEnv(envFile) {
     if (name === 'PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY') env.AWS_SECRET_ACCESS_KEY = value;
   }
   return env;
+}
+
+/** lib/gaps.cjs takedownsId: which takedown list a ledger was written against, null for none. */
+function takedownsId(suppressions) {
+  if (!suppressions?.hashes?.length) return null;
+  return crypto.createHash('sha256').update(JSON.stringify([suppressions.salt, [...suppressions.hashes].sort()])).digest('hex').slice(0, 16);
 }
 
 const sum = (table) => Object.values(table || {}).reduce((total, n) => total + n, 0);
@@ -94,9 +101,18 @@ async function main() {
   const copy = (name, file) => (opts.root
     ? fs.copyFileSync(path.join(opts.root, name), file)
     : execFileSync('aws', ['s3', 'cp', url(name), file, '--only-show-errors'], { env, stdio: ['ignore', 'ignore', 'inherit'] }));
-  const national = JSON.parse(opts.root
-    ? fs.readFileSync(path.join(opts.root, 'gaps/counts.json'), 'utf8')
-    : execFileSync('aws', ['s3', 'cp', url('gaps/counts.json'), '-', '--only-show-errors'], { env, maxBuffer: 256 * 1024 * 1024 }).toString('utf8'));
+  const read = (name) => {
+    if (opts.root) return fs.existsSync(path.join(opts.root, name)) ? fs.readFileSync(path.join(opts.root, name), 'utf8') : null;
+    try {
+      return execFileSync('aws', ['s3', 'cp', url(name), '-', '--only-show-errors'], { env, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 }).toString('utf8');
+    } catch (err) {
+      // Only "not there" means none: a takedown list that can't be read stops here rather than count as empty.
+      if (/\(404\)/.test(String(err.stderr))) return null;
+      throw new Error(`Could not read ${name} from storage`);
+    }
+  };
+  const national = JSON.parse(read('gaps/counts.json') || 'null');
+  if (!national) throw new Error('No missing-facts ledger there yet (gaps/counts.json)');
   if (opts.counts) {
     printCounts(national, opts.fips);
     return;
@@ -108,6 +124,10 @@ async function main() {
   if (!field) throw new Error(`No field ${opts.field}; the fields are ${national.rule.fields.map(([id]) => id).join(', ')}`);
   const [id, label] = field;
   if (opts.kind && !national.rule.kinds[opts.kind]) throw new Error(`No kind ${opts.kind}; the kinds are ${Object.keys(national.rule.kinds).join(', ')}`);
+  // Addresses taken down since the ledger was written may still be in it: the next publish writes it again.
+  if ((county.takedowns ?? null) !== takedownsId(JSON.parse(read('suppressions.json') || 'null'))) {
+    throw new Error(`${county.name}'s ledger is from before the latest takedown; it lists homes again once a publish rewrites it`);
+  }
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaps-read-'));
   const file = path.join(dir, 'ledger.jsonl.gz');

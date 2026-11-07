@@ -11,7 +11,7 @@
 //   node scripts/property-index/gaps.cjs --bucket <name> [--prefix index] [--all | --counties "<fips> ..."] [--budget-minutes <n>]
 //   node scripts/property-index/gaps.cjs --root <local index, or a build's --out> ...   the same on a local copy
 //   node scripts/property-index/gaps.cjs --bucket <name> --out <dir> ...   reads storage, writes the ledger to a local folder
-//     (default)         counties whose serving release has no ledger yet, newest first
+//     (default)         counties whose serving release has no ledger yet, or one from before the latest takedown, newest first
 //     --all             every county again, as after the rule changes
 //     --counties        only these
 //     --budget-minutes  starts no county after this long; the next run takes the rest
@@ -26,7 +26,7 @@ const zlib = require('node:zlib');
 const { execFileSync } = require('node:child_process');
 const { releasePath, switchesPath, SUPPRESSIONS_PATH } = require('../../backend/services/propertyRecords/format');
 const { openRelease } = require('../../backend/scripts/eval/lib/propertyRelease');
-const { FIELDS, SETS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed } = require('./lib/gaps.cjs');
+const { FIELDS, SETS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed, takedownsId } = require('./lib/gaps.cjs');
 const { log } = require('./lib/log.cjs');
 
 const COUNTS_PATH = 'gaps/counts.json';
@@ -89,7 +89,7 @@ function createStore({ bucket, root, prefix, out }) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'gaps-store-'));
   return {
     counties: () => {
-      const dir = path.join(scratch, 'states');
+      const dir = fs.mkdtempSync(path.join(scratch, 'states-'));
       aws(['cp', url('states/'), dir, '--recursive', '--exclude', '*', '--include', '*.json']);
       return fs.readdirSync(dir).flatMap((name) => Object.values(JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')).jurisdictions || {}));
     },
@@ -159,6 +159,7 @@ function countyLedger(release, county, file, { live, suppressions }) {
     fips: county.fips, state: county.state, name: county.name || null, source: county.source || null, release: county.release, as_of: county.as_of || null,
     live, written_at: new Date().toISOString(), homes: {}, complete: {}, rows: 0,
     missing: {}, missing_any: {}, zero: {}, next_build: {}, on_building_record: {}, restricted: 0, suppressed: 0, not_homes: 0,
+    takedowns: takedownsId(suppressions),
   };
   const writer = lineWriter(file);
   writer.add(JSON.stringify({ ledger: 1, fips: county.fips, state: county.state, release: county.release, as_of: county.as_of || null, rule: 'scripts/property-index/lib/gaps.cjs' }));
@@ -251,9 +252,12 @@ function main() {
   const live = (fips) => switches.counties?.[fips]?.mode === 'live';
   const suppressions = JSON.parse(store.text(SUPPRESSIONS_PATH) || 'null');
   const done = new Set(store.list('gaps/').filter((name) => name.endsWith('.counts.json')));
+  const before = JSON.parse(store.text(COUNTS_PATH) || 'null');
+  const takedowns = takedownsId(suppressions);
   const queue = counties.filter((county) => {
     if (opts.counties) return opts.counties.has(county.fips);
-    return opts.all || !done.has(countsPath(county.fips, county.release));
+    // A ledger from before the latest takedown may still list that address: it is written again.
+    return opts.all || !done.has(countsPath(county.fips, county.release)) || (before?.counties?.[county.fips]?.takedowns ?? null) !== takedowns;
   });
   // Newest releases first, so a run with a budget covers what was just published; the largest first otherwise.
   if (opts.all || opts.counties) queue.sort((a, b) => (b.records || 0) - (a.records || 0));
@@ -294,24 +298,38 @@ function main() {
   }
   if (left) log(`${left} counties left for the next run`);
 
-  // Read the national file again just before writing, so nothing written since is lost. A county whose ledger exists
-  // but isn't in it yet (a run that stopped before this point) comes from its own counts file.
+  // Read storage again just before writing the national file. A release published while this run worked replaces the one
+  // it read (that publish's own run writes its ledger), a county whose ledger exists but isn't in the file yet (another
+  // run's, or one that stopped before this point) comes from its own counts file, and a county no longer served leaves.
+  const current = store.counties().filter((county) => county.release && county.status === 'active');
+  const switchesNow = JSON.parse(store.text(switchesPath('production')) || '{}');
+  const liveNow = (fips) => switchesNow.counties?.[fips]?.mode === 'live';
+  const ledgers = new Set(store.list('gaps/').filter((name) => name.endsWith('.counts.json')));
   const national = JSON.parse(store.text(COUNTS_PATH) || 'null') || { v: 1, counties: {} };
-  let changed = written.size > 0;
-  for (const county of counties) {
+  let changed = false;
+  for (const county of current) {
     const name = countsPath(county.fips, county.release);
     const entry = national.counties[county.fips];
-    if (written.has(county.fips)) national.counties[county.fips] = written.get(county.fips);
-    else if (done.has(name) && entry?.release !== county.release) {
+    const mine = written.get(county.fips);
+    if (mine?.release === county.release) {
+      national.counties[county.fips] = { ...mine, live: liveNow(county.fips) };
+      changed = true;
+    } else if (entry?.release !== county.release && ledgers.has(name)) {
       const counts = JSON.parse(store.text(name) || 'null');
       if (counts) {
-        national.counties[county.fips] = { ...counts, live: live(county.fips) };
+        national.counties[county.fips] = { ...counts, live: liveNow(county.fips) };
         changed = true;
       }
-    } else if (entry && entry.live !== live(county.fips)) {
-      entry.live = live(county.fips);
+    } else if (entry && entry.live !== liveNow(county.fips)) {
+      entry.live = liveNow(county.fips);
       changed = true;
     }
+  }
+  const served = new Set(current.map((county) => county.fips));
+  for (const fips of Object.keys(national.counties)) {
+    if (served.has(fips)) continue;
+    delete national.counties[fips];
+    changed = true;
   }
   if (changed) store.putJson(COUNTS_PATH, { ...national, rule: RULE, updated_at: new Date().toISOString() });
   const all = Object.values(national.counties);
