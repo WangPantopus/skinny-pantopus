@@ -151,7 +151,10 @@ export default function LookItOver({
                   <p className="mt-0.5 text-[14px] font-semibold leading-[19px] text-[#111827]">{email.subject}</p>
                 </div>
                 <div className="bg-[#8b1d1d] px-4 pb-4 pt-5 text-center">
-                  <Mail className="mx-auto h-[30px] w-[30px] text-[#fff7ed]" strokeWidth={1.8} aria-hidden />
+                  {email.picture ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={email.picture} alt="" className="-mx-4 -mt-5 mb-3 block h-auto w-[calc(100%+2rem)] max-w-none" />
+                  ) : <Mail className="mx-auto h-[30px] w-[30px] text-[#fff7ed]" strokeWidth={1.8} aria-hidden />}
                   <p className="mt-1.5 text-[17px] font-semibold leading-[22px] text-[#fff7ed]">{email.heading}</p>
                 </div>
                 <div className="px-[18px] pb-4 pt-[18px]">
