@@ -61,12 +61,12 @@ const year = (text, thisYear = new Date().getFullYear()) => {
   return Number.isInteger(value) && value >= 1600 && value <= thisYear + 1 ? value : null;
 };
 
-/** "20261103" or "2026-11-03T00:00" or an ArcGIS time as an ISO date, or null. */
+/** "20261103", "2026-11-03T00:00", "11/03/2026", "11-03-2026" (Allegheny) or an ArcGIS time as an ISO date, or null. */
 function isoDate(value) {
   if (typeof value === 'number') return value > 0 ? new Date(value).toISOString().slice(0, 10) : null;
   const text = String(value ?? '').trim();
-  const american = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(text);
-  if (american) return isoDate(`${american[3]}-${american[1].padStart(2, '0')}-${american[2].padStart(2, '0')}`);
+  const american = /^(\d{1,2})([/-])(\d{1,2})\2(\d{4})/.exec(text);
+  if (american) return isoDate(`${american[4]}-${american[1].padStart(2, '0')}-${american[3].padStart(2, '0')}`);
   const match = /^(\d{4})[-.]?(\d{2})[-.]?(\d{2})/.exec(text);
   if (!match) return null;
   const [, y, m, d] = match.map(Number);
