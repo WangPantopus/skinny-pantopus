@@ -177,6 +177,12 @@ function suppressed(suppressions, fips, address) {
   return suppressions.hashes.includes(hash);
 }
 
+/** Which takedown list a ledger was written against (null for none): one written before the latest takedown may still list that address. */
+function takedownsId(suppressions) {
+  if (!suppressions?.hashes?.length) return null;
+  return crypto.createHash('sha256').update(JSON.stringify([suppressions.salt, [...suppressions.hashes].sort()])).digest('hex').slice(0, 16);
+}
+
 const RULE = {
   fields: FIELDS.map(({ id, label }) => [id, label]),
   kinds: Object.fromEntries(Object.entries(KINDS).map(([id, { label, fields }]) => [id, { label, fields }])),
@@ -184,4 +190,4 @@ const RULE = {
   sets: SETS,
 };
 
-module.exports = { FIELDS, KINDS, SETS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed, STRUCTURE };
+module.exports = { FIELDS, KINDS, SETS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed, takedownsId, STRUCTURE };
