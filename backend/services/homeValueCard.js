@@ -16,6 +16,7 @@
 
 const { stateCode } = require('./propertyRecords/addressKey');
 const { dateLabel } = require('./propertyRecords/homeRecord');
+const { coversMoreThanHome, COVERS_MORE_NOTE } = require('./propertyRecords/salePrice');
 const areaTrend = require('./propertyRecords/areaTrend');
 const { SALE_PRICES_NOT_PUBLIC, ASSESSMENT_SHARE, ASSESSED_VALUE_NOTE } = require('../data/valuePractice');
 
@@ -33,12 +34,14 @@ const EMPTY_MESSAGES = {
 };
 
 function lastSale(facts, state) {
-  const price = facts.sale_price >= LOWEST_SALE_PRICE ? money(facts.sale_price) : null;
+  const many = coversMoreThanHome(facts);
+  const price = facts.sale_price >= LOWEST_SALE_PRICE && !many ? money(facts.sale_price) : null;
   const when = (facts.sale_date && dateLabel(facts.sale_date)) || facts.sale_month || null;
   // A price too small to be a sale means the date is a transfer's too.
-  const row = price || (when && !facts.sale_price)
+  const row = price || (when && (!facts.sale_price || many))
     ? { id: 'last_sale', label: 'Last sale', value: [price, when].filter(Boolean).join(' · ') }
     : null;
+  if (many) return { row, note: COVERS_MORE_NOTE };
   const place = price ? null : SALE_PRICES_NOT_PUBLIC[state];
   return { row, note: place ? `Sale prices aren't public in ${place}.` : null };
 }

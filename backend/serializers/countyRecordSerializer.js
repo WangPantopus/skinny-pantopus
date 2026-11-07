@@ -26,6 +26,8 @@
 const { estimateRows, estimateNote } = require('../services/homeValueCard');
 const { FACTS, SECTIONS: RECORD_SECTIONS } = require('../services/propertyRecords/facts');
 
+const { coversMoreThanHome, COVERS_MORE_NOTE } = require('../services/propertyRecords/salePrice');
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 // A record is vendor data (and, for older Homes, whatever the app sent at
 // setup), so its size is bounded before it reaches a screen.
@@ -592,7 +594,10 @@ function serializePropertyRecord(copy, estimate = null) {
     const assessment = titled('assessment');
     addAssessment(assessment, facts);
     const sale = titled('sale');
-    addFacts(sale, facts, ['sale']);
+    // A deed's price for several homes isn't this home's (homeValueCard.js); its date still is.
+    const many = coversMoreThanHome(facts);
+    addFacts(sale, facts, ['sale'], (fact) => !(many && fact === FACTS.sale_price));
+    if (many) sale.note = COVERS_MORE_NOTE;
     sections.push(assessment, sale);
   }
   if (estimate) sections.push(estimateSection(estimate));
