@@ -57,7 +57,7 @@ async function newestYear(id) {
   return newest;
 }
 
-function fromRow(pin, { place, universe, home, condo, values, sale }) {
+function fromRow(pin, { place, universe, home, condo, values, sale: homeSale, landSale }) {
   const text = word(place?.prop_address_full);
   const parsed = text ? parse(text) : null;
   if (!parsed) return null;
@@ -125,6 +125,8 @@ function fromRow(pin, { place, universe, home, condo, values, sale }) {
       put(facts, 'assessed_building_value', positive(values[`${stage}_bldg`]));
     }
   }
+  // Vacant land has nothing but the land to sell.
+  const sale = kind === 'parcel' ? landSale : homeSale;
   if (sale) {
     facts.sale_price = positive(sale.sale_price);
     put(facts, 'sale_date', isoDate(sale.sale_date));
@@ -157,11 +159,16 @@ async function* build({ work }) {
     if (['board_tot', 'certified_tot', 'mailed_tot'].some((name) => positive(row[name])) && (!was || Number(row.year) > Number(was.year))) values.set(row.pin, row);
   }
   const sales = new Map();
+  const landSales = new Map();
+  const later = (map, row) => {
+    const was = map.get(row.pin);
+    if (!was || String(row.sale_date) > String(was.sale_date)) map.set(row.pin, row);
+  };
   for await (const row of cached(path.join(dir, 'sales.jsonl.gz'), () => socrataRows(DOMAIN, TABLES.sales, SALE_COLUMNS))) {
-    const was = sales.get(row.pin);
-    // A quit claim or the land alone isn't this home's sale.
-    const homeSale = isHomeSale(positive(row.sale_price), row.deed_type) && row.sale_type !== 'LAND';
-    if (homeSale && (!was || String(row.sale_date) > String(was.sale_date))) sales.set(row.pin, row);
+    // A quit claim isn't a sale, and the land alone isn't a home's sale.
+    if (!isHomeSale(positive(row.sale_price), row.deed_type)) continue;
+    later(landSales, row);
+    if (row.sale_type !== 'LAND') later(sales, row);
   }
   log(`${homes.size} homes, ${condos.size} condo parcels, ${universe.size} parcels, ${values.size} values, ${sales.size} sales`);
 
@@ -169,7 +176,7 @@ async function* build({ work }) {
   let noAddress = 0;
   for await (const place of cached(path.join(dir, 'addresses.jsonl.gz'), () => socrataRows(DOMAIN, TABLES.addresses, ADDRESS_COLUMNS, { where: `year=${addressYear}` }))) {
     const { pin } = place;
-    const record = fromRow(pin, { place, universe: universe.get(pin), home: homes.get(pin), condo: condos.get(pin), values: values.get(pin), sale: sales.get(pin) });
+    const record = fromRow(pin, { place, universe: universe.get(pin), home: homes.get(pin), condo: condos.get(pin), values: values.get(pin), sale: sales.get(pin), landSale: landSales.get(pin) });
     if (record) records.push(record);
     else noAddress += 1;
   }
