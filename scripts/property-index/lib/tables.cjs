@@ -66,9 +66,9 @@ const blank = (value) => value === undefined || value === '' || value === 'NULL'
  * @param {string} zip           The zip file
  * @param {string} member        The table inside it
  * @param {string[]} columns     What this connector reads; a missing one stops the build (the source changed)
- * @param {object} [options]     { delimiter: ',', quoted: true, encoding: 'latin1' }
+ * @param {object} [options]     { delimiter: ',', quoted: true, encoding: 'latin1', headerHas: text a header line holds, when a table opens with other lines }
  */
-async function* zipTable(zip, member, columns, { delimiter = ',', quoted = true, encoding = 'latin1' } = {}) {
+async function* zipTable(zip, member, columns, { delimiter = ',', quoted = true, encoding = 'latin1', headerHas = null } = {}) {
   const unzip = spawn('unzip', ['-p', zip, member], { stdio: ['ignore', 'pipe', 'ignore'] });
   const exited = new Promise((resolve, reject) => {
     unzip.on('error', reject);
@@ -78,6 +78,7 @@ async function* zipTable(zip, member, columns, { delimiter = ',', quoted = true,
   let positions = null;
   let rows = 0;
   for await (const line of streamLines(unzip.stdout)) {
+    if (!positions && headerHas && !line.includes(headerHas)) continue;
     const fields = quoted && line.includes('"') ? splitQuoted(line, delimiter) : line.split(delimiter);
     if (!positions) {
       const header = fields.map((name) => name.replace(/^\ufeff/, '').trim());
