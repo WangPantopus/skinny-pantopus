@@ -407,8 +407,11 @@ public final class PulsePostDetailViewModel {
             reconciled.isOn = response.liked
             state = .loaded(content.replacing(reactions: reconciled))
             postChanged()
-            // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
-            PulsePostsRefresh.notifyPostsDidChange()
+            // Lists showing this post (the Pulse feed) change its card, so it isn't left stale.
+            var change = PulsePostChange(postId: postId)
+            change.isGoing = response.liked
+            change.goingCount = response.likeCount
+            PulsePostsRefresh.notifyPostChanged(change)
         } catch {
             logger.warning("Reaction toggle failed: \(error)")
             toastMessage = "Couldn't update your reaction"
@@ -437,10 +440,13 @@ public final class PulsePostDetailViewModel {
                 PostsEndpoints.setReaction(id: postId, reaction: wanted),
                 as: PostLikeResponse.self
             )
-            showReactions(shown.confirmed(by: response))
+            let confirmed = shown.confirmed(by: response)
+            showReactions(confirmed)
             postChanged()
-            // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
-            PulsePostsRefresh.notifyPostsDidChange()
+            // Lists showing this post (the Pulse feed) change its card, so it isn't left stale.
+            var change = PulsePostChange(postId: postId)
+            change.reactions = confirmed
+            PulsePostsRefresh.notifyPostChanged(change)
         } catch {
             logger.warning("Reaction failed: \(error)")
             toastMessage = "Couldn't update your reaction"
@@ -519,8 +525,8 @@ public final class PulsePostDetailViewModel {
             } else {
                 await fetch(force: true)
             }
-            // Feed and My posts refetch so their comment counts match.
-            PulsePostsRefresh.notifyPostsDidChange()
+            // The feed's card and My posts take the new comment count.
+            PulsePostsRefresh.notifyPostChanged(commentCountChange)
         } catch {
             logger.warning("Comment delete failed: \(error)")
             toastMessage = "Couldn't delete the comment"
@@ -537,8 +543,10 @@ public final class PulsePostDetailViewModel {
             didDeletePost = true
             store.remove(endpoint)
             store.remove(conversationEndpoint)
-            // The feed and My posts still list the post until they refetch.
-            PulsePostsRefresh.notifyPostsDidChange()
+            // The feed drops its card; My posts refetches.
+            var change = PulsePostChange(postId: postId)
+            change.removed = true
+            PulsePostsRefresh.notifyPostChanged(change)
         } catch {
             logger.warning("Post delete failed: \(error)")
             toastMessage = "Couldn't delete the post"
@@ -573,8 +581,10 @@ public final class PulsePostDetailViewModel {
             )
             isSaved = response.saved
             postChanged()
-            // A stale card's next tap would undo this save: lists showing the post refetch.
-            PulsePostsRefresh.notifyPostsDidChange()
+            // A stale card's next tap would undo this save: lists showing the post change its card.
+            var change = PulsePostChange(postId: postId)
+            change.isSaved = response.saved
+            PulsePostsRefresh.notifyPostChanged(change)
         } catch {
             logger.warning("Save toggle failed: \(error)")
             toastMessage = "Couldn't update your bookmark"
@@ -635,7 +645,7 @@ public final class PulsePostDetailViewModel {
                 replyTarget = nil
             }
             await fetch(force: true)
-            PulsePostsRefresh.notifyPostsDidChange()
+            PulsePostsRefresh.notifyPostChanged(commentCountChange)
         } catch {
             logger.warning("Comment send failed: \(error)")
             // A refusal says why in the server's words (contract §0); the draft stays.
@@ -670,6 +680,13 @@ public final class PulsePostDetailViewModel {
         store.markStale(topics: [ScreenTopic.post(postId)])
     }
 
+    /// For lists showing the post: its comment count as just read.
+    private var commentCountChange: PulsePostChange {
+        var change = PulsePostChange(postId: postId)
+        if case let .loaded(content) = state { change.commentCount = content.post.commentCount }
+        return change
+    }
+
     private func fetch(force: Bool) async {
         do {
             try await store.show(
@@ -695,8 +712,12 @@ public final class PulsePostDetailViewModel {
             }
             commentsPending = false
             state = .error(message: friendlyMessage(for: error), retryable: isRetryable(error))
-            // Gone (deleted, or no longer visible to you): a list still showing its card refetches without it.
-            if !isRetryable(error) { PulsePostsRefresh.notifyPostsDidChange() }
+            // Gone (deleted, or no longer visible to you): a list still showing its card drops it.
+            if !isRetryable(error) {
+                var change = PulsePostChange(postId: postId)
+                change.removed = true
+                PulsePostsRefresh.notifyPostChanged(change)
+            }
         } catch {
             logger.warning("Post detail load failed: \(error)")
             if case .loaded = state {

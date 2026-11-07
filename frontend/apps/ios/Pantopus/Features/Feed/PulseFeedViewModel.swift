@@ -39,6 +39,8 @@ private struct PulsePostOverride {
     /// The asker kept the Ask open; `expiresAt` is its new end (Pulse S7).
     var keptOpen: Bool?
     var expiresAt: String?
+    /// Replies counted on the post's own page since this row was read.
+    var commentCount: Int?
 }
 
 /// One card's values after the viewer's own taps, ahead of the next read.
@@ -56,6 +58,7 @@ struct PulseCardLiveValues {
     var isSolved: Bool
     var expiresAt: String?
     var keptOpen: Bool
+    var commentCount: Int
     var pending: Set<PulsePendingAction>
 
     /// The row as the server sent it, before any tap.
@@ -69,6 +72,7 @@ struct PulseCardLiveValues {
         isSolved = post.state == "solved"
         expiresAt = post.expiresAt
         keptOpen = post.keptOpenAt != nil
+        commentCount = post.commentCount
         pending = []
     }
 }
@@ -294,8 +298,9 @@ public final class PulseFeedViewModel {
 
     /// Optimistic per-post state layered over `loadedItems`.
     private var overrides: [String: PulsePostOverride] = [:]
-    /// Posts removed client-side by *this* surface (deleted / dismissed).
-    /// Hides live in `moderation` instead — they are app-wide.
+    /// Posts removed client-side (deleted / dismissed), on every surface: a
+    /// deleted post is gone from Connections too, and Nearby keeps it gone
+    /// after a trip there. Hides live in `moderation` instead — they are app-wide.
     private var removedPostIds: Set<String> = []
     /// App-wide mute / hide layer shared by every feed surface, mirroring
     /// RN's `PantopusProvider` (`mutedEntities` + `hiddenPostIds`).
@@ -379,7 +384,6 @@ public final class PulseFeedViewModel {
         postsLoaded = false
         radiusSuggestion = nil
         overrides = [:]
-        removedPostIds = []
         state = .loading
         await fetch()
     }
@@ -655,8 +659,25 @@ public final class PulseFeedViewModel {
             value.isSaved = nil
             value.isReposted = nil
             value.shareCount = nil
+            value.commentCount = nil
             overrides[post.id] = value
         }
+    }
+
+    /// A post changed on its own page: its row takes the new values where it
+    /// is, or leaves; the rest of the list and the reader's place stay. A read
+    /// that started before the change can't put the old values back.
+    func apply(_ change: PulsePostChange) {
+        if change.removed { removedPostIds.insert(change.postId) }
+        var value = overrides[change.postId, default: PulsePostOverride()]
+        if let isGoing = change.isGoing { value.hasReacted = isGoing }
+        if let goingCount = change.goingCount { value.likeCount = goingCount }
+        if let reactions = change.reactions { value.reactions = reactions }
+        if let isSaved = change.isSaved { value.isSaved = isSaved }
+        if let commentCount = change.commentCount { value.commentCount = commentCount }
+        overrides[change.postId] = value
+        actionRevision += 1
+        rebuildLoadedState()
     }
 
     /// Records the external share once the system sheet was used —
@@ -685,6 +706,7 @@ public final class PulseFeedViewModel {
                 as: PostActionAckResponse.self
             )
             toastMessage = "Post hidden from your feed."
+            await refreshSavedOpeningPage()
         } catch {
             moderation.removeHiddenPost(postId)
             toastMessage = "Couldn't hide that post."
@@ -757,6 +779,7 @@ public final class PulseFeedViewModel {
                 as: PostActionAckResponse.self
             )
             toastMessage = "Muted \(name)."
+            await refreshSavedOpeningPage()
         } catch {
             moderation.removeMute(entityType: entityType, entityId: entityId)
             toastMessage = "Couldn't mute \(name)."
@@ -779,6 +802,7 @@ public final class PulseFeedViewModel {
                 as: PostActionAckResponse.self
             )
             toastMessage = "Muted \(label) on \(targetSurface.toggleLabel)."
+            await refreshSavedOpeningPage()
         } catch {
             moderation.removePostTypeMute(postType, surface: targetSurface.backendSurface)
             toastMessage = "Couldn't mute \(label)."
@@ -809,10 +833,11 @@ public final class PulseFeedViewModel {
         }
     }
 
-    /// After a topic mute or suggestion dismissal: saved pages still hold those posts, so
+    /// After a hide, a mute, a delete or a suggestion dismissal: saved pages still hold those posts, so
     /// they read again when next opened, and the page Pulse opens on (every
-    /// topic and type) is read again now, so a relaunch never shows the
-    /// muted posts from the saved copy. The rows on screen stay as they are.
+    /// topic and type) is read again now, so a relaunch never shows them
+    /// from the saved copy, offline included (the hide and mute lists are
+    /// this launch's only). The rows on screen stay as they are.
     private func refreshSavedOpeningPage() async {
         store.markStale(topics: [ScreenTopic.posts])
         guard let area = lastArea else { return }
@@ -904,6 +929,7 @@ public final class PulseFeedViewModel {
                 PostsEndpoints.deletePost(id: postId),
                 as: PostActionAckResponse.self
             )
+            await refreshSavedOpeningPage()
         } catch {
             removedPostIds.remove(postId)
             toastMessage = "Could not delete post."
@@ -965,13 +991,8 @@ public final class PulseFeedViewModel {
                     newPostsCount = fresh
                     return
                 }
-                // Nothing new: the rows on screen take the server's counts and
-                // edits in place, and the older pages below stay.
-                let refreshed = Dictionary(response.posts.map { ($0.id, $0) }) { first, _ in first }
-                reconcileActions(response.posts, revision: revision, confirmed: confirmed)
-                loadedItems = loadedItems.map { refreshed[$0.id] ?? $0 }
-                seedPostDetails(response.posts)
-                rebuildLoadedState()
+                // Nothing new: the rows on screen change in place.
+                updateRowsInPlace(from: response, revision: revision, confirmed: confirmed)
                 return
             }
             pendingFirstPage = nil
@@ -997,6 +1018,21 @@ public final class PulseFeedViewModel {
                 state = .error(message: message)
             }
         }
+    }
+
+    /// A quiet re-read that found nothing new while the reader is down the
+    /// list: the rows on screen take the server's counts and edits in place,
+    /// and the older pages below stay. A row above the fresh page's last one
+    /// that it no longer lists (deleted, hidden or moderated since) leaves.
+    private func updateRowsInPlace(from response: FeedResponse, revision: Int, confirmed: Bool) {
+        let refreshed = Dictionary(response.posts.map { ($0.id, $0) }) { first, _ in first }
+        reconcileActions(response.posts, revision: revision, confirmed: confirmed)
+        let lastListed = loadedItems.lastIndex { refreshed[$0.id] != nil } ?? -1
+        loadedItems = loadedItems.enumerated().compactMap { index, post in
+            refreshed[post.id] ?? (index < lastListed ? nil : post)
+        }
+        seedPostDetails(response.posts)
+        rebuildLoadedState()
     }
 
     private func makeQuery(area: FeedArea) -> FeedQuery {
@@ -1326,6 +1362,7 @@ public final class PulseFeedViewModel {
         live.isSolved = effectiveIsSolved(post)
         live.expiresAt = overrides[post.id]?.expiresAt ?? post.expiresAt
         live.keptOpen = post.keptOpenAt != nil || overrides[post.id]?.keptOpen == true
+        live.commentCount = overrides[post.id]?.commentCount ?? post.commentCount
         live.pending = pendingActions[post.id] ?? []
         return Self.card(for: post, viewerId: viewerId, surface: surface, live: live)
     }
@@ -1398,7 +1435,7 @@ public final class PulseFeedViewModel {
                 thumbnails: post.mediaThumbnails,
                 liveURLs: post.mediaLiveURLs
             ),
-            commentCount: post.commentCount,
+            commentCount: live.commentCount,
             actions: PulsePostActions(
                 isSeeded: post.isSeeded,
                 isSaved: live.isSaved,
