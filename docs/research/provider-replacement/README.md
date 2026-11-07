@@ -58,6 +58,7 @@ landing built work first and D9. Open, with recommendations: D6-D8, D10-D12 and 
 | [sourcing.md](sourcing.md) | National coverage, uncovered counties and prices, field fill by property type, the data source catalog | Choosing sources |
 | [county-survey.md](county-survey.md) | All 150 largest counties and the 100-county national sample | Checking a county |
 | [property-fields.md](property-fields.md) | The 46 Property details fields, measured by property type | Mapping fields |
+| [missing-facts.md](missing-facts.md) | Every home whose county record leaves a Property details field empty, counted by field, kind of home, state and county (the per-home list stays in private storage) | Filling missing facts |
 | [unit-facts.md](unit-facts.md) | Condo and apartment units: how listing sites get them, the floor-plan sheet design | Building unit facts |
 | [fill-routes.md](fill-routes.md) | Every route to fill records' missing facts, ranked by homes; what Zillow, Redfin and other listing sites and data vendors allow; what's filled | Filling bedrooms, baths and the rest |
 | [architecture.md](architecture.md) | The pieces, data flow, identity contract, fact precedence, postal adapter, mail, reliability, privacy, app compatibility | Designing or reviewing |

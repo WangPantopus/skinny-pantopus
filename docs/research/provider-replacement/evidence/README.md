@@ -18,6 +18,7 @@ These files contain aggregate observations and government-source links. No owner
 | [Statewide inventory](statewide-inventory.csv) | One row per state and territory (56): statewide file, publisher, link, facts, rights, how to get it, and the counties, people and homes it adds beyond storage on November 7, 2026. Built for [statewide-inventory.md](../statewide-inventory.md). |
 | [Property data sources](property-data-sources.csv) | The 58 county and state sources opened in the survey's second pass: link, contents and terms caveat. |
 | [Source register](source-register.csv) | Government field definitions, candidate providers, licensing pages and dated price references for the acquisition plan. These are leads; a source listing is not procurement or rights clearance. |
+| [Missing facts by county](missing-facts-by-county.csv) · [by state](missing-facts-by-state.csv) | The missing-facts ledger's counts: homes, homes lacking bedrooms or bathrooms, homes lacking a core fact, and homes missing each of the 40 counted Property details fields, for every county in storage and every state. Counts only; `scripts/property-index/gaps-report.cjs` regenerates them from private storage. |
 
 Run the offline reconciliation from the repository root with `python3 docs/research/provider-replacement/evidence/verify.py`. It checks all field totals, the FL/MA local rollups and geographic identifiers using the Python standard library.
 
