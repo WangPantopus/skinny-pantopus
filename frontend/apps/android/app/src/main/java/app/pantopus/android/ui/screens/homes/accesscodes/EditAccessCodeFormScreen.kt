@@ -165,7 +165,7 @@ internal fun EditAccessCodeFormContent(
             if (!state.isLoaded) {
                 AccessCodeLoading(error = state.loadError, onRetry = onRetry)
             } else {
-                if (state.awaitingCreateConfirmation) {
+                if (state.awaitingCreateConfirmation && !state.isSaving) {
                     Text(
                         "The code may already be saved. Your details are kept. Tap Save to check.",
                         style = PantopusTextStyle.caption,
