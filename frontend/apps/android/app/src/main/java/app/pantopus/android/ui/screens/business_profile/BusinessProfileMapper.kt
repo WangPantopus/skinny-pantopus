@@ -422,8 +422,9 @@ object BusinessProfileMapper {
                 location.city?.takeIf { it.isNotEmpty() },
                 location.state?.takeIf { it.isNotEmpty() },
             ).joinToString(", ")
-        val title = cityState.ifEmpty { location.address ?: "Service area" }
-        val detail = if (!location.address.isNullOrEmpty() && cityState.isNotEmpty()) location.address else null
+        val street = location.streetLine
+        val title = cityState.ifEmpty { street ?: "Service area" }
+        val detail = street.takeIf { cityState.isNotEmpty() }
         return BusinessServiceArea(
             title = title,
             detail = detail,

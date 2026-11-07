@@ -165,6 +165,17 @@ data class BusinessLocationDto(
      */
     val isApproximateHome: Boolean
         get() = isHomeBased == true || (locationType == "home_based_private" && showExactLocation != true)
+
+    /**
+     * The street line with the suite, as the owner typed it ("805 Broadway Street, Suite 500"), or null when
+     * there's no street (a private home-based business's public location has neither).
+     */
+    val streetLine: String?
+        get() =
+            listOfNotNull(address?.trim(), address2?.trim())
+                .filter { it.isNotEmpty() }
+                .joinToString(", ")
+                .ifEmpty { null }
 }
 
 /**
