@@ -48,6 +48,13 @@ class FeedModerationStore
         private val _hiddenPostIds = MutableStateFlow<Set<String>>(emptySet())
         val hiddenPostIds: StateFlow<Set<String>> = _hiddenPostIds.asStateFlow()
 
+        /**
+         * People the viewer blocked here (a profile, a chat, a plan, a card): their posts leave every feed at once,
+         * before the server leaves them out of later reads.
+         */
+        private val _blockedUserIds = MutableStateFlow<Set<String>>(emptySet())
+        val blockedUserIds: StateFlow<Set<String>> = _blockedUserIds.asStateFlow()
+
         /** Shipping category mutes retain their feed surface; preferences can undo them across all feeds. */
         private var mutedPostTypes: Map<String, Set<String>> = emptyMap()
 
@@ -78,7 +85,7 @@ class FeedModerationStore
         fun isHidden(postId: String): Boolean = postId in _hiddenPostIds.value
 
         /**
-         * Whether a feed row survives the mute/hide layer. Business authorship
+         * Whether a feed row survives the mute/hide/block layer. Business authorship
          * wins when both ids are present — that is the identity the mute call
          * sends.
          */
@@ -89,7 +96,7 @@ class FeedModerationStore
         ): Boolean {
             if (isHidden(postId)) return false
             if (businessAuthorId != null && isMuted(FeedMuteEntityType.Business, businessAuthorId)) return false
-            if (userId != null && isMuted(FeedMuteEntityType.User, userId)) return false
+            if (userId != null && (userId in _blockedUserIds.value || isMuted(FeedMuteEntityType.User, userId))) return false
             return true
         }
 
@@ -115,6 +122,14 @@ class FeedModerationStore
             _hiddenPostIds.value = _hiddenPostIds.value - postId
         }
 
+        fun addBlockedUser(userId: String) {
+            _blockedUserIds.value = _blockedUserIds.value + userId
+        }
+
+        fun removeBlockedUser(userId: String) {
+            _blockedUserIds.value = _blockedUserIds.value - userId
+        }
+
         /**
          * Drop everything — called on sign-out so one account's mutes never
          * filter another's feed.
@@ -122,6 +137,7 @@ class FeedModerationStore
         fun clear() {
             _mutedEntities.value = emptySet()
             _hiddenPostIds.value = emptySet()
+            _blockedUserIds.value = emptySet()
             mutedPostTypes = emptyMap()
         }
     }

@@ -269,9 +269,10 @@ fun FeedScreen(
         onPauseOrDispose { }
     }
     // AI assistant phase 2: Nearby posts on screen move the "since you last looked" marker (the VM keeps it to every
-    // 5 minutes), on entry, on every return, and when the posts first show.
+    // 5 minutes, and to posts a read brought, never a stored copy), on entry, on every return, and when a read lands.
+    val currentReads by viewModel.currentReads.collectAsStateWithLifecycle()
     val nearbyPostsShown = activeSurface == FeedSurface.Pulse && (state is PulseFeedUiState.Loaded || state is PulseFeedUiState.Empty)
-    LifecycleResumeEffect(nearbyPostsShown) {
+    LifecycleResumeEffect(nearbyPostsShown, currentReads) {
         if (nearbyPostsShown) viewModel.markNearbySeen()
         onPauseOrDispose { }
     }
