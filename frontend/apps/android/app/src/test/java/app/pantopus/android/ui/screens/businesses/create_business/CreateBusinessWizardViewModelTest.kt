@@ -72,10 +72,13 @@ class CreateBusinessWizardViewModelTest {
         val vm = makeVm()
         vm.setSearchText("tutor")
         val hits = vm.state.value.searchHits
-        assertEquals(3, hits.size)
         assertEquals("tutoring-core", hits.first().id)
         assertEquals(BusinessCategory.Personal, hits.first().category)
-        assertTrue(hits.all { it.label.lowercase().contains("tutor") })
+        assertTrue(
+            hits.all { hit -> hit.label.lowercase().contains("tutor") || hit.keywords.any { it.contains("tutor") } },
+        )
+        vm.setSearchText("a")
+        assertEquals(CreateBusinessCategoryCatalog.MAX_RESULTS, vm.state.value.searchHits.size)
     }
 
     @Test
@@ -92,6 +95,7 @@ class CreateBusinessWizardViewModelTest {
         val hit = vm.state.value.searchHits.first()
         vm.selectSearchHit(hit)
         assertEquals(hit.category, vm.state.value.selectedCategory)
+        assertEquals("Tutoring", vm.state.value.categoryName)
         assertEquals("", vm.state.value.searchText)
         assertFalse(vm.state.value.isSearchActive)
     }
@@ -200,26 +204,29 @@ class CreateBusinessWizardViewModelTest {
     }
 
     @Test
-    fun custom_category_submit_stays_on_pick_category_with_backend_error() =
+    fun custom_category_from_search_becomes_the_category() =
         runTest {
             val vm = makeVm()
             vm.setSearchText("alpaca grooming")
-            vm.submitCustomCategory()
-            assertEquals(BusinessCategory.Home, vm.state.value.selectedCategory)
-            assertEquals(CreateBusinessStep.PickCategory, vm.state.value.currentStep)
-            assertEquals("alpaca grooming", vm.state.value.searchText)
-            assertEquals(
-                "Custom categories aren't available yet. Pick a listed category instead.",
-                vm.state.value.submitError,
-            )
-            assertFalse(vm.state.value.isSubmittingCustom)
+            assertFalse("Continue waits for a pick while searching.", vm.chrome.primaryCtaEnabled)
+            assertTrue(vm.state.value.offersCustomCategory)
+            vm.useSearchTextAsCustomCategory()
+            assertEquals(BusinessCategory.Other, vm.state.value.selectedCategory)
+            assertEquals("Alpaca grooming", vm.state.value.customCategory)
+            assertEquals("Alpaca grooming", vm.state.value.categoryName)
+            assertEquals("", vm.state.value.searchText)
+            assertNull(vm.state.value.submitError)
+            assertTrue(vm.chrome.primaryCtaEnabled)
+            vm.onPrimary()
+            assertEquals(CreateBusinessStep.LegalInfo, vm.state.value.currentStep)
         }
 
     @Test
     fun custom_category_submit_noop_on_empty_query() {
         val vm = makeVm()
         vm.setSearchText("   ")
-        vm.submitCustomCategory()
+        vm.useSearchTextAsCustomCategory()
+        assertEquals(BusinessCategory.Home, vm.state.value.selectedCategory)
         assertEquals(CreateBusinessStep.PickCategory, vm.state.value.currentStep)
     }
 

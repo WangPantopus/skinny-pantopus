@@ -13,7 +13,6 @@ import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.ui.screens.businesses.create_business.steps.ConfirmStep
 import app.pantopus.android.ui.screens.businesses.create_business.steps.LegalInfoStep
-import app.pantopus.android.ui.screens.businesses.create_business.steps.PickCategorySearchStep
 import app.pantopus.android.ui.screens.businesses.create_business.steps.PickCategoryStep
 import app.pantopus.android.ui.screens.businesses.create_business.steps.ProfileStep
 import app.pantopus.android.ui.screens.businesses.create_business.steps.ProfileStepCallbacks
@@ -53,22 +52,16 @@ fun CreateBusinessWizardScreen(
         handleSystemBack = true,
     ) {
         when (state.currentStep) {
-            CreateBusinessStep.PickCategory -> {
-                if (state.isSearchActive) {
-                    PickCategorySearchStep(
-                        state = state,
-                        onSearchTextChanged = viewModel::setSearchText,
-                        onPickHit = viewModel::selectSearchHit,
-                        onSubmitCustom = viewModel::submitCustomCategory,
-                    )
-                } else {
-                    PickCategoryStep(
-                        state = state,
-                        onSearchTextChanged = viewModel::setSearchText,
-                        onPickCategory = viewModel::selectCategory,
-                    )
-                }
-            }
+            // One step for browsing and searching, so the search field stays mounted while typing.
+            CreateBusinessStep.PickCategory ->
+                PickCategoryStep(
+                    state = state,
+                    onSearchTextChanged = viewModel::setSearchText,
+                    onPickCategory = viewModel::selectCategory,
+                    onPickHit = viewModel::selectSearchHit,
+                    onUseCustomCategory = viewModel::useSearchTextAsCustomCategory,
+                    onCustomCategoryChanged = viewModel::setCustomCategory,
+                )
             CreateBusinessStep.LegalInfo ->
                 LegalInfoStep(
                     state = state,

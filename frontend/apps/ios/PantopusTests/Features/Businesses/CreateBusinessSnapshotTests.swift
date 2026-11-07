@@ -30,7 +30,7 @@ final class CreateBusinessSnapshotTests: XCTestCase {
         let vm = CreateBusinessWizardViewModel()
         vm.searchText = "tutor"
         XCTAssertTrue(vm.isSearchActive)
-        XCTAssertEqual(vm.searchHits.count, 3)
+        XCTAssertEqual(vm.searchHits.first?.id, "tutoring-core")
         assertRenders(PickCategorySearchStep(viewModel: vm))
     }
 

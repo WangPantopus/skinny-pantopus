@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -39,8 +40,6 @@ import androidx.compose.ui.unit.dp
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.businesses.create_business.CategorySearchHit
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessUiState
-import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
-import app.pantopus.android.ui.screens.shared.wizard.blocks.SubcopyBlock
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevation
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -51,33 +50,25 @@ import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.pantopusShadow
 
 /**
- * A12.10 Frame 2 (search) — active-typeahead variant of the
- * pick-category step. The chip + headline are shared with Frame 1, but
- * the body swaps to a focused search field + ranked-results header +
- * up to 3 hits with the matched substring highlighted + a dashed-violet
- * "Add as custom category" fallback row.
+ * A12.10 Frame 2 (search) — the results [PickCategoryStep] shows under its
+ * search field while a search is typed: a ranked-results header + the listed
+ * categories that match, with the matched substring highlighted, + a
+ * dashed-violet "Add as custom category" row that makes the search text the
+ * owner's own category (unless a result already has that exact name).
  */
 @Composable
 fun PickCategorySearchStep(
     state: CreateBusinessUiState,
-    onSearchTextChanged: (String) -> Unit,
+    onBrowseAll: () -> Unit,
     onPickHit: (CategorySearchHit) -> Unit,
-    onSubmitCustom: () -> Unit,
+    onUseCustomCategory: () -> Unit,
 ) {
     val query = state.searchText.trim()
-    BusinessIdentityChip()
-
-    HeadlineBlock("What does your business do?")
-    SubcopyBlock(
-        "Pick the closest fit — this shapes your listings, tax setup, and the badges " +
-            "customers see.",
-    )
-
-    BusinessSearchField(value = state.searchText, focused = true, onChange = onSearchTextChanged)
 
     SearchResultsHeader(
         matchCount = state.searchHits.size,
         query = query,
+        onBrowseAll = onBrowseAll,
     )
 
     // While typing, the first tap on a result only puts the keyboard away.
@@ -86,37 +77,14 @@ fun PickCategorySearchStep(
             SearchResultRow(
                 hit = hit,
                 query = query,
-                selected = state.selectedCategory == hit.category,
+                selected = state.isPicked(hit),
                 onPick = { onPickHit(hit) },
             )
         }
     }
 
-    if (state.searchHits.isEmpty() && query.isNotEmpty()) {
-        // No-match fallback from the design pack. Submitting is still
-        // logged-only — there is no POST /custom-categories to invent — so
-        // the row's subcopy promises exactly what happens.
-        AddCustomCategoryRow(
-            label = query,
-            isSubmitting = state.isSubmittingCustom,
-            onTap = onSubmitCustom,
-        )
-    } else {
-        Text(
-            text = "Custom categories aren't available yet. Pick a listed category above.",
-            style = PantopusTextStyle.caption,
-            color = PantopusColors.appTextSecondary,
-            modifier = Modifier.testTag("createBusinessCustomCategoryBlocked"),
-        )
-    }
-
-    state.submitError?.let { message ->
-        Text(
-            text = message,
-            style = PantopusTextStyle.caption,
-            color = PantopusColors.error,
-            modifier = Modifier.testTag("createBusinessSubmitError"),
-        )
+    if (state.offersCustomCategory) {
+        AddCustomCategoryRow(label = query, onTap = onUseCustomCategory)
     }
 }
 
@@ -126,6 +94,7 @@ fun PickCategorySearchStep(
 private fun SearchResultsHeader(
     matchCount: Int,
     query: String,
+    onBrowseAll: () -> Unit,
 ) {
     Row(
         modifier =
@@ -147,7 +116,7 @@ private fun SearchResultsHeader(
             color = PantopusColors.business,
             modifier =
                 Modifier
-                    .clickable { /* clears on next user gesture */ }
+                    .clickable(onClick = onBrowseAll)
                     .testTag("createBusinessBrowseAll"),
         )
     }
@@ -197,7 +166,8 @@ private fun SearchResultRow(
                     onClick = onPick,
                 ).semantics {
                     role = Role.Button
-                    contentDescription = "${hit.label}, in ${hit.category.label}"
+                    contentDescription =
+                        if (hit.isTile) "${hit.label}. ${hit.category.subcopy}" else "${hit.label}, in ${hit.category.label}"
                     this.selected = selected
                 }.padding(Spacing.s3)
                 .testTag("createBusinessSearchResult_${hit.id}"),
@@ -229,10 +199,15 @@ private fun SearchResultRow(
             )
             Text(
                 text =
-                    buildAnnotatedString {
-                        append("in ")
-                        withStyle(SpanStyle(color = PantopusColors.appTextStrong)) {
-                            append(hit.category.label)
+                    if (hit.isTile) {
+                        // A tile's own row: "in Home services" would repeat it.
+                        AnnotatedString(hit.category.subcopy)
+                    } else {
+                        buildAnnotatedString {
+                            append("in ")
+                            withStyle(SpanStyle(color = PantopusColors.appTextStrong)) {
+                                append(hit.category.label)
+                            }
                         }
                     },
                 style = PantopusTextStyle.caption,
@@ -288,20 +263,21 @@ private fun highlightedText(
 
 // MARK: - Dashed-violet "Add as custom category" fallback row
 
+/** Subline of the custom-category row. Matches iOS `AddCustomCategoryRow.subcopy`. */
+private const val CUSTOM_CATEGORY_SUBCOPY = "It shows on your business page. You can change it later."
+
 /**
- * Spoken label for the fallback row. Matches iOS
+ * Spoken label for the custom-category row. Matches iOS
  * `AddCustomCategoryRow.accessibilityLabel`.
  */
-private fun customCategoryAccessibilityLabel(label: String): String =
-    "Add $label as a custom category. " +
-        "We'll pass the request on — custom categories aren't live yet."
+private fun customCategoryAccessibilityLabel(label: String): String = "Add $label as a custom category. $CUSTOM_CATEGORY_SUBCOPY"
 
 @Composable
 private fun AddCustomCategoryRow(
     label: String,
-    isSubmitting: Boolean,
     onTap: () -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
     val shape = RoundedCornerShape(Radii.lg)
     Box(
         modifier =
@@ -312,8 +288,11 @@ private fun AddCustomCategoryRow(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    enabled = !isSubmitting,
-                    onClick = onTap,
+                    onClick = {
+                        // The search is done once its text is the category.
+                        focusManager.clearFocus()
+                        onTap()
+                    },
                 ).semantics {
                     role = Role.Button
                     contentDescription = customCategoryAccessibilityLabel(label)
@@ -372,7 +351,7 @@ private fun AddCustomCategoryRow(
                     color = PantopusColors.businessDark,
                 )
                 Text(
-                    text = "We'll pass the request on — custom categories aren't live yet.",
+                    text = CUSTOM_CATEGORY_SUBCOPY,
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )
