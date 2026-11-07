@@ -620,11 +620,15 @@ fun LivePhotoTile(
             Modifier
         } else {
             Modifier.pointerInput(item.id) {
+                // The lift that ends a hold isn't a tap: nothing opens, as on iOS and the web.
+                var held = false
                 detectTapGestures(
-                    onTap = { onTap?.invoke() },
+                    onTap = { if (!held) onTap?.invoke() },
                     onPress = {
+                        held = false
                         val releasedEarly = withTimeoutOrNull(300L) { tryAwaitRelease() }
                         if (releasedEarly == null) {
+                            held = true
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             playing = true
                             tryAwaitRelease()

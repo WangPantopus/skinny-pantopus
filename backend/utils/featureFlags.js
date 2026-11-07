@@ -37,6 +37,7 @@ const LAUNCH_FEATURE_KEYS = [
   'mailbox', // 10. The mailbox: received mail, Mail Day, vault, vacation hold, Stamps (2026-10-09)
   'pulse_redesign', // 11. The Pulse redesign (PR 625), paused for launch (2026-10-15); the October 13 Pulse stays
   'holiday_cards', // 12. Christmas cards sent through Mail (2026-10-30); needs `mailbox` on too
+  'card_table', // 13. The Christmas card on the table: full screen, sharing, sending by link, public card pages (2026-11-06); needs `mailbox` and `holiday_cards` on too
 ];
 
 function isLaunchFeatureEnabled(key) {

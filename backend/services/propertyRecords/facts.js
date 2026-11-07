@@ -21,6 +21,7 @@ const FACTS = {
   usable_sqft: { section: 'building', label: 'Living or usable area', format: 'sqft', scope: 'unit' },
   gross_sqft: { section: 'building', label: 'Gross area', format: 'sqft', scope: 'building' },
   ground_floor_sqft: { section: 'building', label: 'Ground floor area', format: 'sqft', scope: 'unit' },
+  second_floor_sqft: { section: 'building', label: 'Second floor area', format: 'sqft', scope: 'unit' },
   stories: { section: 'building', label: 'Stories', format: 'stories', scope: 'building' },
   rooms: { section: 'building', label: 'Total rooms', format: 'count', scope: 'unit' },
   bedrooms: { section: 'building', label: 'Bedrooms', format: 'count', scope: 'unit' },
@@ -60,6 +61,7 @@ const FACTS = {
 
   // Parking
   garage: { section: 'parking', label: 'Garage', format: 'text', scope: 'unit' },
+  parking_type: { section: 'parking', label: 'Parking type', format: 'text', scope: 'unit' },
   garage_sqft: { section: 'parking', label: 'Parking area', format: 'sqft', scope: 'unit' },
   carport_sqft: { section: 'parking', label: 'Carport area', format: 'sqft', scope: 'unit' },
   parking_spaces: { section: 'parking', label: 'Parking spaces', format: 'count', scope: 'unit' },
@@ -67,10 +69,13 @@ const FACTS = {
   // Lot
   lot_acres: { section: 'lot', label: 'Lot size', format: 'acres', scope: 'parcel' },
   lot_sqft: { section: 'lot', label: 'Lot area', format: 'sqft', scope: 'parcel' },
+  lot_number: { section: 'lot', label: 'Lot number', format: 'code', scope: 'parcel' },
   zoning: { section: 'lot', label: 'Zoning', format: 'code', scope: 'parcel' },
   pool: { section: 'lot', label: 'Pool', format: 'text', scope: 'unit' },
 
   // Parcel and records
+  property_type: { section: 'records', label: 'Property type', format: 'text', scope: 'parcel' },
+  property_subtype: { section: 'records', label: 'Property subtype', format: 'text', scope: 'parcel' },
   address_on_record: { section: 'records', label: 'Address on record', format: 'raw', scope: 'unit' },
   parcel_number: { section: 'records', label: 'Parcel number (APN)', format: 'code', scope: 'parcel' },
   county: { section: 'records', label: 'County', format: 'name', scope: 'parcel' },

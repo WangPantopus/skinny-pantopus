@@ -8,9 +8,10 @@
 //  the top of the feed. It also comes back at the top and the
 //  end of the page, on another tab or page, and when the page that sent it
 //  away closes or another screen opens over it. Only pages that run under the bar send
-//  it away: a chat's thread ends above its composer, and a page with its own
-//  bar at the bottom (a letter's Counter, Vault and Shred) would leave that
-//  bar over an empty band, so both keep it. `RootTabBar` keeps it in place
+//  it away: a chat beside the list has its thread end above its composer, and a
+//  page with its own bar at the bottom (a letter's Counter, Vault and Shred)
+//  would leave that bar over an empty band, so both keep it. A chat that is the
+//  whole screen has no bar at all (`hidesTabBar`). `RootTabBar` keeps it in place
 //  while VoiceOver or Switch Control is on.
 //
 

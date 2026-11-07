@@ -20,6 +20,13 @@ public struct WalletActivityListView: View {
     }
 
     public var body: some View {
+        // Opened straight from a saved stack, this asks as Wallet does.
+        SensitiveScreenGuard(reason: "Verify to access your Wallet", onRejected: onBack) {
+            guardedBody
+        }
+    }
+
+    private var guardedBody: some View {
         VStack(spacing: Spacing.s0) {
             topBar
             content

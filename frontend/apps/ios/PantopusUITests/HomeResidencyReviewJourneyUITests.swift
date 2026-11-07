@@ -291,7 +291,7 @@ private extension HomeResidencyReviewJourneyUITests {
             let buttons = app.buttons.matching(NSPredicate(format: "label == %@", "Not Now"))
             guard buttons.firstMatch.waitForExistence(timeout: 3) else { break }
             let password = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier == %@", "Not Now", "")).firstMatch
-            let target = password.exists ? password : element("appLockSetupPromptDismiss")
+            let target = password
             let frame = target.frame
             XCTAssertFalse(frame.isEmpty)
             app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()

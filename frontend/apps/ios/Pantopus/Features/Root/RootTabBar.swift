@@ -460,23 +460,3 @@ private struct RootTabBadge: View {
             .accessibilityHidden(true)
     }
 }
-
-extension View {
-    /// Hides the bottom bar while this screen shows: the system tab bar, and
-    /// the drawn bar while the Mailbox is on (`RootTabBar`).
-    func hidesTabBar() -> some View {
-        modifier(HidesTabBar())
-    }
-}
-
-private struct HidesTabBar: ViewModifier {
-    @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
-    @State private var token = UUID()
-
-    func body(content: Content) -> some View {
-        content
-            .toolbar(.hidden, for: .tabBar)
-            .onAppear { rootTabs?.barHiders.insert(token) }
-            .onDisappear { rootTabs?.barHiders.remove(token) }
-    }
-}

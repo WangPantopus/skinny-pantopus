@@ -253,7 +253,7 @@ final class HomeAddressEntryJourneyUITests: XCTestCase {
             let passwordDismiss = app.buttons.matching(NSPredicate(
                 format: "label == %@ AND identifier == %@", "Not Now", ""
             )).firstMatch
-            let topmost = passwordDismiss.exists ? passwordDismiss : app.buttons["appLockSetupPromptDismiss"].firstMatch
+            let topmost = passwordDismiss
             // The password extension reports non-hittable while covering
             // the Face ID offer. Use this current remote button's own frame.
             let frame = topmost.frame

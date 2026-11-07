@@ -53,15 +53,33 @@ struct NamePromptModifier: ViewModifier {
               response.user.accountType != "business",
               NamePromptViewModel.isMissingName(response.user)
         else { return }
-        // Let a link opened before sign-in land first, and wait until nothing
-        // covers the shell (the same gates as the app-lock offer).
-        while AppLockSetupPromptModifier.isDeepLinkInFlight || AppLockSetupPromptModifier.isShellCovered {
+        // Let a link opened before sign-in land first: showing this at the same
+        // time made UIKit refuse the destination's sheet, so the link was lost.
+        // And wait until nothing covers the shell, where UIKit would refuse this.
+        while Self.isDeepLinkInFlight || Self.isShellCovered {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
         }
         // Asked once: remembered as soon as it shows.
         NamePromptMemory.markAsked(userId)
         model = NamePromptViewModel(profile: response.user)
+    }
+
+    /// A link is stashed for replay, waiting for its tab, or still loading.
+    @MainActor
+    private static var isDeepLinkInFlight: Bool {
+        DeepLinkRouter.shared.pending != nil
+            || DeepLinkRouter.shared.activeContentArrival != nil
+            || PendingDeepLinkStore.peek() != nil
+    }
+
+    /// Something is presented over the shell: a destination's sheet, the
+    /// login cover on its way out, or a system prompt.
+    @MainActor
+    private static var isShellCovered: Bool {
+        let scene = UIApplication.shared.connectedScenes
+            .first { $0.activationState == .foregroundActive } as? UIWindowScene
+        return scene?.keyWindow?.rootViewController?.presentedViewController != nil
     }
 }
 

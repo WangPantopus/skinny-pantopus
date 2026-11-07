@@ -14,7 +14,11 @@ import androidx.fragment.app.FragmentActivity
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,38 +54,14 @@ class AppLockManager
         @ApplicationContext private val context: Context,
     ) {
         /**
-         * Per-user answer to the one-time post-login "turn on app lock?"
-         * offer. Persisted so the offer is made exactly once per account,
-         * never on every launch. Mirrors RN's `AppLockSetupPromptState`
-         * (`src/lib/biometrics.ts:10`) and iOS `AppLockSetupPromptState`.
+         * The app came back from the background, and how long it was gone.
+         * Sensitive screens read it: they ask again after a long enough
+         * absence. Mirrors iOS `AppForegroundReturn`.
          */
-        enum class SetupPromptState(val wireValue: String) {
-            /** Never answered — the prompt is still owed. */
-            Pending("pending"),
-
-            /** The user said "Not Now" (or the attempt failed) — never ask again. */
-            Declined("declined"),
-
-            /** App lock is on; nothing left to offer. */
-            Enabled("enabled"),
-            ;
-
-            companion object {
-                fun fromWire(value: String?): SetupPromptState = entries.firstOrNull { it.wireValue == value } ?: Pending
-            }
-        }
-
-        /**
-         * Which surface asked to enable app lock. Only the post-login offer
-         * records a [SetupPromptState.Declined] answer when the user backs
-         * out — turning the preference on from Settings and cancelling the
-         * biometric sheet must not burn the one-time prompt. Mirrors RN's
-         * `enableAppLock(source)` (`src/contexts/AppLockContext.tsx:118`).
-         */
-        enum class EnableSource {
-            Settings,
-            PostLoginPrompt,
-        }
+        data class ForegroundReturn(
+            val count: Long,
+            val awayForMs: Long,
+        )
 
         enum class Capability(val wireValue: String) {
             Available("available"),
@@ -177,14 +157,10 @@ class AppLockManager
         private val _lastError = MutableStateFlow<String?>(null)
         val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
-        /**
-         * Per-user answer to the one-time post-login offer. `null` while
-         * signed out. Hydrated by [configure] from the same per-user prefs
-         * namespace as the preference itself. Mirrors RN's
-         * `AppLockContext.setupPromptState`.
-         */
-        private val _setupPromptState = MutableStateFlow<SetupPromptState?>(null)
-        val setupPromptState: StateFlow<SetupPromptState?> = _setupPromptState.asStateFlow()
+        private val _foregroundReturn = MutableStateFlow<ForegroundReturn?>(null)
+
+        /** The last time the app came back from the background. */
+        val foregroundReturn: StateFlow<ForegroundReturn?> = _foregroundReturn.asStateFlow()
 
         private var userId: String? = null
         private var identityGeneration: Long = 0
@@ -193,19 +169,26 @@ class AppLockManager
 
         /**
          * In-memory (never persisted, exactly like RN's `useRef`) timestamp of
-         * the last *successful* sensitive-action check. Feeds
-         * [isWithinSensitiveGracePeriod].
+         * the last *successful* sensitive-action check, moved up when someone
+         * leaves a sensitive screen. Feeds [isWithinSensitiveGracePeriod].
          */
         private var lastSensitiveAuthAtMs: Long? = null
 
-        private val _sensitiveActionVerifiedAt = MutableStateFlow<Long?>(null)
+        /**
+         * When someone last cancelled a sensitive-screen check. Cancelling on a
+         * letter drops back to the Mailbox, whose own guard must not ask again
+         * at once.
+         */
+        private var lastSensitiveCancelAtMs: Long? = null
 
         /**
-         * When a sensitive action was last verified on this account. The one-time app-lock offer
-         * follows the first one: right after sign-in it was one more prompt on top of the
-         * notification permission.
+         * The sensitive-screen check under way: guards that ask while it is up
+         * share it, so two of them never raise two prompts. It belongs to no
+         * screen: a link can replace the screen that started it, and the prompt
+         * stays up for the one that took its place.
          */
-        val sensitiveActionVerifiedAt: StateFlow<Long?> = _sensitiveActionVerifiedAt.asStateFlow()
+        private var sensitiveScreenCheck: Deferred<SensitiveActionOutcome>? = null
+        private val checkScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
 
         /**
          * Set by [appDidEnterBackground], consumed by [appDidBecomeActive], so a
@@ -236,7 +219,8 @@ class AppLockManager
             if (this.userId == userId) return
             identityGeneration += 1
             lastSensitiveAuthAtMs = null
-            _sensitiveActionVerifiedAt.value = null
+            lastSensitiveCancelAtMs = null
+            sensitiveScreenCheck = null
             isPrompting = false
             backgroundedWhilePrompting = false
             this.userId = userId
@@ -245,41 +229,29 @@ class AppLockManager
             if (userId == null) {
                 _preferenceEnabled.value = false
                 _isLocked.value = false
-                _setupPromptState.value = null
                 return
             }
-            _preferenceEnabled.value = prefs.getBoolean(key("enabled", userId), false)
-            _setupPromptState.value =
-                SetupPromptState.fromWire(prefs.getString(key("setupPrompt", userId), null))
+            forgetRetiredLockSettings(userId)
+            _preferenceEnabled.value = prefs.getBoolean(key(ON_LEAVE, userId), false)
             refreshCapability()
             autoDisableForUnavailableCapability()
-            // RN's "sync setup prompt state with preferences" effect
-            // (`AppLockContext.tsx:395`): a user who already turned the lock
-            // on is never offered it again.
-            if (_preferenceEnabled.value && _setupPromptState.value == SetupPromptState.Pending) {
-                persistSetupPromptState(SetupPromptState.Enabled)
-            }
             if (_preferenceEnabled.value) {
                 _isLocked.value = true
             }
         }
 
         /**
-         * Record the user's answer to the one-time post-login offer. No-op
-         * while signed out (there is no per-user namespace to write to).
+         * The old switch and its one-time offer said "sensitive actions" and
+         * locked the whole app (founder, 2026-11-06). Sensitive screens now
+         * always ask, so nobody keeps the whole-app lock from that promise: its
+         * settings are dropped, and only the renamed switch turns it on.
          */
-        private fun persistSetupPromptState(next: SetupPromptState) {
-            val id = userId ?: return
-            prefs.edit().putString(key("setupPrompt", id), next.wireValue).apply()
-            _setupPromptState.value = next
-        }
-
-        /**
-         * "Not Now" on the post-login offer — burn the prompt for this user.
-         * Mirrors RN `AppLockContext.dismissSetupPrompt`.
-         */
-        fun dismissSetupPrompt() {
-            persistSetupPromptState(SetupPromptState.Declined)
+        private fun forgetRetiredLockSettings(id: String) {
+            val retired = listOf(key("enabled", id), key("setupPrompt", id)).filter(prefs::contains)
+            if (retired.isEmpty()) return
+            val editor = prefs.edit()
+            retired.forEach(editor::remove)
+            editor.apply()
         }
 
         /**
@@ -317,82 +289,67 @@ class AppLockManager
             if (_preferenceEnabled.value) {
                 _isLocked.value = true
                 attemptedCurrentLock = false
+                _lastError.value = null
             }
         }
 
         fun appDidBecomeActive() {
             if (!didEnterBackground) return
             didEnterBackground = false
-            if (userId == null || !_preferenceEnabled.value) return
             val id = userId ?: return
             val backgroundAt = prefs.getLong(key("backgroundAt", id), 0L)
             val elapsedMs =
                 if (backgroundAt > 0L) {
-                    (System.currentTimeMillis() - backgroundAt).coerceAtLeast(0L).toInt()
+                    (System.currentTimeMillis() - backgroundAt).coerceAtLeast(0L)
                 } else {
-                    0
+                    0L
                 }
+            _foregroundReturn.value = ForegroundReturn((_foregroundReturn.value?.count ?: 0L) + 1, elapsedMs)
+            if (!_preferenceEnabled.value) return
             if (elapsedMs >= lockAfterMs) {
                 _isLocked.value = true
             }
         }
 
         /**
-         * @param source [EnableSource.PostLoginPrompt] records a
-         *   [SetupPromptState.Declined] answer on every non-success path so
-         *   the one-time offer is never repeated — RN's
-         *   `enableAppLock('post_login_prompt')`
-         *   (`AppLockContext.tsx:118-198`). [EnableSource.Settings] (the
-         *   default) leaves the prompt state untouched on failure.
+         * Turns the whole-app lock (the "Lock Pantopus when I leave the app"
+         * switch) on or off. Sensitive screens ask either way.
          */
         suspend fun setEnabled(
             enabled: Boolean,
             activity: FragmentActivity,
-            source: EnableSource = EnableSource.Settings,
         ): Boolean {
             val id = userId ?: return false
             if (!enabled) {
-                prefs.edit().putBoolean(key("enabled", id), false).apply()
+                prefs.edit().putBoolean(key(ON_LEAVE, id), false).apply()
                 _preferenceEnabled.value = false
                 _isLocked.value = false
                 _lastError.value = null
                 return true
             }
-            return enableLock(id, activity, source)
+            return enableLock(id, activity)
         }
 
         private suspend fun enableLock(
             id: String,
             activity: FragmentActivity,
-            source: EnableSource,
         ): Boolean {
             refreshCapability()
             if (_capability.value != Capability.Available) {
                 autoDisableForUnavailableCapability()
-                if (source == EnableSource.PostLoginPrompt) {
-                    persistSetupPromptState(SetupPromptState.Declined)
-                }
                 return false
             }
             val generation = identityGeneration
             val succeeded = authenticate(activity, reason = "Turn on app lock for Pantopus")
-            if (generation != identityGeneration) return false
-            if (!succeeded) {
-                if (source == EnableSource.PostLoginPrompt) {
-                    persistSetupPromptState(SetupPromptState.Declined)
-                }
-                return false
-            }
+            if (generation != identityGeneration || !succeeded) return false
             prefs
                 .edit()
-                .putBoolean(key("enabled", id), true)
+                .putBoolean(key(ON_LEAVE, id), true)
                 .putInt(key("lockAfterMs", id), 0)
                 .apply()
             _preferenceEnabled.value = true
             _isLocked.value = false
             recordUnlock()
-            // Turning the lock on — from anywhere — resolves the one-time offer.
-            persistSetupPromptState(SetupPromptState.Enabled)
             return true
         }
 
@@ -400,16 +357,22 @@ class AppLockManager
         private val isUnlockable: Boolean
             get() = _isLocked.value && _preferenceEnabled.value && userId != null
 
+        /**
+         * @param automatic the try that needs no tap. It waits for the app to be
+         *   back in front, and doesn't use up the one try on the way out. Identical
+         *   on iOS, where asking any earlier fails.
+         */
         suspend fun unlockIfNeeded(
             activity: FragmentActivity,
             automatic: Boolean = false,
         ) {
             if (!isUnlockable || isPrompting) return
-            if (automatic && attemptedCurrentLock) return
+            if (automatic && (didEnterBackground || attemptedCurrentLock)) return
             attemptedCurrentLock = true
             if (authenticate(activity, reason = "Unlock Pantopus")) {
                 _isLocked.value = false
                 _lastError.value = null
+                lastSensitiveAuthAtMs = System.currentTimeMillis()
                 recordUnlock()
             }
         }
@@ -476,7 +439,6 @@ class AppLockManager
             }
             if (verified) {
                 lastSensitiveAuthAtMs = System.currentTimeMillis()
-                _sensitiveActionVerifiedAt.value = lastSensitiveAuthAtMs
                 return SensitiveActionOutcome.Verified
             }
             val message = _lastError.value ?: DEFAULT_VERIFY_FAILURE
@@ -495,10 +457,47 @@ class AppLockManager
         ): SensitiveActionOutcome {
             if (activity == null) return SensitiveActionOutcome.Failed(DEFAULT_VERIFY_FAILURE)
             refreshCapability()
-            if (_capability.value == Capability.Available && isWithinSensitiveGracePeriod(graceMs)) {
-                return SensitiveActionOutcome.Verified
+            if (_capability.value == Capability.Available) {
+                if (isWithinSensitiveGracePeriod(graceMs)) return SensitiveActionOutcome.Verified
+                if (wasJustCancelled()) return SensitiveActionOutcome.Cancelled
             }
-            return verifySensitiveAction(activity, reason)
+            return sharedSensitiveScreenCheck(activity, reason).await()
+        }
+
+        private fun sharedSensitiveScreenCheck(
+            activity: FragmentActivity,
+            reason: String,
+        ): Deferred<SensitiveActionOutcome> =
+            sensitiveScreenCheck?.takeIf { it.isActive } ?: checkScope
+                .async {
+                    verifySensitiveAction(activity, reason).also { outcome ->
+                        if (outcome == SensitiveActionOutcome.Cancelled) {
+                            lastSensitiveCancelAtMs = System.currentTimeMillis()
+                        }
+                    }
+                }.also { sensitiveScreenCheck = it }
+
+        /** Nothing to ask inside the grace, so a guard shows no cover either. */
+        fun passesSensitiveScreenWithoutAsking(graceMs: Long = SENSITIVE_AUTH_GRACE_MS): Boolean =
+            _capability.value == Capability.Available && isWithinSensitiveGracePeriod(graceMs)
+
+        /**
+         * Someone was on a sensitive screen until now: the grace runs from here,
+         * not from their last check, so a long read doesn't ask again on the way
+         * back from a quick look at another tab.
+         */
+        fun noteSensitiveScreenLeft() {
+            if (lastSensitiveAuthAtMs != null) lastSensitiveAuthAtMs = System.currentTimeMillis()
+        }
+
+        /** "Try again" on a guard, or coming back to one: this time it asks. */
+        fun forgetSensitiveCancel() {
+            lastSensitiveCancelAtMs = null
+        }
+
+        private fun wasJustCancelled(): Boolean {
+            val last = lastSensitiveCancelAtMs ?: return false
+            return System.currentTimeMillis() - last < SENSITIVE_CANCEL_ECHO_MS
         }
 
         /**
@@ -660,8 +659,9 @@ class AppLockManager
             _lastError.value = null
             userId = null
             _preferenceEnabled.value = false
-            _setupPromptState.value = null
             lastSensitiveAuthAtMs = null
+            lastSensitiveCancelAtMs = null
+            sensitiveScreenCheck = null
         }
 
         fun refreshCapability() {
@@ -772,7 +772,7 @@ class AppLockManager
         private fun autoDisableForUnavailableCapability() {
             val id = userId ?: return
             if (_capability.value != Capability.PasscodeNotSet) return
-            prefs.edit().putBoolean(key("enabled", id), false).apply()
+            prefs.edit().putBoolean(key(ON_LEAVE, id), false).apply()
             _preferenceEnabled.value = false
             _isLocked.value = false
         }
@@ -854,6 +854,9 @@ class AppLockManager
 
             /** `EncryptedSharedPreferences` file holding the per-user app-lock prefs. */
             private const val SECURE_PREFS_FILE = "app_lock_prefs_secure"
+
+            /** The whole-app lock's on/off field: the "Lock Pantopus when I leave the app" switch. */
+            private const val ON_LEAVE = "onLeave"
             private const val MIGRATED_KEY = "appLock.migratedFromPlain"
 
             /**
@@ -869,6 +872,9 @@ class AppLockManager
              * through without a second prompt.
              */
             const val SENSITIVE_AUTH_GRACE_MS: Long = 5 * 60 * 1000
+
+            /** How long a cancel answers for the next screen that would ask. */
+            private const val SENSITIVE_CANCEL_ECHO_MS: Long = 2_000
 
             private const val DEFAULT_VERIFY_FAILURE = "We couldn't verify your identity. Please try again."
         }
