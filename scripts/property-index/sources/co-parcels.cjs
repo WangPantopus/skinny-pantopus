@@ -4,7 +4,7 @@
 // included, with credit to the State; only reselling the dataset itself is barred (web's data sources page credits it).
 // The State's file geodatabase is read, as the service asks; owner and mailing columns are never decoded. Actual value is
 // Colorado's market value; assessed value is its fraction of it. Adams and Denver keep their own connectors, which carry
-// building facts this file lacks.
+// building facts this file lacks; so does Boulder.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,7 +20,7 @@ const { log } = require('../lib/log.cjs');
 const FILE = 'https://www.arcgis.com/sharing/rest/content/items/3245c94414124882b331e35c14bb23a4/data';
 const TABLE = 'Colorado_Public_Parcel_Composite';
 const COLUMNS = ['countyName', 'countyFips', 'parcel_id', 'account', 'situsAdd', 'sitAddCty', 'sitAddZip', 'legalDesc', 'landSqft', 'landAcres', 'lot', 'subName', 'zoningCode', 'landUseCde', 'landUseDsc', 'saleDate', 'salePrice', 'apprValTot', 'asedValTot', 'dateReceived'];
-const OWN_CONNECTOR = new Set(['08001', '08031']);
+const OWN_CONNECTOR = new Set(['08001', '08013', '08031']);
 
 // Counties word their uses their own way. Where only the State's abstract code is given, its first digits say: 1112 and 1212
 // a single-family house, 1230 a condominium, 1115, 1140 and 1215 a manufactured home, 1120, 1125, 1220 and 1225 a building
