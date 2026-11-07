@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -56,6 +57,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.ChannelGlyph
@@ -68,6 +70,8 @@ import app.pantopus.android.ui.components.PauseBanner
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.StealthBanner
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -125,23 +129,29 @@ fun GroupedListScreen(
     onRefresh: (() -> Unit)? = null,
 ) {
     val pullState = rememberPullRefreshState(refreshing = refreshing, onRefresh = { onRefresh?.invoke() })
-    Column(
+    val showsRefreshNotice = refreshNotice != null && state is GroupedListUiState.Loaded
+    // The groups run under the bar, which slides away while they scroll down and comes back near the top (founder
+    // request 2026-11-07, as on iPhone). The refresh line under it stays.
+    ScrollAwayHeaderLayout(
+        header = { TopBar(title = title, onBack = callbacks.onBack) },
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(PantopusColors.appBg)
                 .testTag("groupedList"),
-    ) {
-        TopBar(title = title, onBack = callbacks.onBack)
-        if (refreshNotice != null && state is GroupedListUiState.Loaded) {
-            RefreshFailedLine(refreshNotice, modifier = Modifier.padding(horizontal = Spacing.s4))
-        }
+        pinned =
+            if (refreshNotice != null && showsRefreshNotice) {
+                @Composable { RefreshFailedLine(refreshNotice, modifier = Modifier.padding(horizontal = Spacing.s4)) }
+            } else {
+                null
+            },
+    ) { top ->
         Box(
             Modifier.fillMaxSize().pullRefresh(pullState, enabled = onRefresh != null && state is GroupedListUiState.Loaded),
         ) {
             when (state) {
-                is GroupedListUiState.Loading -> LoadingFrame()
-                is GroupedListUiState.Error -> ErrorFrame(message = state.message, onRetry = callbacks.onRetry)
+                is GroupedListUiState.Loading -> LoadingFrame(top)
+                is GroupedListUiState.Error -> ErrorFrame(message = state.message, onRetry = callbacks.onRetry, top = top)
                 is GroupedListUiState.Loaded ->
                     LoadedFrame(
                         groups = state.groups,
@@ -150,13 +160,14 @@ fun GroupedListScreen(
                         banner = banner,
                         contentDimmed = contentDimmed,
                         header = header,
+                        top = top,
                     )
             }
             if (onRefresh != null) {
                 PullRefreshIndicator(
                     refreshing = refreshing,
                     state = pullState,
-                    modifier = Modifier.align(Alignment.TopCenter),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = top),
                     contentColor = PantopusColors.primary600,
                 )
             }
@@ -222,10 +233,10 @@ private fun TopBar(
 }
 
 @Composable
-internal fun LoadingFrame() {
+internal fun LoadingFrame(top: Dp = 0.dp) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("groupedListLoading"),
-        contentPadding = PaddingValues(vertical = Spacing.s3),
+        contentPadding = PaddingValues(top = top + Spacing.s3, bottom = Spacing.s3),
     ) {
         items(3) {
             Box(
@@ -249,7 +260,11 @@ internal fun LoadedFrame(
     banner: GroupedListBanner? = null,
     contentDimmed: Boolean = false,
     header: (@Composable () -> Unit)? = null,
+    /** The bar drawn over the top of the list: the first group starts below it. */
+    top: Dp = 0.dp,
 ) {
+    val listState = rememberLazyListState()
+    ScrollAwayHeaderPage(listState)
     val optimistic = remember { mutableStateMapOf<String, RowControl>() }
     LaunchedEffect(groups) {
         // The view-model is the source of truth the moment it emits a
@@ -260,8 +275,9 @@ internal fun LoadedFrame(
     }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize().testTag("groupedListContent"),
-        contentPadding = PaddingValues(bottom = Spacing.s6),
+        contentPadding = PaddingValues(top = top, bottom = Spacing.s6),
     ) {
         if (header != null) {
             item(key = "header") {
@@ -905,11 +921,13 @@ private fun SliderControl(
 private fun ErrorFrame(
     message: String,
     onRetry: () -> Unit,
+    top: Dp,
 ) {
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
+                .padding(top = top)
                 .padding(Spacing.s6)
                 .testTag("groupedListError"),
         horizontalAlignment = Alignment.CenterHorizontally,

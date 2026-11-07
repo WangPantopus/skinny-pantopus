@@ -20,9 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +41,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,6 +58,9 @@ import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.screens.root.PullToRefreshUnderHeader
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.screens.scheduling.resources.SegmentedControl
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -126,15 +128,16 @@ object NearbySegmentRequests {
  * with its routes; [neighborhood] the density window and meter ([NeighborhoodScreen]). Each segment keeps its saved
  * state (the feed's place, filters and List / Map mode) while the other shows. Connections is in the side menu.
  *
- * Over Neighborhood the switch row stays above the page. The Pulse segment gets it as its header row (the slot
- * [pulse] is handed): the feed draws it first in its collapsible header, so it slides away with the rest of the
- * header while the map or the posts fill the screen (founder request 2026-10-22; iOS passes it the same way).
+ * The Pulse segment gets the switch row as its header row (the slot [pulse] is handed): the feed draws it first in its
+ * collapsible header, so it slides away with the rest of the header while the map or the posts fill the screen (founder
+ * request 2026-10-22; iOS passes it the same way). Neighborhood gets it too ([neighborhood]) and slides it away while
+ * its page scrolls down, bringing it back near the top (founder request 2026-11-07, as on iPhone).
  */
 @Composable
 fun NearbyTab(
     onOpenMenu: () -> Unit,
     pulse: @Composable (header: @Composable () -> Unit) -> Unit,
-    neighborhood: @Composable () -> Unit,
+    neighborhood: @Composable (header: @Composable () -> Unit) -> Unit,
 ) {
     var segment by rememberSaveable { mutableStateOf(NearbySegment.Pulse) }
     val requested by NearbySegmentRequests.pending.collectAsStateWithLifecycle()
@@ -158,14 +161,11 @@ fun NearbyTab(
             NavigationMenuButton(onClick = onOpenMenu, testTag = "nearby.menu")
         }
     }
-    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("nearbyTab")) {
-        if (segment == NearbySegment.Neighborhood) segmentRow()
-        Box(modifier = Modifier.weight(1f)) {
-            segments.SaveableStateProvider(segment.key) {
-                when (segment) {
-                    NearbySegment.Pulse -> pulse(segmentRow)
-                    NearbySegment.Neighborhood -> neighborhood()
-                }
+    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("nearbyTab")) {
+        segments.SaveableStateProvider(segment.key) {
+            when (segment) {
+                NearbySegment.Pulse -> pulse(segmentRow)
+                NearbySegment.Neighborhood -> neighborhood(segmentRow)
             }
         }
     }
@@ -175,9 +175,10 @@ fun NearbyTab(
  * The Neighborhood segment: the density window (the cells map), the meter and "Invite your neighbors", or "Set up a
  * home" before there is one. The meter controls the local marketplace and tasks preview and preserves privacy floors.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NeighborhoodScreen(
+    /** The Pulse | Neighborhood switch row, over the page: it slides away while the page scrolls down. */
+    header: @Composable () -> Unit,
     onClaim: () -> Unit,
     onOpenMarketplace: () -> Unit,
     onOpenTasks: () -> Unit,
@@ -193,10 +194,13 @@ fun NeighborhoodScreen(
         onPauseOrDispose { }
     }
     RefreshOnStoreChange(viewModel::load)
-    Column(Modifier.fillMaxSize()) {
-        refreshNotice?.let { RefreshFailedLine(it) }
-        PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
-            NeighborhoodContent(state, onClaim, onOpenMarketplace, onOpenTasks, onInvite, viewModel::refresh)
+    ScrollAwayHeaderLayout(
+        header = header,
+        modifier = Modifier.fillMaxSize(),
+        pinned = refreshNotice?.let { notice -> @Composable { RefreshFailedLine(notice) } },
+    ) { top ->
+        PullToRefreshUnderHeader(isRefreshing = refreshing, onRefresh = viewModel::refresh, top = top, modifier = Modifier.fillMaxSize()) {
+            NeighborhoodContent(state, onClaim, onOpenMarketplace, onOpenTasks, onInvite, viewModel::refresh, top = top)
         }
     }
 }
@@ -282,14 +286,18 @@ internal fun NeighborhoodContent(
     onOpenTasks: () -> Unit,
     onInvite: () -> Unit,
     onRetry: () -> Unit,
+    /** The switch row drawn over the top of the page: its first card starts below it. */
+    top: Dp = 0.dp,
 ) {
+    val scroll = rememberScrollState()
+    ScrollAwayHeaderPage(scroll)
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(PantopusColors.appBg)
-                .verticalScroll(rememberScrollState())
-                .padding(top = Spacing.s3)
+                .verticalScroll(scroll)
+                .padding(top = top + Spacing.s3)
                 .testTag("nearbyNeighborhood"),
     ) {
         when (val current = state) {

@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -62,11 +61,15 @@ import app.pantopus.android.ui.screens.place.detail.rememberMinuteClock
 import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
 import app.pantopus.android.ui.screens.plans.today.PlansTodayCards
 import app.pantopus.android.ui.screens.plans.today.PlansTodayViewModel
+import app.pantopus.android.ui.screens.root.PullToRefreshUnderHeader
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import kotlinx.coroutines.flow.Flow
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -149,31 +152,19 @@ fun TodayTabScreen(
     LaunchedEffect(refreshing) { if (!refreshing) pulled = false }
     val placeNow = rememberMinuteClock(todayPlaceZone(state))
     val nowMs = placeNow.toInstant().toEpochMilli()
-    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab")) {
-        // The title, date and address, with the side menu at the end of the title line.
-        Row(modifier = Modifier.padding(start = 18.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
-                    // The date beside the title (the f1-today-tab design); it turns over at midnight.
-                    Text(
-                        placeNow.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PantopusColors.appTextMuted,
-                        modifier = Modifier.padding(bottom = 3.dp),
-                    )
-                }
-                (state as? TodayTabUiState.Loaded)?.intelligence?.place?.let { TodayAddressLine(it) }
-            }
-            onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "today.menu", modifier = Modifier.offset(y = (-10).dp)) }
-        }
-        PullToRefreshBox(
+    // The day scrolls under the title, which slides away while it scrolls down and comes back near the top (founder
+    // request 2026-11-07, as on iPhone).
+    ScrollAwayHeaderLayout(
+        header = { TodayHeader(placeNow, state, onOpenMenu) },
+        modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("todayTab"),
+    ) { top ->
+        PullToRefreshUnderHeader(
             isRefreshing = pulled && refreshing,
             onRefresh = {
                 pulled = true
                 pullAll()
             },
+            top = top,
             modifier = Modifier.fillMaxSize(),
         ) {
             // With no sky to sit under (no place, a claim in review, Today couldn't load), Needs you comes first.
@@ -186,25 +177,30 @@ fun TodayTabScreen(
                 )
             }
             when (val current = state) {
-                TodayTabUiState.Loading -> TodayPlaceholders()
-                TodayTabUiState.NoPlace ->
-                    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
+                TodayTabUiState.Loading -> TodayPlaceholders(Modifier.padding(top = top))
+                TodayTabUiState.NoPlace -> {
+                    ScrollAwayHeaderPage(scroll)
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(top = top)) {
                         needsYouFirst()
                         NoPlaceCard(onClaim)
                     }
-                is TodayTabUiState.ClaimInReview ->
-                    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
+                }
+                is TodayTabUiState.ClaimInReview -> {
+                    ScrollAwayHeaderPage(scroll)
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(top = top)) {
                         needsYouFirst()
                         ClaimInReviewCard(current.claim) { onCheckClaim(current.claim.homeId) }
                     }
+                }
                 is TodayTabUiState.Error ->
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.fillMaxSize().padding(top = top)) {
                         needsYouFirst()
                         ErrorState(message = current.message, onRetry = pullAll, modifier = Modifier.weight(1f))
                     }
-                is TodayTabUiState.Loaded ->
+                is TodayTabUiState.Loaded -> {
+                    ScrollAwayHeaderPage(scroll)
                     Column(
-                        modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(top = top).padding(horizontal = 16.dp),
                     ) {
                         val age = nowMs - current.fetchedAt
                         if (current.showsRefreshFailure(pullFailed, age)) {
@@ -259,8 +255,35 @@ fun TodayTabScreen(
                         }
                         Spacer(modifier = Modifier.height(96.dp))
                     }
+                }
             }
         }
+    }
+}
+
+/** The title, date and address, with the side menu at the end of the title line. */
+@Composable
+private fun TodayHeader(
+    placeNow: ZonedDateTime,
+    state: TodayTabUiState,
+    onOpenMenu: (() -> Unit)?,
+) {
+    Row(modifier = Modifier.padding(start = 18.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
+                // The date beside the title (the f1-today-tab design); it turns over at midnight.
+                Text(
+                    placeNow.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appTextMuted,
+                    modifier = Modifier.padding(bottom = 3.dp),
+                )
+            }
+            (state as? TodayTabUiState.Loaded)?.intelligence?.place?.let { TodayAddressLine(it) }
+        }
+        onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "today.menu", modifier = Modifier.offset(y = (-10).dp)) }
     }
 }
 
@@ -302,8 +325,8 @@ private fun alertsCheck(
     }
 
 @Composable
-private fun TodayPlaceholders() {
-    Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun TodayPlaceholders(modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         repeat(PLACEHOLDER_ROWS) {
             Box(
                 modifier =

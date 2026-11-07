@@ -105,13 +105,14 @@ fun GridTabsBody(
     ) {
         // At large text, five tiles in a row break their one-word labels mid-word ("Task / s"); three per row
         // keep them whole, and at the largest sizes two per row keep the longest ("Maintenance") whole. Below that
-        // the tiles stay in one row, as before.
+        // four share a row, as on iPhone: a fifth (Property details) starts a second row instead of squeezing the
+        // others' labels.
         val fontScale = LocalDensity.current.fontScale
         val perRow =
             when {
                 fontScale >= LARGEST_TEXT_SCALE -> LARGEST_TEXT_TILES_PER_ROW
                 fontScale >= LARGE_TEXT_SCALE -> LARGE_TEXT_TILES_PER_ROW
-                else -> maxOf(quickActions.size, 1)
+                else -> quickActions.size.coerceIn(1, TILES_PER_ROW)
             }
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4),
@@ -176,6 +177,9 @@ fun GridTabsBody(
         }
     }
 }
+
+/** At most this many quick-action tiles share a row (iOS's grid has four columns). */
+private const val TILES_PER_ROW = 4
 
 /** The system font scale from which the quick-action tiles reflow, and how many then share a row. */
 private const val LARGE_TEXT_SCALE = 1.5f

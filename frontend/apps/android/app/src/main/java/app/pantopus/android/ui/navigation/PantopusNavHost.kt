@@ -35,6 +35,7 @@ import app.pantopus.android.ui.screens.RootViewModel
 import app.pantopus.android.ui.screens.auth.AuthNavHost
 import app.pantopus.android.ui.screens.auth.ContinueAsScreen
 import app.pantopus.android.ui.screens.profile.NamePromptHost
+import app.pantopus.android.ui.screens.root.ProvideScrollAwayHeaders
 import app.pantopus.android.ui.screens.root.RootTabScreen
 import app.pantopus.android.ui.theme.PantopusColors
 
@@ -124,7 +125,8 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
                         isSignedIn = true,
                         onSignOut = { viewModel.signOutFromAppLock() },
                     ) {
-                        RootTabScreen()
+                        // The tabs' headers slide away while a page scrolls down (founder request 2026-11-07).
+                        ProvideScrollAwayHeaders { RootTabScreen() }
                         // One-time "What should we call you?" for an account with no name.
                         NamePromptHost(userId = state.user.id)
                         // Step-up coordinator (device_key biometric / password

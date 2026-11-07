@@ -190,6 +190,7 @@ fun HomeDashboardScreen(
             "pets" -> "Pets"
             "calendar" -> "Calendar"
             "access_codes" -> "Access codes"
+            "view_property_details" -> "Property details"
             else -> actionId.replace('_', ' ').replaceFirstChar(Char::uppercase)
         }
 
@@ -309,6 +310,11 @@ fun HomeDashboardScreen(
                 viewModel.currentHomeId()?.let { homeId ->
                     onOpenTasks?.invoke(homeId) ?: openPlaceholder(actionId)
                 }
+            // The tile beside Tasks, Maintenance, Documents and Members (founder request 2026-11-07, as on iPhone).
+            "view_property_details" ->
+                viewModel.currentHomeId()?.let { homeId ->
+                    onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder(actionId)
+                }
             else -> openPlaceholder(actionId)
         }
     }
@@ -393,11 +399,6 @@ fun HomeDashboardScreen(
                         onBack = onBack,
                         onQuickAction = ::handleQuickAction,
                         onFabAction = ::handleFab,
-                        onOpenPropertyDetails = {
-                            viewModel.currentHomeId()?.let { homeId ->
-                                onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
-                            }
-                        },
                         onOpenSettings =
                             onOpenSettings?.let { handler ->
                                 {
@@ -417,11 +418,6 @@ fun HomeDashboardScreen(
                         onBack = onBack,
                         onQuickAction = ::handleQuickAction,
                         onFabAction = ::handleFab,
-                        onOpenPropertyDetails = {
-                            viewModel.currentHomeId()?.let { homeId ->
-                                onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
-                            }
-                        },
                         onOpenSettings =
                             onOpenSettings?.let { handler ->
                                 {
@@ -443,11 +439,6 @@ fun HomeDashboardScreen(
                         onBack = onBack,
                         onQuickAction = ::handleQuickAction,
                         onFabAction = ::handleFab,
-                        onOpenPropertyDetails = {
-                            viewModel.currentHomeId()?.let { homeId ->
-                                onOpenPropertyDetails?.invoke(homeId) ?: openPlaceholder("property_details")
-                            }
-                        },
                         onOpenSettings =
                             onOpenSettings?.let { handler ->
                                 {
@@ -482,7 +473,6 @@ fun HomeDashboardScreenContent(
     onQuickAction: (String) -> Unit = {},
     onFabAction: (String) -> Unit = {},
     onClaim: () -> Unit = {},
-    onOpenPropertyDetails: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {
     when (state) {
@@ -496,7 +486,6 @@ fun HomeDashboardScreenContent(
                 onBack = onBack,
                 onQuickAction = onQuickAction,
                 onFabAction = onFabAction,
-                onOpenPropertyDetails = onOpenPropertyDetails,
             )
         is HomeDashboardUiState.Empty ->
             DashboardLayout(
@@ -507,7 +496,6 @@ fun HomeDashboardScreenContent(
                 onBack = onBack,
                 onQuickAction = onQuickAction,
                 onFabAction = onFabAction,
-                onOpenPropertyDetails = onOpenPropertyDetails,
             )
         is HomeDashboardUiState.NeedsAttention ->
             DashboardLayout(
@@ -518,7 +506,6 @@ fun HomeDashboardScreenContent(
                 onBack = onBack,
                 onQuickAction = onQuickAction,
                 onFabAction = onFabAction,
-                onOpenPropertyDetails = onOpenPropertyDetails,
             )
         is HomeDashboardUiState.Error -> ErrorLayout(message = state.message, onBack = onBack, onRetry = onRetry)
         is HomeDashboardUiState.Limited -> LimitedLayout(state, onBack, onRetry, { onQuickAction("view_tasks") }, onClaim)
@@ -534,7 +521,6 @@ private fun DashboardLayout(
     onBack: () -> Unit,
     onQuickAction: (String) -> Unit,
     onFabAction: (String) -> Unit,
-    onOpenPropertyDetails: () -> Unit,
     onOpenSettings: (() -> Unit)? = null,
     /** Security-state banner CTA. No-op in preview/snapshot hosts. */
     onSecurityAction: (HomeSecurityBannerAction) -> Unit = {},
@@ -546,79 +532,74 @@ private fun DashboardLayout(
     /** Instant Screens contract §3: the copy stays; one quiet line says a refresh failed. */
     refreshNotice: RefreshNotice? = null,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(1f)) {
-            ContentDetailShell(
-                title = "Home",
-                onBack = onBack,
-                topBarAction =
-                    onOpenSettings?.let {
-                        ContentDetailTopBarAction(
-                            icon = PantopusIcon.SlidersHorizontal,
-                            contentDescription = "Home settings",
-                            onClick = it,
-                        )
-                    },
-                header = {
-                    HomeHeroHeader(address = content.address, verified = content.verified, stats = content.stats)
-                },
-                body = {
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                        refreshNotice?.let { RefreshFailedLine(it) }
-                        content.securityBanner?.let { banner ->
-                            HomeSecurityStatusBanner(
-                                content = banner,
-                                onCta = { onSecurityAction(banner.action) },
+    val actions =
+        listOf(
+            FabSheetAction("add_task", "Add Task", PantopusIcon.ListChecks),
+            FabSheetAction("track_bill", "Track Bill", PantopusIcon.CreditCard),
+            FabSheetAction("track_package", "Track Package", PantopusIcon.Package),
+            FabSheetAction("add_pet", "Add Pet", PantopusIcon.PawPrint),
+            FabSheetAction("create_poll", "Create Poll", PantopusIcon.BarChart3),
+            FabSheetAction("send_mail", "Send Mail", PantopusIcon.Mail),
+        ).filter { canPerform(it.id) }
+    ContentDetailShell(
+        title = "Home",
+        onBack = onBack,
+        topBarAction =
+            onOpenSettings?.let {
+                ContentDetailTopBarAction(
+                    icon = PantopusIcon.SlidersHorizontal,
+                    contentDescription = "Home settings",
+                    onClick = it,
+                )
+            },
+        // The + button floats over the page, which runs to the bottom of the screen (founder request 2026-11-07, as on
+        // iPhone); a band behind it took a fifth of the screen.
+        cta = { if (actions.isNotEmpty()) FabCreateCTA(actions = actions, onSelect = onFabAction) },
+        header = {
+            HomeHeroHeader(address = content.address, verified = content.verified, stats = content.stats)
+        },
+        body = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                refreshNotice?.let { RefreshFailedLine(it) }
+                content.securityBanner?.let { banner ->
+                    HomeSecurityStatusBanner(
+                        content = banner,
+                        onCta = { onSecurityAction(banner.action) },
+                    )
+                }
+                content.attentionSummary?.let { summary ->
+                    NeedsAttentionBanner(summary = summary, onJump = onQuickAction)
+                }
+                GridTabsBody(
+                    quickActions = content.quickActions,
+                    tabs = content.tabs,
+                    selectedTab = selectedTab,
+                    onSelectTab = onSelectTab,
+                    onQuickAction = onQuickAction,
+                ) {
+                    if (brandNew != null) {
+                        BrandNewHomeSection(brandNew = brandNew, onStep = onQuickAction)
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                            intelligence()
+                            OverviewSection(
+                                content = content,
+                                onOpenEmergency = { onQuickAction("view_emergency") },
+                                onOpenIssues = { onQuickAction("view_issues") },
+                                can = can,
                             )
                         }
-                        content.attentionSummary?.let { summary ->
-                            NeedsAttentionBanner(summary = summary, onJump = onQuickAction)
-                        }
-                        GridTabsBody(
-                            quickActions = content.quickActions,
-                            tabs = content.tabs,
-                            selectedTab = selectedTab,
-                            onSelectTab = onSelectTab,
-                            onQuickAction = onQuickAction,
-                        ) {
-                            if (brandNew != null) {
-                                BrandNewHomeSection(brandNew = brandNew, onStep = onQuickAction)
-                            } else {
-                                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                                    intelligence()
-                                    OverviewSection(
-                                        content = content,
-                                        onOpenEmergency = { onQuickAction("view_emergency") },
-                                        onOpenIssues = { onQuickAction("view_issues") },
-                                        onOpenPropertyDetails = onOpenPropertyDetails,
-                                        can = can,
-                                    )
-                                }
-                            }
-                        }
                     }
-                },
-            )
-        }
-        val actions =
-            listOf(
-                FabSheetAction("add_task", "Add Task", PantopusIcon.ListChecks),
-                FabSheetAction("track_bill", "Track Bill", PantopusIcon.CreditCard),
-                FabSheetAction("track_package", "Track Package", PantopusIcon.Package),
-                FabSheetAction("add_pet", "Add Pet", PantopusIcon.PawPrint),
-                FabSheetAction("create_poll", "Create Poll", PantopusIcon.BarChart3),
-                FabSheetAction("send_mail", "Send Mail", PantopusIcon.Mail),
-            ).filter { canPerform(it.id) }
-        if (actions.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg).padding(Spacing.s4),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                FabCreateCTA(actions = actions, onSelect = onFabAction)
+                }
+                // The last card scrolls clear of the floating + button.
+                if (actions.isNotEmpty()) Spacer(Modifier.height(FAB_CLEARANCE))
             }
-        }
-    }
+        },
+    )
 }
+
+/** Room below the last card for the floating + button and its margin (iOS `fabClearance`). */
+private val FAB_CLEARANCE = Spacing.s16 + Spacing.s2
 
 /**
  * Home security-state banner — `claim_window` / `review_required` /
@@ -894,7 +875,6 @@ private fun OverviewSection(
     content: HomeDashboardContent,
     onOpenEmergency: () -> Unit,
     onOpenIssues: () -> Unit,
-    onOpenPropertyDetails: () -> Unit,
     can: (String) -> Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
@@ -924,7 +904,6 @@ private fun OverviewSection(
         }
         if (can("maintenance.view")) IssuesRow(onClick = onOpenIssues)
         if (can("sensitive.view")) EmergencyInfoRow(info = content.overview.emergency, onOpen = onOpenEmergency)
-        PropertyDetailsRow(onClick = onOpenPropertyDetails)
     }
 }
 
@@ -1152,51 +1131,6 @@ private fun IssuesRow(onClick: () -> Unit) {
             )
             Text(
                 text = "Report repairs & track the fixes",
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
-        PantopusIconImage(
-            icon = PantopusIcon.ChevronRight,
-            contentDescription = null,
-            size = 18.dp,
-            tint = PantopusColors.appTextMuted,
-        )
-    }
-}
-
-@Composable
-private fun PropertyDetailsRow(onClick: () -> Unit) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .clip(RoundedCornerShape(Radii.lg))
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorderSubtle, RoundedCornerShape(Radii.lg))
-                .clickable(onClick = onClick)
-                .padding(Spacing.s4)
-                .semantics(
-                    mergeDescendants = true,
-                ) {
-                    role = Role.Button
-                    contentDescription = "Property details. County records, beds, baths and verification"
-                }
-                .testTag("homeDashboard_propertyDetailsRow"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-    ) {
-        PantopusIconImage(icon = PantopusIcon.Home, contentDescription = null, size = Radii.xl2, tint = PantopusColors.home)
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            Text(
-                text = "Property details",
-                style = PantopusTextStyle.body,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-            )
-            Text(
-                text = "County records, beds, baths & verification",
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
