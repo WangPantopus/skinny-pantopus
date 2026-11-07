@@ -167,7 +167,8 @@ then mirror the screen.
 ## Build
 
 - `./gradlew assembleDebug` — first build ~5 min, incremental ~30 s.
-- `./gradlew ktlintCheck detekt test paparazziVerify :app:assembleDebug`
-  mirrors the CI quality job.
+- `./gradlew ktlintCheck detekt :app:testDebugUnitTest paparazziVerify :app:assembleDebug :app:lintDebug`
+  runs the CI quality job's checks (CI splits them into three Gradle runs
+  so the Kotlin compiler has the runner's memory to itself).
 - `MAPS_API_KEY` is injected via `manifestPlaceholders` from `.env`;
   `STRIPE_PUBLISHABLE_KEY` goes into `BuildConfig`.
