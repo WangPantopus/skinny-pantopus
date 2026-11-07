@@ -124,6 +124,8 @@ public final class MailDetailViewModel {
     /// Duo rebuilds the screen and nothing on the table may reset. Nil for
     /// anything else, and once it's shredded.
     private(set) var cardTable: CardTableModel?
+    /// The table showed on this visit, so coming back to it doesn't open the card again.
+    private(set) var cardTableWasShown = false
     /// The person closed the table, and the page is on its way back.
     var cardTableClosed = false
     /// The table stepped aside for the sender's page.
@@ -157,6 +159,7 @@ public final class MailDetailViewModel {
 
     func setCardTable(_ model: CardTableModel?) {
         cardTable = model
+        if model != nil { cardTableWasShown = true }
     }
 
     public func load() async {

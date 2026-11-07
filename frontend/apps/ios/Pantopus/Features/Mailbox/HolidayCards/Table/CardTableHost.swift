@@ -105,7 +105,7 @@ private struct MailCardTablePage: View {
     }
 
     var body: some View {
-        CardTableScreen(model: model, menuItems: menuItems, onClose: onClose) {}
+        CardTableScreen(model: model, menuItems: menuItems, onClose: onClose)
             .sheet(isPresented: Binding(get: { viewModel.showsSenderSheet }, set: { viewModel.showsSenderSheet = $0 })) {
                 if let letter, let content = senderContent {
                     MailSenderSheet(letter: letter, senderLink: leavingLink(content))
@@ -134,7 +134,7 @@ private struct MailCardTablePage: View {
                     .accessibilityIdentifier("cardTableBlockConfirm")
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("They won't be able to send you mail or find you on Pantopus. This card stays until you shred it.")
+                Text("They won't be able to send you mail. This card stays until you shred it.")
             }
             .sheet(isPresented: $reportsSender) {
                 if let senderPersonId {
@@ -161,8 +161,12 @@ private struct MailCardTablePage: View {
     private func leavingLink(_ content: MailDetailContent) -> (title: String, open: () -> Void)? {
         senderLink(content).map { link in
             (link.title, {
-                viewModel.cardTableAway = .leaving
-                link.open()
+                // The sheet closes first: a cover can't leave while a sheet is on its way out of it.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    viewModel.cardTableAway = .leaving
+                    link.open()
+                }
             })
         }
     }

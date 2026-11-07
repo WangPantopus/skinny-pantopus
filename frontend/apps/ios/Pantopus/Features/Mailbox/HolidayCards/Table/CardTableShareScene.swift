@@ -41,6 +41,17 @@ enum CardShareFormat: String, CaseIterable, Identifiable {
     }
 }
 
+/// Where a paper slip lies and how big its words are, in the picture's own space.
+private struct CardShareSlip {
+    let x: CGFloat
+    let y: CGFloat
+    let rotation: Double
+    let width: CGFloat
+    let height: CGFloat
+    let title: CGFloat
+    let line: CGFloat
+}
+
 struct CardTableShareScene: View {
     let format: CardShareFormat
     let showsNote: Bool
@@ -84,31 +95,31 @@ struct CardTableShareScene: View {
             if content.sealed {
                 shutEnvelope(width: 460, x: 40, y: 190, rotation: -2.4, sealWidth: 136)
                 sealedStamp(fontSize: 21, left: 96, top: 506)
-                slip(x: 122, y: 776, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5)
+                slip(CardShareSlip(x: 122, y: 776, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5))
             } else if showsNote {
                 openEnvelope(width: 350, x: 96, y: 276, rotation: 5)
                 front(width: 330, x: 26, y: 118, rotation: -4.5)
                 back(width: 330, x: 184, y: 412, rotation: 3.5)
-                slip(x: 26, y: 806, rotation: -2.2, width: 250, height: 50, title: 12, line: 12.5)
+                slip(CardShareSlip(x: 26, y: 806, rotation: -2.2, width: 250, height: 50, title: 12, line: 12.5))
             } else {
                 openEnvelope(width: 424 * 1.012, x: 56, y: 236, rotation: 3.2)
                 front(width: 424, x: 58, y: 244, rotation: -3)
-                slip(x: 122, y: 776, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5)
+                slip(CardShareSlip(x: 122, y: 776, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5))
             }
         case .post:
             if content.sealed {
                 shutEnvelope(width: 410, x: 65, y: 62, rotation: -2.2, sealWidth: 122)
                 sealedStamp(fontSize: 18, left: 118, top: 352)
-                slip(x: 139, y: 606, rotation: -1.2, width: 262, height: 46, title: 12, line: 12)
+                slip(CardShareSlip(x: 139, y: 606, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             } else if showsNote {
                 openEnvelope(width: 286, x: 127, y: 158, rotation: 2.5)
                 front(width: 258, x: 16, y: 112, rotation: -3.2)
                 back(width: 258, x: 266, y: 124, rotation: 2.8)
-                slip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12)
+                slip(CardShareSlip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             } else {
                 openEnvelope(width: 368 * 1.012, x: 84, y: 120, rotation: 3)
                 front(width: 368, x: 86, y: 118, rotation: -2.6)
-                slip(x: 139, y: 606, rotation: -1.2, width: 262, height: 46, title: 12, line: 12)
+                slip(CardShareSlip(x: 139, y: 606, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             }
         case .link:
             openEnvelope(width: 196 * 1.012, x: 43, y: 72, rotation: 3)
@@ -207,29 +218,21 @@ struct CardTableShareScene: View {
     }
 
     /// The paper slip: "PANTOPUS POST" and where to send one.
-    private func slip(
-        x: CGFloat,
-        y: CGFloat,
-        rotation: Double,
-        width: CGFloat,
-        height: CGFloat,
-        title: CGFloat,
-        line: CGFloat
-    ) -> some View {
+    private func slip(_ slip: CardShareSlip) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("PANTOPUS POST")
-                .font(.system(size: title, weight: .semibold, design: .serif))
-                .tracking(title * 0.24)
+                .font(.system(size: slip.title, weight: .semibold, design: .serif))
+                .tracking(slip.title * 0.24)
                 .foregroundStyle(MailPaper.tableSlipInk)
             Text("Send one at pantopus.com/cards")
-                .font(.system(size: line, design: .serif))
-                .tracking(line * 0.03)
+                .font(.system(size: slip.line, design: .serif))
+                .tracking(slip.line * 0.03)
                 .foregroundStyle(MailPaper.tableSlipLine)
         }
         .lineLimit(1)
         .fixedSize()
-        .padding(.leading, height * 0.36)
-        .frame(width: width, height: height, alignment: .leading)
+        .padding(.leading, slip.height * 0.36)
+        .frame(width: slip.width, height: slip.height, alignment: .leading)
         .background {
             Canvas(rendersAsynchronously: false) { context, size in
                 let rect = CGRect(origin: .zero, size: size)
@@ -239,8 +242,8 @@ struct CardTableShareScene: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 1.5))
         .shadow(color: .black.opacity(0.45), radius: 2.5, x: 1, y: 2)
-        .rotationEffect(.degrees(rotation))
-        .offset(x: x, y: y)
+        .rotationEffect(.degrees(slip.rotation))
+        .offset(x: slip.x, y: slip.y)
     }
 
     /// The link preview's words: the caption by hand, PANTOPUS POST and one line.

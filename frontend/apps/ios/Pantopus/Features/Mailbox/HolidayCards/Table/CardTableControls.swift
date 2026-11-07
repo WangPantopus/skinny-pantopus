@@ -164,6 +164,7 @@ struct CardTableAct: View {
     let primarySize: CGFloat
     let hintSize: CGFloat
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(spacing: 6) {
@@ -186,7 +187,14 @@ struct CardTableAct: View {
             Text(hint.isEmpty ? " " : hint)
                 .font(.system(size: hintSize))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(MailPaper.tableCreamFaint)
+                .foregroundStyle(dynamicTypeSize.isAccessibilitySize ? MailPaper.tableCream : MailPaper.tableCreamFaint)
+                // At the largest sizes it runs over the mail, so it gets its own glass.
+                .padding(.horizontal, dynamicTypeSize.isAccessibilitySize && !hint.isEmpty ? 12 : 0)
+                .background {
+                    if dynamicTypeSize.isAccessibilitySize, !hint.isEmpty {
+                        CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
                 .accessibilityHidden(hint.isEmpty)
                 .accessibilityIdentifier("cardTableHint")
         }

@@ -292,18 +292,8 @@ struct CardTableShareSheet: View {
     }
 
     private func shareInstagram() {
-        if format == .story, let id = CardTableShareLinks.metaAppID, let data = currentImage?.pngData(),
-           let url = URL(string: "instagram-stories://share?source_application=\(id)"),
-           UIApplication.shared.canOpenURL(url) {
+        if format == .story, let image = currentImage, let url = CardShareStories.instagram(image, page: cardPage) {
             count("instagram")
-            UIPasteboard.general.setItems(
-                [[
-                    "com.instagram.sharedSticker.backgroundImage": data,
-                    "com.instagram.sharedSticker.contentURL": cardPage,
-                    "public.utf8-plain-text": cardPage
-                ]],
-                options: [.expirationDate: Date().addingTimeInterval(300)]
-            )
             openURL(url)
             return
         }
@@ -316,17 +306,8 @@ struct CardTableShareSheet: View {
             openURL(url)
             return
         }
-        if format == .story, let id = CardTableShareLinks.metaAppID, let data = currentImage?.pngData(),
-           let url = URL(string: "facebook-stories://share?source_application=\(id)"),
-           UIApplication.shared.canOpenURL(url) {
+        if format == .story, let image = currentImage, let url = CardShareStories.facebook(image) {
             count("facebook")
-            UIPasteboard.general.setItems(
-                [[
-                    "com.facebook.sharedSticker.backgroundImage": data,
-                    "com.facebook.sharedSticker.appID": id
-                ]],
-                options: [.expirationDate: Date().addingTimeInterval(300)]
-            )
             openURL(url)
             return
         }
@@ -363,20 +344,52 @@ struct CardTableShareSheet: View {
             return
         }
         count("save")
-        Task { @MainActor in
-            let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-            guard status == .authorized || status == .limited else {
-                say = "Pantopus can’t save to your photos. You can allow it in Settings, under Privacy & Security, Photos."
-                return
+        Task { @MainActor in say = await CardShareStories.save(image) }
+    }
+}
+
+/// One tap to a new Story, where the phone has the app and this build has a Meta app ID (a free, public number). The
+/// picture goes on the pasteboard, which is how Meta takes it.
+@MainActor
+enum CardShareStories {
+    static func instagram(_ image: UIImage, page: String) -> URL? {
+        guard let id = CardTableShareLinks.metaAppID, let data = image.pngData(),
+              let url = URL(string: "instagram-stories://share?source_application=\(id)"),
+              UIApplication.shared.canOpenURL(url) else { return nil }
+        let item: [String: Any] = [
+            "com.instagram.sharedSticker.backgroundImage": data,
+            "com.instagram.sharedSticker.contentURL": page,
+            "public.utf8-plain-text": page
+        ]
+        UIPasteboard.general.setItems([item], options: [.expirationDate: Date().addingTimeInterval(300)])
+        return url
+    }
+
+    static func facebook(_ image: UIImage) -> URL? {
+        guard let id = CardTableShareLinks.metaAppID, let data = image.pngData(),
+              let url = URL(string: "facebook-stories://share?source_application=\(id)"),
+              UIApplication.shared.canOpenURL(url) else { return nil }
+        let item: [String: Any] = [
+            "com.facebook.sharedSticker.backgroundImage": data,
+            "com.facebook.sharedSticker.appID": id
+        ]
+        UIPasteboard.general.setItems([item], options: [.expirationDate: Date().addingTimeInterval(300)])
+        return url
+    }
+
+    /// Saves to Photos, and says how it went.
+    static func save(_ image: UIImage) async -> String {
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else {
+            return "Pantopus can’t save to your photos. You can allow it in Settings, under Privacy & Security, Photos."
+        }
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
             }
-            do {
-                try await PHPhotoLibrary.shared().performChanges {
-                    PHAssetChangeRequest.creationRequestForAsset(from: image)
-                }
-                say = "Saved to your photos."
-            } catch {
-                say = "We couldn’t save it to your photos. Check that there’s room on your phone, then try again."
-            }
+            return "Saved to your photos."
+        } catch {
+            return "We couldn’t save it to your photos. Check that there’s room on your phone, then try again."
         }
     }
 }

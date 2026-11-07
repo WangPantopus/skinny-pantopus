@@ -25,7 +25,8 @@ extension MailDetailViewModel {
         if let cardTable {
             cardTable.update(content: table)
         } else {
-            setCardTable(CardTableModel(content: table, startsOnTable: cardFirstOpen == false))
+            // Back from the shredder it's been opened already, so the card is out.
+            setCardTable(CardTableModel(content: table, startsOnTable: cardFirstOpen == false || cardTableWasShown))
         }
     }
 
