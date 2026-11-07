@@ -90,7 +90,8 @@ function nearest(inventory, x, y) {
 
 const round = (value, step) => Math.round(value / step) * step;
 
-async function* buildState({ work, state }) {
+/** A state's two federal files, downloaded and opened: the inventory in memory, FEMA's table on disk under its folder. */
+function openState({ work, state }) {
   const entry = STATES[state];
   if (!entry) throw new Error(`No files listed for ${state}`);
   const [stateFips, femaPath] = entry;
@@ -109,7 +110,11 @@ async function* buildState({ work, state }) {
   fs.rmSync(nsiZip, { force: true });
   const inventory = readInventory(path.join(nsiDir, fs.readdirSync(nsiDir).find((name) => name.endsWith('.gpkg'))));
   fs.rmSync(nsiDir, { recursive: true, force: true });
+  return { inventory, table: femaTable(femaDir, state), femaDir };
+}
 
+/** FEMA's structures table in an unzipped download. */
+function femaTable(femaDir, state) {
   const find = (folder) => {
     for (const name of fs.readdirSync(folder, { withFileTypes: true })) {
       if (name.isDirectory() && name.name.endsWith('.gdb')) return path.join(folder, name.name);
@@ -124,6 +129,11 @@ async function* buildState({ work, state }) {
   if (!gdb) throw new Error(`${state}'s file has no geodatabase`);
   const table = [...catalog(gdb)].find(([name, base]) => !name.startsWith('GDB_') && fieldNames(base).includes('PROP_ADDR'));
   if (!table) throw new Error(`${state}'s geodatabase has no structures table`);
+  return table;
+}
+
+async function* buildState({ work, state }) {
+  const { inventory, table, femaDir } = openState({ work, state });
 
   const counties = new Map();
   let read = 0;
@@ -181,4 +191,4 @@ async function* buildState({ work, state }) {
   }
 }
 
-module.exports = { buildState, STATES };
+module.exports = { buildState, openState, femaTable, nearest, round, STATES, NSI_VERSION };
