@@ -166,6 +166,8 @@ private struct MailCardTablePage: View {
             }
             // A sheet over the table holds the mail still.
             .onChange(of: viewModel.showsSenderSheet || reportsSender) { _, covered in model.setPaused(covered) }
+            // A fold rebuilds this page, and any report form on it is gone: only the sender sheet comes back.
+            .onAppear { model.setPaused(viewModel.showsSenderSheet) }
             .onChange(of: viewModel.toast) { _, toast in
                 if let toast { model.showToast(toast) }
             }

@@ -222,8 +222,13 @@ final class CardTableModel {
         refreshRunning()
     }
 
+    /// Share is up. Kept here because a fold rebuilds the screen: the sheet comes back up, and the mail holds still under it.
+    var isSharing = false {
+        didSet { refreshRunning() }
+    }
+
     func refreshRunning() {
-        guard isShowing, !isPaused else {
+        guard isShowing, !isPaused, !isSharing else {
             ticker.stop()
             motion.stop()
             return
@@ -284,7 +289,7 @@ final class CardTableModel {
 
     /// Tells the clock something moved.
     func wake() {
-        guard isShowing, !isPaused else { return }
+        guard isShowing, !isPaused, !isSharing else { return }
         if !ticker.isRunning { lastFrame = CACurrentMediaTime() }
         ticker.start()
     }
