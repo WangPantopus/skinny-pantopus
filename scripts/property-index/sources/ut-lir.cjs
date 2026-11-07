@@ -1,7 +1,7 @@
 'use strict';
 // Utah: UGRC's Land Information Records parcels, one layer per county, from what each county assessor agreed to share.
 // Year built, size, floors, market values; no bedrooms or baths, and sale prices aren't public in Utah. Published "as
-// is"; each county's layer points to that county's own disclaimer. PRIMARY_RES (a primary-residence flag says something
+// is" under CC BY 4.0 (web's data sources page); each county's layer points to that county's own disclaimer. PRIMARY_RES (a primary-residence flag says something
 // about a person) isn't asked for.
 
 const path = require('node:path');

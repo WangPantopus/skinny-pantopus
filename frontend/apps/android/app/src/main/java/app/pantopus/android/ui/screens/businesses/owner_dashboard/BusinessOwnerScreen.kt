@@ -74,6 +74,7 @@ import app.pantopus.android.ui.screens.business_profile.BusinessServiceRow
 import app.pantopus.android.ui.screens.business_profile.components.CategoryRow
 import app.pantopus.android.ui.screens.business_profile.components.EmptyBlock
 import app.pantopus.android.ui.screens.business_profile.components.HoursTable
+import app.pantopus.android.ui.screens.businesses.canEditHours
 import app.pantopus.android.ui.screens.businesses.canManageCatalog
 import app.pantopus.android.ui.screens.businesses.canOpenInvoices
 import app.pantopus.android.ui.screens.businesses.canOpenLegal
@@ -400,7 +401,7 @@ private fun OwnerSections(
     }
     val access = content.access
     val canEditProfile = content.allows(BusinessPermission.PROFILE_EDIT)
-    val canEditHours = content.allows(BusinessPermission.HOURS_EDIT)
+    val canEditHours = access.canEditHours
     val canEditLocation = content.allows(BusinessPermission.LOCATIONS_EDIT)
     val canAddServices = content.allows(BusinessPermission.CATALOG_EDIT)
     val canRespond = content.allows(BusinessPermission.REVIEWS_RESPOND)

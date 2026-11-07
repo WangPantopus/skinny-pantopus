@@ -96,6 +96,10 @@ fun EditBusinessHoursEditor(
                 onDayChange(day.id, value)
                 editingDay = null
             },
+            takenOpenings =
+                rows
+                    .filter { it.dayLabel == day.dayLabel && it.id != day.id }
+                    .mapNotNull { (it.state as? EditBusinessPageHoursRow.State.Open)?.openLabel },
         )
     }
 }
@@ -187,13 +191,17 @@ private fun HoursStateView(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                TimePill(value = state.openLabel)
-                Text(
-                    text = "—",
-                    style = TextStyle(fontSize = 11.sp),
-                    color = PantopusColors.appTextMuted,
-                )
-                TimePill(value = state.closeLabel)
+                if (state.isAllDay) {
+                    TimePill(value = OPEN_ALL_DAY_LABEL)
+                } else {
+                    TimePill(value = state.openLabel)
+                    Text(
+                        text = "—",
+                        style = TextStyle(fontSize = 11.sp),
+                        color = PantopusColors.appTextMuted,
+                    )
+                    TimePill(value = state.closeLabel)
+                }
                 Spacer(modifier = Modifier.weight(1f))
                 if (!readOnly) {
                     PantopusIconImage(
@@ -351,7 +359,7 @@ private fun QuickApplyButton(
 private fun a11yLabel(row: EditBusinessPageHoursRow): String {
     val state =
         when (val s = row.state) {
-            is EditBusinessPageHoursRow.State.Open -> "${s.openLabel} to ${s.closeLabel}"
+            is EditBusinessPageHoursRow.State.Open -> if (s.isAllDay) OPEN_ALL_DAY_LABEL else "${s.openLabel} to ${s.closeLabel}"
             EditBusinessPageHoursRow.State.Closed -> "Closed"
             EditBusinessPageHoursRow.State.NotSet -> "Not set"
         }
@@ -365,19 +373,25 @@ internal fun BusinessHoursDayDialog(
     day: EditBusinessPageHoursRow,
     onDismiss: () -> Unit,
     onApply: (EditBusinessPageHoursRow.State) -> Unit,
+    takenOpenings: List<String> = emptyList(),
     canApply: Boolean = true,
 ) {
     val context = LocalContext.current
     val formatter = remember { DateTimeFormatter.ofPattern("h:mm a", Locale.US) }
     val initial = day.state as? EditBusinessPageHoursRow.State.Open
-    var open by remember(day) {
-        mutableStateOf(initial?.openLabel?.let { runCatching { LocalTime.parse(it, formatter) }.getOrNull() } ?: LocalTime.of(9, 0))
-    }
-    var close by remember(day) {
-        mutableStateOf(initial?.closeLabel?.let { runCatching { LocalTime.parse(it, formatter) }.getOrNull() } ?: LocalTime.of(17, 0))
-    }
+    val openedAt = remember(day) { openingTime(initial, formatter) }
+    val closesAt = remember(day) { closingTime(initial, formatter) }
+    var open by remember(day) { mutableStateOf(openedAt) }
+    var close by remember(day) { mutableStateOf(closesAt) }
     var closed by remember(day) { mutableStateOf(day.state == EditBusinessPageHoursRow.State.Closed) }
-    val valid = closed || close != open
+    val repeatsOpening = !closed && open.format(formatter) in takenOpenings
+    val valid = closed || (close != open && !repeatsOpening)
+    val unchanged =
+        if (closed) {
+            day.state == EditBusinessPageHoursRow.State.Closed
+        } else {
+            initial != null && open == openedAt && close == closesAt
+        }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("${day.dayLabel} hours") },
@@ -411,24 +425,40 @@ internal fun BusinessHoursDayDialog(
                         ).show()
                     }) { Text("Closes ${close.format(formatter)}") }
                     if (close.isBefore(open)) Text("Closes the next day.", color = PantopusColors.appTextSecondary)
-                    if (!valid) Text("Opening and closing times must differ.", color = PantopusColors.error)
+                    if (close == open) Text("Opening and closing times must differ.", color = PantopusColors.error)
+                    if (repeatsOpening) Text("Another ${day.dayLabel} interval already opens at this time.", color = PantopusColors.error)
                 }
             }
         },
         confirmButton = {
             TextButton(enabled = valid && canApply, onClick = {
-                onApply(
-                    if (closed) {
-                        EditBusinessPageHoursRow.State.Closed
-                    } else {
-                        EditBusinessPageHoursRow.State.Open(
-                            open.format(formatter),
-                            close.format(formatter),
-                        )
-                    },
-                )
+                when {
+                    // Nothing changed: the row stays exactly as saved, seconds and a 24:00 close included.
+                    unchanged -> onDismiss()
+                    closed -> onApply(EditBusinessPageHoursRow.State.Closed)
+                    else -> onApply(EditBusinessPageHoursRow.State.Open(open.format(formatter), close.format(formatter)))
+                }
             }) { Text("Apply") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+private const val OPEN_ALL_DAY_LABEL = "Open 24 hours"
+
+private fun openingTime(
+    state: EditBusinessPageHoursRow.State.Open?,
+    formatter: DateTimeFormatter,
+): LocalTime = runCatching { LocalTime.parse(state?.openLabel, formatter) }.getOrDefault(LocalTime.of(9, 0))
+
+/** A `24:00` close means the end of the day: the last minute when the whole day is open, else midnight. */
+private fun closingTime(
+    state: EditBusinessPageHoursRow.State.Open?,
+    formatter: DateTimeFormatter,
+): LocalTime =
+    when {
+        state?.closeLabel != EditBusinessPageHoursRow.END_OF_DAY_LABEL ->
+            runCatching { LocalTime.parse(state?.closeLabel, formatter) }.getOrDefault(LocalTime.of(17, 0))
+        state.isAllDay -> LocalTime.parse(EditBusinessPageHoursRow.LAST_MINUTE_LABEL, formatter)
+        else -> LocalTime.MIDNIGHT
+    }

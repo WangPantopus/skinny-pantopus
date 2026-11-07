@@ -2,6 +2,8 @@
 
 package app.pantopus.android.ui.screens.businesses.page_editor
 
+import app.pantopus.android.data.api.models.businesses.BusinessHoursDto
+
 /**
  * P4.2 — A13.10 Edit Business Page. Render-only data model for the
  * business-profile editor. Mirrors the iOS [EditBusinessPageContent]
@@ -76,34 +78,51 @@ enum class EditBusinessMediaKind(val apiType: String) {
     Logo("logo"),
 }
 
-/** One day in the hours card. */
+/** One saved interval in the hours card, or a day with none; a split day has a row per interval. */
 data class EditBusinessPageHoursRow(
     val id: String,
     val dayLabel: String,
     val state: State,
     val isDirty: Boolean = false,
+    /** What the server holds for this row. A save sends it back as it was, notes and seconds included, unless the row changed. */
+    val source: BusinessHoursDto? = null,
 ) {
     sealed interface State {
+        /** Open the whole day, in either saved form: 00:00–23:59, or 00:00–24:00 from older saves. */
+        val isAllDay: Boolean get() = false
+
         data class Open(
             val openLabel: String,
             val closeLabel: String,
-        ) : State
+        ) : State {
+            override val isAllDay: Boolean get() = openLabel == MIDNIGHT_LABEL && closeLabel in ALL_DAY_CLOSES
+        }
 
         data object Closed : State
 
         data object NotSet : State
     }
+
+    companion object {
+        /** How a saved `24:00` close reads in a row; only a saved row can hold it. */
+        const val END_OF_DAY_LABEL = "24:00"
+        const val LAST_MINUTE_LABEL = "11:59 PM"
+        private const val MIDNIGHT_LABEL = "12:00 AM"
+        private val ALL_DAY_CLOSES = setOf(LAST_MINUTE_LABEL, END_OF_DAY_LABEL)
+    }
 }
 
 /** Hours section state. */
 sealed interface EditBusinessPageHoursState {
+    val rows: List<EditBusinessPageHoursRow>
+
     data class Rows(
-        val rows: List<EditBusinessPageHoursRow>,
+        override val rows: List<EditBusinessPageHoursRow>,
         val footerHint: String?,
     ) : EditBusinessPageHoursState
 
     data class QuickApply(
-        val rows: List<EditBusinessPageHoursRow>,
+        override val rows: List<EditBusinessPageHoursRow>,
     ) : EditBusinessPageHoursState
 }
 

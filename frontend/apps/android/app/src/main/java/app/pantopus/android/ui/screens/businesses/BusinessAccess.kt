@@ -64,12 +64,13 @@ private const val BUSINESS_ACCESS_GATE_ID_KEY = "businessId"
 val BusinessAccessDto.canManageCatalog: Boolean
     get() = allows(BusinessPermission.CATALOG_EDIT) || allows(BusinessPermission.CATALOG_MANAGE)
 
+/** A save replaces the whole week, so the week has to be readable before it can be edited. */
+val BusinessAccessDto.canEditHours: Boolean
+    get() = allows(BusinessPermission.HOURS_EDIT) && allows(BusinessPermission.HOURS_VIEW)
+
 /** Each section of the page editor has its own permission. Any one of them opens it, with the rest read-only. */
 val BusinessAccessDto.canUsePageEditor: Boolean
-    get() =
-        allows(BusinessPermission.PROFILE_EDIT) ||
-            allows(BusinessPermission.LOCATIONS_EDIT) ||
-            allows(BusinessPermission.HOURS_EDIT)
+    get() = allows(BusinessPermission.PROFILE_EDIT) || allows(BusinessPermission.LOCATIONS_EDIT) || canEditHours
 
 /** The payout account is the owner's: `requirePrimaryOwner` in `backend/routes/businesses.js` refuses everyone else. */
 val BusinessAccessDto.canOpenPayments: Boolean get() = hasAccess && isOwner

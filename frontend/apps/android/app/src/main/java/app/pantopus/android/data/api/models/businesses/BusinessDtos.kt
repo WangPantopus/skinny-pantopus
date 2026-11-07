@@ -268,6 +268,7 @@ data class BusinessHoursDto(
     @Json(name = "open_time") val openTime: String? = null,
     @Json(name = "close_time") val closeTime: String? = null,
     @Json(name = "is_closed") val isClosed: Boolean? = null,
+    val notes: String? = null,
 )
 
 /**
@@ -567,6 +568,7 @@ data class SetBusinessHoursDayRequest(
     @Json(name = "open_time") val openTime: String? = null,
     @Json(name = "close_time") val closeTime: String? = null,
     @Json(name = "is_closed") val isClosed: Boolean,
+    val notes: String? = null,
 )
 
 /** Body for `PUT /api/businesses/:businessId/locations/:locationId/hours`. */
