@@ -21,8 +21,8 @@ const EXTRACT_COLUMNS = ['SSL', 'PROPTYPE', 'USECODE', 'LANDAREA', 'PREMISEADD',
 const HOME_COLUMNS = ['SSL', 'BLDG_NUM', 'BATHRM', 'HF_BATHRM', 'HEAT_D', 'AC', 'NUM_UNITS', 'ROOMS', 'BEDRM', 'AYB', 'EYB', 'STORIES', 'GBA', 'STYLE_D', 'STRUCT_D', 'GRADE_D', 'CNDTN_D', 'EXTWALL_D', 'ROOF_D', 'KITCHENS', 'FIREPLACES'];
 const CONDO_COLUMNS = ['SSL', 'AYB', 'EYB', 'ROOMS', 'BEDRM', 'BATHRM', 'HF_BATHRM', 'HEAT_D', 'AC', 'FIREPLACES', 'LIVING_GBA'];
 
-// The Office's acceptance code for a price that isn't this home's: several lots on one deed, a transfer to oneself, the land alone.
-const NOT_THIS_SALE = /^Multi-|^Buyer = Seller$|^Land Sale$/;
+// The Office's acceptance code for a price that isn't this home's: a transfer to oneself, the land alone.
+const NOT_THIS_SALE = /^(Multi-)?(Buyer = Seller|Land Sale)$/;
 
 function useOf(row, home) {
   const type = String(row.PROPTYPE || '').toUpperCase();

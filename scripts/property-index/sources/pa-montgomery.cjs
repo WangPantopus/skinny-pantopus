@@ -40,7 +40,7 @@ function useWords(code) {
   return null;
 }
 // A sale's STEB code on the sheet: a family's, an estate's or a forced sale still sold the home.
-const NOT_THIS_SALE = { 53: 'Corporate affiliates', 57: 'Part interest sales', 59: 'Multiple parcel sale', 67: 'Lease purchases', 69: 'Personal property', 71: 'Deed of correction' };
+const NOT_THIS_SALE = { 53: 'Corporate affiliates', 57: 'Part interest sales', 69: 'Personal property', 71: 'Deed of correction' };
 
 function useOf(row, unit, hasBuilding) {
   const type = String(row.PARCELTYPE || '').toUpperCase();

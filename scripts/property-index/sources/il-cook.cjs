@@ -22,7 +22,7 @@ const CONDO_COLUMNS = ['pin', 'card', 'class', 'char_yrblt', 'char_building_sf',
 const ADDRESS_COLUMNS = ['pin', 'prop_address_full', 'prop_address_city_name', 'prop_address_zipcode_1'];
 const UNIVERSE_COLUMNS = ['pin', 'class', 'township_name', 'cook_municipality_name', 'nbhd_code', 'tax_code', 'school_elementary_district_name', 'school_secondary_district_name', 'school_unified_district_name'];
 const VALUE_COLUMNS = ['pin', 'year', 'mailed_bldg', 'mailed_land', 'mailed_tot', 'certified_bldg', 'certified_land', 'certified_tot', 'board_bldg', 'board_land', 'board_tot'];
-const SALE_COLUMNS = ['pin', 'sale_date', 'sale_price', 'doc_no', 'deed_type', 'sale_type', 'is_multisale'];
+const SALE_COLUMNS = ['pin', 'sale_date', 'sale_price', 'doc_no', 'deed_type', 'sale_type'];
 
 // The Assessor's class code dictionary.
 const CLASS_WORDS = {
@@ -159,8 +159,8 @@ async function* build({ work }) {
   const sales = new Map();
   for await (const row of cached(path.join(dir, 'sales.jsonl.gz'), () => socrataRows(DOMAIN, TABLES.sales, SALE_COLUMNS))) {
     const was = sales.get(row.pin);
-    // A quit claim, the land alone, or one price for several parcels isn't this home's sale.
-    const homeSale = isHomeSale(positive(row.sale_price), row.deed_type) && row.sale_type !== 'LAND' && row.is_multisale !== true && row.is_multisale !== 'true';
+    // A quit claim or the land alone isn't this home's sale.
+    const homeSale = isHomeSale(positive(row.sale_price), row.deed_type) && row.sale_type !== 'LAND';
     if (homeSale && (!was || String(row.sale_date) > String(was.sale_date))) sales.set(row.pin, row);
   }
   log(`${homes.size} homes, ${condos.size} condo parcels, ${universe.size} parcels, ${values.size} values, ${sales.size} sales`);

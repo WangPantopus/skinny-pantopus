@@ -26,10 +26,10 @@ const COLUMNS = ['FOLIO', 'STRAP', 'SUB', 'TAXDIST', 'MUNI', 'SITE_ADDR', 'SITE_
 
 // The county's three cities by their tax district, and its unincorporated land.
 const MUNICIPALITIES = { U: 'Unincorporated Hillsborough County', A: 'Tampa', P: 'Plant City', T: 'Temple Terrace' };
-// Deeds that move no home at a price, and the Department of Revenue's qualification codes for a price that isn't this home's: several
-// parcels, a corrective or nominal deed, a cemetery lot, part of an interest, part of a bulk sale, a deed in error.
+// Deeds that move no home at a price, and the Department of Revenue's qualification codes for a price that isn't this home's: a
+// corrective or nominal deed, a cemetery lot, part of an interest, a satisfaction, part of a bulk sale, a deed in error.
 const NOT_A_DEED_OF_SALE = new Set(['QC', 'QD', 'QV', 'QS']);
-const NOT_THIS_SALE = new Set(['05', '11', '13', '16', '34', '43', '98']);
+const NOT_THIS_SALE = new Set(['11', '13', '16', '34', '43', '98']);
 
 function useOf(code, hasUnit) {
   const c = String(code ?? '').trim();

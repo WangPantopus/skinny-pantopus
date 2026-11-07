@@ -113,8 +113,7 @@ async function* build({ work }) {
   const sales = new Map();
   const when = (sale) => new Date(sale.sale_date).getTime() || 0;
   for await (const row of cached(path.join(dir, 'sales.jsonl.gz'), () => layerRows(`${BASE}/5`, SALE_COLUMNS, { oid: 'objectid' }))) {
-    // A price for several parcels isn't this home's.
-    if (!isHomeSale(positive(row.sale_price)) || /^Multiple/i.test(String(row.deed_type ?? '').trim())) continue;
+    if (!isHomeSale(positive(row.sale_price))) continue;
     const was = sales.get(row.account_num);
     if (!was || when(row) > when(was)) sales.set(row.account_num, row);
   }

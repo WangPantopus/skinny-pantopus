@@ -190,10 +190,10 @@ async function readFiles(zip) {
   }
   const sales = new Map();
   for (const member of ['Sales010.txt', 'Sales020-277.txt', 'Sales410-610.txt']) {
-    for await (const row of zipTable(zip, member, ['PARCEL ID', 'SALEDT', 'NOPAR', 'INSTRUMENT', 'VALID', 'SALETYPE', 'PRICE'], TAB)) {
+    for await (const row of zipTable(zip, member, ['PARCEL ID', 'SALEDT', 'INSTRUMENT', 'VALID', 'SALETYPE', 'PRICE'], TAB)) {
       const [date, price, deed] = [isoDate(row.SALEDT), positive(row.PRICE), saidBy(row.INSTRUMENT)];
       const valid = saidBy(row.VALID).word;
-      if (!date || !isHomeSale(price, deed.word, valid) || NOT_A_DEED_OF_SALE.has(deed.code) || Number(row.NOPAR) > 1 || /^(MULTIPLE PARCEL|NON USABLE DEED)/.test(valid) || saidBy(row.SALETYPE).code === '1') continue;
+      if (!date || !isHomeSale(price, deed.word, valid) || NOT_A_DEED_OF_SALE.has(deed.code) || /^NON USABLE DEED/.test(valid) || saidBy(row.SALETYPE).code === '1') continue;
       const key = parcelKey(row['PARCEL ID']);
       const held = sales.get(key);
       if (!held || held.date < date) sales.set(key, { date, price });

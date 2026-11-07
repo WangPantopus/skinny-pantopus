@@ -10,6 +10,7 @@ const { download, zipTable } = require('../lib/tables.cjs');
 const { year, zipCode, isoDate, realUnit } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { alsoAtOwnLine } = require('../lib/own-line.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '48201';
@@ -17,8 +18,24 @@ const COUNTY = 'Harris County';
 const FILES = 'https://download.hcad.org/data/CAMA';
 const TAB = { delimiter: '\t', quoted: false };
 const PROTECTED = /CONFIDENTIAL|PROTECTED|WITHHELD|SUPPRESS|NOT DISPLAYED|25\.025/i;
-const ACCOUNT_COLUMNS = ['acct', 'yr', 'mailto', 'str_pfx', 'str_num', 'str_num_sfx', 'str', 'str_sfx', 'str_sfx_dir', 'str_unit', 'site_addr_1', 'site_addr_2', 'site_addr_3', 'state_class', 'school_dist', 'Neighborhood_Code', 'yr_impr', 'bld_ar', 'land_ar', 'acreage', 'land_val', 'bld_val', 'tot_mkt_val', 'lgl_1', 'certified_date'];
+const ACCOUNT_COLUMNS = ['acct', 'yr', 'mailto', 'jurs', 'str_pfx', 'str_num', 'str_num_sfx', 'str', 'str_sfx', 'str_sfx_dir', 'str_unit', 'site_addr_1', 'site_addr_2', 'site_addr_3', 'state_class', 'school_dist', 'Neighborhood_Code', 'yr_impr', 'bld_ar', 'land_ar', 'acreage', 'land_val', 'bld_val', 'tot_mkt_val', 'lgl_1', 'certified_date'];
 const CATEGORY_WORDS = { A: 'Single-family residence', B: 'Multifamily residence', C: 'Vacant lot', D: 'Rural land', E: 'Farm or ranch improvements', M: 'Mobile home', O: 'Residential inventory' };
+
+// The district's own jurisdiction table names each city "CITY OF ..."; an account's list of jurisdictions says which it's in. Cities
+// named some other way aren't read, so no city is ever claimed to be unincorporated land.
+async function cityNames(zip) {
+  const cities = new Map();
+  for await (const row of zipTable(zip, 'desc_r_12_real_jurisdictions.txt', ['Code', 'Description'], TAB)) {
+    const name = /^CITY OF (.+)$/.exec(String(row.Description ?? '').trim())?.[1];
+    if (name && !/TIRZ|\(/.test(name)) cities.set(row.Code.trim(), name.toLowerCase().replace(/(^|\s)\S/g, (first) => first.toUpperCase()));
+  }
+  return cities;
+}
+// "LT 12 BLK 3 ...": one whole platted lot, not a tract of one or several.
+const lotOf = (legal) => {
+  const text = String(legal ?? '').toUpperCase();
+  return /&|\bPT\b|\bTR\b|\bLTS\b/.test(text) ? null : /^LT (\d+[A-Z]?)(?:\s|$)/.exec(text)?.[1] || null;
+};
 
 function useOf(code, hasUnit) {
   const c = code.toUpperCase();
@@ -105,6 +122,8 @@ async function* build({ work, today = new Date() }) {
     }
   }
   if (!found) throw new Error('The district\'s files weren\'t found');
+  download(`${FILES}/${found}/Code_description_real.zip`, path.join(dir, 'Code_description_real.zip'));
+  const cities = await cityNames(path.join(dir, 'Code_description_real.zip'));
   const buildings = await buildingFacts(path.join(dir, 'Real_building_land.zip'));
   log(`${buildings.size} accounts with residential buildings`);
   const records = [];
@@ -173,13 +192,18 @@ async function* build({ work, today = new Date() }) {
     put(facts, 'land_use', CATEGORY_WORDS[code.charAt(0).toUpperCase()] || null);
     put(facts, 'county_use_code', word(code));
     put(facts, 'legal_description', word(row.lgl_1)?.slice(0, 300));
+    put(facts, 'lot_number', lotOf(row.lgl_1));
+    put(facts, 'municipality', String(row.jurs ?? '').trim().split(/\s+/).map((code) => cities.get(code)).find(Boolean));
     put(facts, 'value_year', positive(row.yr));
     put(facts, 'market_value', positive(row.tot_mkt_val));
     put(facts, 'market_land_value', positive(row.land_val));
     put(facts, 'market_building_value', positive(row.bld_val));
     records.push({ id: `pp:${kind}:${FIPS}:${account}`, kind, home_type: homeType, address: located, facts });
   }
-  log(`${COUNTY}: ${records.length} accounts, ${noAddress} without a street number, ${protectedAccounts} protected`);
+  // The account's address line and its street columns disagree on some homes: each is found at both.
+  const twins = alsoAtOwnLine(records);
+  records.push(...twins);
+  log(`${COUNTY}: ${records.length} accounts, ${noAddress} without a street number, ${protectedAccounts} protected, ${twins.length} also filed at their own address line`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'TX', name: COUNTY, publisher: 'Harris Central Appraisal District', dataset: `${found} public data files`, method: 'county', source: 'tx-harris', as_of: asOf || `${found}-11-01`, stale_after_days: 450, records,

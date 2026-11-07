@@ -101,7 +101,7 @@ async function* build({ work }) {
   const sales = new Map();
   for await (const row of zipTable(zip, 'AllSales.csv', ['Parcel', 'SaleDate', 'SaleAmt', 'DeedType', 'QualificationDescription'])) {
     const [date, price] = [isoDate(row.SaleDate), positive(row.SaleAmt)];
-    if (!date || !isHomeSale(price, row.QualificationDescription) || NOT_A_DEED_OF_SALE.has(row.DeedType.trim()) || /MULTI/i.test(row.QualificationDescription)) continue;
+    if (!date || !isHomeSale(price, row.QualificationDescription) || NOT_A_DEED_OF_SALE.has(row.DeedType.trim())) continue;
     const held = sales.get(row.Parcel);
     if (!held || held.date < date) sales.set(row.Parcel, { date, price });
   }

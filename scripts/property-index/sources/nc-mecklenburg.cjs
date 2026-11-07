@@ -41,8 +41,8 @@ const said = (text) => {
   return value && !/^(NONE|UNKNOWN)$/i.test(value) ? value : null;
 };
 
-// A sale's qualification that says the price isn't this home's: several parcels, or the buildings left out of it.
-const NOT_THIS_SALE = /2 OR MORE PARCELS|IMPROVEMENTS NOT INCLUDED/;
+// A sale's qualification that says the price isn't this home's: the buildings were left out of it.
+const NOT_THIS_SALE = /IMPROVEMENTS NOT INCLUDED/;
 // The legal description's platted lot: "L12 B3 M45-678".
 const lotOf = (legal) => /^L(\d+[A-Z]?)\s+(?:B\S+\s+)?M\d/.exec(String(legal ?? '').trim())?.[1] || null;
 

@@ -23,8 +23,9 @@ const COLUMNS = ['ACCOUNT', 'LOCN', 'LOCS', 'LOCD', 'UNIT', 'LOCCITY', 'LOCZIP',
 // Deeds on the Appraiser's list that move no home at a price: a quit claim, oil and mineral rights, a mortgage, a surrender. A home in a park
 // sells by assigning its proprietary lease.
 const NOT_A_DEED_OF_SALE = new Set(['QC', 'MR', 'BM', 'DS']);
-// Its qualification codes for a line that isn't this home's price: several parcels, a cemetery lot, part of a bulk sale, an error.
-const NOT_THIS_SALE = new Set(['2', '05', '8', 'C', '11', '13', '16', '34', '43', '98']);
+// Its qualification codes for a line that isn't this home's price: a corrective or nominal deed, a cemetery lot, part of an interest, a
+// satisfaction, part of a bulk sale, an error.
+const NOT_THIS_SALE = new Set(['11', '13', '16', '34', '43', '98']);
 const COOLED = new Set(['1', '2', '4', '5']);
 const HEATED = new Set(['1', '3', '4']);
 const said = (text) => {
