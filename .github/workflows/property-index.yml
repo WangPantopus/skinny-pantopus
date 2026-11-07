@@ -11,7 +11,7 @@ on:
     # Clark County writes its file on Tuesdays.
     - cron: "23 13 * * 3"
     - cron: "41 14 9 * *"
-    # The statewide files, in groups that fit one run.
+    # The statewide files, in groups that fit one run. Not tx-stratmap: its site refuses GitHub's servers.
     - cron: "17 3 10 * *"
     - cron: "17 3 11 * *"
     - cron: "17 3 12 * *"
@@ -156,7 +156,7 @@ jobs:
       - name: Build and publish
         if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         env:
-          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-allegheny pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'co-denver co-adams dc-dc ok-oklahoma ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-miami-dade fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || 'tx-dallas fl-roll' }}
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-allegheny pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'co-denver co-adams dc-dc ok-oklahoma ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-miami-dade fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || 'tx-dallas fl-roll' }}
           # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
           # Only a run someone starts by hand, and only when they say so.
