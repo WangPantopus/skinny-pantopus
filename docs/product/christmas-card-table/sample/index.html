@@ -1,0 +1,904 @@
+<meta charset="utf-8">
+<title>Christmas Card Sample</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=La+Belle+Aurore&family=Nothing+You+Could+Do&display=swap">
+<style>
+/* One visual world: a card lying on a table, in a light taken from its own picture. Always dark, whatever the phone's setting. */
+:root{
+  color-scheme:dark;
+  --cream:#f6ecd9; --cream-soft:rgba(246,236,217,.74); --cream-faint:rgba(246,236,217,.5);
+  --ink-pen:#1b2a5c; --ink-caption:#1d2b63; --ink-year:#2b2622;
+  --glass:rgba(24,18,16,.36); --glass-line:rgba(246,236,217,.16);
+  --gold:#d8b76f; --wax:#8b1d1d; --night:#141013;
+  --serif:ui-serif,"New York",Georgia,"Times New Roman",serif;
+  --hand:"Nothing You Could Do",cursive;
+  --pen:"La Belle Aurore",cursive;
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:var(--night);overflow:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+body{font:15px/1.35 var(--ui);color:var(--cream);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+img{display:block;max-width:none;-webkit-user-drag:none;pointer-events:none}
+
+/* ---- The card on the table ---- */
+#shell{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#stage{position:relative;width:100%;height:100%;overflow:hidden;touch-action:none;background:#1c2233;contain:strict;-webkit-touch-callout:none}
+/* On a computer the sample keeps a phone's shape, so its proportions stay true. */
+@media (min-width:560px){
+  #stage{width:402px;height:min(874px,calc(100% - 28px));border-radius:46px;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 30px 80px rgba(0,0,0,.6)}
+}
+#table,#table2,#grain,#light,#vignette,#objects{position:absolute;inset:0;pointer-events:none}
+#table,#table2{inset:-14px;background-size:cover;background-position:50% 50%;transition:opacity .7s ease;will-change:transform}
+#table2{opacity:0}
+#objects{z-index:2}
+#envShadow{z-index:1}#lInside{z-index:2}#lFlapIn{z-index:3}#lPocketShadow{z-index:6}#lPocket{z-index:7}#lFlapShadow{z-index:8}#lFlapOut{z-index:9}#lFront{z-index:10}
+#light{inset:-40px;z-index:30;background-size:100% 100%;mix-blend-mode:soft-light;opacity:.88;will-change:transform}
+#vignette{z-index:31;background:radial-gradient(120% 88% at 46% 40%,rgba(0,0,0,0) 44%,rgba(6,3,4,.46) 100%)}
+#grain{z-index:32;background:url(a/grain.png);background-size:128px 128px;opacity:.36;mix-blend-mode:overlay}
+
+.layer{position:absolute;left:0;top:0;transform-origin:50% 50%;will-change:transform}
+.layer>img{width:100%;height:100%}
+.shadow{position:absolute;left:0;top:0;background:#000;border-radius:4px;will-change:transform,opacity;transform-origin:50% 50%}
+
+/* Envelope */
+#flapOut,#flapIn{position:absolute;left:0;width:100%;will-change:transform,filter}
+#flapOut{top:0;transform-origin:50% 0}
+#flapIn{transform-origin:50% 100%}
+#flapOut>img,#flapIn>img{width:100%;height:auto}
+#flapOut>img#seal{position:absolute;width:28%;height:auto;left:36%;top:71%;transition:transform .16s ease}
+#seal.cracked{transform:rotate(2.5deg) translateY(-1%)}
+#flapGold{position:absolute;inset:0;-webkit-mask:url(a/env-flap-gold.webp) 0 0/100% 100% no-repeat;mask:url(a/env-flap-gold.webp) 0 0/100% 100% no-repeat;overflow:hidden;mix-blend-mode:screen}
+#flapGlint{position:absolute;inset:-20% -60%;background:linear-gradient(105deg,rgba(255,232,170,0) 38%,rgba(255,238,186,.9) 50%,rgba(255,232,170,0) 62%);will-change:transform}
+#frontWords{position:absolute;inset:0}
+#stampImg{position:absolute;left:75.5%;top:3.45%;width:20.17%;height:auto}
+#pmImg{position:absolute;left:34.5%;top:3.16%;width:51.83%;height:auto}
+#toName{position:absolute;left:15%;top:46%;font-family:var(--pen);color:#fbeed2;font-size:calc(var(--ew)*.094);line-height:1.1;transform:rotate(-1.6deg);white-space:nowrap;text-shadow:0 .5px 0 rgba(60,8,10,.5)}
+#fromName{position:absolute;left:6.6%;top:6.2%;font-family:var(--pen);color:#f4e2bf;font-size:calc(var(--ew)*.05);line-height:1.15;transform:rotate(-.8deg);white-space:nowrap}
+#kind{position:absolute;left:6.8%;bottom:5.4%;font:600 calc(var(--ew)*.0235)/1 var(--serif);letter-spacing:.2em;color:var(--gold);text-transform:uppercase}
+#sealedMark{position:absolute;left:50%;top:74%;transform:translate(-50%,-50%) rotate(-7deg);border:calc(var(--ew)*.007) double #ecd7a4;padding:calc(var(--ew)*.018) calc(var(--ew)*.03);font:700 calc(var(--ew)*.04)/1.18 var(--serif);letter-spacing:.11em;color:#ecd7a4;text-align:center;text-transform:uppercase;border-radius:calc(var(--ew)*.012);white-space:nowrap}
+
+/* The card */
+#card{position:absolute;left:0;top:0;z-index:5;transform-origin:50% 50%;will-change:transform;--u:4px;width:calc(var(--u)*100);height:calc(var(--u)*120);perspective:calc(var(--u)*520)}
+#flip{position:relative;width:100%;height:100%;transform-style:preserve-3d;-webkit-transform-style:preserve-3d;will-change:transform}
+#flip .face{backface-visibility:hidden;-webkit-backface-visibility:hidden}
+#flip .face.back{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;overflow:hidden;border-radius:calc(var(--u)*.7);background:#f9f1e3;isolation:isolate}
+.photo{position:absolute;left:calc(var(--u)*1.7);top:calc(var(--u)*1.7);width:calc(var(--u)*96.6);height:calc(var(--u)*103);object-fit:cover;box-shadow:0 0 0 .5px rgba(70,50,20,.25);filter:contrast(1.03) saturate(1.04)}
+.caption{position:absolute;left:calc(var(--u)*4.2);top:calc(var(--u)*107.4);font-family:var(--hand);color:var(--ink-caption);white-space:nowrap;line-height:1}
+.year{position:absolute;left:calc(var(--u)*4.2);top:calc(var(--u)*114.2);font:calc(var(--u)*2.2)/1 var(--serif);letter-spacing:.42em;color:var(--ink-year);white-space:nowrap}
+.pm{position:absolute;left:calc(var(--u)*77.5);top:calc(var(--u)*106.2);width:calc(var(--u)*20);height:calc(var(--u)*12);transform:rotate(-3deg)}
+.pm svg{width:100%;height:100%;display:block}
+.grainMul{position:absolute;inset:0;background:url(a/paper.webp);background-size:calc(var(--u)*60);mix-blend-mode:multiply;pointer-events:none}
+.face.front .grainMul{opacity:.5}
+.edges{position:absolute;inset:0;box-shadow:inset 0 0 calc(var(--u)*2.6) rgba(110,80,30,.2);border-radius:inherit;pointer-events:none}
+.turnShade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+.sheen{position:absolute;inset:-30%;background:linear-gradient(112deg,rgba(255,255,255,0) 34%,rgba(255,250,235,.5) 47%,rgba(255,250,235,.1) 54%,rgba(255,255,255,0) 66%);mix-blend-mode:soft-light;pointer-events:none;will-change:transform}
+.rules{position:absolute;left:calc(var(--u)*8);right:calc(var(--u)*8);top:calc(var(--u)*9);height:calc(var(--u)*83.6);background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) calc(var(--u)*7.6 - 1px),rgba(74,84,118,.2) calc(var(--u)*7.6 - 1px),rgba(74,84,118,.2) calc(var(--u)*7.6))}
+.note{position:absolute;left:calc(var(--u)*8);right:calc(var(--u)*7);top:calc(var(--u)*9);font-family:var(--pen);font-size:calc(var(--u)*6);line-height:calc(var(--u)*7.6);color:var(--ink-pen);mix-blend-mode:multiply}
+.note .w{display:inline-block;white-space:pre}
+.from{position:absolute;left:calc(var(--u)*8);right:calc(var(--u)*8);top:calc(var(--u)*97);display:flex;align-items:baseline;gap:calc(var(--u)*2)}
+.from b{font:calc(var(--u)*2.3)/1 var(--serif);letter-spacing:.24em;color:#6a5f52;font-weight:400}
+.from span{font-family:var(--pen);font-size:calc(var(--u)*6.4);line-height:1;color:var(--ink-pen);mix-blend-mode:multiply}
+.foot{position:absolute;left:0;right:0;bottom:calc(var(--u)*3.2);text-align:center;font:calc(var(--u)*1.9)/1 var(--serif);letter-spacing:.3em;color:#8a7f70}
+
+/* What sits around it */
+#ui{position:absolute;inset:0;z-index:40;pointer-events:none}
+#ui [data-ui]{pointer-events:auto}
+#top{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 10px) max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px));display:flex;justify-content:space-between;align-items:center;transition:opacity .35s ease}
+.round{width:40px;height:40px;border-radius:50%;background:var(--glass);box-shadow:inset 0 0 0 .5px var(--glass-line);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center;flex:none}
+.round svg{width:18px;height:18px;stroke:var(--cream);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#topRight{display:flex;gap:8px;transition:opacity .35s ease}
+#words{position:absolute;left:24px;right:24px;text-align:center;font:italic 18px/1.3 var(--serif);color:var(--cream-soft);text-shadow:0 1px 8px rgba(0,0,0,.35);transition:opacity .4s ease;text-wrap:balance}
+#bottom{position:absolute;left:0;right:0;bottom:0;padding:0 max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 8px) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;align-items:center;gap:8px}
+#act{display:flex;flex-direction:column;align-items:center;gap:6px;transition:opacity .35s ease}
+#primary{min-height:44px;padding:0 24px;border-radius:22px;background:var(--glass);box-shadow:inset 0 0 0 .5px var(--glass-line);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);font-weight:600;font-size:15px;color:var(--cream)}
+#hint{font-size:12.5px;color:var(--cream-faint);min-height:16px;text-align:center}
+#sampleRow{display:flex;align-items:center;gap:10px;padding:5px 12px 5px 8px;border-radius:18px;background:rgba(12,9,8,.5);font-size:12.5px;color:var(--cream-soft)}
+.thumbs{display:flex;gap:6px}
+.thumb{width:26px;height:28px;border-radius:3px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.14);opacity:.72}
+.thumb[aria-pressed=true]{opacity:1;box-shadow:0 0 0 1.5px var(--gold)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.link{min-height:32px;padding:0 3px}
+.link[aria-pressed=true]{color:var(--gold);font-weight:600}
+.dot{width:1px;height:14px;background:rgba(246,236,217,.2)}
+#toast{position:absolute;z-index:60;left:50%;top:calc(env(safe-area-inset-top,0px) + 62px);transform:translateX(-50%);width:max-content;max-width:86%;padding:9px 15px;border-radius:14px;background:rgba(24,18,16,.88);font-size:13.5px;line-height:1.35;color:var(--cream);opacity:0;transition:opacity .28s ease;pointer-events:none;text-align:center}
+#menu{position:absolute;z-index:50;right:max(12px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 58px);min-width:220px;padding:6px;border-radius:14px;background:rgba(28,22,20,.94);box-shadow:0 12px 34px rgba(0,0,0,.5),inset 0 0 0 .5px var(--glass-line)}
+#menu button{display:block;width:100%;min-height:42px;padding:0 12px;text-align:left;border-radius:9px;font-size:14.5px}
+#menu button:active{background:rgba(246,236,217,.08)}
+.hidden{opacity:0!important;pointer-events:none!important}
+#turnTip{position:absolute;inset:0;z-index:70;display:none;flex-direction:column;gap:12px;align-items:center;justify-content:center;background:rgba(10,8,8,.88);text-align:center;padding:20px;font:italic 18px/1.4 var(--serif)}
+#turnTip button{min-height:44px;padding:0 22px;border-radius:22px;background:rgba(246,236,217,.14);font:600 15px/1 var(--ui)}
+@media (orientation:landscape) and (max-height:480px){#turnTip{display:flex}}
+
+/* ---- Sharing ---- */
+#sheetWrap{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center;background:rgba(6,4,4,.58);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+#sheet{width:100%;max-width:520px;max-height:calc(100% - 12px);overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:22px 22px 0 0;background:#211b19;box-shadow:0 -10px 40px rgba(0,0,0,.5),inset 0 .5px 0 var(--glass-line);padding:12px max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 14px) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px}
+#sheetHead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#sheetHead h2{margin:0;font:400 21px/1.2 var(--serif);text-wrap:balance}
+#preview{display:flex;justify-content:center;min-height:0}
+#preview img{height:min(46vh,430px);width:auto;max-width:100%;object-fit:contain;border-radius:8px;box-shadow:0 8px 26px rgba(0,0,0,.5);-webkit-touch-callout:default;pointer-events:auto;-webkit-user-select:auto;user-select:auto}
+#seg{display:flex;gap:3px;padding:3px;border-radius:12px;background:rgba(246,236,217,.08)}
+#seg button{flex:1;min-height:36px;border-radius:9px;font-size:13.5px;color:var(--cream-soft)}
+#seg button[aria-pressed=true]{background:rgba(246,236,217,.14);color:var(--cream);font-weight:600}
+#noteRow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+#noteRow b{display:block;font-weight:600;font-size:14.5px}
+#noteRow small{display:block;font-size:12.5px;line-height:1.3;color:var(--cream-faint);margin-top:2px}
+#showNote{appearance:none;-webkit-appearance:none;flex:none;width:46px;height:28px;border-radius:14px;background:rgba(246,236,217,.18);position:relative;margin:0;cursor:pointer;transition:background .18s ease}
+#showNote::after{content:"";position:absolute;left:2px;top:2px;width:24px;height:24px;border-radius:50%;background:var(--cream);transition:transform .18s ease}
+#showNote:checked{background:var(--wax)}
+#showNote:checked::after{transform:translateX(18px)}
+#acts{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+#acts button{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;color:var(--cream-soft);min-height:64px}
+#acts .ic{width:44px;height:44px;border-radius:14px;background:rgba(246,236,217,.1);display:flex;align-items:center;justify-content:center}
+#acts svg{width:22px;height:22px;stroke:var(--cream);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#shareSay{font-size:13px;line-height:1.4;color:var(--cream-soft);min-height:18px;-webkit-user-select:text;user-select:text}
+
+/* ---- The iPhone Duo ---- */
+#duoView{position:fixed;inset:0;z-index:90;background:radial-gradient(120% 90% at 50% 30%,#2b2a30 0%,#141316 70%);display:flex;flex-direction:column;overflow:hidden}
+#duoTop{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 10px) max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px));flex:none}
+#duoTop h2{margin:0;font:400 19px/1.2 var(--serif)}
+#duoWorld{position:relative;flex:1;min-height:0;perspective:2300px;perspective-origin:50% 44%;overflow:hidden}
+.device{position:absolute;left:50%;top:50%;transform-style:preserve-3d;-webkit-transform-style:preserve-3d;will-change:transform}
+#duoFold{width:951px;height:669px;margin:-334.5px 0 0 -475.5px}
+.half{position:absolute;overflow:hidden;background:#000;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+#hLeft{left:0;top:0;width:475.5px;height:669px;border-radius:34px 0 0 34px}
+.half::after,.ttHalf::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1.5px #4a4a52,inset 0 0 0 8px #0b0b0d;pointer-events:none}
+#hLeft::after{inset:0 -12px 0 0;border-radius:34px 0 0 34px}#hRight::after{inset:0 0 0 -12px;border-radius:0 34px 34px 0}#ttTop::after{inset:0 0 -12px 0;border-radius:34px 34px 0 0}#ttBottom::after{inset:-12px 0 0 0;border-radius:0 0 34px 34px}
+#rightWrap{position:absolute;left:475.5px;top:0;width:475.5px;height:669px;transform-origin:0 50%;transform-style:preserve-3d;-webkit-transform-style:preserve-3d;will-change:transform}
+#hRight{left:0;top:0;width:100%;height:100%;border-radius:0 34px 34px 0}
+#hOuter{left:0;top:0;width:100%;height:100%;border-radius:34px;transform:rotateY(180deg) translateZ(1px)}
+.scene{position:absolute;left:0;top:0;width:951px;height:669px;overflow:hidden}
+.dsTable{position:absolute;inset:-4px;background-size:cover;background-position:50% 50%}
+.dsFlap{position:absolute}
+.dsPage{position:absolute;width:calc(var(--u)*100);height:calc(var(--u)*120);box-shadow:0 8px 30px rgba(0,0,0,.45)}
+.dsPage .face{border-radius:calc(var(--u)*.5)}
+.dsLight{position:absolute;inset:-40px;background:url(a/light.webp);background-size:100% 100%;mix-blend-mode:soft-light;opacity:.8}
+.dsVig{position:absolute;inset:0;background:radial-gradient(120% 92% at 48% 42%,rgba(0,0,0,0) 46%,rgba(6,3,4,.44) 100%)}
+.fold{position:absolute;top:0;bottom:0;width:58%;pointer-events:none}
+#fLeft{right:0;background:linear-gradient(to left,rgba(0,0,0,.42),rgba(0,0,0,.08) 16%,rgba(0,0,0,0) 46%)}
+#fRight{left:0;background:linear-gradient(to right,rgba(0,0,0,.34),rgba(255,255,255,.05) 8%,rgba(0,0,0,0) 34%)}
+#dimRight{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+.sysClock{position:absolute;font:600 13px/1 var(--ui);color:rgba(255,255,255,.82)}
+#ttDevice{width:669px;height:951px;margin:-475.5px 0 0 -334.5px}
+.ttHalf{position:absolute;left:0;width:669px;height:475.5px;overflow:hidden;background:#000;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+#ttTop{top:0;border-radius:34px 34px 0 0;transform-origin:50% 100%}
+#ttBottom{top:475.5px;border-radius:0 0 34px 34px;transform-origin:50% 0}
+#duoControls{flex:none;padding:0 max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 12px) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px;align-items:center}
+#duoWords{font:italic 16.5px/1.35 var(--serif);color:var(--cream-soft);text-align:center;max-width:560px;min-height:45px;text-wrap:balance}
+#hinge{width:min(100%,460px);height:32px;margin:0;accent-color:var(--gold);touch-action:pan-y}
+#poses{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+#poses button{min-height:38px;padding:0 13px;border-radius:19px;font-size:13.5px;color:var(--cream-soft);background:rgba(246,236,217,.08)}
+#poses button[aria-pressed=true]{background:rgba(246,236,217,.18);color:var(--cream);font-weight:600}
+@media (max-height:480px){
+  #duoTop{position:absolute;z-index:2}#duoTop h2,#duoWords{display:none}
+  #duoControls{flex-direction:row;justify-content:center;gap:12px}
+  #hinge{width:min(34vw,260px)}
+  #poses{flex-wrap:nowrap}
+  #poses button{white-space:nowrap;padding:0 10px}
+}
+</style>
+
+<div id="shell">
+  <div id="stage" role="application" aria-label="A Christmas card lying on a table. Use the button at the bottom to open it and turn it over.">
+    <div id="table"></div><div id="table2"></div>
+    <div id="objects">
+      <div class="shadow" id="envShadow"></div>
+      <div class="layer" id="lInside"><img alt="" src="a/env-inside.webp"></div>
+      <div class="layer" id="lFlapIn"><div id="flapIn"><img alt="" src="a/env-flap-in.webp"><div id="flapGold"><div id="flapGlint"></div></div></div></div>
+      <div class="shadow" id="cardShadowWide"></div>
+      <div class="shadow" id="cardShadowTight"></div>
+      <div id="card"><div id="flip"><div class="face front" id="faceFront"></div><div class="face back" id="faceBack"></div></div></div>
+      <div class="layer" id="lPocketShadow"><img alt="" src="a/env-pocket-shadow.webp"></div>
+      <div class="layer" id="lPocket"><img alt="" src="a/env-pocket.webp"></div>
+      <div class="layer" id="lFlapShadow"><img alt="" src="a/env-flap-shadow.webp"></div>
+      <div class="layer" id="lFlapOut"><div id="flapOut"><img alt="" src="a/env-flap-out.webp"><img id="seal" alt="" src="a/wax-gold.webp"></div></div>
+      <div class="layer" id="lFront"><img alt="" src="a/env-front.webp">
+        <div id="frontWords"><img id="stampImg" alt=""><img id="pmImg" alt="" src="a/postmark.webp"><div id="fromName"></div><div id="toName"></div><div id="kind">Christmas card</div><div id="sealedMark" hidden>Do not open<br>until Christmas</div></div>
+      </div>
+    </div>
+    <div id="light"></div><div id="vignette"></div><div id="grain"></div>
+    <div id="ui">
+      <div id="top">
+        <button class="round" data-ui id="close" aria-label="Back to the Mailbox (in this sample, start over)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div id="topRight">
+          <button class="round" data-ui id="shareBtn" aria-label="Share this card"><svg viewBox="0 0 24 24"><path d="M12 15V4M8 7.5L12 3.5l4 4M5.5 12.5V19a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-6.5"/></svg></button>
+          <button class="round" data-ui id="moreBtn" aria-label="More" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M5.5 12h.01M12 12h.01M18.5 12h.01" stroke-width="2.6"/></svg></button>
+        </div>
+      </div>
+      <div id="menu" data-ui hidden>
+        <button class="mi">Who sent it and its trail</button>
+        <button class="mi">File in the Vault</button>
+        <button class="mi">Shred</button>
+      </div>
+      <div id="words" aria-live="polite"></div>
+      <div id="toast" role="status"></div>
+      <div id="bottom">
+        <div id="act"><button data-ui id="primary"></button><div id="hint"></div></div>
+        <div id="sampleRow" data-ui aria-label="Sample options">
+          <div class="thumbs" id="thumbs"></div><span class="dot"></span>
+          <button class="link" id="linkSealed" aria-pressed="false">Sealed</button>
+          <button class="link" id="linkDuo">Duo</button>
+          <button class="link" id="linkPictures">Pictures</button>
+        </div>
+      </div>
+    </div>
+    <div id="turnTip" data-ui>Hold your phone upright for the card.<button id="tipDuo">See it on the iPhone Duo</button></div>
+  </div>
+</div>
+
+<div id="sheetWrap" hidden>
+  <div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div id="sheetHead"><h2 id="sheetTitle">Share this card</h2><button class="round" id="sheetClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div id="preview"><img id="shareImg" alt="The picture that would be shared"></div>
+    <div id="seg" role="group" aria-label="Size">
+      <button data-f="story" aria-pressed="true">Story</button><button data-f="post" aria-pressed="false">Post</button><button data-f="link" aria-pressed="false">Link preview</button>
+    </div>
+    <div id="noteRow"><label for="showNote"><b>Show the note</b><small id="noteSmall"></small></label><input id="showNote" type="checkbox" role="switch"></div>
+    <div id="acts">
+      <button data-a="instagram"><span class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4.5"/><circle cx="12" cy="12" r="3.6"/><path d="M16.8 7.2h.01" stroke-width="2.2"/></svg></span>Instagram</button>
+      <button data-a="facebook"><span class="ic"><svg viewBox="0 0 24 24"><path d="M14.5 20v-7h2.4l.5-3h-2.9V8.4c0-.9.3-1.4 1.5-1.4h1.5V4.3C16.900 4.200 16.200 4 15.200 4c-2.300 0-3.800 1.400-3.800 3.900V10H9v3h2.400v7"/></svg></span>Facebook</button>
+      <button data-a="email"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3.500" y="5.500" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/></svg></span>Email</button>
+      <button data-a="link"><span class="ic"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.700 0l3-3a4 4 0 0 0-5.700-5.700l-1 1M14 10a4 4 0 0 0-5.700 0l-3 3a4 4 0 0 0 5.700 5.700l1-1"/></svg></span>Copy link</button>
+      <button data-a="save"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 4v11M7.500 11l4.500 4.500 4.500-4.500M5 19.500h14"/></svg></span>Save</button>
+    </div>
+    <div id="shareSay" aria-live="polite"></div>
+  </div>
+</div>
+
+<div id="duoView" hidden>
+  <div id="duoTop"><button class="round" id="duoClose" aria-label="Back to the card on a phone"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><h2>On the iPhone Duo</h2></div>
+  <div id="duoWorld"></div>
+  <div id="duoControls">
+    <div id="duoWords" aria-live="polite"></div>
+    <input id="hinge" type="range" min="0" max="180" step="1" value="180" aria-label="Fold the phone">
+    <div id="poses" role="group" aria-label="How you're holding it">
+      <button data-p="closed" aria-pressed="false">Closed</button><button data-p="book" aria-pressed="false">Like a book</button><button data-p="flat" aria-pressed="true">Flat</button><button data-p="table" aria-pressed="false">On a table</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ------- The sample's content: your pictures, made-up people ------- */
+const CARDS = [
+  { n: 8,  num: '08', stamp: 'peak',  caption: 'Come finish our snowman.', paper: '#f9f1e3', slug: 'come-finish-our-snowman',
+    note: "Dear Maya,\nFound this and thought of the winter we built the one with Dad's old hat. It still makes me laugh. Come home early this year, the kids ask about you every day.\nLove you lots," },
+  { n: 1,  num: '01', stamp: 'fir',   caption: 'Home for Christmas.', paper: '#f7eee0', slug: 'home-for-christmas',
+    note: "Dear Maya,\nThe porch lights are up and your room is ready. Mom already hid the good cookies from me. Drive safe, and call when you pass the bridge.\nSee you soon," },
+  { n: 24, num: '24', stamp: 'river', caption: 'Another Christmas. Still you.', paper: '#f9f1df', slug: 'another-christmas-still-you',
+    note: "My Maya,\nForty-one Christmases and you still steal the blanket. I wouldn't change a thing. Save me the seat by the tree.\nYours always," },
+];
+const TO = 'Maya Ortiz', FROM = 'Daniel Ortiz', FROM_SHORT = 'Daniel';
+const $ = (id) => document.getElementById(id);
+const stage = $('stage'), card = $('card'), flipEl = $('flip');
+const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ------- A picture that fails on a weak connection tries again instead of showing as broken ------- */
+function retryImg(el) {
+  const src = el.getAttribute('src');
+  const tries = +(el.dataset.tries || 0);
+  if (!src || tries >= 5) return;
+  el.dataset.tries = tries + 1;
+  setTimeout(() => { el.removeAttribute('src'); el.setAttribute('src', src); }, 400 * (tries + 1));
+}
+document.addEventListener('error', (e) => { if (e.target.tagName === 'IMG') retryImg(e.target); }, true);
+document.querySelectorAll('img').forEach((i) => { if (i.complete && !i.naturalWidth) retryImg(i); });
+
+/* ------- Helpers ------- */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const sm = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+function seeded(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+const POSTMARK = `<svg viewBox="0 0 100 60" fill="none" stroke="#b2413a" stroke-opacity=".86"><circle cx="36" cy="30" r="22" stroke-width="1.6"/><circle cx="36" cy="30" r="18.5" stroke-width=".8"/><path stroke-width="1.6" d="M58 21q6-8 12 0t12 0t12 0M58 30q6-8 12 0t12 0t12 0M58 39q6-8 12 0t12 0t12 0"/><text x="36" y="28" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="7.6" fill="#b2413a" stroke="none">NOV 6</text><text x="36" y="40" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="8.5" fill="#b2413a" stroke="none">2026</text></svg>`;
+function noteHTML(c) {
+  const rnd = seeded(c.n * 7 + 3);
+  return c.note.split('\n').map((line) => `<div>${line.split(/( )/).map((w) => (w === ' ' ? ' ' : `<span class="w" style="transform:translateY(${((rnd() - .5) * .34).toFixed(3)}em) rotate(${((rnd() - .5) * 1.5).toFixed(2)}deg);opacity:${(.86 + rnd() * .14).toFixed(2)}">${w}</span>`)).join('')}</div>`).join('');
+}
+function frontHTML(c, moving) {
+  const size = Math.min(4.8, 70 / Math.max(1, c.caption.length * .53));
+  return `<img class="photo" alt="" src="a/card-${c.num}.jpg"><div class="caption" style="font-size:calc(var(--u)*${size})">${c.caption}</div><div class="year">CHRISTMAS, 2026</div><div class="pm">${POSTMARK}</div><div class="grainMul"></div><div class="edges"></div>${moving ? '<div class="sheen"></div><div class="turnShade"></div>' : ''}`;
+}
+function backHTML(c, moving) {
+  return `<div class="rules"></div><div class="note">${noteHTML(c)}</div><div class="from"><b>FROM</b><span>${FROM_SHORT}</span></div><div class="foot">PANTOPUS POST · CHRISTMAS 2026</div><div class="grainMul"></div><div class="edges"></div>${moving ? '<div class="sheen"></div><div class="turnShade"></div>' : ''}`;
+}
+
+/* ------- State: every moving thing is a spring ------- */
+const V = {
+  envDeg: { x: 0, v: 0, t: 0, k: 95, c: 15 },   // the envelope turning over: 0 address side, 180 flap side
+  pull:   { x: 0, v: 0, t: 0, k: 70, c: 16 },   // 0 shut, .3 flap open, 1 card out
+  lay:    { x: 0, v: 0, t: 0, k: 62, c: 12.5 }, // the card laid down in front of the envelope
+  deg:    { x: 0, v: 0, t: 0, k: 88, c: 13.5 }, // the card turning over
+  tx:     { x: 0, v: 0, t: 0, k: 40, c: 11 },   // the light
+  ty:     { x: 0, v: 0, t: 0, k: 40, c: 11 },
+  drop:   { x: 1, v: 0, t: 0, k: 58, c: 11.5 }, // the envelope arriving on the table
+};
+let dragging = null;
+const S = { i: 0, sealed: false, step: 'front', turnedOnce: false, envTurnedOnce: false, heldOnce: false, drift: true, lastTouch: 0, cracked: false, paused: false };
+let G = {};
+const FLAP_OPEN = 0.3;
+
+function layout() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  const cs = getComputedStyle(document.documentElement);
+  const safeTop = parseFloat(cs.getPropertyValue('--sat')) || 0;
+  const bottom = $('bottom').getBoundingClientRect().height + 8;
+  const topGap = safeTop + 6;
+  const room = h - topGap - bottom;
+  const side = w < 560 ? 9 : 14;
+  let cw = Math.min(w - side * 2, 470);
+  let peek = room - cw * 1.2;
+  const minPeek = cw * .13, maxPeek = cw * .47;
+  if (peek < minPeek) { cw = Math.min(cw, room / (1.2 + .13)); peek = cw * .13; }
+  peek = Math.min(peek, maxPeek);
+  const spare = Math.max(0, room - cw * 1.2 - peek);
+  const cardTop = topGap + spare * .46 + peek;
+  const ew = cw * 1.012, eh = ew * 1392 / 1200, fd = ew * 512 / 1200;
+  const envTopFinal = cardTop - peek + fd;
+  // Shut, it sits a little above the middle of the free space, under the words.
+  const free = h - safeTop - bottom;
+  const envY = safeTop + Math.max(88, (free - eh) * .56);
+  G = { w, h, safeTop, cw, ch: cw * 1.2, ew, eh, fd, cardTop, envTopFinal, envX: (w - ew) / 2, envY, cardX: (w - cw) / 2, bottom,
+    envYOpen: Math.max(envY, safeTop + fd * .9 + 4), envTopOut: Math.min(h - eh * .5, cw * 1.2 * .8 + 8), cardTopOut: 0 };
+  G.cardTopOut = G.envTopOut - G.ch * 1.02 - 8;
+  stage.style.setProperty('--ew', ew + 'px');
+  card.style.setProperty('--u', cw / 100 + 'px');
+  for (const id of ['lInside', 'lPocket', 'lPocketShadow', 'lFlapShadow', 'lFront', 'lFlapOut', 'lFlapIn']) {
+    const el = $(id); el.style.width = ew + 'px'; el.style.height = eh + 'px'; el.style.transformOrigin = `${ew / 2}px ${eh / 2}px`;
+  }
+  $('flapIn').style.top = -fd + 'px'; $('flapIn').style.height = fd + 'px';
+  $('flapOut').style.height = fd + 'px';
+  const es = $('envShadow').style; es.width = ew + 'px'; es.height = eh + 'px'; es.boxShadow = `0 0 ${ew * .08}px ${ew * .02}px rgba(0,0,0,.72)`;
+  for (const [id, blur] of [['cardShadowWide', .14], ['cardShadowTight', .03]]) {
+    const st = $(id).style; st.width = G.cw + 'px'; st.height = G.ch + 'px'; st.boxShadow = `0 0 ${G.cw * blur}px ${G.cw * blur * .25}px #000`;
+  }
+  $('words').style.top = (safeTop + 54) + 'px';
+}
+
+/* ------- Content ------- */
+function setCard(i) {
+  S.i = i;
+  const c = CARDS[i];
+  $('faceFront').innerHTML = frontHTML(c, true);
+  $('faceBack').innerHTML = backHTML(c, true);
+  document.querySelectorAll('#flip .face').forEach((f) => { f.style.background = c.paper; });
+  $('toName').textContent = TO; $('fromName').textContent = FROM;
+  $('stampImg').src = `a/stamp-${c.stamp}.webp`;
+  const t1 = $('table'), t2 = $('table2');
+  t2.style.backgroundImage = `url(a/table-${c.num}.jpg)`; t2.style.opacity = 1;
+  setTimeout(() => { t1.style.backgroundImage = `url(a/table-${c.num}.jpg)`; t2.style.opacity = 0; }, 720);
+  [...document.querySelectorAll('#thumbs button')].forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
+  stage.setAttribute('aria-label', `A Christmas card from ${FROM_SHORT} lying on a table. ${c.caption} Use the button at the bottom to open it and turn it over.`);
+  duo.built = false;
+}
+function restart(animated = true) {
+  for (const k of ['envDeg', 'pull', 'lay', 'deg']) { V[k].x = V[k].t = V[k].v = 0; }
+  S.step = 'front'; S.cracked = false; $('seal').src = 'a/wax-gold.webp'; $('seal').classList.remove('cracked');
+  V.drop.x = animated && !reduce() ? 1 : 0; V.drop.v = 0; V.drop.t = 0;
+  $('sealedMark').hidden = !S.sealed;
+  $('kind').hidden = S.sealed;
+  $('menu').hidden = true;
+  $('top').classList.remove('hidden'); $('act').classList.remove('hidden');
+  mark(); wake();
+}
+
+/* ------- Words and buttons follow what's on the table ------- */
+function daysLeft() {
+  const now = new Date(); const xmas = new Date(now.getFullYear(), 11, 25, 7);
+  return Math.max(1, Math.ceil((xmas - now) / 864e5));
+}
+const backUp = () => Math.cos(V.deg.t * Math.PI / 180) < 0;
+function mark() {
+  const st = S.step, sealed = S.sealed;
+  let words = '', primary = '', hint = '';
+  if (st === 'front') {
+    words = sealed ? `${FROM_SHORT} sealed this card.` : `A Christmas card from ${FROM_SHORT}.`;
+    primary = 'Turn it over'; hint = S.envTurnedOnce ? 'or swipe it' : 'or swipe it, the way you\'d turn it in your hand';
+  } else if (st === 'back') {
+    if (sealed) { words = `It opens Christmas morning, in ${daysLeft()} days.`; primary = 'Try to open it'; hint = 'or pull the flap up'; } else { primary = 'Open it'; hint = 'or pull the flap up with your finger'; }
+  } else if (st === 'flap') {
+    primary = 'Take the card out'; hint = 'or pull it out with your finger';
+  } else if (st === 'out') {
+    primary = backUp() ? 'Turn it back' : 'Turn it over';
+    hint = S.turnedOnce ? (S.heldOnce ? '' : 'press and hold, then move your finger: the light moves') : 'or swipe it';
+  }
+  const W = $('words');
+  W.textContent = words; W.classList.toggle('hidden', !words);
+  $('primary').textContent = primary; $('hint').textContent = hint;
+  $('topRight').classList.toggle('hidden', st !== 'out' && !(sealed && (st === 'back' || st === 'front')));
+}
+
+/* ------- Haptics where the browser allows (the app will always have them) ------- */
+const hapticBox = (() => { const l = document.createElement('label'); l.style.cssText = 'position:fixed;width:0;height:0;overflow:hidden;opacity:0'; const c = document.createElement('input'); c.type = 'checkbox'; c.setAttribute('switch', ''); l.append(c); document.body.append(l); return l; })();
+function tick(ms = 8) { try { if (navigator.vibrate) navigator.vibrate(ms); else hapticBox.click(); } catch (_) { /* no haptics here */ } }
+
+/* ------- Actions ------- */
+function toFlapSide() { V.envDeg.t = 180 * (Math.sign(V.envDeg.t) || -1); S.envTurnedOnce = true; S.step = 'back'; tick(); mark(); wake(); }
+function crack() { if (S.cracked) return; S.cracked = true; $('seal').src = 'a/wax-gold-cracked.webp'; $('seal').classList.add('cracked'); tick(14); }
+function openFlap() {
+  if (S.sealed) { resist(); return; }
+  crack(); V.pull.t = FLAP_OPEN; S.step = 'flap'; mark(); wake();
+}
+function resist() {
+  V.pull.t = 0; V.pull.v = 1.1;
+  toast(`Not yet. ${daysLeft()} days until Christmas morning.`);
+  tick(20); wake();
+}
+function takeOut() { crack(); V.pull.t = 1; S.step = 'pulling'; mark(); wake(); }
+function primary() {
+  S.lastTouch = performance.now();
+  const r = reduce();
+  if (S.step === 'front') {
+    if (r) { V.envDeg.x = V.envDeg.t = 180; S.step = 'back'; S.envTurnedOnce = true; mark(); render(); return; }
+    toFlapSide();
+  } else if (S.step === 'back') {
+    if (S.sealed) { resist(); return; }
+    if (r) { V.pull.x = V.pull.t = 1; V.lay.x = V.lay.t = 1; S.step = 'out'; crack(); mark(); render(); return; }
+    openFlap(); setTimeout(() => { if (S.step === 'flap') takeOut(); }, 680);
+  } else if (S.step === 'flap') takeOut();
+  else if (S.step === 'out') turnCard();
+}
+function turnCard(dir = -1) {
+  V.deg.t = (Math.round(V.deg.t / 180) + (dir < 0 ? -1 : 1)) * 180;
+  if (reduce()) V.deg.x = V.deg.t;
+  S.turnedOnce = true; tick(); mark(); wake();
+}
+let toastTimer;
+function toast(text) { const t = $('toast'); t.textContent = text; t.style.opacity = 1; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.opacity = 0; }, 2600); }
+
+/* ------- Fingers ------- */
+function onDown(e) {
+  if (e.target.closest('[data-ui]')) return;
+  $('menu').hidden = true;
+  stage.setPointerCapture?.(e.pointerId);
+  const now = performance.now();
+  dragging = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: now, lx: e.clientX, ly: e.clientY, lt: now, vx: 0, vy: 0, mode: null, env0: V.envDeg.x, pull0: V.pull.x, deg0: V.deg.x };
+  S.lastTouch = now;
+  // Hold still for a moment on the card: the finger moves the light instead.
+  dragging.holdTimer = setTimeout(() => { if (dragging && !dragging.mode && S.step === 'out') { dragging.mode = 'tilt'; S.heldOnce = true; tick(5); mark(); } }, 240);
+  wake();
+}
+function onMove(e) {
+  const d = dragging; if (!d || e.pointerId !== d.id) return;
+  const dx = e.clientX - d.x0, dy = e.clientY - d.y0, now = performance.now();
+  const dt = Math.max(1, now - d.lt);
+  d.vx = lerp(d.vx, (e.clientX - d.lx) / dt, .5); d.vy = lerp(d.vy, (e.clientY - d.ly) / dt, .5);
+  d.lx = e.clientX; d.ly = e.clientY; d.lt = now;
+  S.lastTouch = now;
+  if (!d.mode && Math.hypot(dx, dy) > 8) {
+    clearTimeout(d.holdTimer);
+    const horizontal = Math.abs(dx) > Math.abs(dy);
+    if (S.step === 'front') d.mode = horizontal ? 'env' : 'none';
+    else if (S.step === 'back' || S.step === 'flap') d.mode = !horizontal && dy < 0 ? 'pull' : (horizontal && S.step === 'back' ? 'env' : 'none');
+    else if (S.step === 'out') d.mode = horizontal ? 'turn' : 'tilt';
+    else d.mode = 'none';
+    d.xs = e.clientX; d.ys = e.clientY;
+  }
+  if (d.mode === 'env') {
+    V.envDeg.x = d.env0 + (e.clientX - d.xs) / (G.ew * .8) * 180;
+    V.envDeg.t = V.envDeg.x; V.envDeg.v = 0;
+  } else if (d.mode === 'pull') {
+    const up = d.ys - e.clientY;
+    let p = d.pull0 + up / (G.h * .36);
+    if (S.sealed) p = Math.min(.04, p * .12);
+    V.pull.x = clamp(p, 0, 1); V.pull.t = V.pull.x; V.pull.v = 0;
+    if (!S.sealed && V.pull.x > .03) crack();
+  } else if (d.mode === 'turn') {
+    V.deg.x = d.deg0 + (e.clientX - d.xs) / (G.cw * .86) * 180;
+    V.deg.t = V.deg.x; V.deg.v = 0;
+  } else if (d.mode === 'tilt') {
+    const r = stage.getBoundingClientRect();
+    V.tx.t = clamp((e.clientX - r.left) / r.width * 2 - 1, -1, 1) * 1.1;
+    V.ty.t = clamp((e.clientY - r.top) / r.height * 2 - 1, -1, 1) * 1.1;
+  }
+  render();
+}
+function onUp(e) {
+  const d = dragging; if (!d || e.pointerId !== d.id) return;
+  dragging = null; clearTimeout(d.holdTimer);
+  const now = performance.now();
+  if (!d.mode && now - d.t0 < 320) { onTap(e); return; }
+  if (d.mode === 'env') {
+    const flick = d.vx * 1000 / (G.ew * .8) * 180 * .22;
+    const aim = Math.round((V.envDeg.x + flick) / 180) * 180;
+    V.envDeg.t = aim; V.envDeg.v = flick * 1.2;
+    if (Math.cos(aim * Math.PI / 180) < 0) { if (S.step !== 'back') tick(); S.step = 'back'; S.envTurnedOnce = true; } else S.step = 'front';
+    mark();
+  } else if (d.mode === 'pull') {
+    const flick = -d.vy * 1000 / (G.h * .36) * .22;
+    const aim = V.pull.x + flick;
+    if (S.sealed) resist();
+    else if (aim > .54) { takeOut(); V.pull.v = flick; }
+    else if (aim > .14) { V.pull.t = FLAP_OPEN; S.step = 'flap'; mark(); }
+    else { V.pull.t = 0; S.step = 'back'; mark(); }
+  } else if (d.mode === 'turn') {
+    const flick = d.vx * 1000 / (G.cw * .86) * 180 * .22;
+    const aim = Math.round((V.deg.x + flick) / 180) * 180;
+    V.deg.t = aim; V.deg.v = flick * 1.1;
+    if (Math.abs(aim - d.deg0) > 1) { S.turnedOnce = true; tick(); }
+    mark();
+  }
+  S.lastTouch = now;
+  wake();
+}
+function onTap(e) {
+  if (S.step === 'front') toFlapSide();
+  else if (S.step === 'back') primary();
+  else if (S.step === 'flap') takeOut();
+  else if (S.step === 'out') {
+    const r = card.getBoundingClientRect();
+    const inCard = e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
+    if (inCard) turnCard();
+    else { const hide = !$('top').classList.contains('hidden'); $('top').classList.toggle('hidden', hide); $('act').classList.toggle('hidden', hide); }
+  }
+}
+stage.addEventListener('pointerdown', onDown);
+window.addEventListener('pointermove', onMove);
+window.addEventListener('pointerup', onUp);
+window.addEventListener('pointercancel', onUp);
+// iOS sometimes hands a touch to the page as a scroll; keep the page itself still.
+document.addEventListener('touchmove', (e) => { if (!e.target.closest('#sheet,#hinge')) e.preventDefault(); }, { passive: false });
+
+/* A computer's mouse moves the light directly. */
+stage.addEventListener('mousemove', (e) => {
+  if (dragging || reduce()) return;
+  const r = stage.getBoundingClientRect();
+  V.tx.t = clamp((e.clientX - r.left) / r.width * 2 - 1, -1, 1);
+  V.ty.t = clamp((e.clientY - r.top) / r.height * 2 - 1, -1, 1);
+  S.lastTouch = performance.now(); wake();
+});
+
+/* The real phone's tilt, wherever this viewer allows it. */
+let gyro = false;
+function listenTilt() {
+  window.addEventListener('deviceorientation', (ev) => {
+    if (ev.gamma == null) return;
+    gyro = true; S.heldOnce = true;
+    V.tx.t = clamp(ev.gamma / 22, -1.1, 1.1);
+    V.ty.t = clamp((ev.beta - 45) / 22, -1.1, 1.1);
+    wake();
+  });
+}
+stage.addEventListener('pointerup', function askOnce() {
+  stage.removeEventListener('pointerup', askOnce);
+  try {
+    if (window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission) DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') listenTilt(); }).catch(() => {});
+    else listenTilt();
+  } catch (_) { /* this viewer doesn't allow it */ }
+});
+
+/* ------- The picture of the moment ------- */
+function render() {
+  if (!G.w) return;
+  const pull = V.pull.x, lay = V.lay.x, tx = V.tx.x, ty = V.ty.x, drop = V.drop.x;
+  const flapT = sm(0, FLAP_OPEN, pull);
+  const theta = 180 * flapT;
+  const r = sm(FLAP_OPEN, 1, pull); // the card coming out
+
+  // Envelope pose.
+  const eRot = lerp(lerp(-1.1, .4, r), 1.5, lay);
+  let eTop = lerp(lerp(G.envY, G.envYOpen, flapT), G.envTopOut, r);
+  eTop = lerp(eTop, G.envTopFinal, lay);
+  const arrive = drop * (G.h * .9);
+  const ex = G.envX + tx * 2.5, ey = eTop + ty * 2.5 - arrive;
+  const eRotA = eRot - drop * 6;
+
+  // Which side of the envelope is up.
+  const envAngle = V.envDeg.x;
+  const cosE = Math.cos(envAngle * Math.PI / 180);
+  const flapSide = cosE < 0;
+  const persp = G.ew * 3.6;
+  const base = `translate3d(${ex}px,${ey}px,0) rotate(${eRotA}deg)`;
+  const settled = Math.abs(Math.sin(envAngle * Math.PI / 180)) < .001;
+  const backT = base + (settled ? '' : ` perspective(${persp}px) rotateY(${envAngle + 180}deg)`);
+  const frontT = base + (settled ? '' : ` perspective(${persp}px) rotateY(${envAngle}deg)`);
+  $('lFront').style.display = flapSide ? 'none' : 'block';
+  $('lFront').style.transform = frontT;
+  for (const id of ['lInside', 'lPocket', 'lPocketShadow', 'lFlapShadow', 'lFlapOut', 'lFlapIn']) {
+    const el = $(id);
+    el.style.display = flapSide ? 'block' : 'none';
+    el.style.transform = backT;
+  }
+  // The envelope's shadow on the table.
+  $('envShadow').style.transform = `translate3d(${ex + 3 - tx * 7}px,${ey + 7 - ty * 7}px,0) rotate(${eRotA}deg) scaleX(${Math.max(.02, Math.abs(cosE))})`;
+  $('envShadow').style.opacity = .78;
+
+  // Flap.
+  const fo = $('flapOut'), fi = $('flapIn');
+  const open = theta >= 90;
+  fo.style.display = open ? 'none' : 'block';
+  fi.style.display = open ? 'block' : 'none';
+  if (!open) {
+    fo.style.transform = theta > .01 ? `perspective(${G.ew * 2.4}px) rotateX(${theta}deg)` : 'none';
+    fo.style.filter = theta > .01 ? `brightness(${1 - .3 * Math.sin(theta * Math.PI / 180)})` : 'none';
+  } else {
+    fi.style.transform = theta < 179.99 ? `perspective(${G.ew * 2.4}px) rotateX(${theta - 180}deg)` : 'none';
+    fi.style.filter = theta < 179.99 ? `brightness(${1 - .45 * Math.sin(theta * Math.PI / 180)})` : 'none';
+  }
+  $('lFlapShadow').style.opacity = open ? 0 : Math.cos(theta * Math.PI / 180) ** 1.4;
+  $('flapGlint').style.transform = `translateX(${tx * 28}%) translateY(${ty * 10}%)`;
+
+  // Card pose.
+  const cardIn = eTop + G.eh * .02;
+  let cTop = lerp(cardIn, G.cardTopOut, r);
+  let cRot = lerp(eRot, -.8, r);
+  let cs = lerp(.94, 1.03, sm(.2, 1, r));
+  cTop = lerp(cTop, G.cardTop, lay);
+  cRot = lerp(cRot, -1.05, lay);
+  cs = lerp(cs, 1, lay);
+  const cx = G.cardX + tx * 5;
+  const cy = cTop + ty * 5 - arrive;
+  const yFix = (G.ch * (cs - 1)) / 2; // it grows from its top edge
+  card.style.display = flapSide && pull > .001 ? 'block' : 'none';
+  const out = r >= .999;
+  card.style.zIndex = out ? 20 : 5;
+  card.style.transform = `translate3d(${cx}px,${cy + yFix}px,0) rotate(${cRot}deg) scale(${cs})`;
+  flipEl.style.transform = `rotateX(${-ty * 2.6}deg) rotateY(${V.deg.x + tx * 3.2}deg)`;
+
+  // The card's shadows grow as it lifts off the paper.
+  const lift = (1 - lay) * r;
+  const narrowC = Math.max(.03, Math.abs(Math.cos(V.deg.x * Math.PI / 180)));
+  const sw = $('cardShadowWide'), st = $('cardShadowTight');
+  sw.style.display = st.style.display = out ? 'block' : 'none';
+  if (out) {
+    sw.style.zIndex = st.style.zIndex = 19;
+    const off = 6 + lift * 26;
+    sw.style.transform = `translate3d(${cx + off * .45 - tx * 10}px,${cy + yFix + off - ty * 10}px,0) rotate(${cRot}deg) scale(${cs * narrowC},${cs})`;
+    sw.style.opacity = .4 + lift * .16;
+    st.style.transform = `translate3d(${cx + 1.5 - tx * 2}px,${cy + yFix + 2.5 - ty * 2}px,0) rotate(${cRot}deg) scale(${cs * narrowC},${cs})`;
+    st.style.opacity = .55 * (1 - lift);
+  }
+
+  // Light, sheen, shading as the card turns.
+  $('light').style.transform = `translate(${tx * 22}px,${ty * 22}px) scale(1.04)`;
+  const sinD = Math.abs(Math.sin(V.deg.x * Math.PI / 180));
+  document.querySelectorAll('.sheen').forEach((f) => { f.style.transform = `translate(${(tx * .9 + V.deg.x / 180 * .6) * 26}%,${ty * 16}%)`; });
+  document.querySelectorAll('.turnShade').forEach((f) => { f.style.opacity = sinD * .34; });
+  $('table').style.transform = $('table2').style.transform = `translate(${-tx * 7}px,${-ty * 7}px)`;
+
+  // Words stay out of the way of what's moving.
+  $('words').style.opacity = pull > .02 || S.step === 'pulling' ? 0 : '';
+  $('act').style.opacity = S.step === 'pulling' ? 0 : '';
+}
+
+/* ------- Animation loop ------- */
+let raf = 0, last = 0;
+function wake() { if (!raf && !S.paused) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+function frame(now) {
+  raf = 0;
+  if (S.paused) return;
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  // Idle: the light drifts by itself, slowly, so the paper is alive even without a hand on it.
+  if (now - S.lastTouch > 2600 && !dragging && !gyro && S.drift && !reduce()) {
+    V.tx.t = Math.sin(now / 2900) * .62;
+    V.ty.t = Math.sin(now / 4100 + 1) * .5;
+  }
+  const steps = Math.max(1, Math.ceil(dt / .006));
+  const h = dt / steps;
+  let moving = false;
+  for (const key in V) {
+    const s = V[key];
+    if (dragging && ((dragging.mode === 'env' && key === 'envDeg') || (dragging.mode === 'pull' && key === 'pull') || (dragging.mode === 'turn' && key === 'deg'))) continue;
+    for (let i = 0; i < steps; i += 1) {
+      const a = s.k * (s.t - s.x) - s.c * s.v;
+      s.v += a * h; s.x += s.v * h;
+    }
+    if (Math.abs(s.t - s.x) > .0006 || Math.abs(s.v) > .0006) moving = true; else { s.x = s.t; s.v = 0; }
+  }
+  // Once it has cleared the envelope, the card is laid down in front of it.
+  if (S.step === 'pulling' && V.pull.x > .985) { V.pull.x = V.pull.t = 1; V.pull.v = 0; S.step = 'out'; V.lay.t = 1; tick(10); mark(); moving = true; }
+  render();
+  if (moving || dragging || (S.drift && !reduce() && !gyro)) raf = requestAnimationFrame(frame);
+}
+
+/* ------- Sharing ------- */
+const share = { f: 'story', note: false };
+const LINK = () => `https://pantopus.com/cards/${CARDS[S.i].slug}`;
+function shareFile() {
+  const c = CARDS[S.i];
+  if (share.f === 'link') return `share-${c.num}-link-card.jpg`;
+  return `share-${c.num}-${share.f}-${S.sealed ? 'sealed' : (share.note ? 'note' : 'card')}.jpg`;
+}
+function drawShare() {
+  $('shareImg').src = 'a/' + shareFile();
+  [...$('seg').children].forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === share.f)));
+  const row = $('noteRow');
+  row.hidden = S.sealed || share.f === 'link';
+  $('noteSmall').textContent = share.note ? `This picture shows ${FROM_SHORT}'s words and first name. Only share them if ${FROM_SHORT} wouldn't mind.` : `${FROM_SHORT}'s words and name stay private. Your address never shows.`;
+  $('showNote').checked = share.note;
+}
+function say(text) { $('shareSay').textContent = text; }
+function openSheet() {
+  S.paused = true; $('sheetWrap').hidden = false;
+  $('sheetTitle').textContent = S.sealed ? 'Share the sealed card' : 'Share this card';
+  say(''); drawShare();
+}
+function closeSheet() { $('sheetWrap').hidden = true; S.paused = false; wake(); }
+$('seg').addEventListener('click', (e) => { const f = e.target.dataset?.f; if (f) { share.f = f; say(''); drawShare(); } });
+$('showNote').addEventListener('change', (e) => { share.note = e.target.checked; drawShare(); });
+$('acts').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const a = b.dataset.a;
+  if (a === 'instagram') say('In the app, this opens the phone\'s share sheet with this picture, and you pick Instagram. With a free Meta app ID it can go straight to a new Story.');
+  if (a === 'facebook') say('In the app, Post and Story use the share sheet. Link preview opens Facebook with the card\'s link, and the post shows the Link preview picture.');
+  if (a === 'email') say('In the app, your mail app opens with this picture attached and the link in the message.');
+  if (a === 'link') {
+    const url = LINK();
+    try { await navigator.clipboard.writeText(url); say(`Copied ${url}. That page isn't built yet. It would show this picture and "Send this card to someone".`); } catch (_) { say(`${url}. That page isn't built yet. It would show this picture and "Send this card to someone".`); }
+  }
+  if (a === 'save') {
+    const name = shareFile();
+    try {
+      const downloads = await window.claude?.use?.('downloads');
+      if (!downloads) throw new Error('none');
+      const blob = await (await fetch('a/' + name)).blob();
+      await downloads.save({ filename: name, data: blob });
+      say('Saved. Try posting it somewhere private to see how it looks.');
+    } catch (err) {
+      say(err?.code === 'declined' ? 'Not saved.' : 'Press and hold the picture to save it.');
+    }
+  }
+});
+$('sheetClose').addEventListener('click', closeSheet);
+$('sheetWrap').addEventListener('click', (e) => { if (e.target === $('sheetWrap')) closeSheet(); });
+
+/* ------- The Duo: a card that folds, on a phone that folds ------- */
+const duo = { built: false, alpha: 180, pose: 'flat', tween: 0, device: null };
+const DUO_U = 3.91;       // each page 391 x 469 points, the size of the whole card on an iPhone
+function duoInner(c, side) {
+  const page = side === 'left'
+    ? `<div class="dsPage" style="--u:${DUO_U}px;left:84.5px;top:100px"><div class="face front" style="background:${c.paper}">${frontHTML(c)}</div></div>`
+    : `<div class="dsPage" style="--u:${DUO_U}px;left:475.5px;top:100px"><div class="face back" style="background:${c.paper}">${backHTML(c)}</div></div>`;
+  return `<div class="dsTable" style="background-image:url(a/table-${c.num}.jpg)"></div>
+    <img class="dsFlap" alt="" src="a/env-flap-in.webp" style="left:260.5px;top:9px;width:430px;height:auto">
+    ${page}<div class="dsLight"></div><div class="dsVig"></div>`;
+}
+function buildDuo() {
+  const c = CARDS[S.i];
+  $('duoWorld').innerHTML = `
+  <div class="device" id="duoFold">
+    <div class="half" id="hLeft"><div class="scene">${duoInner(c, 'left')}</div><div class="fold" id="fLeft"></div></div>
+    <div id="rightWrap">
+      <div class="half" id="hRight"><div class="scene" style="left:-475.5px">${duoInner(c, 'right')}<div class="sysClock" style="left:905px;top:18px">7:02</div></div><div class="fold" id="fRight"></div><div id="dimRight"></div></div>
+      <div class="half" id="hOuter"><div class="scene" style="width:475.5px">
+        <div class="dsTable" style="background-image:url(a/table-${c.num}.jpg)"></div>
+        <img class="dsFlap" alt="" src="a/env-flap-in.webp" style="left:19px;top:30px;width:348px;height:auto">
+        <div class="dsPage" style="--u:3.62px;left:12px;top:150px;transform:rotate(-1deg)"><div class="face front" style="background:${c.paper}">${frontHTML(c)}</div></div>
+        <div class="dsLight"></div><div class="dsVig"></div>
+        <div class="sysClock" style="left:415px;top:20px">7:02</div>
+      </div></div>
+    </div>
+  </div>
+  <div class="device" id="ttDevice" style="display:none">
+    <div class="ttHalf" id="ttTop"><div class="scene" style="width:669px;height:475.5px"><div class="dsTable" style="background-image:url(a/table-${c.num}.jpg)"></div><div class="dsPage" style="--u:3.66px;left:151.5px;top:28px"><div class="face front" style="background:${c.paper}">${frontHTML(c)}</div></div><div class="dsLight"></div><div class="dsVig"></div><div class="sysClock" style="left:610px;top:18px">7:02</div></div></div>
+    <div class="ttHalf" id="ttBottom"><div class="scene" style="width:669px;height:475.5px"><div class="dsTable" style="background-image:url(a/table-${c.num}.jpg)"></div><div class="dsPage" style="--u:3.66px;left:151.5px;top:8px"><div class="face back" style="background:${c.paper}">${backHTML(c)}</div></div><div class="dsLight"></div><div class="dsVig"></div></div></div>
+  </div>`;
+  duo.built = true;
+}
+function duoScale() {
+  const world = $('duoWorld').getBoundingClientRect();
+  return { fold: Math.min(world.width / 985, world.height / 700), table: Math.min(world.width / 720, world.height * .56 / 490), world };
+}
+const DUO_WORDS = {
+  closed: 'Closed, it works like an iPhone: the card in your hand. In the real thing, opening the phone opens the card.',
+  book: 'Half open, you\'re holding an open card. The crease sits on the phone\'s real fold.',
+  flat: 'Open flat: the picture on the left page, the note on the right. Each page is as big as the whole card on an iPhone.',
+  table: 'Stood on a table: the picture stands up and the note lies flat, like a card on a mantel.',
+};
+function drawDuo() {
+  const a = duo.alpha, sc = duoScale();
+  const isTable = duo.pose === 'table';
+  $('duoFold').style.display = isTable ? 'none' : 'block';
+  $('ttDevice').style.display = isTable ? 'block' : 'none';
+  $('hinge').disabled = isTable;
+  $('hinge').style.opacity = isTable ? .35 : 1;
+  if (isTable) {
+    $('ttDevice').style.transform = `translateY(${sc.world.height * .09}px) scale3d(${sc.table},${sc.table},${sc.table})`;
+    $('ttTop').style.transform = 'rotateX(-6deg)';
+    $('ttBottom').style.transform = 'rotateX(58deg)';
+  } else {
+    const closing = 180 - a;
+    const bodyRot = a >= 100 ? closing / 2 : lerp(0, 40, a / 100);
+    const shift = (1 - sm(0, 100, a)) * 237.75;
+    const view = 7 * Math.sin(closing / 180 * Math.PI);
+    const sf = sc.fold * (1 - .13 * Math.sin(closing / 180 * Math.PI));
+    $('duoFold').style.transform = `translateX(${shift * sf}px) scale3d(${sf},${sf},${sf}) rotateX(${view}deg) rotateY(${bodyRot}deg)`;
+    $('rightWrap').style.transform = `rotateY(${-closing}deg)`;
+    const shade = clamp(.25 + closing / 70, 0, 1);
+    $('fLeft').style.opacity = shade; $('fRight').style.opacity = shade;
+    $('dimRight').style.opacity = clamp(closing / 180, 0, 1) * .22;
+    $('hLeft').style.visibility = a < 2 ? 'hidden' : 'visible';
+  }
+  $('duoWords').textContent = DUO_WORDS[isTable ? 'table' : (a < 12 ? 'closed' : a > 165 ? 'flat' : 'book')] + (innerWidth < 560 && innerHeight > innerWidth && !isTable ? ' Turn your phone sideways to see it larger.' : '');
+  const pressed = isTable ? 'table' : (a < 12 ? 'closed' : a > 165 ? 'flat' : 'book');
+  [...$('poses').children].forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === pressed)));
+  $('hinge').value = Math.round(a);
+}
+function tweenHinge(to, ms = 1000) {
+  cancelAnimationFrame(duo.tween);
+  if (reduce()) { duo.alpha = to; drawDuo(); return; }
+  const from = duo.alpha, t0 = performance.now();
+  const step = (now) => {
+    const t = clamp((now - t0) / ms);
+    duo.alpha = lerp(from, to, t * t * (3 - 2 * t));
+    drawDuo();
+    if (t < 1 && !$('duoView').hidden) duo.tween = requestAnimationFrame(step);
+  };
+  duo.tween = requestAnimationFrame(step);
+}
+function openDuo() {
+  S.paused = true; $('duoView').hidden = false;
+  if (!duo.built) buildDuo();
+  duo.pose = 'fold'; duo.alpha = 0; drawDuo();
+  setTimeout(() => tweenHinge(180, 2000), 650);
+}
+function closeDuo() { cancelAnimationFrame(duo.tween); $('duoView').hidden = true; S.paused = false; layout(); render(); wake(); }
+$('duoClose').addEventListener('click', closeDuo);
+$('hinge').addEventListener('input', (e) => { cancelAnimationFrame(duo.tween); duo.pose = 'fold'; duo.alpha = +e.target.value; drawDuo(); });
+$('poses').addEventListener('click', (e) => {
+  const p = e.target.dataset?.p; if (!p) return;
+  if (p === 'table') { cancelAnimationFrame(duo.tween); duo.pose = 'table'; drawDuo(); return; }
+  duo.pose = 'fold'; tweenHinge({ closed: 0, book: 118, flat: 180 }[p]);
+});
+
+/* ------- Controls ------- */
+$('primary').addEventListener('click', primary);
+$('close').addEventListener('click', () => restart(true));
+$('shareBtn').addEventListener('click', openSheet);
+$('moreBtn').addEventListener('click', () => { const m = $('menu'); m.hidden = !m.hidden; $('moreBtn').setAttribute('aria-expanded', String(!m.hidden)); });
+document.querySelectorAll('.mi').forEach((b) => b.addEventListener('click', () => { $('menu').hidden = true; toast('In the app these stay, just out of the way until you want them. They aren\'t part of this sample.'); }));
+$('linkSealed').addEventListener('click', () => { S.sealed = !S.sealed; $('linkSealed').setAttribute('aria-pressed', String(S.sealed)); restart(true); });
+$('linkDuo').addEventListener('click', openDuo);
+$('tipDuo').addEventListener('click', openDuo);
+$('linkPictures').addEventListener('click', openSheet);
+CARDS.forEach((c, i) => {
+  const b = document.createElement('button'); b.className = 'thumb'; b.setAttribute('aria-label', c.caption);
+  b.innerHTML = `<img alt="" src="a/thumb-${c.num}.jpg">`;
+  b.addEventListener('click', () => { setCard(i); restart(true); });
+  $('thumbs').append(b);
+});
+
+/* ------- Start ------- */
+const probe = document.createElement('div');
+probe.style.cssText = 'position:fixed;top:0;left:0;height:env(safe-area-inset-top,0px);width:env(safe-area-inset-bottom,0px);visibility:hidden';
+document.body.append(probe);
+function safeAreas() { const r = probe.getBoundingClientRect(); document.documentElement.style.setProperty('--sat', r.height + 'px'); document.documentElement.style.setProperty('--sab', r.width + 'px'); }
+window.addEventListener('resize', () => { safeAreas(); layout(); render(); if (!$('duoView').hidden) drawDuo(); });
+safeAreas();
+setCard(0);
+$('table').style.backgroundImage = `url(a/table-${CARDS[0].num}.jpg)`; $('table2').style.opacity = 0;
+$('light').style.backgroundImage = 'url(a/light.webp)';
+mark();
+layout();
+V.drop.x = 1; render();
+const READY = ['a/env-front.webp', 'a/env-pocket.webp', 'a/env-flap-out.webp', 'a/env-flap-in.webp', 'a/env-inside.webp', 'a/wax-gold.webp', 'a/wax-gold-cracked.webp', `a/card-${CARDS[0].num}.jpg`, `a/table-${CARDS[0].num}.jpg`];
+let started = false;
+const begin = () => { if (started) return; started = true; layout(); restart(true); };
+Promise.all(READY.map((u) => { const i = new Image(); i.src = u; return i.decode().catch(() => {}); })).then(() => document.fonts?.ready).then(begin);
+setTimeout(begin, 5000);
+
+/* For testing: jump straight to any moment. */
+window.__setCard = setCard;
+window.__sample = {
+  V, S, render, layout, mark, openSheet, closeSheet, openDuo, closeDuo, duo, drawDuo, share, drawShare,
+  go(step, opts = {}) {
+    V.drop.x = V.drop.t = 0; V.drop.v = 0;
+    S.drift = false; V.tx.x = V.tx.t = opts.tx || 0; V.ty.x = V.ty.t = opts.ty || 0;
+    const set = (k, x) => { V[k].x = V[k].t = x; V[k].v = 0; };
+    set('envDeg', 0); set('pull', 0); set('lay', 0); set('deg', 0);
+    if (step === 'front') S.step = 'front';
+    if (step === 'back') { set('envDeg', 180); S.step = 'back'; }
+    if (step === 'flapmid') { set('envDeg', 180); set('pull', opts.p ?? .17); S.step = 'flap'; crack(); }
+    if (step === 'flap') { set('envDeg', 180); set('pull', FLAP_OPEN); S.step = 'flap'; crack(); }
+    if (step === 'rising') { set('envDeg', 180); set('pull', opts.p ?? .6); S.step = 'flap'; crack(); }
+    if (step === 'out') { set('envDeg', 180); set('pull', 1); set('lay', 1); S.step = 'out'; crack(); }
+    if (step === 'outback') { set('envDeg', 180); set('pull', 1); set('lay', 1); set('deg', 180); S.step = 'out'; S.turnedOnce = true; crack(); }
+    mark(); layout(); render();
+  },
+};
+</script>

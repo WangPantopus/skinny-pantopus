@@ -23,9 +23,10 @@ function useOf(row, unit) {
   if (/^CONDOMINIUM/.test(use) || /RESIDENTIAL CONDO/.test(type)) return ['unit', 'condo'];
   if (/^TOWN ?HOUSE/.test(use) || type === 'TOWNHOUSE') return ['property', 'townhouse'];
   if (/MANUFACTURED/.test(use) || /MANUFACTURED/.test(type)) return ['property', 'mobile_home'];
-  if (/^SINGLE FAMILY/.test(use)) return unit ? ['unit', 'condo'] : ['property', 'house'];
+  // Its homesite, affordable-housing and mobile-home-subdivision land uses hold ordinary houses: the building type says so.
+  if (/^SINGLE FAMILY/.test(use) || (/HOMESITE|AFFORDABLE|MOBILE HOME SUB/.test(use) && /^SINGLE FAMILY/.test(type))) return unit ? ['unit', 'condo'] : ['property', 'house'];
   if (/DUPLEX|TRIPLEX/.test(use) || /DUPLEX/.test(type)) return ['building', 'multi_unit'];
-  if (/^MULTI FAMILY/.test(use)) return ['building', 'apartment'];
+  if (/^MULTI FAMIL/.test(use)) return ['building', 'apartment'];
   if (/^VACANT/.test(use)) return ['parcel', null];
   return ['other', null];
 }

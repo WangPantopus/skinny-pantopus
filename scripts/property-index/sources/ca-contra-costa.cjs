@@ -22,6 +22,7 @@ function useOf(words, unit, built) {
   if (/^SINGLE FAMILY, 2 OR MORE|^DUPLEX|^TRIPLEX|^FOURPLEX|^2.?4 UNIT/.test(use)) return ['building', 'multi_unit'];
   if (/^APARTMENT|^MULTIPLE|UNITS/.test(use)) return ['building', 'apartment'];
   if (/^SINGLE FAMILY/.test(use)) return built || !/^VACANT/.test(use) ? (unit ? ['unit', 'condo'] : ['property', 'house']) : ['parcel', null];
+  if (/^RURAL, RESIDENTIAL IMPROVED/.test(use)) return unit ? ['unit', 'condo'] : ['property', 'house'];
   if (/^VACANT|^COMMON AREA/.test(use)) return ['parcel', null];
   return ['other', null];
 }

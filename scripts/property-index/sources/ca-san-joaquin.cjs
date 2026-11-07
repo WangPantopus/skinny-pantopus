@@ -19,7 +19,7 @@ function useOf(words, unit, built) {
   const use = String(words || '').toUpperCase();
   if (/^VAC|COMMON AREA/.test(use)) return ['parcel', null];
   if (/^CONDOMINIUM/.test(use)) return ['unit', 'condo'];
-  if (/COMMON WAL/.test(use)) return ['property', 'townhouse'];
+  if (/COMMON WAL|ZERO LOT LINE/.test(use)) return ['property', 'townhouse'];
   if (/DUPLEX|TRIPLEX|FOURPLEX|TWO SFDS|2 OR MORE RESI|MULTIPLE/.test(use)) return ['building', 'multi_unit'];
   if (/APARTMENT|\d+ ?UNITS/.test(use)) return ['building', 'apartment'];
   if (/MOBILE|MANUFACTURED/.test(use)) return ['property', 'mobile_home'];
