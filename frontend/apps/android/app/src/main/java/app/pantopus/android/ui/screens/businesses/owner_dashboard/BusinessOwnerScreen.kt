@@ -602,7 +602,7 @@ private fun OwnerSections(
         RatingDistribution(
             average = summary.average,
             count = summary.count,
-            distribution = summary.distribution.map { it.toFloat() },
+            distribution = summary.distribution?.map { it.toFloat() },
         )
     }
     content.reviews.forEach { review ->

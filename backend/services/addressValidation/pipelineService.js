@@ -367,19 +367,20 @@ async function lookupExistingHouseholdByHash(addressHash) {
 
   const homeIds = new Set();
 
-  const { data: homesByHash } = await supabaseAdmin
-    .from('Home')
-    .select('id')
-    .eq('address_hash', addressHash)
-    .limit(20);
+  const [{ data: homesByHash }, { data: address }] = await Promise.all([
+    supabaseAdmin
+      .from('Home')
+      .select('id')
+      .eq('address_hash', addressHash)
+      .limit(20),
+    supabaseAdmin
+      .from('HomeAddress')
+      .select('id')
+      .eq('address_hash', addressHash)
+      .maybeSingle(),
+  ]);
 
   for (const row of homesByHash || []) homeIds.add(row.id);
-
-  const { data: address } = await supabaseAdmin
-    .from('HomeAddress')
-    .select('id')
-    .eq('address_hash', addressHash)
-    .maybeSingle();
 
   if (address?.id) {
     const { data: homesByAddressId } = await supabaseAdmin
@@ -814,16 +815,29 @@ async function runValidationPipeline(input, options = {}) {
       )
     : null;
 
-  let household = null;
-  if (includeHousehold) {
-    if (addressHash) {
-      household = await lookupExistingHouseholdByHash(addressHash);
-    }
-    // Fallback: try the raw-input hash when it differs from the canonical hash
-    if (!household && inputHash && inputHash !== addressHash) {
-      household = await lookupExistingHouseholdByHash(inputHash);
-    }
-  }
+  // Google has answered. Who lives here and saving the address row don't depend on each other, so a person waits for
+  // one round trip of reads and one save, not one after another.
+  // A PO box has no street line to key a home address row on.
+  const saving = googleResult?.normalized && (!googlePostal || googleResult.normalized.line1)
+    ? canonicalAddressService.findOrCreate(
+        googleResult.normalized,
+        {
+          google: googleResult,
+          smarty: smartyResult,
+          place,
+          providerPlace,
+          unitIntelligence,
+          parcelIntel,
+        },
+      )
+    : null;
+  const [canonicalHousehold, inputHousehold, saved] = await Promise.all([
+    includeHousehold && addressHash ? lookupExistingHouseholdByHash(addressHash) : null,
+    // Fallback: the raw-input hash when it differs from the canonical hash
+    includeHousehold && inputHash && inputHash !== addressHash ? lookupExistingHouseholdByHash(inputHash) : null,
+    saving,
+  ]);
+  const household = canonicalHousehold || inputHousehold;
 
   const verdict = decisionEngine.classify({
     google: googleResult,
@@ -840,29 +854,15 @@ async function runValidationPipeline(input, options = {}) {
     ...(googlePostal ? { postal_source: 'google' } : {}),
   });
 
-  let canonicalAddress = null;
-  // A PO box has no street line to key a home address row on.
-  if (googleResult?.normalized && (!googlePostal || googleResult.normalized.line1)) {
-    const { data } = await canonicalAddressService.findOrCreate(
-      googleResult.normalized,
-      {
-        google: googleResult,
-        smarty: smartyResult,
-        place,
-        providerPlace,
-        unitIntelligence,
-        parcelIntel,
-      },
-    );
-    canonicalAddress = data || null;
-  }
-  await addressVerificationObservability.recordPipelineAudit({
+  const canonicalAddress = saved?.data || null;
+  // Bookkeeping that never decides anything here, so nobody waits for it.
+  addressVerificationObservability.recordPipelineAudit({
     addressId: canonicalAddress?.id || null,
     providerCalls,
     shadowComparisons,
     verdict,
     trigger,
-  });
+  }).catch((error) => logger.warn('pipelineService.runValidationPipeline: audit failed', { error: error.message }));
 
   if (!googlePostal && postalShadowEnabled() && googleResult) {
     await recordPostalShadow(input, googleResult, canonicalAddress?.id || null, trigger);

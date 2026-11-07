@@ -32,7 +32,9 @@ function reader() {
 
 const gunzipJson = (bytes) => JSON.parse(zlib.gunzipSync(bytes).toString('utf8'));
 
+/** A state's file, or null if it can't be read in time or there's no index to read. */
 function stateFile(state) {
+  if (!config.manifestUrl) return Promise.resolve(null);
   const read = reader().file(`${state}.json.gz`, gunzipJson);
   let timer;
   const late = new Promise((resolve) => { timer = setTimeout(resolve, FIRST_READ_MS, null); });
@@ -57,6 +59,25 @@ async function lookup({ state, zip, fips = null }) {
     return Number.isFinite(county) ? { scope: 'county', change_pct: county, year: file.year, source: SOURCE } : null;
   } catch (err) {
     if (!(err instanceof StorageUnavailable)) logger.warn('property_records.area_trend_failed', { error: err.name });
+    return null;
+  }
+}
+
+/**
+ * The Census Bureau's figures for a home's ZIP: the neighborhood's, never a home's. Off unless VALUE_NEIGHBORHOOD_FIGURES says.
+ * @returns {Promise<null|{ median: number, low: number, high: number, source: string }>}
+ */
+async function neighborhood({ state, zip }) {
+  if (!config.neighborhoodFiguresEnabled()) return null;
+  const code = stateCode(state);
+  const zipCode = zip5(zip);
+  if (!code || !zipCode) return null;
+  try {
+    const file = await stateFile(code);
+    const values = file?.zip_values?.[zipCode];
+    return values ? { median: values[0], low: values[1], high: values[2], source: file.census_source } : null;
+  } catch (err) {
+    if (!(err instanceof StorageUnavailable)) logger.warn('property_records.neighborhood_failed', { error: err.name });
     return null;
   }
 }
@@ -86,4 +107,4 @@ function describe(trend) {
 /** For the apps in the stores, whose words are "in your ZIP": a ZIP's own number or nothing, never a default. */
 const oldBuildDirection = (trend) => (trend?.scope === 'zip' ? directionOf(trend.change_pct, OLD_BUILD_FLAT_WITHIN) : null);
 
-module.exports = { lookup, describe, oldBuildDirection };
+module.exports = { lookup, neighborhood, stateFile, describe, oldBuildDirection };

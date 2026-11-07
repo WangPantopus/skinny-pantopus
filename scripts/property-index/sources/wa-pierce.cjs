@@ -3,6 +3,7 @@
 // disclaims any warranty. Year built, floor area, bedrooms, baths, stories, style, walls, roof, heat, garage, basement, condition,
 // quality, values and sales. Only named positions are read: the sale file's grantor and grantee and the exemption columns are never kept.
 // An address holding "XXX" is the county's estimate from its map, and isn't used. The files have no ZIP, so the county's come from the Census.
+// Each file's columns are in its description, https://online.co.pierce.wa.us/cfapps/atr/datamart/metadata/<file>.pdf
 
 const path = require('node:path');
 const { spawn } = require('node:child_process');
@@ -12,12 +13,15 @@ const { year, isoDate, onRecord } = require('../lib/addresses.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
+const { lotNumber } = require('../lib/legal.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '53053';
 const COUNTY = 'Pierce County';
 const FILES = 'https://online.co.pierce.wa.us/datamart';
 const LIVING_TYPES = new Set(['Residential', 'Townhouse', 'Mobile Home', 'Duplex', 'Triplex', 'Multiple Unit']);
+const GARAGES = { Attached: 'Attached', 'Built In': 'Built-in', Detached: 'Detached', 'Fin Detached': 'Detached', 'Basement Single': 'Basement', 'Basement Double': 'Basement' };
 
 async function* rows(work, name) {
   const zip = path.join(work, 'wa-pierce', `${name}.zip`);
@@ -38,7 +42,19 @@ function useOf(code, words, hasUnit) {
   return ['other', null];
 }
 
-function fromAccount(row, building, land, sale) {
+// A tub, sink and toilet is 1 bath, a shower, sink and toilet 3/4, a sink and toilet 1/2 (the file's description). Its fixture lines
+// count baths by fixtures, so with its total they say how many of each. A total they don't add up to says nothing here.
+function bathParts(total, twoFixtures, moreFixtures) {
+  const count = positive(total);
+  if (!count) return {};
+  const threeQuarter = (moreFixtures + twoFixtures / 2 - count) / 0.25;
+  if (Math.abs(threeQuarter - Math.round(threeQuarter)) > 1e-6 || threeQuarter < -1e-6 || threeQuarter > moreFixtures + 1e-6) return {};
+  return { full: moreFixtures - Math.round(threeQuarter), threeQuarter: Math.round(threeQuarter), half: twoFixtures };
+}
+
+const COOLING = new Set(['Warm and Cool Air Zone', 'Complete HVAC', 'Central Air to Air']);
+
+function fromAccount(row, building, land, sale, parcelLines, legal) {
   const [parcel, line] = [word(row[0]), word(row[3])];
   if (!parcel || !line || /XXX/i.test(line)) return null;
   const address = parse(line);
@@ -50,13 +66,22 @@ function fromAccount(row, building, land, sale) {
   put(facts, 'land_use', word(row[5]));
   put(facts, 'county_use_code', word(row[4]));
   put(facts, 'subdivision', word(row[26]));
+  put(facts, 'legal_description', word(legal)?.slice(0, 300));
+  put(facts, 'lot_number', lotNumber(legal, { short: true }));
+  put(facts, 'property_class', word(land?.type));
   if (building && (home || kind === 'building')) {
     put(facts, 'year_built', year(building.built));
+    const adjusted = year(building.adjusted);
+    if (adjusted) facts.effective_year_built = adjusted;
+    put(facts, 'buildings_on_parcel', positive(land?.buildings));
+    put(facts, 'property_subtype', word(building.occupancy));
+    if (positive(building.complete) < 1) facts.percent_complete = Math.round(positive(building.complete) * 100);
     put(facts, 'style', word(building.style));
     put(facts, 'stories', positive(building.stories));
     put(facts, 'exterior_walls', word(building.walls));
     put(facts, 'roof_cover', word(building.roof));
-    put(facts, 'heating', word(building.heat) === 'None' ? null : word(building.heat));
+    put(facts, 'heating', /^(None|No Heat)$/.test(word(building.heat) || '') ? null : word(building.heat));
+    if (COOLING.has(word(building.heat))) facts.cooling = word(building.heat);
     put(facts, 'quality', word(building.quality));
     put(facts, 'condition', word(building.condition));
   }
@@ -64,22 +89,36 @@ function fromAccount(row, building, land, sale) {
     put(facts, 'living_sqft', positive(building.net));
     put(facts, 'bedrooms', positive(building.bedrooms) <= 15 ? positive(building.bedrooms) : null);
     put(facts, 'bathrooms', positive(building.baths));
+    const baths = bathParts(building.baths, building.twoFixtures || 0, building.moreFixtures || 0);
+    put(facts, 'full_baths', baths.full || null);
+    put(facts, 'three_quarter_baths', baths.threeQuarter || null);
+    put(facts, 'half_baths', baths.half || null);
     put(facts, 'basement_sqft', positive(building.basement));
     put(facts, 'basement_finished_sqft', positive(building.basementFinished));
-    put(facts, 'garage_sqft', (positive(building.attached) || 0) + (positive(building.detached) || 0) || null);
+    put(facts, 'garage_sqft', (positive(building.attached) || 0) + (positive(building.detached) || 0) + (parcelLines?.detachedBuildings || 0) || null);
     put(facts, 'carport_sqft', positive(building.carport));
     put(facts, 'fireplaces', positive(building.fireplaces));
+    if (parcelLines?.garage.size) facts.garage = [...parcelLines.garage].sort().join(', ');
+    if (parcelLines?.parking.size) facts.parking_type = [...parcelLines.parking].sort().join(', ');
+    if (parcelLines?.pool) facts.pool = 'Yes';
+    // A building's gross area: its floors, its basement and a garage that's part of it. A unit's lines are its own, not a building's.
+    if (kind === 'property' && positive(land?.buildings) <= 1) {
+      put(facts, 'gross_sqft', (positive(building.net) || 0) + (positive(building.basement) || 0) + (positive(building.attached) || 0) || null);
+    }
   } else if (building && kind === 'building') {
     put(facts, 'gross_sqft', positive(building.net));
     put(facts, 'units', positive(building.units));
   }
   if (land && kind !== 'unit') {
-    put(facts, 'lot_acres', positive(land.acres));
+    // Gross acres can be a whole group of parcels; net is this one's.
+    put(facts, 'lot_acres', positive(land.netAcres) || positive(land.acres));
+    put(facts, 'lot_sqft', positive(land.netAcres) ? positive(land.netSqft) : null);
     put(facts, 'water_source', word(land.water));
     put(facts, 'sewer', word(land.sewer));
   }
   // The coming year's values are filled parcel by parcel: the last year's stand until then.
   const [valueYear, landValue, improvement, total] = positive(row[20]) ? [row[14], row[18], row[19], row[20]] : [row[6], row[10], row[11], row[12]];
+  put(facts, 'tax_code_area', word(positive(row[20]) ? row[15] : row[7]));
   put(facts, 'value_year', positive(valueYear));
   put(facts, 'market_value', positive(total));
   put(facts, 'market_land_value', positive(landValue));
@@ -99,20 +138,54 @@ async function* build({ work }) {
     const held = buildings.get(row[0]);
     const net = positive(row[6]) || positive(row[5]) || 0;
     if (held && held.net >= net) continue;
-    buildings.set(row[0], { id: row[1], net, condition: row[8], quality: row[9], basement: row[16], basementFinished: row[17], carport: row[18], attached: row[21], detached: row[22], fireplaces: row[23] });
+    buildings.set(row[0], { id: row[1], net, complete: row[7], condition: row[8], quality: row[9], occupancy: row[11], basement: row[16], basementFinished: row[17], carport: row[18], attached: row[21], detached: row[22], fireplaces: row[23] });
   }
   log(`${buildings.size} parcels with a living building`);
+  const lines = new Map();
+  const linesOf = (parcel) => {
+    if (!lines.has(parcel)) lines.set(parcel, { garage: new Set(), parking: new Set(), pool: false, detachedBuildings: 0 });
+    return lines.get(parcel);
+  };
   for await (const row of rows(work, 'improvement_builtas')) {
     const held = buildings.get(row[0]);
+    if (held && row[4] === 'Detached Garage' && positive(row[5])) {
+      const parcel = linesOf(row[0]);
+      parcel.detachedBuildings += positive(row[5]);
+      parcel.garage.add('Detached');
+      parcel.parking.add('Detached garage');
+    }
     if (!held || held.id !== row[1] || row[2] !== '1') continue;
-    Object.assign(held, { style: row[4], heat: row[7], walls: row[8], stories: row[10], roof: row[13], bedrooms: row[14], baths: row[15], units: row[16], built: row[19] });
+    Object.assign(held, { style: row[4], heat: row[7], walls: row[8], stories: row[10], roof: row[13], bedrooms: row[14], baths: row[15], units: row[16], built: row[19], adjusted: row[21] });
+  }
+  for await (const row of rows(work, 'improvement_detail')) {
+    const held = buildings.get(row[0]);
+    if (!held) continue;
+    const [type, what] = [row[2], row[3]];
+    const garage = type === 'Garage' && GARAGES[what];
+    if (garage) {
+      const parcel = linesOf(row[0]);
+      parcel.garage.add(garage);
+      parcel.parking.add(`${garage} garage`);
+    } else if (type === 'Carport') linesOf(row[0]).parking.add('Carport');
+    else if (/^Swimming Pool/.test(what)) linesOf(row[0]).pool = true;
+    else if (type === 'Fixture' && held.id === row[1]) {
+      const fixtures = /^Bath (\d+) Fixture$/.exec(what);
+      if (fixtures && fixtures[1] === '2') held.twoFixtures = (held.twoFixtures || 0) + (positive(row[4]) || 0);
+      else if (fixtures) held.moreFixtures = (held.moreFixtures || 0) + (positive(row[4]) || 0);
+    }
+  }
+  const legals = new Map();
+  for await (const row of rows(work, 'tax_description')) {
+    // The file's lines run on: only the first few say anything a screen shows.
+    const text = (legals.get(row[0]) || '').length < 400 ? `${legals.get(row[0]) || ''} ${row.slice(2).join(' ')}` : null;
+    if (text) legals.set(row[0], text);
   }
   const lands = new Map();
-  for await (const row of rows(work, 'appraisal_account')) lands.set(row[0], { acres: row[7], sewer: row[19], water: row[20] });
+  for await (const row of rows(work, 'appraisal_account')) lands.set(row[0], { type: row[1], buildings: row[5], acres: row[7], netAcres: row[8], netSqft: row[10], sewer: row[19], water: row[20] });
   const sales = new Map();
   for await (const row of rows(work, 'sale')) {
     const [date, price] = [isoDate(row[3]), positive(row[4])];
-    if (row[1] !== '1' || !date || !(price > 100)) continue;
+    if (row[1] !== '1' || !date || !isHomeSale(price, row[5], row[10])) continue;
     const held = sales.get(row[2]);
     if (!held || held.date < date) sales.set(row[2], { date, price });
   }
@@ -122,7 +195,7 @@ async function* build({ work }) {
   let noAddress = 0;
   for await (const row of rows(work, 'tax_account')) {
     if (row[1] !== 'REAL' && row[1] !== 'MOBIL') continue;
-    const record = fromAccount(row, buildings.get(row[0]), lands.get(row[0]), sales.get(row[0]));
+    const record = fromAccount(row, buildings.get(row[0]), lands.get(row[0]), sales.get(row[0]), lines.get(row[0]), legals.get(row[0]));
     if (!record) noAddress += 1;
     else if (!seen.has(record.id)) {
       seen.add(record.id);
@@ -141,7 +214,7 @@ async function* build({ work }) {
 module.exports = {
   build,
   dictionary: {
-    columns: ['Year Built', 'Built-As Description', 'Stories', 'Exterior', 'Roof Cover', 'HVAC Description', 'Quality', 'Condition', 'Net Square Feet', 'Bedrooms', 'Bathrooms', 'Basement Square Feet', 'Basement Finished Square Feet', 'Attached Garage Square Feet', 'Carport Square Feet', 'Fireplaces', 'Units', 'Land Gross Acres', 'Utility Water', 'Utility Sewer', 'Tax Year', 'Total Market Value', 'Land Value', 'Improvement Value', 'Sale Price', 'Sale Date', 'Use Description', 'Subdivision Name'],
-    facts: { year_built: 'Year Built', style: 'Built-As Description', stories: 'Stories', exterior_walls: 'Exterior', roof_cover: 'Roof Cover', heating: 'HVAC Description', quality: 'Quality', condition: 'Condition', living_sqft: 'Net Square Feet', gross_sqft: 'Net Square Feet', bedrooms: 'Bedrooms', bathrooms: 'Bathrooms', basement_sqft: 'Basement Square Feet', basement_finished_sqft: 'Basement Finished Square Feet', garage_sqft: 'Attached Garage Square Feet', carport_sqft: 'Carport Square Feet', fireplaces: 'Fireplaces', units: 'Units', lot_acres: 'Land Gross Acres', water_source: 'Utility Water', sewer: 'Utility Sewer', value_year: 'Tax Year', market_value: 'Total Market Value', market_land_value: 'Land Value', market_building_value: 'Improvement Value', sale_price: 'Sale Price', sale_date: 'Sale Date', land_use: 'Use Description', subdivision: 'Subdivision Name' },
+    columns: ['Adjusted Year Built', 'Year Built', 'Built-As Description', 'Stories', 'Exterior', 'Roof Cover', 'HVAC Description', 'Quality', 'Condition', 'Net Square Feet', 'Bedrooms', 'Bathrooms', 'Basement Square Feet', 'Basement Finished Square Feet', 'Attached Garage Square Feet', 'Carport Square Feet', 'Fireplaces', 'Units', 'Land Gross Acres', 'Utility Water', 'Utility Sewer', 'Tax Year', 'Total Market Value', 'Land Value', 'Improvement Value', 'Sale Price', 'Sale Date', 'Use Description', 'Subdivision Name'],
+    facts: { effective_year_built: 'Adjusted Year Built', year_built: 'Year Built', style: 'Built-As Description', stories: 'Stories', exterior_walls: 'Exterior', roof_cover: 'Roof Cover', heating: 'HVAC Description', quality: 'Quality', condition: 'Condition', living_sqft: 'Net Square Feet', gross_sqft: 'Net Square Feet', bedrooms: 'Bedrooms', bathrooms: 'Bathrooms', basement_sqft: 'Basement Square Feet', basement_finished_sqft: 'Basement Finished Square Feet', garage_sqft: 'Attached Garage Square Feet', carport_sqft: 'Carport Square Feet', fireplaces: 'Fireplaces', units: 'Units', lot_acres: 'Land Gross Acres', water_source: 'Utility Water', sewer: 'Utility Sewer', value_year: 'Tax Year', market_value: 'Total Market Value', market_land_value: 'Land Value', market_building_value: 'Improvement Value', sale_price: 'Sale Price', sale_date: 'Sale Date', land_use: 'Use Description', subdivision: 'Subdivision Name' },
   },
 };

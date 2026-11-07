@@ -9,12 +9,13 @@ const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { alsoAtOwnLine } = require('../lib/own-line.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '36055';
 const COUNTY = 'Monroe County';
 const LAYER = 'https://maps.monroecounty.gov/server/rest/services/Hosted/Parcels_Public/FeatureServer/0';
-const COLUMNS = ['countysbl', 'printkey', 'parceladdress', 'parceladdressnumber', 'parceladdressstreetprefixdir', 'parceladdressstreetname', 'parceladdressstreetsuffix', 'parceladdressstreetpostdir', 'parceladdresscity', 'parceladdresszipcode', 'parceladdressunit', 'parceladdressunitnumber', 'frontagefeet', 'depthfeet', 'acres', 'rollyear', 'totalassessedvalue', 'landassessedvalue', 'schooldistrictname', 'propertyclass', 'propertyclassdescription', 'yearbuilt', 'buildingstyle', 'exteriorwallmaterial', 'numberofstories', 'squarefeetlivingarea', 'numberofbedrooms', 'numberoffullbathrooms', 'numberofhalfbathrooms', 'numberofkitchens', 'numberoffireplaces', 'basementtype', 'centralair', 'heattype', 'sewertype', 'watersupply'];
+const COLUMNS = ['countysbl', 'printkey', 'parceladdress', 'parceladdressnumber', 'parceladdressstreetprefixdir', 'parceladdressstreetname', 'parceladdressstreetsuffix', 'parceladdressstreetpostdir', 'parceladdresscity', 'parceladdresszipcode', 'parceladdressunit', 'parceladdressunitnumber', 'frontagefeet', 'depthfeet', 'acres', 'rollyear', 'totalassessedvalue', 'landassessedvalue', 'schooldistrictname', 'propertyclass', 'propertyclassdescription', 'yearbuilt', 'buildingstyle', 'exteriorwallmaterial', 'numberofstories', 'squarefeetlivingarea', 'numberofbedrooms', 'numberoffullbathrooms', 'numberofhalfbathrooms', 'numberofkitchens', 'numberoffireplaces', 'basementtype', 'centralair', 'heattype', 'sewertype', 'watersupply', 'swis', 'description1', 'description2', 'description3'];
 
 function useOf(code, hasUnit) {
   const c = String(code ?? '').slice(0, 3);
@@ -44,6 +45,9 @@ function fromRow(row) {
   put(facts, 'land_use', word(row.propertyclassdescription));
   put(facts, 'county_use_code', word(row.propertyclass));
   put(facts, 'school_district', word(row.schooldistrictname));
+  // The roll's municipality: "Town of Greece", "Village of Fairport", "City of Rochester".
+  put(facts, 'municipality', word(row.swis));
+  put(facts, 'legal_description', [row.description1, row.description2, row.description3].map(word).filter(Boolean).join(' ').slice(0, 300) || null);
   if (home || kind === 'building') {
     put(facts, 'year_built', year(row.yearbuilt));
     put(facts, 'style', said(row.buildingstyle));
@@ -92,7 +96,10 @@ async function* build({ work }) {
       records.push(record);
     }
   }
-  log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number`);
+  // The roll's address line and its address columns disagree on a few homes.
+  const twins = alsoAtOwnLine(records);
+  records.push(...twins);
+  log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number, ${twins.length} also filed at their own address line`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'NY', name: COUNTY, publisher: 'Monroe County', dataset: 'public parcels', method: 'county', source: 'ny-monroe', as_of: asOf, stale_after_days: 730, records,

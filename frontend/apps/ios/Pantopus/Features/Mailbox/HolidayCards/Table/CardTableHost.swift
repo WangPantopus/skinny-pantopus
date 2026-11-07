@@ -34,6 +34,27 @@ extension CardTableContent {
     }
 }
 
+extension CardTableContent {
+    /// A card in Sent, as the other person gets it.
+    init(sent piece: MailSentPiece, from: String, mailedOn: String?) {
+        design = piece.card.design
+        number = piece.card.number
+        caption = piece.card.caption ?? ""
+        paper = piece.card.paper
+        table = piece.card.table
+        slug = piece.card.slug
+        year = piece.card.year
+        self.mailedOn = mailedOn
+        note = MailPieceModel.firstText(piece.note) ?? ""
+        fromName = from
+        toName = piece.byLink && piece.status != .claimed ? "Their name" : piece.toName
+        sealed = false
+        sealedUntil = nil
+        sealedInDays = ""
+        sealedDayCount = 0
+    }
+}
+
 /// Which card the cover shows.
 private struct CardTableCoverItem: Identifiable {
     let id: String

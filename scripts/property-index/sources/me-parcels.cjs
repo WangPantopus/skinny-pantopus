@@ -1,7 +1,9 @@
 'use strict';
 // Maine: the Maine GeoLibrary's parcels for organized towns, joined by state ID to the assessor table towns chose to
 // share. Many towns share only a value or nothing at all. Published as "Access: Public. Use: User assumes risk." A
-// value here is a town's assessment, at that town's own ratio. Owner columns aren't asked for.
+// value here is a town's assessment, at that town's own ratio. Owner columns aren't asked for. A parcel with no assessor
+// row isn't written: it would say nothing true about what stands there, and reading it as land hid the estimate where a
+// house stands (no town in Aroostook shares an assessor table).
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
@@ -84,20 +86,24 @@ async function* build({ work }) {
     const records = [];
     const seen = new Set();
     let noAddress = 0;
-    let joined = 0;
+    let noAssessor = 0;
     const rows = cached(path.join(work, 'me-parcels', `${fips}.jsonl.gz`), () => layerRows(`${SERVICE}/10`, PARCEL_COLUMNS, { where: `COUNTY = '${name}'` }));
     for await (const parcel of rows) {
       const assessor = assessors.get(parcel.STATE_ID);
+      if (!assessor) {
+        noAssessor += 1;
+        continue;
+      }
       const town = String(word(parcel.TOWN) || '').toLowerCase().replace(/(^|\s)\S/g, (first) => first.toUpperCase());
       const record = fromRow(parcel, assessor, fips, county, town);
       if (!record) noAddress += 1;
       else if (!seen.has(record.id)) {
         seen.add(record.id);
         records.push(record);
-        if (assessor) joined += 1;
       }
     }
-    log(`${county}: ${records.length} records, ${joined} with an assessor row, ${noAddress} without a street number`);
+    log(`${county}: ${records.length} records, ${noAssessor} parcels without an assessor row, ${noAddress} without a street number`);
+    if (!records.length) continue;
     for (const building of condoBuildings(records, { fips, county })) records.push(building);
     yield {
       fips, state: 'ME', name: county, publisher: 'Maine GeoLibrary', dataset: 'organized towns\' parcels', method: 'state', source: 'me-parcels', title: 'State records', as_of: asOf, stale_after_days: 730, extra_zips: zips.get(fips) || [], records,

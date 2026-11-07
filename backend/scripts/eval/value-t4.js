@@ -17,7 +17,7 @@ const path = require('path');
 const { openRelease } = require('./lib/propertyRelease');
 const { zipTable } = require('../../../scripts/property-index/lib/tables.cjs');
 const { readIndex, FILES } = require('../../../scripts/property-index/sources/us-fhfa.cjs');
-const { BAR, saleFrom, measure, passes, sorted: sortedBy, median } = require('../../../scripts/property-index/lib/value-model.cjs');
+const { BAR, saleFrom, likelySales, measure, passes, sorted: sortedBy, median } = require('../../../scripts/property-index/lib/value-model.cjs');
 
 const opt = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
 const root = opt('--root');
@@ -58,7 +58,9 @@ function salesFromRelease(fips) {
       else if (why) bump(counts, why);
     }
   }
-  return { sales, counts, trendSales, homes };
+  const likely = likelySales(sales);
+  counts['price far from any value'] = sales.length - likely.length;
+  return { sales: likely, counts, trendSales, homes };
 }
 
 /** Clark County: every valid sale of a year against that year's value, joined to the release for the kind of home. */

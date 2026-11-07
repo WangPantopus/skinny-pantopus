@@ -9,13 +9,15 @@ const { ckanRows, getJson, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
+const { alsoAtOwnLine } = require('../lib/own-line.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '42003';
 const COUNTY = 'Allegheny County';
 const DOMAIN = 'data.wprdc.org';
 const RESOURCE = '65855e14-549e-4992-b5be-d629afc676fa';
-const COLUMNS = ['PARID', 'PROPERTYHOUSENUM', 'PROPERTYFRACTION', 'PROPERTYADDRESS', 'PROPERTYCITY', 'PROPERTYUNIT', 'PROPERTYZIP', 'MUNIDESC', 'SCHOOLDESC', 'LEGAL1', 'LEGAL2', 'LEGAL3', 'NEIGHDESC', 'CLASSDESC', 'USECODE', 'USEDESC', 'LOTAREA', 'SALEDATE', 'SALEPRICE', 'DEEDBOOK', 'DEEDPAGE', 'COUNTYBUILDING', 'COUNTYLAND', 'COUNTYTOTAL', 'STYLEDESC', 'STORIES', 'YEARBLT', 'EXTFINISH_DESC', 'ROOFDESC', 'BASEMENTDESC', 'GRADEDESC', 'CONDITIONDESC', 'TOTALROOMS', 'BEDROOMS', 'FULLBATHS', 'HALFBATHS', 'HEATINGCOOLINGDESC', 'FIREPLACES', 'BSMTGARAGE', 'FINISHEDLIVINGAREA', 'TAXYEAR', 'ASOFDATE'];
+const COLUMNS = ['PARID', 'PROPERTYHOUSENUM', 'PROPERTYFRACTION', 'PROPERTYADDRESS', 'PROPERTYCITY', 'PROPERTYUNIT', 'PROPERTYZIP', 'MUNIDESC', 'SCHOOLDESC', 'LEGAL1', 'LEGAL2', 'LEGAL3', 'NEIGHDESC', 'CLASSDESC', 'USECODE', 'USEDESC', 'LOTAREA', 'SALEDATE', 'SALEPRICE', 'SALEDESC', 'DEEDBOOK', 'DEEDPAGE', 'COUNTYBUILDING', 'COUNTYLAND', 'COUNTYTOTAL', 'STYLEDESC', 'STORIES', 'YEARBLT', 'EXTFINISH_DESC', 'ROOFDESC', 'BASEMENTDESC', 'GRADEDESC', 'CONDITIONDESC', 'TOTALROOMS', 'BEDROOMS', 'FULLBATHS', 'HALFBATHS', 'HEATINGCOOLINGDESC', 'FIREPLACES', 'BSMTGARAGE', 'FINISHEDLIVINGAREA', 'TAXYEAR', 'ASOFDATE'];
 
 const BASEMENTS = { Full: 'Full basement', Part: 'Partial basement', 'Slab/Piers': 'Slab or piers', Crawl: 'Crawl space' };
 
@@ -87,7 +89,7 @@ function fromRow(row) {
   put(facts, 'assessed_value', positive(row.COUNTYTOTAL));
   put(facts, 'assessed_land_value', positive(row.COUNTYLAND));
   put(facts, 'assessed_building_value', positive(row.COUNTYBUILDING));
-  if (positive(row.SALEPRICE) > 100) {
+  if (isHomeSale(positive(row.SALEPRICE), row.SALEDESC)) {
     facts.sale_price = positive(row.SALEPRICE);
     put(facts, 'sale_date', isoDate(row.SALEDATE));
     if (word(row.DEEDBOOK) && word(row.DEEDPAGE)) facts.sale_document = `${word(row.DEEDBOOK)}-${word(row.DEEDPAGE)}`;
@@ -110,7 +112,10 @@ async function* build({ work }) {
       records.push(record);
     }
   }
-  log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number`);
+  // The address line and the address columns disagree on a few homes: each is found at both.
+  const twins = alsoAtOwnLine(records);
+  records.push(...twins);
+  log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number, ${twins.length} also filed at their own address line`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'PA', name: COUNTY, publisher: 'Allegheny County Office of Property Assessments', dataset: 'property assessments, WPRDC', method: 'county', source: 'pa-allegheny', as_of: asOf, stale_after_days: 60, records,

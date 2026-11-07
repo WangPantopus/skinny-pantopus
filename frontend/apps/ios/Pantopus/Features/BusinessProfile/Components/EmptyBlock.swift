@@ -18,6 +18,8 @@ struct EmptyBlock: View {
     struct CTA {
         let label: String
         let icon: PantopusIcon
+        /// The button's accessibility identifier, mirroring Android's test tag.
+        var identifier: String?
         let action: @MainActor () -> Void
     }
 
@@ -28,47 +30,34 @@ struct EmptyBlock: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(Theme.Color.businessBg)
-                    .frame(width: 44, height: 44)
-                Icon(icon, size: 21, strokeWidth: 1.8, color: Theme.Color.business)
+            VStack(spacing: Spacing.s0) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(Theme.Color.businessBg)
+                        .frame(width: 44, height: 44)
+                    Icon(icon, size: 21, strokeWidth: 1.8, color: Theme.Color.business)
+                }
+                .padding(.bottom, 9)
+
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .tracking(-0.2)
+                    .foregroundStyle(Theme.Color.appText)
+                    .padding(.bottom, 3)
+
+                Text(message)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .frame(maxWidth: 248)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.bottom, 9)
-
-            Text(title)
-                .font(.system(size: 14, weight: .bold))
-                .tracking(-0.2)
-                .foregroundStyle(Theme.Color.appText)
-                .padding(.bottom, 3)
-
-            Text(message)
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(3)
-                .frame(maxWidth: 248)
-                .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(title). \(message)")
 
             if let cta {
-                Button { cta.action() } label: {
-                    HStack(spacing: Spacing.s1) {
-                        Icon(cta.icon, size: 13, color: Theme.Color.appText)
-                        Text(cta.label)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.Color.appText)
-                    }
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 7)
-                    .background(Theme.Color.appSurface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                            .stroke(Theme.Color.appBorder, lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 11)
+                ctaButton(cta)
             }
         }
         .frame(maxWidth: .infinity)
@@ -80,8 +69,35 @@ struct EmptyBlock: View {
                 .strokeBorder(Theme.Color.appBorder, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title). \(message)")
+        // The text reads as one element and the CTA as its own button; an identifier set on the block names it.
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private func ctaButton(_ cta: CTA) -> some View {
+        let button = Button { cta.action() } label: {
+            HStack(spacing: Spacing.s1) {
+                Icon(cta.icon, size: 13, color: Theme.Color.appText)
+                Text(cta.label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 7)
+            .background(Theme.Color.appSurface)
+            .overlay(
+                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                    .stroke(Theme.Color.appBorder, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 11)
+        if let identifier = cta.identifier {
+            button.accessibilityIdentifier(identifier)
+        } else {
+            button
+        }
     }
 }
 
