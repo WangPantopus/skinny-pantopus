@@ -29,9 +29,9 @@ extension View {
     /// `header` sits above this page and slides away while the page scrolls
     /// down, coming back near its top. The page runs under it, and under the
     /// status bar, which `fill` paints so the clock stays readable.
-    func scrollAwayHeader<Header: View>(
+    func scrollAwayHeader(
         fill: Color = Theme.Color.appBg,
-        @ViewBuilder _ header: () -> Header
+        @ViewBuilder _ header: () -> some View
     ) -> some View {
         safeAreaInset(edge: .top, spacing: Spacing.s0) {
             header()

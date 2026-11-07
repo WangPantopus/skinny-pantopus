@@ -44,22 +44,22 @@ struct AddressTodayTabView: View {
             .scrollAwayHeader { header }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Theme.Color.appBg)
-        .task(id: resolveKey) {
-            if rootTabs.selected == .today { await resolveHome() }
-        }
-        // Needs you reads again each time Today shows, beside the place.
-        .task(id: resolveKey) {
-            if rootTabs.selected == .today { await needsYou.load() }
-        }
-        .refreshesOnStoreChange(onBackground: discardTemporaryPlace) {
-            guard rootTabs.selected == .today else { return }
-            await resolveHome()
-            await needsYou.load()
-        }
-        .onChange(of: rootTabs.selected) { _, tab in
-            if tab != .today { discardTemporaryPlace() }
-        }
-        .accessibilityIdentifier("addressTodayTab")
+            .task(id: resolveKey) {
+                if rootTabs.selected == .today { await resolveHome() }
+            }
+            // Needs you reads again each time Today shows, beside the place.
+            .task(id: resolveKey) {
+                if rootTabs.selected == .today { await needsYou.load() }
+            }
+            .refreshesOnStoreChange(onBackground: discardTemporaryPlace) {
+                guard rootTabs.selected == .today else { return }
+                await resolveHome()
+                await needsYou.load()
+            }
+            .onChange(of: rootTabs.selected) { _, tab in
+                if tab != .today { discardTemporaryPlace() }
+            }
+            .accessibilityIdentifier("addressTodayTab")
     }
 
     private var resolveKey: String {

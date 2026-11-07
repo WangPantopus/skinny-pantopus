@@ -53,22 +53,22 @@ public struct ChatListView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Theme.Color.appSurface)
-        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .refreshFailureToast($viewModel.refreshFailureMessage)
-        .task {
-            ChatPerformance.signposter.emitEvent("InboxLoad")
-            await viewModel.load()
-        }
-        .refreshesOnStoreChange(
-            affects: { $0.names(topic: ScreenTopic.chats, kind: .messagesList) },
-            perform: { viewModel.refreshAfterChange() }
-        )
-        // The Inbox tab keeps the list through a fold or a turn: it stops
-        // listening only once no screen shows it.
-        .onAppear { viewModel.presentationDidAppear() }
-        .onDisappear { viewModel.presentationDidDisappear() }
-        .onChange(of: viewModel.state.isEmpty, initial: true) { _, isEmpty in onEmptyChange(isEmpty) }
-        .accessibilityIdentifier("chatList")
+            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+            .refreshFailureToast($viewModel.refreshFailureMessage)
+            .task {
+                ChatPerformance.signposter.emitEvent("InboxLoad")
+                await viewModel.load()
+            }
+            .refreshesOnStoreChange(
+                affects: { $0.names(topic: ScreenTopic.chats, kind: .messagesList) },
+                perform: { viewModel.refreshAfterChange() }
+            )
+            // The Inbox tab keeps the list through a fold or a turn: it stops
+            // listening only once no screen shows it.
+            .onAppear { viewModel.presentationDidAppear() }
+            .onDisappear { viewModel.presentationDidDisappear() }
+            .onChange(of: viewModel.state.isEmpty, initial: true) { _, isEmpty in onEmptyChange(isEmpty) }
+            .accessibilityIdentifier("chatList")
     }
 
     @ViewBuilder private var content: some View {
