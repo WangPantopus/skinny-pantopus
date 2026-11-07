@@ -6,7 +6,7 @@
 // city and ZIP come from the county's parcel layer.
 
 const path = require('node:path');
-const { layerRows, cached } = require('../lib/services.cjs');
+const { layerRows, offsetRows, cached } = require('../lib/services.cjs');
 const { streetParts, year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
@@ -16,7 +16,7 @@ const FIPS = '42011';
 const COUNTY = 'Berks County';
 const BASE = 'https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services';
 const RESIDENTIAL = `${BASE}/Berks_Assessment_CAMA_Residential_File/FeatureServer/15`;
-const PARCELS = `${BASE}/Berks_County_Parcels_V2/FeatureServer/0`;
+const PARCELS = `${BASE}/Berks_County_Parcels_V2/FeatureServer/2`;
 const COLUMNS = ['PARID', 'CARD', 'TAXYR', 'ADRNO', 'ADRADD', 'ADRDIR', 'ADRSTR', 'ADRSUF', 'TOTACRES', 'LUC', 'LIVUNITS', 'STORIES', 'YRBLT', 'BEDROOMS', 'FULLBATHS', 'HALFBATHS', 'SFLA', 'TOTROOMS', 'WBFP_OPENINGS', 'MET_FIREPL', 'LAND_VALUE', 'BLDG_VALUE', 'TOTAL_VALUE', 'PRICE', 'SALEDT'];
 // Land use codes by kind, read from the county's CAMA data dictionary (residential codes; "/ROW" and "DOUBLE" share a wall).
 const KINDS = {
@@ -87,7 +87,7 @@ async function* build({ work, today }) {
   }
   const records = new Map();
   let noAddress = 0;
-  for await (const row of cached(path.join(work, 'pa-berks', 'residential.jsonl.gz'), () => layerRows(RESIDENTIAL, ['auto', ...COLUMNS], { oid: 'auto' }))) {
+  for await (const row of cached(path.join(work, 'pa-berks', 'residential.jsonl.gz'), () => offsetRows(RESIDENTIAL, COLUMNS, { orderBy: 'PARID,CARD', pageSize: 2000 }))) {
     if (Number(row.CARD) > 1) continue;
     const record = fromRow(row, places.get(String(row.PARID || '').trim()));
     if (!record) noAddress += 1;
