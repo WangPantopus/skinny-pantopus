@@ -3,8 +3,8 @@
 //
 // The web mirror of place-message-compose.jsx. The trust-and-safety
 // constraints ARE the UI: template-only (no free-text field exists),
-// delivered anonymously ("from a verified neighbor nearby"), scoped to a
-// verified home on your block, rate-limited, and blockable.
+// delivered anonymously ("from a verified neighbor nearby"), scoped to an
+// address on your block, rate-limited, and blockable.
 //
 // Pure + presentational: every value and handler arrives via props so the
 // container owns fetching, the verified gate, and the send. Tokens only —
@@ -40,6 +40,9 @@ export interface ComposeRecipient {
 export interface NeighborMessageComposeViewProps {
   templates: NeighborMessageTemplate[];
   recipient: ComposeRecipient | null;
+  /** The chosen address's apartment or unit, when one can be typed. */
+  unit?: string;
+  onUnitChange?: (unit: string) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onSend: () => void;
@@ -51,23 +54,46 @@ export interface NeighborMessageComposeViewProps {
 }
 
 // ── Recipient — an address on your block, never a name ──
-function RecipientCard({ recipient, onChange }: { recipient: ComposeRecipient; onChange: () => void }) {
+function RecipientCard({
+  recipient,
+  onChange,
+  unit,
+  onUnitChange,
+}: {
+  recipient: ComposeRecipient;
+  onChange: () => void;
+  unit?: string;
+  onUnitChange?: (unit: string) => void;
+}) {
   return (
-    <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-3.5 flex items-center gap-3">
-      <span className="w-[38px] h-[38px] rounded-[10px] bg-app-home-bg flex items-center justify-center shrink-0 text-app-home">
-        <HomeIcon size={20} strokeWidth={2} />
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em] truncate">{recipient.address}</div>
-        <div className="text-[13px] text-app-text-muted mt-px truncate">{recipient.relativeLabel}</div>
+    <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-3.5">
+      <div className="flex items-center gap-3">
+        <span className="w-[38px] h-[38px] rounded-[10px] bg-app-home-bg flex items-center justify-center shrink-0 text-app-home">
+          <HomeIcon size={20} strokeWidth={2} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em] truncate">{recipient.address}</div>
+          <div className="text-[13px] text-app-text-muted mt-px truncate">{recipient.relativeLabel}</div>
+        </div>
+        <button
+          type="button"
+          onClick={onChange}
+          className="shrink-0 px-1 py-1 text-sm font-semibold text-primary-600 hover:text-primary-700 transition-colors"
+        >
+          Change
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onChange}
-        className="shrink-0 px-1 py-1 text-sm font-semibold text-primary-600 hover:text-primary-700 transition-colors"
-      >
-        Change
-      </button>
+      {unit !== undefined && onUnitChange && (
+        <input
+          value={unit}
+          onChange={(e) => onUnitChange(e.target.value)}
+          aria-label="Apt or unit, optional"
+          placeholder="Apt or unit (optional)"
+          maxLength={30}
+          autoComplete="off"
+          className="mt-3 w-full h-11 px-3 text-[14px] text-app-text bg-app-surface-sunken border border-app-border rounded-[10px] outline-none transition focus:border-primary-600 focus:ring-4 focus:ring-primary-600/10"
+        />
+      )}
     </div>
   );
 }
@@ -186,6 +212,8 @@ function SafetyCard() {
 export default function NeighborMessageComposeView({
   templates,
   recipient,
+  unit,
+  onUnitChange,
   selectedId,
   onSelect,
   onSend,
@@ -200,12 +228,12 @@ export default function NeighborMessageComposeView({
   return (
     <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
       <div className="flex-1">
-        <DetailHeader title="New message" address="To a verified neighbor on your block" />
+        <DetailHeader title="New message" address="To a home on your block" />
 
         <div className="px-4 sm:px-5 pt-1 pb-28">
           <DetailSectionLabel>To</DetailSectionLabel>
           {recipient ? (
-            <RecipientCard recipient={recipient} onChange={onChangeRecipient} />
+            <RecipientCard recipient={recipient} onChange={onChangeRecipient} unit={unit} onUnitChange={onUnitChange} />
           ) : chooser ? (
             chooser
           ) : (
@@ -272,7 +300,7 @@ export default function NeighborMessageComposeView({
         </button>
         <div className="flex items-center justify-center gap-1.5 mt-2.5 text-[12px] text-app-text-muted">
           <EyeOff size={13} strokeWidth={2} />
-          Delivered anonymously · a few messages a week
+          Sent anonymously · a few messages a week
         </div>
       </div>
     </div>

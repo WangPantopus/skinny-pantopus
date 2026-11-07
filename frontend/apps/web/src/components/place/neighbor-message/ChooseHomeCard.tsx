@@ -1,34 +1,33 @@
 // ============================================================
 // Neighbor message · Choose a home — the web mirror of the iOS
 // ChooseNeighborCard. Address suggestions while you type; picking one
-// (or Search homes) looks the address up among discoverable homes.
+// (or Use this address) asks the server whether it's on your block.
 //
-// The privacy contract is discovery's: only homes whose household turned
-// discovery on can appear, never a redacted or ambiguous address, never
-// your own household, never a resident's name. Sending still needs a
-// verified household on your block; the server checks both.
+// Any address on your block can be chosen. The server never says who
+// lives there: a note reaches a verified household if one lives there,
+// and nothing here or after sending tells the sender either way.
 // ============================================================
 
 'use client';
 
 import { useRef, useState } from 'react';
-import { Home as HomeIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 
-export interface ChosenHome {
-  homeId: string;
+export interface ChosenAddress {
   address: string;
+  city: string;
+  state: string;
+  zipcode: string;
   relativeLabel: string;
 }
 
-type SearchState =
+type CheckState =
   | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'loaded'; homes: api.homes.HomeDiscoverItem[] }
-  | { kind: 'error' };
+  | { kind: 'checking' }
+  | { kind: 'refused'; message: string };
 
-function searchable(text: string): boolean {
+function usable(text: string): boolean {
   const q = text.trim();
   return q.length >= 4 && /\d/.test(q) && /[a-z]/i.test(q);
 }
@@ -40,43 +39,45 @@ export default function ChooseHomeCard({
 }: {
   senderHomeId: string;
   near: { lat: number; lng: number } | null;
-  onChoose: (home: ChosenHome) => void;
+  onChoose: (chosen: ChosenAddress) => void;
 }) {
   const [query, setQuery] = useState('');
-  const [state, setState] = useState<SearchState>({ kind: 'idle' });
+  const [state, setState] = useState<CheckState>({ kind: 'idle' });
   const generation = useRef(0);
 
-  const search = async (text: string) => {
-    if (!searchable(text)) return;
+  const check = async (address: api.neighborMessages.NeighborAddress) => {
     const mine = ++generation.current;
-    setState({ kind: 'loading' });
+    setState({ kind: 'checking' });
     try {
-      const res = await api.homes.discoverHomes({ q: text.trim(), limit: 50 });
+      const res = await api.neighborMessages.checkNeighborAddress(senderHomeId, address);
       if (mine !== generation.current) return;
-      const homes = (res.homes ?? []).filter(
-        (h) => h.id !== senderHomeId && !h.is_member && h.address_redacted === false
-          && h.visibility === 'public_preview' && !!h.address,
-      );
-      setState({ kind: 'loaded', homes });
+      if (res.status === 'on_block') {
+        const { address: street, city, state: region, zipcode } = res;
+        onChoose({ address: street, city, state: region, zipcode, relativeLabel: [city, region].filter(Boolean).join(', ') });
+      } else {
+        setState({ kind: 'refused', message: res.message });
+      }
     } catch {
-      if (mine === generation.current) setState({ kind: 'error' });
+      if (mine === generation.current) {
+        setState({ kind: 'refused', message: "Couldn't check that address. Check your connection and try again." });
+      }
     }
   };
 
-  const loading = state.kind === 'loading';
+  const checking = state.kind === 'checking';
 
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-4">
       <div className="text-[15px] font-semibold text-app-text">Choose a home</div>
       <p className="text-[13px] text-app-text-muted mt-1 leading-[18px]">
-        Enter the house number and street. Only homes with discovery enabled appear; sending requires a verified
-        household on your block.
+        Enter the house number and street of any home on your block. If a verified household lives there, they&apos;ll
+        get your note. We won&apos;t tell you either way.
       </p>
       <form
         className="mt-3"
         onSubmit={(e) => {
           e.preventDefault();
-          void search(query);
+          if (usable(query)) void check({ address: query.trim() });
         }}
       >
         <AddressAutocomplete
@@ -86,8 +87,8 @@ export default function ChooseHomeCard({
             setQuery(text);
             setState({ kind: 'idle' });
           }}
-          // A picked suggestion is the exact address: look it up at once.
-          onSelectNormalized={(n) => void search(n.address)}
+          // A picked suggestion is the exact address: check it at once.
+          onSelectNormalized={(n) => void check({ address: n.address, city: n.city, state: n.state, zipcode: n.zipcode })}
           ariaLabel="House number and street"
           placeholder="House number and street"
           hintText={null}
@@ -97,46 +98,16 @@ export default function ChooseHomeCard({
         />
         <button
           type="submit"
-          disabled={!searchable(query) || loading}
-          className="mt-2 text-sm font-semibold text-primary-600 hover:text-primary-700 transition-colors disabled:text-app-text-muted"
+          disabled={!usable(query) || checking}
+          className="mt-2 text-sm font-semibold text-primary-600 hover:text-primary-700 transition-colors disabled:text-app-text-muted disabled:cursor-not-allowed"
         >
-          {loading ? 'Searching…' : 'Search homes'}
+          {checking ? 'Checking…' : 'Use this address'}
         </button>
       </form>
-      {state.kind === 'error' && (
+      {state.kind === 'refused' && (
         <p role="alert" className="mt-2 text-[13px] text-app-error">
-          Couldn&apos;t search homes. Check your connection and try again.
+          {state.message}
         </p>
-      )}
-      {state.kind === 'loaded' && state.homes.length === 0 && (
-        <p className="mt-2 text-[13px] text-app-text-muted leading-[18px]">
-          No selectable homes found. Check the number and street; private homes and your own household won&apos;t
-          appear.
-        </p>
-      )}
-      {state.kind === 'loaded' && state.homes.length > 0 && (
-        <ul className="mt-1">
-          {state.homes.map((home) => {
-            const where = [home.city, home.state].filter(Boolean).join(', ');
-            return (
-              <li key={home.id}>
-                <button
-                  type="button"
-                  onClick={() => onChoose({ homeId: home.id, address: home.address, relativeLabel: where })}
-                  className="w-full flex items-center gap-3 py-2 text-left"
-                >
-                  <span className="w-8 h-8 rounded-lg bg-app-home-bg flex items-center justify-center shrink-0 text-app-home">
-                    <HomeIcon size={17} strokeWidth={2} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[14px] font-semibold text-app-text truncate">{home.address}</span>
-                    <span className="block text-[12px] text-app-text-muted truncate">{where}</span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
       )}
     </div>
   );
