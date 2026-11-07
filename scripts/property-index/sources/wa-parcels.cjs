@@ -35,9 +35,20 @@ const USES = {
   14: ['unit', 'condo', 'Residential condominium'], 18: ['property', null, 'Other residential'], 19: ['property', 'house', 'Vacation home or cabin'], 91: ['parcel', null, 'Undeveloped land'],
 };
 
+// Chelan's situs is the whole mailing line, "<street> <town>, WA <ZIP>", and the reader stops at the comma, so the town read
+// as the street's last word and nobody typing their street found their home. The town has its own column: it comes off the
+// street when a street is left. On November 7 only Chelan's rows were written this way.
+function streetLine(row) {
+  const [street, ...after] = String(row.SITUS_ADDRESS ?? '').replace(/\s+/g, ' ').trim().split(',');
+  const town = String(word(row.SITUS_CITY_NM) || '').toUpperCase();
+  const upper = street.trim().toUpperCase();
+  const left = after.length && town && upper.endsWith(` ${town}`) ? upper.slice(0, -town.length - 1) : null;
+  return left && parse(left)?.name ? left : row.SITUS_ADDRESS;
+}
+
 function fromRow(row, fips, county) {
   const unit = realUnit(row.SUB_ADDRESS);
-  const parsed = parse(row.SITUS_ADDRESS, unit);
+  const parsed = parse(streetLine(row), unit);
   const parcel = word(row.PARCEL_ID_NR) || word(row.ORIG_PARCEL_ID);
   if (!parsed || !parcel) return null;
   const code = Number(String(row.LANDUSE_CD ?? '').trim().slice(0, 2));
