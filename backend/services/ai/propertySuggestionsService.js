@@ -8,6 +8,8 @@
 
 const logger = require('../../utils/logger');
 const countyPages = require('../countyPages');
+const countyLinks = require('../../config/countyLinks');
+const { addHomeCheck } = require('../householdFacts');
 const { getAnthropicClient, resolveModel, resolveEffort, DRAFT_MODEL } = require('../../config/anthropic');
 const { complete, isTimeoutError, parseJsonObject } = require('./llm');
 const {
@@ -356,10 +358,16 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
     }
   }
 
-  // What's still missing can be checked on the county's own page, once the lookup has had its say.
-  const countyPage = attomLookup !== 'pending' && (merged.bedrooms == null || merged.bathrooms == null)
-    ? await countyPages.forAddress({ jurisdiction: record?.answer?.jurisdiction, state: homeAddressRow?.state || state, lat: homeAddressRow?.geocode_lat, lng: homeAddressRow?.geocode_lng })
+  // What's still missing can be checked on the county's own page, once the lookup has had its say. With link and
+  // confirm on, so can everything where no county record answers, and the record's parcel number opens the home's own page.
+  const linking = countyLinks.enabled();
+  const where = linking
+    ? { parcel: record?.copy?.facts?.parcel_number ?? null, municipality: record?.copy?.facts?.municipality ?? homeAddressRow?.city_norm ?? city ?? null }
+    : {};
+  const countyPage = attomLookup !== 'pending' && (merged.bedrooms == null || merged.bathrooms == null || (linking && !record?.copy))
+    ? await countyPages.forAddress({ jurisdiction: record?.answer?.jurisdiction, state: homeAddressRow?.state || state, lat: homeAddressRow?.geocode_lat, lng: homeAddressRow?.geocode_lng, ...where })
     : null;
+  const countyCheck = linking && countyPage && !record?.copy ? addHomeCheck(countyPage) : null;
 
   // 'attom' in tiers_used is how the apps know a county record was found.
   // `attom_lookup` ('found', 'none', 'pending', 'unavailable') is answered for
@@ -374,6 +382,7 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
     ...(!provenance && Object.keys(fieldTags).length ? { field_tags: fieldTags } : {}),
     ...(lookupNote ? { lookup_note: lookupNote } : {}),
     ...(countyPage ? { county_page: countyPage } : {}),
+    ...(countyCheck ? { county_check: countyCheck } : {}),
     ...(floorPlan ? { floor_plan: floorPlan } : {}),
   };
 }

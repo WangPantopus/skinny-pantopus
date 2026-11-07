@@ -41,7 +41,7 @@ function lookupMessage(tiers, lookup, provenance) {
 
 /** POST /api/homes/property-suggestions: the new words sit beside today's, so `tiers_used` still says `attom` for ATTOM. */
 function suggestions(result, wanted) {
-  const { provenance = null, field_tags: fieldTags = null, lookup_note: note = null, county_page: countyPage = null, floor_plan: floorPlan = null, ...legacy } = result;
+  const { provenance = null, field_tags: fieldTags = null, lookup_note: note = null, county_page: countyPage = null, county_check: countyCheck = null, floor_plan: floorPlan = null, ...legacy } = result;
   if (!wanted) return legacy;
   const planPart = floorPlan ? addHomePart(floorPlan) : null;
   const tiers = legacy.tiers_used || [];
@@ -58,6 +58,7 @@ function suggestions(result, wanted) {
     ...(fieldTags ? { field_tags: fieldTags } : {}),
     ...(questions.length ? { questions } : {}),
     ...(countyPage ? { county_page: countyPage } : {}),
+    ...(countyCheck ? { county_check: countyCheck } : {}),
     ...(planPart ? { floor_plan: planPart } : {}),
   };
 }

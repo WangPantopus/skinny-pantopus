@@ -57,7 +57,7 @@ public struct PropertyDetailsView: View {
                 await viewModel.load()
             })
             .sheet(item: $editing) { group in
-                HouseholdFactEditorSheet(group: group) { changes in
+                HouseholdFactEditorSheet(group: group, checkGroup: group.id == viewModel.countyCheckGroup ? group.id : nil) { changes in
                     await viewModel.saveFacts(changes)
                 }
             }
@@ -74,7 +74,8 @@ public struct PropertyDetailsView: View {
             save: { changes in Task { await viewModel.saveFacts(changes) } },
             edit: { editing = $0 },
             report: { reporting = $0 },
-            answerLayout: { answer in Task { await viewModel.answerFloorPlan(answer) } }
+            answerLayout: { answer in Task { await viewModel.answerFloorPlan(answer) } },
+            homeId: viewModel.homeId
         )
     }
 
@@ -134,6 +135,9 @@ private struct LoadedBody: View {
                     if let household = content.household, !household.questions.isEmpty {
                         HouseholdQuestionsCard(household: household, actions: householdActions)
                     }
+                    if let household = content.household, let check = household.countyCheck, let page = household.countyPage {
+                        HouseholdCountyCheckCard(page: page, check: check, actions: householdActions)
+                    }
                     // The county record comes for verified owners
                     // only, so everyone else sees just the Property card.
                     ForEach(content.recordSections) { section in
@@ -157,7 +161,7 @@ private struct LoadedBody: View {
                         ForEach(household.sections) { section in
                             PropertySection(title: section.title, rows: section.rows, note: section.note)
                         }
-                        if household.questions.isEmpty, let page = household.countyPage {
+                        if household.questions.isEmpty, household.countyCheck == nil, let page = household.countyPage {
                             HouseholdCountyPageLink(page: page)
                         }
                         ForEach(household.addDetails) { group in

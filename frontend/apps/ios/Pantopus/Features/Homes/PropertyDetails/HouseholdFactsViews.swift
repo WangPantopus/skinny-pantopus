@@ -17,6 +17,8 @@ struct HouseholdActions {
     let report: (PropertyRecordSection) -> Void
     /// "Is this your layout?": yes, no or undo.
     var answerLayout: (String) -> Void = { _ in }
+    /// The Home, for what this device remembers about it (link and confirm).
+    var homeId: String = ""
 }
 
 private let otherChip = "__other"
@@ -66,15 +68,25 @@ struct HouseholdQuestionRow: View {
 /// The county's own page: a person checks a fact at the source and comes back to confirm it.
 struct HouseholdCountyPageLink: View {
     let page: HouseholdCountyPageDTO
+    /// Link and confirm: told when the person opens it, so "Is this right?" can wait for them to come back.
+    var onOpen: (() -> Void)?
+
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         if let url = URL(string: page.url), url.scheme == "https" {
-            Link(destination: url) {
+            Button {
+                onOpen?()
+                openURL(url)
+            } label: {
                 Text(page.label)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.primary600)
                     .multilineTextAlignment(.leading)
             }
+            .buttonStyle(.plain)
+            .accessibilityRemoveTraits(.isButton)
+            .accessibilityAddTraits(.isLink)
             .accessibilityIdentifier("household_countyPage")
         }
     }
@@ -97,7 +109,7 @@ struct HouseholdQuestionsCard: View {
                         onOther: { openFact(question.key) }
                     )
                 }
-                if let page = household.countyPage {
+                if let page = household.countyPage, household.countyCheck == nil {
                     HouseholdCountyPageLink(page: page)
                 }
             }
@@ -249,6 +261,8 @@ struct HouseholdAddDetailsCard: View {
 /// "Fix something" and "Add details": tap what's right, or type it.
 struct HouseholdFactEditorSheet: View {
     let group: HouseholdGroupDTO
+    /// Opened from "Is this right?" after the county's page: what's saved is checked there, the facts left as they were too.
+    var checkGroup: String?
     let onSave: ([HouseholdFactChange]) async -> Bool
 
     @Environment(\.dismiss) private var dismiss
@@ -261,7 +275,7 @@ struct HouseholdFactEditorSheet: View {
         group.facts.compactMap { fact in
             guard let value = drafts[fact.key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty,
                   value != fact.current else { return nil }
-            return .correct(fact.key, value: value)
+            return checkGroup == nil ? .correct(fact.key, value: value) : .correctFromCountyPage(fact.key, value: value)
         }
     }
 
@@ -296,7 +310,7 @@ struct HouseholdFactEditorSheet: View {
                         .accessibilityIdentifier("household_editor_cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save(changes) } }
+                    Button("Save") { Task { await save(checkGroup.map { changes + [.confirm(group: $0)] } ?? changes) } }
                         .disabled(changes.isEmpty || saving)
                         .accessibilityIdentifier("household_editor_save")
                 }

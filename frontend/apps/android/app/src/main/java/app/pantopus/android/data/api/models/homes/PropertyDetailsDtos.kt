@@ -82,6 +82,21 @@ data class HouseholdCountyPageDto(
     val label: String,
 )
 
+/**
+ * "Is this right?" once someone is back from the county's page, for a home no county record answers (link and
+ * confirm, `backend/services/householdFacts.js`): year built, size, bedrooms and baths.
+ */
+@JsonClass(generateAdapter = true)
+data class HouseholdCountyCheckDto(
+    val group: String,
+    val prompt: String? = null,
+    val lead: String,
+    val confirmed: String? = null,
+    @Json(name = "can_undo") val canUndo: Boolean = false,
+    val fix: String,
+    val facts: List<HouseholdFactDto> = emptyList(),
+)
+
 /** One one-tap answer. */
 @JsonClass(generateAdapter = true)
 data class HouseholdAnswerDto(
@@ -145,6 +160,8 @@ data class HouseholdPartDto(
     val groups: List<HouseholdGroupDto> = emptyList(),
     val questions: List<HouseholdQuestionDto> = emptyList(),
     @Json(name = "county_page") val countyPage: HouseholdCountyPageDto? = null,
+    /** Link and confirm: "Is this right?" after the county's page. */
+    @Json(name = "county_check") val countyCheck: HouseholdCountyCheckDto? = null,
     /** "Is this your layout?", for a unit its building's sheet names. */
     @Json(name = "floor_plan") val floorPlan: FloorPlanLayoutDto? = null,
 )
@@ -174,12 +191,19 @@ data class HouseholdFactChange(
     val group: String? = null,
     val action: String,
     val value: String? = null,
+    /** "county_page": a fix sent from "Is this right?" after the county's page (link and confirm). */
+    val via: String? = null,
 ) {
     companion object {
         fun correct(
             key: String,
             value: String,
         ) = HouseholdFactChange(key = key, action = "correct", value = value)
+
+        fun correctFromCountyPage(
+            key: String,
+            value: String,
+        ) = HouseholdFactChange(key = key, action = "correct", value = value, via = "county_page")
 
         fun undo(key: String) = HouseholdFactChange(key = key, action = "undo")
 

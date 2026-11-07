@@ -120,6 +120,8 @@ struct AddHomeDetailsSection: View {
 
             AddHomeFloorPlanCard(viewModel: viewModel)
 
+            AddHomeCountyCheckCard(viewModel: viewModel, firstFieldFocused: $bedroomsFocused)
+
             AddHomeFactQuestions(
                 viewModel: viewModel,
                 bedroomsFocused: $bedroomsFocused,

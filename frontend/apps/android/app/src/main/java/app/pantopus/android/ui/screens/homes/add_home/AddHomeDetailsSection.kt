@@ -37,13 +37,16 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.api.models.homes.AddHomeCountyCheckDto
 import app.pantopus.android.data.api.models.homes.FloorPlanSuggestionDto
+import app.pantopus.android.data.api.models.homes.HouseholdCountyPageDto
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsFields
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
 import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
 import app.pantopus.android.ui.components.ChipPicker
 import app.pantopus.android.ui.components.ChipPickerOption
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.homes.property_details.HouseholdAction
 import app.pantopus.android.ui.screens.homes.property_details.HouseholdCountyPageLink
 import app.pantopus.android.ui.screens.homes.property_details.HouseholdQuestionRow
 import app.pantopus.android.ui.theme.PantopusColors
@@ -144,6 +147,23 @@ internal fun AddHomeDetailsSection(
                 answer = state.floorPlanAnswer,
                 onAnswer = vm::answerFloorPlan,
             )
+            // Link and confirm, with no county record: the county's page, then "Is this right?" over the fields below.
+            val countyCheck = suggestions?.countyCheck?.takeIf { !state.propertyLookupPending }
+            val countyPage = suggestions?.countyPage
+            if (countyCheck != null && countyPage != null) {
+                AddHomeCountyCheckCard(
+                    page = countyPage,
+                    check = countyCheck,
+                    opened = state.countyPageOpened,
+                    checked = state.countyChecked,
+                    onOpen = vm::openedCountyPage,
+                    onChecked = vm::answerCountyCheck,
+                    onFix = {
+                        vm.answerCountyCheck(true)
+                        bedroomsFocus.requestFocus()
+                    },
+                )
+            }
             // One-tap answers for what the record lacks, when the server sends them. A tap fills the field below.
             suggestions?.questions?.takeIf { it.isNotEmpty() && !state.propertyLookupPending }?.let { questions ->
                 Column(
@@ -159,7 +179,7 @@ internal fun AddHomeDetailsSection(
                             onOther = { (if (bedrooms) bedroomsFocus else bathroomsFocus).requestFocus() },
                         )
                     }
-                    suggestions?.countyPage?.let { HouseholdCountyPageLink(it) }
+                    suggestions?.countyPage?.takeIf { suggestions?.countyCheck == null }?.let { HouseholdCountyPageLink(it) }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -586,6 +606,44 @@ private fun AddHomeFloorPlanCard(
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
+        }
+    }
+}
+
+/** Link and confirm on Add Home, with no county record: the county's page, then "Is this right?" over the fields below once the person is back. */
+@Composable
+private fun AddHomeCountyCheckCard(
+    page: HouseholdCountyPageDto,
+    check: AddHomeCountyCheckDto,
+    opened: Boolean,
+    checked: Boolean,
+    onOpen: () -> Unit,
+    onChecked: (Boolean) -> Unit,
+    onFix: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.lg))
+                .background(PantopusColors.appSurfaceSunken)
+                .padding(Spacing.s3)
+                .testTag("addHome_countyCheck"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        HouseholdCountyPageLink(page, onOpen = onOpen)
+        if (checked) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                Text(text = check.confirmed, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary, modifier = Modifier.weight(1f))
+                HouseholdAction("Undo", true, "addHome_countyCheck_undo") { onChecked(false) }
+            }
+        } else if (opened) {
+            Text(text = check.lead, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                Text(text = check.prompt, style = PantopusTextStyle.small, color = PantopusColors.appText, modifier = Modifier.weight(1f))
+                HouseholdAction(check.confirm, true, "addHome_countyCheck_yes") { onChecked(true) }
+                HouseholdAction(check.fix, true, "addHome_countyCheck_fix", onFix)
+            }
         }
     }
 }
