@@ -7,7 +7,7 @@ const path = require('node:path');
 const { download, zipTable, zipMembers } = require('../../lib/tables.cjs');
 
 const DOWNLOAD_URL = 'https://data.transportation.gov/download/fc2s-wawr/application%2Fx-zip-compressed';
-const COLUMNS = ['AddNo_Full', 'St_PreMod', 'St_PreDir', 'St_PreTyp', 'St_PreSep', 'St_Name', 'St_PosTyp', 'St_PosDir', 'St_PosMod', 'Building', 'Floor', 'Unit', 'Room', 'SubAddress',
+const COLUMNS = ['AddNum_Pre', 'AddNo_Full', 'St_PreMod', 'St_PreDir', 'St_PreTyp', 'St_PreSep', 'St_Name', 'St_PosTyp', 'St_PosDir', 'St_PosMod', 'Building', 'Floor', 'Unit', 'Room', 'SubAddress',
   'Post_City', 'Inc_Muni', 'Urbnztn_PR', 'State', 'Zip_Code', 'UUID', 'Longitude', 'Latitude', 'Placement', 'AddrClass', 'Lifecycle', 'Expire', 'Addr_Type', 'DateUpdate'];
 
 // How the point was placed, as the publisher says. Lower is better for a pin.
@@ -22,6 +22,17 @@ const NOT_AN_ADDRESS = /intersection|range|landmark|community|general delivery|p
 
 const words = (...values) => values.filter(Boolean).join(' ');
 const place = (value) => (value && !NOT_A_PLACE.test(value) ? value : '');
+
+/**
+ * The house number as published, read once where a county also copied it into the prefix: NAD joins the two, so Kittitas WA's
+ * 123 arrives as "123-123" (39,853 of its 40,155 rows in release 24, 22 rows elsewhere). Queens and Hawaii number houses with a
+ * hyphen, so a number there stays as it is.
+ */
+function houseNumber(row) {
+  const pre = (row.AddNum_Pre || '').trim();
+  const full = (row.AddNo_Full || '').trim();
+  return pre && full === `${pre}-${pre}` && row.State !== 'NY' && row.State !== 'HI' ? pre : row.AddNo_Full;
+}
 
 function asOf() {
   // The file's description states its date; the release number in the member name is what changes.
@@ -48,7 +59,7 @@ async function* rows({ work, states = null }) {
       source: 'nad',
       record: row.UUID,
       state: row.State,
-      number: row.AddNo_Full,
+      number: houseNumber(row),
       pre: row.St_PreDir,
       name: words(row.St_PreMod, row.St_PreTyp, row.St_PreSep, row.St_Name, row.St_PosMod),
       suffix: row.St_PosTyp,
