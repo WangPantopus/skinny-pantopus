@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import Field from '../shared/Field';
 import AddressField from '../shared/AddressField';
+import { streetLine } from '../shared/streetLine';
 
 interface LocationsTabProps {
   locations: BusinessLocation[];
@@ -112,7 +113,7 @@ export default function LocationsTab({ locations, businessId, onUpdate, canManag
                       </span>
                     )}
                   </div>
-                  <div className="text-sm text-app-secondary mt-0.5">{loc.address}</div>
+                  <div className="text-sm text-app-secondary mt-0.5">{streetLine(loc)}</div>
                   <div className="text-sm text-app-secondary">
                     {[loc.city, loc.state, loc.zipcode].filter(Boolean).join(', ')}
                   </div>

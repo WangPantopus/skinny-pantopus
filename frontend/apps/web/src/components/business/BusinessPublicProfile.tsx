@@ -28,6 +28,7 @@ import { authPageHref } from '@/lib/auth-utils';
 import { queryKeys } from '@/lib/query-keys';
 import ErrorState from '@/components/ui/ErrorState';
 import { chosenUsername } from '@pantopus/utils';
+import { streetLine } from './shared/streetLine';
 
 interface BusinessPublicProfileProps {
   username: string;
@@ -554,7 +555,7 @@ function LocationsHoursTab({ locations, hours }: { locations: BusinessLocation[]
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-app-text-secondary mt-0.5">{loc.address}</div>
+                <div className="text-sm text-app-text-secondary mt-0.5">{streetLine(loc)}</div>
                 <div className="text-sm text-app-text-secondary">
                   {[loc.city, loc.state, loc.zipcode].filter(Boolean).join(', ')}
                 </div>
