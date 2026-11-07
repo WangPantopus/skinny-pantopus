@@ -1111,7 +1111,8 @@ open class AddHomeWizardViewModel
                             )
                         }
                         // A refusal stays one; a dropped connection or the server's own trouble may pass.
-                        result.error.let { it is NetworkError.Server || it is NetworkError.Transport || it == NetworkError.RetriesExhausted }
+                        val error = result.error
+                        error is NetworkError.Server || error is NetworkError.Transport || error == NetworkError.RetriesExhausted
                     }
                 }
             persist()
