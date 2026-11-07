@@ -25,6 +25,8 @@ const { openState, nearest, round, NSI_VERSION } = require('./us-structures.cjs'
 const COLUMNS = ['Shape', 'OCC_CLS', 'PRIM_OCC', 'PROP_ADDR', 'SQFEET', 'LONGITUDE', 'LATITUDE', 'PROD_DATE'];
 const OUTLINE_TOLERANCE = 1; // half a meter, in the outline's own units
 const STREET_HASH = 16777619;
+// A house number this close on the same street is the house next door, or the one after it.
+const NEXT_DOOR_NUMBERS = 20;
 
 function hash(text) {
   let value = 2166136261;
@@ -142,6 +144,7 @@ function readStructures(table, inventory) {
   const sqft = growing(Float32Array, 1 << 20);
   const use = growing(Uint8Array, 1 << 20);
   const number = growing(Int32Array, 1 << 20);
+  const street = growing(Uint32Array, 1 << 20);
   const match = growing(Int32Array, 1 << 20);
   const next = growing(Int32Array, 1 << 20);
   const numbers = [''];
@@ -169,6 +172,7 @@ function readStructures(table, inventory) {
     sqft.fit(count);
     use.fit(count);
     number.fit(count);
+    street.fit(count);
     match.fit(count);
     next.fit(count);
     pool.fit(used + outline.length);
@@ -193,6 +197,7 @@ function readStructures(table, inventory) {
           numberIds.set(parsed.number, id);
         }
         number.array[i] = id;
+        street.array[i] = hash(parsed.name || '');
       }
       const found = nearest(inventory, lng, lat);
       if (found >= 0) {
@@ -210,10 +215,22 @@ function readStructures(table, inventory) {
       }
     }
   }
-  const data = { at: at.array, starts: starts.array, pool: pool.array, sqft: sqft.array, use: use.array, number: number.array, match: match.array, next: next.array, numbers, heads, wide, count, newest, counts };
+  const data = { at: at.array, starts: starts.array, pool: pool.array, sqft: sqft.array, use: use.array, number: number.array, street: street.array, match: match.array, next: next.array, numbers, heads, wide, count, newest, counts };
   data.claimNumber = new Int32Array(count);
   data.claimStreet = new Uint32Array(count);
+  data.inventoried = new Uint8Array(count);
   return data;
+}
+
+/** How many of the Army Corps's residential structures stand on each footprint: more than one and it's several homes drawn as one. */
+function countInventory(data, inventory) {
+  const around = nearby(data, inventory);
+  const { xs, ys } = inventory;
+  const order = Array.from({ length: xs.length }, (_, i) => i).sort((a, b) => points.cellNumber(xs[a], ys[a]) - points.cellNumber(xs[b], ys[b]));
+  for (const i of order) {
+    const found = points.underPoint(xs[i], ys[i], around(xs[i], ys[i]));
+    if (found.structure && found.distance <= 0 && data.inventoried[found.structure.i] < 255) data.inventoried[found.structure.i] += 1;
+  }
 }
 
 function factsOf(data, inventory, i) {
@@ -240,6 +257,7 @@ function recordOf(data, inventory, i) {
     facts: factsOf(data, inventory, i),
   };
   if (data.number[i]) record.num = data.numbers[data.number[i]];
+  if (data.inventoried?.[i] > 1) record.homes = data.inventoried[i];
   if (data.claimNumber[i] === -1) record.claim = points.MANY;
   else if (data.claimNumber[i]) record.claim = data.claimLabels[data.claimNumber[i]];
   return record;
@@ -380,7 +398,7 @@ function addClaims(data, inventory, registry, { keep = () => true } = {}) {
  */
 function measure(data, inventory, registry, { jitter = 0, ignoreClaims = false, seed = 1, splits = null } = {}) {
   const around = nearby(data, inventory);
-  const out = { points: 0, accepted: 0, inside: 0, near: 0, right: 0, wrong: 0, unknown: 0, reached_without_address: 0, refused: {} };
+  const out = { points: 0, accepted: 0, inside: 0, near: 0, right: 0, wrong: 0, wrong_next_door: 0, wrong_same_street: 0, wrong_other_street: 0, unknown: 0, reached_without_address: 0, refused: {} };
   const split = (answer, result, p) => {
     if (!splits) return;
     const key = splits(answer, QUALITIES[registry.quality[p] - 1] || 'none');
@@ -419,6 +437,9 @@ function measure(data, inventory, registry, { jitter = 0, ignoreClaims = false, 
     } else {
       out.wrong += 1;
       split(answer, 'wrong', p);
+      if (data.street[answer.structure.i] !== registry.street[p]) out.wrong_other_street += 1;
+      else if (Math.abs(Number(points.houseBase(answer.structure.num)) - Number(points.houseBase(label))) <= NEXT_DOOR_NUMBERS) out.wrong_next_door += 1;
+      else out.wrong_same_street += 1;
     }
   }
   return out;
@@ -458,11 +479,12 @@ function buildStatePoints({ work, out, state, registry: registryRoot, built }) {
   fs.rmSync(femaDir, { recursive: true, force: true });
   const { counts } = data;
   log(`${state}: ${counts.read} structures, ${counts.homes} homes, ${counts.addressed} with a readable address, ${counts.joined} joined to the inventory, ${counts.no_shape} with no outline`);
+  countInventory(data, inventory);
   const registry = readRegistry(registryRoot, state, work);
   const claimed = addClaims(data, inventory, registry);
   log(`${state}: ${registry.count} registry points, ${claimed} buildings marked by one`);
   const identity = measure(data, inventory, registry);
-  log(`${state}: asked about each: ${identity.accepted} found a building (${identity.inside} inside, ${identity.near} near), ${identity.reached_without_address} of them with no FEMA address; with FEMA's number held out ${identity.right} right, ${identity.wrong} wrong, ${wrongRate(identity)}; refused ${JSON.stringify(identity.refused)}`);
+  log(`${state}: asked about each: ${identity.accepted} found a building (${identity.inside} inside, ${identity.near} near), ${identity.reached_without_address} of them with no FEMA address; with FEMA's number held out ${identity.right} right, ${identity.wrong} wrong, ${wrongRate(identity)} (next door ${identity.wrong_next_door}, same street ${identity.wrong_same_street}, another street ${identity.wrong_other_street}); refused ${JSON.stringify(identity.refused)}`);
   const geometry = measure(data, inventory, registry, { ignoreClaims: true });
   log(`${state}: on the geometry alone: ${geometry.accepted} found a building, ${geometry.right} right, ${geometry.wrong} wrong, ${wrongRate(geometry)}`);
   const asOf = new Date(data.newest || Date.now()).toISOString().slice(0, 10);
@@ -477,4 +499,4 @@ function buildStatePoints({ work, out, state, registry: registryRoot, built }) {
   return entry;
 }
 
-module.exports = { buildStatePoints, readStructures, readRegistry, addClaims, measure, wrongRate, recordOf };
+module.exports = { buildStatePoints, readStructures, countInventory, readRegistry, addClaims, measure, wrongRate, recordOf };

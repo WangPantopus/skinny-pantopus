@@ -17,6 +17,7 @@
  *   use    h house, m multifamily, f manufactured home, r a residence of no stated
  *          type, x anything else (a store, a school, a hotel)
  *   num    the house number FEMA has for it, where FEMA has one
+ *   homes  how many of the Army Corps of Engineers' residential structures stand on it, when more than one
  *   claim  which address's point marks this building in the address registry: its
  *          house number, or + when two or more addresses do
  *   facts  estimateFacts.js's names, nothing else
@@ -39,7 +40,8 @@ const SEPARATION_METERS = 8;
 // marks what it falls on. Short of that the geometry is all there is, and it's strict: inside a single-family footprint no
 // bigger than a house usually is (a larger one is usually a row of houses drawn as one), with the next house clear of it.
 const MARKED_SHARE = 0.6;
-const LARGEST_HOUSE_SQFT = 3000;
+const MARKED_AROUND_AT_LEAST = 3;
+const LARGEST_HOUSE_SQFT = 2500;
 const CLEAR_METERS = 10;
 // Under this it's a shed or a garage, not somebody's house.
 const MIN_HOUSE_SQFT = 400;
@@ -152,7 +154,7 @@ function underPoint(lng, lat, records) {
   // Not counting itself.
   if (first.structure.claim) marked -= 1;
   houses -= 1;
-  return { ...first, nextHouse: second - Math.max(first.distance, 0), markedAround: houses ? marked / houses : 0 };
+  return { ...first, nextHouse: second - Math.max(first.distance, 0), markedAround: houses >= MARKED_AROUND_AT_LEAST ? marked / houses : 0 };
 }
 
 /**
@@ -171,7 +173,9 @@ function resolve(point, records, { number, holdOut = false, ignoreClaims = false
   if (claim === MANY) return { why: 'shared_building' };
   if (claim && !sameHouse(claim, number)) return { why: 'claimed_by_another' };
   if (!holdOut && structure.num && !sameHouse(structure.num, number)) return { why: 'another_number' };
-  // Measured with FEMA's addresses held out: a point just outside anything but a house is too loose, marked or not.
+  // Measured with FEMA's addresses held out: where the Army Corps counts several homes on one footprint, it's usually a row
+  // of houses drawn as one; and a point just outside anything but a house is too loose, marked or not.
+  if (structure.homes > 1) return { why: 'several_homes' };
   if (distance > 0 && structure.use !== 'h') return { why: 'not_sure_enough' };
   // Where the registry marks the houses around this one, a neighbor's point would have shown up here.
   if (markedAround < MARKED_SHARE && !(structure.use === 'h' && distance <= 0 && structure.facts.footprint_sqft <= LARGEST_HOUSE_SQFT && nextHouse >= CLEAR_METERS)) return { why: 'not_sure_enough' };

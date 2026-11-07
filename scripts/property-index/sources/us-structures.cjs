@@ -191,4 +191,4 @@ async function* buildState({ work, state }) {
   }
 }
 
-module.exports = { buildState, openState, femaTable, nearest, round, STATES, NSI_VERSION };
+module.exports = { buildState, openState, femaTable, readInventory, nearest, round, STATES, NSI_VERSION, nsiUrl };
