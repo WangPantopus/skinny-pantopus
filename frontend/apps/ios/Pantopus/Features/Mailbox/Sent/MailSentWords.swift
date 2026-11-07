@@ -14,11 +14,13 @@ import Foundation
 enum MailSentWords {
     /// "To Maya O. · Christmas card", or "To m***@example.com · by email".
     static func toLine(_ piece: MailSentPiece) -> String {
-        "To \(piece.toName) · \(piece.isLetter ? "Letter" : (piece.byEmail ? "by email" : "Christmas card"))"
+        if piece.byLink, piece.status != .claimed { return "To whoever opens your link" }
+        return "To \(piece.toName) · \(piece.isLetter ? "Letter" : (piece.byEmail ? "by email" : "Christmas card"))"
     }
 
     /// Where it is now, as its row and its page say it.
     static func statusLine(_ piece: MailSentPiece, calendar: Calendar = .current) -> String {
+        if piece.byLink, let line = linkStatusLine(piece) { return line }
         let day = HolidayCardWords.shortDay(piece.arrivesOn ?? piece.arrivesAt, calendar: calendar)
         switch piece.status {
         case .waiting:
@@ -55,8 +57,19 @@ enum MailSentWords {
         return (sent.isEmpty ? "" : "Sent \(sent) · ") + statusLine(piece, calendar: calendar)
     }
 
+    /// A card by link, where it stands; nil when the usual words fit (taken back).
+    static func linkStatusLine(_ piece: MailSentPiece) -> String? {
+        switch piece.status {
+        case .claimed: "\(piece.toName) opened your link and has your card."
+        case .expired: "Nobody opened your link in 90 days."
+        case .emailWaiting: "Waiting for someone to open your link."
+        default: nil
+        }
+    }
+
     /// Until when it can be taken back.
     static func takeBackLine(_ piece: MailSentPiece, calendar: Calendar = .current) -> String {
+        if piece.byLink { return "You can take it back until someone opens it." }
         guard !piece.byEmail, let until = MailDates.parse(piece.takeBackUntil) else {
             return "You can take it back until they open it."
         }
@@ -67,7 +80,9 @@ enum MailSentWords {
     /// The confirm's words: the card's own, and the day freed again only
     /// for a card sent today.
     static func takeBackConfirm(_ piece: MailSentPiece, now: Date = Date(), calendar: Calendar = .current) -> String {
-        let first = piece.byEmail
+        let first = piece.byLink
+            ? "Your link will say you took it back."
+            : piece.byEmail
             ? "The link in their email will say you took it back."
             : "It won’t go out with the morning mail."
         let sentToday = MailDates.parse(piece.sentAt).map { calendar.isDate($0, inSameDayAs: now) } ?? false
@@ -92,6 +107,9 @@ enum MailSentWords {
         case "picked_up": "Picked up by the carrier"
         case "opens": "Opens on Christmas morning"
         // Once claimed, the name is whoever joined, not the address it went to.
+        case "emailed" where piece.byLink: "Your link is ready"
+        case "joined" where piece.byLink && !step.done: "Someone opens your link"
+        case "joined" where piece.byLink: "\(piece.toName) opened your link and has your card"
         case "emailed": "\(piece.isLetter ? "Sent" : "Emailed") to \(piece.status == .claimed ? "them" : piece.toName)"
         // Not yet: the drawing's words, as on the web and Android.
         case "joined" where !step.done: piece.isLetter ? "They claim your letter" : "They join Pantopus and have it"
