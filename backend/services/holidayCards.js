@@ -42,62 +42,63 @@ const COLLECTIONS = [
 ].map(([id, name, line, numbers]) => ({ id, name, line, designs: numbers.map(designIdOf) }));
 const COLLECTION_OF_DESIGN = new Map(COLLECTIONS.flatMap((c) => c.designs.map((design) => [design, c.id])));
 
-// The pictures by number, with the caption printed under each, the colour of its paper and its height in px at 960 px
-// wide (an app keeps a picture's shape while it loads it). 1–17 are the founder's own (2026-10-30); 18–49 came in five
-// groups on 2026-10-31. A number is never reused: every app picks the card's stamp from it.
+// The pictures by number, with the caption printed under each, the colour of its paper, its height in px at 960 px wide
+// (an app keeps a picture's shape while it loads it), its name on the public card pages (/cards/<slug>) and the colour of
+// the cloth it lies on (launch key card_table). 1–17 are the founder's own (2026-10-30); 18–49 came in five groups on
+// 2026-10-31. A number is never reused: every app picks the card's stamp from it.
 const DESIGNS = [
-  ['Home for Christmas.', '#f7eee0', 1054],
-  ['One more run?', '#f7efe1', 1054],
-  ['Don’t open until Christmas.', '#f4eee0', 1034],
-  ['Remember making your wish list?', '#fcf5e7', 1054],
-  ['We saved you a window seat.', '#fbf2e2', 1035],
-  ['Shake it once for me.', '#f4ede2', 1032],
-  ['Remember Christmas at the mall?', '#f8f0e3', 1058],
-  ['Come finish our snowman.', '#f9f1e3', 1045],
-  ['Look outside. It’s snowing.', '#f6ede0', 1062],
-  ['One more Christmas movie.', '#f8f0e0', 1040],
-  ['We found our tree.', '#f9f3e7', 1027],
-  ['Your cocoa’s getting cold.', '#f5eee0', 1052],
-  ['A little Christmas from home.', '#f8f1e0', 1065],
-  ['Wish you were here.', '#f9f6ed', 1046],
-  ['Snowy wishes, just for you.', '#f8f0e3', 1052],
-  ['Saved you the good cookies.', '#f4efe4', 1042],
-  ['See you after Christmas.', '#fbf3e4', 1054],
-  ['Same friends. New memories.', '#f2eee2', 1024],
-  ['No fancy plans. Just us.', '#f3efe5', 982],
-  ['Come over. There’s always room.', '#f1ede2', 1014],
-  ['Let’s take the long way home.', '#f7f3ea', 1019],
-  ['We saved your usual seat.', '#f5f0e6', 990],
-  ['Our little place. Our Christmas.', '#f9f1e3', 994],
-  ['Another Christmas. Still you.', '#f9f1df', 968],
-  ['Until I can hold you again.', '#f8f0df', 987],
-  ['One more movie, like always.', '#f7f0e3', 975],
-  ['Christmas starts when you get here.', '#f7f2e8', 1019],
-  ['One more song, my love.', '#f7f0e5', 1019],
-  ['My favorite place is beside you.', '#faf1e1', 1066],
-  ['All I wanted was you.', '#f6eee0', 1004],
-  ['Good friends. Questionable wrapping skills.', '#f5efe2', 971],
-  ['Save me a place at home.', '#f2eadf', 1034],
-  ['Our kind of Christmas Eve.', '#f1e7d8', 999],
-  ['Books closed. Christmas starts now.', '#f5ede1', 999],
-  ['Small gifts. Good company.', '#f2ece1', 999],
-  ['We’ll make it fit.', '#f0e8d6', 1057],
-  ['Different cities. Same old us.', '#f4ecdc', 999],
-  ['Saved you something sweet.', '#f7f0e3', 1014],
-  ['A little Christmas, sent your way.', '#f6eddd', 1040],
-  ['Follow the lights home.', '#f7eede', 1041],
-  ['Press play. Stay awhile.', '#f8eee1', 1031],
-  ['Wake up. It’s Christmas.', '#faf0e1', 996],
-  ['Come in. The movie’s starting.', '#f4e7d3', 1046],
-  ['Your turn to stir.', '#faf3e5', 993],
-  ['You can have one now.', '#f5f1e7', 997],
-  ['Take this for tomorrow.', '#f9f2e6', 997],
-  ['You made this one.', '#f6f2e9', 986],
-  ['One more piece before bed.', '#f4f0e6', 1034],
-  ['Your bed’s already made.', '#f6eddd', 994],
-].map(([caption, paper, height], index) => {
+  ['Home for Christmas.', '#f7eee0', 1054, 'home-for-christmas', '#2c4071'],
+  ['One more run?', '#f7efe1', 1054, 'one-more-run', '#3b4c6e'],
+  ['Don’t open until Christmas.', '#f4eee0', 1034, 'dont-open-until-christmas', '#6e4b30'],
+  ['Remember making your wish list?', '#fcf5e7', 1054, 'remember-making-your-wish-list', '#6e4b30'],
+  ['We saved you a window seat.', '#fbf2e2', 1035, 'we-saved-you-a-window-seat', '#3b4c6e'],
+  ['Shake it once for me.', '#f4ede2', 1032, 'shake-it-once-for-me', '#6e4b30'],
+  ['Remember Christmas at the mall?', '#f8f0e3', 1058, 'remember-christmas-at-the-mall', '#6e4b30'],
+  ['Come finish our snowman.', '#f9f1e3', 1045, 'come-finish-our-snowman', '#3b4c6e'],
+  ['Look outside. It’s snowing.', '#f6ede0', 1062, 'look-outside-its-snowing', '#3b4c6e'],
+  ['One more Christmas movie.', '#f8f0e0', 1040, 'one-more-christmas-movie', '#6e4b30'],
+  ['We found our tree.', '#f9f3e7', 1027, 'we-found-our-tree', '#3b4c6e'],
+  ['Your cocoa’s getting cold.', '#f5eee0', 1052, 'your-cocoas-getting-cold', '#2c4071'],
+  ['A little Christmas from home.', '#f8f1e0', 1065, 'a-little-christmas-from-home', '#6e4b30'],
+  ['Wish you were here.', '#f9f6ed', 1046, 'wish-you-were-here', '#6e4b30'],
+  ['Snowy wishes, just for you.', '#f8f0e3', 1052, 'snowy-wishes-just-for-you', '#3b4c6e'],
+  ['Saved you the good cookies.', '#f4efe4', 1042, 'saved-you-the-good-cookies', '#6e4b30'],
+  ['See you after Christmas.', '#fbf3e4', 1054, 'see-you-after-christmas', '#3b4c6e'],
+  ['Same friends. New memories.', '#f2eee2', 1024, 'same-friends-new-memories', '#6e4b30'],
+  ['No fancy plans. Just us.', '#f3efe5', 982, 'no-fancy-plans-just-us', '#6e4b30'],
+  ['Come over. There’s always room.', '#f1ede2', 1014, 'come-over-theres-always-room', '#6e4b30'],
+  ['Let’s take the long way home.', '#f7f3ea', 1019, 'lets-take-the-long-way-home', '#3b4c6e'],
+  ['We saved your usual seat.', '#f5f0e6', 990, 'we-saved-your-usual-seat', '#704b51'],
+  ['Our little place. Our Christmas.', '#f9f1e3', 994, 'our-little-place-our-christmas', '#6e4b30'],
+  ['Another Christmas. Still you.', '#f9f1df', 968, 'another-christmas-still-you', '#6e4b30'],
+  ['Until I can hold you again.', '#f8f0df', 987, 'until-i-can-hold-you-again', '#6e4b30'],
+  ['One more movie, like always.', '#f7f0e3', 975, 'one-more-movie-like-always', '#6e4b30'],
+  ['Christmas starts when you get here.', '#f7f2e8', 1019, 'christmas-starts-when-you-get-here', '#2c4071'],
+  ['One more song, my love.', '#f7f0e5', 1019, 'one-more-song-my-love', '#6e4b30'],
+  ['My favorite place is beside you.', '#faf1e1', 1066, 'my-favorite-place-is-beside-you', '#3b4c6e'],
+  ['All I wanted was you.', '#f6eee0', 1004, 'all-i-wanted-was-you', '#6e4b30'],
+  ['Good friends. Questionable wrapping skills.', '#f5efe2', 971, 'good-friends-questionable-wrapping-skills', '#6e4b30'],
+  ['Save me a place at home.', '#f2eadf', 1034, 'save-me-a-place-at-home', '#704b51'],
+  ['Our kind of Christmas Eve.', '#f1e7d8', 999, 'our-kind-of-christmas-eve', '#6e4b30'],
+  ['Books closed. Christmas starts now.', '#f5ede1', 999, 'books-closed-christmas-starts-now', '#3b4c6e'],
+  ['Small gifts. Good company.', '#f2ece1', 999, 'small-gifts-good-company', '#6e4b30'],
+  ['We’ll make it fit.', '#f0e8d6', 1057, 'well-make-it-fit', '#2c4071'],
+  ['Different cities. Same old us.', '#f4ecdc', 999, 'different-cities-same-old-us', '#6e4b30'],
+  ['Saved you something sweet.', '#f7f0e3', 1014, 'saved-you-something-sweet', '#6e4b30'],
+  ['A little Christmas, sent your way.', '#f6eddd', 1040, 'a-little-christmas-sent-your-way', '#6e4b30'],
+  ['Follow the lights home.', '#f7eede', 1041, 'follow-the-lights-home', '#2c4071'],
+  ['Press play. Stay awhile.', '#f8eee1', 1031, 'press-play-stay-awhile', '#6e4b30'],
+  ['Wake up. It’s Christmas.', '#faf0e1', 996, 'wake-up-its-christmas', '#6e4b30'],
+  ['Come in. The movie’s starting.', '#f4e7d3', 1046, 'come-in-the-movies-starting', '#6e4b30'],
+  ['Your turn to stir.', '#faf3e5', 993, 'your-turn-to-stir', '#6e4b30'],
+  ['You can have one now.', '#f5f1e7', 997, 'you-can-have-one-now', '#704b51'],
+  ['Take this for tomorrow.', '#f9f2e6', 997, 'take-this-for-tomorrow', '#6e4b30'],
+  ['You made this one.', '#f6f2e9', 986, 'you-made-this-one', '#6e4b30'],
+  ['One more piece before bed.', '#f4f0e6', 1034, 'one-more-piece-before-bed', '#6e4b30'],
+  ['Your bed’s already made.', '#f6eddd', 994, 'your-beds-already-made', '#6e4b30'],
+].map(([caption, paper, height, slug, table], index) => {
   const id = designIdOf(index + 1);
-  return { id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height };
+  return { id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height, slug, table };
 });
 const DESIGN_BY_ID = new Map(DESIGNS.map((design) => [design.id, design]));
 
@@ -203,6 +204,9 @@ function cardView(mail, now = new Date()) {
     paper: design?.paper || '#f7f0e2',
     // The picture's height at 960 px wide, so an app keeps its shape while it loads it.
     height: design?.height ?? null,
+    // The card's public page (/cards/<slug>) and the colour of the cloth it lies on (launch key card_table).
+    slug: design?.slug || null,
+    table: design?.table || null,
     holiday: card.holiday || SEASON.holiday,
     year: card.year || SEASON.year,
     arrival: card.arrival || null,
@@ -323,7 +327,7 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = 
     // The envelope as it reaches them: postmarked once the carrier has it (by email, the day it was sent).
     envelope: { from: senderName, postmarked_on: status === 'waiting' ? null : dayIn(mail.created_at, zone) },
     card: { design: view.design || null, number: view.number ?? null, caption: view.caption || null, paper: view.paper || null,
-      year: view.year || null, height: view.height ?? null },
+      year: view.year || null, height: view.height ?? null, slug: view.slug || null, table: view.table || null },
   };
 }
 
