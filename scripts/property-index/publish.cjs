@@ -4,10 +4,12 @@
 // readers over, so a failed or refused import leaves the previous release serving. Run by
 // .github/workflows/property-index.yml with the AWS key of its master-only environment.
 //
-//   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--bulk] [--min-retention 0.995] [--republish]
+//   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--bulk] [--min-retention 0.995] [--republish] [--accept-falls]
 //     --bulk  uploads every county's release at once, which a whole state of them needs; a refused county's files just go unused
 //     --republish  someone decided: a file that was rolled back may serve again, and a new build of the file serving
 //                  replaces it (a scheduled run never passes this)
+//     --accept-falls  someone read the refusals and a connector's fix meant them: lower fill and changed account ids publish
+//                     with a warning. An empty file or far fewer records is still refused. Off unless asked for by hand.
 //   node scripts/property-index/publish.cjs --rollback <fips> --state <ST> --bucket <name> [--prefix index]
 'use strict';
 
@@ -37,6 +39,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--rollback') opts.rollback = argv[++i];
     else if (argv[i] === '--state') opts.state = argv[++i];
     else if (argv[i] === '--republish') opts.republish = true;
+    else if (argv[i] === '--accept-falls') opts.acceptFalls = true;
     else if (argv[i] === '--bulk') opts.bulk = true;
     else if (argv[i] === '--min-retention') opts.minRetention = Number(argv[++i]);
     else throw new Error('Unknown argument');
@@ -86,13 +89,14 @@ function withMaps(stateFile, counties) {
   return { ...stateFile, zips, cities };
 }
 
-/** Why this release mustn't replace the one serving: counts only. */
+/** Why this release mustn't replace the one serving, and what only someone who looked may accept: counts only. */
 function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION) {
   const found = [];
+  const falls = [];
   const dir = path.join(out, releasePath(entry.fips, entry.release));
   const report = JSON.parse(fs.readFileSync(path.join(dir, 'report.json'), 'utf8'));
   if (report.records === 0) found.push('no records');
-  if (!previous) return found;
+  if (!previous) return { found, falls };
   const before = previous.records || 0;
   if (report.records < before * MIN_RECORD_SHARE) found.push(`${report.records} records, ${before} serving`);
   const oldReport = store.get(`${releasePath(entry.fips, previous.release)}/report.json`);
@@ -104,7 +108,7 @@ function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION) 
       for (const [fact, count] of Object.entries(facts)) {
         const had = count / records;
         const has = (now.facts[fact] || 0) / now.records;
-        if (had >= 0.2 && had - has > MAX_FILL_DROP) found.push(`${group} ${fact} fell from ${Math.round(had * 100)}% to ${Math.round(has * 100)}%`);
+        if (had >= 0.2 && had - has > MAX_FILL_DROP) falls.push(`${group} ${fact} fell from ${Math.round(had * 100)}% to ${Math.round(has * 100)}%`);
       }
     }
   }
@@ -113,9 +117,9 @@ function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION) 
     const was = JSON.parse(zlib.gunzipSync(oldIds).toString('utf8'));
     const now = new Set(JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(dir, 'ids.json.gz'))).toString('utf8')));
     const kept = was.filter((id) => now.has(id)).length;
-    if (was.length && kept / was.length < minRetention) found.push(`${kept} of ${was.length} accounts kept`);
+    if (was.length && kept / was.length < minRetention) falls.push(`${kept} of ${was.length} accounts kept`);
   }
-  return found;
+  return { found, falls };
 }
 
 function readState(store, state) {
@@ -123,7 +127,7 @@ function readState(store, state) {
   return bytes ? JSON.parse(bytes.toString('utf8')) : emptyState(state);
 }
 
-function publish(store, { out, republish, bulk = false, minRetention }) {
+function publish(store, { out, republish, acceptFalls = false, bulk = false, minRetention }) {
   if (bulk) store.putDir(path.join(out, 'releases'), 'releases');
   const dir = path.join(out, 'counties');
   const entries = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
@@ -149,12 +153,13 @@ function publish(store, { out, republish, bulk = false, minRetention }) {
         log(`${entry.fips}: ${entry.as_of} was rolled back, not publishing it again`);
         continue;
       }
-      const found = problems(store, entry, serving, out, minRetention);
-      if (found.length) {
+      const { found, falls } = problems(store, entry, serving, out, minRetention);
+      if (found.length || (falls.length && !acceptFalls)) {
         refused += 1;
-        console.log(`::error::${entry.fips} ${entry.release} refused: ${found.join('; ')}. The previous release keeps serving.`);
+        console.log(`::error::${entry.fips} ${entry.release} refused: ${[...found, ...falls].join('; ')}. The previous release keeps serving.`);
         continue;
       }
+      if (falls.length) console.log(`::warning::${entry.fips} ${entry.release} accepted by hand: ${falls.join('; ')}.`);
       const name = releasePath(entry.fips, entry.release);
       if (!bulk) store.putDir(path.join(out, name), name);
       stateFile.jurisdictions[entry.fips] = { ...entry, previous: serving?.release || null, previous_as_of: serving?.as_of || null };

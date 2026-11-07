@@ -47,6 +47,10 @@ on:
         description: "Facts to keep off its screens, comma separated; none brings them back; blank keeps them (switch)"
         required: false
         default: ""
+      accept_falls:
+        description: "Publish lower fill and changed account ids, after reading what a run refused and only if a connector's fix meant them (build)"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - scripts/property-index/**
@@ -143,13 +147,15 @@ jobs:
           SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
           # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
+          # Only a run someone starts by hand, and only when they say so.
+          ACCEPT_FALLS: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && '--accept-falls' || '' }}
         run: |
           status=0
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
             # What built still publishes; the run ends failed so someone looks.
             node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || status=1
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH || status=1
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS || status=1
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done
           exit $status
