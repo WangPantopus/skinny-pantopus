@@ -1755,7 +1755,16 @@ public final class ChatConversationViewModel {
             }
             if message.status == .refused { refusedClientIds.insert(message.id) } else { refusedClientIds.remove(message.id) }
         }
-        let failure = ChatOutbox.shared.restoreFailure ?? held.last { $0.status != .queued }?.failure
+        // A send the outbox retries on its own raises no notice either: "Please
+        // try again" while it retries asks people to send it twice. A rate
+        // limit's wait and a final failure (failed, refused) keep theirs.
+        let failure = ChatOutbox.shared.restoreFailure ?? held.last { message in
+            switch message.status {
+            case .queued: false
+            case .retrying: message.rateLimited == true
+            case .failed, .refused: true
+            }
+        }?.failure
         if let failure { sendLimitNotice = failure } else if sendLimitNotice == outboxNotice { sendLimitNotice = nil }
         outboxNotice = failure
         // Most outbox events (saved progress, another thread's send, the
