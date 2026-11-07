@@ -30,15 +30,6 @@ async function checked(query) {
   return result.data;
 }
 
-/** Is a household vote about removing this person open at this Home (SQL home_removal_vote_open)? */
-async function removalVoteOpen(homeId, userId) {
-  const rows = await checked(supabaseAdmin.from('HomeQuorumAction').select('id').eq('home_id', homeId)
-    .eq('action_type', 'REMOVE_MEMBER').in('state', ['proposed', 'collecting_votes'])
-    .gt('expires_at', new Date().toISOString()).eq('metadata->>target_user_id', userId).limit(1));
-  if (!Array.isArray(rows)) throw accessUnavailable();
-  return rows.length > 0;
-}
-
 // Home claims PR 3: a proof always beats a claim (home_proof_holder, home_claim_set_aside and home_effective_access in
 // SQL; keep these aligned). Someone who proved the address: source address or legacy, an adult, living there as a member.
 const PROOF_SOURCES = new Set(['address', 'legacy']);
@@ -51,12 +42,30 @@ async function claimSetAside(homeId, userId) {
   if (typeof setAside !== 'boolean') throw accessUnavailable();
   return setAside;
 }
-/** Does anyone else at this Home have (or had) access by a claim? */
-async function homeHasClaim(homeId, userId) {
-  const rows = await checked(supabaseAdmin.from('HomeOccupancy').select('id').eq('home_id', homeId)
-    .eq('verification_source', 'claim').neq('user_id', userId).limit(1));
-  if (!Array.isArray(rows)) throw accessUnavailable();
-  return rows.length > 0;
+// The Home row with this person's rows at it embedded (PostgREST resource embedding, one query): their occupancy,
+// their verified ownership, their permission overrides, whether anyone else there has access by a claim, and whether
+// a household vote about removing them is open (SQL home_removal_vote_open).
+function homeWithPersonRows(homeId, userId) {
+  return supabaseAdmin.from('Home')
+    .select('id, owner_id, occupancy:HomeOccupancy(*), owner:HomeOwner(id, subject_type, owner_status), '
+      + 'overrides:HomePermissionOverride(permission, allowed), other_claims:HomeOccupancy(id), removal_votes:HomeQuorumAction(id)')
+    .eq('id', homeId)
+    .eq('occupancy.user_id', userId)
+    .eq('owner.subject_id', userId).eq('owner.subject_type', 'user').eq('owner.owner_status', 'verified')
+    .eq('overrides.user_id', userId)
+    .eq('other_claims.verification_source', 'claim').neq('other_claims.user_id', userId)
+    .limit(1, { referencedTable: 'other_claims' })
+    .eq('removal_votes.action_type', 'REMOVE_MEMBER').in('removal_votes.state', ['proposed', 'collecting_votes'])
+    .gt('removal_votes.expires_at', new Date().toISOString()).eq('removal_votes.metadata->>target_user_id', userId)
+    .limit(1, { referencedTable: 'removal_votes' })
+    .maybeSingle();
+}
+
+// At most one embedded row (one occupancy per person and Home, one current ownership): more is unreadable, as a
+// `.maybeSingle()` read of them on their own would be.
+function oneRow(rows) {
+  if (!Array.isArray(rows) || rows.length > 1) throw accessUnavailable();
+  return rows[0] || null;
 }
 
 /**
@@ -64,11 +73,10 @@ async function homeHasClaim(homeId, userId) {
  * membership; missing age is preserved as historical adult-compatible data.
  * Errors throw so callers cannot turn an unreadable deny into a base grant.
  *
- * Every read the decision may need goes out at once, one round trip: the role
- * and override rows, and the claim and removal-vote checks that apply to some
- * people only. Each answer is used exactly where the decision needs it, and
- * only a read that is used can fail the check. A claim's set-aside check stays
- * a second step; it applies to claims only.
+ * Every read the decision may need goes out at once, one round trip of two
+ * calls: the Home with this person's rows embedded (homeWithPersonRows), and
+ * every role's rows. Each answer is used exactly where the decision needs it.
+ * A claim's set-aside check stays a second step; it applies to claims only.
  */
 async function getUserAccess(homeId, userId) {
   const empty = { permissions: [], role_base: null, effective_role_base: null,
@@ -79,20 +87,18 @@ async function getUserAccess(homeId, userId) {
     if (error) throw error;
     return value;
   };
-  const [home, occupancy, owner, roleRead, overridesRead, otherClaimRead, removalVoteRead] = await Promise.all([
-    checked(supabaseAdmin.from('Home').select('id, owner_id').eq('id', homeId).maybeSingle()),
-    checked(supabaseAdmin.from('HomeOccupancy').select('*').eq('home_id', homeId).eq('user_id', userId).maybeSingle()),
-    checked(supabaseAdmin.from('HomeOwner').select('id, subject_type, owner_status')
-      .eq('home_id', homeId).eq('subject_id', userId).eq('subject_type', 'user')
-      .eq('owner_status', 'verified').maybeSingle()),
+  const [home, roleRead] = await Promise.all([
+    checked(homeWithPersonRows(homeId, userId)),
     // Every role's rows (a few dozen): which role applies is known only once the occupancy is read.
     settle(checked(supabaseAdmin.from('HomeRolePermission').select('role_base, permission, allowed'))),
-    settle(checked(supabaseAdmin.from('HomePermissionOverride').select('permission, allowed')
-      .eq('home_id', homeId).eq('user_id', userId))),
-    settle(homeHasClaim(homeId, userId)),
-    settle(removalVoteOpen(homeId, userId)),
   ]);
   if (!home) return empty;
+  const occupancy = oneRow(home.occupancy);
+  const owner = oneRow(home.owner);
+  // Lists of at most one row: is there any? Unreadable only where the decision uses it.
+  const anyRow = rows => (Array.isArray(rows) ? { value: rows.length > 0 } : { error: accessUnavailable() });
+  const otherClaimRead = anyRow(home.other_claims);
+  const removalVoteRead = anyRow(home.removal_votes);
   const role = resolveHomeRole(occupancy);
   const verifiedOccupancy = currentOccupancy(occupancy) && occupancy.verification_status === 'verified' && !!role;
   const ownership = home.owner_id === userId || (owner && owner.subject_type === 'user')
@@ -107,7 +113,7 @@ async function getUserAccess(homeId, userId) {
   const ownerEntitlement = !!ownership;
   const baseRole = ownerEntitlement ? 'owner' : role;
   const allRoleRows = used(roleRead);
-  const overrides = used(overridesRead);
+  const { overrides } = home;
   if (!Array.isArray(allRoleRows)) throw accessUnavailable();
   const roleRows = allRoleRows.filter(row => row && row.role_base === baseRole);
   if (![roleRows, overrides].every(rows => Array.isArray(rows)
