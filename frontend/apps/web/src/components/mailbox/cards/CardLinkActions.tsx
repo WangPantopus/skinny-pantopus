@@ -33,9 +33,12 @@ export default function CardLinkActions({
   const [said, setSaid] = useState<{ text: string; problem?: boolean; link?: string } | null>(null);
   const [known, setKnown] = useState<string | null>(link ?? null);
 
-  /** The link, read from the server when this page doesn't have it. Its refusal says what happened, as it comes. */
+  /**
+   * The link, read from the server when this page doesn't have it, and every time on a card sent earlier: someone may
+   * have opened it, or it may have been taken back, since it was last read. Its refusal says what happened, as it comes.
+   */
   const theLink = async (): Promise<string | null> => {
-    if (known) return known;
+    if (known && !again) return known;
     setBusy(true);
     try {
       const answer = await api.mailbox.getHolidayCardLink(cardId);
