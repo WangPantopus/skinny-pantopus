@@ -429,6 +429,8 @@ public struct CreateHomeRequest: Encodable, Sendable {
     public let noUnitAttestation: Bool?
     /// "Is this your layout?", answered on the form: `yes` or `no`.
     public let floorPlanAnswer: String?
+    /// "Is this right?" after the county's page was answered (link and confirm).
+    public let countyChecked: Bool?
 
     public init(
         address: String,
@@ -452,7 +454,8 @@ public struct CreateHomeRequest: Encodable, Sendable {
         moveInDate: String? = nil,
         noUnitAttestation: Bool? = nil,
         addressId: String? = nil,
-        floorPlanAnswer: String? = nil
+        floorPlanAnswer: String? = nil,
+        countyChecked: Bool? = nil
     ) {
         self.addressId = addressId
         self.address = address
@@ -476,11 +479,13 @@ public struct CreateHomeRequest: Encodable, Sendable {
         self.moveInDate = moveInDate
         self.noUnitAttestation = noUnitAttestation
         self.floorPlanAnswer = floorPlanAnswer
+        self.countyChecked = countyChecked
     }
 
     private enum CodingKeys: String, CodingKey {
         case noUnitAttestation = "no_unit_attestation"
         case floorPlanAnswer = "floor_plan_answer"
+        case countyChecked = "county_checked"
         case addressId = "address_id"
         case address
         case unitNumber = "unit_number"
@@ -678,6 +683,23 @@ public struct FloorPlanSuggestionDTO: Decodable, Sendable, Hashable {
     }
 }
 
+/// Add Home's "Is this right?" after the county's page (link and confirm): its words. The facts are the form's own fields.
+public struct AddHomeCountyCheckDTO: Decodable, Sendable, Hashable {
+    public let prompt: String
+    public let lead: String
+    public let confirm: String
+    public let fix: String
+    public let confirmed: String
+
+    public init(prompt: String, lead: String, confirm: String, fix: String, confirmed: String) {
+        self.prompt = prompt
+        self.lead = lead
+        self.confirm = confirm
+        self.fix = fix
+        self.confirmed = confirmed
+    }
+}
+
 public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
     public let suggestions: PropertySuggestionsFields?
     /// Per-field provenance (`record` or `attom` / `heuristic` / `llm`).
@@ -699,6 +721,8 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
     public let questions: [HouseholdQuestionDTO]?
     /// The county's own page, where a person can check what's missing.
     public let countyPage: HouseholdCountyPageDTO?
+    /// Link and confirm, with no county record: "Is this right?" once the person is back from the county's page.
+    public let countyCheck: AddHomeCountyCheckDTO?
     /// What the building's own floor-plan sheet says about this address.
     public let floorPlan: FloorPlanSuggestionDTO?
 
@@ -714,6 +738,7 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         fieldTags: [String: String]? = nil,
         questions: [HouseholdQuestionDTO]? = nil,
         countyPage: HouseholdCountyPageDTO? = nil,
+        countyCheck: AddHomeCountyCheckDTO? = nil,
         floorPlan: FloorPlanSuggestionDTO? = nil
     ) {
         self.suggestions = suggestions
@@ -727,6 +752,7 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         self.fieldTags = fieldTags
         self.questions = questions
         self.countyPage = countyPage
+        self.countyCheck = countyCheck
         self.floorPlan = floorPlan
     }
 
@@ -744,12 +770,14 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         fieldTags = try? container.decodeIfPresent([String: String].self, forKey: .fieldTags)
         questions = try? container.decodeIfPresent([HouseholdQuestionDTO].self, forKey: .questions)
         countyPage = try? container.decodeIfPresent(HouseholdCountyPageDTO.self, forKey: .countyPage)
+        countyCheck = try? container.decodeIfPresent(AddHomeCountyCheckDTO.self, forKey: .countyCheck)
         floorPlan = try? container.decodeIfPresent(FloorPlanSuggestionDTO.self, forKey: .floorPlan)
     }
 
     private enum CodingKeys: String, CodingKey {
         case suggestions, provenance, questions
         case countyPage = "county_page"
+        case countyCheck = "county_check"
         case floorPlan = "floor_plan"
         case fieldSources = "field_sources"
         case tiersUsed = "tiers_used"

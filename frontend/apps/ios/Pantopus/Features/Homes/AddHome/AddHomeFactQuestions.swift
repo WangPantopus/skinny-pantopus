@@ -86,13 +86,72 @@ struct AddHomeFactQuestions: View {
                         }
                     )
                 }
-                if let page = viewModel.propertySuggestions?.countyPage {
+                if let page = viewModel.propertySuggestions?.countyPage, viewModel.propertySuggestions?.countyCheck == nil {
                     HouseholdCountyPageLink(page: page)
                 }
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("addHome_factQuestions")
         }
+    }
+}
+
+/// Link and confirm on Add Home, with no county record: the county's page, then "Is this right?" over the form's own
+/// fields once the person is back.
+struct AddHomeCountyCheckCard: View {
+    @Bindable var viewModel: AddHomeWizardViewModel
+    let firstFieldFocused: FocusState<Bool>.Binding
+
+    var body: some View {
+        if !viewModel.propertyLookupPending, let check = viewModel.propertySuggestions?.countyCheck,
+           let page = viewModel.propertySuggestions?.countyPage {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                HouseholdCountyPageLink(page: page) { viewModel.countyPageOpened = true }
+                if viewModel.countyChecked {
+                    HStack(spacing: Spacing.s2) {
+                        Text(check.confirmed)
+                            .pantopusTextStyle(.caption)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                        Spacer(minLength: Spacing.s2)
+                        action("Undo", id: "undo") { viewModel.countyChecked = false }
+                    }
+                } else if viewModel.countyPageOpened {
+                    Text(check.lead)
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: Spacing.s3) {
+                        Text(check.prompt)
+                            .pantopusTextStyle(.small)
+                            .foregroundStyle(Theme.Color.appText)
+                        Spacer(minLength: Spacing.s2)
+                        action(check.confirm, id: "yes") { viewModel.countyChecked = true }
+                        action(check.fix, id: "fix") {
+                            viewModel.countyChecked = true
+                            firstFieldFocused.wrappedValue = true
+                        }
+                    }
+                }
+            }
+            .padding(Spacing.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.Color.appSurfaceSunken)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("addHome_countyCheck")
+        }
+    }
+
+    private func action(_ title: String, id: String, perform: @escaping () -> Void) -> some View {
+        Button(action: perform) {
+            Text(title)
+                .pantopusTextStyle(.small)
+                .foregroundStyle(Theme.Color.primary600)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("addHome_countyCheck_\(id)")
     }
 }
 
