@@ -136,7 +136,9 @@ extension MailPieceModel {
             number: piece.card.number ?? 0,
             caption: piece.card.caption ?? "",
             paper: piece.card.paper ?? "",
-            height: piece.card.height
+            height: piece.card.height,
+            slug: piece.card.slug,
+            table: piece.card.table
         )
         return MailPieceModel(
             id: piece.id,

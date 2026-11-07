@@ -12,6 +12,23 @@
 import Foundation
 
 extension MailDetailViewModel {
+    // MARK: - The card on the table
+
+    /// A card, unless it's shredded, lies on the table with the key on. Its model stays for the visit, and takes the
+    /// server's newer answers (the seal lifting).
+    func prepareCardTable(_ content: MailDetailContent) {
+        guard LaunchFeatures.cardTable, removed == nil, let letter = content.letter, let card = letter.card else {
+            setCardTable(nil)
+            return
+        }
+        let table = CardTableContent(letter: letter, card: card)
+        if let cardTable {
+            cardTable.update(content: table)
+        } else {
+            setCardTable(CardTableModel(content: table, startsOnTable: cardFirstOpen == false))
+        }
+    }
+
     // MARK: - Actions
 
     /// A tap on the letter page's actions. Pay is the view's (it opens the
