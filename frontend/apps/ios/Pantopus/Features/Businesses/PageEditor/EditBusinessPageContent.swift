@@ -205,6 +205,8 @@ public struct EditBusinessPageGalleryState: Sendable, Hashable {
 public struct EditBusinessPageLocation: Sendable, Hashable {
     /// Street line only — never the concatenated display address.
     public let address: EditBusinessPageField
+    /// Suite / unit — the `BusinessLocation.address2` column.
+    public let suite: EditBusinessPageField
     public let city: EditBusinessPageField
     public let state: EditBusinessPageField
     public let zip: EditBusinessPageField
@@ -215,6 +217,7 @@ public struct EditBusinessPageLocation: Sendable, Hashable {
 
     public init(
         address: EditBusinessPageField,
+        suite: EditBusinessPageField = EditBusinessPageField(original: "", current: ""),
         city: EditBusinessPageField = EditBusinessPageField(original: "", current: ""),
         state: EditBusinessPageField = EditBusinessPageField(original: "", current: ""),
         zip: EditBusinessPageField = EditBusinessPageField(original: "", current: ""),
@@ -224,6 +227,7 @@ public struct EditBusinessPageLocation: Sendable, Hashable {
         hideExactAddress: Bool
     ) {
         self.address = address
+        self.suite = suite
         self.city = city
         self.state = state
         self.zip = zip
@@ -249,7 +253,7 @@ public struct EditBusinessPageLocation: Sendable, Hashable {
 
     /// True when any address component carries an unsaved edit.
     public var hasAddressEdits: Bool {
-        address.isDirty || city.isDirty || state.isDirty || zip.isDirty
+        address.isDirty || suite.isDirty || city.isDirty || state.isDirty || zip.isDirty
     }
 }
 

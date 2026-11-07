@@ -937,17 +937,22 @@ public struct BusinessLocationHoursResponse: Decodable, Sendable, Hashable {
 /// `updateLocationSchema` (`backend/routes/businesses.js:190`).
 public struct UpdateBusinessLocationRequest: Encodable, Sendable {
     public var address: String?
+    /// Suite / unit. An empty string clears the saved one; nil leaves it
+    /// as it is, and the route then checks the address with the saved suite.
+    public var address2: String?
     public var city: String?
     public var state: String?
     public var zipcode: String?
 
     public init(
         address: String? = nil,
+        address2: String? = nil,
         city: String? = nil,
         state: String? = nil,
         zipcode: String? = nil
     ) {
         self.address = address
+        self.address2 = address2
         self.city = city
         self.state = state
         self.zipcode = zipcode
@@ -956,13 +961,14 @@ public struct UpdateBusinessLocationRequest: Encodable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(address, forKey: .address)
+        try container.encodeIfPresent(address2, forKey: .address2)
         try container.encodeIfPresent(city, forKey: .city)
         try container.encodeIfPresent(state, forKey: .state)
         try container.encodeIfPresent(zipcode, forKey: .zipcode)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case address, city, state, zipcode
+        case address, address2, city, state, zipcode
     }
 }
 
