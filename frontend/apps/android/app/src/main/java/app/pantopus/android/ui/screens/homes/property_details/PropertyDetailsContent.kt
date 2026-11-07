@@ -60,6 +60,9 @@ data class PropertyHouseholdContent(
     /** "Is this your layout?", for a unit its building's sheet names. */
     val floorPlan: FloorPlanLayoutDto? = null,
 ) {
+    /** The county's page as a link of its own: not when "Is this right?" draws it in its card. */
+    val countyLink: HouseholdCountyPageDto? get() = countyPage?.takeIf { countyCheck == null }
+
     fun groupForSection(id: String): HouseholdGroupDto? = groups.firstOrNull { it.sectionId == id }
 
     /** The layout question, if it sits at the foot of this card. */

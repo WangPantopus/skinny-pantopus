@@ -144,7 +144,7 @@ internal fun HouseholdQuestionsCard(
                     onOther = { household.fact(question.key)?.let { fact -> actions.edit(fact.asGroup()) } },
                 )
             }
-            household.countyPage?.takeIf { household.countyCheck == null }?.let { HouseholdCountyPageLink(it) }
+            household.countyLink?.let { HouseholdCountyPageLink(it) }
         }
     }
 }
@@ -303,7 +303,11 @@ internal fun HouseholdFactEditorSheet(
     val changes =
         group.facts.mapNotNull { fact ->
             drafts[fact.key]?.trim()?.takeIf { it.isNotEmpty() && it != fact.current }?.let {
-                if (checkGroup == null) HouseholdFactChange.correct(fact.key, it) else HouseholdFactChange.correctFromCountyPage(fact.key, it)
+                if (checkGroup == null) {
+                    HouseholdFactChange.correct(fact.key, it)
+                } else {
+                    HouseholdFactChange.correctFromCountyPage(fact.key, it)
+                }
             }
         }
     val save = { list: List<HouseholdFactChange> ->

@@ -148,22 +148,18 @@ internal fun AddHomeDetailsSection(
                 onAnswer = vm::answerFloorPlan,
             )
             // Link and confirm, with no county record: the county's page, then "Is this right?" over the fields below.
-            val countyCheck = suggestions?.countyCheck?.takeIf { !state.propertyLookupPending }
-            val countyPage = suggestions?.countyPage
-            if (countyCheck != null && countyPage != null) {
-                AddHomeCountyCheckCard(
-                    page = countyPage,
-                    check = countyCheck,
-                    opened = state.countyPageOpened,
-                    checked = state.countyChecked,
-                    onOpen = vm::openedCountyPage,
-                    onChecked = vm::answerCountyCheck,
-                    onFix = {
-                        vm.answerCountyCheck(true)
-                        bedroomsFocus.requestFocus()
-                    },
-                )
-            }
+            AddHomeCountyCheckCard(
+                page = suggestions?.countyPage,
+                check = suggestions?.countyCheck?.takeIf { !state.propertyLookupPending },
+                opened = state.countyPageOpened,
+                checked = state.countyChecked,
+                onOpen = vm::openedCountyPage,
+                onChecked = vm::answerCountyCheck,
+                onFix = {
+                    vm.answerCountyCheck(true)
+                    bedroomsFocus.requestFocus()
+                },
+            )
             // One-tap answers for what the record lacks, when the server sends them. A tap fills the field below.
             suggestions?.questions?.takeIf { it.isNotEmpty() && !state.propertyLookupPending }?.let { questions ->
                 Column(
@@ -610,17 +606,21 @@ private fun AddHomeFloorPlanCard(
     }
 }
 
-/** Link and confirm on Add Home, with no county record: the county's page, then "Is this right?" over the fields below once the person is back. */
+/**
+ * Link and confirm on Add Home, with no county record: the county's page, then "Is this right?" over the fields below
+ * once the person is back.
+ */
 @Composable
 private fun AddHomeCountyCheckCard(
-    page: HouseholdCountyPageDto,
-    check: AddHomeCountyCheckDto,
+    page: HouseholdCountyPageDto?,
+    check: AddHomeCountyCheckDto?,
     opened: Boolean,
     checked: Boolean,
     onOpen: () -> Unit,
     onChecked: (Boolean) -> Unit,
     onFix: () -> Unit,
 ) {
+    if (page == null || check == null) return
     Column(
         modifier =
             Modifier
@@ -634,7 +634,12 @@ private fun AddHomeCountyCheckCard(
         HouseholdCountyPageLink(page, onOpen = onOpen)
         if (checked) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                Text(text = check.confirmed, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary, modifier = Modifier.weight(1f))
+                Text(
+                    text = check.confirmed,
+                    style = PantopusTextStyle.caption,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.weight(1f),
+                )
                 HouseholdAction("Undo", true, "addHome_countyCheck_undo") { onChecked(false) }
             }
         } else if (opened) {

@@ -1,3 +1,5 @@
+@file:Suppress("PackageNaming")
+
 package app.pantopus.android.ui.screens.homes.property_details
 
 import android.content.Context
@@ -19,7 +21,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.core.content.edit
 import app.pantopus.android.data.api.models.homes.HouseholdCountyCheckDto
-import app.pantopus.android.data.api.models.homes.HouseholdCountyPageDto
 import app.pantopus.android.data.api.models.homes.HouseholdFactChange
 import app.pantopus.android.data.api.models.homes.HouseholdGroupDto
 import app.pantopus.android.ui.theme.PantopusColors
@@ -49,10 +50,11 @@ internal fun rememberCountyPageOpened(homeId: String): Pair<Boolean, () -> Unit>
  */
 @Composable
 internal fun HouseholdCountyCheckCard(
-    page: HouseholdCountyPageDto,
-    check: HouseholdCountyCheckDto,
+    household: PropertyHouseholdContent,
     actions: HouseholdActions,
 ) {
+    val check = household.countyCheck ?: return
+    val page = household.countyPage ?: return
     val (opened, markOpened) = rememberCountyPageOpened(actions.homeId)
     Column(
         modifier = Modifier.fillMaxWidth().householdCard().padding(Spacing.s4).testTag("propertyDetails_countyCheck"),
