@@ -727,6 +727,29 @@
   }
 }
 
+/* The bar is set in the system font: it stops fitting below 381 px on an iPhone and 369 px on
+   Android, and the page clips what runs past its edge. Nothing here shows until then: the gap is
+   only a floor, and the wordmark wraps onto a clipped line only when it can't fit beside the links. */
+@media (max-width: 380px) {
+  .nav {
+    gap: 8px;
+  }
+
+  .brand {
+    flex-shrink: 1;
+    flex-wrap: wrap;
+    height: 26px;
+    overflow: hidden;
+  }
+}
+
+/* Too narrow for the bar on either: "Sign in" moves toward the button, clear of the wordmark. */
+@media (max-width: 368px) {
+  .navLinks {
+    gap: 10px;
+  }
+}
+
 /* ── 07:10 Understand ───────────────────────────────────── */
 
 .understand {
