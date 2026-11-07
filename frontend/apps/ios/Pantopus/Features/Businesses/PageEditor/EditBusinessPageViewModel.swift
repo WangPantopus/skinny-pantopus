@@ -255,6 +255,8 @@ public final class EditBusinessPageViewModel {
         accessGeneration &+= 1
         let generation = accessGeneration
         clearAccess()
+        // A toast queued behind the notice is out of date once the notice goes.
+        if accessError != nil { toastMessage = nil }
         accessError = nil
         isCheckingAccess = true
         defer { if generation == accessGeneration { isCheckingAccess = false } }
