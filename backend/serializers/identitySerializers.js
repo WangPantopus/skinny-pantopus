@@ -516,9 +516,7 @@ function serializePostAuthorForViewer(post) {
   if (post.identity_context_type === 'business' && (post.business_author || post.business)) {
     return serializeBusinessSeatForViewer(post.business_author || post.business);
   }
-  if (post.identity_context_type === 'home' && post.home) {
-    return serializeHomeIdentityForViewer(post.home);
-  }
+  // A Home post is its writer's, as in the feed (attachIdentityAuthors): a home is never a post's author.
   if (post.local_profile) {
     return serializeLocalProfileForViewer(post.local_profile);
   }

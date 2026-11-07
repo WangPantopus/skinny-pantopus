@@ -9,6 +9,7 @@ const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { alsoAtOwnLine } = require('../lib/own-line.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '36055';
@@ -92,7 +93,10 @@ async function* build({ work }) {
       records.push(record);
     }
   }
-  log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number`);
+  // The roll's address line and its address columns disagree on a few homes.
+  const twins = alsoAtOwnLine(records);
+  records.push(...twins);
+  log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number, ${twins.length} also filed at their own address line`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'NY', name: COUNTY, publisher: 'Monroe County', dataset: 'public parcels', method: 'county', source: 'ny-monroe', as_of: asOf, stale_after_days: 730, records,

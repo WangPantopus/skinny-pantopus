@@ -326,22 +326,45 @@ app.get('/', (req, res) => {
   });
 });
 
+const propertyRecordsConfig = require('./config/propertyRecords');
+const propertyRecordsRouter = require('./services/propertyRecords/router');
+// Docker's readiness check (scripts/healthcheck.js) asks from inside the container every 5 seconds.
+// Its healthy answer is reused for 15 seconds, and checks that arrive together share one query, so it
+// costs the database 4 queries a minute instead of 12. A check from outside the container (the proxy,
+// a deploy, the health monitor) always asks the database, and a failure is never reused.
+const HEALTHY_REUSE_MS = 15 * 1000;
+const CONTAINER_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+let lastHealthyAt = 0;
+let healthProbe = null;
+
+function probeDatabase() {
+  if (!healthProbe) {
+    healthProbe = (async () => {
+      // Connectivity only: a HEAD request through the service client makes PostgREST run a query
+      // but returns no rows, so the check depends neither on table contents nor on what client roles
+      // may read (their grants keep narrowing). The Supabase JS client has no raw SQL; this is its
+      // "select 1".
+      const { error } = await supabaseAdmin
+        .from('User')
+        .select('id', { head: true })
+        .limit(1);
+      if (error) throw error;
+      lastHealthyAt = Date.now();
+    })().finally(() => { healthProbe = null; });
+  }
+  return healthProbe;
+}
+
 app.get('/health', async (req, res) => {
   try {
-    // Connectivity only: a HEAD request through the service client makes PostgREST run a query
-    // but returns no rows, so the check depends neither on table contents nor on what client roles
-    // may read (their grants keep narrowing). The Supabase JS client has no raw SQL; this is its
-    // "select 1".
-    const { error } = await supabaseAdmin
-      .from('User')
-      .select('id', { head: true })
-      .limit(1);
-
-    if (error) throw error;
+    const fromContainer = CONTAINER_ADDRESSES.has(req.socket.remoteAddress);
+    if (!fromContainer || Date.now() - lastHealthyAt >= HEALTHY_REUSE_MS) await probeDatabase();
 
     res.json({
       status: 'healthy',
       database: 'connected',
+      // Pantopus's own property index, where it's on: a reading for the monitor, never a reason to call the API unhealthy.
+      ...(propertyRecordsConfig.enabled() ? { property_index: propertyRecordsRouter.health() } : {}),
       timestamp: new Date().toISOString()
     });
   } catch (err) {

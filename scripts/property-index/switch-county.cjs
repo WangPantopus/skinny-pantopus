@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Moves counties between off, shadow and live for one environment, or withholds some of their facts, with one change:
+// Moves counties between off, shadow and live for one environment, withholds some of their facts, or turns their owners'
+// value estimates on or off, with one change:
 // their lines in that environment's switch file, which that environment's servers follow within about a minute
 // (backend/services/propertyRecords/router.js). No release and no restart. Run by hand through
 // .github/workflows/property-index.yml, which holds the storage key; a local rig passes --root.
@@ -8,6 +9,7 @@
 //   node scripts/property-index/switch-county.cjs --county 53011,48113,12086 --mode live --target production --bucket <name>
 //   node scripts/property-index/switch-county.cjs --county 53011 --mode off --target local --root <dir>
 //     --withhold sale_price,sale_date   these facts stay off its screens (stored copies keep them); `none` brings them all back
+//     --estimates on|off   a live county's owners see a Pantopus estimate, or don't (backend/services/propertyRecords/valueEstimate.js)
 //   Leave out --mode to keep its mode.
 //
 // A list changes every county in it or none: one refused county refuses the whole run, and the file is written once.
@@ -29,13 +31,15 @@ const counties = [...new Set(opt('--county').split(',').map((code) => code.trim(
 const mode = opt('--mode').trim();
 const target = opt('--target').trim();
 const withhold = opt('--withhold').trim();
+const estimates = opt('--estimates').trim();
 const root = opt('--root');
 const remote = `s3://${opt('--bucket')}/${opt('--prefix') || 'index'}`;
 
 if (!counties.length) refuse('A county is its five-digit FIPS code');
 if (mode && !['off', 'shadow', 'live'].includes(mode)) refuse('A county is off, shadow or live');
 if (!/^[a-z]+$/.test(target)) refuse('Name the environment: production or staging');
-if (!mode && !withhold) refuse('Nothing to change: pass --mode, --withhold or both');
+if (estimates && !['on', 'off'].includes(estimates)) refuse('Estimates are on or off');
+if (!mode && !withhold && !estimates) refuse('Nothing to change: pass --mode, --withhold, --estimates or several');
 if (!root && !opt('--bucket')) refuse('Pass --bucket, or --root for a local rig');
 
 function read(name) {
@@ -89,9 +93,10 @@ if (file.v !== 1 || !file.counties) refuse('A switch file this tool can\'t read'
 
 const changes = known.map((county) => {
   const before = file.counties[county] || { mode: 'off (not named)' };
-  const next = { ...before, ...(mode ? { mode } : {}), ...(withheld ? { withheld } : {}) };
+  const next = { ...before, ...(mode ? { mode } : {}), ...(withheld ? { withheld } : {}), ...(estimates ? { estimates: estimates === 'on' } : {}) };
   if (!['off', 'shadow', 'live'].includes(next.mode)) problems.push(`${county} is named for the first time, so it needs --mode`);
   if (!next.withheld?.length) delete next.withheld;
+  if (!next.estimates) delete next.estimates;
   return { county, before, next };
 });
 
@@ -107,6 +112,6 @@ write(name, `${JSON.stringify(file, null, 1)}\n`);
 const count = (wanted) => Object.values(file.counties).filter((entry) => entry.mode === wanted).length;
 for (const { county, before, next } of changes) {
   const release = releases.get(county);
-  log(`${target}: ${county} ${before.mode} -> ${next.mode}${release ? `, release ${release.release} as of ${release.as_of}` : ''}; withheld: ${(next.withheld || []).join(', ') || 'none'}`);
+  log(`${target}: ${county} ${before.mode} -> ${next.mode}${release ? `, release ${release.release} as of ${release.as_of}` : ''}; withheld: ${(next.withheld || []).join(', ') || 'none'}; estimates: ${next.estimates ? (next.mode === 'live' ? 'on' : 'on once live') : 'off'}`);
 }
-log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off; servers follow within about a minute`);
+log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off, estimates on in ${Object.values(file.counties).filter((entry) => entry.estimates).length}; servers follow within about a minute`);

@@ -497,7 +497,8 @@ object BusinessProfileMapper {
         val count = business.reviewCount ?: reviewsResponse?.reviewCount ?: 0
         if (count <= 0) return null
         val average = business.averageRating ?: reviewsResponse?.averageRating ?: 0.0
-        return BusinessReviewSummary(average = average, count = count, distribution = emptyList())
+        // None of this page's reads carries per-star counts, and web's business page shows no bars, so neither do we.
+        return BusinessReviewSummary(average = average, count = count, distribution = null)
     }
 
     private fun buildReview(review: PublicProfileReview): BusinessReviewCard =

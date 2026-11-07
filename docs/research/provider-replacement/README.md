@@ -62,9 +62,13 @@ landing built work first and D9. Open, with recommendations: D6-D8, D10-D12 and 
 | [architecture.md](architecture.md) | The pieces, data flow, identity contract, fact precedence, postal adapter, mail, reliability, privacy, app compatibility | Designing or reviewing |
 | [experience.md](experience.md) | What each screen shows on web, iOS and Android, and the "same or better" gates G1-G7 | Building any screen change |
 | [parity-and-acceptance.md](parity-and-acceptance.md) | Truth sets, exact-unit precision, service objectives, sample design, how a switch is made | Proving a package |
+| [reliability.md](reliability.md) | Measured speed against the service objectives, and every failure row and drill with its result (November 7) | Checking an objective, or rerunning a drill |
 | [build-plan.md](build-plan.md) | Work packages WP0-WP16 with files, switches, gates, checks, rollout and rollback | Building |
 | [cost-and-rights.md](cost-and-rights.md) | Costs, prices, the rights register and Google retention plans | Anything that costs money or keeps data |
 | [public-records-requests.md](public-records-requests.md) | Requests for the 41 large counties without a free file, prices found, and why not to scrape lookup sites | Sending requests or buying a file |
+| [statewide-inventory.md](statewide-inventory.md) | Every state's and territory's statewide parcel, assessment and building-fact files, ranked by homes gained beyond storage | Adding statewide sources (WP7) |
+| [other-routes.md](other-routes.md) | Records-law bulk copies, state tax departments, clearinghouses, federal sets, what changed for the 41 counties, bedrooms and baths | Choosing the next route |
+| [lookup-sites.md](lookup-sites.md) | One-home reads of county lookup sites: platforms, terms, robots, law by state, cost, and a recommendation for D2 | Deciding D2's open question |
 | [mail-pilot.md](mail-pilot.md) | The real-mail pilot for each printer | Running the pilot |
 | [HANDOFF.md](HANDOFF.md) | Where the work stands and the next steps | Continuing this work |
 

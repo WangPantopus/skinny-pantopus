@@ -153,6 +153,22 @@
           "license": "CC BY 4.0",
           "license_url": "https://creativecommons.org/licenses/by/4.0/",
           "dataset": "Land Information Records parcels"
+        },
+        {
+          "id": "co-parcels",
+          "publisher": "State of Colorado, Governor's Office of Information Technology, and Colorado's county assessors",
+          "url": "https://gis.colorado.gov/public/rest/services/Address_and_Parcel",
+          "license": "Commercial use allowed with attribution; the dataset itself may not be resold",
+          "license_url": "https://www.arcgis.com/home/item.html?id=55234e04218f47c9868900e439fcbd5a",
+          "dataset": "Colorado Public Parcels. State of Colorado Public addresses were accessed on November 7, 2026 from https://gis.colorado.gov/public/rest/services/Address_and_Parcel"
+        },
+        {
+          "id": "wi-parcels",
+          "publisher": "Wisconsin State Cartographer's Office, the Wisconsin Department of Administration, and Wisconsin's counties",
+          "url": "https://www.sco.wisc.edu/parcels/data/",
+          "license": "Free for public consumption (as of June 30, 2026)",
+          "license_url": "https://www.arcgis.com/home/item.html?id=2386813b23ea4e51a009f7d1d6b76e02",
+          "dataset": "Statewide Parcel Map Database (V12)"
         }
       ]
     },
@@ -255,6 +271,14 @@
           "license_url": "https://creativecommons.org/licenses/by/4.0/"
         },
         {
+          "id": "us/wi/city_of_milwaukee",
+          "publisher": "City of Milwaukee, Wisconsin",
+          "url": "https://data.milwaukee.gov/dataset/mai",
+          "license": "CC BY",
+          "license_url": "http://www.opendefinition.org/licenses/cc-by",
+          "dataset": "Address points (Master Address Index)"
+        },
+        {
           "id": "us/ca/city_of_mountain_view",
           "publisher": "City of Mountain View, California",
           "url": "https://data-mountainview.opendata.arcgis.com/datasets/MountainView::address-points/about",
@@ -298,6 +322,14 @@
           "url": "https://dekalbinsights-dekalbgis.opendata.arcgis.com/datasets/DeKalbGIS::address-6/about",
           "license": "CC BY 4.0",
           "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/dc/statewide",
+          "publisher": "District of Columbia, Office of the Chief Technology Officer",
+          "url": "https://opendata.dc.gov/datasets/DCGIS::address-points/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/",
+          "dataset": "Address points"
         },
         {
           "id": "us/ne/omaha",
@@ -403,6 +435,14 @@
           "license_url": "https://creativecommons.org/licenses/by/4.0/"
         },
         {
+          "id": "us/or/portland_metro",
+          "publisher": "Metro, Oregon",
+          "url": "https://rlisdiscovery.oregonmetro.gov",
+          "license": "RLIS Open Database End User License Agreement",
+          "license_url": "https://rlisdiscovery.oregonmetro.gov/pages/open-database-license",
+          "statement": "Regional Land Information System data are a product of Metro and made publicly available according to the license agreement found in https://rlisdiscovery.oregonmetro.gov/pages/open-database-license."
+        },
+        {
           "id": "us/md/montgomery",
           "publisher": "Montgomery County, Maryland",
           "url": "https://data.montgomerycountymd.gov/terms-of-use",
@@ -410,11 +450,25 @@
           "statement": "The data made available here has been modified for use from its original source, which is Montgomery County, Maryland."
         },
         {
+          "id": "us/nj/statewide",
+          "publisher": "NJ Office of Information Technology, Office of GIS (NJOGIS), and its county partners",
+          "url": "https://njogis-newjersey.opendata.arcgis.com/datasets/c4b6cb9caad94a569e40541457fd45f6",
+          "license": "Acknowledgement requested",
+          "dataset": "Address points for New Jersey, Next Generation 9-1-1"
+        },
+        {
           "id": "overture:us/ny/city_of_new_york",
           "publisher": "NYC Department of City Planning",
           "url": "https://data.cityofnewyork.us/City-Government/AddressPoint/uf93-f8nk",
           "license": "NYC Open Data Terms of Use",
           "license_url": "https://opendata.cityofnewyork.us/overview/#termsofuse"
+        },
+        {
+          "id": "us/id/statewide",
+          "publisher": "Oak Ridge National Laboratory and the Federal Emergency Management Agency",
+          "url": "https://www.arcgis.com/home/item.html?id=1f8a907f2b3042489c5d900ddcd2fa16",
+          "license": "U.S. government work",
+          "dataset": "Idaho's address points from building footprints"
         },
         {
           "id": "overture:us/or/statewide",
@@ -447,6 +501,13 @@
           "license": "SEMCOG Copyright License Agreement",
           "license_url": "https://maps-semcog.opendata.arcgis.com/pages/copyright-license-agreement",
           "statement": "Copyright (c) 2024 SEMCOG. All Rights Reserved. Reproduction or Use Without Permission is Prohibited."
+        },
+        {
+          "id": "us/md/statewide",
+          "publisher": "State of Maryland (MD iMAP, Maryland Department of Planning, SDAT)",
+          "url": "https://data.imap.maryland.gov/datasets/maryland::maryland-property-data-parcel-points/about",
+          "license": "Free to distribute, acknowledging the State of Maryland",
+          "dataset": "Maryland Property Data parcel points"
         },
         {
           "id": "us/ny/suffolk",

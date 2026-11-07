@@ -18,7 +18,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { BusinessUser, BusinessProfile, BusinessLocation, BusinessHours, BusinessPage, CatalogItem, BusinessReview, PageBlock } from '@pantopus/types';
-import { formatHoursInterval, PublicBlock } from './PublicBlockRenderer';
+import { compareHoursRows, formatHoursInterval, PublicBlock } from './PublicBlockRenderer';
 import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { EndorsementSummary, EndorsementButton } from '@/components/endorsement';
@@ -540,7 +540,7 @@ function LocationsHoursTab({ locations, hours }: { locations: BusinessLocation[]
   return (
     <div className="space-y-4">
       {locations.map((loc) => {
-        const locHours = (hoursByLocation[loc.id] || []).sort((a: BusinessHours, b: BusinessHours) => a.day_of_week - b.day_of_week);
+        const locHours = (hoursByLocation[loc.id] || []).sort(compareHoursRows);
         return (
           <div key={loc.id} className="rounded-xl border border-app-border bg-app-surface p-6">
             <div className="flex items-start justify-between gap-4 mb-4">

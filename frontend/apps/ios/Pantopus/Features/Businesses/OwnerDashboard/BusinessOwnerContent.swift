@@ -202,6 +202,20 @@ public struct BusinessOwnerContent: Sendable, Hashable {
     /// business-post route (`backend/routes/businesses.js:4198`).
     public static let postingRoles: Set<String> = ["owner", "admin", "editor"]
 
+    /// `publicProfile` for the preview frame, with the replies this dashboard
+    /// holds: the public read comes from before a reply saved here, and the
+    /// preview shows what neighbors see now.
+    public var previewProfile: BusinessProfileContent {
+        var profile = publicProfile
+        profile.reviews = publicProfile.reviews.map { card in
+            guard let reply = reviews.first(where: { $0.id == card.id })?.reply else { return card }
+            var replied = card
+            replied.ownerReply = reply
+            return replied
+        }
+        return profile
+    }
+
     /// Returns a copy with `reply` set on the review matching `reviewId`.
     /// Backs the local-state reply stub (no backend in B3.2).
     public func applyingReply(_ reply: String, to reviewId: String) -> BusinessOwnerContent {
