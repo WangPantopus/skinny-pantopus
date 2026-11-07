@@ -77,12 +77,17 @@ open class BusinessesRepository
         /** P1-C — owner reviews list behind the reply composer. */
         open suspend fun reviews(businessId: String): NetworkResult<BusinessOwnerReviewsResponse> = safeApiCall { api.reviews(businessId) }
 
-        /** P1-C — save / update the owner's reply on a review. */
+        /**
+         * P1-C — save / update the owner's reply on a review. The public page reads its reviews through the stored
+         * public profile, so a saved reply marks that copy and its next read asks the server.
+         */
         open suspend fun respondToReview(
             businessId: String,
             reviewId: String,
             response: String,
-        ): NetworkResult<Unit> = safeApiCall { api.respondToReview(businessId, reviewId, BusinessReviewRespondRequest(response)) }
+        ): NetworkResult<Unit> =
+            safeApiCall { api.respondToReview(businessId, reviewId, BusinessReviewRespondRequest(response)) }
+                .also { if (it is NetworkResult.Success) store.markEdited("profile:$businessId") }
 
         /** P1.6 — save/follow a public business profile. */
         open suspend fun followBusiness(businessId: String): NetworkResult<BusinessFollowResponse> = safeApiCall { api.follow(businessId) }

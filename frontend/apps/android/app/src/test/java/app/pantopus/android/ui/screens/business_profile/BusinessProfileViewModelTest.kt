@@ -21,7 +21,9 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessPagesRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.data.store.Stored
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -51,6 +53,7 @@ class BusinessProfileViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { profiles.publicProfileCopy(any()) } returns Stored()
     }
 
     @After fun tearDown() {
