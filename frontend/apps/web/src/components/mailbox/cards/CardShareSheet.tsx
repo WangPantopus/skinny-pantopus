@@ -45,7 +45,7 @@ export function cardPageLink(slug: string | null | undefined, sealed: boolean, i
 
 /** A phone or tablet in the hand: its share sheet is the way to Instagram and mail. A computer saves the picture instead. */
 function inTheHand(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
+  return typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches;
 }
 
 function clickLink(attributes: Partial<HTMLAnchorElement>) {
