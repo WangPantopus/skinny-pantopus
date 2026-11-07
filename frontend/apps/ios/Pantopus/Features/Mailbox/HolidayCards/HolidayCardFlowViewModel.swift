@@ -46,17 +46,24 @@ enum HolidayCardStep: Int, CaseIterable {
 enum HolidayCardRecipient: Hashable {
     case person(userId: String, name: String)
     case email(String)
+    /// Whoever opens the link (`card_table`). It comes the way a card by email does.
+    case link
 
     var name: String {
         switch self {
         case let .person(_, name): name
         case let .email(address): address
+        case .link: "whoever opens your link"
         }
     }
 
     var isEmail: Bool {
-        if case .email = self { return true }
-        return false
+        if case .person = self { return false }
+        return true
+    }
+
+    var isLink: Bool {
+        self == .link
     }
 }
 
@@ -71,6 +78,7 @@ enum HolidayCardSearch: Equatable {
 
 @Observable
 @MainActor
+// swiftlint:disable:next type_body_length
 final class HolidayCardFlowViewModel {
     private(set) var state: HolidayCardFlowState = .loading
     private(set) var step: HolidayCardStep = .to
@@ -141,6 +149,8 @@ final class HolidayCardFlowViewModel {
 
     private(set) var search: HolidayCardSearch = .idle
     var byEmail = false
+    /// The link to send, just after sending a card by link.
+    private(set) var sentLink: String?
     var email = ""
 
     /// Who it's from, printed at the bottom of the back and on the envelope:
@@ -358,6 +368,7 @@ final class HolidayCardFlowViewModel {
         let to: SendHolidayCardBody.Recipient = switch recipient {
         case let .person(userId, _): .person(userId: userId)
         case let .email(address): .email(address)
+        case .link: .link
         }
         return SendHolidayCardBody(
             design: design.id,
@@ -384,6 +395,7 @@ final class HolidayCardFlowViewModel {
             let response: SendHolidayCardResponse = try await answer(HolidayCardEndpoints.send(body))
             requestId = nil
             sent = response.card
+            sentLink = response.link
             step = .sent
             tookBack = false
         } catch {

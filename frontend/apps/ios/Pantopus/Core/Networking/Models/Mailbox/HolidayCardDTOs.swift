@@ -148,6 +148,8 @@ public struct SentHolidayCard: Decodable, Sendable, Hashable, Identifiable {
     /// The person's name, or the email address masked.
     public let toName: String?
     public let byEmail: Bool
+    /// By link, not to an address (`by_email` is true too, for older apps).
+    public let byLink: Bool
     public let arrival: HolidayCardArrival?
     /// When it goes into their mailbox (nil by email).
     public let arrivesAt: String?
@@ -167,6 +169,7 @@ public struct SentHolidayCard: Decodable, Sendable, Hashable, Identifiable {
         case id, design, arrival, status
         case toName = "to_name"
         case byEmail = "by_email"
+        case byLink = "by_link"
         case arrivesAt = "arrives_at"
         case arrivesOn = "arrives_on"
         case opensAt = "opens_at"
@@ -181,6 +184,7 @@ public struct SentHolidayCard: Decodable, Sendable, Hashable, Identifiable {
         design = try? c.decodeIfPresent(String.self, forKey: .design)
         toName = try? c.decodeIfPresent(String.self, forKey: .toName)
         byEmail = (try? c.decodeIfPresent(Bool.self, forKey: .byEmail)) ?? false
+        byLink = (try? c.decodeIfPresent(Bool.self, forKey: .byLink)) ?? false
         arrival = (try? c.decodeIfPresent(String.self, forKey: .arrival)).flatMap(HolidayCardArrival.init(rawValue:))
         arrivesAt = try? c.decodeIfPresent(String.self, forKey: .arrivesAt)
         arrivesOn = try? c.decodeIfPresent(String.self, forKey: .arrivesOn)
@@ -227,10 +231,13 @@ public struct SendHolidayCardBody: Encodable, Sendable {
     public enum Recipient: Encodable, Sendable {
         case person(userId: String)
         case email(String)
+        /// One link, one person: the first to open it keeps the card (`card_table`).
+        case link
 
         private enum CodingKeys: String, CodingKey {
             case userId = "user_id"
             case email
+            case link
         }
 
         public func encode(to encoder: any Encoder) throws {
@@ -238,6 +245,7 @@ public struct SendHolidayCardBody: Encodable, Sendable {
             switch self {
             case let .person(userId): try c.encode(userId, forKey: .userId)
             case let .email(address): try c.encode(address, forKey: .email)
+            case .link: try c.encode(true, forKey: .link)
             }
         }
     }
@@ -254,6 +262,13 @@ public struct SendHolidayCardBody: Encodable, Sendable {
 /// `POST /api/mailbox/cards` → 201.
 public struct SendHolidayCardResponse: Decodable, Sendable, Hashable {
     public let card: SentHolidayCard
+    /// The link to send, for a card by link.
+    public let link: String?
+}
+
+/// `GET /api/mailbox/cards/:id/link`: the link again while it waits.
+public struct HolidayCardLinkResponse: Decodable, Sendable, Hashable {
+    public let link: String
 }
 
 /// `POST /api/mailbox/cards/:id/take-back` → 200.

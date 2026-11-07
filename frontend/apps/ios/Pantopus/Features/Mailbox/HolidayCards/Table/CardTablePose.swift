@@ -128,7 +128,7 @@ struct CardTablePose {
         var turned = rotation - drop * 6
         if let pages, let flapWidth = pages.flapWidth {
             // Sideways, the flap stays above the middle of the two pages.
-            scaleOfEnvelope = cardTableLerp(1, flapWidth / g.envelopeWidth, open)
+            scaleOfEnvelope = cardTableLerp(1, Double(flapWidth) / Double(g.envelopeWidth), open)
             envelopeLeft = cardTableLerp(envelopeLeft, pages.spine - flapWidth / 2, open)
             envelopeTop = cardTableLerp(envelopeTop, pages.flapTop + flapWidth * 512 / 1200, open)
             turned = cardTableLerp(turned, 0, open)
@@ -161,12 +161,12 @@ struct CardTablePose {
         cardIsOut = rise >= 0.999
         var left = g.cardX + tx * 5
         // It grows from its top edge.
-        var cardTopNow = cardTop + ty * 5 - arrive + g.cardHeight * (scale - 1) / 2
+        var cardTopNow = cardTop + ty * 5 - arrive + Double(g.cardHeight) * (scale - 1) / 2
         var pageScaleNow = 1.0
         if let pages {
             // The folded card opens across the hinge: the picture goes to its page, and the note swings out from
             // behind it.
-            pageScaleNow = cardTableLerp(1, pages.pictureFrame.width / g.cardWidth, open)
+            pageScaleNow = cardTableLerp(1, Double(pages.pictureFrame.width) / Double(g.cardWidth), open)
             left = cardTableLerp(left, pages.pictureFrame.minX, open)
             cardTopNow = cardTableLerp(cardTopNow, pages.pictureFrame.minY, open)
             cardRot = cardTableLerp(cardRot, 0, open)

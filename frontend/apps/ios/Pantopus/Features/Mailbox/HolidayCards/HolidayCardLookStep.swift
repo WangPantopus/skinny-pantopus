@@ -32,6 +32,8 @@ struct HolidayCardLookStep: View {
     /// "Open it again": the card rises out of its envelope once more.
     @State private var rises = false
     @State private var replays = 0
+    /// "Open it the way they will": the real moment, full screen.
+    @State private var tableContent: CardTableContent?
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -73,6 +75,7 @@ struct HolidayCardLookStep: View {
                 personSections
             }
         }
+        .modifier(CardTablePreviewCover(content: $tableContent))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sendCardLook")
     }
@@ -125,6 +128,9 @@ struct HolidayCardLookStep: View {
 
     private var intro: String {
         if recipient.isEmail {
+            if recipient.isLink {
+                return "Whoever opens your link first joins Pantopus to read it. The link never shows the card."
+            }
             return "They aren’t on Pantopus yet. The email never shows the card; they open it in Pantopus once they join with this address."
         }
         switch arrival {
@@ -209,8 +215,14 @@ struct HolidayCardLookStep: View {
                 showBack.toggle()
             }
             .accessibilityIdentifier("sendCardLookTurn")
-            Button(action: openAgain) {
-                Text("Open it again")
+            Button {
+                if LaunchFeatures.cardTable {
+                    tableContent = lookContent
+                } else {
+                    openAgain()
+                }
+            } label: {
+                Text(LaunchFeatures.cardTable ? "Open it the way they will" : "Open it again")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(HolidayCardDesk.link(scheme))
                     .padding(.horizontal, 14)
@@ -236,14 +248,16 @@ struct HolidayCardLookStep: View {
 
     private var emailSections: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
-            sectionLabel(arrival == .sealedChristmas ? "The email they get, now" : "The email they get, right away")
-                .padding(.top, 18)
+            if !recipient.isLink {
+                sectionLabel(arrival == .sealedChristmas ? "The email they get, now" : "The email they get, right away")
+                    .padding(.top, 18)
+            }
             if let email = preview.email {
                 HolidayCardEmailPicture(email: email, to: recipient.name, senderName: preview.linkPage?.senderName ?? from)
                     .padding(.top, Spacing.s2)
             }
             if let page = preview.linkPage {
-                sectionLabel("The page its link opens")
+                sectionLabel(recipient.isLink ? "The page your link opens" : "The page its link opens")
                     .padding(.top, 26)
                 HolidayCardLinkPagePicture(page: page)
                     .padding(.top, Spacing.s2)
@@ -345,6 +359,29 @@ struct HolidayCardLookStep: View {
 
 // MARK: - The footer
 
+private extension HolidayCardLookStep {
+    /// The card as it'll lie on the table, for "Open it the way they will".
+    var lookContent: CardTableContent {
+        CardTableContent(
+            design: design.id,
+            number: design.number,
+            caption: card?.caption ?? design.caption,
+            paper: card?.paper ?? design.paper,
+            table: card?.table ?? design.table,
+            slug: design.slug,
+            year: card?.year ?? cards.year,
+            mailedOn: envelope.postmarkDate,
+            note: note,
+            fromName: from,
+            toName: recipient.isLink ? "You" : recipient.name,
+            sealed: false,
+            sealedUntil: nil,
+            sealedInDays: "",
+            sealedDayCount: 0
+        )
+    }
+}
+
 /// Under Look it over, pinned: until when it can be taken back, why sending
 /// didn't go, and "Seal and send".
 struct HolidayCardLookFooter: View {
@@ -370,7 +407,10 @@ struct HolidayCardLookFooter: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("sendCardError")
             }
-            HolidayCardWaxButton(title: "Seal and send", isLoading: viewModel.sending) {
+            HolidayCardWaxButton(
+                title: viewModel.recipient?.isLink == true ? "Seal it and get the link" : "Seal and send",
+                isLoading: viewModel.sending
+            ) {
                 Task { await viewModel.send() }
             }
             .accessibilityIdentifier("sendCardLookSend")

@@ -18,6 +18,8 @@ struct MailSentPieceView: View {
     /// Back to Sent.
     private let onBack: () -> Void
     @State private var showBack = false
+    /// "See it the way they did": the real moment, full screen.
+    @State private var tableContent: CardTableContent?
 
     init(viewModel: MailSentPieceViewModel, onBack: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
@@ -43,9 +45,9 @@ struct MailSentPieceView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("mailSentPiece")
+        .modifier(CardTablePreviewCover(content: $tableContent, isSender: true))
     }
 
-    /// After "Take your card back?": gone from Sent, and back to it.
     private func confirmTakeBack() {
         Task {
             guard await viewModel.takeBack() else { return }
@@ -129,7 +131,16 @@ struct MailSentPieceView: View {
             } else {
                 section("The card you sent") { theCard(piece, envelope: envelope) }
             }
+            if LaunchFeatures.cardTable, !piece.isLetter {
+                HolidayCardPaperButton(title: "See it the way they did", fullWidth: true) {
+                    tableContent = CardTableContent(sent: piece, from: envelope.from, mailedOn: envelope.postmarkDate)
+                }
+                .accessibilityIdentifier("mailSentSeeIt")
+            }
             trail(piece)
+            if piece.byLink, piece.canTakeBack {
+                CardTableCopyLinkAgain(cardId: piece.id)
+            }
             if piece.canTakeBack {
                 takeBack(piece)
             } else if let error = viewModel.takeBackError {
