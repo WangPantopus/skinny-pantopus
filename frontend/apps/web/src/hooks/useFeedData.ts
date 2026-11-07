@@ -115,6 +115,29 @@ export function removePostFromFeedCaches(queryClient: QueryClient, postId: strin
   });
 }
 
+/**
+ * Take a person's posts out of every cached feed list, as muting them does (handleMute), so a person blocked on their
+ * profile isn't listed when you go back to the feed, or in another filter or area for the next 30 s.
+ */
+export async function removeUserFromFeedCaches(queryClient: QueryClient, userId: string) {
+  // A page still on its way can't bring their posts back.
+  await queryClient.cancelQueries({ queryKey: ['feed'] });
+  queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (old) => {
+    if (!old) return old;
+    return {
+      ...old,
+      pages: old.pages.map((page) => ({
+        ...page,
+        // The author's user id, as PostCard reads it: post.creator.id is their public profile id.
+        posts: (page.posts || []).filter((post) => (post.author_user_id || post.user_id) !== userId),
+      })),
+    };
+  });
+  // A repost names its reposters but carries no ids. Re-read Connections to remove posts that reached this viewer
+  // only through this person.
+  await queryClient.resetQueries({ queryKey: ['feed', 'connections'] });
+}
+
 export function useFeedData({
   initialSurface = 'place',
   viewingLat,
