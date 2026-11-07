@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -64,9 +66,10 @@ private sealed interface GuardPhase {
 }
 
 /**
- * Screen-level identity gate for the money surfaces (Wallet, Settings →
- * Payments). Mirrors RN `components/security/SensitiveScreenGuard.tsx` and the
- * iOS `SensitiveScreenGuard`:
+ * Screen-level identity gate for the private surfaces (Wallet, Settings →
+ * Payments, Mail, access codes). Mirrors RN
+ * `components/security/SensitiveScreenGuard.tsx` and the iOS
+ * `SensitiveScreenGuard`:
  *
  * - the device carries no credential (no biometric, no device credential) →
  *   [content] renders immediately, because there is nothing to check against,
@@ -75,6 +78,10 @@ private sealed interface GuardPhase {
  * - otherwise the biometric / device-credential sheet is raised *before*
  *   [content] is composed. Cancel or failure calls [onRejected], which pops
  *   the screen exactly like RN's `backOrDismissTo(router, MAIN_TABS_ROUTE)`.
+ *
+ * Once through, coming back after 5 minutes away asks again. [content] leaves the
+ * screen meanwhile, with any sheet it has open; its view model stays with the back
+ * stack entry, so the person lands where they were.
  */
 @Composable
 fun SensitiveScreenGuard(
@@ -87,11 +94,22 @@ fun SensitiveScreenGuard(
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findFragmentActivity() }
-    var phase by remember { mutableStateOf<GuardPhase>(GuardPhase.Pending) }
+    // Inside the grace there is nothing to ask, so no cover shows either.
+    var phase by remember {
+        mutableStateOf(if (manager.passesSensitiveScreenWithoutAsking(graceMs)) GuardPhase.Authenticated else GuardPhase.Pending)
+    }
     var attempt by remember { mutableStateOf(0) }
+    var seenReturn by remember { mutableStateOf(manager.foregroundReturn.value) }
+    val isLocked by manager.isLocked.collectAsStateWithLifecycle()
+    val foregroundReturn by manager.foregroundReturn.collectAsStateWithLifecycle()
 
-    LaunchedEffect(attempt) {
-        if (phase !is GuardPhase.Pending) return@LaunchedEffect
+    // The whole-app lock asks first; its check counts for this screen too.
+    LaunchedEffect(attempt, isLocked) {
+        if (phase is GuardPhase.Authenticated || phase is GuardPhase.Rejected) return@LaunchedEffect
+        if (isLocked) {
+            phase = GuardPhase.Pending
+            return@LaunchedEffect
+        }
         phase = GuardPhase.Authenticating
         phase =
             when (val outcome = manager.verifySensitiveScreen(activity, reason, graceMs)) {
@@ -107,11 +125,56 @@ fun SensitiveScreenGuard(
             }
     }
 
+    // Back from the background: a cover left up asks again now someone is here, and an open screen asks after the grace ran out.
+    LaunchedEffect(foregroundReturn) {
+        val back = foregroundReturn
+        if (back == null || back == seenReturn) return@LaunchedEffect
+        seenReturn = back
+        val asks =
+            when (phase) {
+                is GuardPhase.Rejected -> true
+                is GuardPhase.Authenticated ->
+                    back.awayForMs >= graceMs && !manager.isWithinSensitiveGracePeriod(graceMs)
+                else -> false
+            }
+        if (asks) {
+            manager.forgetSensitiveCancel()
+            phase = GuardPhase.Pending
+            attempt += 1
+        }
+    }
+
+    DisposableEffect(manager) {
+        onDispose {
+            if (phase is GuardPhase.Authenticated) manager.noteSensitiveScreenLeft()
+        }
+    }
+    RecentsHiddenEffect()
+
     if (phase is GuardPhase.Authenticated) {
         content()
         return
     }
 
+    GuardCover(
+        reason = reason,
+        rejected = phase as? GuardPhase.Rejected,
+        modifier = modifier,
+        onTryAgain = {
+            manager.forgetSensitiveCancel()
+            phase = GuardPhase.Pending
+            attempt += 1
+        },
+    )
+}
+
+@Composable
+private fun GuardCover(
+    reason: String,
+    rejected: GuardPhase.Rejected?,
+    modifier: Modifier,
+    onTryAgain: () -> Unit,
+) {
     Column(
         modifier =
             modifier
@@ -135,7 +198,6 @@ fun SensitiveScreenGuard(
             color = PantopusColors.appText,
             textAlign = TextAlign.Center,
         )
-        val rejected = phase as? GuardPhase.Rejected
         Text(
             text =
                 when {
@@ -150,13 +212,32 @@ fun SensitiveScreenGuard(
         if (rejected != null) {
             PrimaryButton(
                 title = "Try again",
-                onClick = {
-                    phase = GuardPhase.Pending
-                    attempt += 1
-                },
+                onClick = onTryAgain,
                 modifier = Modifier.testTag("sensitiveScreenGuardRetry"),
             )
         }
+    }
+}
+
+/**
+ * Keeps this screen out of the recents thumbnail, on Android 13 and later, while
+ * it shows. It can still be screenshotted (a letter, a card); screens that must
+ * not be use [SecureScreenEffect] as well.
+ */
+@Composable
+private fun RecentsHiddenEffect() {
+    val context = LocalContext.current
+    val controller =
+        remember(context) {
+            EntryPointAccessors
+                .fromApplication(
+                    context.applicationContext,
+                    SecureWindowEntryPoint::class.java,
+                ).secureWindowController()
+        }
+    DisposableEffect(controller) {
+        controller.hideFromRecents()
+        onDispose { controller.showInRecents() }
     }
 }
 
