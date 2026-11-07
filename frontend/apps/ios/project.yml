@@ -84,8 +84,13 @@ targets:
           # Bundled explicitly below so it always lands in Copy Bundle
           # Resources (Apple requires PrivacyInfo.xcprivacy at the .app root).
           - "PrivacyInfo.xcprivacy"
+          # Bundled below as one folder: the card table's art (WebP, which an asset catalog can't hold).
+          - "Resources/HolidayCardTable"
       # App privacy manifest — see docs/compliance/privacy-data-inventory.md.
       - path: Pantopus/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Pantopus/Resources/HolidayCardTable
+        type: folder
         buildPhase: resources
     resources:
       - path: Pantopus/Resources/Assets.xcassets
@@ -107,10 +112,15 @@ targets:
         # First-launch scope: comma-separated LaunchFeature keys switched back
         # on for this build (empty = every cut feature stays hidden).
         PantopusLaunchFeatures: $(PANTOPUS_LAUNCH_FEATURES)
+        # A free Meta app ID makes sharing a card to a Story one tap (card_table);
+        # empty, it falls back to the share sheet. A public number, not a secret.
+        PantopusMetaAppID: $(PANTOPUS_META_APP_ID)
         # The hand a Christmas card's caption is printed in (holiday_cards):
-        # Nothing You Could Do, SIL Open Font License (Resources/Fonts).
+        # Nothing You Could Do; and its note's pen (card_table): La Belle
+        # Aurore. Both SIL Open Font License (Resources/Fonts).
         UIAppFonts:
           - NothingYouCouldDo.ttf
+          - LaBelleAurore.ttf
         LSRequiresIPhoneOS: true
         # Phase 6b — active-task Live Activity (PantopusWidgets extension).
         NSSupportsLiveActivities: true
@@ -141,6 +151,9 @@ targets:
         LSApplicationQueriesSchemes:
           - tel
           - mailto
+          # One-tap Stories for a Christmas card (card_table), when a Meta app ID is in the build.
+          - instagram-stories
+          - facebook-stories
           - sms
         CFBundleURLTypes:
           - CFBundleURLSchemes:

@@ -310,7 +310,7 @@ struct HolidayCardLookStep: View {
     /// The back with the note and who it's from.
     private var back: some View {
         HolidayCardBack(paper: card?.paper ?? design.paper, fromName: from, year: card?.year ?? cards.year) { width in
-            HolidayCardNoteText(text: .constant(note), cardWidth: width)
+            HolidayCardReadNote(text: note, number: design.number, cardWidth: width)
         }
         .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
         .shadow(color: MailPaper.cardShadow.opacity(0.28), radius: 15, x: 0, y: 14)
