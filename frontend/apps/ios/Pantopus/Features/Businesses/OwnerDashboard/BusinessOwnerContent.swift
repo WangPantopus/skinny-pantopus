@@ -269,7 +269,8 @@ public struct BusinessOwnerContent: Sendable, Hashable {
     /// Add a completed optional section without replacing other live state.
     func withAdditionalContent(
         insights: [OwnerInsightTile]? = nil,
-        reviews: [OwnerReviewItem]? = nil
+        reviews: [OwnerReviewItem]? = nil,
+        publicProfile: BusinessProfileContent? = nil
     ) -> BusinessOwnerContent {
         BusinessOwnerContent(
             businessId: businessId,
@@ -279,7 +280,7 @@ public struct BusinessOwnerContent: Sendable, Hashable {
             profileStrength: profileStrength,
             reviewsToReplyLabel: reviews.map { recomputeReplyLabel(after: $0) } ?? reviewsToReplyLabel,
             reviews: reviews ?? self.reviews,
-            publicProfile: publicProfile,
+            publicProfile: publicProfile ?? self.publicProfile,
             canPostAsBusiness: canPostAsBusiness,
             foundingOffer: foundingOffer,
             isVerified: isVerified,
