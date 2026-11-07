@@ -10,6 +10,7 @@ const { download, zipTable } = require('../lib/tables.cjs');
 const { year, zipCode, isoDate, realUnit } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { alsoAtOwnLine } = require('../lib/own-line.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '48201';
@@ -153,7 +154,10 @@ async function* build({ work, today = new Date() }) {
     put(facts, 'market_building_value', positive(row.bld_val));
     records.push({ id: `pp:${kind}:${FIPS}:${account}`, kind, home_type: homeType, address: located, facts });
   }
-  log(`${COUNTY}: ${records.length} accounts, ${noAddress} without a street number, ${protectedAccounts} protected`);
+  // The account's address line and its street columns disagree on some homes: each is found at both.
+  const twins = alsoAtOwnLine(records);
+  records.push(...twins);
+  log(`${COUNTY}: ${records.length} accounts, ${noAddress} without a street number, ${protectedAccounts} protected, ${twins.length} also filed at their own address line`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'TX', name: COUNTY, publisher: 'Harris Central Appraisal District', dataset: `${found} public data files`, method: 'county', source: 'tx-harris', as_of: asOf || `${found}-11-01`, stale_after_days: 450, records,
