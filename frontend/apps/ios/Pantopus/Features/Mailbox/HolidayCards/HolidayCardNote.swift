@@ -13,8 +13,11 @@ import SwiftUI
 import UIKit
 
 enum HolidayCardNote {
-    /// The note's type size and line pitch, as shares of the card's width.
-    static let size: CGFloat = 0.047
+    /// The note's type size and line pitch, as shares of the card's width. The pen on the table's card is larger.
+    static var size: CGFloat {
+        LaunchFeatures.cardTable ? 0.06 : 0.047
+    }
+
     static let pitch: CGFloat = 0.076
 
     /// Letters as the server counts them (code points).
@@ -23,6 +26,7 @@ enum HolidayCardNote {
     }
 
     static func font(size: CGFloat) -> UIFont {
+        if LaunchFeatures.cardTable { return CardTableType.pen(size) }
         let base = UIFont.systemFont(ofSize: size)
         let serif = base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor
         let italic = serif.withSymbolicTraits(.traitItalic) ?? serif
@@ -34,7 +38,38 @@ enum HolidayCardNote {
         style.minimumLineHeight = cardWidth * pitch
         style.maximumLineHeight = cardWidth * pitch
         style.lineBreakMode = .byWordWrapping
-        return [.font: font(size: cardWidth * size), .foregroundColor: color, .paragraphStyle: style]
+        let font = font(size: cardWidth * size)
+        guard LaunchFeatures.cardTable else {
+            return [.font: font, .foregroundColor: color, .paragraphStyle: style]
+        }
+        // TextKit hangs a tall font's line from its descent; the card sets it in the middle of the line, as read.
+        let middle = (cardWidth * pitch - (font.ascender - font.descender)) / 2
+        return [.font: font, .foregroundColor: color, .paragraphStyle: style, .baselineOffset: middle]
+    }
+}
+
+/// A note to read on the back of a card: in the pen with the key on, each word with its small shift and turn, as it
+/// lies on the table.
+struct HolidayCardReadNote: View {
+    let text: String
+    /// The card's number, for the writing's shifts and turns.
+    var number: Int?
+    let cardWidth: CGFloat
+
+    var body: some View {
+        if LaunchFeatures.cardTable {
+            Canvas(rendersAsynchronously: false) { context, _ in
+                let unit = cardWidth / 100
+                var page = context
+                page.translateBy(x: -CardTableNoteLayout.left * unit, y: -CardTableNoteLayout.top * unit)
+                CardTableNoteLayout(text: text, seed: number, u: unit).draw(in: page)
+            }
+            .blendMode(.multiply)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        } else {
+            HolidayCardNoteText(text: .constant(text), cardWidth: cardWidth)
+        }
     }
 }
 
