@@ -45,6 +45,7 @@ const recordVocabulary = require('../services/recordVocabulary');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const homeRecords = require('../services/propertyRecords/homeRecord');
 const householdFacts = require('../services/householdFacts');
+const countyLinks = require('../config/countyLinks');
 const floorPlans = require('../services/propertyRecords/floorPlans');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { encodeGeohash } = require('../utils/geohash');
@@ -135,6 +136,8 @@ const createHomeSchema = Joi.object({
   is_owner: Joi.boolean().optional(),
   // "Is this your layout?", answered on the form (services/propertyRecords/floorPlans.js).
   floor_plan_answer: Joi.string().valid('yes', 'no').optional(),
+  // "Is this right?" after the county's page was answered (link and confirm): the facts are kept as checked there.
+  county_checked: Joi.boolean().optional(),
   // "My home doesn't have a unit number" — clears the MISSING_UNIT refusal
   // only; see the gate in POST / for what it does and does not relax.
   no_unit_attestation: Joi.boolean().optional(),
@@ -214,6 +217,8 @@ const updateHomeSchema = Joi.object({
     group: Joi.string().max(40),
     action: Joi.string().valid('confirm', 'correct', 'undo').required(),
     value: Joi.alternatives().try(Joi.string().max(200), Joi.number()),
+    // A fix sent from "Is this right?" after the county's page (link and confirm).
+    via: Joi.string().valid('county_page'),
   }).xor('key', 'group')).min(1).max(40),
 }).min(1);
 
@@ -1258,7 +1263,10 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       ...(countyRecord?.whole ? { niche_data: { property_record: countyRecord.whole } } : {}),
     };
     // Who and when for what the form sent, beside the record. Beside ATTOM's copy, the form's prefill can't be told from an entry.
-    const addedFacts = attomPropertyDetail ? null : householdFacts.fromAddHome({ values: homeData, copy: countyRecord?.copy, actorId: userId, floorPlan });
+    // A person who checked year built, size, bedrooms and baths on the county's page (link and confirm) speaks for those four even there.
+    const checked = countyLinks.enabled() && !countyRecord?.copy && req.body.county_checked === true;
+    const addedFacts = attomPropertyDetail && !checked ? null
+      : householdFacts.fromAddHome({ values: homeData, copy: countyRecord?.copy, actorId: userId, floorPlan, checked, onlyChecked: Boolean(attomPropertyDetail) });
     if (addedFacts) homeData.niche_data = { ...homeData.niche_data, household_facts: addedFacts };
     if (floorPlan) homeData.niche_data = { ...homeData.niche_data, floor_plan: floorPlan };
     if (floorPlan?.match === 'exact' && req.body.floor_plan_answer) {

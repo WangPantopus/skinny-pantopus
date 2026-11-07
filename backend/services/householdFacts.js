@@ -45,6 +45,11 @@ const GROUP_TITLES = {
 };
 // A sale is the recorder's: nothing a household says about it is accepted, and there's nothing to report here either.
 const NO_CONTROLS = new Set(['sale']);
+// Link and confirm (config/countyLinks.js): with no county record, the household checks these on the county's own
+// page and confirms or fixes them here. Its entries say so (`via`); they stay the household's, never a county record.
+const CHECK_GROUP = 'county_check';
+const CHECK_FACTS = ['year_built', 'living_sqft', 'bedrooms', 'bathrooms'];
+const CHECKED_VIA = 'county_page';
 
 const choices = (...labels) => labels.map((label) => ({ label, value: label }));
 const yearsOf = { input: 'year', first: 'record', conflict: true };
@@ -252,6 +257,12 @@ function householdRow(state) {
   return { id: state.key, label: FACTS[state.key].label, value: valueText(state.key, state.own), mono: state.def.input !== 'text' && factIsMono(FACTS[state.key].format) };
 }
 
+/** What a fact says now for this household: its own word, the record's, or the Home's column. */
+const currentValue = (state) => state.own ?? state.record ?? state.column;
+
+/** Whether the household checked this fact on the county's page, and its entry still holds what the fact says. */
+const checkedOnPage = (state) => state.entry?.via === CHECKED_VIA && currentValue(state) !== null && sameValue(state.def, state.entry.value, currentValue(state));
+
 /** The record's sections with the household's word in place. The record's own rows are copied, never changed in the copy. */
 function recordView(countyRecord, states, unitPage) {
   const sections = countyRecord.sections.map((section) => ({ ...section, rows: section.rows.map((row) => ({ ...row })) }));
@@ -358,11 +369,32 @@ function editorParts({ states, sections, unitPage, reports, hasRecord, reportabl
 
 /** What the household has said, as a card: for a member, and for an owner with no record to set it beside. */
 function entriesCard(states) {
-  const rows = Object.values(states).filter((state) => state.entry && state.entry.action !== 'confirmed').map((state) => ({
-    ...householdRow(state),
-    note: dayLabel(state.entry.at) ? `Updated ${dayLabel(state.entry.at)}` : null,
-  }));
+  const rows = Object.values(states).filter((state) => state.entry && state.entry.action !== 'confirmed').map((state) => {
+    const day = dayLabel(state.entry.at);
+    return { ...householdRow(state), note: day ? `${state.entry.via === CHECKED_VIA ? "Checked on the county's page ·" : 'Updated'} ${day}` : null };
+  });
   return rows.length ? [{ id: 'household', title: HOUSEHOLD_TAG, rows, note: null }] : [];
+}
+
+/**
+ * "Is this right?" once someone is back from the county's page (link and confirm), for a home no county record
+ * answers: its year built, size, bedrooms and baths, to confirm with a tap or fix. A yes keeps them as the
+ * household's entries, checked on the county's page; nothing here becomes a county record.
+ */
+function checkPart(states, countyPage) {
+  const facts = CHECK_FACTS.map((key) => states[key]);
+  const known = facts.filter((state) => currentValue(state) !== null);
+  const checked = known.filter(checkedOnPage);
+  const done = known.length > 0 && checked.length === known.length;
+  return {
+    group: CHECK_GROUP,
+    prompt: known.length && !done ? 'Is this right?' : null,
+    lead: known.length ? `Compare these with ${countyPage.name}'s page.` : `Add what ${countyPage.name}'s page says about your home.`,
+    confirmed: done ? `Your household checked these on ${countyPage.name}'s page · ${dayLabel(checked.map((state) => state.entry.at).sort().pop())}` : null,
+    can_undo: checked.length > 0,
+    fix: known.length ? 'Fix something' : 'Add details',
+    facts: facts.map(factForEditor),
+  };
 }
 
 /** "Is this your layout?", or what this household said, for a unit the building's sheet names. */
@@ -400,9 +432,10 @@ function layoutPart(floorPlan, nicheData, viewerId, verifiedWriters) {
  * @param {object|null} [args.floorPlan]  The building's sheet as this Home may use it (usableFloorPlan), for a resident.
  * @param {object|null} [args.otherRecord]  With no county copy, the record this page already shows, for the sheet's cards to join.
  * @param {boolean} [args.seesEntries]  False for a renter: the sheet's cards and nothing of the household's.
+ * @param {boolean} [args.countyCheck]  Link and confirm is on: with no county record, "Is this right?" for what the county's page shows.
  * @returns {object|null} Null when there's nothing to say to this viewer.
  */
-function project({ home, nicheData, copy, countyRecord, canEdit, viewerId, verifiedWriters, reports = null, countyPage = null, floorPlan = null, otherRecord = null, seesEntries = true }) {
+function project({ home, nicheData, copy, countyRecord, canEdit, viewerId, verifiedWriters, reports = null, countyPage = null, floorPlan = null, otherRecord = null, seesEntries = true, countyCheck = false }) {
   const unitPage = isUnitPage(home, copy, floorPlan);
   const states = seesEntries ? factStates({ home, nicheData, copy, viewerId, verifiedWriters, floorPlan }) : {};
   const ownRecord = copy && countyRecord ? countyRecord : null;
@@ -414,7 +447,9 @@ function project({ home, nicheData, copy, countyRecord, canEdit, viewerId, verif
   if (!canEdit) return view || sections.length ? { can_edit: false, ...shared, groups: [], questions: [], county_page: null } : null;
   const reportable = (id) => Boolean(ownRecord?.sections.some((section) => section.id === id));
   const { groups, questions } = editorParts({ states, sections: view ? view.sections : [], unitPage, reports, hasRecord: Boolean(ownRecord), reportable });
-  return { can_edit: true, ...shared, groups, questions, county_page: countyPage };
+  // Where a county record answers, only the link is new.
+  const check = countyCheck && !ownRecord && seesEntries && countyPage?.name ? checkPart(states, countyPage) : null;
+  return { can_edit: true, ...shared, groups, questions, county_page: countyPage, ...(check ? { county_check: check } : {}) };
 }
 
 function newEntry({ def, value, action, actorId, via, record, previous, column, verified, at }) {
@@ -433,13 +468,26 @@ function columnValue(def, value) {
   return def.input === 'decimal' ? n : Math.round(n);
 }
 
-/** Group requests become one request per fact, as this viewer sees them. */
-function expand(asked, unitPage, states) {
+/**
+ * Group requests become one request per fact, as this viewer sees them. "Is this right?" after the county's page
+ * (`check`, link and confirm on) keeps what each fact says now, apart from facts the same request fixes.
+ */
+function expand(asked, unitPage, states, check = false) {
   const out = [];
+  const named = new Set(asked.filter((request) => request.key).map((request) => request.key));
   for (const request of asked) {
     if (!request.group) {
       if (!CATALOG[request.key]) throw failure();
       out.push(request);
+      continue;
+    }
+    if (request.group === CHECK_GROUP) {
+      if (!check || request.action === 'correct') throw failure();
+      for (const key of CHECK_FACTS.filter((fact) => !named.has(fact))) {
+        const state = states[key];
+        if (request.action === 'confirm' && currentValue(state) !== null && !checkedOnPage(state)) out.push({ key, action: 'check' });
+        if (request.action === 'undo' && state.entry?.via === CHECKED_VIA) out.push({ key, action: 'undo' });
+      }
       continue;
     }
     if (request.action === 'correct' || !EDIT_GROUPS.includes(request.group)) throw failure();
@@ -457,9 +505,12 @@ function expand(asked, unitPage, states) {
  * column some build changed directly. The caller writes `columns` with the rest of the
  * edit, under its authority check, then calls `commit`.
  *
+ * `check`: link and confirm is on, so "Is this right?" after the county's page (group `county_check`) and fixes sent
+ * from it (`via: 'county_page'`) are kept as checked on the county's page.
+ *
  * @returns {{ columns: object, commit: () => Promise<void>, changed: string[], conflicts: object[] }}
  */
-function plan({ home, copy, seesRecord, asked, fields, actorId, floorPlan = null, now = new Date().toISOString() }) {
+function plan({ home, copy, seesRecord, asked, fields, actorId, floorPlan = null, check = false, now = new Date().toISOString() }) {
   const nicheData = home.niche_data;
   const shownCopy = seesRecord ? copy : null;
   const unitPage = isUnitPage(home, shownCopy, floorPlan);
@@ -468,7 +519,7 @@ function plan({ home, copy, seesRecord, asked, fields, actorId, floorPlan = null
   const edits = [];
   const conflicts = [];
   const known = recordFacts(copy);
-  for (const request of expand(asked || [], unitPage, states)) {
+  for (const request of expand(asked || [], unitPage, states, check)) {
     const { key, action } = request;
     const state = states[key];
     const { def } = state;
@@ -478,16 +529,17 @@ function plan({ home, copy, seesRecord, asked, fields, actorId, floorPlan = null
       edits.push({ key, undo: true });
       continue;
     }
-    if (!['confirm', 'correct'].includes(action)) throw failure();
+    if (!['confirm', 'correct', 'check'].includes(action)) throw failure();
     if (action === 'confirm' && state.record === null) throw failure();
-    const value = action === 'confirm' ? state.record : parseValue(def, request.value);
+    const value = action === 'confirm' ? state.record : action === 'check' ? currentValue(state) : parseValue(def, request.value);
     if (value === null) throw failure();
     const agrees = sameValue(def, value, state.record);
     if (def.column) {
       const next = columnValue(def, value);
       if (next !== null && !sameValue(def, next, state.column)) columns[def.column] = next;
     }
-    edits.push({ key, value, action: agrees ? 'confirmed' : state.record !== null ? 'corrected' : 'entered', record: state.record, column: state.column, via: 'details' });
+    const via = action === 'check' || (check && request.via === CHECKED_VIA && CHECK_FACTS.includes(key)) ? CHECKED_VIA : 'details';
+    edits.push({ key, value, action: agrees ? 'confirmed' : state.record !== null ? 'corrected' : 'entered', record: state.record, column: state.column, via });
     if (def.conflict && known[key] !== undefined && !sameValue(def, value, known[key])) {
       conflicts.push({ field: key, section: FACTS[key].section, shown: factValue(FACTS[key].format, known[key]), entered: valueText(key, value) });
     }
@@ -515,7 +567,9 @@ function plan({ home, copy, seesRecord, asked, fields, actorId, floorPlan = null
           const [latest, ...rest] = previous.history || [];
           if (latest) next[edit.key] = { ...latest, history: rest };
           else delete next[edit.key];
-        } else if (!(previous && previous.action === edit.action && sameValue(CATALOG[edit.key], previous.value, edit.value))) {
+        } else if (!(previous && previous.action === edit.action && sameValue(CATALOG[edit.key], previous.value, edit.value)
+          // The same value checked on the county's page is news: it's kept, and Undo goes back to the entry before.
+          && !(edit.via === CHECKED_VIA && previous.via !== CHECKED_VIA))) {
           next[edit.key] = newEntry({ def: CATALOG[edit.key], ...edit, actorId, previous, verified: true, at: now });
         }
       }
@@ -528,21 +582,23 @@ function plan({ home, copy, seesRecord, asked, fields, actorId, floorPlan = null
 /**
  * Who and when for what Add Home's form sent, kept with the new Home. A value the record
  * already says is the record's, not an entry. Its writer holds pending access at this
- * point, so the entries wait for them to verify.
+ * point, so the entries wait for them to verify. `checked`: after the county's page, the person said its four facts
+ * were right or fixed them (link and confirm), so those are kept as checked there; `onlyChecked` keeps just those four
+ * (beside ATTOM's copy, the rest of the form is its prefill).
  *
  * @returns {object|null} The `household_facts` to store; null with nothing to keep.
  */
-function fromAddHome({ values, copy, actorId, floorPlan = null, now = new Date().toISOString() }) {
+function fromAddHome({ values, copy, actorId, floorPlan = null, checked = false, onlyChecked = false, now = new Date().toISOString() }) {
   const record = { ...planFacts(floorPlan), ...recordFacts(copy) };
   const fields = {};
   for (const [key, column] of COLUMN_FACTS) {
     const value = values[column];
-    if (value === null || value === undefined) continue;
+    if (value === null || value === undefined || (onlyChecked && !CHECK_FACTS.includes(key))) continue;
     const def = CATALOG[key];
     if (sameValue(def, value, record[key])) continue;
     const recorded = record[key] ?? null;
     fields[key] = newEntry({
-      def, value, action: recorded !== null ? 'corrected' : 'entered', actorId, via: 'add_home', record: recorded, previous: null, column: null, verified: false, at: now,
+      def, value, action: recorded !== null ? 'corrected' : 'entered', actorId, via: checked && CHECK_FACTS.includes(key) ? CHECKED_VIA : 'add_home', record: recorded, previous: null, column: null, verified: false, at: now,
     });
   }
   return Object.keys(fields).length ? { schema: SCHEMA, fields } : null;
@@ -571,6 +627,17 @@ function layoutColumnsToClear(previous, floorPlan, home) {
   const facts = planFacts(floorPlan);
   return Object.fromEntries(LAYOUT_COLUMNS.filter(([fact, column]) => previous?.filled?.includes(column) && sameValue(CATALOG[fact], home[column], columnValue(CATALOG[fact], facts[fact])))
     .map(([, column]) => [column, null]));
+}
+
+/** Add Home's "Is this right?" after the county's page (link and confirm): its words. The facts are the form's own fields. */
+function addHomeCheck(countyPage) {
+  return {
+    prompt: 'Is this right?',
+    lead: `Compare year built, size, bedrooms and bathrooms with ${countyPage.name}'s page.`,
+    confirm: 'Yes',
+    fix: 'Fix something',
+    confirmed: `Checked on ${countyPage.name}'s page`,
+  };
 }
 
 /** One-tap answers for Add Home's missing bedrooms and bathrooms, once the lookup has had its say. */
@@ -605,7 +672,7 @@ function factsWithEntries(facts, nicheData) {
 }
 
 module.exports = {
-  plan, project, fromAddHome, addHomeQuestions, factsWithEntries, seesHousehold, isResident, usableFloorPlan, unverifiedWriters, columnAgrees, COLUMN_FACTS,
+  plan, project, fromAddHome, addHomeQuestions, addHomeCheck, factsWithEntries, seesHousehold, isResident, usableFloorPlan, unverifiedWriters, columnAgrees, COLUMN_FACTS,
   prefilledFromCopy, shownColumns,
   layoutAnswer, layoutColumns, layoutColumnsToClear,
 };
