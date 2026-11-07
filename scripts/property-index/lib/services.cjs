@@ -63,12 +63,13 @@ async function* layerRows(url, fields, { where = '1=1', oid = 'OBJECTID', pageSi
  * Mercator, which overstates areas away from the equator). Rings are summed with their signs, so holes come out.
  * @param {string} url    The layer, ending in its number
  * @param {string} outSR  The state plane system's code, in US feet
+ * @param {object} [options] { pageSize, fields: columns to send with each area, such as a parcel number when the shapes are another layer's }
  * @returns {AsyncGenerator<{ OBJECTID: number, area: number }>}
  */
-async function* layerAreas(url, outSR, { pageSize = 1000 } = {}) {
+async function* layerAreas(url, outSR, { pageSize = 1000, fields = [] } = {}) {
   let last = -1;
   for (;;) {
-    const query = new URLSearchParams({ where: `OBJECTID > ${last}`, outFields: 'OBJECTID', returnGeometry: 'true', outSR, orderByFields: 'OBJECTID', resultRecordCount: String(pageSize), f: 'json' });
+    const query = new URLSearchParams({ where: `OBJECTID > ${last}`, outFields: ['OBJECTID', ...fields].join(','), returnGeometry: 'true', outSR, orderByFields: 'OBJECTID', resultRecordCount: String(pageSize), f: 'json' });
     const page = await getJson(`${url}/query?${query}`, 'A parcel shape page');
     const features = page.features || [];
     if (!features.length) return;
@@ -77,7 +78,7 @@ async function* layerAreas(url, outSR, { pageSize = 1000 } = {}) {
       for (const ring of feature.geometry?.rings || []) {
         for (let i = 0; i < ring.length - 1; i += 1) signed += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
       }
-      yield { OBJECTID: feature.attributes.OBJECTID, area: Math.round(Math.abs(signed) / 2) };
+      yield { ...Object.fromEntries(fields.map((name) => [name, feature.attributes[name]])), OBJECTID: feature.attributes.OBJECTID, area: Math.round(Math.abs(signed) / 2) };
       last = Math.max(last, feature.attributes.OBJECTID);
     }
   }
