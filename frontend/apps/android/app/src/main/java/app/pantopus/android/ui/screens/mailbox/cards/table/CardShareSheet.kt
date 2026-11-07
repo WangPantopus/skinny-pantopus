@@ -397,7 +397,8 @@ private fun ActionTiles(
 ) {
     val context = LocalContext.current
     val hasMail = remember { mailAppsExist(context) }
-    val large = LocalDensity.current.fontScale > 1.3f
+    // Six to a row only where their words fit on one line.
+    val perRow = if (LocalDensity.current.fontScale > 1.3f || LocalConfiguration.current.screenWidthDp < 400) 3 else 6
     val tiles =
         buildList {
             if (canDraw) {
@@ -412,10 +413,10 @@ private fun ActionTiles(
             }
         }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        tiles.chunked(if (large) 3 else 6).forEach { row ->
+        tiles.chunked(perRow).forEach { row ->
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 row.forEach { action -> ActionTile(action, onAction, Modifier.weight(1f)) }
-                repeat((if (large) 3 else 6) - row.size) { Box(Modifier.weight(1f)) }
+                repeat(perRow - row.size) { Box(Modifier.weight(1f)) }
             }
         }
     }

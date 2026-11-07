@@ -584,7 +584,8 @@ private fun arrivalLine(
     val day = HolidayCardTimes.shortDay(card.arrivesOn ?: card.arrivesAt, zone)
     return when {
         card.status == "withdrawn" -> "You took this card back."
-        card.byLink && card.status == "claimed" -> "$who opened your link and has your card."
+        card.byLink && card.status == "claimed" ->
+            card.toName?.let { "$it opened your link and has your card." } ?: "They opened your link and have your card."
         card.byLink && card.status == "expired" -> "Nobody opened your link in 90 days."
         card.byLink -> "Waiting for someone to open your link."
         card.byEmail && card.status == "claimed" -> "$who joined Pantopus and has your card."

@@ -111,7 +111,7 @@ private fun todayLine(
     when {
         card.byLink ->
             if (card.status == "claimed") {
-                "${card.toName ?: "They"} opened your link and has your card."
+                card.toName?.let { "$it opened your link and has your card." } ?: "They opened your link and have your card."
             } else {
                 "Waiting for someone to open your link."
             }
