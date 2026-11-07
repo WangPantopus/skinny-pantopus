@@ -25,6 +25,27 @@ function streetParts({ number, numberSuffix = '', pre = '', name = '', suffix = 
   return parts({ number, numberSuffix, name: line, unit, building });
 }
 
+/**
+ * A county's site columns as a person would type them. Some files end the street column with the unit's word ("MAIN ST UNIT",
+ * "SPC", "LOT") or the unit itself ("#12"), or put that word in the suffix column, and keep the number in the unit column; some
+ * join two house numbers ("12&14"); some write a road number with "#" ("CR #2310"). The reader reads each of those differently
+ * from what the household types.
+ */
+const ROAD_NUMBER = /\b(CR|FM|RR|SH|PR|HWY|RD|ROAD|HIGHWAY)\s*#\s*(?=\d)/g;
+const UNIT_TAIL = /\s+(?:UNIT|APT|STE|SUITE|SPC|SPACE|LOT|#)\s*([A-Z0-9-]*)$/;
+function situsParts({ number, street, suffix = '', unit = '' }) {
+  // A road's number first ("CR #2310" is county road 2310), then a unit at the end, then any "#" left before a number.
+  let name = String(street ?? '').toUpperCase().replace(/\s+/g, ' ').trim().replace(ROAD_NUMBER, '$1 ');
+  let secondary = unit;
+  const tail = UNIT_TAIL.exec(name);
+  if (tail) {
+    name = name.slice(0, tail.index).trim();
+    secondary = secondary || tail[1];
+  }
+  const type = String(suffix ?? '').toUpperCase().trim();
+  return { number: String(number ?? '').trim().replace(/^(\d+)\s*&\s*\d+$/, '$1'), street: name.replace(/#\s*(\d)/g, '$1'), suffix: /^(UNIT|APT|STE|SUITE|SPC|SPACE|LOT|#)$/.test(type) ? '' : suffix, unit: secondary };
+}
+
 /** One parsed address per number the record's line holds. Empty when the line can't be read. */
 function readAddresses(numbers, street, unit = '') {
   const found = [];
@@ -81,4 +102,4 @@ function onRecord(line, unit) {
   return /^[A-Z0-9-]{1,8}$/i.test(secondary) ? `${street} UNIT ${secondary}` : `${street} ${secondary}`;
 }
 
-module.exports = { houseNumbers, streetParts, readAddresses, year, isoDate, zipCode, realUnit, onRecord, unitAfterStreet };
+module.exports = { houseNumbers, streetParts, situsParts, readAddresses, year, isoDate, zipCode, realUnit, onRecord, unitAfterStreet };
