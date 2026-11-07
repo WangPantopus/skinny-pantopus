@@ -23,6 +23,7 @@ const { FACTS } = require('./facts');
 const { parse, zip5, stateCode } = require('./addressKey');
 const { lookup, StorageUnavailable } = require('./index');
 const reader = require('./reader');
+const registryUnits = require('./registryUnits');
 const router = require('./router');
 const counts = require('./counts');
 
@@ -210,6 +211,36 @@ async function readForHome(home) {
 }
 
 /**
+ * A Home no county record answers for, in a state live on the address registry: the line asking which unit is theirs, when
+ * its address has several homes and it names none, in the shape the apps draw (provenanceOf). Never stored on the Home: a
+ * copy would take the place of what the Home shows today. Null when there's nothing to ask, or the registry can't say in time.
+ */
+async function unitQuestion(home) {
+  const address = homeAddress(home);
+  if (!registryUnits.usesRegistry(address)) return null;
+  const parsed = parse(address.line1, address.unit, { state: stateCode(address.state), zip: address.zip });
+  if (!parsed || parsed.unit || parsed.building) return null;
+  try {
+    const units = await registryUnits.lookup({ normalizedAddress: address, submittedUnit: '' });
+    if (!units?.secondary_required) return null;
+    const release = String(units.provider_version || '');
+    return {
+      publisher: 'Public address records',
+      dataset: 'address points',
+      as_of: /^\d{8}/.test(release) ? `${release.slice(0, 4)}-${release.slice(4, 6)}-${release.slice(6, 8)}` : null,
+      scope: 'building',
+      method: 'county',
+      label: units.raw?.reason === 'several_urbanizations'
+        ? 'More than one home has this address. Which urbanizaci\u00f3n is yours?'
+        : 'We found the building. Which unit is yours?',
+    };
+  } catch (err) {
+    logger.info('address_registry.question_later', { error: err.name });
+    return null;
+  }
+}
+
+/**
  * What the record has for an address with no Home yet (Add Home). `copy` is what may be shown; `whole` is what a new
  * Home keeps, so a fact withheld today comes back without a new lookup.
  * @returns {Promise<null|{ copy: object|null, whole: object|null, answer: object, lookup: 'found'|'none'|'pending' }>} null outside live counties.
@@ -233,4 +264,4 @@ async function readForAddress(address) {
   }
 }
 
-module.exports = { copyFromAnswer, provenanceOf, storedCopy, liveCopy, storeCopy, forHome, forAddress, noteLookup, homeAddress, dateLabel };
+module.exports = { copyFromAnswer, provenanceOf, storedCopy, liveCopy, storeCopy, forHome, forAddress, unitQuestion, noteLookup, homeAddress, dateLabel };
