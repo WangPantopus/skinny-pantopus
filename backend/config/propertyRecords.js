@@ -8,7 +8,8 @@
  *   PROPERTY_RECORDS_LIVE_JURISDICTIONS    County FIPS codes served from the record. A live county never calls ATTOM.
  *   PROPERTY_RECORDS_SWITCHES              Which switch file this server follows, switches/<name>.json. Default: APP_ENV.
  *   VALUE_AREA_TREND                       1: owners' value cards show the area's price change, from <root>/area-trends, in every county.
- *   VALUE_ESTIMATE_MARKETS                 County FIPS codes where a Pantopus estimate may show, after T4 has measured it. Empty: none, anywhere.
+ *   VALUE_ESTIMATES                        on: Pantopus estimates show, in each county its live switch has live. Anything else: none, anywhere.
+ *   VALUE_NEIGHBORHOOD_FIGURES             1: owners' value cards show the Census Bureau's figures for the ZIP where a home has no estimate.
  *   PROPERTY_INDEX_AWS_ACCESS_KEY_ID, PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY, PROPERTY_INDEX_REGION  The read-only key.
  *   ATTOM_STAND_IN                         '1' only on a local rig whose stand-in answers for ATTOM. See below.
  *
@@ -45,10 +46,11 @@ function listedModes() {
 
 const enabled = () => Boolean(manifestUrl);
 const areaTrendEnabled = () => Boolean(manifestUrl) && env('VALUE_AREA_TREND') === '1';
-const estimateMarkets = () => fipsList('VALUE_ESTIMATE_MARKETS');
+const estimatesOn = () => env('VALUE_ESTIMATES') === 'on';
+const neighborhoodFiguresEnabled = () => Boolean(manifestUrl) && env('VALUE_NEIGHBORHOOD_FIGURES') === '1';
 
 if (manifestUrl) {
-  logger.info('property_records.config', { shadow: [...shadow], live: [...live], switches: switchesName, area_trend: areaTrendEnabled(), estimate_markets: [...estimateMarkets()] });
+  logger.info('property_records.config', { shadow: [...shadow], live: [...live], switches: switchesName, area_trend: areaTrendEnabled(), estimates: estimatesOn(), neighborhood_figures: neighborhoodFiguresEnabled() });
 }
 
 module.exports = {
@@ -60,5 +62,6 @@ module.exports = {
   listedModes,
   enabled,
   areaTrendEnabled,
-  estimateMarkets,
+  estimatesOn,
+  neighborhoodFiguresEnabled,
 };

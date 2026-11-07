@@ -29,6 +29,7 @@ const syncChanged = require('../syncChangedService');
 const propertyRecordsConfig = require('../../config/propertyRecords');
 const propertyRecords = require('../propertyRecords');
 const homeRecords = require('../propertyRecords/homeRecord');
+const valueEstimate = require('../propertyRecords/valueEstimate');
 const { changeNicheData } = require('../homeNicheData');
 const householdFacts = require('../householdFacts');
 
@@ -572,9 +573,11 @@ function factsOnly(profile) {
  * and it is their home); year built and lot are the record's. For the apps in the
  * stores `estimated_value` is the county's own market value: a county's estimate of
  * market value, and never a fractional assessment (facts.js), and not a bare land
- * parcel's value, which would read as the home's.
+ * parcel's value, which would read as the home's. A level 1 estimate
+ * (propertyRecords/valueEstimate.js) takes that place, with its range; a rough one can't
+ * carry its label under their fixed "Estimated home value", so it stays on the card.
  */
-function buildProfileFromRecord(home, copy) {
+function buildProfileFromRecord(home, copy, estimate = null) {
   const facts = copy.facts || {};
   const building = copy.building || {};
   // A condo's account lists the complex's common land, and a tower's lot isn't an apartment's.
@@ -596,7 +599,8 @@ function buildProfileFromRecord(home, copy) {
     if (own != null && (county == null || (ownFirst && !householdFacts.columnAgrees(field, own, county)))) householdFields.push(field);
   }
   const provenance = homeRecords.provenanceOf(copy);
-  const value = copy.match === 'parcel_only' ? null : facts.market_value ?? null;
+  const measured = estimate?.level === 1 ? estimate : null;
+  const value = measured?.value ?? (copy.match === 'parcel_only' ? null : facts.market_value ?? null);
   const yearLead = facts.value_year ? `${facts.value_year} value. ` : '';
   return {
     home_id: home.id,
@@ -607,8 +611,8 @@ function buildProfileFromRecord(home, copy) {
     ...shown,
     property_type: home.home_type || copy.home_type || null,
     estimated_value: value,
-    value_range_low: null,
-    value_range_high: null,
+    value_range_low: measured?.low ?? null,
+    value_range_high: measured?.high ?? null,
     value_confidence: null,
     value_as_of: value != null ? `${copy.as_of}T12:00:00.000Z` : null,
     assessed_value: facts.assessed_value ?? null,
@@ -620,9 +624,14 @@ function buildProfileFromRecord(home, copy) {
     source: 'record',
     provenance: householdFields.length ? { ...provenance, label: `${provenance.label}, with details you entered` } : provenance,
     ...(value != null ? {
-      value_title: 'County market value',
-      value_provenance: { ...provenance, label: `${yearLead}${provenance.label}` },
+      value_title: measured ? 'Estimated value' : 'County market value',
+      value_provenance: {
+        ...provenance,
+        method: measured ? 'estimate' : provenance.method,
+        label: measured ? `Estimated from the county's value and recent sales. Not an appraisal. ${provenance.label}` : `${yearLead}${provenance.label}`,
+      },
     } : {}),
+    ...(estimate ? { estimate } : {}),
     county_values: Object.fromEntries(COUNTY_VALUE_FACTS.filter((name) => facts[name] !== undefined).map((name) => [name, facts[name]])),
     value_match: copy.match,
     // The card says for itself when only the building was found.
@@ -1068,7 +1077,9 @@ async function getProfile(homeId, { wait = false } = {}) {
     }
     propertyRecords.shadow(homeRecords.homeAddress(row));
     const found = await homeRecords.forHome(row);
-    if (found?.copy) return { profile: buildProfileFromRecord(row, found.copy), source: 'cache', lookup: null };
+    if (found?.copy) {
+      return { profile: buildProfileFromRecord(row, found.copy, await valueEstimate.forCopy(found.copy, row)), source: 'cache', lookup: null };
+    }
     if (found) return { profile: buildFallbackProfile(row), source: 'fallback', lookup: found.lookup === 'pending' ? 'pending' : null };
   }
 
