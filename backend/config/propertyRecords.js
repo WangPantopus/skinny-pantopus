@@ -19,7 +19,7 @@ const logger = require('../utils/logger');
 
 const env = (key) => (process.env[key] || '').trim();
 
-// ATTOM's trial ended November 4, 2026, so nothing may call it, whatever an env file still holds. Every ATTOM path
+// Servers don't call ATTOM, whatever an env file still holds. Every ATTOM path
 // treats a missing key as "not configured", so it reads as missing. Emptied, not deleted: dotenv won't fill it back in.
 if (process.env.ATTOM_API_KEY && process.env.NODE_ENV !== 'test' && env('ATTOM_STAND_IN') !== '1') {
   process.env.ATTOM_API_KEY = '';

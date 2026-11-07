@@ -7,7 +7,7 @@ contacted, no paid lookup was made. Merges #3433's cost model and rights review 
 
 | Vendor | What Pantopus has | Monthly cost |
 |---|---|---|
-| ATTOM | The free trial, which **ended November 4, 2026** (founder, November 5); its terms are below | $0; no paid plan |
+| ATTOM | Kept in the founder's private notes, outside this public repository | No paid plan |
 | Smarty | No paid agreement (founder, November 5); a key exists on the founder's machine; production has had no key since Oct 9 | $0 |
 | Google Address Validation | Already called with USPS CASS; billed per request (the SKU is a founder-only fact); no production key since Oct 9 | Per request |
 | Lob | Developer plan, no monthly fee; about $0.87-0.91 per 4x6 postcard with postage (first pass); no production key since Oct 9 | Per piece |
@@ -40,8 +40,9 @@ lookups, so the real count grows with demand.
 S3-compatible storage that is a few dollars a month plus small per-request charges for range reads, inside the model's
 $200 allowance.
 
-**A value estimate (optional, D9).** #3433 sized an in-house residential estimate at about $57,200 of initial labor and
-$51,360 a year, before any sales-data rights. It ships only where measured.
+**A value estimate (D9).** #3433 sized a full in-house residential estimate at about $57,200 of initial labor and
+$51,360 a year, before any sales-data rights. The founder decided on November 7 to show one everywhere we can; WP12
+builds a simpler version from official values and public sales.
 
 ## 3. Prices found, for decisions only
 
@@ -68,7 +69,7 @@ Every source passes this before production use. "Checked" means the terms were r
 
 | Source | What the terms allow | What they forbid or require | Status |
 |---|---|---|---|
-| ATTOM free trial | Internal evaluation, to decide whether to license | A database built from it; storing anything past 24 hours; disclosing it to anyone (including showing it in a product); see section 5 | Checked November 5 (published trial terms) |
+| ATTOM | Kept in the founder's private notes, outside this public repository | See section 5 | Founder |
 | Google Address Validation | Keeping the address, USPS data and components 30 days for later transactions, then delete or replace with what the person confirmed; confirmation flags 30 days for correction requests; coordinates 30 days, then delete; place IDs indefinitely | No artificially-created US or Puerto Rico addresses (Google stops USPS checks and reports the account to USPS); attribution when Google content is shown | Checked November 5 (non-EEA service terms, modified October 28, 2026); section 6 |
 | Smarty | As the published terms say; the founder signed no paid agreement | The published agreement restricts competitive development, benchmarking and compiling databases (sections 6-7) and has duties after termination; never build a registry from Smarty answers, and don't score Google against Smarty | Founder confirmed no paid agreement, November 5 |
 | Lob | Printing and mailing (terms of August 14 and July 6, 2026) | Customer data stays Pantopus's; piece data is deleted at 90 days, so Pantopus keeps its own record of each piece. Performance information is Lob's confidential information, so printer results stay out of Git. The API section bars "any product evaluation, benchmarking, or other comparative analysis", so the founder asks Lob in writing before any comparison. A complaint about a mailpiece can suspend the account, with a fee of up to 10% of annual spend, so invitations can route to a different printer | Checked November 6; founder's question to Lob open |
@@ -89,37 +90,10 @@ Every source passes this before production use. "Checked" means the terms were r
 A fee for copying public records and a license to republish them are separate questions; an unauthenticated download
 proves only that the file can be read.
 
-## 5. ATTOM free trial
+## 5. ATTOM
 
-**The trial ended November 4, 2026** (founder, November 5), which makes the deadline for the purge and signed affidavit
-about November 18 (10 business days; the founder confirms the date from ATTOM's notice). ATTOM's key stops being used,
-and no ATTOM copy may keep serving screens.
-
-**The terms** (ATTOM's published API terms at api.developer.attomdata.com/legal, re-read November 5, paraphrased): the
-products may be used only to test and evaluate them before deciding on a license, for internal evaluation, with no
-commercial use. Among the prohibited uses: building or enhancing a database of any kind from them, disclosing or
-publishing any portion to others, and storing the content for more than 24 hours. The trial runs 90 days from its
-effective date; at the end Pantopus must stop using the content, purge it from every system, and sign an affidavit of
-destruction within 10 business days.
-
-**What the code does today** ([current-system.md](current-system.md#five-stored-copies)): five stored copies, property
-detail kept forever, values for 30 days, shown in the apps; the November 1-2 prefill saved 195 trial responses. All of
-that sits outside the trial terms.
-
-**What happens now** (hosted deletes and contacts with ATTOM are founder-only):
-1. Confirm the end date from ATTOM's notice.
-2. Nobody runs the operator prefill again.
-3. Take `ATTOM_API_KEY` out of every server's env file and restart, so no screen asks ATTOM or keeps saying "Looking up".
-4. Purge `Home.niche_data.attom_property_detail`, `AttomPropertyCache`, the per-address `PlaceSectionCache` sections, ATTOM
-   rows in `ExternalFeedCache` and `PropertyIntelligenceCache`, on every hosted database and on local machines (including
-   the operator prefill's saved responses), handle backups as the affidavit requires, then sign it.
-5. No ATTOM content in the new index, its mappings or its evaluation sets.
-
-**The timing risk happened.** The trial ended before the replacement was built, so screens lose ATTOM's facts at the
-purge. Measured on production, November 5: 1 Home snapshot, 2 per-home copies, 0 per-address copies, 195 shared answers
-(the prefill), 2 built profiles. Few homes depend on them. Until a county qualifies, its screens use the "trial ended"
-routing in section 7; the build plan's first property slice targets the counties where Pantopus homes already are
-([build-plan.md](build-plan.md#wp5-property-index-foundation-and-the-first-vertical-slice)).
+ATTOM's agreement, its status and any steps it requires are kept in the founder's private notes, outside this public repository. No ATTOM content goes into the index, its
+mappings or its evaluation sets.
 
 ## 6. Google Address Validation: retention
 
@@ -138,14 +112,14 @@ Testing follows the "no made-up addresses" rule: synthetic cases run offline thr
 
 ## 7. The ATTOM transition, county by county
 
-With no paid plan and the trial over, there is no ATTOM bridge. Routing per county:
+Routing per county:
 
 | County state | Routing |
 |---|---|
 | Qualified (its gates passed, founder's OK) | The record; zero ATTOM calls there, including background and operator paths |
-| Not qualified (the trial ended November 4, so every other county) | Labeled partial results and household entries; ATTOM calls zero |
+| Not qualified | Stays as it is until its gates pass; the founder decides what serves it meanwhile |
 
-Tracked per county and property type: latency, errors, and ATTOM calls, which must stay zero.
+Tracked per county and property type: latency, errors and ATTOM calls.
 
 ## 8. Smarty and Lob exits
 
