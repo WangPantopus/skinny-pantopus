@@ -86,19 +86,18 @@ independently confirmed residential premises in a jurisdiction resolve to the ri
 - **Per connector:** 50 homes per county and property type compared field by field with the county's own public
   lookup page by a person: codes mapped to the right words, units of measure right, no field lost, nothing of another
   subject's scope. A connector ships when every displayed field is right on the sample or is withheld.
-- **Against ATTOM's fill, not its values:** on a stratified sample of addresses per county and type (about 200), count
-  which fields ATTOM fills and which the record fills. **The trial ended November 4, 2026, so this comparison doesn't
-  run:** G1 uses T3's adjudicated sample alone, and no ATTOM call or stored ATTOM copy enters any evaluation.
+- G1 uses T3's adjudicated sample alone: no ATTOM call or stored ATTOM copy enters any evaluation.
 - **Freshness:** each release's age by source and county; a source past its expected cadence is flagged.
 
-### T4. Values (only if an estimate ships, decision D9)
+### T4. Values (decision D9)
 
 - Held-out recorded sales per county, time-separated (fit on sales before a date, test on sales after it), arm's-length
   sales only, at least 200 test sales per county and property type.
 - Measures: median absolute percentage error, share within ±10%, bias, interval coverage (an 80% range should contain
   75-85% of sales).
-- Proposed bar for showing an estimate in a market: median error ≤ 8% and coverage within 75-85%; elsewhere no
-  estimate. The founder sets the bar.
+- The founder decided on November 7: show an estimate everywhere we can, so its error no longer decides whether one
+  shows. Where sale prices are public, the range is calibrated to hold 75-85% of held-out sales and the card says what
+  was measured. Elsewhere it's labeled rough, or as the neighborhood's.
 - The FHFA trend line is checked for direction and rough size against county sale medians, and always labeled as an
   area index.
 
@@ -144,8 +143,8 @@ Switching back: the Smarty adapter stays in the code until WP14; with a key it c
 |---|---|---|---|
 | Add Home prefill | The record; one-tap questions for what it lacks | G1, G2 (T3) | No vendor wait; residents confirm |
 | Place "Your home" | Stored record copy; value facts | G1, G7 | Source and date on each fact |
-| Property details | The record in the same groups | T3's 50-home check; G1 | Fixes ATTOM errors where the county is right (a Clark County sample home differed on baths, city and roof material); weekly freshness where counties publish weekly |
-| Value estimate and range | Official values, sales, the FHFA index; an estimate only where T4 passes | T4 | Explains each number |
+| Property details | The record in the same groups | T3's 50-home check; G1 | The county is the source of record; weekly freshness where counties publish weekly |
+| Value estimate and range | Official values, sales, the FHFA index; an estimate everywhere we can, with wider ranges where we're less sure (D9) | T4 | Explains each number; says how often its range held |
 | ZIP sales trend | FHFA index, labeled; county sale medians where public | T4's trend check | Public and explainable; never "flat" by default |
 | Exemption check | County exemption fields | Sample of homes with known exemptions | Straight from the county |
 | Sky house | County footprint, FEMA structures | Visual check on all three apps | — |
@@ -177,8 +176,8 @@ Switching back: the Smarty adapter stays in the code until WP14; with a key it c
   its file, 2.3% one-city or unconfirmed. Households and labeled estimates fill in until files are requested or bought
   (decision D2).
 - Bedrooms and baths where counties publish basics only (32.5%), until residents confirm them.
-- Value estimates in states without public sale prices (TX, UT, ID, NM, KS, MO): official values and the area trend
-  only.
+- Value estimates in states without public sale prices (TX, UT, ID, NM, KS, MO): labeled rough, from official values and the
+  area trend.
 - Deed, mortgage and lien history (not used today).
 
 ## Measures watched after each switch

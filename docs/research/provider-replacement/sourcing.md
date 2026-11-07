@@ -199,7 +199,7 @@ ATTOM, Smarty or Google output; owner names are dropped when any file is read.
 | County assessed and market values | The assessor's value with its tax year (Washington assesses at 100% of market) | Assessment practice varies by state | Planned |
 | County and state recorded sales | Sale price and date where public | Not public in TX, UT, ID, NM, KS, MO | Planned |
 | FHFA House Price Index (ZIP and county, annual) | **Price change** for an area: 14,200 ZIPs with their own number and 16,800 more through their county, in the 2025 file | Not a home's value and not a ZIP median sale price; labeled as an area index. Tract would need each home's tract, which a Home doesn't keep | Built (WP12), off until `VALUE_AREA_TREND` |
-| Pantopus estimate | A value from the three above | Shown only where its error has been measured on held-out sales | Planned, optional (decision D9) |
+| Pantopus estimate | A value from the three above | Shown everywhere we can; measured on held-out sales where sale prices are public, labeled rough elsewhere | Being built (decision D9) |
 
 ### Mail (Lob)
 

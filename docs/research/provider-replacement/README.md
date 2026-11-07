@@ -1,8 +1,8 @@
 # Replacing ATTOM, Smarty and Lob: research, design and build plan
 
-November 5, 2026; updated November 6. **ATTOM's free trial ended November 4,** so ATTOM is off and its replacement is the
-critical path. PR #3418, merged on the founder's OK. The package is research and design: nothing here is built yet, and
-nothing is decided beyond what [decisions.md](decisions.md) marks as the founder's. This package merges PR #3418 (national coverage, sources, prices,
+November 5, 2026; updated November 7. PR #3418, merged on the founder's OK. This package is the research, design and plan.
+The build is under way ([HANDOFF.md](HANDOFF.md)), and nothing is decided beyond what [decisions.md](decisions.md) marks as
+the founder's. This package merges PR #3418 (national coverage, sources, prices,
 the ATTOM flow, unit floor plans) and PR #3433 (code audit, the 46-field test by property type, identity contract,
 rights, costs, service objectives) into one plan. Code re-checked on master `ffd28e60a1`.
 
@@ -18,7 +18,7 @@ at a time. No paid ATTOM plan.
 | Vendor | Today | What Pantopus builds | What stays rented | Switches when | Work |
 |---|---|---|---|---|---|
 | **Smarty** | A mandatory second postal check after Google (up to 2.5 s more); no production key since Oct 9 | Reads the USPS answer Google already returns, completely and correctly | Google's per-request USPS answer (a USPS license later, if volume justifies it) | The postal truth set passes (gate G5) | WP3, WP14 |
-| **ATTOM** | The free trial, ended November 4: three endpoints, five stored copies to purge | A national address registry and property index from public records, household facts, floor-plan sheets, values from official records | Nothing | Per county and property type, when gates G1-G4, G6 and G7 pass; other counties show labeled partial results | WP5-WP12, WP15 |
+| **ATTOM** | Three endpoints, five stored copies | A national address registry and property index from public records, household facts, floor-plan sheets, values from official records | Nothing | Per county and property type, when gates G1-G4, G6 and G7 pass; other counties show labeled partial results | WP5-WP12, WP15 |
 | **Lob** | Prints and mails verification and invitation postcards, per piece | One mail interface: no double mailing, returned cards handled, a second printer | Printing and postage, per piece | The real-mail pilot passes; keeping Lob per piece is the founder's choice | WP13, WP16 |
 
 USPS's delivery database can only be licensed, and printing and postage are always bought per piece; everything else
@@ -38,17 +38,16 @@ can be Pantopus's own. Details: [architecture.md](architecture.md).
   flags and reads two field names Google never sends; the iOS and Android apps in the stores reject unknown `source`
   values and say "ATTOM" in copy; returned postcards are ignored in the Home flow; Block Founders cards can be mailed
   twice after a timeout; the value card can show an assessed total as an estimate and a missing trend as "flat".
-- **Terms** ([cost-and-rights.md](cost-and-rights.md)): ATTOM's trial allows internal evaluation only, no database and
-  nothing kept past 24 hours, for 90 days, then a purge and a signed affidavit. Google allows keeping its results 30
-  days, deleting its coordinates after 30 days, and forbids sending made-up addresses.
+- **Terms** ([cost-and-rights.md](cost-and-rights.md)): Google allows keeping its results 30 days, deleting its
+  coordinates after 30 days, and forbids sending made-up addresses.
 - **Money.** The public-records route was modeled at $47,500 to build and $30,480 a year including labor, or about
   $5,400 of cash in year one if the founder supplies the labor, with no data fees.
 
 ## Decisions
 
-The founder decided the goal, nationwide scope, no paid ATTOM plan, replace nothing until proven (for Smarty and Lob; ATTOM's
-trial ended first), the seven corrections from the #3433 review, and on November 6 D1, D2, D5 and P1 and the bar: really
-exceed these three services. Open, with recommendations: D6-D12 and proposals P2-P5. All in [decisions.md](decisions.md).
+The founder decided the goal, nationwide scope, no paid ATTOM plan, replace nothing until proven, the seven corrections
+from the #3433 review, on November 6 D1, D2, D5 and P1 and the bar: really exceed these three services, and on November 7
+landing built work first and D9. Open, with recommendations: D6-D8, D10-D12 and proposals P2-P5. All in [decisions.md](decisions.md).
 
 ## How to read this package
 
@@ -64,13 +63,13 @@ exceed these three services. Open, with recommendations: D6-D12 and proposals P2
 | [experience.md](experience.md) | What each screen shows on web, iOS and Android, and the "same or better" gates G1-G7 | Building any screen change |
 | [parity-and-acceptance.md](parity-and-acceptance.md) | Truth sets, exact-unit precision, service objectives, sample design, how a switch is made | Proving a package |
 | [build-plan.md](build-plan.md) | Work packages WP0-WP16 with files, switches, gates, checks, rollout and rollback | Building |
-| [cost-and-rights.md](cost-and-rights.md) | Costs, prices, the rights register, the ATTOM trial and Google retention plans | Anything that costs money or keeps data |
+| [cost-and-rights.md](cost-and-rights.md) | Costs, prices, the rights register and Google retention plans | Anything that costs money or keeps data |
 | [public-records-requests.md](public-records-requests.md) | Requests for the 41 large counties without a free file, prices found, and why not to scrape lookup sites | Sending requests or buying a file |
 | [mail-pilot.md](mail-pilot.md) | The real-mail pilot for each printer | Running the pilot |
 | [HANDOFF.md](HANDOFF.md) | Where the work stands and the next steps | Continuing this work |
 
 Evidence and tools: [evidence/](evidence/README.md) (every CSV, with `verify.py`), [county-survey/](county-survey/README.md)
-(the survey's scripts and inputs), [studies/](studies/README.md) (#3433's PDFs and workbooks).
+(the survey's scripts and inputs), [studies/](studies/README.md) (#3433's workbooks).
 
 ## Reproducing the numbers
 

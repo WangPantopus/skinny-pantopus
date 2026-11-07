@@ -112,6 +112,9 @@ public struct HolidayCardDesign: Decodable, Sendable, Hashable, Identifiable {
     public let paper: String
     /// The picture's height at 960 wide: its shape while it loads.
     public let height: Int?
+    /// Its public page's name, and the colour of its table (`card_table`); older servers don't send them.
+    public let slug: String?
+    public let table: String?
 }
 
 /// A collection of the season's pictures ("Christmas with Friends"): who
@@ -192,6 +195,21 @@ public struct SentHolidayCard: Decodable, Sendable, Hashable, Identifiable {
 /// `POST /api/mailbox/cards` body — route `backend/routes/mailbox.js:1837`:
 /// the picture, the note, when it comes, and to whom (a person found by name,
 /// or an email address for someone not on Pantopus).
+/// One share of a card's picture, counted so the founder can see whether sharing works (`card_table`).
+public struct HolidayCardSharedBody: Encodable, Sendable {
+    public let design: String
+    /// `instagram`, `facebook`, `email`, `link`, `save` or `more`.
+    public let kind: String
+    /// `story`, `post` or `link`.
+    public let format: String
+    public let withNote: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case design, kind, format
+        case withNote = "with_note"
+    }
+}
+
 public struct SendHolidayCardBody: Encodable, Sendable {
     public let design: String
     public let message: String
@@ -373,9 +391,12 @@ public struct MailCard: Decodable, Sendable, Hashable {
     public let arrival: String?
     public let sealedUntil: String?
     public let sealed: Bool
+    /// Its public page's name, and the colour of its table (`card_table`).
+    public let slug: String?
+    public let table: String?
 
     private enum CodingKeys: String, CodingKey {
-        case design, number, caption, paper, height, holiday, year, arrival, sealed
+        case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table
         case sealedUntil = "sealed_until"
     }
 
@@ -391,6 +412,8 @@ public struct MailCard: Decodable, Sendable, Hashable {
         arrival = nil
         sealedUntil = nil
         self.sealed = sealed
+        slug = design.slug
+        table = design.table
     }
 
     private init(copying card: MailCard, sealed: Bool) {
@@ -404,6 +427,8 @@ public struct MailCard: Decodable, Sendable, Hashable {
         arrival = card.arrival
         sealedUntil = card.sealedUntil
         self.sealed = sealed
+        slug = card.slug
+        table = card.table
     }
 
     /// The same card on the morning its seal lifts.
@@ -423,5 +448,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         arrival = try? c.decodeIfPresent(String.self, forKey: .arrival)
         sealedUntil = try? c.decodeIfPresent(String.self, forKey: .sealedUntil)
         sealed = (try? c.decodeIfPresent(Bool.self, forKey: .sealed)) ?? false
+        slug = try? c.decodeIfPresent(String.self, forKey: .slug)
+        table = try? c.decodeIfPresent(String.self, forKey: .table)
     }
 }

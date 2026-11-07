@@ -55,6 +55,12 @@ enum HolidayCardPicture {
         return URL(string: InviteLinks.publicPageURLString(path: "/holiday-cards/\(name(design, thumb: thumb)).jpg"))
     }
 
+    /// The trimmed copy for the card on the table (`card_table`), which only the website keeps.
+    static func trimmedURL(_ design: String) -> URL? {
+        guard design.range(of: #"^[a-z0-9][a-z0-9-]{0,63}$"#, options: .regularExpression) != nil else { return nil }
+        return URL(string: InviteLinks.publicPageURLString(path: "/holiday-cards/card/\(design).jpg"))
+    }
+
     /// "christmas-2026-18", or "christmas-2026-18-thumb" for the smaller copy.
     static func name(_ design: String, thumb: Bool) -> String {
         thumb ? "\(design)-thumb" : design
@@ -142,6 +148,15 @@ struct HolidayCardFront: View {
     var thumb = false
 
     var body: some View {
+        if LaunchFeatures.cardTable, !thumb {
+            // The card on the table's face and shape, so what you see while sending is what arrives.
+            CardTableFrontPage(design: design, caption: caption, paper: paper, year: year, mailedOn: mailedOn)
+        } else {
+            printedFront
+        }
+    }
+
+    private var printedFront: some View {
         VStack(spacing: Spacing.s0) {
             HolidayCardPictureView(design: design, paper: paper, height: height, thumb: thumb)
             HolidayCardStrip(caption: caption, year: year, mailedOn: mailedOn)
@@ -291,6 +306,36 @@ struct HolidayCardBack<Note: View>: View {
     @ViewBuilder let note: (_ cardWidth: CGFloat) -> Note
 
     var body: some View {
+        if LaunchFeatures.cardTable {
+            GeometryReader { geo in
+                let unit = geo.size.width / 100
+                CardTableBack(
+                    paperGrain: CardTableSmallArt.shared.paperGrain,
+                    paper: paper,
+                    note: "",
+                    fromName: HolidayCardWords.firstName(fromName),
+                    year: year,
+                    number: nil,
+                    drawsNote: false
+                )
+                .equatable()
+                .overlay(alignment: .topLeading) {
+                    note(geo.size.width)
+                        .frame(
+                            width: CardTableNoteLayout.width * unit,
+                            height: CardTableNoteLayout.boxHeight * unit,
+                            alignment: .topLeading
+                        )
+                        .offset(x: CardTableNoteLayout.left * unit, y: CardTableNoteLayout.top * unit)
+                }
+            }
+            .aspectRatio(CardTableShape.aspect, contentMode: .fit)
+        } else {
+            printedBack
+        }
+    }
+
+    private var printedBack: some View {
         GeometryReader { geo in
             let width = geo.size.width
             let noteHeight = max(0, geo.size.height - width * 0.23)

@@ -1,15 +1,17 @@
 # Handoff: replacing ATTOM, Smarty and Lob
 
-Updated November 6, 2026 (UTC). Live status is on the coordinator's board, outside Git.
+Updated November 7, 2026 (UTC). Live status is on the coordinator's board, outside Git.
 
 ## State
 
-- **ATTOM's free trial ended November 4.** Its key comes out of production and staging, every copy is purged and the
-  founder signs the affidavit by about November 18 (WP0; [cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)).
-  Until a county goes live on the record, its screens show labeled partial results and household entries.
+- **ATTOM's status and agreement** are kept in the founder's private notes, outside this public repository. A county moves onto its record only when
+  its gates pass and the founder says so.
 - **This package** is PR WangPantopus/skinny-pantopus#3418, squash-merged on the founder's OK. It holds everything from
   PR #3433, which is closed as superseded. No app code, no migration, no purchase, no hosted change.
 - **Decisions:** the founder answered "all recommended" on November 6 ([decisions.md](decisions.md)).
+- **November 7:** 18 built PRs landed together in #3585. New counties wait until Clark County is proven live. Value
+  estimates show everywhere we can, with wider ranges where we're less sure (D9), switched off until the founder turns
+  them on.
 - **Private storage (P1) exists:** bucket `pantopus-property-index` in us-west-2, public access blocked; GitHub Actions
   writes through the `master`-only environment `property-index`; the reader key can read only under `index/`.
 - **WP1 is done:** #3439, #3445, #3446 and #3447 merged.
@@ -18,15 +20,14 @@ Updated November 6, 2026 (UTC). Live status is on the coordinator's board, outsi
 ## Verified, and not
 
 - Verified by reading master `ffd28e60a1`: every vendor call site and consumer in [current-system.md](current-system.md).
-- Verified at the source on November 5: Google's `validateAddress` field reference and its non-EEA service terms;
-  ATTOM's published trial terms.
+- Verified at the source on November 5: Google's `validateAddress` field reference and its non-EEA service terms.
 - Verified November 6: the bucket refuses anonymous reads, and the reader key can list but not write.
-- Not verified: hosted contents beyond production's copy counts, live vendor answers, license terms for each free county
+- Not verified: hosted contents, live vendor answers, license terms for each free county
   source, physical phones, live mail.
 
 ## Waiting on the founder
 
-1. ATTOM: take the key out of the servers, run the purge, confirm the end date, sign the affidavit.
+1. ATTOM: the steps are on the founder's private list, outside Git.
 2. The plans each builder sends, and D6-D12 and P2-P5 as packages reach them.
 3. Google's CASS billing SKU and the production key; Lob's live key and return address.
 
