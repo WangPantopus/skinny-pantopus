@@ -66,16 +66,26 @@ class CardLinkViewModel
         private val _state = MutableStateFlow(CardLinkState())
         val state: StateFlow<CardLinkState> = _state.asStateFlow()
 
+        /** The link handed in right after sending: it's shown and copied as it is. */
+        private var handedIn: String? = null
+
         fun show(link: String?) {
-            if (link != null) _state.value = _state.value.copy(link = link)
+            if (link != null) {
+                handedIn = link
+                _state.value = _state.value.copy(link = link)
+            }
         }
 
-        /** [then] gets the link, from what's here or from the server; a failure says what happened instead. */
+        /**
+         * [then] gets the link: the one handed in right after sending, or else read from the server every time, since
+         * someone may have opened it, or it may have been taken back, since it was last read. A failure says what
+         * happened instead, and a link the server says has stopped working stops showing.
+         */
         fun withLink(
             cardId: String,
             then: (String) -> Unit,
         ) {
-            _state.value.link?.let {
+            handedIn?.let {
                 then(it)
                 return
             }
@@ -89,7 +99,8 @@ class CardLinkViewModel
                     }
                     is NetworkResult.Failure -> {
                         val why = result.error.mailMessage(online = network.isOnline.value, doing = "get your link")
-                        _state.value = _state.value.copy(reading = false, said = why)
+                        val shown = if (result.error.code == 409) null else _state.value.link
+                        _state.value = _state.value.copy(reading = false, link = shown, said = why)
                     }
                 }
             }
