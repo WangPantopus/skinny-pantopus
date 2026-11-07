@@ -65,7 +65,7 @@ public struct EditBusinessHoursEditor: View {
             ForEach(Array(rows.enumerated()), id: \.element.id) { idx, row in
                 Menu {
                     Button("Set hours") { editingRow = row }
-                    Button("Open 24 hours") { onChange?(row.id, .open(openLabel: "12:00 AM", closeLabel: "24:00")) }
+                    Button("Open 24 hours") { onChange?(row.id, .allDay) }
                     Button("Closed all day") { onChange?(row.id, .closed) }
                 } label: {
                     EditHoursRowView(row: row)
@@ -191,7 +191,7 @@ private struct EditHoursRowView: View {
         switch row.state {
         case let .open(openLabel, closeLabel):
             HStack(spacing: 6) {
-                if isAllDay {
+                if row.state.isAllDay {
                     Text("Open 24 hours").pantopusTextStyle(.caption)
                 } else {
                     TimePill(value: openLabel)
@@ -236,17 +236,12 @@ private struct EditHoursRowView: View {
 
     private var a11yLabel: String {
         let stateLabel = switch row.state {
-        case let .open(open, close): isAllDay ? "Open 24 hours" : "\(open) to \(close)"
+        case let .open(open, close): row.state.isAllDay ? "Open 24 hours" : "\(open) to \(close)"
         case .closed: "Closed"
         case .notSet: "Not set"
         }
         let dirtyTag = row.isDirty ? ", unsaved" : ""
         return "\(row.dayLabel), \(stateLabel)\(dirtyTag)"
-    }
-
-    private var isAllDay: Bool {
-        guard case let .open(open, close) = row.state else { return false }
-        return ["12:00 AM", "00:00"].contains(open) && close == "24:00"
     }
 }
 

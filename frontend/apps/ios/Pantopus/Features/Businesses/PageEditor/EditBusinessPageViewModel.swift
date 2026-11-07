@@ -373,7 +373,7 @@ public final class EditBusinessPageViewModel {
         guard canEditProfile, canEditHours, hasLoadedHours, !hasInFlightOperation,
               case let .loaded(content) = state,
               let selected = content.hours.rows.first(where: { $0.id == dayId }) else { return }
-        let replacesDay = value == .closed || value == .open(openLabel: "12:00 AM", closeLabel: "24:00")
+        let replacesDay = value == .closed || value == .allDay
         let removesIntervals = replacesDay && content.hours.rows.filter { $0.dayLabel == selected.dayLabel }.count > 1
         let hasRemovedIntervals = content.hours.rows.filter { $0.dayLabel == selected.dayLabel }.count
             != originalHours?.rows.filter { $0.dayLabel == selected.dayLabel }.count

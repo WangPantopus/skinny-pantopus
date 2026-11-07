@@ -121,6 +121,19 @@ public struct EditBusinessPageHoursRow: Sendable, Hashable, Identifiable {
     }
 }
 
+public extension EditBusinessPageHoursRow.State {
+    /// Saved as 00:00–23:59, which store builds, the web and Android all read
+    /// correctly. They read a `24:00` close as noon, and Android's editor would
+    /// save it back that way.
+    static let allDay = Self.open(openLabel: "12:00 AM", closeLabel: "11:59 PM")
+
+    /// A `24:00` close saved elsewhere also means the whole day.
+    var isAllDay: Bool {
+        guard case let .open(open, close) = self else { return false }
+        return open == "12:00 AM" && ["11:59 PM", "24:00"].contains(close)
+    }
+}
+
 /// One chip in the services flow. `isFresh == true` paints the chip with
 /// the amber "just-added" tone instead of the default identity violet.
 public struct EditBusinessPageServiceChip: Sendable, Hashable, Identifiable {
