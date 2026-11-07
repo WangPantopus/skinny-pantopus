@@ -251,7 +251,8 @@ async function unitLinks(report, unitsDir, state, read) {
       const address = JSON.parse(line);
       const where = parts(address);
       if (!where?.unit) continue;
-      const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), unit: where.unit, city: address.city, state, zip: address.zip }, read);
+      // As the roll writes it, building and all: "A9" alone reads as building A, unit 9.
+      const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), unit: where.building ? `BLDG ${where.building} ${where.unit}` : where.unit, city: address.city, state, zip: address.zip }, read);
       report.unit_links.n += 1;
       if (found.match === 'exact' && found.subject.kind === 'unit') {
         // A building letter can sit in the unit on one side and in its own column on the other: A101 and BLDG A UNIT 101.
