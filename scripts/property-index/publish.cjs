@@ -6,6 +6,7 @@
 //
 //   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--bulk] [--min-retention 0.995] [--republish] [--accept-falls]
 //     --bulk  uploads every county's release at once, which a whole state of them needs; a refused county's files just go unused
+//     --moved "<fips> ..."  counties moving from a statewide file to a connector of their own: ids and facts are another file's, so only the record count compares
 //     --republish  someone decided: a file that was rolled back may serve again, and a new build of the file serving
 //                  replaces it (a scheduled run never passes this)
 //     --accept-falls  someone read the refusals and a connector's fix meant them: lower fill and changed account ids publish
@@ -42,6 +43,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--accept-falls') opts.acceptFalls = true;
     else if (argv[i] === '--bulk') opts.bulk = true;
     else if (argv[i] === '--min-retention') opts.minRetention = Number(argv[++i]);
+    else if (argv[i] === '--moved') opts.moved = argv[++i].split(/\s+/).filter(Boolean);
     else throw new Error('Unknown argument');
   }
   if (!opts.bucket || !(opts.out || (opts.rollback && opts.state))) throw new Error('usage: see the top of publish.cjs');
@@ -90,7 +92,7 @@ function withMaps(stateFile, counties) {
 }
 
 /** Why this release mustn't replace the one serving, and what only someone who looked may accept: counts only. */
-function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION) {
+function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, moved = []) {
   const found = [];
   const falls = [];
   const dir = path.join(out, releasePath(entry.fips, entry.release));
@@ -99,6 +101,7 @@ function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION) 
   if (!previous) return { found, falls };
   const before = previous.records || 0;
   if (report.records < before * MIN_RECORD_SHARE) found.push(`${report.records} records, ${before} serving`);
+  if (moved.includes(entry.fips) && previous.source !== entry.source) return { found, falls };
   const oldReport = store.get(`${releasePath(entry.fips, previous.release)}/report.json`);
   if (oldReport) {
     const { fill } = JSON.parse(oldReport.toString('utf8'));
@@ -127,7 +130,7 @@ function readState(store, state) {
   return bytes ? JSON.parse(bytes.toString('utf8')) : emptyState(state);
 }
 
-function publish(store, { out, republish, acceptFalls = false, bulk = false, minRetention }) {
+function publish(store, { out, republish, acceptFalls = false, bulk = false, minRetention, moved }) {
   if (bulk) store.putDir(path.join(out, 'releases'), 'releases');
   const dir = path.join(out, 'counties');
   const entries = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
@@ -153,7 +156,7 @@ function publish(store, { out, republish, acceptFalls = false, bulk = false, min
         log(`${entry.fips}: ${entry.as_of} was rolled back, not publishing it again`);
         continue;
       }
-      const { found, falls } = problems(store, entry, serving, out, minRetention);
+      const { found, falls } = problems(store, entry, serving, out, minRetention, moved);
       if (found.length || (falls.length && !acceptFalls)) {
         refused += 1;
         console.log(`::error::${entry.fips} ${entry.release} refused: ${[...found, ...falls].join('; ')}. The previous release keeps serving.`);

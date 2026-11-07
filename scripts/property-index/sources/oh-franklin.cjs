@@ -18,9 +18,9 @@ const COLUMNS = ['PARCELID', 'BUILDING', 'UNIT', 'ACRES', 'CVTTXDSCRP', 'SCHLDSC
 
 function useOf(code, unit) {
   const n = Number(code);
-  if (n === 510 || n === 511 || n === 512 || n === 513) return unit ? ['unit', 'condo'] : ['property', 'house'];
+  if (n === 510 || n === 511 || n === 512 || n === 513 || n === 591) return unit ? ['unit', 'condo'] : ['property', 'house'];
   if (n === 550 || n === 551 || n === 552 || n === 553 || n === 554) return ['unit', 'condo'];
-  if (n === 520 || n === 530) return ['building', 'multi_unit'];
+  if (n === 520 || n === 530 || n === 592) return ['building', 'multi_unit'];
   if (n === 401 || n === 402 || n === 403 || n === 404) return ['building', 'apartment'];
   if (n === 500 || n === 501 || n === 502 || n === 400) return ['parcel', null];
   return ['other', null];

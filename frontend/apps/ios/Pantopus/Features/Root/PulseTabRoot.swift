@@ -67,17 +67,21 @@ public struct PulseTabRoot: View {
     /// Whether the Nearby tab has room for the October 13 feed and the open post side by side (the iPhone Duo
     /// open, held sideways).
     private let sideBySide: Bool
+    /// False while Nearby's Neighborhood segment covers this one: a chat left open under it doesn't hide the tab bar.
+    private let isShowing: Bool
 
     public init(
         onAddHome: @escaping @MainActor () -> Void = {},
         onClose: (@MainActor () -> Void)? = nil,
         header: AnyView? = nil,
-        sideBySide: Bool = false
+        sideBySide: Bool = false,
+        isShowing: Bool = true
     ) {
         self.onAddHome = onAddHome
         self.onClose = onClose
         self.header = header
         self.sideBySide = sideBySide
+        self.isShowing = isShowing
         let feed = PulseFeedViewModel()
         let feedMap = FeedMapViewModel(surface: feed.surface)
         _feed = State(initialValue: feed)
@@ -378,22 +382,30 @@ public struct PulseTabRoot: View {
                 }
             )
         case let .chatConversation(dest):
-            ChatConversationView(
-                viewModel: detailModels.conversationModel(for: dest, userId: currentUserId) {
-                    ChatConversationViewModel(
-                        mode: dest.threadMode,
-                        counterparty: dest.counterparty,
-                        currentUserId: currentUserId,
-                        initialTopic: dest.initialTopic
-                    )
-                },
-                mode: dest.kind,
-                onOpenProfile: { userId in
-                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
-                },
-                onBack: pop
-            )
+            chatConversation(dest)
         }
+    }
+}
+
+extension PulseTabRoot {
+    private func chatConversation(_ dest: InboxConversationDestination) -> some View {
+        ChatConversationView(
+            viewModel: detailModels.conversationModel(for: dest, userId: currentUserId) {
+                ChatConversationViewModel(
+                    mode: dest.threadMode,
+                    counterparty: dest.counterparty,
+                    currentUserId: currentUserId,
+                    initialTopic: dest.initialTopic
+                )
+            },
+            mode: dest.kind,
+            onOpenProfile: { userId in
+                Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+            },
+            onBack: pop
+        )
+        // The whole screen has no tab bar; beside the feed, the bar stays.
+        .hidesTabBar(!isSideBySide && isShowing)
     }
 }
 

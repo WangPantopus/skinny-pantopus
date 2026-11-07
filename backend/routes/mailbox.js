@@ -410,6 +410,9 @@ function closedEscrowReason(mail) {
   const thing = card ? 'card' : 'letter';
   const closed = (status, error, code) => ({ status, error, code, ...(card ? { card: true } : {}) });
   if (mail.escrow_status === 'claimed') {
+    if (holidayCards.isByLink(mail)) {
+      return closed(409, 'Someone already opened this card. A card goes to one person.', 'MAIL_CLAIMED');
+    }
     return closed(409, `This ${thing} has already been added to a mailbox.`, 'MAIL_CLAIMED');
   }
   if (mail.escrow_status === 'withdrawn') {
@@ -1727,13 +1730,15 @@ const sendCardSchema = Joi.object({
   to: Joi.object({
     user_id: Joi.string().uuid(),
     email: Joi.string().email().max(320),
-  }).xor('user_id', 'email').required(),
+    link: Joi.boolean().valid(true),
+  }).xor('user_id', 'email', 'link').required(),
   // One per card draft, sent again with every retry of it: a repeat of the send answers with the card it stored
   // (services/holidayCards requestRowId). Apps from before it send none and are answered as before.
   request_id: Joi.string().uuid(),
 });
 
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
+const cardTableOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_table']);
 const sendCardsOff = (res) => res.status(404).json({ error: 'Not found' });
 const sendCardUnavailable = (res) =>
   res.status(503).json({ error: 'Couldn’t send your card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
@@ -1778,8 +1783,19 @@ const CARD_REQUEST_SELECT = 'id, sender_user_id, created_at, delivered_at, escro
 const cardNote = (message) => String(message || '').replace(/\r\n?/g, '\n').trim();
 const cardRequestDigest = (body) => holidayCards.requestDigest({
   design: String(body.design), message: cardNote(body.message), arrival: body.arrival,
-  toUserId: body.to.user_id || null, toEmail: body.to.user_id ? null : normalizeEscrowContact(body.to.email),
+  toUserId: body.to.user_id || null,
+  // A card by link adds to the digest only here, so a person's and an email's stay what they were.
+  toEmail: body.to.user_id ? null : (body.to.link ? 'link' : normalizeEscrowContact(body.to.email)),
 });
+// A card by link's own link. Throws when the server has no secret to make it with (nothing is stored then).
+const cardLinkOf = (mailId) => {
+  const token = holidayCards.cardLinkToken(mailId);
+  if (!token) throw new Error('no card link secret');
+  return { token, link: escrowClaimLink(mailId, token) };
+};
+// What a send answers: the card, and by link its link.
+const cardAnswer = (mail, now) => ({ card: holidayCards.sentSummary(mail, now),
+  ...(holidayCards.isByLink(mail) ? { link: cardLinkOf(mail.id).link } : {}) });
 const cardRequestOf = (mail) => mail?.mail_extracted?.card?.request || null;
 const cardTakenBack = (res, mail) => res.status(409).json({
   error: mail?.mail_extracted?.card?.withdrawn?.reason === 'blocked' ? 'This card wasn’t sent.' : 'You took this card back.',
@@ -1875,6 +1891,8 @@ async function personRefusal(senderId, toUserId) {
 async function checkCard(senderId, body, now) {
   const refuse = (status, error, code) => ({ refusal: { status, body: { error, code } } });
   const { arrival } = body;
+  const byLink = body.to.link === true;
+  if (byLink && !cardTableOn()) return refuse(400, 'Sending a card by link isn’t open yet. Send it to a name or an email.', 'CARD_LINK_OFF');
   const design = holidayCards.designById(body.design);
   if (!design) return refuse(400, 'Pick one of the Christmas cards.', 'CARD_DESIGN_UNKNOWN');
   const message = cardNote(body.message);
@@ -1898,7 +1916,7 @@ async function checkCard(senderId, body, now) {
   }
 
   const toUserId = body.to.user_id || null;
-  const toEmail = toUserId ? null : normalizeEscrowContact(body.to.email);
+  const toEmail = toUserId || byLink ? null : normalizeEscrowContact(body.to.email);
   const arrivalClosed = () => refuse(400, 'That choice isn’t open any more. Choose when it arrives again.', 'CARD_ARRIVAL_CLOSED');
   const card = {
     design: design.id, caption: design.caption, holiday: holidayCards.SEASON.holiday, year: holidayCards.SEASON.year,
@@ -1921,16 +1939,19 @@ async function checkCard(senderId, body, now) {
       delivery: { delivered_at: timing.delivered_at, special_delivery: false }, escrowExpiresAt: null };
   }
 
-  if (toEmail === normalizeEscrowContact(sender.email || '')) {
+  if (!byLink && toEmail === normalizeEscrowContact(sender.email || '')) {
     return refuse(400, 'Send your card to someone else.', 'CARD_TO_SELF');
   }
   const open = holidayCards.arrivalsFor({ byEmail: true, timeZone: senderZone, now, nextRound: mailDelivery.nextRound });
   if (!open.includes(arrival)) return arrivalClosed();
-  const rateCheck = await checkEscrowRateLimits(senderId, toEmail);
-  if (!rateCheck.allowed) return refuse(429, rateCheck.reason, 'MAIL_SEND_LIMIT');
-  // Sealed by email: until Christmas morning where the sender is, set again where they live once they open it.
-  Object.assign(card, { to_name: maskContact(toEmail),
-    sealed_until: arrival === 'sealed_christmas' ? holidayCards.christmasMorning(senderZone).toISOString() : null });
+  // A link goes to no address, so the email limits don't count it; one card a day does.
+  if (!byLink) {
+    const rateCheck = await checkEscrowRateLimits(senderId, toEmail);
+    if (!rateCheck.allowed) return refuse(429, rateCheck.reason, 'MAIL_SEND_LIMIT');
+  }
+  // Sealed by email or link: until Christmas morning where the sender is, set again where they live once they open it.
+  Object.assign(card, byLink ? { by_link: true } : { to_name: maskContact(toEmail) },
+    { sealed_until: arrival === 'sealed_christmas' ? holidayCards.christmasMorning(senderZone).toISOString() : null });
   return { design, message, arrival, senderZone, toUserId: null, toEmail, card, zone: senderZone,
     senderDisplay: (await loadChatPeople([senderId])).get(String(senderId))?.displayName || 'Someone',
     delivery: { delivered_at: now.toISOString(), special_delivery: false },
@@ -1972,6 +1993,22 @@ router.get('/cards', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/mailbox/cards/designs
+ * Public (no sign-in; launch key card_table): the season's pictures for the public card pages (/cards, /cards/<slug>).
+ * Only what's printed on a card anyway, never anyone's card. Cached an hour.
+ */
+router.get('/cards/designs', (req, res) => {
+  if (!cardTableOn()) return sendCardsOff(res);
+  res.set('Cache-Control', 'public, max-age=3600');
+  return res.json({
+    year: holidayCards.SEASON.year,
+    collections: holidayCards.COLLECTIONS,
+    designs: holidayCards.DESIGNS.map(({ id, number, slug, caption, paper, collection, table }) =>
+      ({ id, number, slug, caption, paper, collection, table })),
+  });
+});
+
+/**
  * GET /api/mailbox/cards/arrivals?to=<user_id>
  * When a card to this person can come, by their clock rather than the sender's: the arrivals open for them and the day
  * of their next 7 a.m. mail where they live (`next_round_on`, "2026-10-31"), which "Seal it for the day" names. The
@@ -2000,13 +2037,15 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
 });
 
 /**
- * POST /api/mailbox/cards  { design, message, arrival, to: { user_id } | { email }, request_id? }
+ * POST /api/mailbox/cards  { design, message, arrival, to: { user_id } | { email } | { link: true }, request_id? }
  * Send today's card. To a person it comes with their next 7 a.m. mail (sealed until Christmas morning or not) or on
  * Christmas morning, and the sender can take it back until the next 7 a.m. pickup. By email it waits for them (90
- * days, like a letter) and they get an email saying only who it's from. Answers 201 { card } (what the sender sees).
+ * days, like a letter) and they get an email saying only who it's from. By link (launch key card_table) it waits the same
+ * way for whoever opens the link first, and no email goes out. Answers 201 { card } (what the sender sees), with
+ * { link } by link.
  * A repeat of a send with the same request ID answers from the card it stored: 200 { card }, 409 CARD_TAKEN_BACK once
  * that card was taken back (it never sends again), or 409 CARD_REQUEST_SENT with the card when the content changed. A
- * 503 means the outcome isn't known yet; the same request ID finds it.
+ * 503 means the outcome isn't known yet; the same request ID finds it. A repeat by link answers its link again.
  */
 router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) => {
   if (!cardsOn()) return sendCardsOff(res);
@@ -2022,7 +2061,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
       if (outcome === 'taken_back') return cardTakenBack(res, stored);
       if (outcome !== 'sent') return null;
       return cardRequestOf(stored).digest === digest
-        ? res.status(200).json({ card: holidayCards.sentSummary(stored, now) })
+        ? res.status(200).json(cardAnswer(stored, now))
         : cardRequestSent(res, stored, now);
     };
     const earlier = rowId ? await cardOfRequest(rowId, senderId) : null;
@@ -2035,7 +2074,12 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
     const { design, message, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
     if (requestId) card.request = { id: requestId, digest };
-    const escrow = toEmail ? { token: crypto.randomBytes(32).toString('hex'), expiresAt: checked.escrowExpiresAt } : null;
+    const byLink = Boolean(card.by_link);
+    // A link's token comes from the row's id, so the id is known before the insert.
+    const linkRowId = byLink ? (rowId || crypto.randomUUID()) : null;
+    const escrow = toEmail || byLink
+      ? { token: byLink ? cardLinkOf(linkRowId).token : crypto.randomBytes(32).toString('hex'), expiresAt: checked.escrowExpiresAt }
+      : null;
 
     // The note lives only in the card's private stored copy, never in the Mail row (services/holidayCards).
     let objectResult;
@@ -2055,7 +2099,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     }
 
     const stored = {
-      ...(rowId ? { id: rowId } : {}),
+      ...(linkRowId || rowId ? { id: linkRowId || rowId } : {}),
       sender_user_id: senderId, sender_entity_id: null, sender_display: checked.senderDisplay,
       sender_trust: 'pantopus_user', sender_business_name: null, sender_address: null,
       type: 'letter', subject: holidayCards.SUBJECT, display_title: holidayCards.SUBJECT, content: '', content_excerpt: '',
@@ -2109,7 +2153,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     if (settled.outcome === 'taken_back') return cardTakenBack(res, settled.mail);
     mail = settled.mail;
 
-    if (escrow) {
+    if (escrow && toEmail) {
       const claimLink = escrowClaimLink(mail.id, escrow.token);
       const senderName = checked.senderDisplay;
       (async () => {
@@ -2124,9 +2168,9 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
       })();
     }
 
-    logMailEvent('holiday_card_sent', mail.id, senderId, { design: design.id, arrival, byEmail: Boolean(escrow) });
-    logger.info('Christmas card sent', { mailId: mail.id, senderId, arrival, byEmail: Boolean(escrow) });
-    return res.status(201).json({ card: holidayCards.sentSummary(mail, now) });
+    logMailEvent('holiday_card_sent', mail.id, senderId, { design: design.id, arrival, byEmail: Boolean(toEmail), ...(byLink ? { byLink } : {}) });
+    logger.info('Christmas card sent', { mailId: mail.id, senderId, arrival, byEmail: Boolean(toEmail), byLink });
+    return res.status(201).json(cardAnswer(mail, now));
   } catch (err) {
     logger.error('Card send error', { error: err.message, userId: senderId });
     return sendCardUnavailable(res);
@@ -2138,7 +2182,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
  * "Look it over": exactly what the other person will see, before the card is sent. It runs every check the send runs
  * (checkCard), with the same refusals, and stores, sends and records nothing. `piece` is the card as it will lie in their
  * Mailbox (named and postmarked by the same lookups, dated by their clock); by email, `email` holds the words the real
- * email uses and `link_page` what its link's page shows. Never their time zone, address or ids. A draft whose request ID
+ * email uses and `link_page` what its link's page shows; by link, `link_page` too. Never their time zone, address or ids. A draft whose request ID
  * already sent its card answers 409 CARD_REQUEST_SENT with that card, or CARD_TAKEN_BACK, instead of today's limit.
  */
 router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req, res) => {
@@ -2160,16 +2204,17 @@ router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req,
     const arrivesOn = card.arrives_on || null;
     const opensOn = card.sealed_until ? mailDelivery.localDate(new Date(card.sealed_until), zone) : null;
     let linkPage = null;
-    if (toEmail) {
+    const byLink = Boolean(card.by_link);
+    if (toEmail || byLink) {
       const { senderName, senderVerified } = await claimPagePerson(senderId, senderDisplay);
-      linkPage = { sender_name: senderName, sender_verified: senderVerified, sealed, sent_to: maskContact(toEmail),
-        sent_on: now.toISOString() };
+      linkPage = { sender_name: senderName, sender_verified: senderVerified, sealed, sent_to: byLink ? '' : maskContact(toEmail),
+        sent_on: now.toISOString(), ...(byLink ? { by_link: true } : {}) };
     }
     return res.json({
       piece: {
         id: 'preview', kind: 'letter', type: 'letter', mail_object_type: 'envelope', sender_display: senderDisplay,
         sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.SUBJECT, content: message,
-        created_at: now.toISOString(), delivered_at: toEmail ? null : delivery.delivered_at,
+        created_at: now.toISOString(), delivered_at: toEmail || byLink ? null : delivery.delivered_at,
         postmark: { town: null, date: mailDelivery.localDate(now, zone) },
         card: holidayCards.cardView({ mail_extracted: { card } }, now),
       },
@@ -2189,10 +2234,47 @@ router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req,
   }
 });
 
+// Why a card by email or link never reached anyone, as take-back and its link say it.
+const cardReturnedWords = (mail) => (holidayCards.isByLink(mail)
+  ? 'Nobody opened your link in 90 days.' : 'They didn’t open the email in 90 days.');
+
+/**
+ * GET /api/mailbox/cards/:id/link
+ * A card by link's link again, for its sender while it waits ("Copy link again"). Otherwise 409 with what happened, in
+ * take-back's words. If the server's secret has changed since it was sent, the old link can't be made again: 409, and
+ * they take it back and send it again.
+ */
+router.get('/cards/:id/link', verifyToken, async (req, res) => {
+  if (!sentOn()) return sendCardsOff(res);
+  const senderId = req.user.id;
+  const { id } = req.params;
+  const notHere = () => res.status(404).json({ error: 'This card isn’t here any more.', code: 'CARD_NOT_FOUND' });
+  if (!UUID_REGEX.test(id)) return notHere();
+  try {
+    const { data: mail, error } = await supabaseAdmin.from('Mail')
+      .select('id, sender_user_id, created_at, delivered_at, escrow_status, escrow_expires_at, escrow_claim_token_hash, mail_extracted')
+      .eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!mail || String(mail.sender_user_id) !== String(senderId) || !holidayCards.isByLink(mail)) return notHere();
+    if (mail.escrow_status === 'withdrawn') return res.status(409).json({ error: 'You took this card back.', code: 'CARD_TAKEN_BACK' });
+    const status = holidayCards.sentStatus(mail, new Date());
+    if (status === 'expired') return res.status(409).json({ error: cardReturnedWords(mail), code: 'CARD_ALREADY_SENT' });
+    if (status === 'claimed') return res.status(409).json({ error: 'They already have your card.', code: 'CARD_ALREADY_SENT' });
+    const token = holidayCards.cardLinkToken(mail.id);
+    if (!claimTokenMatches(mail, token)) {
+      return res.status(409).json({ error: 'This link can’t be made again. Take the card back and send it again.', code: 'CARD_LINK_LOST' });
+    }
+    return res.json({ link: escrowClaimLink(mail.id, token) });
+  } catch (err) {
+    logger.error('Card link read error', { error: err.message, mailId: id, userId: senderId });
+    return res.status(503).json({ error: 'Couldn’t get your link just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
+  }
+});
+
 /**
  * POST /api/mailbox/cards/:id/take-back
  * The sender takes their card back: one to a person until the carrier's 7 a.m. pickup (it's gone, and today's card is
- * free again), one by email until they open it (its link then says the sender took it back).
+ * free again), one by email or link until it's opened (its link then says the sender took it back).
  */
 router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
   // Sent survives the seasonal sending switch; taking back its waiting cards must too.
@@ -2208,9 +2290,9 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
     if (error) throw new Error(error.message);
     if (!mail || String(mail.sender_user_id) !== String(senderId) || !holidayCards.isCard(mail)) return notHere();
     const now = new Date();
-    // Why it can't come back, as Sent says it: its email's 90 days ended, they have it, or the carrier has it.
+    // Why it can't come back, as Sent says it: its email's or link's 90 days ended, they have it, or the carrier has it.
     const tooLate = (row) => res.status(409).json({
-      error: holidayCards.sentStatus(row, now) === 'expired' ? 'They didn’t open the email in 90 days.'
+      error: holidayCards.sentStatus(row, now) === 'expired' ? cardReturnedWords(mail)
         : row.escrow_status ? 'They already have your card.' : 'The carrier has already picked up your card.',
       code: 'CARD_ALREADY_SENT' });
     if (!holidayCards.sentSummary(mail, now).can_take_back || holidayCards.sentStatus(mail, now) === 'expired') {
@@ -3255,9 +3337,9 @@ router.get('/claim/:mailId', async (req, res) => {
         mailType: mail.mail_type || mail.type || null,
         outcomeDescription,
         card: card ? { holiday: card.holiday || holidayCards.SEASON.holiday, year: card.year || holidayCards.SEASON.year,
-          sealed: card.arrival === 'sealed_christmas' } : null,
-        // The address or number to sign in with, masked as in the sender's expiry notice.
-        sentTo: maskContact(mail.escrow_recipient_contact || ''),
+          sealed: card.arrival === 'sealed_christmas', ...(card.by_link ? { by_link: true } : {}) } : null,
+        // The address or number to sign in with, masked as in the sender's expiry notice. A card by link went to none.
+        sentTo: card?.by_link ? '' : maskContact(mail.escrow_recipient_contact || ''),
         createdAt: mail.created_at,
         expiresAt: mail.escrow_expires_at,
       },
@@ -3271,7 +3353,8 @@ router.get('/claim/:mailId', async (req, res) => {
 /**
  * POST /api/mailbox/claim/:mailId  { token }
  * The signed-in person the letter was sent to puts it in their mailbox: their account's email (or phone number) must
- * be the one the sender typed. The letter arrives as their own, and the sender is told it was opened.
+ * be the one the sender typed. A card by link goes to the first account that opens it, whichever that is. The letter
+ * arrives as their own, and the sender is told it was opened.
  */
 router.post('/claim/:mailId', verifyToken, async (req, res) => {
   try {
@@ -3282,7 +3365,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
 
     const { data: mail, error } = await supabaseAdmin
       .from('Mail')
-      .select('id, sender_user_id, type, subject, mail_type, display_title, escrow_recipient_contact, escrow_status, escrow_claim_token, escrow_claim_token_hash, escrow_expires_at, mail_extracted')
+      .select('id, sender_user_id, recipient_user_id, type, subject, mail_type, display_title, escrow_recipient_contact, escrow_status, escrow_claim_token, escrow_claim_token_hash, escrow_expires_at, mail_extracted')
       .eq('id', mailId)
       .maybeSingle();
     if (error) {
@@ -3290,6 +3373,21 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
       return res.status(500).json({ error: 'Failed to claim mail' });
     }
     if (!mail || !claimTokenMatches(mail, token)) return sendClaimLinkInvalid(res);
+
+    const byLink = holidayCards.isByLink(mail);
+    const claimedAnswer = () => res.json({
+      message: 'Mail claimed successfully',
+      mail: {
+        id: mail.id,
+        type: mail.type,
+        subject: mail.subject,
+        mailType: mail.mail_type || null,
+        displayTitle: mail.display_title || mail.subject || null,
+        escrowStatus: 'claimed',
+      },
+    });
+    // The person who has this card by link opening its link again (or a lost answer tried again) just gets their card.
+    if (byLink && mail.escrow_status === 'claimed' && String(mail.recipient_user_id) === String(claimerId)) return claimedAnswer();
 
     const closed = closedEscrowReason(mail);
     if (closed) {
@@ -3304,27 +3402,32 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
     }
 
     if (String(mail.sender_user_id) === String(claimerId)) {
-      return res.status(400).json({ error: 'You sent this letter. It’s waiting for the person you wrote to.', code: 'MAIL_OWN_LETTER' });
-    }
-
-    // Profile contact fields are editable without proof. Only Auth-confirmed contacts establish ownership.
-    const { data: authData, error: claimerError } = await supabaseAdmin.auth.admin.getUserById(claimerId);
-    const claimer = authData?.user;
-    if (claimerError || !claimer) {
-      logger.error('Escrow claimer read failed', { error: claimerError?.message || 'no Auth user', mailId });
-      return res.status(500).json({ error: 'Failed to claim mail' });
-    }
-
-    const escrowContact = normalizeEscrowContact(mail.escrow_recipient_contact);
-    const contactMatches = Boolean(escrowContact) && (
-      (claimer.email_confirmed_at && claimer.email && normalizeEscrowContact(claimer.email) === escrowContact) ||
-      (claimer.phone_confirmed_at && claimer.phone && normalizeEscrowContact(claimer.phone) === escrowContact));
-
-    if (!contactMatches) {
-      return res.status(403).json({
-        error: 'This letter was sent to a different email address or phone number. Sign in with the account that uses it.',
-        code: 'MAIL_CONTACT_MISMATCH',
+      return res.status(400).json({
+        error: byLink ? 'This is your own card. Send the link to the person it’s for.' : 'You sent this letter. It’s waiting for the person you wrote to.',
+        code: 'MAIL_OWN_LETTER',
       });
+    }
+
+    if (!byLink) {
+      // Profile contact fields are editable without proof. Only Auth-confirmed contacts establish ownership.
+      const { data: authData, error: claimerError } = await supabaseAdmin.auth.admin.getUserById(claimerId);
+      const claimer = authData?.user;
+      if (claimerError || !claimer) {
+        logger.error('Escrow claimer read failed', { error: claimerError?.message || 'no Auth user', mailId });
+        return res.status(500).json({ error: 'Failed to claim mail' });
+      }
+
+      const escrowContact = normalizeEscrowContact(mail.escrow_recipient_contact);
+      const contactMatches = Boolean(escrowContact) && (
+        (claimer.email_confirmed_at && claimer.email && normalizeEscrowContact(claimer.email) === escrowContact) ||
+        (claimer.phone_confirmed_at && claimer.phone && normalizeEscrowContact(claimer.phone) === escrowContact));
+
+      if (!contactMatches) {
+        return res.status(403).json({
+          error: 'This letter was sent to a different email address or phone number. Sign in with the account that uses it.',
+          code: 'MAIL_CONTACT_MISMATCH',
+        });
+      }
     }
 
     // ── Claim the mail ─────────────────────────────────────────
@@ -3361,13 +3464,18 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
 
     if (updateError) {
       if (updateError.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
-        return res.status(404).json({ error: 'This letter is no longer available.', code: 'MAIL_UNAVAILABLE' });
+        return res.status(404).json({ error: card ? 'This card is no longer available.' : 'This letter is no longer available.', code: 'MAIL_UNAVAILABLE' });
       }
       logger.error('Escrow claim update failed', { error: updateError.message, mailId });
       return res.status(500).json({ error: 'Failed to claim mail' });
     }
 
     if (!updatedRows || updatedRows.length === 0) {
+      // Someone else's claim came first, a moment ago.
+      if (byLink) {
+        const already = closedEscrowReason({ ...mail, escrow_status: 'claimed' });
+        return res.status(already.status).json({ error: already.error, code: already.code, card: already.card });
+      }
       return res.status(409).json({ error: 'This letter has already been added to a mailbox.', code: 'MAIL_CLAIMED' });
     }
 
@@ -3383,7 +3491,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
           userId: mail.sender_user_id,
           type: 'holiday_card_claimed',
           title: 'Your Christmas card arrived',
-          body: `${claimerName} joined Pantopus and has your card.`,
+          body: byLink ? `${claimerName} opened your link and has your card.` : `${claimerName} joined Pantopus and has your card.`,
           icon: '✉️',
           link: `/app/mailbox/sent/${mailId}`,
           metadata: { mail_id: mailId, claimer_id: claimerId },
@@ -3401,17 +3509,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
       }
     })();
 
-    return res.json({
-      message: 'Mail claimed successfully',
-      mail: {
-        id: mail.id,
-        type: mail.type,
-        subject: mail.subject,
-        mailType: mail.mail_type || null,
-        displayTitle: mail.display_title || mail.subject || null,
-        escrowStatus: 'claimed',
-      },
-    });
+    return claimedAnswer();
   } catch (err) {
     logger.error('Escrow claim error', { error: err.message, mailId: req.params.mailId });
     return res.status(500).json({ error: 'Server error' });

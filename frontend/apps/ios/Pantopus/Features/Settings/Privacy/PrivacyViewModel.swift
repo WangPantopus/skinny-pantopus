@@ -72,6 +72,7 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
     /// A PATCH is in flight — the radios/toggle ignore taps meanwhile,
     /// matching RN's `privacySaving` guard.
     private var searchPrivacySaving = false
+    private var isChangingAppLock = false
     /// Counts the changes made here, so a read that was out while one was
     /// made drops its older reply.
     private var searchPrivacyEdits = 0
@@ -230,12 +231,16 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
             return
         }
         guard rowId == "appLockToggle" else { return }
+        // The switch shows what's true while Face ID is up, and after a cancel.
+        isChangingAppLock = true
+        state = .loaded(groups())
         let changed = await appLock.setEnabled(isOn)
+        isChangingAppLock = false
         if changed {
             toast = ToastMessage(
                 text: isOn
-                    ? "\(appLock.biometricLabel) protection is on."
-                    : "Biometric protection turned off.",
+                    ? "Pantopus will lock when you leave."
+                    : "Pantopus won't lock when you leave.",
                 kind: .success
             )
         } else if isOn {
@@ -491,10 +496,11 @@ public final class PrivacySettingsViewModel: GroupedListDataSource {
             rows: [
                 GroupedListRow(
                     id: "appLockToggle",
-                    label: "Require \(appLock.biometricLabel) for sensitive actions",
-                    subtext: "Protect payments, mailbox, and account changes with biometric verification.",
+                    label: "Lock Pantopus when I leave the app",
+                    subtext: "Confirm it's you every time you come back. Wallet, Mail and access codes always ask.",
                     control: .toggle(isOn: appLock.preferenceEnabled),
-                    accessibilityIdentifier: "appLockToggle"
+                    accessibilityIdentifier: "appLockToggle",
+                    toggleEnabled: !isChangingAppLock
                 ),
                 GroupedListRow(
                     id: "appLockCapabilityStatus",

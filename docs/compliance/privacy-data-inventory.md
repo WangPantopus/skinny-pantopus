@@ -176,7 +176,7 @@ Keychain/Keystore review, not for the labels):**
 | Block Store item `pantopus.account_hint` (`{ v:1, accounts:[…], resumeGrant?, grantUserId?, issuedAt }`) | — | Google Play services Block Store, `setShouldBackupToCloud(false)` → same-device + device-to-device transfer only, **no cloud copy**; `deleteBytes` on remove / account deletion; no-op without GMS | ≤ 4 KB; the only place the resume grant lives |
 | Install marker | `Library/Application Support/.pantopus-install` (`isExcludedFromBackup = true`) + Keychain `installId` | `device_identity` prefs `install_id` | random; not personal |
 | `expiresAt`, `sessionId`, `sessionContext` | Keychain | `TokenStorage` (`expires_at`, `session_id`, `session_context`) | session bookkeeping next to the tokens |
-| App-lock preference `appLockEnabled.<uid>` | Keychain (migrated from UserDefaults so it survives reinstall) | encrypted prefs | user setting |
+| App-lock preference `appLockOnLeave.<uid>` | Keychain (survives reinstall) | encrypted prefs | user setting |
 
 > **Android backup rules — action for the Android layer:** `res/xml/backup_rules.xml`
 > and `data_extraction_rules.xml` must exclude `sharedpref/device_identity.xml`
@@ -312,7 +312,7 @@ manifests and are **out of scope** for this file.
   `AuthChallenge` 10 minutes (pruned by the existing jobs runner).
 - **Local secure storage:** access/refresh tokens + user id + (2026-08)
   `expiresAt`, `sessionId`, `sessionContext`, `deviceId`, `deviceKey`,
-  `stepUpKey`, `installId`, `accountHints`, `appLockEnabled.<uid>` in the iOS
+  `stepUpKey`, `installId`, `accountHints`, `appLockOnLeave.<uid>` in the iOS
   Keychain (`KeychainStore`, `afterFirstUnlockThisDeviceOnly`,
   `synchronizable = false`) / Android encrypted store + `device_identity`
   prefs + Block Store item. On **ordinary sign-out** the tokens, `expiresAt`

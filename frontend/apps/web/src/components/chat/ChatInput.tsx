@@ -210,7 +210,7 @@ export default function ChatInput({ onSend, draft, sending, disabled = false, pl
 
   if (lockedNote) {
     return (
-      <footer className="bg-surface border-t border-app shrink-0">
+      <footer className="bg-surface border-t border-app shrink-0 pb-[env(safe-area-inset-bottom)]">
         <div className={compact ? 'px-2 py-2' : 'max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-3'}>
           <p role="status" className="text-center text-sm text-app-text-secondary">{lockedNote}</p>
         </div>
@@ -219,7 +219,7 @@ export default function ChatInput({ onSend, draft, sending, disabled = false, pl
   }
 
   return (
-    <footer className="bg-surface border-t border-app shrink-0">
+    <footer className="bg-surface border-t border-app shrink-0 pb-[env(safe-area-inset-bottom)]">
       <div className={compact ? 'px-2 py-2' : 'max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-3'}>
         {typingPeerCount > 0 && <p role="status" className="mb-1 text-xs text-app-muted">{typingPeerCount > 1 ? 'People are typing…' : 'Typing…'}</p>}
         {draftSaving && <p role="status" className="mb-1 text-xs text-app-muted">Saving draft…</p>}
@@ -304,7 +304,7 @@ export default function ChatInput({ onSend, draft, sending, disabled = false, pl
             }}
             placeholder={placeholder}
             disabled={inputDisabled || savingEdit}
-            className="flex-1 px-4 py-2.5 border border-app-border-strong rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-surface text-app disabled:bg-surface-muted disabled:text-app-muted"
+            className="flex-1 min-w-0 px-4 py-2.5 border border-app-border-strong rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-base md:text-sm bg-surface text-app disabled:bg-surface-muted disabled:text-app-muted"
           />
           <button
             onClick={handleSend}

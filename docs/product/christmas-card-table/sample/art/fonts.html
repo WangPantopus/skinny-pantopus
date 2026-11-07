@@ -1,0 +1,10 @@
+<!doctype html><html><head><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nothing+You+Could+Do&family=La+Belle+Aurore&family=Cedarville+Cursive&family=Homemade+Apple&family=Reenie+Beanie&family=Over+the+Rainbow&family=Caveat&family=Gaegu&family=Covered+By+Your+Grace&family=Kristi&family=Dawning+of+a+New+Day&family=Loved+by+the+King&family=Zeyada&display=swap"><style>
+body{margin:0;background:#f9f1e3;color:#1f2f5c;width:1200px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:18px 30px;padding:20px}
+.b{border-bottom:1px solid #d9cfba;padding-bottom:10px}
+small{font:11px system-ui;color:#886;display:block;margin-bottom:6px}
+p{margin:0;line-height:1.28}
+</style></head><body><div class="g" id="g"></div><script>
+const note="Dear Maya, Found this and thought of the winter we built the one with Dad's old hat. It still makes me laugh. Come home early this year, the kids ask about you every day. Love you lots, Daniel";
+[['Nothing You Could Do',27],['La Belle Aurore',31],['Cedarville Cursive',27],['Homemade Apple',24],['Reenie Beanie',42],['Over the Rainbow',29],['Caveat',36],['Covered By Your Grace',32],['Kristi',44],['Dawning of a New Day',32],['Loved by the King',36],['Zeyada',42]].forEach(([f,s])=>{const d=document.createElement('div');d.className='b';d.innerHTML=`<small>${f}</small><p style="font-family:'${f}';font-size:${s}px">${note}</p>`;g.appendChild(d)});
+</script></body></html>
