@@ -74,7 +74,7 @@ const kidsAges = (description) => ({ type: ['array', 'null'], items: { type: 'st
 function draftPlanDefinition({ playdates = false, sports = false } = {}) {
   return {
     name: 'draft_plan',
-    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet; only for people with a verified address), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}${sports ? "For listed sports games, use the game's start and end from find_games. " : ''}Make sensible assumptions (${sports ? '' : 'an hour and a half for games, '}8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
+    description: `Draft a new plan (a small meetup on the Plans map) for the person to post with one tap. Kinds: watch_party (a game or show to watch together), ${playdates ? 'playdate (kids play while their parents meet), ' : ''}pickup_game (a sport), walk_coffee (a walk, dog walk, stroller walk or coffee), study_group (studying together; public places only). Plans start within the next 14 days and last 15 minutes to 8 hours. Pickup games, ${playdates ? 'playdates, ' : ''}study groups and walks in public need a public place: give its name and the server finds it near them. Watch parties and walks may be at their own home. Neighbors read the title and about before they get in, while the place shows only to people who get in, so keep the place's name and any address out of them; where exactly to meet goes in guest_note. ${playdates ? "A playdate needs the ages of the kids it's for (details.kids_age_bands): use what they said, or ask in one short question. Its host approves each family, and its spots count families. Others see only its neighborhood until the host accepts them. " : ''}${sports ? "For listed sports games, use the game's start and end from find_games. " : ''}Make sensible assumptions (${sports ? '' : 'an hour and a half for games, '}8 spots${playdates ? '; for a playdate, an hour and a half and 4 families' : ''}) and name the main one in the note.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -584,10 +584,9 @@ async function draftPlan(args, ctx) {
   if (!(await plansOn(ctx))) return { error: "Plans aren't available for this person yet." };
   if (!rules.KINDS.includes(args.kind)) return { error: 'Choose one of the plan kinds.' };
   const viewer = await loadViewer(userFor(ctx));
-  // A playdate needs plans_playdates and a verified address (planActions checks both again, with the rest).
+  // A playdate needs plans_playdates (planActions checks it again, with the rest); anyone on Pantopus may host one.
   const playdate = args.kind === 'playdate';
   if (playdate && !viewer.playdatesFlag) return { error: 'Choose one of the plan kinds.' };
-  if (playdate && !viewer.verified) return { error: 'Verify your address to host a playdate.' };
   if (playdate && !args.details?.kids_age_bands?.length) {
     return { error: "A playdate needs the ages of the kids it's for. Ask how old the kids are, in one short question." };
   }
@@ -677,7 +676,7 @@ async function draftPlan(args, ctx) {
     ],
     warnings: playdate
       ? [
-        'Only verified neighbors see playdates. Until you accept a family, they see only the neighborhood and the part of the day.',
+        'Until you accept a family, they see only the neighborhood and the part of the day.',
         'Parents stay with their kids the whole time; only kids’ ages are shared, never names.',
       ]
       : [

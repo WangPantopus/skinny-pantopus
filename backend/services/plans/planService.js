@@ -8,8 +8,8 @@
  *    the area label, a distance band, never the exact point, venue, address,
  *    host's note or the people going.
  *  - PlanDetail adds those, only for the host and people who are in.
- *  - Playdates don't exist for viewers without a verified address or with
- *    plans_playdates off, and hide their time behind day_part until the viewer is in.
+ *  - Playdates don't exist for viewers with plans_playdates off, and hide their
+ *    time behind day_part until the viewer is in.
  *  - Blocks hide plans and requests both ways; mutes and hidden posts hide plans.
  */
 
@@ -399,8 +399,8 @@ function matchingAutoRule(plan, viewer, ctx) {
 
 /**
  * Can this viewer send an ask now, and why not.
- * Reasons: needs_verified_address, too_far, needs_location, full_use_waitlist,
- * declined, removed, blocked, too_many_requests, ended.
+ * Reasons: too_far, needs_location, full_use_waitlist, declined, removed,
+ * blocked, too_many_requests, ended.
  * When the plan is full, `can_ask` is false with full_use_waitlist, and
  * POST /requests still works: it puts the viewer on the waitlist.
  */
@@ -410,11 +410,10 @@ function askEligibility(plan, viewer, ctx, { myRequest, spotsLeft, state }) {
   if (myRequest && ACTIVE_REQUEST_STATUSES.includes(myRequest.status)) return no(null);
   if (state === 'cancelled' || state === 'ended') return no('ended');
   if (!rules.isAskingOpen(plan, startsAt(plan), endsAt(plan))) return no('ended');
-  // The host's invitation: no location, distance, ask-limit or "who can ask" rule. A playdate still needs a verified
-  // address. Saying no to someone, or removing them, ends their invitations (planInvites.cancelForPerson).
+  // The host's invitation: no location, distance, ask-limit or "who can ask" rule. Saying no to someone, or removing
+  // them, ends their invitations (planInvites.cancelForPerson).
   if (ctx.myInviteByPlan?.has(plan.post_id)) {
     if (viewer.blockedUserIds.has(String(plan.host_user_id))) return no('blocked');
-    if (plan.kind === 'playdate' && !viewer.verified) return no('needs_verified_address');
     if (spotsLeft <= 0) return no('full_use_waitlist');
     return { can_ask: true, cannot_ask_reason: null };
   }
@@ -423,8 +422,8 @@ function askEligibility(plan, viewer, ctx, { myRequest, spotsLeft, state }) {
   if (viewer.blockedUserIds.has(String(plan.host_user_id))) return no('blocked');
   if (myRequest && myRequest.ask_count >= rules.LIMITS.asksPerPlan) return no('too_many_requests');
   if (ctx.viewerOpenRequestCount >= rules.LIMITS.openRequestsPerPerson) return no('too_many_requests');
-  const needsVerified = plan.kind === 'playdate' || plan.join_requirement === 'verified';
-  if (needsVerified && !viewer.verified) return no('needs_verified_address');
+  // Anyone on Pantopus nearby may ask, playdates included: a verified address is no longer a Plans rule (founder
+  // decision, November 7), so join_requirement 'verified' (every playdate's, some older plans') asks for nothing more.
   if (viewer.locations.length === 0) return no('needs_location');
   const radius = plan.kind === 'playdate' ? rules.PLAYDATE_ASK_RADIUS_METERS : rules.ASK_RADIUS_METERS;
   const nearest = nearestLocationMeters(plan, viewer);
@@ -822,8 +821,9 @@ async function listMine(viewer) {
   const out = {
     // invited: plans someone invited the viewer to that they haven't answered (planInvites.js).
     hosting: [], going: [], asked: [], waitlisted: [], invited: [], recent: [],
-    // The viewer's own standing, so the apps can lead people without a verified address to "Verify your
-    // address" instead of a playdate they can't ask to join or host.
+    // The viewer's own standing: the host's own "Verified" in the composer's preview, and whether playdates show.
+    // Apps before November 7 also sent people without a verified address from the playdate card to "Verify your
+    // address"; since then anyone on Pantopus may host one, so both fields stay for those apps.
     viewer: { verified_address: Boolean(viewer.verified), sees_playdates: Boolean(viewer.seesPlaydates) },
   };
   for (const plan of visible.sort(soonestFirst)) {

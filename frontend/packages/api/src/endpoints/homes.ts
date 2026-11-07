@@ -91,8 +91,19 @@ export interface PropertySuggestionsResponse {
   questions?: HouseholdQuestion[];
   /** The county's own page, where a person can check what's missing. */
   county_page?: CountyPage;
+  /** "Is this right?" once the person is back from the county's page, with no county record (link and confirm). */
+  county_check?: AddHomeCountyCheck;
   /** What the building's own floor-plan sheet says about this address. */
   floor_plan?: FloorPlanSuggestion;
+}
+
+/** Add Home's "Is this right?" after the county's page: its words. The facts are the form's own fields. */
+export interface AddHomeCountyCheck {
+  prompt: string;
+  lead: string;
+  confirm: string;
+  fix: string;
+  confirmed: string;
 }
 
 /** Add Home's words from a building's floor-plan sheet: this unit's plan, or the building's plans, labeled as the building's. */
@@ -115,6 +126,23 @@ export interface FloorPlanLayout {
 export interface CountyPage {
   url: string;
   label: string;
+  /** Link and confirm: the home's own page ('deep') or the county's property search. */
+  kind?: 'deep' | 'search';
+  name?: string;
+}
+
+/**
+ * "Is this right?" on Property details once someone is back from the county's page, for a home no county record
+ * answers (link and confirm): year built, size, bedrooms and baths, to confirm with a tap or fix.
+ */
+export interface HouseholdCountyCheck {
+  group: string;
+  prompt: string | null;
+  lead: string;
+  confirmed: string | null;
+  can_undo: boolean;
+  fix: string;
+  facts: HouseholdFact[];
 }
 
 export interface HouseholdAnswer {
@@ -167,12 +195,13 @@ export interface HouseholdPart {
   groups: HouseholdGroup[];
   questions: HouseholdQuestion[];
   county_page: CountyPage | null;
+  county_check?: HouseholdCountyCheck;
   floor_plan?: FloorPlanLayout;
 }
 
 /** A change to one fact, or with `group` to every fact of a group that can take it. */
 export type HouseholdFactChange =
-  | { key: string; action: 'correct'; value: string }
+  | { key: string; action: 'correct'; value: string; via?: 'county_page' }
   | { key: string; action: 'undo' }
   | { group: string; action: 'confirm' | 'undo' };
 
@@ -281,6 +310,8 @@ export async function createHome(data: {
   request_id?: string;
   /** "Is this your layout?", answered on the form. */
   floor_plan_answer?: 'yes' | 'no';
+  /** "Is this right?" after the county's page was answered (link and confirm). */
+  county_checked?: boolean;
   address: string;
   address_id?: string;
   unit_number?: string;

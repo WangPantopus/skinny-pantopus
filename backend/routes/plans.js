@@ -219,24 +219,10 @@ router.get('/:id', async (req, res) => {
       loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) }),
       planInvites.attachEmailInvites(req.user),
     ]);
-    const { plan, body } = await planService.getForViewer(req.params.id, viewer);
+    const { body } = await planService.getForViewer(req.params.id, viewer);
     if (body?.my_invite) planInvites.markOpened(viewer.id, body.id).catch(() => {});
-    if (!body) {
-      // A playdate someone without a verified address opened from a link (J9):
-      // say only what the public web page says, so the app can explain why,
-      // and who invited them when they hold an invitation.
-      if (plan && plan.kind === 'playdate' && viewer.playdatesFlag && !viewer.verified
-        && String(plan.host_user_id) !== viewer.id && plan.status === 'open') {
-        const invitedBy = await planInvites.lockedInviteFrom(viewer, plan).catch(() => null);
-        return res.status(404).json({
-          error: 'needs_verified_address',
-          message: 'Playdates are for verified neighbors. Verify your address to see this one.',
-          plan: { kind: 'playdate', city: plan.city || null },
-          invited_by: invitedBy,
-        });
-      }
-      return fail(res, 404, 'not_found', "This plan isn't available.");
-    }
+    // Playdate links open for everyone on Pantopus: the J9 "verify your address" answer ended November 7.
+    if (!body) return fail(res, 404, 'not_found', "This plan isn't available.");
     if (body.viewer.role === 'none') {
       recordFunnelEvent('plan_viewed', { userId: viewer.id, meta: { plan_id: body.id, kind: body.kind } });
     }

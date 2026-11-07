@@ -15,7 +15,7 @@ import AddressAutocomplete from '@/components/AddressAutocomplete';
 import MailVerificationFlow from '@/components/address/MailVerificationFlow';
 import PrivacyPromise from '@/components/place/PrivacyPromise';
 import { useHomeCreation } from '@/components/homes/creation/useHomeCreation';
-import { CountyPageLink, FloorPlanNote, QuickQuestion } from '@/components/homes/HouseholdFacts';
+import { CountyCheckNote, CountyPageLink, FloorPlanNote, QuickQuestion } from '@/components/homes/HouseholdFacts';
 import { validHomeCreationInput, type HomeCreationInput } from '@/components/homes/creation/homeCreationModel';
 import HomeCreationRecoveryView from '@/components/homes/creation/HomeCreationRecoveryView';
 import { validHomeResidencyInput, type HomeResidencyInput } from '@/components/homes/creation/homeResidencySubmissionModel';
@@ -173,6 +173,10 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   // One-tap answers for what the record lacks, and the county's own page, when the server sends them.
   const [factQuestions, setFactQuestions] = useState<NonNullable<PropertySuggestionsResponse['questions']>>([]);
   const [countyPage, setCountyPage] = useState<PropertySuggestionsResponse['county_page'] | null>(null);
+  // Link and confirm, with no county record: "Is this right?" once the person is back from the county's page.
+  const [countyCheck, setCountyCheck] = useState<PropertySuggestionsResponse['county_check'] | null>(null);
+  const [countyOpened, setCountyOpened] = useState(false);
+  const [countyChecked, setCountyChecked] = useState(false);
   const [floorPlan, setFloorPlan] = useState<PropertySuggestionsResponse['floor_plan'] | null>(null);
   const [floorPlanAnswer, setFloorPlanAnswer] = useState<'yes' | 'no' | null>(null);
   // The county record is looked up while the person is already on this step ('pending': the fields say
@@ -276,6 +280,9 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setNamedRecord(null);
     setFactQuestions([]);
     setCountyPage(null);
+    setCountyCheck(null);
+    setCountyOpened(false);
+    setCountyChecked(false);
     setFloorPlan(null);
     setFloorPlanAnswer(null);
   };
@@ -306,6 +313,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setNamedRecord(res?.provenance || res?.floor_plan ? res : null);
     setFactQuestions(res?.questions ?? []);
     setCountyPage(res?.county_page ?? null);
+    setCountyCheck(res?.county_check ?? null);
     setFloorPlan(res?.floor_plan ?? null);
     setFloorPlanAnswer(null);
     if (res?.provenance) return res.provenance.label;
@@ -422,6 +430,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
       lot_sq_ft: parsedLotSqft,
       year_built: parsedYearBuilt,
       ...(floorPlanAnswer ? { floor_plan_answer: floorPlanAnswer } : {}),
+      ...(countyCheck && countyChecked ? { county_checked: true } : {}),
       description: description.trim() || undefined,
       amenities: Object.fromEntries(Object.entries(amenities).filter(([, v]) => v)),
       is_owner: isOwner,
@@ -1274,6 +1283,12 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
 
               {floorPlan ? <FloorPlanNote part={floorPlan} answer={floorPlanAnswer} onAnswer={setFloorPlanAnswer} /> : null}
 
+              {countyCheck && countyPage ? (
+                <CountyCheckNote page={countyPage} check={countyCheck} opened={countyOpened} checked={countyChecked}
+                  onOpen={() => setCountyOpened(true)} onChecked={setCountyChecked}
+                  onFix={() => { setCountyChecked(true); document.getElementById('add-home-year_built')?.focus(); }} />
+              ) : null}
+
               {/* What the record lacks: a tap fills the same field below. */}
               {factQuestions.length ? (
                 <div className="space-y-3">
@@ -1283,7 +1298,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                       onAnswer={(value) => (question.key === 'bedrooms' ? setBedrooms : setBathrooms)(value)}
                       onOther={() => document.getElementById(`add-home-${question.key}`)?.focus()} />
                   ))}
-                  {countyPage ? <CountyPageLink page={countyPage} /> : null}
+                  {countyPage && !countyCheck ? <CountyPageLink page={countyPage} /> : null}
                 </div>
               ) : null}
 
@@ -1307,7 +1322,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Sq ft</label>
-                  <input type="number" min="0" value={sqft} onChange={e => setSqft(e.target.value)} placeholder={lookingUpPlaceholder}
+                  <input id="add-home-sq_ft" type="number" min="0" value={sqft} onChange={e => setSqft(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('sq_ft')}
                   {...fieldA11y('sq_ft')} />
                   {fieldErrors.sq_ft ? <p id="err-sq_ft" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.sq_ft}</p> : null}
@@ -1315,7 +1330,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Year built</label>
-                  <input type="number" min="1600" max="2100" value={yearBuilt} onChange={e => setYearBuilt(e.target.value)} placeholder={lookingUpPlaceholder}
+                  <input id="add-home-year_built" type="number" min="1600" max="2100" value={yearBuilt} onChange={e => setYearBuilt(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('year_built')}
                   {...fieldA11y('year_built')} />
                   {fieldErrors.year_built ? <p id="err-year_built" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.year_built}</p> : null}

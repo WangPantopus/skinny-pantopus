@@ -13,6 +13,9 @@
 //     --accept-falls  someone read the refusals and a connector's fix meant them: lower fill and changed account ids publish
 //                     with a warning. An empty file or far fewer records is still refused. Off unless asked for by hand.
 //     --accept-falls-for  the same, for the counties named only
+//     --accept-shrink-for "<fips> ..."  with --accept-falls: the counties named only may also publish far fewer records, when
+//                     a connector's fix drops records that shouldn't exist. Each is logged with both counts; a county live in
+//                     any switch file never takes it (that's the founder's).
 //   node scripts/property-index/publish.cjs --rollback <fips> --state <ST> --bucket <name> [--prefix index]
 'use strict';
 
@@ -21,7 +24,7 @@ const os = require('node:os');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { execFileSync } = require('node:child_process');
-const { FORMAT, statePath, releasePath } = require('../../backend/services/propertyRecords/format');
+const { FORMAT, statePath, releasePath, switchesPath } = require('../../backend/services/propertyRecords/format');
 const { log } = require('./lib/log.cjs');
 const { selfFind, described, MIN_SELF_FIND } = require('./lib/self-find.cjs');
 
@@ -45,6 +48,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--republish') opts.republish = true;
     else if (argv[i] === '--accept-falls') opts.acceptFalls = true;
     else if (argv[i] === '--accept-falls-for') opts.acceptFallsFor = argv[++i].split(/[\s,]+/).filter(Boolean);
+    else if (argv[i] === '--accept-shrink-for') opts.acceptShrinkFor = argv[++i].split(/[\s,]+/).filter(Boolean);
     else if (argv[i] === '--bulk') opts.bulk = true;
     else if (argv[i] === '--min-retention') opts.minRetention = Number(argv[++i]);
     else if (argv[i] === '--moved') opts.moved = argv[++i].split(/\s+/).filter(Boolean);
@@ -99,7 +103,7 @@ function withMaps(stateFile, counties) {
 const addresses = (county) => (county.source === 'registry' && county.counts ? county.counts.property + county.counts.building : null);
 
 /** Why this release mustn't replace the one serving, and what only someone who looked may accept: counts only. */
-function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, moved = [], records = true) {
+function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, moved = [], records = true, shrinkable = false) {
   const found = [];
   const falls = [];
   const dir = path.join(out, releasePath(entry.fips, entry.release));
@@ -117,7 +121,10 @@ function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, 
     // The registry counts addresses. Fewer units under them, as when a fix drops units a source made up, needs someone to look.
     if (addressesNow < addressesBefore * MIN_RECORD_SHARE) found.push(`${addressesNow} addresses, ${addressesBefore} serving`);
     else if (report.records < before * MIN_RECORD_SHARE) falls.push(`${report.records} records, ${before} serving`);
-  } else if (report.records < before * MIN_RECORD_SHARE) found.push(`${report.records} records, ${before} serving`);
+  } else if (report.records < before * MIN_RECORD_SHARE) {
+    // Named by hand for a connector's fix that drops records that shouldn't exist: someone who looked may accept it.
+    (shrinkable ? falls : found).push(`${report.records} records, ${before} serving${shrinkable ? ' (named to shrink)' : ''}`);
+  }
   if (moved.includes(entry.fips) && previous.source !== entry.source) return { found, falls };
   const oldReport = store.get(`${releasePath(entry.fips, previous.release)}/report.json`);
   if (oldReport) {
@@ -157,7 +164,18 @@ function readState(store, state) {
   return bytes ? JSON.parse(bytes.toString('utf8')) : emptyState(state);
 }
 
-function publish(store, { out, prefix, republish, acceptFalls = false, acceptFallsFor = [], bulk = false, minRetention, moved }) {
+/** Counties live in any switch file. */
+function liveCounties(store) {
+  const live = new Set();
+  for (const name of ['production', 'staging']) {
+    const bytes = store.get(switchesPath(name));
+    if (!bytes) continue;
+    for (const [fips, county] of Object.entries(JSON.parse(bytes.toString('utf8')).counties || {})) if (county.mode === 'live') live.add(fips);
+  }
+  return live;
+}
+
+function publish(store, { out, prefix, republish, acceptFalls = false, acceptFallsFor = [], acceptShrinkFor = [], bulk = false, minRetention, moved }) {
   // The national floor's estimates (--prefix index/estimates) are counted, not held to the reader's answers.
   const records = prefix === 'index';
   if (bulk) store.putDir(path.join(out, 'releases'), 'releases');
@@ -169,6 +187,8 @@ function publish(store, { out, prefix, republish, acceptFalls = false, acceptFal
     byState.get(entry.state).push(entry);
   }
   let refused = 0;
+  const live = acceptShrinkFor.length ? liveCounties(store) : new Set();
+  for (const fips of acceptShrinkFor.filter((name) => live.has(name))) console.log(`::error::${fips} is live: the shrink override never applies to it.`);
   for (const [state, built] of byState) {
     const stateFile = readState(store, state);
     const rolledBackBefore = Object.fromEntries(Object.entries(stateFile.jurisdictions).map(([fips, county]) => [fips, county.rolled_back_at]));
@@ -191,7 +211,8 @@ function publish(store, { out, prefix, republish, acceptFalls = false, acceptFal
         log(`${entry.fips}: ${entry.as_of} was rolled back, not publishing it again`);
         continue;
       }
-      const { found, falls } = problems(store, entry, serving, out, minRetention, moved, records);
+      const shrinkable = (acceptFalls || acceptFallsFor.includes(entry.fips)) && acceptShrinkFor.includes(entry.fips) && !live.has(entry.fips);
+      const { found, falls } = problems(store, entry, serving, out, minRetention, moved, records, shrinkable);
       if (found.length || (falls.length && !acceptFalls && !acceptFallsFor.includes(entry.fips))) {
         refused += 1;
         console.log(`::error::${entry.fips} ${entry.release} refused: ${[...found, ...falls].join('; ')}. The previous release keeps serving.`);

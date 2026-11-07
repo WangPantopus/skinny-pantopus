@@ -22,6 +22,7 @@ on:
     - cron: "17 3 16 * *"
     - cron: "17 3 17 * *"
     - cron: "17 3 18 * *"
+    - cron: "17 3 19 * *"
     # FHFA's yearly price index: out by the end of March, and a second try in May.
     - cron: "29 5 12 4,5 *"
   workflow_dispatch:
@@ -40,7 +41,7 @@ on:
         required: false
         default: ""
       county:
-        description: "County FIPS (rollback); one or a comma separated list (switch, models; all refits every county)"
+        description: "County FIPS (rollback); one or a comma separated list (switch, models; all refits every county; build with accept_falls: the counties allowed to publish far fewer records, never a live one)"
         required: false
         default: ""
       state:
@@ -166,19 +167,22 @@ jobs:
       - name: Build and publish
         if: (github.event_name != 'workflow_dispatch' && github.event.schedule != '29 5 12 4,5 *') || inputs.action == 'build'
         env:
-          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-allegheny pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'co-denver co-adams dc-dc ok-oklahoma ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-miami-dade fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || (github.event.schedule == '17 3 18 * *' && 'tx-cameron tx-nueces tx-taylor tx-kaufman tx-grayson tx-liberty tx-atascosa tx-bell tx-gregg tx-bastrop tx-smith tx-brazos tx-johnson tx-ector wa-skagit nc-lincoln') || 'tx-dallas fl-roll' }}
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-allegheny pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'co-denver co-adams dc-dc ok-oklahoma ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-miami-dade fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || (github.event.schedule == '17 3 18 * *' && 'tx-cameron tx-nueces tx-taylor tx-kaufman tx-grayson tx-liberty tx-atascosa tx-bell tx-gregg tx-bastrop tx-smith tx-brazos tx-johnson tx-ector wa-skagit nc-lincoln') || (github.event.schedule == '17 3 19 * *' && 'ca-sonoma pa-berks va-chesterfield mo-st-charles co-boulder va-henrico sc-york mo-st-louis-county nc-cumberland pa-cumberland wa-kitsap') || 'tx-dallas fl-roll' }}
           # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
           # Only a run someone starts by hand, and only when they say so.
           ACCEPT_FALLS: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && '--accept-falls' || '' }}
           MOVED: ${{ inputs.moved }}
+          # With accept_falls only, the counties someone names may publish far fewer records: a fix dropping records that
+          # shouldn't exist. publish.cjs logs both counts and never lets a live county through.
+          SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && inputs.county || '' }}
         run: |
           status=0
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
             # What built still publishes; the run ends failed so someone looks.
             node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || status=1
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS ${MOVED:+--moved "$MOVED"} || status=1
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS ${MOVED:+--moved "$MOVED"} ${SHRINK:+--accept-shrink-for "$SHRINK"} || status=1
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done
           exit $status
