@@ -200,8 +200,12 @@ final class BillsListViewModel: ListOfRowsDataSource {
     }
 
     private func fetch() async {
-        bills = nil
-        contentState = .loading
+        // A refresh keeps the bills on screen until the new answer arrives:
+        // loading rows would replace the list whose pull started it.
+        if !contentState.showsContent {
+            bills = nil
+            contentState = .loading
+        }
         do {
             try await financeAccess.refresh()
             let response: GetHomeBillsResponse = try await api.request(
@@ -212,6 +216,9 @@ final class BillsListViewModel: ListOfRowsDataSource {
             bills = response.bills
             rebuildState()
         } catch {
+            // A cancelled read says nothing new about the bills, so it isn't a
+            // failed load.
+            guard !(error is CancellationError), !Task.isCancelled else { return }
             bills = nil
             contentState = .error(
                 message: (error as? LocalizedError)?.errorDescription ?? "Couldn't load your bills."
