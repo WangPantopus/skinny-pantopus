@@ -29,7 +29,8 @@ const SOURCE_RANKS = { point: 0, nad: 1, overture: 2, openaddresses: 2, syntheti
 // How long an address release answers before it reads as out of date: the National Address Database comes about quarterly.
 const STALE_AFTER_DAYS = 540;
 const FLUSH_BYTES = 256 * 1024;
-const NOT_A_NUMBER = /^(0+|N\/?A|NONE|NULL)$/i;
+// What sources write for a number or unit that isn't there.
+const NOT_GIVEN = /^(0+|N\/?A|NONE|NULL)$/i;
 const US = (lng, lat) => (lat > 17 && lat < 72 && lng > -180 && lng < -64) || (lat > -15 && lat < 21 && (lng > 144 || lng < -168));
 
 function parseArgs(argv) {
@@ -95,12 +96,15 @@ async function split(opts) {
         counts.no_point += 1;
         continue;
       }
-      const number = NOT_A_NUMBER.test(row.number) ? '' : row.number;
+      const number = NOT_GIVEN.test(row.number) ? '' : row.number;
       const address = parts({ ...row, number });
       if (!address) {
         counts.unreadable += 1;
         continue;
       }
+      // A house a source gives unit "0" stays a house, not a one-unit building that asks which unit is yours.
+      if (NOT_GIVEN.test(address.unit)) address.unit = '';
+      if (NOT_GIVEN.test(address.building)) address.building = '';
       const fips = counties.locate(row.lng, row.lat);
       if (!fips) {
         counts.no_county += 1;
