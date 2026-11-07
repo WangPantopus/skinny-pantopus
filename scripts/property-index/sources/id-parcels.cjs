@@ -116,7 +116,11 @@ async function* build({ work }) {
     }
     log(`${county}: ${records.length} records, ${noAddress} without a street number, ${dwellings.size} dwellings in the improvement table`);
     if (!records.length) continue;
-    if (!asOf) throw new Error(`${county}'s parcels no longer say when they were updated`);
+    // A county whose parcels carry no date (Minidoka in November 2026) waits; it doesn't stop the counties after it.
+    if (!asOf) {
+      log(`${county}: no parcel says when it was updated, not written`);
+      continue;
+    }
     for (const building of condoBuildings(records, { fips, county })) records.push(building);
     yield {
       fips, state: 'ID', name: county, publisher: `${county} Assessor, through Idaho's Office of Information Technology Services`, dataset: 'Public Idaho Parcels and improvements', method: 'state', source: 'id-parcels', title: 'State records', as_of: asOf, stale_after_days: 550, records,
