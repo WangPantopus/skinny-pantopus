@@ -30,6 +30,31 @@ const HOME_USES = new Map([
   [72, ['building', 'other']],
 ]);
 const VACANT_USES = new Set([989, 991, 992, 993, 994, 995, 996, 997, 998, 999]);
+// The same codes in plain words, from the county's own descriptions. A hardship home reads as a mobile home: that word can
+// say something about a person's health.
+const USE_WORDS = new Map([
+  ...[10, 11, 13, 14, 15, 19, 511, 513, 514, 518].map((code) => [code, 'Single family residence']),
+  [31, 'Single family residence with an auxiliary unit'],
+  [88, 'Adult family home or group home'],
+  [92, 'Vacation cabin'],
+  [12, 'Townhouse'],
+  ...[16, 516].map((code) => [code, 'Manufactured or mobile home, with its land']),
+  ...[71, 75].map((code) => [code, 'Manufactured or mobile home']),
+  [70, 'Mobile home or houseboat'],
+  [78, 'Mobile home in a condominium park'],
+  [79, 'Mobile home converted to a conventional home'],
+  ...[17, 517].map((code) => [code, 'Condominium']),
+  ...[21, 32].map((code) => [code, 'Duplex']),
+  [22, 'Triplex or fourplex'],
+  [33, 'Three or four units'],
+  [35, 'Five or more units'],
+  ...[38, 39].map((code) => [code, 'Mixed multi-family']),
+  ...[23, 24, 25, 26, 27, 28, 29].map((code) => [code, 'Apartment building']),
+  ...[37, 83].map((code) => [code, 'Boarding house']),
+  [80, 'Group living quarters'],
+  [81, 'Retirement or assisted living residence'],
+  [72, 'Mobile home park'],
+]);
 
 const number = (text) => {
   const value = Number(text);
@@ -81,7 +106,46 @@ const GARAGE_WORDS = new Map([
 const BASEMENT_FINISHED = new Set(['FINISHED BASEMENT', 'DAY FINISHED BASEMENT']);
 const BASEMENT_ALL = new Set(['FINISHED BASEMENT', 'DAY FINISHED BASEMENT', 'UNFINISHED BASEMENT', 'DAY UNFINISHED BASEMENT']);
 const STORY_LINES = new Map([['MAIN', 1], ['SECOND', 2], ['THIRD', 3]]);
+const PARKING_WORDS = new Map([
+  ['ATTACHED GARAGE', 'Attached garage'], ['BUILT-IN GARAGE', 'Built-in garage'], ['DETACHED GARAGE', 'Detached garage'],
+  ['BASEMENT GARAGE', 'Basement garage'], ['MH ATTACHED GARAGE', 'Attached garage'], ['CARPORT', 'Carport'], ['MH CARPORT', 'Carport'],
+]);
+// What a building's gross area adds up: its floors, its basements and a garage that's part of it.
+const GROSS_LINES = new Set(['MAIN', 'SECOND', 'THIRD', 'MOBILE HOME', ...BASEMENT_ALL, 'ATTACHED GARAGE', 'BUILT-IN GARAGE', 'BASEMENT GARAGE', 'MH ATTACHED GARAGE']);
 const STRUCTURES = new Set(['GENERAL PURPOSE BUILDING', 'SHED', 'LEANTO', 'PORCH', 'DECK', 'POLE COVER', 'BARN', 'SUN ROOM', 'PATIO COVER', 'PATIO', 'MACHSHED', 'STABLE', 'ARENA', 'LOAFSHED']);
+
+/**
+ * Ground floor, second floor and gross area from the one building an account lives in. Returns which improvement that is,
+ * by account. An account with several dwellings gets none of these: no one building's figures say what the home is, and a
+ * sum across them isn't a building. A condo's lines are its unit's, and a gross area reads as a whole building's
+ * (facts.js), so a unit gets its floors and no gross area; a complex of several buildings gets none either.
+ */
+function addBuildingAreas(records, buildings) {
+  const dwellings = new Map();
+  for (const [id, lines] of buildings) {
+    const homes = [...lines].filter(([, areas]) => areas.has('MAIN') || areas.has('MOBILE HOME'));
+    if (homes.length !== 1) continue;
+    const [improvement, areas] = homes[0];
+    dwellings.set(id, improvement);
+    const record = records.get(id);
+    const { facts } = record;
+    put(facts, 'ground_floor_sqft', Math.round(areas.get('MAIN') || areas.get('MOBILE HOME')));
+    if (areas.has('SECOND')) facts.second_floor_sqft = Math.round(areas.get('SECOND'));
+    if (record.kind === 'unit' || (record.kind === 'building' && (facts.buildings_on_parcel || 1) > 1)) continue;
+    facts.gross_sqft = Math.round([...areas.values()].reduce((sum, area) => sum + area, 0));
+  }
+  return dwellings;
+}
+
+// A legal description's lot, only when it plainly names one whole lot: not "LOTS 3 & 4", "PTN LOT 3", "E 1/2 LOT 3",
+// "S 5 FT OF LOT 3" or "LOT 3 EX THE N 5 FT".
+const PART_OF_A_LOT = /\b(?:PTN|PORT|POR|PT|PART|FT|EX|EXC|EXCEPT|LESS|TGW|TOG|AND|OF\s+LOT)\b|&|\d\/\d/;
+function lotNumber(legal) {
+  const text = String(legal || '').toUpperCase();
+  const lots = text.match(/\bLOTS?\b/g) || [];
+  if (lots.length !== 1 || lots[0] !== 'LOT' || PART_OF_A_LOT.test(text)) return null;
+  return /\bLOT\s+#?(\d+[A-Z]?)(?![\w/-])/.exec(text)?.[1] || null;
+}
 
 async function readFacts(zip, records, today) {
   const unmappedCodes = {};
@@ -117,8 +181,11 @@ async function readFacts(zip, records, today) {
   }
 
   const garages = new Map();
+  const parking = new Map();
   const structures = new Map();
-  for await (const row of zipTable(zip, 'PropImpDetailVw.txt', ['prop_id', 'ImpDetTypeDesc', 'ImpDetSqFt', 'ImpDetStories'], TABLE)) {
+  // Each improvement is a building, and its lines add up to that building only.
+  const buildings = new Map();
+  for await (const row of zipTable(zip, 'PropImpDetailVw.txt', ['prop_id', 'ImpID', 'ImpDetTypeDesc', 'ImpDetSqFt', 'ImpDetStories'], TABLE)) {
     const record = records.get(row.prop_id);
     if (!record) continue;
     const { facts } = record;
@@ -130,6 +197,16 @@ async function readFacts(zip, records, today) {
       if (!garages.has(row.prop_id)) garages.set(row.prop_id, new Set());
       garages.get(row.prop_id).add(GARAGE_WORDS.get(type));
       if (area) facts.garage_sqft = (facts.garage_sqft || 0) + area;
+    }
+    if (PARKING_WORDS.has(type)) {
+      if (!parking.has(row.prop_id)) parking.set(row.prop_id, new Set());
+      parking.get(row.prop_id).add(PARKING_WORDS.get(type));
+    }
+    if (GROSS_LINES.has(type) && area) {
+      if (!buildings.has(row.prop_id)) buildings.set(row.prop_id, new Map());
+      const lines = buildings.get(row.prop_id);
+      if (!lines.has(row.ImpID)) lines.set(row.ImpID, new Map());
+      lines.get(row.ImpID).set(type, (lines.get(row.ImpID).get(type) || 0) + area);
     }
     if (type === 'CARPORT' && area) facts.carport_sqft = (facts.carport_sqft || 0) + area;
     if (BASEMENT_ALL.has(type) && area) facts.basement_sqft = (facts.basement_sqft || 0) + area;
@@ -143,6 +220,12 @@ async function readFacts(zip, records, today) {
   log(`codes with no plain word yet: ${Object.entries(unmappedCodes).map(([code, n]) => `${code} ${n}`).join(', ') || 'none'}`);
   for (const [id, kinds] of garages) records.get(id).facts.garage = [...kinds].sort().join(', ');
   for (const [id, kinds] of structures) records.get(id).facts.other_structures = [...kinds].sort().join(', ');
+  for (const [id, words] of parking) records.get(id).facts.parking_type = [...words].sort().join(', ');
+  const dwellings = addBuildingAreas(records, buildings);
+
+  for await (const row of zipTable(zip, 'PropImprvVw.txt', ['prop_id', 'ImpID', 'CntyImprvType'], TABLE)) {
+    if (dwellings.get(row.prop_id) === row.ImpID) put(records.get(row.prop_id).facts, 'property_subtype', word(row.CntyImprvType));
+  }
 
   for await (const row of zipTable(zip, 'PropLandVw.txt', ['Prop_id', 'AssrAc', 'AssrSqFt', 'PT1Desc', 'DOR_Use_Code', 'Z1'], TABLE)) {
     const record = records.get(row.Prop_id);
@@ -159,6 +242,7 @@ async function readFacts(zip, records, today) {
     const record = records.get(row.Prop_ID);
     if (!record) continue;
     put(record.facts, 'legal_description', word(row.Legal)?.slice(0, 300));
+    put(record.facts, 'lot_number', lotNumber(row.Legal));
     put(record.facts, 'neighborhood', word(row.NbrhdName));
     const status = word(row.TaxStatus);
     put(record.facts, 'tax_status', status);
@@ -256,7 +340,8 @@ function addressOf(row) {
 function recordLine(row) {
   const street = [row.SitusHsNum, row.SitusHsSub, row.SitusStDir, row.SitusStName, row.SitusStType].filter(Boolean).join(' ');
   const secondary = [row.SitusBldgNum && `BLDG ${row.SitusBldgNum}`, row.SitusUnit && `#${row.SitusUnit}`].filter(Boolean).join(' ');
-  return [street, secondary].filter(Boolean).join(' ');
+  const zipCode = zip5(row.SitusZip1);
+  return [[street, secondary].filter(Boolean).join(' '), String(row.SitusCity || '').trim().toUpperCase(), ['WA', zipCode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 }
 
 async function build({ work, today = new Date() }) {
@@ -285,6 +370,7 @@ async function build({ work, today = new Date() }) {
     const use = HOME_USES.get(row.Pt1);
     const [kind, homeType] = use || [VACANT_USES.has(row.Pt1) ? 'parcel' : 'other', null];
     const facts = { parcel_number: id, county: 'Clark County', fips: FIPS, address_on_record: recordLine(row) };
+    put(facts, 'property_type', USE_WORDS.get(row.Pt1));
     put(facts, 'year_built', positive(row.BldgYrBlt));
     put(facts, 'effective_year_built', positive(row.BldgEffYrBlt));
     put(facts, 'building_type', word(row.BldgType));
@@ -407,4 +493,4 @@ async function build({ work, today = new Date() }) {
   }];
 }
 
-module.exports = { build };
+module.exports = { build, CODE_WORDS };
