@@ -296,6 +296,7 @@ import app.pantopus.android.ui.screens.listing_offers.ListingOffersScreen
 import app.pantopus.android.ui.screens.listing_offers.ListingOffersViewModel
 import app.pantopus.android.ui.screens.listings.MyListingsScreen
 import app.pantopus.android.ui.screens.mailbox.cards.SendCardScreen
+import app.pantopus.android.ui.screens.mailbox.cards.SendCardViewModel
 import app.pantopus.android.ui.screens.mailbox.community.CommunityMailScreen
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DISAMBIGUATE_MAIL_ID_KEY
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DisambiguateMailFormScreen
@@ -562,7 +563,7 @@ private object ChildRoutes {
     const val MAILBOX_ITEM_DETAIL = "mailbox/item/{$MAILBOX_ITEM_DETAIL_MAIL_ID_KEY}"
 
     /** Send a Christmas card, or today's card once it's sent (launch keys `holiday_cards` + `mailbox`). */
-    const val MAILBOX_CARDS = "mailbox/cards"
+    const val MAILBOX_CARDS = "mailbox/cards?${SendCardViewModel.SEND_CARD_DESIGN_KEY}={${SendCardViewModel.SEND_CARD_DESIGN_KEY}}"
 
     /** A card the person sent, opened from Sent in the Mailbox (launch key `mailbox`). */
     const val MAILBOX_SENT_CARD = "mailbox/sent/{$MAIL_SENT_CARD_ID_KEY}"
@@ -1536,6 +1537,10 @@ private object ChildRoutes {
     fun mailboxItemDetail(id: String): String = "mailbox/item/$id"
 
     fun mailboxSentCard(id: String): String = "mailbox/sent/$id"
+
+    /** The steps of sending a card, with [design] chosen when there is one. */
+    fun mailboxCards(design: String?): String =
+        if (design == null) "mailbox/cards" else "mailbox/cards?${SendCardViewModel.SEND_CARD_DESIGN_KEY}=$design"
 
     /** Build the concrete path for a public profile. */
     fun publicProfile(id: String): String = "users/$id"
@@ -2813,6 +2818,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 DeepLinkRouter.consume()
             }
+            // "Send this card to someone": the steps of sending one on the Mail tab, with that picture chosen.
+            is DeepLinkRouter.Destination.SendCard -> {
+                navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailboxCards(pending.design))
+                DeepLinkRouter.consume()
+            }
             // `/mailbox` ("Your mail is here", the morning summary) — the Mail tab at its Mailbox, at the top of Incoming.
             DeepLinkRouter.Destination.Mailbox -> {
                 navController.openTabRoot(PantopusRoute.Mail)
@@ -3222,7 +3232,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             onPay = { invoiceId -> navController.navigate(ChildRoutes.invoiceDetail(invoiceId)) },
                             onStartVerify = { homeId, method -> navController.openPlaceVerify(method, homeId) },
                             onOpenVerificationStatus = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
-                            onOpenCards = { navController.navigate(ChildRoutes.MAILBOX_CARDS) },
+                            onOpenCards = { navController.navigate(ChildRoutes.mailboxCards(null)) },
                             onOpenSentCard = { id -> navController.navigate(ChildRoutes.mailboxSentCard(id)) },
                         )
                     }
@@ -5048,7 +5058,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     PropertyCorrectionScreen(onBack = { navController.popBackStack() })
                 }
-                mailComposable(navController, ChildRoutes.MAILBOX_CARDS) {
+                mailComposable(
+                    navController,
+                    ChildRoutes.MAILBOX_CARDS,
+                    arguments =
+                        listOf(
+                            navArgument(SendCardViewModel.SEND_CARD_DESIGN_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                ) {
                     // Launch cut #12 (Christmas cards), with #10 (Mailbox).
                     if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) {
                         return@mailComposable LaunchCutPlaceholder("Christmas cards", navController)
