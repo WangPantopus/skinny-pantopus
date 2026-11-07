@@ -27,7 +27,7 @@ on:
         required: false
         default: "wa-clark"
       county:
-        description: "County FIPS (rollback, switch)"
+        description: "County FIPS (rollback); one or a comma separated list (switch)"
         required: false
         default: ""
       state:
@@ -60,7 +60,8 @@ on:
 permissions:
   contents: read
 
-# A county's switch only writes its own file, so it never waits behind a build that takes hours.
+# A county's switch only writes its own file, so it never waits behind a build that takes hours. A waiting run is
+# replaced by a newer one, so several counties go in one run's list, not in a loop of runs.
 concurrency:
   group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || 'publish' }}
   cancel-in-progress: false
