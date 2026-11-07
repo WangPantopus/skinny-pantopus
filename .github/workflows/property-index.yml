@@ -26,12 +26,12 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates (sources are state codes); or area-trends (FHFA's yearly file); or models (refit each county's value model from the release it serves)"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file)"
         type: choice
-        options: [build, rollback, switch, estimates, area-trends, models]
+        options: [build, rollback, switch, estimates, floor-points, area-trends]
         default: build
       sources:
-        description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates)"
+        description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates, floor-points)"
         required: false
         default: "wa-clark"
       moved:
@@ -63,6 +63,10 @@ on:
         description: "Publish lower fill and changed account ids, after reading what a run refused and only if a connector's fix meant them (build)"
         type: boolean
         default: false
+      estimates:
+        description: "on or off: a live county's owners see a Pantopus value estimate; blank keeps it (switch)"
+        required: false
+        default: ""
   pull_request:
     paths:
       - scripts/property-index/**
@@ -71,6 +75,8 @@ on:
       - backend/services/propertyRecords/facts.js
       - backend/services/propertyRecords/format.js
       - backend/services/propertyRecords/identity.js
+      - backend/services/propertyRecords/registryFormat.js
+      - backend/services/propertyRecords/structurePoints.js
       - backend/services/propertyRecords/valueModel.js
       - .github/workflows/property-index.yml
 
@@ -80,7 +86,7 @@ permissions:
 # A county's switch only writes its own file, so it never waits behind a build that takes hours. The national floor writes only under its own prefix and can take hours a state, so it has its own line too. A waiting run is
 # replaced by a newer one, so several counties go in one run's list, not in a loop of runs.
 concurrency:
-  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || (inputs.action == 'estimates' && 'estimates') || 'publish' }}
+  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || (inputs.action == 'estimates' && 'estimates') || (inputs.action == 'floor-points' && 'floor-points') || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -130,7 +136,8 @@ jobs:
           MODE: ${{ inputs.mode }}
           TARGET: ${{ inputs.target }}
           WITHHOLD: ${{ inputs.withhold }}
-        run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --bucket "$PROPERTY_INDEX_BUCKET"
+          ESTIMATES: ${{ inputs.estimates }}
+        run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --estimates "$ESTIMATES" --bucket "$PROPERTY_INDEX_BUCKET"
 
   publish:
     name: Build and publish
@@ -201,6 +208,22 @@ jobs:
             rm -rf "$out"
             node --disable-warning=ExperimentalWarning --max-old-space-size=12288 scripts/property-index/build-estimates.cjs --states "$state" --out "$out" --work "$work"
             node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/estimates
+            rm -rf "$work/us-structures/$state"
+          done
+      # The floor by location: every structure of a state by where it stands, marked by the address registry. A hand-started run
+      # means a new registry or a new FEMA file, so it replaces what's serving. Its log has the wrong-building count per state.
+      - name: Build and publish the floor by location
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'floor-points'
+        env:
+          STATES: ${{ inputs.sources }}
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
+          out="$RUNNER_TEMP/floor-points"
+          work="$RUNNER_TEMP/floor-points-work"
+          for state in $STATES; do
+            rm -rf "$out"
+            node --disable-warning=ExperimentalWarning --max-old-space-size=12288 scripts/property-index/build-estimates.cjs --points --registry "s3://$PROPERTY_INDEX_BUCKET/index/registry" --states "$state" --out "$out" --work "$work"
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/estimates/points --bulk --republish
             rm -rf "$work/us-structures/$state"
           done
       # The value card's area price change: one small file per state. A build that fails or looks wrong uploads nothing, and last year's stays.

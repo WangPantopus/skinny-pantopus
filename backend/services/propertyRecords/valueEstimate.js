@@ -9,12 +9,12 @@
  *            rescale is missing or too large) and the Census Bureau's (what owners said homes here are worth), with a range by how
  *            spread out the county's values are, from tests in other counties (backend/scripts/eval/value-floor-test.js). A
  *            fractional assessment can't be moved, so it gets none.
- * Off unless VALUE_ESTIMATES=on, and then it follows the county: a copy only reaches a screen in a live county. Unsetting it is
- * the quick way back.
+ * Off until the founder turns it on for a live county, in that environment's switch file (router.js, `estimates: true`):
+ * one command, no release, and off again the same way.
  * It answers null rather than wait or fail.
  */
 
-const config = require('../../config/propertyRecords');
+const router = require('./router');
 const logger = require('../../utils/logger');
 const reader = require('./reader');
 const areaTrend = require('./areaTrend');
@@ -96,7 +96,7 @@ function levelTwo(copy, model, file, state) {
 
 /** @returns {Promise<null|{ level: 1|2, value: number, low: number, high: number, as_of: string, typical_miss: number, range_held?: number }>} */
 async function forCopy(copy, home) {
-  if (!config.estimatesOn() || !copy || copy.match !== 'exact') return null;
+  if (!copy || copy.match !== 'exact' || !router.estimatesFor(copy.jurisdiction)) return null;
   const { facts } = copy;
   const base = facts.market_value || facts.assessed_value;
   if (!base) return null;

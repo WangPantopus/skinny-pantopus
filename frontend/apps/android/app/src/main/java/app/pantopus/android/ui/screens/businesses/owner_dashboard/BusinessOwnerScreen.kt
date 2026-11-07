@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.businesses.BusinessPermission
 import app.pantopus.android.ui.components.BizStatusBadge
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.IdentityPillar
@@ -73,6 +74,11 @@ import app.pantopus.android.ui.screens.business_profile.BusinessServiceRow
 import app.pantopus.android.ui.screens.business_profile.components.CategoryRow
 import app.pantopus.android.ui.screens.business_profile.components.EmptyBlock
 import app.pantopus.android.ui.screens.business_profile.components.HoursTable
+import app.pantopus.android.ui.screens.businesses.canEditHours
+import app.pantopus.android.ui.screens.businesses.canManageCatalog
+import app.pantopus.android.ui.screens.businesses.canOpenInvoices
+import app.pantopus.android.ui.screens.businesses.canOpenLegal
+import app.pantopus.android.ui.screens.businesses.canOpenPayments
 import app.pantopus.android.ui.screens.businesses.catalog.BusinessCatalogScreen
 import app.pantopus.android.ui.screens.businesses.inbox.BusinessInboxScreen
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.FoundingOfferBanner
@@ -84,6 +90,7 @@ import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.Own
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.PreviewBar
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.ProfileStrengthCard
 import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.ReviewReplyComposer
+import app.pantopus.android.ui.screens.businesses.team.BusinessRole
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -147,10 +154,12 @@ fun BusinessOwnerScreen(
                 .testTag("businessOwner"),
     ) {
         val current = state
-        // The catalog and inbox own their reads, so they (and an unsaved catalog edit) stay while the owner
-        // content is cleared on pause and read again; a refused or failed owner read still replaces them.
+        // The catalog and inbox own their reads and check their own access, so they (and an unsaved catalog edit)
+        // stay while the owner content is read again, even if that read fails. A refusal or a missing business still
+        // replaces them.
         val ownsReads = mode == OwnerViewMode.Catalog || mode == OwnerViewMode.Inbox
-        val showsOwnFrame = ownsReads && (current is BusinessOwnerUiState.Loading || current is BusinessOwnerUiState.Loaded)
+        val isGone = current == BusinessOwnerUiState.NotFound || (current as? BusinessOwnerUiState.Error)?.refused == true
+        val showsOwnFrame = ownsReads && !isGone
         Crossfade(targetState = showsOwnFrame, animationSpec = tween(180), label = "ownerFrame") { ownFrame ->
             if (ownFrame) {
                 when (mode) {
@@ -300,9 +309,16 @@ internal fun OwnerEditFrame(
     onDismissFounding: () -> Unit = {},
 ) {
     val profile = content.publicProfile
+    // A null action hides its control: the dashboard offers only what this person's permissions allow.
+    val onEditProfile = onEditPage.takeIf { content.allows(BusinessPermission.PROFILE_EDIT) }
     Box(modifier = Modifier.fillMaxSize().testTag("businessOwner.edit")) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OwnerTopBar(onBack = onBack, onOpenInsights = onOpenInsights, onOpenSettings = onOpenSettings)
+            OwnerTopBar(
+                onBack = onBack,
+                onOpenInsights = onOpenInsights?.takeIf { content.allows(BusinessPermission.INSIGHTS_VIEW) },
+                onOpenSettings = onOpenSettings.takeIf { content.allows(BusinessPermission.PROFILE_EDIT) },
+                roleLabel = "${BusinessRole.parse(content.access.roleBase).label.uppercase()} VIEW",
+            )
             OwnerLiveBar(isLive = content.isLive, editedMeta = content.editedMeta, onPreview = onPreview)
             Column(
                 modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -315,7 +331,7 @@ internal fun OwnerEditFrame(
                     logoUrl = profile.header.logoUrl,
                     bannerUrl = profile.header.bannerUrl,
                     status = bannerStatus(profile.status),
-                    onEdit = onEditPage,
+                    onEdit = onEditProfile,
                     isVerified = content.isVerified,
                 )
                 Column(
@@ -346,7 +362,7 @@ internal fun OwnerEditFrame(
         }
         OwnerDock(
             onPreview = onPreview,
-            onEditPage = onEditPage,
+            onEditPage = onEditProfile,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
         )
     }
@@ -383,21 +399,41 @@ private fun OwnerSections(
             modifier = Modifier.padding(top = 14.dp),
         )
     }
-    InsightTiles(
-        insights = content.insights,
-        onOpenInsights = onOpenInsights,
-        modifier = Modifier.padding(top = 14.dp),
-    )
-    ProfileStrengthCard(
-        strength = content.profileStrength,
-        onAddStep = { onEditPage() },
-        modifier = Modifier.padding(top = Spacing.s3),
-    )
+    val access = content.access
+    val canEditProfile = content.allows(BusinessPermission.PROFILE_EDIT)
+    val canEditHours = access.canEditHours
+    val canEditLocation = content.allows(BusinessPermission.LOCATIONS_EDIT)
+    val canAddServices = content.allows(BusinessPermission.CATALOG_EDIT)
+    val canRespond = content.allows(BusinessPermission.REVIEWS_RESPOND)
+    if (content.allows(BusinessPermission.INSIGHTS_VIEW)) {
+        InsightTiles(
+            insights = content.insights,
+            onOpenInsights = onOpenInsights,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+    }
+    if (canEditProfile) {
+        ProfileStrengthCard(
+            strength = content.profileStrength,
+            onAddStep = { onEditPage() },
+            modifier = Modifier.padding(top = Spacing.s3),
+        )
+    }
 
-    OwnerSectionHeader(title = "Categories", actionLabel = "Edit", actionIcon = PantopusIcon.Pencil, onAction = onEditPage)
+    OwnerSectionHeader(
+        title = "Categories",
+        actionLabel = "Edit".takeIf { canEditProfile },
+        actionIcon = PantopusIcon.Pencil,
+        onAction = onEditPage,
+    )
     CategoryRow(categories = profile.categories)
 
-    OwnerSectionHeader(title = "About", actionLabel = "Edit", actionIcon = PantopusIcon.Pencil, onAction = onEditPage)
+    OwnerSectionHeader(
+        title = "About",
+        actionLabel = "Edit".takeIf { canEditProfile },
+        actionIcon = PantopusIcon.Pencil,
+        onAction = onEditPage,
+    )
     if (!profile.about.isNullOrEmpty()) {
         Text(
             text = profile.about,
@@ -406,115 +442,161 @@ private fun OwnerSections(
             letterSpacing = (-0.05).sp,
         )
     } else {
-        EmptyBlock(
+        OwnerEmptyBlock(
             icon = PantopusIcon.FileText,
-            title = "Add a description",
-            body = "Tell neighbors what makes your business worth hiring.",
-            ctaLabel = "Add",
-            ctaIcon = PantopusIcon.Plus,
-            onCta = onEditPage,
+            addTitle = "Add a description",
+            addBody = "Tell neighbors what makes your business worth hiring.",
+            readOnlyTitle = "No description yet",
+            readOnlyBody = "This business hasn't added a description.",
+            onAdd = onEditPage.takeIf { canEditProfile },
         )
     }
 
-    OwnerSectionHeader(title = "Hours", actionLabel = "Edit", actionIcon = PantopusIcon.Pencil, onAction = onEditPage)
+    OwnerSectionHeader(
+        title = "Hours",
+        actionLabel = "Edit".takeIf { canEditHours },
+        actionIcon = PantopusIcon.Pencil,
+        onAction = onEditPage,
+    )
     val status = profile.status
     if (status != null && profile.hours.isNotEmpty()) {
         HoursTable(status = status, rows = profile.hours)
     } else {
-        EmptyBlock(
+        OwnerEmptyBlock(
             icon = PantopusIcon.Clock,
-            title = "Set your hours",
-            body = "Add opening hours so neighbors know when you're available.",
-            ctaLabel = "Add",
-            ctaIcon = PantopusIcon.Plus,
-            onCta = onEditPage,
+            addTitle = "Set your hours",
+            addBody = "Add opening hours so neighbors know when you're available.",
+            readOnlyTitle = "No hours to show",
+            readOnlyBody = "Opening hours appear here once they're set.",
+            onAdd = onEditPage.takeIf { canEditHours },
         )
     }
 
-    OwnerSectionHeader(title = "Service area", actionLabel = "Edit", actionIcon = PantopusIcon.Pencil, onAction = onEditPage)
+    OwnerSectionHeader(
+        title = "Service area",
+        actionLabel = "Edit".takeIf { canEditLocation },
+        actionIcon = PantopusIcon.Pencil,
+        onAction = onEditPage,
+    )
     val area = profile.serviceArea
     if (area != null) {
         OwnerServiceAreaCard(area = area)
     } else {
-        EmptyBlock(
+        OwnerEmptyBlock(
             icon = PantopusIcon.MapPin,
-            title = "Add a service area",
-            body = "Show neighbors where you work.",
-            ctaLabel = "Add",
-            ctaIcon = PantopusIcon.Plus,
-            onCta = onEditPage,
+            addTitle = "Add a service area",
+            addBody = "Show neighbors where you work.",
+            readOnlyTitle = "No service area yet",
+            readOnlyBody = "This business hasn't added where it works.",
+            onAdd = onEditPage.takeIf { canEditLocation },
         )
     }
 
     OwnerSectionHeader(
         title = "Services",
-        actionLabel = "Manage",
+        actionLabel = "Manage".takeIf { access.canManageCatalog },
         actionIcon = PantopusIcon.SlidersHorizontal,
         onAction = onManageCatalog,
     )
-    ManageServicesList(services = profile.services, onManage = onManageCatalog)
+    if (profile.services.isEmpty() && !canAddServices) {
+        EmptyBlock(
+            icon = PantopusIcon.Tag,
+            title = "No services yet",
+            body = "This business hasn't listed any services.",
+        )
+    } else {
+        ManageServicesList(
+            services = profile.services,
+            onManage = onManageCatalog.takeIf { access.canManageCatalog },
+            canAdd = canAddServices,
+        )
+    }
 
     // No gallery backend yet: the Photos rail only offered "Add photo", which
     // opens the page editor, and the editor's gallery is hidden too (as on iOS).
 
-    OwnerSectionHeader(title = "Team", actionLabel = "Manage", actionIcon = PantopusIcon.Users, onAction = onOpenTeam)
-    TeamSummaryRow(onOpen = onOpenTeam)
+    if (content.allows(BusinessPermission.TEAM_VIEW)) {
+        val canManageTeam = content.allows(BusinessPermission.TEAM_MANAGE) || content.allows(BusinessPermission.TEAM_INVITE)
+        OwnerSectionHeader(
+            title = "Team",
+            actionLabel = if (canManageTeam) "Manage" else "View",
+            actionIcon = PantopusIcon.Users,
+            onAction = onOpenTeam,
+        )
+        TeamSummaryRow(onOpen = onOpenTeam, canManage = canManageTeam)
+    }
 
     // C4 — custom Pages CMS (block builder + revision history).
-    OwnerSectionHeader(
-        title = "Pages",
-        actionLabel = "Manage",
-        actionIcon = PantopusIcon.FileText,
-        onAction = onOpenPages,
-    )
-    OwnerNavRow(
-        icon = PantopusIcon.FileText,
-        title = "Custom pages",
-        subtitle = "Build menus, about pages and more with content blocks",
-        testTagValue = "businessOwner.pagesRow",
-        onOpen = onOpenPages,
-    )
-
-    OwnerSectionHeader(
-        title = "Inbox",
-        actionLabel = "Open",
-        actionIcon = PantopusIcon.Inbox,
-        onAction = onOpenInbox,
-    )
-    OwnerNavRow(
-        icon = PantopusIcon.Inbox,
-        title = "Messages & mentions",
-        subtitle = "Conversations with this business and posts that mention it",
-        testTagValue = "businessOwner.inboxRow",
-        onOpen = onOpenInbox,
-    )
-
-    OwnerSectionHeader(title = "Money & legal")
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        OwnerNavRow(
-            icon = PantopusIcon.CreditCard,
-            title = "Payments",
-            subtitle = "Connect Stripe so this business can get paid",
-            testTagValue = "businessOwner.paymentsRow",
-            onOpen = onOpenPayments,
+    if (content.allows(BusinessPermission.PAGES_EDIT)) {
+        OwnerSectionHeader(
+            title = "Pages",
+            actionLabel = "Manage",
+            actionIcon = PantopusIcon.FileText,
+            onAction = onOpenPages,
         )
         OwnerNavRow(
-            icon = PantopusIcon.ReceiptText,
-            title = "Invoices",
-            subtitle = "Bill a customer and track what's been paid",
-            testTagValue = "businessOwner.invoicesRow",
-            onOpen = onOpenInvoices,
-        )
-        OwnerNavRow(
-            icon = PantopusIcon.ShieldCheck,
-            title = "Legal & verification",
-            subtitle = "Legal name, tax ID and verification documents",
-            testTagValue = "businessOwner.legalRow",
-            onOpen = onOpenLegal,
+            icon = PantopusIcon.FileText,
+            title = "Custom pages",
+            subtitle = "Build menus, about pages and more with content blocks",
+            testTagValue = "businessOwner.pagesRow",
+            onOpen = onOpenPages,
         )
     }
 
-    OwnerSectionHeader(title = "Reviews", actionLabel = content.reviewsToReplyLabel, actionIcon = PantopusIcon.MessageSquare)
+    if (content.allows(BusinessPermission.MAIL_VIEW)) {
+        OwnerSectionHeader(
+            title = "Inbox",
+            actionLabel = "Open",
+            actionIcon = PantopusIcon.Inbox,
+            onAction = onOpenInbox,
+        )
+        OwnerNavRow(
+            icon = PantopusIcon.Inbox,
+            title = "Messages & mentions",
+            subtitle = "Conversations with this business and posts that mention it",
+            testTagValue = "businessOwner.inboxRow",
+            onOpen = onOpenInbox,
+        )
+    }
+
+    if (access.canOpenPayments || access.canOpenInvoices || access.canOpenLegal) {
+        OwnerSectionHeader(title = "Money & legal")
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            if (access.canOpenPayments) {
+                OwnerNavRow(
+                    icon = PantopusIcon.CreditCard,
+                    title = "Payments",
+                    subtitle = "Connect Stripe so this business can get paid",
+                    testTagValue = "businessOwner.paymentsRow",
+                    onOpen = onOpenPayments,
+                )
+            }
+            if (access.canOpenInvoices) {
+                OwnerNavRow(
+                    icon = PantopusIcon.ReceiptText,
+                    title = "Invoices",
+                    subtitle = "Bill a customer and track what's been paid",
+                    testTagValue = "businessOwner.invoicesRow",
+                    onOpen = onOpenInvoices,
+                )
+            }
+            if (access.canOpenLegal) {
+                OwnerNavRow(
+                    icon = PantopusIcon.ShieldCheck,
+                    title = "Legal & verification",
+                    subtitle = "Legal name, tax ID and verification documents",
+                    testTagValue = "businessOwner.legalRow",
+                    onOpen = onOpenLegal,
+                )
+            }
+        }
+    }
+
+    OwnerSectionHeader(
+        title = "Reviews",
+        actionLabel = content.reviewsToReplyLabel.takeIf { canRespond },
+        actionIcon = PantopusIcon.MessageSquare,
+    )
     val summary = profile.reviewSummary
     if (summary != null && summary.count > 0) {
         RatingDistribution(
@@ -528,10 +610,27 @@ private fun OwnerSections(
             ReviewReplyComposer(
                 review = review,
                 businessName = shortBusinessName(profile.header.displayName),
-                onSubmit = { text -> onSubmitReply(review.id, text) },
+                onSubmit = ({ text: String -> onSubmitReply(review.id, text) }).takeIf { canRespond },
                 modifier = Modifier.padding(top = Spacing.s2),
             )
         }
+    }
+}
+
+/** A section's empty state: an invitation for someone who may fill it, a plain statement for everyone else. */
+@Composable
+private fun OwnerEmptyBlock(
+    icon: PantopusIcon,
+    addTitle: String,
+    addBody: String,
+    readOnlyTitle: String,
+    readOnlyBody: String,
+    onAdd: (() -> Unit)?,
+) {
+    if (onAdd != null) {
+        EmptyBlock(icon = icon, title = addTitle, body = addBody, ctaLabel = "Add", ctaIcon = PantopusIcon.Plus, onCta = onAdd)
+    } else {
+        EmptyBlock(icon = icon, title = readOnlyTitle, body = readOnlyBody)
     }
 }
 
@@ -628,7 +727,8 @@ private fun OwnerSectionHeader(
 @Composable
 private fun ManageServicesList(
     services: List<BusinessServiceRow>,
-    onManage: () -> Unit,
+    onManage: (() -> Unit)?,
+    canAdd: Boolean,
 ) {
     Column(
         modifier =
@@ -645,31 +745,33 @@ private fun ManageServicesList(
                 HorizontalDivider(color = PantopusColors.appBorderSubtle, modifier = Modifier.padding(start = 14.dp))
             }
         }
-        HorizontalDivider(color = PantopusColors.appBorderSubtle)
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onManage)
-                    .padding(vertical = 11.dp)
-                    .testTag("businessOwner.addService"),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Plus,
-                contentDescription = null,
-                size = 14.dp,
-                strokeWidth = 2.5f,
-                tint = PantopusColors.business,
-            )
-            Text(
-                text = "Add a service",
-                color = PantopusColors.business,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = Spacing.s1),
-            )
+        if (onManage != null && canAdd) {
+            HorizontalDivider(color = PantopusColors.appBorderSubtle)
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onManage)
+                        .padding(vertical = 11.dp)
+                        .testTag("businessOwner.addService"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Plus,
+                    contentDescription = null,
+                    size = 14.dp,
+                    strokeWidth = 2.5f,
+                    tint = PantopusColors.business,
+                )
+                Text(
+                    text = "Add a service",
+                    color = PantopusColors.business,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = Spacing.s1),
+                )
+            }
         }
     }
 }
@@ -677,14 +779,14 @@ private fun ManageServicesList(
 @Composable
 private fun ManageServiceRow(
     service: BusinessServiceRow,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
 ) {
     val subtitle = listOfNotNull(service.detail, service.priceLabel).filter(String::isNotBlank).joinToString(" · ")
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .padding(horizontal = 14.dp, vertical = Spacing.s3)
                 .semantics { contentDescription = "${service.name}, $subtitle" },
         verticalAlignment = Alignment.CenterVertically,
@@ -712,7 +814,9 @@ private fun ManageServiceRow(
             )
             Text(text = subtitle, color = PantopusColors.appTextSecondary, fontSize = 11.sp, maxLines = 1)
         }
-        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
+        if (onClick != null) {
+            PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
+        }
     }
 }
 
@@ -721,7 +825,10 @@ private fun ManageServiceRow(
 /** B2C — entry-point card on the owner dashboard that opens the Team &
  *  roles management screen. */
 @Composable
-private fun TeamSummaryRow(onOpen: () -> Unit) {
+private fun TeamSummaryRow(
+    onOpen: () -> Unit,
+    canManage: Boolean,
+) {
     Row(
         modifier =
             Modifier
@@ -756,7 +863,12 @@ private fun TeamSummaryRow(onOpen: () -> Unit) {
                 letterSpacing = (-0.1).sp,
             )
             Text(
-                text = "Invite teammates and manage what each role can do",
+                text =
+                    if (canManage) {
+                        "Invite teammates and manage what each role can do"
+                    } else {
+                        "View your business teammates and their roles"
+                    },
                 color = PantopusColors.appTextSecondary,
                 fontSize = 11.sp,
                 maxLines = 1,
@@ -824,7 +936,7 @@ private fun OwnerServiceAreaCard(area: BusinessServiceArea) {
 @Composable
 private fun OwnerDock(
     onPreview: () -> Unit,
-    onEditPage: () -> Unit,
+    onEditPage: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().background(PantopusColors.appSurface)) {
@@ -841,14 +953,16 @@ private fun OwnerDock(
                 testTag = "businessOwner.previewAction",
                 modifier = Modifier.weight(1f),
             )
-            DockButton(
-                label = "Edit page",
-                icon = PantopusIcon.Edit2,
-                filled = true,
-                onClick = onEditPage,
-                testTag = "businessOwner.editPage",
-                modifier = Modifier.weight(1f),
-            )
+            if (onEditPage != null) {
+                DockButton(
+                    label = "Edit page",
+                    icon = PantopusIcon.Edit2,
+                    filled = true,
+                    onClick = onEditPage,
+                    testTag = "businessOwner.editPage",
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
@@ -895,7 +1009,7 @@ private fun DockButton(
 @Composable
 internal fun OwnerLoadingLayout(onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().testTag("businessOwner.loading")) {
-        OwnerTopBar(onBack = onBack, onOpenInsights = null, onOpenSettings = {})
+        OwnerTopBar(onBack = onBack, onOpenInsights = null, onOpenSettings = null)
         Box(
             modifier =
                 Modifier

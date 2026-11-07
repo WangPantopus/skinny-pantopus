@@ -284,6 +284,7 @@ fun MailDetailScreen(
                                         onBack = onBack,
                                         actions = letterActions,
                                         banner = removedBanner,
+                                        message = toast,
                                     )
                                 }
                             },

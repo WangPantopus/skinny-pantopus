@@ -7,7 +7,9 @@
  * off, shadow and live with one change, no release and no restart, and the API and the
  * worker can't disagree for long.
  *
- *   switches/<name>.json   { v: 1, counties: { "<fips>": { mode: 'off'|'shadow'|'live', withheld: [fact, ...] } } }
+ *   switches/<name>.json   { v: 1, counties: { "<fips>": { mode: 'off'|'shadow'|'live', withheld: [fact, ...], estimates: true } } }
+ *
+ * `estimates: true` shows a live county's owners a Pantopus estimate (propertyRecords/valueEstimate.js). Without it, none.
  *
  * A county the file names follows the file; any other follows the environment's lists.
  * The file is written by scripts/property-index/switch-county.cjs, by hand. If it can't
@@ -58,7 +60,7 @@ function parseFile(bytes) {
   const found = {};
   for (const [fips, entry] of Object.entries(data.counties)) {
     if (/^\d{5}$/.test(fips) && MODES.has(entry?.mode)) {
-      found[fips] = { mode: entry.mode, withheld: new Set(Array.isArray(entry.withheld) ? entry.withheld : []) };
+      found[fips] = { mode: entry.mode, withheld: new Set(Array.isArray(entry.withheld) ? entry.withheld : []), estimates: entry.estimates === true };
     }
   }
   return { counties: found };
@@ -90,6 +92,9 @@ const anyShadow = () => config.enabled() && anyShadowCounty;
 /** Whether a county's stored copies are on screens now. */
 const showsCopies = (fips) => modeFor(fips) === 'live' || (config.enabled() && !fileRead);
 
+/** Whether a county's owners see a Pantopus estimate: only a live county whose line says so. */
+const estimatesFor = (fips) => modeFor(fips) === 'live' && counties[fips]?.estimates === true;
+
 function withholding(fips) {
   return counties[fips]?.withheld?.size ? counties[fips].withheld : null;
 }
@@ -105,10 +110,12 @@ const listed = () => new Map(modes);
 function summary() {
   const named = [...modes].filter(([, mode]) => mode !== 'off').sort();
   const withheld = Object.entries(counties).filter(([, entry]) => entry.withheld.size).map(([fips, entry]) => [fips, [...entry.withheld].sort()]).sort();
+  const estimates = Object.entries(counties).filter(([, entry]) => entry.estimates).map(([fips]) => fips).sort();
   return {
     live: named.filter(([, mode]) => mode === 'live').length,
     shadow: named.filter(([, mode]) => mode === 'shadow').length,
-    hash: crypto.createHash('sha256').update(JSON.stringify([named, withheld])).digest('hex').slice(0, 12),
+    estimates: estimates.length,
+    hash: crypto.createHash('sha256').update(JSON.stringify([named, withheld, estimates])).digest('hex').slice(0, 12),
   };
 }
 
@@ -119,4 +126,4 @@ function served(copy) {
   return { ...copy, facts: without(copy.facts, withheld), ...(copy.building ? { building: without(copy.building, withheld) } : {}) };
 }
 
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served, listed, summary };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, estimatesFor, listed, summary };

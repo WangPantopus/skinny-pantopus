@@ -22,9 +22,6 @@ const { SALE_PRICES_NOT_PUBLIC, ASSESSMENT_SHARE, ASSESSED_VALUE_NOTE } = requir
 const TAXABLE_VALUE_NOTE = 'Taxable value is what the county uses to figure property tax, not what the home would sell for.';
 // Below this a deed's price is a formality, not a sale ($1, $10, "love and affection").
 const LOWEST_SALE_PRICE = 1000;
-// Above this many times the county's market value, a deed's price is for more than this home: some towns list a whole
-// condo building's sale on every unit.
-const MOST_SALE_TIMES_VALUE = 8;
 
 const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
 
@@ -36,14 +33,12 @@ const EMPTY_MESSAGES = {
 };
 
 function lastSale(facts, state) {
-  const many = facts.market_value > 0 && facts.sale_price > MOST_SALE_TIMES_VALUE * facts.market_value;
-  const price = facts.sale_price >= LOWEST_SALE_PRICE && !many ? money(facts.sale_price) : null;
+  const price = facts.sale_price >= LOWEST_SALE_PRICE ? money(facts.sale_price) : null;
   const when = (facts.sale_date && dateLabel(facts.sale_date)) || facts.sale_month || null;
   // A price too small to be a sale means the date is a transfer's too.
-  const row = price || (when && (!facts.sale_price || many))
+  const row = price || (when && !facts.sale_price)
     ? { id: 'last_sale', label: 'Last sale', value: [price, when].filter(Boolean).join(' · ') }
     : null;
-  if (many) return { row, note: 'The recorded price for this sale covers more than this home, so it isn\'t shown.' };
   const place = price ? null : SALE_PRICES_NOT_PUBLIC[state];
   return { row, note: place ? `Sale prices aren't public in ${place}.` : null };
 }
