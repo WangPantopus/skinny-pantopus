@@ -14,7 +14,7 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '36055';
 const COUNTY = 'Monroe County';
 const LAYER = 'https://maps.monroecounty.gov/server/rest/services/Hosted/Parcels_Public/FeatureServer/0';
-const COLUMNS = ['countysbl', 'printkey', 'parceladdress', 'parceladdressnumber', 'parceladdressstreetprefixdir', 'parceladdressstreetname', 'parceladdressstreetsuffix', 'parceladdressstreetpostdir', 'parceladdresscity', 'parceladdresszipcode', 'parceladdressunit', 'parceladdressunitnumber', 'acres', 'rollyear', 'totalassessedvalue', 'landassessedvalue', 'schooldistrictname', 'propertyclass', 'propertyclassdescription', 'yearbuilt', 'buildingstyle', 'exteriorwallmaterial', 'numberofstories', 'squarefeetlivingarea', 'numberofbedrooms', 'numberoffullbathrooms', 'numberofhalfbathrooms', 'numberofkitchens', 'numberoffireplaces', 'basementtype', 'centralair', 'heattype', 'sewertype', 'watersupply'];
+const COLUMNS = ['countysbl', 'printkey', 'parceladdress', 'parceladdressnumber', 'parceladdressstreetprefixdir', 'parceladdressstreetname', 'parceladdressstreetsuffix', 'parceladdressstreetpostdir', 'parceladdresscity', 'parceladdresszipcode', 'parceladdressunit', 'parceladdressunitnumber', 'frontagefeet', 'depthfeet', 'acres', 'rollyear', 'totalassessedvalue', 'landassessedvalue', 'schooldistrictname', 'propertyclass', 'propertyclassdescription', 'yearbuilt', 'buildingstyle', 'exteriorwallmaterial', 'numberofstories', 'squarefeetlivingarea', 'numberofbedrooms', 'numberoffullbathrooms', 'numberofhalfbathrooms', 'numberofkitchens', 'numberoffireplaces', 'basementtype', 'centralair', 'heattype', 'sewertype', 'watersupply'];
 
 function useOf(code, hasUnit) {
   const c = String(code ?? '').slice(0, 3);
@@ -65,7 +65,12 @@ function fromRow(row) {
   } else if (kind === 'building') put(facts, 'gross_sqft', positive(row.squarefeetlivingarea));
   put(facts, 'water_source', said(row.watersupply));
   put(facts, 'sewer', said(row.sewertype));
-  if (kind !== 'unit') put(facts, 'lot_acres', positive(row.acres));
+  // A town lot is on the roll by its frontage and depth, a bigger parcel in acres.
+  if (kind !== 'unit') {
+    const [front, depth] = [positive(row.frontagefeet), positive(row.depthfeet)];
+    if (positive(row.acres)) facts.lot_acres = positive(row.acres);
+    else if (front && depth) facts.lot_sqft = Math.round(front * depth);
+  }
   put(facts, 'value_year', positive(row.rollyear));
   put(facts, 'assessed_value', positive(row.totalassessedvalue));
   put(facts, 'assessed_land_value', positive(row.landassessedvalue));
@@ -98,7 +103,7 @@ module.exports = {
   build,
   dictionary: {
     layer: [LAYER],
-    facts: { year_built: 'yearbuilt', style: 'buildingstyle', exterior_walls: 'exteriorwallmaterial', stories: 'numberofstories', heating: 'heattype', living_sqft: 'squarefeetlivingarea', gross_sqft: 'squarefeetlivingarea', bedrooms: 'numberofbedrooms', full_baths: 'numberoffullbathrooms', half_baths: 'numberofhalfbathrooms', kitchens: 'numberofkitchens', fireplaces: 'numberoffireplaces', foundation: 'basementtype', water_source: 'watersupply', sewer: 'sewertype', lot_acres: 'acres', assessed_value: 'totalassessedvalue', assessed_land_value: 'landassessedvalue', value_year: 'rollyear', land_use: 'propertyclassdescription', school_district: 'schooldistrictname' },
+    facts: { year_built: 'yearbuilt', style: 'buildingstyle', exterior_walls: 'exteriorwallmaterial', stories: 'numberofstories', heating: 'heattype', living_sqft: 'squarefeetlivingarea', gross_sqft: 'squarefeetlivingarea', bedrooms: 'numberofbedrooms', full_baths: 'numberoffullbathrooms', half_baths: 'numberofhalfbathrooms', kitchens: 'numberofkitchens', fireplaces: 'numberoffireplaces', foundation: 'basementtype', water_source: 'watersupply', sewer: 'sewertype', lot_acres: 'acres', lot_sqft: 'frontagefeet', assessed_value: 'totalassessedvalue', assessed_land_value: 'landassessedvalue', value_year: 'rollyear', land_use: 'propertyclassdescription', school_district: 'schooldistrictname' },
     words: {},
   },
 };

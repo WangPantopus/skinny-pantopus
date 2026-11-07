@@ -80,7 +80,7 @@ function fromParcel(line, dwell, value, sale) {
     put(facts, 'fireplaces', positive(dwell.fireplaces));
   } else if (dwell && kind === 'building') put(facts, 'gross_sqft', positive(dwell.living));
   if (kind === 'building') put(facts, 'units', positive(amount(line, 243, 247)));
-  if (kind !== 'unit') put(facts, 'lot_acres', positive(amount(line, 321, 335)));
+  if (kind !== 'unit') put(facts, 'lot_acres', positive(amount(line, 321, 335)) || positive(amount(line, 307, 321)));
   if (value) {
     put(facts, 'value_year', positive(value.year));
     put(facts, 'market_value', positive(value.total));

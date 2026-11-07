@@ -22,7 +22,7 @@ const USER_AGENT = 'Mozilla/5.0 (compatible; PantopusPropertyIndex/1.0; +https:/
 const SAYS = {
   year_built: /y(ea)?r|built|age/i, effective_year_built: /eff|y(ea)?r/i, living_sqft: /sq|sf|area|size|liv|feet/i, usable_sqft: /sq|sf|area|size/i, gross_sqft: /sq|sf|area|size|gross|gba|liv/i,
   ground_floor_sqft: /sq|sf|area|floor/i, bedrooms: /bed|bdrm|bd|br/i, bathrooms: /bath|bth|ba|plumb/i, full_baths: /f.*b(a)?th|bath|bth|full_?b|plumb/i, half_baths: /h.*b(a)?th|bath|bth|hlf_?b|plumb|powder/i, rooms: /room|rm/i, stories: /stor|stry|flr|floor/i,
-  units: /unit|apt|apart|dwell|famil|ducount/i, lot_acres: /acre|ac|land|lot/i, lot_sqft: /sq|sf|area|land|lot/i, market_value: /val|mkt|market|appr|total|fmv|apr|just/i, market_land_value: /land|lnd/i, market_building_value: /bldg|build|imp|struct/i,
+  units: /unit|apt|apart|dwell|famil|ducount/i, lot_acres: /acre|ac|land|lot/i, lot_sqft: /sq|sf|area|land|lot|frontage/i, market_value: /val|mkt|market|appr|total|fmv|apr|just/i, market_land_value: /land|lnd/i, market_building_value: /bldg|build|imp|struct/i,
   assessed_value: /val|assess|assd|total/i, assessed_land_value: /land|lnd/i, assessed_building_value: /bldg|build|imp|struct/i, taxable_value: /tax/i, sale_price: /sale|price|consid|amount|amt/i, sale_date: /sale|date|dt|saldat/i,
   value_year: /y(ea)?r|roll/i, tax_year: /y(ea)?r|roll/i, tax_amount: /tax|amount|amt|bill/i, fireplaces: /fire|firpl|frpl|fp/i, garage_sqft: /gar|park/i, basement_sqft: /bas|bsmt|bsmnt/i, basement_finished_sqft: /bas|bsmt|bsmnt|fin/i,
 };
