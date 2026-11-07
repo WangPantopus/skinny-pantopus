@@ -143,10 +143,13 @@ export default function HubTodayPage() {
   const today = query.data ? withoutLaunchCutTodayRows(query.data) : null;
   // The Weather box's sky: the briefing's own weather, sun times and clock. The kind of home comes from your primary
   // home, which the page already holds (first content, or the shell's read), when the briefing is about that home.
+  // Guests and service providers get the scene's first house, as on the apps, where the Your Home section isn't theirs.
   const primaryHome = usePrimaryHome({ enabled: false }).data?.home;
   const weather = today?.weather ?? null;
   const location = today?.location;
-  const homeType = location?.source === 'primary_home' ? primaryHome?.home_type : null;
+  const homeType = location?.source === 'primary_home' && primaryHome?.role_base !== 'guest' && primaryHome?.role_base !== 'service_provider'
+    ? primaryHome?.home_type
+    : null;
   const sky = useMemo<TodaySkyInput | null>(() => (weather ? {
     condition: weather.condition_code,
     tempF: weather.current_temp_f,
