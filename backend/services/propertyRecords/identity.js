@@ -52,10 +52,16 @@ function unitChoices(buildings, others) {
   return { unit_count: units.size, ...(units.size && units.size <= MAX_CHOICES ? { choices: [...units].sort(naturally.compare) } : {}) };
 }
 
-/** ZIP decides when both sides have one: the same street line can exist in two towns of a county. */
+/**
+ * ZIP decides when both sides have one: the same street line can exist in two towns of a county. When the person's ZIP names
+ * none of the records here but exactly one is in the person's town, the source's ZIP was off and the town decides.
+ */
 function inZip(query, records) {
   if (!query.zip) return records;
-  return records.filter(({ address }) => !address.zip || address.zip === query.zip);
+  const named = records.filter(({ address }) => !address.zip || address.zip === query.zip);
+  if (named.length || !query.city) return named;
+  const town = records.filter(({ address }) => address.city === query.city);
+  return town.length === 1 ? town : named;
 }
 
 /**
