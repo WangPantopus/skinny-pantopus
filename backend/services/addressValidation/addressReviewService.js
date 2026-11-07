@@ -210,10 +210,42 @@ async function flagRecordProblem({ homeId, userId, reason }) {
     if (error) throw error;
     logger.info('addressReview: record problem case opened', { caseId: data.id, homeId });
     const { data: home } = await supabaseAdmin.from('Home').select('city, state').eq('id', homeId).maybeSingle();
-    adminAlerts.notifyRecordProblemToReview({ caseId: data.id, home }).catch(() => {});
+    adminAlerts.notifyRecordProblemToReview({ caseId: data.id, home, floorPlan: reason.kind === 'floor_plan_no' }).catch(() => {});
     return data.id;
   } catch (error) {
     logger.error('addressReview: record problem not written', { homeId, error: error.message });
+    return null;
+  }
+}
+
+const FLOOR_PLAN_SHEET = 'floor_plan_sheet';
+
+/**
+ * A building's floor-plan sheet, sent to be published. A person reads it and its permission, and nothing reaches a
+ * screen until a release is built from it (scripts/property-index/build-floor-plans.cjs). No address_id, as with record
+ * problems, and no Home: a manager needn't live there. Who granted permission stays here, never in a release.
+ *
+ * Never throws. Returns the case id, or null when nothing was written.
+ */
+async function flagFloorPlanSheet({ userId, sheet, permission, summary, original, fips_hint: fipsHint, area }) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('AddressReviewCase')
+      .insert({
+        user_id: userId,
+        verdict_status: 'FLOOR_PLAN_SHEET',
+        reasons: [{ kind: FLOOR_PLAN_SHEET, sheet, permission, summary, original, fips_hint: fipsHint, at: new Date().toISOString() }],
+        trigger: FLOOR_PLAN_SHEET,
+        status: 'open',
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    logger.info('addressReview: floor plan sheet case opened', { caseId: data.id });
+    adminAlerts.notifyFloorPlanSheetToReview({ caseId: data.id, area, summary }).catch(() => {});
+    return data.id;
+  } catch (error) {
+    logger.error('addressReview: floor plan sheet not written', { error: error.message });
     return null;
   }
 }
@@ -275,4 +307,4 @@ async function resolveCase({ caseId, reviewerId, outcome, note = null }) {
   return { success: true };
 }
 
-module.exports = { needsReview, openCase, flagAddressWatch, flagRecordProblem, openRecordProblems, listOpenCases, resolveCase, OPEN_STATUSES };
+module.exports = { needsReview, openCase, flagAddressWatch, flagRecordProblem, flagFloorPlanSheet, openRecordProblems, listOpenCases, resolveCase, OPEN_STATUSES };
