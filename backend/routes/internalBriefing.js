@@ -155,6 +155,31 @@ function getTodayLocal(tz) {
   }
 }
 
+// The briefing scheduler asks for every recipient's zone once a minute, and the
+// home reminders every 15 minutes. Each answer takes about seven database reads
+// (preferences, viewing location, homes, saved place), which made these minute
+// ticks the API's largest source of database calls. The answers rarely change,
+// so one is reused for ten minutes: someone who moves or changes their location
+// gets their new clock within ten minutes, inside the scheduler's 15-minute
+// delivery window. An answer built while one of those reads failed isn't kept.
+const ZONE_REUSE_MS = 10 * 60 * 1000;
+const ZONE_MEMORY_LIMIT = 10000;
+const recentZones = new Map(); // userId → { zone, until }
+
+function rememberedZone(userId, now) {
+  const kept = recentZones.get(userId);
+  if (kept && kept.until > now) return kept;
+  if (kept) recentZones.delete(userId);
+  return null;
+}
+
+function rememberZone(userId, zone, now) {
+  recentZones.delete(userId);
+  // The oldest answer goes first when the memory is full (a Map keeps insertion order).
+  if (recentZones.size >= ZONE_MEMORY_LIMIT) recentZones.delete(recentZones.keys().next().value);
+  recentZones.set(userId, { zone, until: now + ZONE_REUSE_MS });
+}
+
 // The scheduler uses the same location hierarchy as Today for accounts that
 // have never explicitly chosen a notification timezone. No coordinates leave
 // this authenticated internal endpoint.
@@ -165,7 +190,16 @@ router.post('/timezones', verifyInternalApiKey, async (req, res) => {
   }
   try {
     const zones = {};
-    for (const userId of new Set(ids)) zones[userId] = await resolveNotificationTimezone(userId);
+    for (const userId of new Set(ids)) {
+      const kept = rememberedZone(userId, Date.now());
+      if (kept) {
+        zones[userId] = kept.zone;
+        continue;
+      }
+      const report = { degraded: false };
+      zones[userId] = await resolveNotificationTimezone(userId, undefined, report);
+      if (!report.degraded) rememberZone(userId, zones[userId], Date.now());
+    }
     return res.json({ timezones: zones });
   } catch (err) {
     logger.error('Internal timezone lookup failed', { error: err.message });

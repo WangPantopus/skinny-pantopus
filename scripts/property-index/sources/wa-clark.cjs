@@ -8,8 +8,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { parts, zip5, unitKey } = require('../../../backend/services/propertyRecords/addressKey');
+const { parse, parts, zip5, unitKey } = require('../../../backend/services/propertyRecords/addressKey');
+const { resolve } = require('../../../backend/services/propertyRecords/identity');
 const { download, zipTable, cachedLayer } = require('../lib/tables.cjs');
+const { lotNumber } = require('../lib/legal.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '53011';
@@ -142,14 +144,26 @@ function addBuildingAreas(records, buildings) {
   return dwellings;
 }
 
-// A legal description's lot, only when it plainly names one whole lot: not "LOTS 3 & 4", "PTN LOT 3", "E 1/2 LOT 3",
-// "S 5 FT OF LOT 3" or "LOT 3 EX THE N 5 FT".
-const PART_OF_A_LOT = /\b(?:PTN|PORT|POR|PT|PART|FT|EX|EXC|EXCEPT|LESS|TGW|TOG|AND|OF\s+LOT)\b|&|\d\/\d/;
-function lotNumber(legal) {
-  const text = String(legal || '').toUpperCase();
-  const lots = text.match(/\bLOTS?\b/g) || [];
-  if (lots.length !== 1 || lots[0] !== 'LOT' || PART_OF_A_LOT.test(text)) return null;
-  return /\bLOT\s+#?(\d+[A-Z]?)(?![\w/-])/.exec(text)?.[1] || null;
+/** Where the Assessor's own text says an account is: this file's street columns, and the unit that follows them in its address line. */
+function assessorAddress(row) {
+  if (!row.Situs_PACS) return null;
+  const head = row.Situs_PACS.split(',')[0].replace(/\s+/g, ' ').trim();
+  const street = [row.SitusNum, row.SitusStPre, row.SitusSt, row.SitusSuf].filter(Boolean).join(' ');
+  let unit = head.startsWith(street) ? head.slice(street.length).trim() : '';
+  if (row.SitusCity && unit.endsWith(row.SitusCity)) unit = unit.slice(0, -row.SitusCity.length).trim();
+  const address = parse(street, unit);
+  return address && { ...address, city: String(row.SitusCity || '').trim().toUpperCase(), zip: zip5(row.SitusZip) };
+}
+
+/** Where the Assessor's own text says an account is: this file's street columns, and the unit that follows them in its address line. */
+function assessorAddress(row) {
+  if (!row.Situs_PACS) return null;
+  const head = row.Situs_PACS.split(',')[0].replace(/\s+/g, ' ').trim();
+  const street = [row.SitusNum, row.SitusStPre, row.SitusSt, row.SitusSuf].filter(Boolean).join(' ');
+  let unit = head.startsWith(street) ? head.slice(street.length).trim() : '';
+  if (row.SitusCity && unit.endsWith(row.SitusCity)) unit = unit.slice(0, -row.SitusCity.length).trim();
+  const address = parse(street, unit);
+  return address && { ...address, city: String(row.SitusCity || '').trim().toUpperCase(), zip: zip5(row.SitusZip) };
 }
 
 async function readFacts(zip, records, today) {
@@ -243,9 +257,10 @@ async function readFacts(zip, records, today) {
     put(facts, 'zoning', word(row.Z1));
   }
 
-  for await (const row of zipTable(zip, 'PropAbstractVw.txt', ['Prop_ID', 'Legal', 'TaxStatus', 'NbrhdName'], TABLE)) {
+  for await (const row of zipTable(zip, 'PropAbstractVw.txt', ['Prop_ID', 'Legal', 'TaxStatus', 'NbrhdName', 'Situs_PACS', 'SitusCity', 'SitusZip', 'SitusNum', 'SitusStPre', 'SitusSt', 'SitusSuf'], TABLE)) {
     const record = records.get(row.Prop_ID);
     if (!record) continue;
+    record.ownText = assessorAddress(row);
     put(record.facts, 'legal_description', word(row.Legal)?.slice(0, 300));
     put(record.facts, 'lot_number', lotNumber(row.Legal));
     put(record.facts, 'neighborhood', word(row.NbrhdName));
@@ -409,9 +424,20 @@ async function build({ work, today = new Date() }) {
   const streetId = (address) => `${address.pre}|${address.name}|${address.suffix}|${address.post}|${address.number}`;
   // Where an account says it is. A neighbor's address list can name the same number; the account's own word wins.
   const homesAt = new Set();
+  // The Assessor's text and the map layer can disagree about a home: a hardship mobile home beside a house has the house's
+  // number in one and its own in the other. It's filed at both, so a person writing either line finds it, and the house
+  // beside it asks which home instead of answering for both. A ZIP alone doesn't move a home.
+  let filedTwice = 0;
   for (const record of records.values()) {
-    if (record.kind === 'property' || record.kind === 'unit') homesAt.add(streetId(record.address));
+    const home = record.kind === 'property' || record.kind === 'unit';
+    if (home) homesAt.add(streetId(record.address));
+    if (!home || !record.ownText || resolve({ ...record.ownText, zip: '', city: '' }, [record]).match === 'exact') delete record.ownText;
+    else {
+      filedTwice += 1;
+      homesAt.add(streetId(record.ownText));
+    }
   }
+  log(`accounts the Assessor's text and the map layer place differently: ${filedTwice}`);
   /** One building record per street number the building has, listing the units the county knows there. */
   function buildingAt(id, kindSource, points, facts, parentId) {
     const byStreet = new Map();
@@ -463,7 +489,7 @@ async function build({ work, today = new Date() }) {
   }
 
   for (const record of records.values()) {
-    const { sourceId, taxAreaYear, isComplexLand, layerSale, ...kept } = record;
+    const { sourceId, taxAreaYear, isComplexLand, layerSale, ownText, ...kept } = record;
     if (isComplexLand) continue;
     // A rental building's facts sit at every street number it has.
     if (record.kind === 'building') {
@@ -472,6 +498,10 @@ async function build({ work, today = new Date() }) {
       continue;
     }
     output.push(kept);
+    if (ownText) {
+      delete ownText.form;
+      output.push({ ...kept, address: ownText });
+    }
     // A house with a second street number: that address is the house's, not a home of its own.
     if (record.kind === 'property') {
       const others = (pointsByParcel.get(sourceId) || []).filter((point) => !homesAt.has(streetId(point)));

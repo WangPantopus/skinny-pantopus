@@ -4,9 +4,10 @@
 //
 //  A10.6 — View-model for the single-scroll Business Profile. Loads
 //  `GET /api/businesses/:businessId` (the authenticated detail) and,
-//  best-effort, the `/public/:username` payload (hours + catalog) + the
-//  public-profile endpoint (rating + reviews), then projects them onto
-//  the section models the view renders.
+//  best-effort, the `/public/:username` payload (hours + catalog), then
+//  projects them onto the section models the view renders. The reviews
+//  (`GET /api/users/id/:id`) and a named page load after the page shows,
+//  each with its own loading and failure state.
 //
 //  B3.1 reshape: no more tabs. The projection now derives the stat strip
 //  (rating / jobs / followers-or-"New"), category accents, an open/closed
@@ -65,6 +66,20 @@ public final class BusinessProfileViewModel {
     private let logger = Logger(label: "app.pantopus.ios.BusinessProfile")
     private var isStartingInquiry = false
 
+    /// The reads the page itself waits for. Reviews arrive apart from them.
+    private struct PageReads {
+        let detail: BusinessDetailResponse
+        let publicResponse: BusinessPublicResponse?
+        let hours: [BusinessHoursDTO]
+    }
+
+    private var page: PageReads?
+    /// The reviews' last answer, when it came, and where their own read stands.
+    private var reviews: PublicProfile?
+    private var reviewsReadAt: Date?
+    private var reviewsRead: BusinessReviewsRead = .loading
+    private var reviewsGeneration = 0
+
     init(businessId: String, pageSlug: String? = nil, client: APIClient = .shared) {
         self.businessId = businessId
         self.pageSlug = pageSlug
@@ -81,6 +96,11 @@ public final class BusinessProfileViewModel {
 
     public func refresh() async {
         await fetch()
+    }
+
+    /// The Reviews section's retry; the rest of the page stays as it is.
+    public func retryReviews() async {
+        await readReviews()
     }
 
     /// Save/follow this business through the backend.
@@ -141,20 +161,18 @@ public final class BusinessProfileViewModel {
         }
     }
 
+    /// The page shows once its own reads answer. The reviews and a named page then load on their own, so a slow
+    /// or failed read touches only its section. Returns once both have settled (the owner dashboard reads the
+    /// finished page).
     private func fetch() async {
+        page = nil
+        let detail: BusinessDetailResponse
         do {
-            let detail = try await loadDetail()
+            detail = try await loadDetail()
             let publicResponse = await loadPublic(username: detail.business.username)
             let hours = try await loadHours(from: detail, publicResponse: publicResponse)
-            let reviewsResponse = await loadReviewsAndStats()
-            await loadNamedPage(username: detail.business.username)
-            let content = build(
-                from: detail,
-                publicResponse: publicResponse,
-                hours: hours,
-                reviewsResponse: reviewsResponse
-            )
-            state = .loaded(content)
+            page = PageReads(detail: detail, publicResponse: publicResponse, hours: hours)
+            publish()
         } catch let error as APIError {
             switch error {
             case .notFound:
@@ -164,10 +182,15 @@ public final class BusinessProfileViewModel {
                 logger.warning("Business detail load failed: \(error)")
                 state = .error(message: friendlyMessage(for: error))
             }
+            return
         } catch {
             logger.warning("Business detail load failed: \(error)")
             state = .error(message: "Something went wrong")
+            return
         }
+        async let reviewsSettled: Void = readReviews()
+        await loadNamedPage(username: detail.business.username)
+        await reviewsSettled
     }
 
     /// `/b/:username` links (a business's shared public page) carry the
@@ -271,16 +294,51 @@ public final class BusinessProfileViewModel {
         }
     }
 
-    private func loadReviewsAndStats() async -> PublicProfile? {
+    /// `GET /api/users/id/:id`, on its own so a slow or failed read touches only the Reviews section. Rows already
+    /// on screen stay during the read; only a section with no answer yet shows its loading state.
+    private func readReviews() async {
+        reviewsGeneration &+= 1
+        let generation = reviewsGeneration
+        reviewsRead = reviews == nil && reviewsRead != .loaded ? .loading : .loaded
+        publish()
         do {
-            return try await client.request(
-                PublicProfileEndpoints.profile(id: businessId),
-                as: PublicProfile.self
-            )
+            let profile = try await client.request(PublicProfileEndpoints.profile(id: businessId), as: PublicProfile.self)
+            guard generation == reviewsGeneration else { return }
+            reviews = profile
+            reviewsReadAt = Date()
+            reviewsRead = .loaded
         } catch {
-            logger.debug("Public-profile fallback skipped for business: \(error)")
-            return nil
+            // A newer read owns the section, or the page went away mid-read and reads again when it's back.
+            guard generation == reviewsGeneration, !Task.isCancelled else { return }
+            logger.debug("Business reviews read failed: \(error)")
+            reviewsRead = reviewsAfterFailure(error)
         }
+        publish()
+    }
+
+    private func reviewsAfterFailure(_ error: any Error) -> BusinessReviewsRead {
+        let apiError = error as? APIError
+        switch apiError {
+        case .notFound?, .forbidden?:
+            // A retry can't change a refusal (a draft's own page, a private or blocked profile): nothing public to show.
+            reviews = nil
+            return .loaded
+        default:
+            if reviews != nil, let reviewsReadAt { return .refreshFailed(shownAt: reviewsReadAt) }
+            return .failed(message: apiError.map { friendlyMessage(for: $0) } ?? "Something went wrong. Try again.")
+        }
+    }
+
+    /// Shows the page with the reviews as they stand. Until the page's own reads answer, there is no page to show.
+    private func publish() {
+        guard let page else { return }
+        state = .loaded(build(
+            from: page.detail,
+            publicResponse: page.publicResponse,
+            hours: page.hours,
+            reviewsResponse: reviews,
+            reviewsRead: reviewsRead
+        ))
     }
 
     private func friendlyMessage(for error: APIError) -> String {
@@ -308,7 +366,8 @@ extension BusinessProfileViewModel {
         from detail: BusinessDetailResponse,
         publicResponse: BusinessPublicResponse?,
         hours: [BusinessHoursDTO],
-        reviewsResponse: PublicProfile?
+        reviewsResponse: PublicProfile?,
+        reviewsRead: BusinessReviewsRead
     ) -> BusinessProfileContent {
         let business = detail.business
         let profile = detail.profile
@@ -385,6 +444,7 @@ extension BusinessProfileViewModel {
             gallery: [],
             reviewSummary: buildReviewSummary(business: business, reviewsResponse: reviewsResponse),
             reviews: (reviewsResponse?.reviews ?? []).map(buildReview),
+            reviewsRead: reviewsRead,
             dock: buildDock(status: status, phoneNumber: profile?.publicPhone ?? primaryLocation?.phone),
             savedPlace: pendingSavePlace,
             isNewlyClaimed: isNewlyClaimed,
@@ -761,9 +821,10 @@ extension BusinessProfileViewModel {
             reviewerName: raw.reviewerName ?? "Anonymous",
             reviewerAvatarURL: raw.reviewerAvatar.flatMap(URL.init(string:)),
             rating: raw.rating,
-            body: raw.content ?? "",
+            body: raw.comment ?? raw.content ?? "",
             timestamp: relativeTimestamp(raw.createdAt),
-            verified: false
+            verified: false,
+            ownerReply: raw.ownerResponse.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         )
     }
 

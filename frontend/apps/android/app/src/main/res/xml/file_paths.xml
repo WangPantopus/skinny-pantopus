@@ -28,6 +28,10 @@
     <cache-path
         name="home_documents"
         path="home-document-files/" />
+    <!-- A Christmas card's shared picture (CardShareSheet). -->
+    <cache-path
+        name="card_share"
+        path="card-share/" />
     <!-- Today's sky card and calendar invites, for the share sheet. -->
     <cache-path
         name="share"

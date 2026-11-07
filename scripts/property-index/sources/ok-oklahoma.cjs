@@ -9,14 +9,17 @@ const { year, isoDate, realUnit, streetParts, onRecord } = require('../lib/addre
 const { positive, put, word } = require('../lib/values.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '40109';
 const COUNTY = 'Oklahoma County';
 const BASE = 'https://okassessor.oklahomacounty.org/server/rest/services/Hosted/View_OKPublicRecord/FeatureServer';
-const ACCOUNT_COLUMNS = ['account_num', 'parcel_num', 'account_type', 'house_num', 'direction', 'street_name', 'street_suffix', 'unit', 'full_address', 'city', 'full_legal', 'subdivision_description', 'land_total_acres', 'land_total_sq_foot', 'tax_district', 'total_market_value', 'total_taxable_value', 'total_assessed_value', 'status'];
-const BUILDING_COLUMNS = ['account_num', 'property_type', 'occupancy_description', 'square_feet', 'condominium_square_feet', 'total_basement_square_feet', 'finished_basement_square_feet', 'garage_square_feet', 'carport_square_feet', 'percent_complete', 'condition', 'quality', 'heat_vent_air_description', 'exterior', 'number_of_stories', 'roof_cover', 'foundation_type', 'number_of_rooms', 'number_of_bedrooms', 'number_of_bathrooms', 'number_of_units', 'type_of_construction_description', 'year_built', 'adjusted_year_built'];
-const SALE_COLUMNS = ['account_num', 'reception_num', 'sale_price', 'sale_date', 'valid'];
+const ACCOUNT_COLUMNS = ['account_num', 'parcel_num', 'account_type', 'house_num', 'direction', 'street_name', 'street_suffix', 'unit', 'full_address', 'city', 'full_legal', 'subdivision_description', 'land_total_acres', 'land_total_sq_foot', 'tax_district', 'total_market_value', 'total_taxable_value', 'total_assessed_value', 'status', 'buildings', 'subdivision_lot_number'];
+const BUILDING_COLUMNS = ['account_num', 'property_type', 'occupancy_description', 'square_feet', 'condominium_square_feet', 'total_basement_square_feet', 'finished_basement_square_feet', 'garage_square_feet', 'carport_square_feet', 'percent_complete', 'condition', 'quality', 'heat_vent_air_description', 'exterior', 'number_of_stories', 'roof_cover', 'foundation_type', 'number_of_rooms', 'number_of_bedrooms', 'number_of_bathrooms', 'number_of_units', 'type_of_construction_description', 'year_built', 'adjusted_year_built', 'roof_type'];
+const SALE_COLUMNS = ['account_num', 'reception_num', 'sale_price', 'sale_date', 'deed_type', 'valid'];
+const DETAIL_COLUMNS = ['account_num', 'detail_type'];
+const GARAGES = { GARAGEATTA: 'Attached', GARAGEDETA: 'Detached', GARAGEBUIL: 'Built-in' };
 const CONDITIONS = { EX: 'Excellent', VG: 'Very good', GD: 'Good', AV: 'Average', FR: 'Fair', PR: 'Poor' };
 
 function useOf(account, building, unit) {
@@ -35,7 +38,7 @@ const inRange = (value, most) => {
 };
 const STORY_WORDS = { 'Ranch 1 Story': 1, '1½ Story Fin': 1.5, '2 Story': 2 };
 
-function fromRow(account, building, sale) {
+function fromRow(account, building, sale, details) {
   const unit = realUnit(word(account.unit));
   const address = streetParts({ number: account.house_num, pre: word(account.direction) || '', name: word(account.street_name) || '', suffix: word(account.street_suffix) || '', unit });
   const id = word(account.account_num);
@@ -49,6 +52,9 @@ function fromRow(account, building, sale) {
   put(facts, 'property_class', word(account.account_type));
   put(facts, 'land_use', word(building?.occupancy_description));
   put(facts, 'legal_description', word(account.full_legal)?.slice(0, 300));
+  // "007" is lot 7; "000" says the account names no lot.
+  const lot = /^0*(\d+[A-Z]?)$/.exec(String(account.subdivision_lot_number ?? '').trim())?.[1];
+  put(facts, 'lot_number', lot && lot !== '0' ? lot : null);
   if (building && (home || kind === 'building')) {
     put(facts, 'year_built', year(building.year_built));
     put(facts, 'effective_year_built', year(building.adjusted_year_built));
@@ -56,6 +62,8 @@ function fromRow(account, building, sale) {
     put(facts, 'stories', inRange(building.number_of_stories, 30) || STORY_WORDS[word(building.type_of_construction_description)]);
     put(facts, 'exterior_walls', word(building.exterior));
     put(facts, 'roof_cover', word(building.roof_cover));
+    put(facts, 'roof_shape', word(building.roof_type));
+    if (positive(account.buildings) > 1) facts.buildings_on_parcel = positive(account.buildings);
     put(facts, 'foundation', word(building.foundation_type));
     put(facts, 'quality', word(building.quality));
     put(facts, 'condition', CONDITIONS[word(building.condition)]);
@@ -71,6 +79,11 @@ function fromRow(account, building, sale) {
     put(facts, 'basement_finished_sqft', positive(building.finished_basement_square_feet));
     put(facts, 'garage_sqft', positive(building.garage_square_feet));
     put(facts, 'carport_sqft', positive(building.carport_square_feet));
+    if (details?.garage.size) facts.garage = [...details.garage].sort().join(', ');
+    const parking = [...(details?.garage || [])].sort().map((kind) => `${kind} garage`);
+    if (details?.carport || positive(building.carport_square_feet)) parking.push('Carport');
+    if (parking.length) facts.parking_type = parking.join(', ');
+    if (details?.pool) facts.pool = 'Yes';
   }
   if (kind !== 'unit') {
     if (positive(account.land_total_sq_foot)) facts.lot_sqft = positive(account.land_total_sq_foot);
@@ -100,9 +113,19 @@ async function* build({ work }) {
   const sales = new Map();
   const when = (sale) => new Date(sale.sale_date).getTime() || 0;
   for await (const row of cached(path.join(dir, 'sales.jsonl.gz'), () => layerRows(`${BASE}/5`, SALE_COLUMNS, { oid: 'objectid' }))) {
-    if (!(positive(row.sale_price) > 100)) continue;
+    if (!isHomeSale(positive(row.sale_price))) continue;
     const was = sales.get(row.account_num);
     if (!was || when(row) > when(was)) sales.set(row.account_num, row);
+  }
+  const details = new Map();
+  for await (const row of cached(path.join(dir, 'details.jsonl.gz'), () => layerRows(`${BASE}/2`, DETAIL_COLUMNS, { oid: 'objectid' }))) {
+    const type = String(row.detail_type ?? '').trim();
+    if (!GARAGES[type] && type !== 'CARPORTADD' && type !== 'Pool') continue;
+    if (!details.has(row.account_num)) details.set(row.account_num, { garage: new Set() });
+    const held = details.get(row.account_num);
+    if (GARAGES[type]) held.garage.add(GARAGES[type]);
+    if (type === 'CARPORTADD') held.carport = true;
+    if (type === 'Pool') held.pool = true;
   }
   const records = [];
   const seen = new Set();
@@ -113,7 +136,7 @@ async function* build({ work }) {
       personal += 1;
       continue;
     }
-    const record = fromRow(row, buildings.get(row.account_num), sales.get(row.account_num));
+    const record = fromRow(row, buildings.get(row.account_num), sales.get(row.account_num), details.get(row.account_num));
     if (!record) noAddress += 1;
     else if (!seen.has(record.id)) {
       seen.add(record.id);

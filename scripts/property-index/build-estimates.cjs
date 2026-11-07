@@ -4,6 +4,7 @@
 //
 //   node scripts/property-index/build-estimates.cjs --states VT,NH --out <dir> [--work <dir>]
 //   node scripts/property-index/build-estimates.cjs --areas --out <dir> [--work <dir>]
+//   node scripts/property-index/build-estimates.cjs --points --registry <s3://bucket/prefix or dir> --states HI,NV --out <dir> [--work <dir>]
 'use strict';
 
 const fs = require('node:fs');
@@ -13,6 +14,7 @@ const { ESTIMATE_FACTS } = require('../../backend/services/propertyRecords/estim
 const { writeRelease } = require('./lib/release.cjs');
 const { buildState } = require('./sources/us-structures.cjs');
 const { buildAreas } = require('./sources/us-acs.cjs');
+const { buildStatePoints } = require('./sources/us-structure-points.cjs');
 const { log } = require('./lib/log.cjs');
 
 function assertAllowed(records) {
@@ -34,6 +36,10 @@ async function main() {
     return;
   }
   const built = new Date();
+  if (process.argv.includes('--points')) {
+    for (const state of (opt('--states') || '').split(',').filter(Boolean)) buildStatePoints({ work, out, state, registry: opt('--registry'), built });
+    return;
+  }
   for (const state of (opt('--states') || '').split(',').filter(Boolean)) {
     for await (const county of buildState({ work, state })) {
       const { records, stale_after_days: staleAfterDays, ...about } = county;

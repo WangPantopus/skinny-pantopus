@@ -8,11 +8,13 @@
  *   PROPERTY_RECORDS_LIVE_JURISDICTIONS    County FIPS codes served from the record. A live county never calls ATTOM.
  *   PROPERTY_RECORDS_SWITCHES              Which switch file this server follows, switches/<name>.json. Default: APP_ENV.
  *   VALUE_AREA_TREND                       1: owners' value cards show the area's price change, from <root>/area-trends, in every county.
- *   VALUE_ESTIMATE_MARKETS                 County FIPS codes where a Pantopus estimate may show, after T4 has measured it. Empty: none, anywhere.
+ *   VALUE_NEIGHBORHOOD_FIGURES             1: owners' value cards show the Census Bureau's figures for the ZIP where a home has no estimate.
  *   PROPERTY_ESTIMATES_ENABLED             1: homes with no record see the labeled national estimates, from <root>/estimates.
  *   PROPERTY_FLOOR_BY_LOCATION             on: a home FEMA's file has no address for finds its building from its own registry
  *                                          point (<root>/estimates/points); shadow: looks, counts in the log, shows nothing. Off by default.
  *   PROPERTY_INDEX_AWS_ACCESS_KEY_ID, PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY, PROPERTY_INDEX_REGION  The read-only key.
+ *   PROPERTY_RECORDS_FALLBACK_URL          A replica of the index in a second region, s3://bucket/prefix. A read's second try goes there,
+ *   PROPERTY_INDEX_FALLBACK_REGION         so a regional outage costs a moment, not the lookup. Empty: one region. Same read-only key.
  *   ATTOM_STAND_IN                         '1' only on a local rig whose stand-in answers for ATTOM. See below.
  *
  * Both lists are empty by default, and a county on both is live.
@@ -48,7 +50,7 @@ function listedModes() {
 
 const enabled = () => Boolean(manifestUrl);
 const areaTrendEnabled = () => Boolean(manifestUrl) && env('VALUE_AREA_TREND') === '1';
-const estimateMarkets = () => fipsList('VALUE_ESTIMATE_MARKETS');
+const neighborhoodFiguresEnabled = () => Boolean(manifestUrl) && env('VALUE_NEIGHBORHOOD_FIGURES') === '1';
 const estimatesEnabled = () => Boolean(manifestUrl) && env('PROPERTY_ESTIMATES_ENABLED') === '1';
 const floorByLocation = () => {
   const mode = env('PROPERTY_FLOOR_BY_LOCATION');
@@ -56,19 +58,21 @@ const floorByLocation = () => {
 };
 
 if (manifestUrl) {
-  logger.info('property_records.config', { shadow: [...shadow], live: [...live], switches: switchesName, area_trend: areaTrendEnabled(), estimate_markets: [...estimateMarkets()], estimates: estimatesEnabled(), floor_by_location: floorByLocation() });
+  logger.info('property_records.config', { shadow: [...shadow], live: [...live], switches: switchesName, area_trend: areaTrendEnabled(), neighborhood_figures: neighborhoodFiguresEnabled(), estimates: estimatesEnabled(), floor_by_location: floorByLocation() });
 }
 
 module.exports = {
   manifestUrl,
   region: env('PROPERTY_INDEX_REGION') || 'us-west-2',
+  fallbackUrl: env('PROPERTY_RECORDS_FALLBACK_URL'),
+  fallbackRegion: env('PROPERTY_INDEX_FALLBACK_REGION') || 'us-east-2',
   accessKeyId: env('PROPERTY_INDEX_AWS_ACCESS_KEY_ID'),
   secretAccessKey: env('PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY'),
   switchesName,
   listedModes,
   enabled,
   areaTrendEnabled,
-  estimateMarkets,
+  neighborhoodFiguresEnabled,
   estimatesEnabled,
   floorByLocation,
 };

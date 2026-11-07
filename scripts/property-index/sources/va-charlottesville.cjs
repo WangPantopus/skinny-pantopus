@@ -10,12 +10,18 @@ const { parse } = require('../../../backend/services/propertyRecords/addressKey'
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '51540';
 const COUNTY = 'Charlottesville city';
 const SERVICE = 'https://gisweb.charlottesville.org/arcgis/rest/services/OpenData_2/MapServer';
-const DETAILS = ['ParcelNumber', 'UseCode', 'Bedrooms', 'FullBathrooms', 'HalfBathrooms', 'TotalRooms', 'Fireplace', 'Style', 'ExternalWalls', 'Roof', 'Heating', 'Flooring', 'NumberOfStories', 'SquareFootageFinishedLiving', 'FinishedBasement', 'YearBuilt'];
+const DETAILS = ['ParcelNumber', 'UseCode', 'Bedrooms', 'FullBathrooms', 'HalfBathrooms', 'TotalRooms', 'Fireplace', 'Style', 'ExternalWalls', 'Roof', 'Heating', 'Flooring', 'NumberOfStories', 'SquareFootageFinishedLiving', 'FinishedBasement', 'YearBuilt', 'Grade', 'Basement', 'BasementType'];
+const AREA = 'cvgis.city.vw_OpenData_Parcels_Additions.Area';
+const said = (text) => {
+  const value = word(text);
+  return value && !/^(no data|not applicable)$/i.test(value) ? value : null;
+};
 
 function useOf(use, hasUnit) {
   const u = String(use ?? '').trim();
@@ -28,7 +34,7 @@ function useOf(use, hasUnit) {
   return ['other', null];
 }
 
-function fromBase(row, details, value, sale) {
+function fromBase(row, details, value, sale, parts) {
   const street = [word(row.StreetNumber), word(row.StreetName)].filter(Boolean).join(' ');
   const address = street ? parse(street, realUnit(row.Unit)) : null;
   const parcel = word(row.ParcelNumber);
@@ -40,13 +46,18 @@ function fromBase(row, details, value, sale) {
   put(facts, 'land_use', word(details?.UseCode));
   put(facts, 'zoning', word(row.Zone));
   put(facts, 'legal_description', word(row.Legal)?.slice(0, 300));
+  // "1.0 Residential (Urban)": the state's class code and its words.
+  put(facts, 'property_class', word(String(row.StateCode ?? '').replace(/^[\d.]+\s*/, '')));
   if (details && (home || kind === 'building')) {
     put(facts, 'year_built', year(details.YearBuilt));
     put(facts, 'style', word(details.Style));
     put(facts, 'stories', positive(details.NumberOfStories));
     put(facts, 'exterior_walls', word(details.ExternalWalls));
     put(facts, 'roof_cover', word(details.Roof));
-    put(facts, 'heating', word(details.Heating));
+    put(facts, 'heating', said(details.Heating));
+    // The city's grade letter, as it writes it: "C +" is grade C plus.
+    const grade = /^([A-E])\s*(\+\+|\+|-)?$/.exec(String(details.Grade ?? '').trim());
+    if (grade) facts.quality = `Grade ${grade[1]}${grade[2] || ''}`;
   }
   if (details && home) {
     put(facts, 'living_sqft', positive(details.SquareFootageFinishedLiving));
@@ -58,6 +69,15 @@ function fromBase(row, details, value, sale) {
     if (full || half) facts.bathrooms = (full || 0) + (half || 0) * 0.5;
     put(facts, 'fireplaces', positive(details.Fireplace));
     put(facts, 'basement_finished_sqft', positive(details.FinishedBasement));
+    put(facts, 'basement_sqft', positive(details.Basement));
+    if (parts && kind === 'property') {
+      put(facts, 'ground_floor_sqft', parts['First Floor']);
+      put(facts, 'second_floor_sqft', parts['Second Floor']);
+    }
+    put(facts, 'garage_sqft', parts?.Garage);
+    put(facts, 'carport_sqft', parts?.Carport);
+    const parking = [parts?.Garage && 'Garage', parts?.Carport && 'Carport'].filter(Boolean);
+    if (parking.length) facts.parking_type = parking.join(', ');
     put(facts, 'flooring', word(details.Flooring));
   } else if (details && kind === 'building') put(facts, 'gross_sqft', positive(details.SquareFootageFinishedLiving));
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.Acreage));
@@ -79,16 +99,26 @@ async function* build({ work, today }) {
   const sales = new Map();
   for await (const row of cached(path.join(work, 'va-charlottesville', 'sales.jsonl.gz'), () => layerRows(`${SERVICE}/3`, ['ParcelNumber', 'SaleAmount', 'SaleDate'], { oid: 'RecordID_Int' }))) {
     const [date, price] = [isoDate(row.SaleDate), positive(row.SaleAmount)];
-    if (!date || !(price > 100)) continue;
+    if (!date || !isHomeSale(price)) continue;
     const held = sales.get(row.ParcelNumber);
     if (!held || held.date < date) sales.set(row.ParcelNumber, { date, price });
   }
-  log(`${details.size} parcels with details, ${values.size} with values, ${sales.size} with a sale`);
+  // Each building's parts by card: card 1 is the main building.
+  const parts = new Map();
+  for await (const row of cached(path.join(work, 'va-charlottesville', 'additions.jsonl.gz'), () => layerRows(`${SERVICE}/18`, ['ParcelNumber', 'CardNumber', 'Description', AREA], { oid: 'RecordID_Int' }))) {
+    if (String(row.CardNumber ?? '1').trim() !== '1') continue;
+    const what = word(row.Description);
+    if (!['First Floor', 'Second Floor', 'Garage', 'Carport'].includes(what)) continue;
+    if (!parts.has(row.ParcelNumber)) parts.set(row.ParcelNumber, {});
+    const held = parts.get(row.ParcelNumber);
+    held[what] = (held[what] || 0) + (positive(row[AREA]) || 0) || undefined;
+  }
+  log(`${details.size} parcels with details, ${values.size} with values, ${sales.size} with a sale, ${parts.size} with building parts`);
   const records = [];
   const seen = new Set();
   let noAddress = 0;
-  for await (const row of cached(path.join(work, 'va-charlottesville', 'base.jsonl.gz'), () => layerRows(`${SERVICE}/8`, ['ParcelNumber', 'StreetNumber', 'StreetName', 'Unit', 'Zone', 'Legal', 'Acreage'], { oid: 'RecordID_Int' }))) {
-    const record = fromBase(row, details.get(row.ParcelNumber), values.get(row.ParcelNumber), sales.get(row.ParcelNumber));
+  for await (const row of cached(path.join(work, 'va-charlottesville', 'base.jsonl.gz'), () => layerRows(`${SERVICE}/8`, ['ParcelNumber', 'StreetNumber', 'StreetName', 'Unit', 'Zone', 'Legal', 'Acreage', 'StateCode'], { oid: 'RecordID_Int' }))) {
+    const record = fromBase(row, details.get(row.ParcelNumber), values.get(row.ParcelNumber), sales.get(row.ParcelNumber), parts.get(row.ParcelNumber));
     if (!record) noAddress += 1;
     else if (!seen.has(record.id)) {
       seen.add(record.id);

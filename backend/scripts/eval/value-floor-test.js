@@ -11,15 +11,19 @@
 //
 // "Holds 8 in 10 at ±x%" is how wide a range around the estimate would have to be for 8 of these sales to land inside it.
 //
-//   node backend/scripts/eval/value-floor-test.js --root <index root> --fips 53011,25027 --work <downloads> --uad <UADAggs county zip> [--type house] [--structures <estimates root> --structures-state 24]
+//   served     level 2 as the server gives it (services/propertyRecords/valueEstimate.js), from an area-trends folder (--area-trends),
+//              and how often its own range held
+//
+//   node backend/scripts/eval/value-floor-test.js --root <index root> --fips 53011,25027 --work <downloads> --uad <UADAggs county zip> [--area-trends <dir>] [--type house] [--structures <estimates root> --structures-state 24]
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { openRelease } = require('./lib/propertyRelease');
 const { download, zipTable } = require('../../../scripts/property-index/lib/tables.cjs');
 const { readIndex, FILES } = require('../../../scripts/property-index/sources/us-fhfa.cjs');
-const { saleFrom, sorted, median, quantile, validYear } = require('../../../scripts/property-index/lib/value-model.cjs');
+const { saleFrom, likelySales, sorted, median, quantile, validYear } = require('../../../scripts/property-index/lib/value-model.cjs');
 const { zip5 } = require('../../services/propertyRecords/addressKey');
 
 const opt = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
@@ -126,25 +130,36 @@ async function main() {
   const acs = acsValues();
   const uad = await uadMedians(opt('--uad'));
   const places = structurePlaces();
-  const ways = ['forward', 'appraised', 'zip', 'blockgroup', 'county_sales_factor'];
+  const ways = ['forward', 'appraised', 'zip', 'blockgroup', 'county_sales_factor', 'served'];
+  const trendsDir = opt('--area-trends');
+  // eslint-disable-next-line global-require
+  const served = trendsDir ? require('../../services/propertyRecords/valueEstimate').levelTwo : null;
+  const { buildModel } = require('../../../scripts/property-index/lib/value-model.cjs'); // eslint-disable-line global-require
+  const heldServed = [];
   console.log(['county', 'way', 'sales', 'typical miss %', 'within 10 %', 'bias %', 'holds 8 in 10 at +-%'].join('\t'));
   const pooled = Object.fromEntries(ways.map((way) => [way, []]));
   for (const fips of fipsList) {
     const release = openRelease(root, fips);
     const level = priceLevels(counties.byYear, fips);
     const bases = [];
-    const sales = [];
+    const candidates = [];
     for (const record of release.records()) {
       const base = record.facts.market_value || record.facts.assessed_value;
       // The county's own level is read from its houses, whichever kind of home is being tested.
       if (base && record.kind === 'property' && record.home_type === 'house') bases.push(base);
       if ((record.kind === 'property' || record.kind === 'unit') && record.home_type === TYPE) {
         const { sale } = saleFrom(record, fips, release.county.as_of);
-        if (sale) sales.push({ ...sale, valueDate: validYear(record.facts.value_year), key: `${record.key}|${record.address.number}` });
+        if (sale) candidates.push({ ...sale, valueDate: validYear(record.facts.value_year), key: `${record.key}|${record.address.number}` });
       }
     }
+    const sales = likelySales(candidates);
     const medianBase = median(sorted(bases));
     const errors = Object.fromEntries(ways.map((way) => [way, []]));
+    // What a county with no sales to learn from has: its release's medians and spread, and its state's area figures.
+    const model = served ? buildModel(release.records(), fips, release.county.as_of) : null;
+    const state = release.county.state;
+    const trends = served ? JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(trendsDir, `${state}.json.gz`))).toString('utf8')) : null;
+    let inside = 0;
     const appraised = uad.get(fips);
     const ratios = sorted(sales.map((sale) => sale.price / sale.base));
     const factor = median(ratios);
@@ -160,7 +175,15 @@ async function main() {
       const blockGroup = fips.slice(0, 2) === opt('--structures-state') ? places?.get(sale.key) : null;
       const groupValue = blockGroup ? acs.blockGroups.get(blockGroup) : null;
       if (groupValue) errors.blockgroup.push(miss(groupValue * (now / level(ACS_MIDDLE))));
+      if (served && model) {
+        const estimate = served({ facts: { market_value: sale.base, value_year: sale.valueDate }, jurisdiction: fips, as_of: sale.date }, { ...model, types: {} }, trends, state);
+        if (estimate) {
+          errors.served.push(miss(estimate.value));
+          if (sale.price >= estimate.low && sale.price <= estimate.high) inside += 1;
+        }
+      }
     }
+    if (errors.served.length >= 50) heldServed.push({ fips, held: (100 * inside) / errors.served.length });
     for (const way of ways) {
       const score = scored(errors[way]);
       if (score) {
@@ -168,6 +191,11 @@ async function main() {
         console.log([fips, way, score.sales, pct(score.median_error), pct(score.within_10), pct(score.bias), pct(score.holds_8_in_10)].join('\t'));
       }
     }
+  }
+  if (heldServed.length) {
+    const shares = sorted(heldServed.map((row) => row.held));
+    console.log(`\nserved: its own range held a median of ${pct(median(shares))}% (lowest ${pct(shares[0])}%), at least 70% in ${shares.filter((share) => share >= 70).length} of ${shares.length} counties`);
+    console.log(`  under 70%: ${heldServed.filter((row) => row.held < 70).map((row) => `${row.fips} ${pct(row.held)}%`).join(', ') || 'none'}`);
   }
   console.log('\nAcross counties (median of their numbers), and how a range set from the other counties held in each:');
   for (const way of ways) {

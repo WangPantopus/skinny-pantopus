@@ -9,12 +9,13 @@ const { offsetRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { lotNumber } = require('../lib/legal.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '29095';
 const COUNTY = 'Jackson County';
 const TABLE = 'https://jcgis.jacksongov.org/arcgis/rest/services/ParcelViewer/ParcelsAscendRelate/MapServer/2';
-const COLUMNS = ['parcel_number', 'situs_address', 'situs_city', 'situs_zip', 'tcacode', 'total_sqft', 'landuse_cd', 'landuse_cd_descr', 'nbhd_name', 'year_built', 'num_stories', 'num_bedrooms', 'num_families', 'full_baths', 'half_baths', 'tot_sqf_l_area', 'eff_yr_built_csect', 'tax_year', 'Assessed_Value_Total', 'Market_Value_Total', 'Taxable_Value_Total'];
+const COLUMNS = ['parcel_number', 'situs_address', 'situs_city', 'situs_zip', 'tcacode', 'total_sqft', 'landuse_cd', 'landuse_cd_descr', 'nbhd_name', 'year_built', 'num_stories', 'num_bedrooms', 'num_families', 'full_baths', 'half_baths', 'tot_sqf_l_area', 'eff_yr_built_csect', 'tax_year', 'Assessed_Value_Total', 'Market_Value_Total', 'Taxable_Value_Total', 'subdiv_name', 'Legal_Lines'];
 
 function useOf(words) {
   const use = String(words || '').toUpperCase();
@@ -45,6 +46,9 @@ function fromRow(row) {
   put(facts, 'county_use_code', word(row.landuse_cd));
   put(facts, 'neighborhood', word(row.nbhd_name));
   put(facts, 'tax_code_area', word(row.tcacode));
+  put(facts, 'subdivision', word(row.subdiv_name));
+  put(facts, 'legal_description', word(row.Legal_Lines)?.slice(0, 300));
+  put(facts, 'lot_number', lotNumber(row.Legal_Lines));
   if (home || kind === 'building') {
     put(facts, 'year_built', year(row.year_built));
     put(facts, 'effective_year_built', year(row.eff_yr_built_csect));

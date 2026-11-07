@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -49,19 +50,21 @@ import kotlin.math.sin
  * @param average Mean rating in 0..5.
  * @param count Total number of reviews.
  * @param distribution Five fractions in 0..1, ordered 5★→1★, giving each bar's
- *   fill. Shorter lists pad with zeros; longer lists truncate.
+ *   fill. Shorter lists pad with zeros; longer lists truncate. Null when the
+ *   per-star counts aren't known: the card then shows the average, the stars
+ *   and the count with no bars, as web's business page does.
  */
 @Composable
 fun RatingDistribution(
     average: Double,
     count: Int,
-    distribution: List<Float>,
+    distribution: List<Float>?,
     modifier: Modifier = Modifier,
 ) {
     val avg = average.coerceIn(0.0, 5.0)
     val reviewCount = count.coerceAtLeast(0)
     val hasReviews = reviewCount > 0
-    val bars = (distribution + List(5) { 0f }).take(5).map { it.coerceIn(0f, 1f) }
+    val bars = distribution?.let { fractions -> (fractions + List(5) { 0f }).take(5).map { it.coerceIn(0f, 1f) } }
 
     Row(
         modifier =
@@ -80,24 +83,27 @@ fun RatingDistribution(
             average = avg,
             count = reviewCount,
             hasReviews = hasReviews,
-            modifier = Modifier.width(84.dp),
+            // With no bars beside it, large text widens the summary instead of wrapping it.
+            modifier = if (bars == null) Modifier.widthIn(min = 84.dp) else Modifier.width(84.dp),
         )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            for (row in 0 until 5) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp),
-                ) {
-                    Text(
-                        text = "${5 - row}",
-                        color = PantopusColors.appTextSecondary,
-                        fontSize = 10.5.sp,
-                        modifier = Modifier.width(8.dp),
-                    )
-                    HistogramBar(fraction = bars[row], modifier = Modifier.weight(1f))
+        if (bars != null) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for (row in 0 until 5) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    ) {
+                        Text(
+                            text = "${5 - row}",
+                            color = PantopusColors.appTextSecondary,
+                            fontSize = 10.5.sp,
+                            modifier = Modifier.width(8.dp),
+                        )
+                        HistogramBar(fraction = bars[row], modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }

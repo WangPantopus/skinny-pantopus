@@ -24,6 +24,8 @@ public struct PublicProfileReview: Decodable, Sendable, Hashable, Identifiable {
     public let reviewerName: String?
     public let reviewerAvatar: String?
     public let reviewerUsername: String?
+    /// The reviewed business's published reply (the Review row's `owner_response`); nil until it answers.
+    public let ownerResponse: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -34,6 +36,7 @@ public struct PublicProfileReview: Decodable, Sendable, Hashable, Identifiable {
         case reviewerName = "reviewer_name"
         case reviewerAvatar = "reviewer_avatar"
         case reviewerUsername = "reviewer_username"
+        case ownerResponse = "owner_response"
     }
 }
 

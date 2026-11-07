@@ -21,7 +21,7 @@ const ROLL = 'https://arc.sbcounty.gov/wp-content/uploads/sites/70/arcforms/Secu
 const LAYER = 'https://services.arcgis.com/aA3snZwJfFkVyDuP/arcgis/rest/services/Internal_SB_County_Parcels_ForPublicView/FeatureServer/0';
 const LAYER_COLUMNS = ['APN', 'SITUS_NBR', 'SITUS_PREDIR', 'SITUS_NAME', 'SITUS_TYPE', 'SITUS_CITY', 'SITUS_ZIP', 'TYPEUSE', 'ACREAGE', 'TRA'];
 const TILDE = { delimiter: '~', quoted: false };
-const SFR = ['SFRS-CONST-YEAR', 'SFRS-EFF-YEAR', 'SFRS-SIZE', 'SFRS-NBR-BDRM', 'SFRS-NBR-BATH', 'SFRS-TOTAL-ROOM', 'SFRS-ROOF-TYPE', 'SFRS-FLR1-SIZE', 'SFRS-FLR2-SIZE', 'SFRS-FLR3-SIZE', 'SFRS-BAS1-SIZE', 'SFRS-BAS2-SIZE', 'SFRS-PORT-SQF', 'SFRS-GARG-SQF', 'SFRS-GARG-CLASS', 'SFRS-GARG-STALL', 'SFRS-HEAT', 'SFRS-COOL', 'SFRS-NBR-FIRPLC', 'SFRS-POOL-TYPE', 'SFRS-CONST-TYPE'];
+const SFR = ['SFRS-CONST-YEAR', 'SFRS-EFF-YEAR', 'SFRS-SIZE', 'SFRS-NBR-BDRM', 'SFRS-NBR-BATH', 'SFRS-TOTAL-ROOM', 'SFRS-ROOF-TYPE', 'SFRS-FLR1-SIZE', 'SFRS-FLR2-SIZE', 'SFRS-FLR3-SIZE', 'SFRS-BAS1-SIZE', 'SFRS-BAS2-SIZE', 'SFRS-PORT-SQF', 'SFRS-GARG-SQF', 'SFRS-GARG-CLASS', 'SFRS-GARG-STALL', 'SFRS-PORT-STALL', 'SFRS-HEAT', 'SFRS-COOL', 'SFRS-NBR-FIRPLC', 'SFRS-POOL-TYPE', 'SFRS-CONST-TYPE'];
 const OTHER = ['OTHR-CONST-YEAR', 'OTHR-EFF-YEAR', 'OTHR-NBR-UNITS', 'OTHR-NBR-STORIES', 'OTHR-GRO-LEASE'];
 const LAND = ['LAND-LOT-FOOTAGE', 'GROSS-ACRE', 'LAND-SEWER', 'LAND-WATER', 'LAND-GAS'];
 const COLUMNS = ['FILE-CREATE-DATE', 'PARCEL-NBR', 'USE-CODE', 'TRA', 'SITUS-CITY', ...LAND, ...SFR, ...OTHER];
@@ -79,11 +79,20 @@ function homeFacts(facts, row, others) {
   put(facts, 'frame', FRAMES[row['SFRS-CONST-TYPE']]);
   put(facts, 'garage_sqft', positive(row['SFRS-GARG-SQF']));
   put(facts, 'carport_sqft', positive(row['SFRS-PORT-SQF']));
-  put(facts, 'parking_spaces', inRange(row['SFRS-GARG-STALL'], 20));
+  // Garage and carport stalls, each a count the layout defines.
+  const [garageStalls, carportStalls] = [inRange(row['SFRS-GARG-STALL'], 20), inRange(row['SFRS-PORT-STALL'], 20)];
+  if (garageStalls || carportStalls) facts.parking_spaces = (garageStalls || 0) + (carportStalls || 0);
   put(facts, 'garage', GARAGE_KINDS[String(row['SFRS-GARG-CLASS'] || '')[0]]);
+  const parking = [facts.garage && `${facts.garage} garage`, (carportStalls || positive(row['SFRS-PORT-SQF'])) && 'Carport'].filter(Boolean);
+  if (parking.length) facts.parking_type = parking.join(', ');
   put(facts, 'basement_sqft', (positive(row['SFRS-BAS1-SIZE']) || 0) + (positive(row['SFRS-BAS2-SIZE']) || 0) || null);
   if (positive(row['SFRS-FLR1-SIZE'])) facts.stories = 1 + (positive(row['SFRS-FLR2-SIZE']) ? 1 : 0) + (positive(row['SFRS-FLR3-SIZE']) ? 1 : 0);
   if (others > 1) facts.buildings_on_parcel = others;
+  else {
+    // One residence: its floors are the home's.
+    put(facts, 'ground_floor_sqft', positive(row['SFRS-FLR1-SIZE']));
+    put(facts, 'second_floor_sqft', positive(row['SFRS-FLR2-SIZE']));
+  }
 }
 
 function fromRow(row, sets, roll, valueYear) {

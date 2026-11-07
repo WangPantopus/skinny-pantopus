@@ -14,11 +14,15 @@ import Foundation
 enum MailSentWords {
     /// "To Maya O. · Christmas card", or "To m***@example.com · by email".
     static func toLine(_ piece: MailSentPiece) -> String {
-        "To \(piece.toName) · \(piece.isLetter ? "Letter" : (piece.byEmail ? "by email" : "Christmas card"))"
+        if piece.byLink {
+            return piece.status == .claimed ? "To \(piece.toName) · by link" : "To whoever opens your link"
+        }
+        return "To \(piece.toName) · \(piece.isLetter ? "Letter" : (piece.byEmail ? "by email" : "Christmas card"))"
     }
 
     /// Where it is now, as its row and its page say it.
     static func statusLine(_ piece: MailSentPiece, calendar: Calendar = .current) -> String {
+        if piece.byLink, let line = linkStatusLine(piece) { return line }
         let day = HolidayCardWords.shortDay(piece.arrivesOn ?? piece.arrivesAt, calendar: calendar)
         switch piece.status {
         case .waiting:
@@ -55,8 +59,19 @@ enum MailSentWords {
         return (sent.isEmpty ? "" : "Sent \(sent) · ") + statusLine(piece, calendar: calendar)
     }
 
+    /// A card by link, where it stands; nil when the usual words fit (taken back).
+    static func linkStatusLine(_ piece: MailSentPiece) -> String? {
+        switch piece.status {
+        case .claimed: "\(recipientFirst(piece)) opened your link and has your card"
+        case .expired: "Nobody opened your link in 90 days"
+        case .emailWaiting: "Waiting for someone to open your link"
+        default: nil
+        }
+    }
+
     /// Until when it can be taken back.
     static func takeBackLine(_ piece: MailSentPiece, calendar: Calendar = .current) -> String {
+        if piece.byLink { return "You can take it back until someone opens it." }
         guard !piece.byEmail, let until = MailDates.parse(piece.takeBackUntil) else {
             return "You can take it back until they open it."
         }
@@ -67,7 +82,9 @@ enum MailSentWords {
     /// The confirm's words: the card's own, and the day freed again only
     /// for a card sent today.
     static func takeBackConfirm(_ piece: MailSentPiece, now: Date = Date(), calendar: Calendar = .current) -> String {
-        let first = piece.byEmail
+        let first = piece.byLink
+            ? "Your link will say you took it back."
+            : piece.byEmail
             ? "The link in their email will say you took it back."
             : "It won’t go out with the morning mail."
         let sentToday = MailDates.parse(piece.sentAt).map { calendar.isDate($0, inSameDayAs: now) } ?? false
@@ -82,8 +99,19 @@ enum MailSentWords {
         piece.toHousehold ? piece.toName : HolidayCardWords.firstName(piece.toName)
     }
 
+    /// A card by link's own words for a step; nil where they're the usual ones.
+    private static func linkTrailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String? {
+        switch step.step {
+        case "emailed": "Your link was ready"
+        case "joined": step.done ? "\(recipientFirst(piece)) opened your link and has your card" : "Someone opens your link"
+        case "returned": "Nobody opened your link in 90 days"
+        default: nil
+        }
+    }
+
     /// A step's words: "Sealed by you", "Delivered with Maya’s 7 a.m. mail" …
     static func trailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String {
+        if piece.byLink, let words = linkTrailTitle(step, piece: piece) { return step.done ? words : "\(words) · not yet" }
         let first = HolidayCardWords.possessive(recipientFirst(piece))
         let title = switch step.step {
         case "sealed": "Sealed by you"
@@ -147,7 +175,7 @@ extension MailPieceModel {
             trust: .neighbor,
             from: MailPieceModel.firstText(piece.envelope.from) ?? "You",
             fromLine: nil,
-            to: piece.toName,
+            to: piece.byLink && piece.status != .claimed ? "Their name" : piece.toName,
             toLine: nil,
             note: nil,
             postmarkTown: nil,

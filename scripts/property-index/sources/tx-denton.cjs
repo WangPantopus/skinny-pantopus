@@ -26,7 +26,10 @@ function classify(code) {
   if (code === 'MA3') return 'floor3';
   // Bonus rooms, attached additions and finished basements count in the district's own main area.
   if (code === 'BR' || code === 'AA' || code === 'BAF') return 'floor';
-  if (code === 'AG' || code === 'EG' || code === 'DG') return 'garage';
+  // Attached and detached garages by their own codes; EG is a garage the district doesn't place.
+  if (code === 'AG') return 'attached';
+  if (code === 'DG') return 'detached';
+  if (code === 'EG') return 'garage';
   if (code === 'CP') return 'carport';
   if (code === 'PL') return 'pool';
   return null;
@@ -75,7 +78,11 @@ function fromProperty(row, imp, words, subdivisions) {
     put(facts, 'rooms', whole(imp['Number of Rooms'], 40));
     put(facts, 'fireplaces', /^S\d$/.test(imp.Fireplaces || '') ? Number(imp.Fireplaces[1]) : null);
     put(facts, 'condition', CONDITION[imp.Condition]);
-    put(facts, 'garage_sqft', positive(imp.garage));
+    put(facts, 'garage_sqft', (positive(imp.attached) || 0) + (positive(imp.detached) || 0) + (positive(imp.garage) || 0) || null);
+    const garages = [positive(imp.attached) && 'Attached', positive(imp.detached) && 'Detached'].filter(Boolean);
+    if (garages.length) facts.garage = garages.join(', ');
+    const parking = [...garages.map((kind) => `${kind} garage`), positive(imp.carport) && 'Carport'].filter(Boolean);
+    if (parking.length) facts.parking_type = parking.join(', ');
     put(facts, 'carport_sqft', positive(imp.carport));
     if (imp.pool) facts.pool = 'Yes';
     if (kind === 'property') put(facts, 'stories', Math.max(...[...imp.floors].map(Number), 0) || null);

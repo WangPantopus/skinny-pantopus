@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.v2.MailEnclosure
 import app.pantopus.android.ui.components.CompactButton
 import app.pantopus.android.ui.components.CompactButtonSize
@@ -77,7 +78,13 @@ fun LetterLayout(
     actions: LetterActions,
     /** Shredded: "Bring it back", under the top bar. */
     banner: (@Composable () -> Unit)? = null,
+    /** A word from the page (an action's result); with the card on the table, the table says it. */
+    message: String? = null,
 ) {
+    val tableCard = letter.card?.takeIf { LaunchFeatures.cardTable && !removed }
+    if (tableCard != null) {
+        return HolidayCardTablePage(letter, tableCard, actionInFlight, message, actions, onBack, content.senderUserId)
+    }
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("mailLetter")) {
         MailItemDetailTopBar(config = MailTopBarConfig(eyebrow = "Mail", trust = content.detailTrust, onBack = onBack))
         banner?.invoke()

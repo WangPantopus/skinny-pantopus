@@ -114,6 +114,17 @@ data class SendHolidayCardBody(
     @Json(name = "request_id") val requestId: String? = null,
 )
 
+/** `POST /api/mailbox/cards/shared` (launch key `card_table`): what was shared, for the counts; never the note or a name. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardSharedBody(
+    val design: String,
+    /** `instagram`, `facebook`, `email`, `link`, `save` or `more`. */
+    val kind: String,
+    /** `story`, `post` or `link`. */
+    val format: String,
+    @Json(name = "with_note") val withNote: Boolean,
+)
+
 /** Exactly one of the two. */
 @JsonClass(generateAdapter = true)
 data class HolidayCardRecipient(

@@ -35,6 +35,16 @@ struct RefreshNotice: View {
     }
 }
 
+extension RefreshNotice {
+    /// "Couldn't refresh. Showing 3:42 PM." for content last read at `shownAt`.
+    nonisolated static func text(shownAt: Date) -> String {
+        let shown = Calendar.current.isDateInToday(shownAt)
+            ? shownAt.formatted(date: .omitted, time: .shortened)
+            : shownAt.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+        return "Couldn't refresh. Showing \(shown)."
+    }
+}
+
 extension ScreenSnapshot {
     /// "Couldn't refresh. Showing 3:42 PM." when the copy is past its max
     /// shown age and the last refresh failed; nil otherwise.
@@ -45,9 +55,6 @@ extension ScreenSnapshot {
     /// Pulse names a failed refresh immediately, even for a recent copy.
     func refreshNotice(afterEveryFailure: Bool) -> String? {
         guard refreshFailed, afterEveryFailure || isPastMaxShownAge else { return nil }
-        let shown = Calendar.current.isDateInToday(fetchedAt)
-            ? fetchedAt.formatted(date: .omitted, time: .shortened)
-            : fetchedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute())
-        return "Couldn't refresh. Showing \(shown)."
+        return RefreshNotice.text(shownAt: fetchedAt)
     }
 }

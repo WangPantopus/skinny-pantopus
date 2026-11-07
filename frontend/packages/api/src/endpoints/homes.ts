@@ -91,6 +91,25 @@ export interface PropertySuggestionsResponse {
   questions?: HouseholdQuestion[];
   /** The county's own page, where a person can check what's missing. */
   county_page?: CountyPage;
+  /** What the building's own floor-plan sheet says about this address. */
+  floor_plan?: FloorPlanSuggestion;
+}
+
+/** Add Home's words from a building's floor-plan sheet: this unit's plan, or the building's plans, labeled as the building's. */
+export interface FloorPlanSuggestion {
+  match: 'exact' | 'building';
+  line: string;
+  source: string;
+  /** "Is this your layout?", for a unit the sheet names. */
+  prompt: string | null;
+}
+
+/** "Is this your layout?" on Property details, at the foot of the card `section_id`, or what the household said. */
+export interface FloorPlanLayout {
+  section_id: string;
+  prompt: string | null;
+  answered: string | null;
+  can_undo: boolean;
 }
 
 export interface CountyPage {
@@ -148,6 +167,7 @@ export interface HouseholdPart {
   groups: HouseholdGroup[];
   questions: HouseholdQuestion[];
   county_page: CountyPage | null;
+  floor_plan?: FloorPlanLayout;
 }
 
 /** A change to one fact, or with `group` to every fact of a group that can take it. */
@@ -259,6 +279,8 @@ export async function getHomePropertyDetail(homeId: string): Promise<HomePropert
  */
 export async function createHome(data: {
   request_id?: string;
+  /** "Is this your layout?", answered on the form. */
+  floor_plan_answer?: 'yes' | 'no';
   address: string;
   address_id?: string;
   unit_number?: string;
@@ -313,6 +335,13 @@ export async function updateHome(homeId: string, data: Partial<{
  */
 export async function reportRecordProblem(homeId: string, data: { section: string; field?: string | null; note?: string | null }): Promise<{ reported: boolean }> {
   return post<{ reported: boolean }>(`/api/homes/${homeId}/record-problem`, data);
+}
+
+/**
+ * "Is this your layout?", for a unit its building's sheet names. A no reaches Pantopus review, and nothing shown changes.
+ */
+export async function answerFloorPlan(homeId: string, answer: 'yes' | 'no' | 'undo'): Promise<{ answered: boolean }> {
+  return post<{ answered: boolean }>(`/api/homes/${homeId}/floor-plan-answer`, { answer });
 }
 
 /**
