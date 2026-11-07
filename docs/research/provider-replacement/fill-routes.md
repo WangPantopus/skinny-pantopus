@@ -1,4 +1,4 @@
-# Missing home facts: every route to fill them
+# Filling missing home facts: every route, ranked
 
 November 7, 2026. The founder asked for every record's missing facts to be researched and filled "with all resources,
 whatever resources, it has to be available online, even Zillow, redfin", and saved for those records, and for the
@@ -6,7 +6,8 @@ address to be kept on file where nothing is found. This page ranks every route b
 baths first. It records what each listing site and data vendor allows and what has been filled so far. Counts only: no
 addresses or owner names. This isn't legal advice. Terms and prices are as read on the date shown.
 
-Related: [other-routes.md](other-routes.md) (the routes beyond free county files),
+Related: [missing-facts.md](missing-facts.md) (the gaps ledger's counts by field, kind, state and county; PR #3737),
+[other-routes.md](other-routes.md) (the routes beyond free county files),
 [statewide-inventory.md](statewide-inventory.md), [lookup-sites.md](lookup-sites.md), [unit-facts.md](unit-facts.md),
 [decisions.md](decisions.md) (D2, D7), [architecture.md](architecture.md#7-fact-precedence-field-by-field) (which source
 wins; modeled figures never fill a record field).
