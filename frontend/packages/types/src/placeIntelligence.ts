@@ -1035,6 +1035,16 @@ export interface PlaceYourHomeData {
   value_title?: string | null;
   /** The value block in the server's words, the confirmed owner's. A build reads this first. */
   value_card?: HomeValueCard | null;
+  /** No record of this home: labeled estimates, in their own slot and never in the fields above. */
+  estimate?: PlaceHomeEstimate | null;
+}
+
+/** "Estimate for similar homes nearby": the server words and rounds every row. */
+export interface PlaceHomeEstimate {
+  title: string;
+  rows: { id: string; label: string; value: string }[];
+  note: string;
+  footer: string;
 }
 
 // ════════════════════════════════════════════════════════════

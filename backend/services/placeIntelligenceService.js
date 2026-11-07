@@ -47,12 +47,14 @@ const addressCalendarService = require('./addressCalendarService');
 const { getHomePrivacy } = require('./homePrivacyService');
 const { buildGoodDayTiles } = require('./goodDayEngine');
 const { getDensityBucket } = require('./place/densityReader');
-const { resolveHouse } = require('./place/houseShape');
+const { resolveHouse, houseFromEstimate } = require('./place/houseShape');
 const { getSystemsLedger } = require('./homeSystemsService');
 const nfipPremiumService = require('./nfipPremiumService');
 const { isConnecticutPlanningRegion } = require('../data/connecticutTowns');
 const exemptionCheckService = require('./exemptionCheckService');
 const propertyRecordsConfig = require('../config/propertyRecords');
+const propertyEstimates = require('./propertyRecords/estimates');
+const { serializeEstimate } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
 const recordVocabulary = require('./recordVocabulary');
 const homeValueCard = require('./homeValueCard');
@@ -1019,6 +1021,23 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   // lookup that just failed) offer Try again.
   const nothingYet = profile.source === 'fallback'
     && !(profile.household_fields || []).some((field) => field !== 'property_type');
+  // No record of this home: the labeled estimates, never in a field below. New builds draw them; the sky's outline
+  // uses the footprint on every build that gets this section's data.
+  const floor = !profile.provenance && profile.source === 'fallback' && result.lookup !== 'pending' ? await propertyEstimates.forHome(home) : null;
+  const floorEstimate = floor ? serializeEstimate(floor, home) : null;
+  const estimateData = floorEstimate ? { title: floorEstimate.sections[0].title, rows: floorEstimate.sections[0].rows, note: floorEstimate.sections[0].note, footer: floorEstimate.footer } : null;
+  if (nothingYet && estimateData && wantsRecordVocabulary) {
+    return [serializePlaceSection('your_home', {
+      access,
+      status: 'ready',
+      data: {
+        year_built: null, sqft: null, bedrooms: null, bathrooms: null, lot_sqft: null, home_type: profile.property_type ?? null,
+        estimated_value: null, value_low: null, value_high: null, assessed_value: null,
+        house: resolveHouse(houseFromEstimate(floor.structure), home.home_type),
+        estimate: estimateData,
+      },
+    })];
+  }
   if (nothingYet && !process.env.ATTOM_API_KEY && result.lookup !== 'pending') {
     return [serializePlaceSection('your_home', {
       access,
@@ -1063,8 +1082,9 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
       assessed_value: profile.assessed_value ?? null,
       // The home's outline for the Today sky: the county record's, with the
       // kind of home the household chose over it.
-      house: resolveHouse(profile.house, home.home_type),
+      house: resolveHouse(profile.house || houseFromEstimate(floor?.structure), home.home_type),
       ...(wantsRecordVocabulary ? recordVocabulary.placeValueFields(profile, valueCard) : {}),
+      ...(wantsRecordVocabulary && estimateData ? { estimate: estimateData } : {}),
     },
   })];
 }

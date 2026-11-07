@@ -346,7 +346,7 @@ export default function HomePropertyDetailsPage() {
             {hasRecord ? (
               <>
                 <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
-                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                  {countyRecord?.estimate ? null : <ShieldCheck className="h-4 w-4 shrink-0" />}
                   <span>
                     {countyRecord?.footer || details?.provenance?.label || 'Data from public records'}
                     {countyRecord || details?.provenance ? (

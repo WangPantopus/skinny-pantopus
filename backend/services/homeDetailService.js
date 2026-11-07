@@ -5,8 +5,9 @@ const invitations = require('./homeInvitationService');
 const claimConfig = require('../config/householdClaims');
 const claimPolicy = require('./homeClaimRoutingService');
 const property = require('./ai/propertyIntelligenceService');
-const { serializeCountyRecord, serializePropertyRecord } = require('../serializers/countyRecordSerializer');
+const { serializeCountyRecord, serializePropertyRecord, serializeEstimate } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
+const estimates = require('./propertyRecords/estimates');
 const householdFacts = require('./householdFacts');
 const floorPlans = require('./propertyRecords/floorPlans');
 const { changeNicheData } = require('./homeNicheData');
@@ -235,6 +236,16 @@ async function householdPart({ homeId, home, raw, access, actorId, copy = null, 
   }
 }
 
+// No record anywhere: the labeled estimates, in the same place a record's sections go, so every build draws them. The
+// household's questions still ask for what no record answers: an estimate never stands in for a fact.
+async function estimateAnswer(home, raw, household) {
+  const county = serializeEstimate(await estimates.forHome(raw), raw);
+  if (!county) return null;
+  return { home, attom_property_detail: null, source: 'cache', unavailable_reason: null, county_record: county,
+    provenance: { publisher: county.footer, dataset: null, as_of: null, scope: 'area', method: 'estimate', label: county.footer, title: 'Estimate' },
+    household: await householdPart(household) };
+}
+
 async function propertyDetail(homeId, actorId) {
   return authority.withCurrentAccess({ homeId, actorId }, async access => {
     // The county record is the verified owner's, as the Home's value is on Place. Everyone else who can open
@@ -255,6 +266,10 @@ async function propertyDetail(homeId, actorId) {
     const record = await homeRecords.forHome(raw);
     if (record) {
       const county = record.copy ? serializePropertyRecord(record.copy) : null;
+      if (!county && record.lookup !== 'pending') {
+        const floor = await estimateAnswer(home, raw, { homeId, home, raw, access, actorId });
+        if (floor) return floor;
+      }
       return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
         unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : 'NO_PROPERTY_FOUND'), county_record: county,
         ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}),
@@ -269,6 +284,10 @@ async function propertyDetail(homeId, actorId) {
     // Only the property bundle is returned, never the rest of niche_data or
     // unrelated raw Home fields. Deeper vendor-content validation is separate.
     const stored = serializeCountyRecord(result.attomPayload, avm);
+    if (!stored) {
+      const floor = await estimateAnswer(home, raw, { homeId, home, raw, access, actorId });
+      if (floor) return floor;
+    }
     return { home, attom_property_detail: result.attomPayload, source: result.source,
       unavailable_reason: result.unavailableReason || null, county_record: stored,
       household: await householdPart({ homeId, home, raw, access, actorId, otherRecord: stored }) };
