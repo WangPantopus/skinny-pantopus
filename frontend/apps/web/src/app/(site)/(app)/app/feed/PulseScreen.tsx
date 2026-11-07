@@ -30,7 +30,7 @@ import SportsEventModule from '@/components/feed/SportsEventModule';
 import ErrorState from '@/components/ui/ErrorState';
 import { useAreaPicker } from '@/hooks/useAreaPicker';
 import { useFeedPreferences } from '@/hooks/useFeedPreferences';
-import { useFeedData, type FilterType } from '@/hooks/useFeedData';
+import { markNearbyFeedSeen, useFeedData, type FilterType } from '@/hooks/useFeedData';
 import { useProfilePin } from '@/hooks/useProfilePin';
 import { useNewPostsPill } from '@/hooks/useNewPostsPill';
 import { useActiveSportsEvents } from '@/hooks/useActiveSportsEvents';
@@ -304,6 +304,19 @@ export default function FeedPage() {
       feed.loadFeed(false);
     }
   }, [virtualizer.getVirtualItems(), feed.hasMore, feed.loading, feed.loadingMore, listed.posts.length, feed.loadFeed]);
+
+  // Nearby's posts on screen (the Place list, in a tab that's showing) move the "since you last looked" marker:
+  // when they first show, and whenever the tab is shown again (markNearbyFeedSeen keeps it to every 5 minutes).
+  // Cold-start tips aren't posts.
+  const viewerId = feed.user?.id;
+  const nearbyPostsShown = feed.surface === 'place' && viewMode === 'list' && listed.posts.some((post) => !post.is_seeded);
+  useEffect(() => {
+    if (!nearbyPostsShown || !viewerId) return undefined;
+    const mark = () => { if (document.visibilityState === 'visible') markNearbyFeedSeen(viewerId); };
+    mark();
+    document.addEventListener('visibilitychange', mark);
+    return () => document.removeEventListener('visibilitychange', mark);
+  }, [nearbyPostsShown, viewerId]);
 
   // ── The Pulse header (founder request 2026-10-22) ─────────
   // One header block over the content, which fills the screen: sticky over the list, overlaid on

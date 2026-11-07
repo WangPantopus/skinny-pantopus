@@ -80,6 +80,23 @@ export function patchPostInFeedCaches(queryClient: QueryClient, postId: string, 
   });
 }
 
+// When each account last moved its Nearby marker, this page load.
+const nearbySeenAt = new Map<string, number>();
+const NEARBY_SEEN_INTERVAL_MS = 5 * 60 * 1000;
+
+/**
+ * Nearby's posts are on screen: POST /api/posts/feed/seen moves the account's "since you last looked" marker, which the
+ * assistant's "What did I miss?" and the morning brief catch up from (as on iOS and Android). At most once every
+ * 5 minutes per account; a missed mark only makes the next catch-up a little longer.
+ */
+export function markNearbyFeedSeen(userId: string) {
+  const now = Date.now();
+  const last = nearbySeenAt.get(userId);
+  if (last != null && now - last < NEARBY_SEEN_INTERVAL_MS) return;
+  nearbySeenAt.set(userId, now);
+  api.posts.markFeedSeen().catch(() => {});
+}
+
 /** Take one post out of every cached feed list, so a post deleted on its own page or in My pulse isn't listed when you come back. */
 export function removePostFromFeedCaches(queryClient: QueryClient, postId: string) {
   queryClient.setQueriesData<InfiniteData<FeedPage>>({ queryKey: ['feed'] }, (old) => {
