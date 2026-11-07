@@ -48,6 +48,27 @@ county or its site's vendor says yes in writing.**
 If the founder says yes anyway, the only defensible version is a written-permission list: a county enters it only when
 it or its vendor agrees, and Pantopus stops on any objection.
 
+## As built: link and confirm (November 7, after the founder's "3. yes"; off behind `LINK_AND_CONFIRM`)
+
+- **The switch:** `LINK_AND_CONFIRM=1` on the API (`backend/config/countyLinks.js`). Off, every screen and link is what it was
+  (`config/countyPages.js`), word for word.
+- **Links:** `backend/config/countyLinks.json`, one row per county, or per town where the town keeps the records (Connecticut).
+  A row is `deep` when the county's site takes the record's parcel number in its address, with the published pattern that
+  says so; otherwise it links the county's property search. Every row names where its pattern came from: a county's own
+  published file or web map (Connecticut's state file publishes each town's property-card link; Los Angeles's and Franklin's
+  parcel maps link to the parcel's page), the county's own pages as a search engine lists them, NETR's public directory,
+  or WP9's list. No lookup page was opened, by a server, a script or a browser, to build or test a link. A deep link needs a
+  live county record's parcel number, so where no record answers, the link is the county's search page.
+- **Is this right?:** with no county record, Property details and Add Home show "Check <county>'s page for this home"; once the
+  person is back from it, year built, size, bedrooms and baths ask "Is this right?". Yes keeps them as the household's own
+  entries, marked as checked on the county's page (`via: 'county_page'` in `niche_data.household_facts`), shown as "From your
+  household" and never as a county record (architecture.md, section 7). Fix opens WP9's editor; Undo goes back to the entry
+  before. A refresh never touches them (section 9). Where a county record answers, only the link changes.
+- **Who sees it:** whoever can edit the Home writes; verified members see the household's entries, each "Checked on the county's
+  page"; renters and guests see nothing new. Builds in the stores get nothing new (it rides on `?vocabulary=2`).
+- **The written asks:** a letter to each lookup-site vendor and a line for every county letter, kept privately with the county
+  letters. A yes makes that vendor's or county's pages an ordinary connector with its own rights row.
+
 ## Who runs the lookup sites
 
 Which system runs each county's assessor lookup, from the [NETR Online public records directory](https://publicrecords.netronline.com/):
