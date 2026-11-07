@@ -15,7 +15,7 @@ import AddressAutocomplete from '@/components/AddressAutocomplete';
 import MailVerificationFlow from '@/components/address/MailVerificationFlow';
 import PrivacyPromise from '@/components/place/PrivacyPromise';
 import { useHomeCreation } from '@/components/homes/creation/useHomeCreation';
-import { CountyPageLink, QuickQuestion } from '@/components/homes/HouseholdFacts';
+import { CountyPageLink, FloorPlanNote, QuickQuestion } from '@/components/homes/HouseholdFacts';
 import { validHomeCreationInput, type HomeCreationInput } from '@/components/homes/creation/homeCreationModel';
 import HomeCreationRecoveryView from '@/components/homes/creation/HomeCreationRecoveryView';
 import { validHomeResidencyInput, type HomeResidencyInput } from '@/components/homes/creation/homeResidencySubmissionModel';
@@ -173,6 +173,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   // One-tap answers for what the record lacks, and the county's own page, when the server sends them.
   const [factQuestions, setFactQuestions] = useState<NonNullable<PropertySuggestionsResponse['questions']>>([]);
   const [countyPage, setCountyPage] = useState<PropertySuggestionsResponse['county_page'] | null>(null);
+  const [floorPlan, setFloorPlan] = useState<PropertySuggestionsResponse['floor_plan'] | null>(null);
+  const [floorPlanAnswer, setFloorPlanAnswer] = useState<'yes' | 'no' | null>(null);
   // The county record is looked up while the person is already on this step ('pending': the fields say
   // "Looking up…"); it fills only what is still empty. Details that land after the person moved on say
   // so on the later steps, with a way back to check them.
@@ -274,6 +276,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setNamedRecord(null);
     setFactQuestions([]);
     setCountyPage(null);
+    setFloorPlan(null);
+    setFloorPlanAnswer(null);
   };
 
   // The first answer fills the new step's fields; a county record that lands later fills only what is
@@ -299,15 +303,17 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     return filled;
   };
   const suggestionNote = (res: PropertySuggestionsResponse | undefined) => {
-    setNamedRecord(res?.provenance ? res : null);
+    setNamedRecord(res?.provenance || res?.floor_plan ? res : null);
     setFactQuestions(res?.questions ?? []);
     setCountyPage(res?.county_page ?? null);
+    setFloorPlan(res?.floor_plan ?? null);
+    setFloorPlanAnswer(null);
     if (res?.provenance) {
       return res.provenance.scope === 'building' && res.lookup_message ? `${res.lookup_message} ${res.provenance.label}` : res.provenance.label;
     }
     // No record behind the prefill: the server's words, not "public records".
     const lookup = res?.record_lookup ?? res?.attom_lookup;
-    if ((lookup === 'unavailable' || lookup === 'none') && res?.lookup_message) return res.lookup_message;
+    if ((res?.floor_plan?.match === 'exact' || lookup === 'unavailable' || lookup === 'none') && res?.lookup_message) return res.lookup_message;
     return res?.tiers_used?.filter(Boolean).length ? 'Prefilled using public records and address hints where available — please verify.' : '';
   };
   // Under a field once the record names its source: the record's tag, or that this is the person's own entry.
@@ -417,6 +423,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
       sq_ft: parsedSqft,
       lot_sq_ft: parsedLotSqft,
       year_built: parsedYearBuilt,
+      ...(floorPlanAnswer ? { floor_plan_answer: floorPlanAnswer } : {}),
       description: description.trim() || undefined,
       amenities: Object.fromEntries(Object.entries(amenities).filter(([, v]) => v)),
       is_owner: isOwner,
@@ -1266,6 +1273,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                   ))}
                 </div>
               </div>
+
+              {floorPlan ? <FloorPlanNote part={floorPlan} answer={floorPlanAnswer} onAnswer={setFloorPlanAnswer} /> : null}
 
               {/* What the record lacks: a tap fills the same field below. */}
               {factQuestions.length ? (
