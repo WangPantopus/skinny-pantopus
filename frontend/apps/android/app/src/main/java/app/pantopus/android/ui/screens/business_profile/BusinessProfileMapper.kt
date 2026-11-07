@@ -33,6 +33,9 @@ import java.util.UUID
  * view-model keeps a thin `computeOpenState` wrapper for its unit tests.
  */
 object BusinessProfileMapper {
+    private const val MINUTES_PER_DAY = 24 * 60
+    private const val LAST_MINUTE_OF_DAY = MINUTES_PER_DAY - 1
+
     fun build(
         detail: BusinessDetailResponse,
         publicResponse: BusinessPublicResponse?,
@@ -241,11 +244,12 @@ object BusinessProfileMapper {
         return scoped.ifEmpty { rows }
     }
 
+    /** By day, then by opening time: the hours reads order by day only. */
     private fun buildHours(
         rows: List<BusinessHoursDto>,
         weekday: Int,
     ): List<BusinessHoursRow> =
-        rows.sortedBy { it.dayOfWeek }.map { row ->
+        rows.sortedWith(compareBy<BusinessHoursDto> { it.dayOfWeek }.thenBy { minutes(it.openTime) ?: -1 }).map { row ->
             val dayIndex = row.dayOfWeek.coerceIn(0, 6)
             val isClosed = row.isClosed == true
             val overnight =
@@ -253,6 +257,7 @@ object BusinessProfileMapper {
             val time =
                 when {
                     isClosed -> "Closed"
+                    isAllDay(row) -> "Open 24 hours"
                     row.openTime != null && row.closeTime != null ->
                         "${formatTime(row.openTime)} – ${formatTime(row.closeTime)}" + if (overnight) " (next day)" else ""
                     else -> "—"
@@ -275,62 +280,83 @@ object BusinessProfileMapper {
         val weekday = now.dayOfWeek.value % 7
         val minutesNow = now.hour * 60 + now.minute
         val byDay = rows.groupBy { it.dayOfWeek.coerceIn(0, 6) }
+        val today = byDay[weekday].orEmpty()
 
-        overnightCarryover(byDay[(weekday + 6) % 7]?.firstOrNull(), minutesNow)?.let { return it }
-        val today = byDay[weekday]?.firstOrNull()
-        if (today != null) {
-            val state = todayOpenState(today, minutesNow)
-            if (state != null) return state
+        if (today.any { isAllDay(it) }) {
+            return BusinessOpenState(isOpen = true, statusLabel = "Open now", statusDetail = "Open 24 hours", chipLabel = "Open now")
         }
-        val next = nextOpening(byDay, weekday)
-        if (next != null) return next
-
-        return BusinessOpenState(false, "Closed", "Hours vary", "Closed")
-    }
-
-    private fun overnightCarryover(
-        previous: BusinessHoursDto?,
-        minutesNow: Int,
-    ): BusinessOpenState? {
-        if (previous == null || previous.isClosed == true) return null
-        val open = minutes(previous.openTime) ?: return null
-        val close = minutes(previous.closeTime) ?: return null
-        if (close >= open || minutesNow >= close) return null
-        return BusinessOpenState(
-            isOpen = true,
-            statusLabel = "Open now",
-            statusDetail = "Closes ${formatTime(previous.closeTime.orEmpty())}",
-            chipLabel = "Open now",
-        )
-    }
-
-    private fun todayOpenState(
-        today: BusinessHoursDto,
-        minutesNow: Int,
-    ): BusinessOpenState? {
-        if (today.isClosed == true) return null
-        val openM = minutes(today.openTime) ?: return null
-        val closeM = minutes(today.closeTime) ?: return null
-        val overnight = closeM < openM
-        val isOpen = if (overnight) minutesNow >= openM else minutesNow in openM until closeM
-        if (isOpen) {
+        // Overnight hours belong to the day the business opened, even when the
+        // following day's own schedule is closed.
+        val intervals = openIntervals(byDay[(weekday + 6) % 7].orEmpty(), dayOffset = -1) + openIntervals(today, dayOffset = 0)
+        val closing = closingInterval(intervals, minutesNow)
+        if (closing != null) {
             return BusinessOpenState(
                 isOpen = true,
                 statusLabel = "Open now",
-                statusDetail = "Closes ${formatTime(today.closeTime.orEmpty())}" + if (overnight) " tomorrow" else "",
+                statusDetail = "Closes ${formatTime(closing.closeTime)}" + if (closing.end >= MINUTES_PER_DAY) " tomorrow" else "",
                 chipLabel = "Open now",
             )
         }
-        if (minutesNow < openM) {
-            return BusinessOpenState(
-                isOpen = false,
-                statusLabel = "Closed now",
-                statusDetail = "Opens today at ${formatTime(today.openTime.orEmpty())}",
-                chipLabel = "Closed · opens ${formatTime(today.openTime.orEmpty())}",
+        val laterToday = intervals.filter { it.start > minutesNow }.minByOrNull { it.start }
+        if (laterToday != null) return closedState("today", laterToday.openTime)
+
+        return nextOpening(byDay, weekday) ?: BusinessOpenState(false, "Closed", "Hours vary", "Closed")
+    }
+
+    /**
+     * One saved interval, in minutes from today's midnight: yesterday's start
+     * below zero, and an overnight interval ends past 24 hours.
+     */
+    private data class OpenInterval(
+        val start: Int,
+        val end: Int,
+        val openTime: String,
+        val closeTime: String,
+    )
+
+    private fun openIntervals(
+        rows: List<BusinessHoursDto>,
+        dayOffset: Int,
+    ): List<OpenInterval> =
+        rows.filter { it.isClosed != true }.mapNotNull { row ->
+            val openTime = row.openTime ?: return@mapNotNull null
+            val closeTime = row.closeTime ?: return@mapNotNull null
+            val open = minutes(openTime) ?: return@mapNotNull null
+            val close = minutes(closeTime) ?: return@mapNotNull null
+            OpenInterval(
+                start = open + dayOffset * MINUTES_PER_DAY,
+                end = (if (close < open) close + MINUTES_PER_DAY else close) + dayOffset * MINUTES_PER_DAY,
+                openTime = openTime,
+                closeTime = closeTime,
             )
         }
-        return null
+
+    /**
+     * The interval the business next closes at, or null when none covers
+     * [minute]. Intervals that overlap or touch count as one: 9–2 and 12–5
+     * close at 5.
+     */
+    private fun closingInterval(
+        intervals: List<OpenInterval>,
+        minute: Int,
+    ): OpenInterval? {
+        var last = intervals.filter { it.start <= minute && minute < it.end }.maxByOrNull { it.end } ?: return null
+        for (interval in intervals.sortedBy { it.start }) {
+            if (interval.start <= last.end && interval.end > last.end) last = interval
+        }
+        return last
     }
+
+    private fun closedState(
+        whenLabel: String,
+        time: String,
+    ): BusinessOpenState =
+        BusinessOpenState(
+            isOpen = false,
+            statusLabel = "Closed now",
+            statusDetail = "Opens $whenLabel at ${formatTime(time)}",
+            chipLabel = "Closed · opens ${formatTime(time)}",
+        )
 
     private fun nextOpening(
         byDay: Map<Int, List<BusinessHoursDto>>,
@@ -338,24 +364,21 @@ object BusinessProfileMapper {
     ): BusinessOpenState? {
         for (offset in 1..7) {
             val day = (weekday + offset) % 7
-            val open = openTimeFor(byDay[day]?.firstOrNull())
-            if (open != null) {
-                val whenLabel = if (offset == 1) "tomorrow" else fullDayName(day)
-                return BusinessOpenState(
-                    isOpen = false,
-                    statusLabel = "Closed now",
-                    statusDetail = "Opens $whenLabel at ${formatTime(open)}",
-                    chipLabel = "Closed · opens ${formatTime(open)}",
-                )
-            }
+            val open = earliestOpening(byDay[day].orEmpty())
+            if (open != null) return closedState(if (offset == 1) "tomorrow" else fullDayName(day), open)
         }
         return null
     }
 
-    private fun openTimeFor(row: BusinessHoursDto?): String? {
-        val open = row?.openTime ?: return null
-        return open.takeUnless { row.isClosed == true || minutes(it) == null }
-    }
+    private fun earliestOpening(rows: List<BusinessHoursDto>): String? =
+        rows
+            .filter { it.isClosed != true && minutes(it.openTime) != null }
+            .minByOrNull { minutes(it.openTime) ?: Int.MAX_VALUE }
+            ?.openTime
+
+    /** 00:00–23:59, or a `24:00` close: "Open 24 hours", as on iOS. */
+    private fun isAllDay(row: BusinessHoursDto): Boolean =
+        row.isClosed != true && minutes(row.openTime) == 0 && (minutes(row.closeTime) ?: 0) >= LAST_MINUTE_OF_DAY
 
     private fun minutes(raw: String?): Int? {
         if (raw == null) return null
@@ -371,7 +394,7 @@ object BusinessProfileMapper {
         if (parts.size < 2) return raw
         val hour = parts[0].toIntOrNull() ?: return raw
         val minute = parts[1].toIntOrNull() ?: return raw
-        val suffix = if (hour >= 12) "PM" else "AM"
+        val suffix = if (hour in 12..23) "PM" else "AM"
         val normalised = if (hour % 12 == 0) 12 else hour % 12
         return if (minute == 0) "$normalised $suffix" else String.format(Locale.US, "%d:%02d %s", normalised, minute, suffix)
     }
