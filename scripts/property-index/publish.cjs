@@ -21,6 +21,7 @@ const zlib = require('node:zlib');
 const { execFileSync } = require('node:child_process');
 const { FORMAT, statePath, releasePath } = require('../../backend/services/propertyRecords/format');
 const { log } = require('./lib/log.cjs');
+const { selfFind, described, MIN_SELF_FIND } = require('./lib/self-find.cjs');
 
 // A new release may lose this much without someone looking at it.
 const MIN_RECORD_SHARE = 0.9;
@@ -92,12 +93,16 @@ function withMaps(stateFile, counties) {
 }
 
 /** Why this release mustn't replace the one serving, and what only someone who looked may accept: counts only. */
-function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, moved = []) {
+function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, moved = [], records = true) {
   const found = [];
   const falls = [];
   const dir = path.join(out, releasePath(entry.fips, entry.release));
   const report = JSON.parse(fs.readFileSync(path.join(dir, 'report.json'), 'utf8'));
   if (report.records === 0) found.push('no records');
+  // Its homes, looked up from the address a person would type with the reader the servers run.
+  const own = selfFind(fs.readFileSync(path.join(dir, 'manifest.json.gz')), fs.readFileSync(path.join(dir, 'data.bin')), entry);
+  log(`${entry.fips} ${entry.release}: ${described(own)}`);
+  if (records && own.share !== null && own.share < MIN_SELF_FIND) falls.push(`only ${own.found} of ${own.asked - own.ambiguous} sampled homes find themselves through the app's reader`);
   if (!previous) return { found, falls };
   const before = previous.records || 0;
   if (report.records < before * MIN_RECORD_SHARE) found.push(`${report.records} records, ${before} serving`);
@@ -125,12 +130,24 @@ function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, 
   return { found, falls };
 }
 
+/** How the release serving reads with the reader the servers run now, when it no longer finds its own homes; else null. */
+function readsDifferently(store, county) {
+  const name = releasePath(county.fips, county.release);
+  const manifest = store.get(`${name}/manifest.json.gz`);
+  const data = manifest && store.get(`${name}/data.bin`);
+  if (!data) return null;
+  const own = selfFind(manifest, data, county);
+  return own.share !== null && own.share < MIN_SELF_FIND ? described(own) : null;
+}
+
 function readState(store, state) {
   const bytes = store.get(statePath(state));
   return bytes ? JSON.parse(bytes.toString('utf8')) : emptyState(state);
 }
 
-function publish(store, { out, republish, acceptFalls = false, bulk = false, minRetention, moved }) {
+function publish(store, { out, prefix, republish, acceptFalls = false, bulk = false, minRetention, moved }) {
+  // The national floor's estimates (--prefix index/estimates) are counted, not held to the reader's answers.
+  const records = prefix === 'index';
   if (bulk) store.putDir(path.join(out, 'releases'), 'releases');
   const dir = path.join(out, 'counties');
   const entries = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
@@ -148,16 +165,21 @@ function publish(store, { out, republish, acceptFalls = false, bulk = false, min
       const serving = stateFile.jurisdictions[entry.fips];
       // The source hasn't published anything new since the release serving.
       // A run someone starts by hand publishes anyway: a new build of the same file can hold new address keys.
+      // So does a scheduled one when the reader has changed since and no longer finds the release's homes.
       if (serving && serving.as_of === entry.as_of && serving.status === 'active' && !republish) {
-        log(`${entry.fips}: unchanged since ${entry.as_of}`);
-        continue;
+        const drift = records && readsDifferently(store, serving);
+        if (!drift) {
+          log(`${entry.fips}: unchanged since ${entry.as_of}`);
+          continue;
+        }
+        log(`${entry.fips}: unchanged since ${entry.as_of}, but in the release serving ${drift}`);
       }
       // The file someone rolled back stays back until the source publishes a newer one or someone says otherwise.
       if (serving?.rolled_back_as_of === entry.as_of && !republish) {
         log(`${entry.fips}: ${entry.as_of} was rolled back, not publishing it again`);
         continue;
       }
-      const { found, falls } = problems(store, entry, serving, out, minRetention, moved);
+      const { found, falls } = problems(store, entry, serving, out, minRetention, moved, records);
       if (found.length || (falls.length && !acceptFalls)) {
         refused += 1;
         console.log(`::error::${entry.fips} ${entry.release} refused: ${[...found, ...falls].join('; ')}. The previous release keeps serving.`);
