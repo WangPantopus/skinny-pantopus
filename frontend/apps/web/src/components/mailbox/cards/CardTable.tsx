@@ -11,10 +11,11 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, TABLE_ART, tableTint } from './cardArt';
+import { cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { cardPen } from './cardFont';
 import { PaperBack, PaperFront } from './CardPaper';
 import { CardTableEngine, type TableState } from './cardTableEngine';
+import { useDarkPage } from './useDarkPage';
 import styles from './CardTable.module.css';
 
 const art = (name: string) => `${TABLE_ART}${name}`;
@@ -133,6 +134,7 @@ export default function CardTable({
   }, []);
 
   useEffect(() => { setMounted(true); }, []);
+  useDarkPage(mounted, tableEdge(card.table));
 
   // The engine lives as long as the screen; fold-like resizes only lay it out again.
   useEffect(() => {

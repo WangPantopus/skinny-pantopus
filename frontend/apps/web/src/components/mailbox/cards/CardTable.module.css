@@ -76,7 +76,8 @@
   height: calc(var(--u) * 120); perspective: calc(var(--u) * 520);
 }
 .flip { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; -webkit-transform-style: preserve-3d; will-change: transform; }
-.side { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+/* The side clips and isolates its paper, as the sample's face does: without that, Safari shows the picture mirrored from behind. */
+.side { backface-visibility: hidden; -webkit-backface-visibility: hidden; overflow: hidden; isolation: isolate; border-radius: calc(var(--u) * 0.7); }
 .sideBack { transform: rotateY(180deg); }
 .turnShade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 .sheen {
