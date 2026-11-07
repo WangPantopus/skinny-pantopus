@@ -18,8 +18,8 @@ wins; modeled figures never fill a record field).
   Texas (3.21M), New Jersey (2.31M), North Carolina (2.31M), Maryland (1.92M), New York (1.78M) and Massachusetts (1.75M).
 - **Filled free, from the county that keeps the fact.** A county's own building file, joined to the records already in
   storage by parcel number, adds bedrooms, baths and living area without changing the record or its account. Built
-  November 7: Osceola, Alachua, Leon and Martin counties in Florida (390,552 homes gain facts) and Summit County, Ohio.
-  The states' rolls serving those counties have no bedrooms or baths.
+  November 7: Osceola, Alachua, Leon, Martin and St. Johns counties in Florida (524,165 homes gain facts) and Summit
+  County, Ohio (184,638): 708,803 homes. The files serving them today have no bedrooms or baths.
 - **Listing sites: no lawful copy route.** Zillow, Redfin, Realtor.com and Homes.com bar automated collection of their
   pages. None offers a program that hands a non-broker company bedrooms and baths for homes that aren't for sale, except
   Zillow's invite-only, unpriced Public Records API, which is a vendor's copy of the same county records.
@@ -37,11 +37,10 @@ yet stored are in [statewide-inventory.md](statewide-inventory.md) and [other-ro
 | Route | Homes | Fields | Terms | Cost | Who acts |
 |---|---:|---|---|---|---|
 | Households confirm or correct their own home (WP9, link and confirm) | Every verified household, 29.96M without bedrooms | Bedrooms, baths, size, year, the household's own | Pantopus's privacy policy | $0 | Built, off; the founder turns it on |
-| Florida appraisers whose free files a script may read: Osceola, Alachua, Leon, Martin | 390,552 | Bedrooms, baths, living area, floors; walls and roof in three | Disclaimers; no limit on use stated | $0 | Built (this work) |
-| Summit County OH, Fiscal Office's dwelling file | about 185,000 | Bedrooms, full and half baths | No terms stated | $0 | Built (this work) |
+| Florida appraisers whose free files a script may read: Osceola, Alachua, Leon, Martin, St. Johns | 524,165 | Bedrooms, baths, living area, floors; walls and roof in three | Disclaimers; no limit on use stated | $0 | Built (this work) |
+| Summit County OH, Fiscal Office's dwelling file | 184,638 | Bedrooms, full and half baths | No terms stated | $0 | Built (this work) |
 | Florida appraisers whose sites refuse scripts (15 counties: Orange, Pinellas, Polk, Brevard, Pasco, Volusia, Marion, St. Lucie, Escambia, Bay, Okaloosa, Clay, Flagler, Walton, Monroe) | about 2.65M | Bedrooms, baths, living area where each publishes them | Bot challenge or robots.txt banning all robots | $0 | Founder: a one-line written ask each |
 | Other Florida appraisers: Lake (FTP didn't answer), Indian River (file on Schneider's server, whose terms ban robots), Collier (expiring links, daily limit), Manatee (terms against harmful scraping) | 635,000 | As above | As noted | $0 | A person's download, or a written ask |
-| St. Johns FL, CAMA database (free, daily) | about 134,000 | Buildings and features | Free download or $10 a CD | $0 | Builder: needs an Access database reader |
 | Citrus FL, the appraiser's files on Google Drive | about 80,000 | To open | To read | $0 | A person's download |
 | Lee, Palm Beach, Duval FL | 1.30M | Bedrooms, baths | Lee forbids business use; Palm Beach and Duval sell | Price on request | Founder: letter or purchase (county-letters.md) |
 | Tarrant TX, appraisal district's residential file | 606,542 | Bedrooms, baths | Free, but both columns are empty in all 670,390 rows (file of November 7) | $0 | Founder: ask the district to fill them |
@@ -102,6 +101,8 @@ signature (D2 keeps resellers out until then).
 | Alachua FL | 77,282 of 78,440 | 74,555 | 76,828 | 77,276 | Roof, walls, floors |
 | Leon FL | 85,692 of 86,580 | 56,892 (blank on a third in its file) | 56,850 | 85,686 | Roof, walls, floors |
 | Martin FL | 68,050 of 70,978 | 67,021 | 68,017 | 67,958 | Roof, walls, heat, floors |
+| St. Johns FL | 133,613 of 134,367 | 133,611 | 133,074 | 119,167 | Floors, half baths (read from its Access database) |
+| Summit OH | 184,638 of 186,097 | 184,620 | 184,579 | (already had it) | Half baths |
 
 ## What I couldn't confirm
 
