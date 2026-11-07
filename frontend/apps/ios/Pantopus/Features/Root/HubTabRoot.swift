@@ -1799,7 +1799,14 @@ public struct HubTabRoot: View {
         push: @escaping @MainActor @Sendable (HubRoute) -> Void
     ) -> some View {
         if route.isAvailableAtLaunch {
-            destination(for: route, push: push)
+            // The Mail tab has one guard around its whole stack (`RootTabView`).
+            if mode != .mailbox, route.isMailScreen {
+                SensitiveScreenGuard(reason: HubRoute.mailGuardReason, onRejected: pop) {
+                    destination(for: route, push: push)
+                }
+            } else {
+                destination(for: route, push: push)
+            }
         } else {
             NotYetAvailableView(tabName: "This feature", icon: .info)
         }
@@ -4208,6 +4215,22 @@ extension HubRoute {
         switch self {
         case .addHome, .addHomeAt, .joinHome: true
         default: false
+        }
+    }
+}
+
+/// Personal mail asks who's holding the phone first (founder, 2026-11-06).
+extension HubRoute {
+    static let mailGuardReason = "Verify to open Mail"
+
+    var isMailScreen: Bool {
+        switch self {
+        case .mailItemDetail, .mailboxVault, .mailboxSearch, .mailboxRoot, .mailboxMap, .vacationHold, .ceremonialMail,
+             .ceremonialMailOpen, .mailWelcome, .mailRoutingQueue, .christmasCards, .mailSentCard, .mailParty, .mailDay,
+             .stamps, .mailTask, .mailTaskList, .mailTranslation, .unboxing, .packageGig, .communityMail, .homeRecords, .earn:
+            true
+        default:
+            false
         }
     }
 }
