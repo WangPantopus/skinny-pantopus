@@ -118,6 +118,11 @@ public final class EditBusinessPageViewModel {
         return EditBusinessPageMapper.unsavedCount(in: content) > 0
     }
 
+    /// Without a location there is nothing to read until one is added.
+    public var canRetryHours: Bool {
+        primaryLocationId != nil
+    }
+
     public var hasInFlightOperation: Bool {
         isSaving || isPublishing || uploadingMedia != nil || isClosing
     }

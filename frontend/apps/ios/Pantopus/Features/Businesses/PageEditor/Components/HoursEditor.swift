@@ -161,6 +161,8 @@ public struct EditBusinessHoursEditor: View {
 
 private struct EditHoursRowView: View {
     let row: EditBusinessPageHoursRow
+    /// Read-only hours don't offer the actions the row's menu can't take.
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
@@ -203,7 +205,9 @@ private struct EditHoursRowView: View {
         case let .open(openLabel, closeLabel):
             HStack(spacing: 6) {
                 if row.state.isAllDay {
-                    Text("Open 24 hours").pantopusTextStyle(.caption)
+                    Text("Open 24 hours")
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appText)
                 } else {
                     TimePill(value: openLabel)
                     Text("—")
@@ -212,8 +216,10 @@ private struct EditHoursRowView: View {
                     TimePill(value: closeLabel == "24:00" ? "12:00 AM" : closeLabel)
                 }
                 Spacer()
-                Icon(.moreHorizontal, size: 14, color: Theme.Color.appTextSecondary)
-                    .padding(4)
+                if isEnabled {
+                    Icon(.moreHorizontal, size: 14, color: Theme.Color.appTextSecondary)
+                        .padding(4)
+                }
             }
         case .closed:
             HStack {
@@ -221,9 +227,11 @@ private struct EditHoursRowView: View {
                     .font(.system(size: 12).italic())
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer()
-                Text("Set hours")
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.business)
+                if isEnabled {
+                    Text("Set hours")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(Theme.Color.business)
+                }
             }
         case .notSet:
             HStack {
@@ -231,16 +239,18 @@ private struct EditHoursRowView: View {
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextMuted)
                 Spacer()
-                Text("Add")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.Color.businessDark)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Theme.Color.businessBg)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(Theme.Color.business.opacity(0.25), lineWidth: 1)
-                    )
+                if isEnabled {
+                    Text("Add")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.Color.businessDark)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Theme.Color.businessBg)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule().stroke(Theme.Color.business.opacity(0.25), lineWidth: 1)
+                        )
+                }
             }
         }
     }

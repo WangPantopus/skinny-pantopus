@@ -249,7 +249,7 @@ public struct EditBusinessPageView: View {
                 isLoadingHours: viewModel.isLoadingHours,
                 hoursLoaded: viewModel.hasLoadedHours,
                 hoursError: viewModel.hoursError,
-                onRetryHours: { Task { await viewModel.refreshHours() } },
+                onRetryHours: viewModel.canRetryHours ? { Task { await viewModel.refreshHours() } } : nil,
                 isLoadingServices: viewModel.isLoadingServices,
                 servicesLoaded: viewModel.hasLoadedServices,
                 servicesError: viewModel.servicesError,
@@ -332,7 +332,7 @@ public struct EditBusinessPageLoadedView: View {
     public let isLoadingHours: Bool
     public let hoursLoaded: Bool
     public let hoursError: String?
-    public let onRetryHours: () -> Void
+    public let onRetryHours: (() -> Void)?
     public let isLoadingServices: Bool
     public let servicesLoaded: Bool
     public let servicesError: String?
@@ -363,7 +363,7 @@ public struct EditBusinessPageLoadedView: View {
         isLoadingHours: Bool = false,
         hoursLoaded: Bool = true,
         hoursError: String? = nil,
-        onRetryHours: @escaping () -> Void = {},
+        onRetryHours: (() -> Void)? = nil,
         isLoadingServices: Bool = false,
         servicesLoaded: Bool = true,
         servicesError: String? = nil,
@@ -569,9 +569,13 @@ private extension EditBusinessPageLoadedView {
                 }
                 if let hoursError {
                     Text(hoursError).pantopusTextStyle(.small)
-                    Button("Retry hours", action: onRetryHours)
-                        .frame(minHeight: 44)
-                        .disabled(!canEditProfile)
+                    if let onRetryHours {
+                        Button("Retry hours", action: onRetryHours)
+                            .font(Theme.Font.small)
+                            .foregroundStyle(Theme.Color.business)
+                            .frame(minHeight: 44)
+                            .disabled(!canEditProfile)
+                    }
                 }
                 // A week that hasn't been read isn't an empty week.
                 if hoursLoaded {
@@ -593,6 +597,8 @@ private extension EditBusinessPageLoadedView {
             if let servicesError {
                 Text(servicesError).pantopusTextStyle(.small)
                 Button("Retry services", action: onRetryServices)
+                    .font(Theme.Font.small)
+                    .foregroundStyle(Theme.Color.business)
                     .frame(minHeight: 44)
                     .disabled(!canEditProfile)
             }
