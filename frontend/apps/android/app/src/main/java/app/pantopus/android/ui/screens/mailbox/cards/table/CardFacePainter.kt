@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber", "TooManyFunctions")
+@file:Suppress("PackageNaming", "MagicNumber", "TooManyFunctions", "NestedBlockDepth", "ComplexCondition")
 
 package app.pantopus.android.ui.screens.mailbox.cards.table
 
@@ -545,13 +545,13 @@ internal class PenNote private constructor(
         ): PenNote {
             var size = u * 6f
             var pitch = u * 7.6f
-            var words = place(note, number, size, pitch, u * 85f, paint)
+            var words = place(note, number, size, u * 85f, paint)
             var lines = (words.maxOfOrNull { it.line } ?: 0) + 1
             var tries = 0
             while (lines > RULES && tries < 6) {
                 pitch = u * RULED / lines
                 size = pitch * 6f / 7.6f
-                words = place(note, number, size, pitch, u * 85f, paint)
+                words = place(note, number, size, u * 85f, paint)
                 lines = (words.maxOfOrNull { it.line } ?: 0) + 1
                 tries += 1
             }
@@ -562,7 +562,6 @@ internal class PenNote private constructor(
             note: String,
             number: Int,
             size: Float,
-            pitch: Float,
             width: Float,
             paint: Paint,
         ): List<PenWord> {

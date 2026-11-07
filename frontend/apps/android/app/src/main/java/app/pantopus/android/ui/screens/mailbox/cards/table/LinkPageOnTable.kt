@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber")
+@file:Suppress("PackageNaming", "MagicNumber", "LongMethod")
 
 package app.pantopus.android.ui.screens.mailbox.cards.table
 
@@ -50,7 +50,11 @@ internal fun LinkPageOnTable(page: HolidayCardPreviewLinkPage) {
     val art = rememberCardTableArt()
     val shape = RoundedCornerShape(16.dp)
     val cloth =
-        remember { Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = PorterDuffColorFilter(clothTint(null).toArgb(), PorterDuff.Mode.MULTIPLY) } }
+        remember {
+            Paint(Paint.FILTER_BITMAP_FLAG).apply {
+                colorFilter = PorterDuffColorFilter(clothTint(null).toArgb(), PorterDuff.Mode.MULTIPLY)
+            }
+        }
     Column(
         modifier =
             Modifier

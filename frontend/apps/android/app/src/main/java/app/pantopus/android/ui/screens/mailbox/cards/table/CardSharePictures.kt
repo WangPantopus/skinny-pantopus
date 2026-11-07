@@ -154,7 +154,10 @@ internal class CardSharePictures(
                 0f,
                 0f,
                 1f,
-                intArrayOf(PantopusColors.tableVignette.copy(alpha = 0f).toArgb(), PantopusColors.tableVignette.copy(alpha = 0.48f).toArgb()),
+                intArrayOf(
+                    PantopusColors.tableVignette.copy(alpha = 0f).toArgb(),
+                    PantopusColors.tableVignette.copy(alpha = 0.48f).toArgb(),
+                ),
                 floatArrayOf(0.44f, 1f),
                 Shader.TileMode.CLAMP,
             ).apply {
@@ -250,7 +253,8 @@ internal class CardSharePictures(
         target.translate(0f, above)
         lay(target)
         val offset = IntArray(2)
-        val blurPaint = Paint().apply { maskFilter = BlurMaskFilter(((blur - 0.5f) / 0.57735f).coerceAtLeast(0.1f), BlurMaskFilter.Blur.NORMAL) }
+        val blurRadius = ((blur - 0.5f) / 0.57735f).coerceAtLeast(0.1f)
+        val blurPaint = Paint().apply { maskFilter = BlurMaskFilter(blurRadius, BlurMaskFilter.Blur.NORMAL) }
         val silhouette = copy.extractAlpha(blurPaint, offset)
         copy.recycle()
         val restore = canvas.save()
@@ -387,4 +391,3 @@ internal class CardSharePictures(
         return top + (line - (metrics.descent - metrics.ascent)) / 2f - metrics.ascent
     }
 }
-

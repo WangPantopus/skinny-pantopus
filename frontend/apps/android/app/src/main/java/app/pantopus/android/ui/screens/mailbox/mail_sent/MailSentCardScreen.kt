@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber", "LongMethod", "TooManyFunctions")
+@file:Suppress("PackageNaming", "MagicNumber", "LongMethod", "TooManyFunctions", "CyclomaticComplexMethod")
 
 package app.pantopus.android.ui.screens.mailbox.mail_sent
 

@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming")
+@file:Suppress("PackageNaming", "MatchingDeclarationName")
 
 package app.pantopus.android.ui.screens.mailbox.cards.table
 

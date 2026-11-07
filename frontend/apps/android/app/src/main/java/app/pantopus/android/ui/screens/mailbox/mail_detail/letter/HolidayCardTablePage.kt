@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming")
+@file:Suppress("PackageNaming", "LongParameterList")
 
 package app.pantopus.android.ui.screens.mailbox.mail_detail.letter
 

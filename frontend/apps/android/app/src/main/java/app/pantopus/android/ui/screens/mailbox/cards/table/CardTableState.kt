@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber", "TooManyFunctions")
+@file:Suppress("PackageNaming", "MagicNumber", "TooManyFunctions", "CyclomaticComplexMethod")
 
 package app.pantopus.android.ui.screens.mailbox.cards.table
 

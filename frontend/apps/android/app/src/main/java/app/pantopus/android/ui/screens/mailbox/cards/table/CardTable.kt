@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber", "LongParameterList", "TooManyFunctions")
+@file:Suppress("PackageNaming", "MagicNumber", "LongParameterList", "TooManyFunctions", "LongMethod", "LoopWithTooManyJumpStatements")
 
 package app.pantopus.android.ui.screens.mailbox.cards.table
 

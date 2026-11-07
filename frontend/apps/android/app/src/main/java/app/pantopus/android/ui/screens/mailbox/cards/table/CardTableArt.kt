@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber")
+@file:Suppress("PackageNaming", "MagicNumber", "LongParameterList")
 
 package app.pantopus.android.ui.screens.mailbox.cards.table
 

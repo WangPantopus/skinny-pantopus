@@ -457,12 +457,46 @@ private fun drawAddressSide(
         canvas.drawBitmap(stamp, null, RectF(left, top, left + stampWidth, top + stampWidth * stamp.height / stamp.width), paints.bitmap)
     }
     drawEnvelopePostmark(canvas, art.postmark, width * 0.345f, height * 0.0316f, width * 0.5183f, day, card.year, paints)
-    penLine(canvas, pen, card.from, width * 0.066f, height * 0.062f, width * 0.05f, 1.15f, -0.8f, width * 0.6f, PantopusColors.tableEnvelopeFrom, paints)
+    penLine(
+        canvas,
+        pen,
+        card.from,
+        width * 0.066f,
+        height * 0.062f,
+        width * 0.05f,
+        1.15f,
+        -0.8f,
+        width * 0.6f,
+        PantopusColors.tableEnvelopeFrom,
+        paints,
+    )
     card.to?.takeIf { it.isNotBlank() }?.let { to ->
-        penLine(canvas, pen, to, width * 0.15f, height * 0.46f, width * 0.094f, 1.1f, -1.6f, width * 0.78f, PantopusColors.tableEnvelopeTo, paints)
+        penLine(
+            canvas,
+            pen,
+            to,
+            width * 0.15f,
+            height * 0.46f,
+            width * 0.094f,
+            1.1f,
+            -1.6f,
+            width * 0.78f,
+            PantopusColors.tableEnvelopeTo,
+            paints,
+        )
     }
     if (card.sealed) {
-        drawSealedMark(canvas, width * 0.5f, height * 0.74f, width * 0.04f, width * 0.007f, width * 0.018f, width * 0.03f, width * 0.012f, paints)
+        drawSealedMark(
+            canvas,
+            width * 0.5f,
+            height * 0.74f,
+            width * 0.04f,
+            width * 0.007f,
+            width * 0.018f,
+            width * 0.03f,
+            width * 0.012f,
+            paints,
+        )
     } else {
         val size = width * 0.0235f
         paints.text.reset()
@@ -609,7 +643,7 @@ private fun TableCardLayer(
                         drawIntoCanvas { face.drawBack(it.nativeCanvas, size.width, words) }
                     },
             )
-            TurningLight(state, g)
+            TurningLight(state)
         }
     }
 }
@@ -619,10 +653,7 @@ private fun TableCardLayer(
  * The back's face is mirrored for the turn, so this is too, and the band keeps sliding the same way across the paper.
  */
 @Composable
-private fun TurningLight(
-    state: CardTableState,
-    g: TableGeometry,
-) {
+private fun TurningLight(state: CardTableState) {
     val band = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
     val shade = remember { Paint().apply { color = Color.Black.toArgb() } }
     Box(

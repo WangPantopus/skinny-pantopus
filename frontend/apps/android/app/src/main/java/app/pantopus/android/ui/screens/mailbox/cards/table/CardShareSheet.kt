@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber", "LongParameterList", "TooManyFunctions")
+@file:Suppress("PackageNaming", "MagicNumber", "LongParameterList", "TooManyFunctions", "ReturnCount")
 
 package app.pantopus.android.ui.screens.mailbox.cards.table
 
@@ -230,7 +230,13 @@ private fun SheetHead(
                         .border(0.5.dp, PantopusColors.tableGlassLine, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 18.dp, strokeWidth = 1.8f, tint = PantopusColors.tableCream)
+                PantopusIconImage(
+                    icon = PantopusIcon.X,
+                    contentDescription = null,
+                    size = 18.dp,
+                    strokeWidth = 1.8f,
+                    tint = PantopusColors.tableCream,
+                )
             }
         }
     }
@@ -339,8 +345,20 @@ private fun NoteSwitch(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Show the note", fontSize = 14.5.sp, lineHeight = 1.35.em, fontWeight = FontWeight.SemiBold, color = PantopusColors.tableCream)
-            Text(words, fontSize = 12.5.sp, lineHeight = 1.3.em, color = PantopusColors.tableCreamFaint, modifier = Modifier.padding(top = 2.dp))
+            Text(
+                "Show the note",
+                fontSize = 14.5.sp,
+                lineHeight = 1.35.em,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.tableCream,
+            )
+            Text(
+                words,
+                fontSize = 12.5.sp,
+                lineHeight = 1.3.em,
+                color = PantopusColors.tableCreamFaint,
+                modifier = Modifier.padding(top = 2.dp),
+            )
         }
         Switch(
             checked = showNote,
