@@ -804,6 +804,16 @@ export async function getSentCard(id: string): Promise<{ item: SentPieceDetail }
   return get<{ item: SentPieceDetail }>(`/api/mailbox/sent/${encodeURIComponent(id)}`);
 }
 
+/** POST /api/mailbox/cards/shared (launch key card_table): which picture went where, for counts. The picture and note stay on the device. */
+export async function recordHolidayCardShare(data: {
+  design: string;
+  kind: 'instagram' | 'facebook' | 'email' | 'link' | 'save' | 'more';
+  format: 'story' | 'post' | 'link';
+  with_note: boolean;
+}): Promise<void> {
+  await post<void>('/api/mailbox/cards/shared', data);
+}
+
 /** POST /api/mailbox/cards/:id/take-back: before the 7 a.m. pickup (by email: before they open it). */
 export async function takeBackHolidayCard(cardId: string): Promise<{ taken_back: true }> {
   return post<{ taken_back: true }>(`/api/mailbox/cards/${encodeURIComponent(cardId)}/take-back`);
