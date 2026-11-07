@@ -87,7 +87,74 @@ export interface PropertySuggestionsResponse {
   provenance?: RecordProvenance;
   /** A short tag per field ("County"), once the record names its source. */
   field_tags?: Partial<Record<string, string>>;
+  /** One-tap answers for what the record lacks, once the lookup has had its say. */
+  questions?: HouseholdQuestion[];
+  /** The county's own page, where a person can check what's missing. */
+  county_page?: CountyPage;
 }
+
+export interface CountyPage {
+  url: string;
+  label: string;
+}
+
+export interface HouseholdAnswer {
+  label: string;
+  value: string;
+}
+
+/** "Bedrooms? 1 2 3 4 Other": a tap answers it. */
+export interface HouseholdQuestion {
+  key: string;
+  prompt: string;
+  options: HouseholdAnswer[];
+  other: string;
+}
+
+/** One fact in "Fix something" or "Add details", as the server words it. */
+export interface HouseholdFact {
+  key: string;
+  label: string;
+  /** What the page shows now. */
+  value: string | null;
+  /** What the field starts with. */
+  current: string;
+  /** "County record: 3", when the household's value differs from it. */
+  note: string | null;
+  input: 'number' | 'decimal' | 'year' | 'text';
+  unit: string | null;
+  options: HouseholdAnswer[];
+  can_undo: boolean;
+}
+
+/** What someone who can edit may do with one group of facts; `section_id` is the card it sits under, or null for a card of its own. */
+export interface HouseholdGroup {
+  id: string;
+  section_id: string | null;
+  title: string;
+  lead?: string;
+  prompt: string | null;
+  confirmed: string | null;
+  fix: string | null;
+  facts: HouseholdFact[];
+  report: string | null;
+  reported: string | null;
+}
+
+/** What the household has said, for those it's meant for (backend/services/householdFacts.js). */
+export interface HouseholdPart {
+  can_edit: boolean;
+  sections: CountyRecordSection[];
+  groups: HouseholdGroup[];
+  questions: HouseholdQuestion[];
+  county_page: CountyPage | null;
+}
+
+/** A change to one fact, or with `group` to every fact of a group that can take it. */
+export type HouseholdFactChange =
+  | { key: string; action: 'correct'; value: string }
+  | { key: string; action: 'undo' }
+  | { group: string; action: 'confirm' | 'undo' };
 
 /** One label / value row of a county record, worded and formatted by the server. */
 export interface CountyRecordRow {
@@ -96,8 +163,10 @@ export interface CountyRecordRow {
   value: string;
   /** Numbers, measurements and codes (the apps draw them monospaced). */
   mono?: boolean;
-  /** Where this row came from, when it isn't the footer's source ("Your household"). */
+  /** Where this row came from, when it isn't the footer's source ("From your household"). */
   tag?: string | null;
+  /** What stands beside it ("County record: 3"). */
+  note?: string | null;
 }
 
 export interface CountyRecordSection {
@@ -130,6 +199,8 @@ export interface HomePropertyDetailResponse {
   unavailable_reason?: 'NO_PROPERTY_FOUND' | 'ATTOM_UNAVAILABLE' | 'ATTOM_NOT_CONFIGURED' | 'OWNER_ONLY' | 'LOOKUP_PENDING' | string | null;
   /** The county record as labeled sections; verified owners only (older servers leave it out). */
   county_record?: CountyRecord | null;
+  /** What the household has said and can say; only for those it's meant for. */
+  household?: HouseholdPart | null;
 }
 
 /**
@@ -193,8 +264,8 @@ export async function createHome(data: {
   state: string;
   zip_code: string;
   country?: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   home_type?: 'apartment' | 'house' | 'condo' | 'townhouse' | 'studio' | 'rv' | 'mobile_home' | 'trailer' | 'multi_unit' | 'other';
   bedrooms?: number;
   bathrooms?: number;
@@ -230,8 +301,16 @@ export async function updateHome(homeId: string, data: Partial<{
   bathrooms: number;
   square_feet: number;
   public_info: Record<string, any>;
+  household_facts: HouseholdFactChange[];
 }>): Promise<{ home: Home }> {
   return patch<{ home: Home }>(`/api/homes/${homeId}`, data);
+}
+
+/**
+ * "Report a problem" on a fact a household can't correct: it reaches Pantopus review, and nothing on the page changes.
+ */
+export async function reportRecordProblem(homeId: string, data: { section: string; field?: string | null; note?: string | null }): Promise<{ reported: boolean }> {
+  return post<{ reported: boolean }>(`/api/homes/${homeId}/record-problem`, data);
 }
 
 /**

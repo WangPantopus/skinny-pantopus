@@ -60,7 +60,8 @@ function fromRow(row, fips, county) {
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.CALC_ACRE));
   put(facts, 'land_use', USE_WORDS[klass] || null);
   put(facts, 'county_use_code', klass);
-  put(facts, 'value_year', positive(row.LAST_YR_TX));
+  // LAST_YR_TX is last year's tax in dollars, not a year. The file gives no year for its assessments.
+  put(facts, 'tax_amount', positive(row.LAST_YR_TX));
   put(facts, 'assessed_value', positive(row.NET_VALUE));
   put(facts, 'assessed_land_value', positive(row.LAND_VAL));
   put(facts, 'assessed_building_value', positive(row.IMPRVT_VAL));

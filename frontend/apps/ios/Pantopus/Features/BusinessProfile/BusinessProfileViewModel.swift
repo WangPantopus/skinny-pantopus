@@ -513,6 +513,8 @@ extension BusinessProfileViewModel {
             let isClosed = row.isClosed == true
             let time = if isClosed {
                 "Closed"
+            } else if isAllDay(row) {
+                "Open 24 hours"
             } else if let open = row.openTime, let close = row.closeTime {
                 "\(formatTime(open)) – \(formatTime(close))"
             } else {
@@ -562,6 +564,9 @@ extension BusinessProfileViewModel {
         guard today.isClosed != true,
               let openM = minutes(today.openTime),
               let closeM = minutes(today.closeTime) else { return nil }
+        if isAllDay(today) {
+            return BusinessOpenState(isOpen: true, statusLabel: "Open now", statusDetail: "Open 24 hours", chipLabel: "Open now")
+        }
         if minutesNow >= openM, closeM < openM || minutesNow < closeM {
             return openState(closingAt: today.closeTime)
         }
@@ -601,6 +606,11 @@ extension BusinessProfileViewModel {
         return nil
     }
 
+    /// 00:00–23:59, or a `24:00` close: the editor's "Open 24 hours".
+    private func isAllDay(_ row: BusinessHoursDTO) -> Bool {
+        row.isClosed != true && minutes(row.openTime) == 0 && (minutes(row.closeTime) ?? 0) >= 23 * 60 + 59
+    }
+
     private func minutes(_ raw: String?) -> Int? {
         guard let raw else { return nil }
         let parts = raw.split(separator: ":")
@@ -611,7 +621,7 @@ extension BusinessProfileViewModel {
     private func formatTime(_ raw: String) -> String {
         let parts = raw.split(separator: ":")
         guard parts.count >= 2, let hour = Int(parts[0]), let minute = Int(parts[1]) else { return raw }
-        let suffix = hour >= 12 ? "PM" : "AM"
+        let suffix = (12..<24).contains(hour) ? "PM" : "AM"
         let normalisedHour = hour % 12 == 0 ? 12 : hour % 12
         if minute == 0 {
             return "\(normalisedHour) \(suffix)"

@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -59,16 +62,23 @@ fun SlotEditorSheet(
     isSubmitting: Boolean,
     onSave: (ManageSlotEditorState) -> Unit,
     onCancel: () -> Unit,
+    onDraftChange: (ManageSlotEditorState) -> Unit = {},
 ) {
     var draft by remember(editor.slotId) { mutableStateOf(editor) }
     var pickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
     val canSave = !isSubmitting && draft.endTime > draft.startTime
+
+    fun updateDraft(updated: ManageSlotEditorState) {
+        draft = updated
+        onDraftChange(updated)
+    }
 
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(PantopusColors.appBg)
+                .verticalScroll(rememberScrollState())
                 .testTag("slotEditorSheet"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
@@ -123,7 +133,7 @@ fun SlotEditorSheet(
                 options = ManageSlotEditorState.LABELS,
                 selected = draft.slotLabel,
                 tagPrefix = "slotEditorLabel",
-                onSelect = { if (!isSubmitting) draft = draft.copy(slotLabel = it) },
+                onSelect = { if (!isSubmitting) updateDraft(draft.copy(slotLabel = it)) },
             )
 
             FieldLabel("How can neighbors help?")
@@ -131,7 +141,7 @@ fun SlotEditorSheet(
                 options = ManageSlotEditorState.MODES,
                 selected = draft.supportMode,
                 tagPrefix = "slotEditorMode",
-                onSelect = { if (!isSubmitting) draft = draft.copy(supportMode = it) },
+                onSelect = { if (!isSubmitting) updateDraft(draft.copy(supportMode = it)) },
             )
 
             EditorRow(
@@ -185,14 +195,19 @@ fun SlotEditorSheet(
 
     pickerTarget?.let { target ->
         FutureDateTimePickerDialogs(
-            initial = null,
+            initial =
+                runCatching {
+                    val time = if (target == PickerTarget.END) draft.endTime else draft.startTime
+                    LocalDate.parse(draft.slotDate).atTime(LocalTime.parse(time))
+                }.getOrNull(),
             onPicked = { picked ->
-                draft =
+                updateDraft(
                     when (target) {
                         PickerTarget.DATE -> draft.copy(slotDate = picked.toLocalDate().format(DATE_FORMAT))
                         PickerTarget.START -> draft.copy(startTime = picked.toLocalTime().format(TIME_FORMAT))
                         PickerTarget.END -> draft.copy(endTime = picked.toLocalTime().format(TIME_FORMAT))
-                    }
+                    },
+                )
                 pickerTarget = null
             },
             onDismiss = { pickerTarget = null },
@@ -258,7 +273,7 @@ private fun ChipRow(
     onSelect: (String) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         options.forEach { option ->
@@ -274,7 +289,7 @@ private fun ChipRow(
                             if (isSelected) PantopusColors.primary600 else PantopusColors.appBorder,
                             RoundedCornerShape(Radii.pill),
                         )
-                        .clickable { onSelect(option) }
+                        .selectable(selected = isSelected, role = Role.RadioButton) { onSelect(option) }
                         .padding(horizontal = Spacing.s3)
                         .testTag("$tagPrefix-$option"),
                 contentAlignment = Alignment.Center,

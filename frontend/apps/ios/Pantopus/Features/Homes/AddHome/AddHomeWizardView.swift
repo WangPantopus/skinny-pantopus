@@ -70,6 +70,10 @@ public struct AddHomeWizardView: View {
                     Button("Try again", action: viewModel.retryCheckAddress)
                         .disabled(viewModel.isCheckingAddress || !viewModel.isCurrent)
                     Button("Edit address", action: viewModel.leadingTapped)
+                    if !viewModel.unitChoices.isEmpty {
+                        AddHomeUnitChoices(choices: viewModel.unitChoices, onChoose: viewModel.chooseUnit)
+                            .disabled(viewModel.isCheckingAddress || !viewModel.isCurrent)
+                    }
                     if viewModel.offersNoUnitAttestation {
                         Button("My home doesn't have a unit number", action: viewModel.attestNoUnit)
                             .disabled(viewModel.isCheckingAddress || !viewModel.isCurrent)

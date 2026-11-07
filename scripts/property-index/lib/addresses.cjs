@@ -1,7 +1,7 @@
 'use strict';
 // Reading a street line in a state file, and the small cleanups every statewide file needs.
 
-const { parse } = require('../../../backend/services/propertyRecords/addressKey');
+const { parse, parts } = require('../../../backend/services/propertyRecords/addressKey');
 
 /**
  * A number that spans a building, "12-14" or "12 14", as the numbers it holds: mail goes to either. A connector asks
@@ -14,6 +14,15 @@ function houseNumbers(number) {
   const [first, last] = [Number(range[1]), Number(range[2])];
   // The range as written too: some people's mail says "12-14".
   return last > first && last - first <= 40 && (last - first) % 2 === 0 ? [range[1], range[2], `${range[1]}-${range[2]}`] : [text];
+}
+
+/**
+ * parts(), with a county's street columns read as one line, the way a person's address is: a name that ends in a word that is
+ * also a street type keeps it (OAK GROVE, RD). parts() on its own would keep OAK and RD, a street no one would type.
+ */
+function streetParts({ number, numberSuffix = '', pre = '', name = '', suffix = '', post = '', unit = '', building = '' }) {
+  const line = [pre, name, suffix, post].map((part) => String(part ?? '').trim()).filter(Boolean).join(' ');
+  return parts({ number, numberSuffix, name: line, unit, building });
 }
 
 /** One parsed address per number the record's line holds. Empty when the line can't be read. */
@@ -72,4 +81,4 @@ function onRecord(line, unit) {
   return /^[A-Z0-9-]{1,8}$/i.test(secondary) ? `${street} UNIT ${secondary}` : `${street} ${secondary}`;
 }
 
-module.exports = { houseNumbers, readAddresses, year, isoDate, zipCode, realUnit, onRecord, unitAfterStreet };
+module.exports = { houseNumbers, streetParts, readAddresses, year, isoDate, zipCode, realUnit, onRecord, unitAfterStreet };

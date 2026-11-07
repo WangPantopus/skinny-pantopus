@@ -6,7 +6,8 @@
  * this Home with the release and date they came from, and only what the match
  * allows: a unit's private facts only on an exact match, building figures labeled
  * as the building's. Nothing a household entered is in it, so a refresh can't
- * write over a person's entries (those stay in Home's own columns).
+ * write over a person's entries (those stay in Home's own columns and
+ * `niche_data.household_facts`, services/householdFacts.js).
  *
  * A refresh runs in the background when the county has a newer release. It only
  * replaces the copy with a real answer: an empty answer, a timeout or an outage
@@ -15,7 +16,7 @@
  */
 
 const crypto = require('crypto');
-const supabaseAdmin = require('../../config/supabaseAdmin');
+const { changeNicheData } = require('../homeNicheData');
 const config = require('../../config/propertyRecords');
 const logger = require('../../utils/logger');
 const { FACTS } = require('./facts');
@@ -106,18 +107,22 @@ function storedCopy(home) {
 }
 
 // True when the copy was written: the Home row's change tells its household's open screens to read again.
+// Only this key changes, on the row as it stands now: an entry the household made during the lookup stays.
 async function storeCopy(home, copy) {
   if (!home?.id || home.niche_data === undefined) return false;
-  const nicheData = { ...(home.niche_data && typeof home.niche_data === 'object' ? home.niche_data : {}) };
-  if (copy) nicheData.property_record = copy;
-  else delete nicheData.property_record;
-  const { error } = await supabaseAdmin.from('Home').update({ niche_data: nicheData }).eq('id', home.id);
-  if (error) {
-    logger.warn('property_records.store_failed', { error: error.message });
+  try {
+    const nicheData = await changeNicheData(home.id, (stored) => {
+      if (copy) stored.property_record = copy;
+      else delete stored.property_record;
+      return stored;
+    });
+    if (!nicheData) return false;
+    home.niche_data = nicheData;
+    return true;
+  } catch (err) {
+    logger.warn('property_records.store_failed', { error: err.message });
     return false;
   }
-  home.niche_data = nicheData;
-  return true;
 }
 
 const refreshedAt = new Map();
@@ -156,6 +161,13 @@ function noteLookup(surface, address, found) {
   } catch (err) {
     logger.info('property_records.count_failed', { error: err.name });
   }
+}
+
+/** The copy a live county's screens answer from, with no lookup. */
+function liveCopy(home) {
+  if (!config.enabled() || !home) return null;
+  const stored = storedCopy(home);
+  return stored && router.showsCopies(stored.jurisdiction) ? router.served(stored) : null;
 }
 
 /**
@@ -221,4 +233,4 @@ async function readForAddress(address) {
   }
 }
 
-module.exports = { copyFromAnswer, provenanceOf, storedCopy, storeCopy, forHome, forAddress, noteLookup, homeAddress, dateLabel };
+module.exports = { copyFromAnswer, provenanceOf, storedCopy, liveCopy, storeCopy, forHome, forAddress, noteLookup, homeAddress, dateLabel };

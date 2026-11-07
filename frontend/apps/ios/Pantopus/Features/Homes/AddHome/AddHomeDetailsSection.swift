@@ -17,6 +17,8 @@ import SwiftUI
 
 struct AddHomeDetailsSection: View {
     @Bindable var viewModel: AddHomeWizardViewModel
+    @FocusState private var bedroomsFocused: Bool
+    @FocusState private var bathroomsFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
@@ -116,6 +118,12 @@ struct AddHomeDetailsSection: View {
 
             homeTypeChips
 
+            AddHomeFactQuestions(
+                viewModel: viewModel,
+                bedroomsFocused: $bedroomsFocused,
+                bathroomsFocused: $bathroomsFocused
+            )
+
             HStack(alignment: .top, spacing: Spacing.s2) {
                 AddHomeTextField(
                     label: "Bedrooms",
@@ -126,6 +134,7 @@ struct AddHomeDetailsSection: View {
                     ),
                     tag: ownEntryTag(viewModel.form.details.bedrooms, recorded: recorded?.bedrooms.map(String.init)),
                     keyboard: .numberPad,
+                    focused: $bedroomsFocused,
                     identifier: "addHome_bedrooms"
                 )
                 AddHomeTextField(
@@ -140,6 +149,7 @@ struct AddHomeDetailsSection: View {
                         recorded: recorded?.bathrooms.map(AddHomeWizardViewModel.trimTrailingZero)
                     ),
                     keyboard: .decimalPad,
+                    focused: $bathroomsFocused,
                     identifier: "addHome_bathrooms"
                 )
             }
@@ -411,6 +421,8 @@ struct AddHomeTextField: View {
     var trailing: AnyView?
     /// Codes set `.oneTimeCode` so iOS doesn't offer to save them as a login.
     var contentType: UITextContentType?
+    /// Lets the screen put the cursor here ("Other" on a one-tap question).
+    var focused: FocusState<Bool>.Binding?
     let identifier: String
 
     var body: some View {
@@ -476,6 +488,7 @@ struct AddHomeTextField: View {
                 .autocorrectionDisabled(keyboard != .default)
                 .textContentType(contentType)
                 .accessibilityIdentifier(identifier)
+                .modifier(OptionalFocus(focused: focused))
         }
     }
 }

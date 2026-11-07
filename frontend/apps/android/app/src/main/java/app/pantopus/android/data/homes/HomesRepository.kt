@@ -43,12 +43,15 @@ import app.pantopus.android.data.api.models.homes.HomeMaintenanceResponse
 import app.pantopus.android.data.api.models.homes.HomePackageResponse
 import app.pantopus.android.data.api.models.homes.HomePollResponse
 import app.pantopus.android.data.api.models.homes.HomeTaskResponse
+import app.pantopus.android.data.api.models.homes.HouseholdFactChange
+import app.pantopus.android.data.api.models.homes.HouseholdFactsRequest
 import app.pantopus.android.data.api.models.homes.InviteOwnerRequest
 import app.pantopus.android.data.api.models.homes.MoveOutResponse
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.MyOwnershipClaimsResponse
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsRequest
+import app.pantopus.android.data.api.models.homes.RecordProblemRequest
 import app.pantopus.android.data.api.models.homes.SetDefaultHomeBody
 import app.pantopus.android.data.api.models.homes.SetDefaultHomeResponse
 import app.pantopus.android.data.api.models.homes.SubmitClaimRequest
@@ -163,6 +166,18 @@ open class HomesRepository
 
         /** The stored property facts, without a request. */
         open fun storedPropertyDetails(id: String): PropertyDetailsResponse? = store.peek(HomeStoreKeys.propertyDetails(id)).data
+
+        /** `PATCH /api/homes/:id` with `household_facts`: confirm, correct or undo a fact. */
+        open suspend fun updateHouseholdFacts(
+            id: String,
+            changes: List<HouseholdFactChange>,
+        ) = safeApiCall { api.updateHouseholdFacts(id, HouseholdFactsRequest(changes)) }
+
+        /** `POST /api/homes/:id/record-problem`. */
+        open suspend fun reportRecordProblem(
+            id: String,
+            request: RecordProblemRequest,
+        ) = safeApiCall { api.reportRecordProblem(id, request) }
 
         /** `POST /api/homes/property-suggestions`; `lookup` as in [HomesApi.propertySuggestions]. */
         open suspend fun propertySuggestions(

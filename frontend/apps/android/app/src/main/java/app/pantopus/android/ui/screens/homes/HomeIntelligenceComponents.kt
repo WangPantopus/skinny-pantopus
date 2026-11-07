@@ -52,6 +52,7 @@ import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendSeriesDto
 import app.pantopus.android.data.api.models.homedashboard.HomeBillTrendsDto
 import app.pantopus.android.data.api.models.homedashboard.HomeHealthScoreDto
 import app.pantopus.android.data.api.models.homedashboard.HomePropertyValueDto
+import app.pantopus.android.data.api.models.homedashboard.HomeValueCardDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistDto
 import app.pantopus.android.data.api.models.homedashboard.SeasonalChecklistItemDto
 import app.pantopus.android.ui.components.Shimmer
@@ -752,7 +753,9 @@ fun PropertyValueCard(
 ) {
     DashboardCard(
         // The record may say what the number is ("County market value").
-        title = (state as? HomeIntelligenceCardState.Loaded)?.value?.valueTitle ?: "Estimated home value",
+        title =
+            (state as? HomeIntelligenceCardState.Loaded)?.value?.let { it.valueCard?.title ?: it.valueTitle }
+                ?: "Estimated home value",
         accent = PantopusColors.primary600,
         modifier = Modifier.testTag("homeDashboard_propertyValueCard"),
     ) {
@@ -776,11 +779,104 @@ fun PropertyValueCard(
                     onRetry = onRetry,
                 )
             is HomeIntelligenceCardState.Loaded -> {
+                val card = state.value.valueCard
                 val estimate = state.value.estimatedValue
-                if (estimate == null) {
-                    PropertyValueUnavailable()
-                } else {
-                    PropertyValueBody(value = state.value, estimate = estimate)
+                when {
+                    card != null -> PropertyValueRecordBody(value = state.value, card = card)
+                    estimate == null -> PropertyValueUnavailable()
+                    else -> PropertyValueBody(value = state.value, estimate = estimate)
+                }
+            }
+        }
+    }
+}
+
+/** The server's card: what the county says, the last sale and the area's price change, each labeled. */
+@Composable
+private fun PropertyValueRecordBody(
+    value: HomePropertyValueDto,
+    card: HomeValueCardDto,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s1),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        val number = card.value
+        val message = card.emptyMessage
+        if (number != null) {
+            Text(
+                text = number,
+                style = PantopusTextStyle.h2,
+                fontWeight = FontWeight.Bold,
+                color = PantopusColors.appText,
+            )
+        } else if (message != null) {
+            Text(text = message, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+        }
+        HomeValueCardDetails(card)
+        val chips =
+            buildList {
+                value.yearBuilt?.let { add("Built $it") }
+                value.sqft?.let { add("$it sqft") }
+            }
+        if (chips.isNotEmpty()) {
+            Text(
+                text = chips.joinToString(" - "),
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+        card.source?.let { Text(text = it, style = PantopusTextStyle.caption, color = PantopusColors.appTextMuted) }
+    }
+}
+
+/**
+ * The value card's rows, notes and the area's price change, as the server wrote
+ * them. The Home page and Place's Value block both draw these.
+ */
+@Composable
+fun HomeValueCardDetails(card: HomeValueCardDto) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        card.rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                Text(
+                    text = row.label,
+                    style = PantopusTextStyle.caption,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = row.value,
+                    style = PantopusTextStyle.caption,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
+                    textAlign = TextAlign.End,
+                )
+            }
+        }
+        card.notes.forEach { note ->
+            Text(text = note, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+        }
+        card.areaTrend?.let { trend ->
+            val (icon, tint) =
+                when (trend.direction) {
+                    "up" -> PantopusIcon.ArrowUp to PantopusColors.success
+                    "down" -> PantopusIcon.ArrowDown to PantopusColors.error
+                    else -> PantopusIcon.ArrowRight to PantopusColors.appTextSecondary
+                }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                PantopusIconImage(icon = icon, contentDescription = null, size = 14.dp, tint = tint)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = trend.label,
+                        style = PantopusTextStyle.caption,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tint,
+                    )
+                    trend.note?.let { Text(text = it, style = PantopusTextStyle.caption, color = PantopusColors.appTextMuted) }
                 }
             }
         }

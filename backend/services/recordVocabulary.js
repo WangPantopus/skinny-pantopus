@@ -17,6 +17,8 @@
 // the server already sends for them don't change.
 // ============================================================
 
+const { addHomeQuestions } = require('./householdFacts');
+
 const VOCABULARY = '2';
 const RECORD_TIER = 'record';
 const GUESS_TIERS = new Set(['heuristic', 'llm']);
@@ -38,11 +40,12 @@ function lookupMessage(tiers, lookup, provenance) {
 
 /** POST /api/homes/property-suggestions: the new words sit beside today's, so `tiers_used` still says `attom` for ATTOM. */
 function suggestions(result, wanted) {
-  const { provenance = null, field_tags: fieldTags = null, lookup_note: note = null, ...legacy } = result;
+  const { provenance = null, field_tags: fieldTags = null, lookup_note: note = null, county_page: countyPage = null, ...legacy } = result;
   if (!wanted) return legacy;
   const tiers = legacy.tiers_used || [];
   const lookup = legacy.attom_lookup;
   const message = note || lookupMessage(tiers, lookup, provenance);
+  const questions = addHomeQuestions(legacy.suggestions, lookup);
   return {
     ...legacy,
     tiers_used: tiers.includes('attom') && !tiers.includes(RECORD_TIER) ? [...tiers, RECORD_TIER] : tiers,
@@ -50,6 +53,8 @@ function suggestions(result, wanted) {
     ...(message ? { lookup_message: message } : {}),
     ...(provenance ? { provenance } : {}),
     ...(fieldTags ? { field_tags: fieldTags } : {}),
+    ...(questions.length ? { questions } : {}),
+    ...(countyPage ? { county_page: countyPage } : {}),
   };
 }
 
@@ -77,15 +82,25 @@ const withoutRowTags = (record) => record && {
   ...record,
   sections: record.sections.map((section) => ({
     ...section,
-    rows: section.rows.map(({ tag, ...row }) => row),
+    rows: section.rows.map(({ tag, note, ...row }) => row),
   })),
 };
 
-/** GET /api/homes/:id/property-details. A row tag says a row came from somewhere other than the footer's source. */
+/**
+ * GET /api/homes/:id/property-details. A row tag says a row came from somewhere other than the footer's source,
+ * and a row note says what stands beside it. `household` (services/householdFacts.js) goes only to builds that ask:
+ * every other build gets the record as the county has it.
+ */
 function propertyDetail(result, wanted) {
-  const { provenance = null, ...legacy } = result;
+  const { provenance = null, household = null, ...legacy } = result;
   if (!wanted) return { ...legacy, county_record: withoutRowTags(legacy.county_record) };
-  return provenance ? { ...legacy, source: RECORD_TIER, provenance } : legacy;
+  const { record_view: view = null, ...part } = household || {};
+  return {
+    ...legacy,
+    ...(view ? { county_record: view } : {}),
+    ...(provenance ? { source: RECORD_TIER, provenance } : {}),
+    ...(household ? { household: part } : {}),
+  };
 }
 
 /** Place's value block: nulled with the other value fields for anyone but the confirmed owner. */

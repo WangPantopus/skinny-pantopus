@@ -6,7 +6,7 @@
 //  `EditBusinessPageContent` for the A13.10 profile editor.
 //
 
-// swiftlint:disable type_body_length
+// swiftlint:disable file_length type_body_length
 
 import Foundation
 
@@ -272,60 +272,73 @@ enum EditBusinessPageMapper {
         guard rows.contains(where: \.isDirty) else { return nil }
 
         var payload: [SetBusinessHoursDayRequest] = []
-        for (index, label) in dayLabels.enumerated() {
-            guard let row = rows.first(where: { $0.dayLabel == label || $0.id == label.lowercased() })
-                ?? rows.first(where: { $0.id == String(index) }) else {
+        for row in rows {
+            guard let index = dayLabels.firstIndex(of: row.dayLabel) ?? Int(row.id) else { continue }
+            if !row.isDirty, let source = row.source {
+                payload.append(.init(
+                    dayOfWeek: index,
+                    openTime: source.openTime,
+                    closeTime: source.closeTime,
+                    isClosed: source.isClosed == true,
+                    notes: source.notes
+                ))
                 continue
             }
             switch row.state {
             case let .open(openLabel, closeLabel):
                 guard let open = parseDisplayTime(openLabel),
                       let close = parseDisplayTime(closeLabel) else { continue }
-                payload.append(.init(dayOfWeek: index, openTime: open, closeTime: close, isClosed: false))
+                payload.append(.init(dayOfWeek: index, openTime: open, closeTime: close, isClosed: false, notes: row.notes))
             case .closed:
-                payload.append(.init(dayOfWeek: index, openTime: nil, closeTime: nil, isClosed: true))
+                payload.append(.init(dayOfWeek: index, openTime: nil, closeTime: nil, isClosed: true, notes: row.notes))
             case .notSet:
-                continue
+                if let notes = row.notes {
+                    payload.append(.init(dayOfWeek: index, openTime: nil, closeTime: nil, isClosed: false, notes: notes))
+                }
             }
         }
         return payload.isEmpty ? nil : payload
     }
 
-    // MARK: - Private
-
-    private static func mapHours(_ hours: [BusinessHoursDTO]) -> EditBusinessPageHoursState {
+    static func mapHours(_ hours: [BusinessHoursDTO]) -> EditBusinessPageHoursState {
         guard !hours.isEmpty else {
             return .quickApply(rows: dayLabels.map { label in
                 EditBusinessPageHoursRow(id: label.lowercased(), dayLabel: label, state: .notSet)
             })
         }
-        let byDay = Dictionary(uniqueKeysWithValues: hours.map { ($0.dayOfWeek, $0) })
-        let rows = dayLabels.enumerated().map { index, label -> EditBusinessPageHoursRow in
-            guard let row = byDay[index] else {
-                return EditBusinessPageHoursRow(id: label.lowercased(), dayLabel: label, state: .notSet)
+        let byDay = Dictionary(grouping: hours, by: \.dayOfWeek)
+        let rows = dayLabels.enumerated().flatMap { index, label -> [EditBusinessPageHoursRow] in
+            guard let intervals = byDay[index], !intervals.isEmpty else {
+                return [EditBusinessPageHoursRow(id: label.lowercased(), dayLabel: label, state: .notSet)]
             }
-            if row.isClosed == true {
-                return EditBusinessPageHoursRow(id: label.lowercased(), dayLabel: label, state: .closed)
-            }
-            let open = formatAPITime(row.openTime)
-            let close = formatAPITime(row.closeTime)
-            if let open, let close {
-                return EditBusinessPageHoursRow(
-                    id: label.lowercased(),
-                    dayLabel: label,
-                    state: .open(openLabel: open, closeLabel: close)
-                )
-            }
-            return EditBusinessPageHoursRow(id: label.lowercased(), dayLabel: label, state: .notSet)
+            return intervals
+                .sorted { ($0.openTime ?? "") < ($1.openTime ?? "") }
+                .enumerated()
+                .map { offset, row in
+                    let state: EditBusinessPageHoursRow.State = if row.isClosed == true {
+                        .closed
+                    } else if let open = formatAPITime(row.openTime), let close = formatAPITime(row.closeTime) {
+                        .open(openLabel: open, closeLabel: close)
+                    } else {
+                        .notSet
+                    }
+                    return EditBusinessPageHoursRow(
+                        id: row.rowId ?? "\(label.lowercased())-\(offset)",
+                        dayLabel: label,
+                        state: state,
+                        notes: row.notes,
+                        source: row
+                    )
+                }
         }
         if rows.allSatisfy({ if case .notSet = $0.state { return true }
             return false }) {
             return .quickApply(rows: rows)
         }
-        return .rows(rows: rows, footerHint: "Holiday hours can be added per date — neighbors see a banner.")
+        return .rows(rows: rows, footerHint: nil)
     }
 
-    private static func mapServices(_ catalog: [BusinessCatalogItemDTO]) -> EditBusinessPageServicesState {
+    static func mapServices(_ catalog: [BusinessCatalogItemDTO]) -> EditBusinessPageServicesState {
         let chips = catalog.prefix(12).map { item in
             EditBusinessPageServiceChip(
                 id: item.id,
@@ -453,18 +466,20 @@ enum EditBusinessPageMapper {
         return plain.date(from: value)
     }
 
-    private static func formatAPITime(_ value: String?) -> String? {
+    static func formatAPITime(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         let parts = value.split(separator: ":")
         guard let hourPart = parts.first, let hour = Int(hourPart) else { return value }
+        if hour == 24 { return "24:00" }
         let minute = parts.count > 1 ? String(parts[1].prefix(2)) : "00"
         let period = hour >= 12 ? "PM" : "AM"
         let hour12 = hour % 12 == 0 ? 12 : hour % 12
         return "\(hour12):\(minute) \(period)"
     }
 
-    private static func parseDisplayTime(_ value: String) -> String? {
+    static func parseDisplayTime(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if trimmed == "24:00" { return trimmed }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         for format in ["h:mm a", "h:mma", "HH:mm", "H:mm"] {

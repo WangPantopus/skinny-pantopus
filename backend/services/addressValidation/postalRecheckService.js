@@ -176,7 +176,7 @@ async function updateRaw(address, changes) {
   if (error) throw new Error(error.message);
 }
 
-/** Tell whoever added the home what the re-check found, once per outcome. */
+/** Tell whoever added the home, and anyone waiting to verify there by mail, what the re-check found, once per outcome. */
 async function notifyHomes(homes, outcome, address) {
   const notificationService = require('../notificationService');
   const copy = {
@@ -195,21 +195,22 @@ async function notifyHomes(homes, outcome, address) {
   }[outcome];
 
   for (const home of homes) {
-    const userId = home.created_by_user_id;
-    if (!userId) continue;
-    try {
-      await notificationService.createNotification({
-        userId,
-        type: 'home_address_checked',
-        title: copy.title,
-        body: copy.body,
-        icon: '📬',
-        link: `/app/homes/${home.id}/verify-postcard`,
-        metadata: { home_id: home.id, outcome },
-        idempotencyKey: `home_address_checked:${home.id}:${address.id}:${outcome}`,
-      });
-    } catch (error) {
-      logger.warn('postalRecheckService: notification failed', { homeId: home.id, error: error.message });
+    for (const userId of new Set([home.created_by_user_id, ...(home.waiting_user_ids || [])])) {
+      if (!userId) continue;
+      try {
+        await notificationService.createNotification({
+          userId,
+          type: 'home_address_checked',
+          title: copy.title,
+          body: copy.body,
+          icon: '📬',
+          link: `/app/homes/${home.id}/verify-postcard`,
+          metadata: { home_id: home.id, outcome },
+          idempotencyKey: `home_address_checked:${home.id}:${address.id}:${outcome}:${userId}`,
+        });
+      } catch (error) {
+        logger.warn('postalRecheckService: notification failed', { homeId: home.id, error: error.message });
+      }
     }
   }
 }
@@ -346,8 +347,17 @@ async function recheckPendingAddresses({ limit = 25 } = {}) {
     .eq('home_status', 'active');
   if (homeError) throw new Error(homeError.message);
 
+  const { data: waitingPeople, error: peopleError } = await supabaseAdmin
+    .from('HomeOccupancy')
+    .select('home_id, user_id')
+    .in('home_id', (homes || []).map((home) => home.id))
+    .eq('is_active', true)
+    .eq('verification_status', 'pending_postcard');
+  if (peopleError) logger.warn('postalRecheckService: waiting people unavailable', { error: peopleError.message });
+
   const homesByAddress = new Map();
   for (const home of homes || []) {
+    home.waiting_user_ids = (waitingPeople || []).filter((row) => row.home_id === home.id).map((row) => row.user_id);
     homesByAddress.set(home.address_id, [...(homesByAddress.get(home.address_id) || []), home]);
   }
 

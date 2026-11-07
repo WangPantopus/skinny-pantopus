@@ -84,6 +84,7 @@ const moneyNear = (a, b) => Math.abs(Number(a) - Number(b)) <= Math.max(1, Numbe
 // A second publication per source. `county` limits the check where the second publication is one county's own file.
 // `map` is [our fact, its column, optional comparison]. A year-apart vintage is only fair for facts that rarely change.
 const CHECKS = {
+  ...require('./lib/countyChecks'),
   'ma-boston': {
     county: '25025', rows: () => layerRows('https://gis.boston.gov/arcgis/rest/services/Assessing/PROPERTY_ASSESSMENT_PARCEL_JOIN_FY26/MapServer/0', ['PID', 'YR_BUILT', 'LIVING_AREA', 'GROSS_AREA', 'BED_RMS', 'FULL_BTH', 'HLF_BTH', 'TOTAL_VALUE', 'LAND_VALUE', 'LAND_SF', 'TT_RMS']),
     id: (row) => row.PID,

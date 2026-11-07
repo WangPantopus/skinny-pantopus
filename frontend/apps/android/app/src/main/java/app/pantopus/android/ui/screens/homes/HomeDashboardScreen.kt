@@ -361,7 +361,8 @@ fun HomeDashboardScreen(
             onGenerate = viewModel::generateChecklist,
             onRetry = viewModel::generateChecklist,
         )
-        PropertyValueCard(state = propertyValue, onRetry = viewModel::retryPropertyValue)
+        // The Home's value is its confirmed owner's, as on Place.
+        if (viewModel.isOwner()) PropertyValueCard(state = propertyValue, onRetry = viewModel::retryPropertyValue)
         BillTrendsCard(
             state = billTrends,
             currency = billCurrency,

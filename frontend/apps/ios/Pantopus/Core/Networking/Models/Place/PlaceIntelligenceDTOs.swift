@@ -1165,10 +1165,13 @@ public struct PlaceYourHomeData: Decodable, Sendable, Hashable {
     /// Where the value came from, when the record names its source; the
     /// confirmed owner's, like the value.
     public let valueSource: String?
+    /// The value block in the server's words, the confirmed owner's. It comes first.
+    public let valueCard: HomeValueCardDTO?
 
     private enum CodingKeys: String, CodingKey {
         case sqft, bedrooms, bathrooms, house
         case valueSource = "value_source"
+        case valueCard = "value_card"
         case yearBuilt = "year_built"
         case lotSqft = "lot_sqft"
         case homeType = "home_type"
