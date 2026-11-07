@@ -173,9 +173,11 @@ struct CardTableGradientPoints {
 
     init(degrees: Double, width: CGFloat, height: CGFloat) {
         let angle = degrees * .pi / 180
-        let length = abs(width * sin(angle)) + abs(height * cos(angle))
-        let dx = sin(angle) * length / 2 / width
-        let dy = -cos(angle) * length / 2 / height
+        let sine = CGFloat(sin(angle))
+        let cosine = CGFloat(cos(angle))
+        let length = abs(width * sine) + abs(height * cosine)
+        let dx = sine * length / 2 / width
+        let dy = -cosine * length / 2 / height
         start = UnitPoint(x: 0.5 - dx, y: 0.5 - dy)
         end = UnitPoint(x: 0.5 + dx, y: 0.5 + dy)
     }
