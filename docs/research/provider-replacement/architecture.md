@@ -114,7 +114,7 @@ events: a new legal interest gets a new ID linked to its predecessor, and a spli
 privilege follows it.
 
 **Matching rules.** Normalize directions, suffixes, unit designators, aliases and ZIP while keeping the publisher's
-spelling. Keep a unit number's leading zeros and its full designator. A house number a roll pads to a fixed width ("00123") is the same number as the one people write. Never derive a unit number from an assessor ID. Never
+spelling. Keep a unit number's leading zeros and its full designator, but a unit a source writes as "0", "N/A" or "NONE" is no unit. A house number a roll pads to a fixed width ("00123") is the same number as the one people write. Never derive a unit number from an assessor ID. Never
 auto-link on a key that matches more than one parcel (Cook: 69,070 of 1,700,036 keys did). A unit's private facts show
 only on an `exact` match.
 
