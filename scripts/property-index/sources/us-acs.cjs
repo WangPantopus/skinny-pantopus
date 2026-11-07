@@ -100,25 +100,32 @@ function buildAreas({ work, out }) {
  * What owners say their homes are worth, by ZIP: [median, lower quartile, upper quartile]. The neighborhood's figures, never
  * a home's. Tables B25077, B25076 and B25078; an area the survey is unsure of says nothing.
  */
+const COUNTY_GEO = '0500000US';
+
+/** What owners said their homes are worth, for each ZIP and each county: median and quartiles, and the survey's middle as a year. */
 function zipValues(work) {
   const read = (table, estimate) => {
     const lines = tableLines(work, table);
-    const found = new Map();
+    const found = { zip: new Map(), county: new Map() };
     for (const line of lines) {
       const fields = line.split('|');
-      const area = areaOf(fields[0] || '');
+      const geoId = fields[0] || '';
+      const area = geoId.startsWith(COUNTY_GEO) ? ['county', geoId.slice(COUNTY_GEO.length)] : areaOf(geoId);
       const value = Number(fields[estimate]);
-      if (area?.[0] === 'zip' && value > 0) found.set(area[1], value);
+      if (found[area?.[0]] && value > 0) found[area[0]].set(area[1], value);
     }
     return found;
   };
   const [median, low, high] = [read('b25077', 1), read('b25076', 1), read('b25078', 1)];
-  const zips = new Map();
-  for (const [zip, value] of median) {
-    if (low.has(zip) && high.has(zip)) zips.set(zip, [value, low.get(zip), high.get(zip)]);
-  }
-  log(`Census home values: ${zips.size} ZIP codes with a median and quartiles`);
-  return { zips, source: `American Community Survey ${YEAR - 4}-${YEAR}` };
+  const [zips, counties] = ['zip', 'county'].map((kind) => {
+    const values = new Map();
+    for (const [id, value] of median[kind]) {
+      if (low[kind].has(id) && high[kind].has(id)) values.set(id, [value, low[kind].get(id), high[kind].get(id)]);
+    }
+    return values;
+  });
+  log(`Census home values: ${zips.size} ZIP codes and ${counties.size} counties with a median and quartiles`);
+  return { zips, counties, source: `American Community Survey ${YEAR - 4}-${YEAR}`, middle: YEAR - 1.5 };
 }
 
 module.exports = { buildAreas, zipValues };

@@ -84,7 +84,9 @@ function estimateRows(estimate) {
 /** What was measured, in place of a confidence score. */
 function estimateNote(estimate) {
   if (estimate.level !== 1) {
-    return `A rough estimate from the county's value and federal price and appraisal figures, not an appraisal. It couldn't be checked against local sales here. In other counties it typically missed by about ${Math.round(estimate.typical_miss)}%, so its range is wide.`;
+    const why = estimate.prices_not_public ? `, because sale prices aren't public in ${estimate.prices_not_public}` : '';
+    const wide = estimate.typical_miss >= 15 ? ', so its range is wide' : '';
+    return `A rough estimate from the county's value and federal housing figures, not an appraisal. It couldn't be checked against local sales here${why}. In counties like this one it typically missed by about ${Math.round(estimate.typical_miss)}%${wide}.`;
   }
   return `An estimate from the county's value and recent sales, not an appraisal. Against sales held back to test it, here it typically missed by about ${Math.round(estimate.typical_miss)}%, and its range held about ${Math.round(estimate.range_held / 10)} times in 10.`;
 }
@@ -101,9 +103,10 @@ function build(profile, { trend = null, lookup = null, neighborhood = null } = {
   const { headline, rows, notes } = countyValues(facts, state);
   if (headline && profile.value_match === 'parcel_only') notes.push("This is the county's value for the parcel. Its record doesn't list a home.");
   const sale = lastSale(facts, state);
-  if (sale.row) rows.push(sale.row);
-  if (sale.note) notes.push(sale.note);
   const { estimate } = profile;
+  if (sale.row) rows.push(sale.row);
+  // A rough estimate says for itself that prices aren't public here.
+  if (sale.note && !estimate?.prices_not_public) notes.push(sale.note);
   if (estimate) {
     rows.push(...estimateRows(estimate));
     notes.push(estimateNote(estimate));

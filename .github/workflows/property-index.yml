@@ -26,9 +26,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file)"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file); or models (refit each county's value model from the release it serves)"
         type: choice
-        options: [build, rollback, switch, estimates, floor-points, area-trends]
+        options: [build, rollback, switch, estimates, floor-points, area-trends, models]
         default: build
       sources:
         description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates, floor-points)"
@@ -39,7 +39,7 @@ on:
         required: false
         default: ""
       county:
-        description: "County FIPS (rollback); one or a comma separated list (switch)"
+        description: "County FIPS (rollback); one or a comma separated list (switch, models; all refits every county)"
         required: false
         default: ""
       state:
@@ -181,6 +181,18 @@ jobs:
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done
           exit $status
+      # Each county's value model, fitted from the release it serves: for counties published before releases carried one
+      # (blank: those), or after the model changes (all). No release changes and nothing goes live.
+      - name: Fit value models
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'models'
+        env:
+          COUNTIES: ${{ inputs.county }}
+        run: |
+          case "$COUNTIES" in
+            all) node --max-old-space-size=12288 scripts/property-index/fit-models.cjs --bucket "$PROPERTY_INDEX_BUCKET" --all ;;
+            "") node --max-old-space-size=12288 scripts/property-index/fit-models.cjs --bucket "$PROPERTY_INDEX_BUCKET" ;;
+            *) node --max-old-space-size=12288 scripts/property-index/fit-models.cjs --bucket "$PROPERTY_INDEX_BUCKET" --counties "$COUNTIES" ;;
+          esac
       # The national floor's own index, under its own prefix. Large states need room: the runner's unused tools go first.
       - name: Build and publish estimates
         if: github.event_name == 'workflow_dispatch' && inputs.action == 'estimates'
