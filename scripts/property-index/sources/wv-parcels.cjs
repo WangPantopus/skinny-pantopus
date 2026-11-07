@@ -64,8 +64,22 @@ function fromRow(row, fips, county) {
   };
 }
 
-// The state's county codes run 1 to 55 alphabetically; FIPS are the odd numbers in the same order.
-const fipsOf = (code) => `54${String(Number(code) * 2 - 1).padStart(3, '0')}`;
+// FIPS by county name. The state's own codes run 1 to 55 alphabetically with McDowell after Mason, but FIPS order files it
+// as if spelled MacDowell, before Marion, so codes turned into FIPS put Marion, Marshall, Mason and McDowell each under
+// another's code (November 7).
+const FIPS = {
+  BARBOUR: 1, BERKELEY: 3, BOONE: 5, BRAXTON: 7, BROOKE: 9, CABELL: 11, CALHOUN: 13, CLAY: 15, DODDRIDGE: 17, FAYETTE: 19,
+  GILMER: 21, GRANT: 23, GREENBRIER: 25, HAMPSHIRE: 27, HANCOCK: 29, HARDY: 31, HARRISON: 33, JACKSON: 35, JEFFERSON: 37,
+  KANAWHA: 39, LEWIS: 41, LINCOLN: 43, LOGAN: 45, MCDOWELL: 47, MARION: 49, MARSHALL: 51, MASON: 53, MERCER: 55,
+  MINERAL: 57, MINGO: 59, MONONGALIA: 61, MONROE: 63, MORGAN: 65, NICHOLAS: 67, OHIO: 69, PENDLETON: 71, PLEASANTS: 73,
+  POCAHONTAS: 75, PRESTON: 77, PUTNAM: 79, RALEIGH: 81, RANDOLPH: 83, RITCHIE: 85, ROANE: 87, SUMMERS: 89, TAYLOR: 91,
+  TUCKER: 93, TYLER: 95, UPSHUR: 97, WAYNE: 99, WEBSTER: 101, WETZEL: 103, WIRT: 105, WOOD: 107, WYOMING: 109,
+};
+const fipsOf = (name) => {
+  const code = FIPS[String(name ?? '').toUpperCase().replace(/[^A-Z]/g, '')];
+  if (!code) throw new Error(`No FIPS code for ${name}`);
+  return `54${String(code).padStart(3, '0')}`;
+};
 
 async function* build({ work }) {
   const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
@@ -80,7 +94,7 @@ async function* build({ work }) {
   log(`${counties.size} counties listed`);
   if (counties.size !== 55) throw new Error(`${counties.size} counties are listed, not 55`);
   for (const row of [...counties.values()].sort((a, b) => Number(a.CountyCode) - Number(b.CountyCode))) {
-    const fips = fipsOf(row.CountyCode);
+    const fips = fipsOf(row.CountyName);
     if (only.length && !only.includes(fips)) continue;
     const county = `${row.CountyName} County`;
     const records = [];
