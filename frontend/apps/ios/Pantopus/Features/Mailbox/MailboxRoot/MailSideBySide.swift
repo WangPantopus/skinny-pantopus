@@ -433,4 +433,9 @@ final class MailScreenModels {
         let onStack = Set(routes)
         models = models.filter { onStack.contains($0.key) }
     }
+
+    /// Whether this model's screen is still on the stack.
+    func holds(_ model: AnyObject) -> Bool {
+        models.values.contains { $0 === model }
+    }
 }

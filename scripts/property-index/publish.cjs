@@ -5,12 +5,14 @@
 // .github/workflows/property-index.yml with the AWS key of its master-only environment.
 //
 //   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--bulk] [--min-retention 0.995] [--republish] [--accept-falls]
+//     [--accept-falls-for "<fips> ..."]
 //     --bulk  uploads every county's release at once, which a whole state of them needs; a refused county's files just go unused
 //     --moved "<fips> ..."  counties moving from a statewide file to a connector of their own: ids and facts are another file's, so only the record count compares
 //     --republish  someone decided: a file that was rolled back may serve again, and a new build of the file serving
 //                  replaces it (a scheduled run never passes this)
 //     --accept-falls  someone read the refusals and a connector's fix meant them: lower fill and changed account ids publish
 //                     with a warning. An empty file or far fewer records is still refused. Off unless asked for by hand.
+//     --accept-falls-for  the same, for the counties named only
 //   node scripts/property-index/publish.cjs --rollback <fips> --state <ST> --bucket <name> [--prefix index]
 'use strict';
 
@@ -42,6 +44,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--state') opts.state = argv[++i];
     else if (argv[i] === '--republish') opts.republish = true;
     else if (argv[i] === '--accept-falls') opts.acceptFalls = true;
+    else if (argv[i] === '--accept-falls-for') opts.acceptFallsFor = argv[++i].split(/[\s,]+/).filter(Boolean);
     else if (argv[i] === '--bulk') opts.bulk = true;
     else if (argv[i] === '--min-retention') opts.minRetention = Number(argv[++i]);
     else if (argv[i] === '--moved') opts.moved = argv[++i].split(/\s+/).filter(Boolean);
@@ -92,6 +95,9 @@ function withMaps(stateFile, counties) {
   return { ...stateFile, zips, cities };
 }
 
+/** An address registry release's addresses: its houses and buildings, not the units listed under them. Null otherwise. */
+const addresses = (county) => (county.source === 'registry' && county.counts ? county.counts.property + county.counts.building : null);
+
 /** Why this release mustn't replace the one serving, and what only someone who looked may accept: counts only. */
 function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, moved = [], records = true) {
   const found = [];
@@ -105,7 +111,13 @@ function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, 
   if (records && own.share !== null && own.share < MIN_SELF_FIND) falls.push(`only ${own.found} of ${own.asked - own.ambiguous} sampled homes find themselves through the app's reader`);
   if (!previous) return { found, falls };
   const before = previous.records || 0;
-  if (report.records < before * MIN_RECORD_SHARE) found.push(`${report.records} records, ${before} serving`);
+  const addressesBefore = addresses(previous);
+  const addressesNow = addresses(entry);
+  if (addressesBefore !== null && addressesNow !== null) {
+    // The registry counts addresses. Fewer units under them, as when a fix drops units a source made up, needs someone to look.
+    if (addressesNow < addressesBefore * MIN_RECORD_SHARE) found.push(`${addressesNow} addresses, ${addressesBefore} serving`);
+    else if (report.records < before * MIN_RECORD_SHARE) falls.push(`${report.records} records, ${before} serving`);
+  } else if (report.records < before * MIN_RECORD_SHARE) found.push(`${report.records} records, ${before} serving`);
   if (moved.includes(entry.fips) && previous.source !== entry.source) return { found, falls };
   const oldReport = store.get(`${releasePath(entry.fips, previous.release)}/report.json`);
   if (oldReport) {
@@ -145,7 +157,7 @@ function readState(store, state) {
   return bytes ? JSON.parse(bytes.toString('utf8')) : emptyState(state);
 }
 
-function publish(store, { out, prefix, republish, acceptFalls = false, bulk = false, minRetention, moved }) {
+function publish(store, { out, prefix, republish, acceptFalls = false, acceptFallsFor = [], bulk = false, minRetention, moved }) {
   // The national floor's estimates (--prefix index/estimates) are counted, not held to the reader's answers.
   const records = prefix === 'index';
   if (bulk) store.putDir(path.join(out, 'releases'), 'releases');
@@ -180,7 +192,7 @@ function publish(store, { out, prefix, republish, acceptFalls = false, bulk = fa
         continue;
       }
       const { found, falls } = problems(store, entry, serving, out, minRetention, moved, records);
-      if (found.length || (falls.length && !acceptFalls)) {
+      if (found.length || (falls.length && !acceptFalls && !acceptFallsFor.includes(entry.fips))) {
         refused += 1;
         console.log(`::error::${entry.fips} ${entry.release} refused: ${[...found, ...falls].join('; ')}. The previous release keeps serving.`);
         continue;

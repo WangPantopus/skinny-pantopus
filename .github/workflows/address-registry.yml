@@ -28,6 +28,14 @@ on:
         description: "Publish what's built (build)"
         type: boolean
         default: true
+      republish:
+        description: "Publish a county's new build even when its sources haven't changed, as after a fix to the build (build)"
+        type: boolean
+        default: false
+      accept_falls:
+        description: "County FIPS, space separated, whose refusals someone read and means to publish anyway (build)"
+        required: false
+        default: ""
       county:
         description: "County FIPS (rollback)"
         required: false
@@ -114,4 +122,6 @@ jobs:
           SOURCES: ${{ inputs.sources || 'points,nad,overture,openaddresses' }}
           STATES: ${{ inputs.states }}
           PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+          REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.republish }}
+          ACCEPT_FALLS: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls || '' }}
         run: bash scripts/property-index/run-registry.sh

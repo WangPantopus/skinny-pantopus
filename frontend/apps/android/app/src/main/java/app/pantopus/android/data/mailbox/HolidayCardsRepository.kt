@@ -69,9 +69,10 @@ class HolidayCardsRepository
             toUserId: String?,
             toEmail: String?,
             requestId: String? = null,
+            toLink: Boolean = false,
         ): CardLook {
             val body =
-                SendHolidayCardBody(design, message, arrival, HolidayCardRecipient(userId = toUserId, email = toEmail), requestId)
+                SendHolidayCardBody(design, message, arrival, recipient(toUserId, toEmail, toLink), requestId)
             val response =
                 when (val result = safeApiCall { api.preview(body) }) {
                     is NetworkResult.Success -> result.data
@@ -89,6 +90,20 @@ class HolidayCardsRepository
                 else -> CardLook.Failed(NetworkError.ClientError(response.code(), error))
             }
         }
+
+        /** A person, an email address or a link: one of the three. */
+        private fun recipient(
+            toUserId: String?,
+            toEmail: String?,
+            toLink: Boolean,
+        ) = HolidayCardRecipient(userId = toUserId, email = toEmail, link = true.takeIf { toLink })
+
+        /** `GET /api/mailbox/cards/:id/link`: the link of a card by link that's still waiting for someone. */
+        suspend fun cardLink(id: String): NetworkResult<String> =
+            when (val result = safeApiCall { api.cardLink(id) }) {
+                is NetworkResult.Success -> NetworkResult.Success(result.data.link)
+                is NetworkResult.Failure -> result
+            }
 
         /** `POST /api/mailbox/cards/shared`: counts what was shared; whether it worked changes nothing for the person. */
         suspend fun cardShared(
@@ -108,14 +123,15 @@ class HolidayCardsRepository
             toUserId: String?,
             toEmail: String?,
             requestId: String? = null,
+            toLink: Boolean = false,
         ): NetworkResult<SentHolidayCard> {
             val body =
-                SendHolidayCardBody(design, message, arrival, HolidayCardRecipient(userId = toUserId, email = toEmail), requestId)
+                SendHolidayCardBody(design, message, arrival, recipient(toUserId, toEmail, toLink), requestId)
             return when (val result = safeApiCall { api.send(body) }) {
                 is NetworkResult.Success -> {
                     latestFlow.update { it?.copy(today = result.data.card) }
                     cardSentFlow.tryEmit(result.data.card.id)
-                    NetworkResult.Success(result.data.card)
+                    NetworkResult.Success(result.data.card.copy(link = result.data.link))
                 }
                 is NetworkResult.Failure -> result
             }

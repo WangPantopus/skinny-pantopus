@@ -48,6 +48,7 @@ struct MailSentPieceView: View {
         .accessibilityIdentifier("mailSentPiece")
         .modifier(CardTablePreviewCover(
             content: $tableContent,
+            owner: viewModel,
             closeLabel: "Back to your card",
             isSender: true,
             sharesSealed: tableSharesSealed

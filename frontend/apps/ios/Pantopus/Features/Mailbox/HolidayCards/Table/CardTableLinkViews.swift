@@ -276,6 +276,8 @@ struct CardTableLinkPagePicture: View {
 /// and closing it comes back here.
 struct CardTablePreviewCover: ViewModifier {
     @Binding var content: CardTableContent?
+    /// The model of the screen showing it: from the tab's root, the table goes when that screen does.
+    let owner: AnyObject
     /// What ✕ says it does.
     let closeLabel: String
     /// On a card already sent, Share is there too.
@@ -283,6 +285,7 @@ struct CardTablePreviewCover: ViewModifier {
     /// A card you sent, still sealed for them, shares as the sealed envelope.
     var sharesSealed = false
 
+    @Environment(\.cardTableCoverSlot) private var slot
     @State private var item: Item?
 
     private struct Item: Identifiable {
@@ -293,29 +296,48 @@ struct CardTablePreviewCover: ViewModifier {
     func body(content view: Content) -> some View {
         view
             .onChange(of: content) { _, new in
-                var quiet = Transaction()
-                quiet.disablesAnimations = true
-                withTransaction(quiet) {
-                    item = new.map { Item(model: CardTableModel(content: $0, startsOnTable: false)) }
-                }
+                present(new.map { Item(model: CardTableModel(content: $0, startsOnTable: false)) })
             }
             .fullScreenCover(item: $item, onDismiss: { content = nil }, content: { item in
-                CardTableScreen(
-                    model: item.model,
-                    menuItems: [
-                        CardTableMenuItem(title: "Open it again", identifier: "cardTableMenuAgain") {
-                            item.model.restart(animated: true)
-                        }
-                    ],
-                    isSender: isSender,
-                    sharesSealed: sharesSealed,
-                    closeLabel: closeLabel,
-                    canShare: isSender
-                ) {
-                    var quiet = Transaction()
-                    quiet.disablesAnimations = true
-                    withTransaction(quiet) { self.item = nil }
-                }
+                table(item)
             })
+    }
+
+    /// From the tab's root when it has a place for it (`CardTableCoverSlot`), else from here.
+    private func present(_ next: Item?) {
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) {
+            guard let slot else {
+                item = next
+                return
+            }
+            let page = next.map { next in
+                CardTableCoverSlot.Page(
+                    id: next.id.uuidString,
+                    owner: owner,
+                    content: { AnyView(table(next)) },
+                    onDismiss: { content = nil }
+                )
+            }
+            slot.show(page, owner: owner)
+        }
+    }
+
+    private func table(_ item: Item) -> CardTableScreen {
+        CardTableScreen(
+            model: item.model,
+            menuItems: [
+                CardTableMenuItem(title: "Open it again", identifier: "cardTableMenuAgain") {
+                    item.model.restart(animated: true)
+                }
+            ],
+            isSender: isSender,
+            sharesSealed: sharesSealed,
+            closeLabel: closeLabel,
+            canShare: isSender
+        ) {
+            present(nil)
+        }
     }
 }

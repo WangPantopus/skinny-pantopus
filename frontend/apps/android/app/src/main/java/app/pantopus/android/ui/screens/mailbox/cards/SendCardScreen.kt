@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber", "LongMethod")
+@file:Suppress("PackageNaming", "MagicNumber", "LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 
 package app.pantopus.android.ui.screens.mailbox.cards
 
@@ -53,6 +53,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardLinkBox
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -103,7 +104,15 @@ fun SendCardScreen(
                 }
                 SendCardPage.Today ->
                     season?.todaysCard?.let { today ->
-                        SentCardSection(today, season, "Today’s card", form, onTakeBack = { confirmTakeBack = true }, onClose = onClose)
+                        SentCardSection(
+                            today,
+                            season,
+                            "Today’s card",
+                            form,
+                            onTakeBack = { confirmTakeBack = true },
+                            onClose = onClose,
+                            fromName = fromName,
+                        )
                     }
                 SendCardPage.Closed -> DoneForTheYear(onClose)
                 SendCardPage.Steps, SendCardPage.Sent ->
@@ -121,12 +130,18 @@ fun SendCardScreen(
             }
         }
         if (page == SendCardPage.Steps && form.step == SendCardStep.Look && form.preview != null) {
-            LookFooter(byEmail = form.to is CardRecipient.Email, form = form, onSend = viewModel::send)
+            LookFooter(
+                byEmail = form.to is CardRecipient.Email,
+                form = form,
+                onSend = viewModel::send,
+                byLink = form.to is CardRecipient.Link,
+            )
         }
     }
     if (confirmTakeBack) {
         TakeBackDialog(
             byEmail = (form.sent ?: season?.todaysCard)?.byEmail == true,
+            byLink = (form.sent ?: season?.todaysCard)?.byLink == true,
             onTakeBack = {
                 confirmTakeBack = false
                 viewModel.takeBack()
@@ -149,7 +164,7 @@ private enum class SendCardPage {
         when (this) {
             Reading, Closed -> "Christmas cards"
             Today -> "Today’s card"
-            Steps, Sent -> form.step.title
+            Steps, Sent -> if (form.step == SendCardStep.Sent && form.sent?.byLink == true) "Your card is ready" else form.step.title
         }
 
     companion object {
@@ -226,8 +241,9 @@ private fun Steps(
                 SentCardSection(
                     card = card,
                     cards = cards,
-                    title = "On its way",
+                    title = if (card.byLink) "By link" else "On its way",
                     form = form,
+                    fromName = fromName,
                     onTakeBack = onTakeBack,
                     onClose = onClose,
                     onSeeInSent = { onSeeInSent(card.id) },
@@ -398,8 +414,14 @@ internal fun TakeBackDialog(
     onTakeBack: () -> Unit,
     onKeep: () -> Unit,
     freesToday: Boolean = true,
+    byLink: Boolean = false,
 ) {
-    val first = if (byEmail) "The link in their email will say you took it back." else "It won’t go out with the morning mail."
+    val first =
+        when {
+            byLink -> "Your link will say you took it back."
+            byEmail -> "The link in their email will say you took it back."
+            else -> "It won’t go out with the morning mail."
+        }
     AlertDialog(
         onDismissRequest = onKeep,
         title = { Text("Take your card back?") },
@@ -427,6 +449,8 @@ internal fun SentCardSection(
     onTakeBack: () -> Unit,
     onClose: () -> Unit,
     onSeeInSent: (() -> Unit)? = null,
+    /** Who it's from, for the line sent with a link. */
+    fromName: String = "",
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
     Column(
@@ -438,6 +462,15 @@ internal fun SentCardSection(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         SentCardBox(card, cards.designOf(card.design), title, arrivalLine(card, zone))
+        if (card.byLink && card.canTakeBack) {
+            CardLinkBox(
+                cardId = card.id,
+                knownLink = card.link,
+                fromFirst = fromName.trim().substringBefore(' ').ifEmpty { "someone" },
+                copyWords = if (card.link != null) "Copy link" else "Copy link again",
+                modifier = Modifier.padding(top = Spacing.s3),
+            )
+        }
         takeBackLine(card, zone)?.let {
             Text(
                 it,
@@ -523,7 +556,7 @@ private fun SentCardBox(
                 color = PantopusColors.cardTextQuiet,
             )
             Text(
-                "To ${card.toName ?: "them"}",
+                if (card.byLink && card.status != "claimed") "To whoever opens your link" else "To ${card.toName ?: "them"}",
                 fontSize = 17.sp,
                 lineHeight = 22.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -551,6 +584,10 @@ private fun arrivalLine(
     val day = HolidayCardTimes.shortDay(card.arrivesOn ?: card.arrivesAt, zone)
     return when {
         card.status == "withdrawn" -> "You took this card back."
+        card.byLink && card.status == "claimed" ->
+            card.toName?.let { "$it opened your link and has your card." } ?: "They opened your link and have your card."
+        card.byLink && card.status == "expired" -> "Nobody opened your link in 90 days."
+        card.byLink -> "Waiting for someone to open your link."
         card.byEmail && card.status == "claimed" -> "$who joined Pantopus and has your card."
         card.byEmail && card.arrival == "sealed_christmas" ->
             "We emailed them. Once they join with that address, it waits in their mailbox and opens on Christmas morning."
