@@ -87,6 +87,13 @@ enum HolidayCardWords {
     static func arrivalLine(_ card: SentHolidayCard, calendar: Calendar = .current) -> String {
         let who = MailPieceModel.firstText(card.toName) ?? "They"
         if card.status == "withdrawn" { return "You took this card back." }
+        if card.byLink {
+            if card.status == "claimed" { return "\(who) opened your link and has your card." }
+            if card.status == "expired" { return "Nobody opened your link in 90 days." }
+            return card.arrival == .sealedChristmas
+                ? "It waits for someone to open your link and join. Then it’s in their mailbox and opens on Christmas morning."
+                : "It waits for someone to open your link and join."
+        }
         if card.byEmail {
             if card.status == "claimed" { return "\(who) joined Pantopus and has your card." }
             return card.arrival == .sealedChristmas
@@ -107,7 +114,7 @@ enum HolidayCardWords {
     /// Until when it can be taken back, on this phone's clock; nil once it can't.
     static func takeBackLine(_ card: SentHolidayCard, calendar: Calendar = .current) -> String? {
         guard card.canTakeBack else { return nil }
-        if card.byEmail { return "You can take it back until they open it." }
+        if card.byEmail { return card.byLink ? "You can take it back until someone opens it." : "You can take it back until they open it." }
         let until = "\(clockTime(card.takeBackUntil, calendar: calendar)) \(shortDay(card.takeBackUntil, calendar: calendar))"
         return "You can take it back until \(until), when the carrier picks it up."
     }
@@ -115,6 +122,9 @@ enum HolidayCardWords {
     /// The Mailbox row's second line: the invitation, or how today's card comes.
     static func rowLine(today: SentHolidayCard?, calendar: Calendar = .current) -> String {
         guard let today else { return "Pick a picture and write a note. One card a day." }
+        if today.byLink {
+            return today.status == "claimed" ? "Someone opened your link and has it." : "Waiting for someone to open your link."
+        }
         if today.byEmail {
             return today.status == "claimed" ? "They joined Pantopus and have it." : "Waiting for them to open the email."
         }
@@ -146,11 +156,16 @@ enum HolidayCardWords {
         let day = shortDay(theirDay ?? cards.nextRoundAt, calendar: calendar)
         let name = switch recipient {
         case let .person(_, full): firstName(full)
-        case .email: "they"
+        case .email, .link: "they"
         }
         switch arrival {
         case .nextMorning:
             return ("With the morning mail", "\(day), about 7 a.m. where \(name) lives. They can open it right away.")
+        case .sealedChristmas where recipient.isLink:
+            return (
+                "Sealed until Christmas",
+                "Whoever opens your link and joins gets it now, with a “Do not open until Christmas” seal. It opens on December 25."
+            )
         case .sealedChristmas where recipient.isEmail:
             return (
                 "Sealed until Christmas",
@@ -166,6 +181,9 @@ enum HolidayCardWords {
         case .christmasMorning:
             return ("On Christmas morning", "\(shortDay(cards.christmasMorningAt, calendar: calendar)), with the 7 a.m. mail.")
         case .now:
+            if recipient.isLink {
+                return ("Right away", "Whoever opens your link can open the card as soon as they join.")
+            }
             return ("Right away, by email", "They get an email now and can open it once they join with that address.")
         }
     }
@@ -175,6 +193,8 @@ enum HolidayCardWords {
     static func sealNote(byEmail: Bool) -> String {
         byEmail ? "You can take it back until they open it." : "You can take it back until the carrier picks it up at 7 a.m. their time."
     }
+
+    static let sealNoteByLink = "You can take it back until someone opens it."
 
     /// A caption as a sentence for VoiceOver: most end in a full stop or a
     /// question mark already.
