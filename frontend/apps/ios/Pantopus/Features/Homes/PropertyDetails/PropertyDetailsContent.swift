@@ -83,6 +83,8 @@ public struct PropertyHouseholdContent: Sendable, Hashable {
     public let groups: [HouseholdGroupDTO]
     public let questions: [HouseholdQuestionDTO]
     public let countyPage: HouseholdCountyPageDTO?
+    /// Link and confirm: "Is this right?" once someone is back from the county's page.
+    public let countyCheck: HouseholdCountyCheckDTO?
     /// "Is this your layout?", for a unit its building's sheet names.
     public let floorPlan: FloorPlanLayoutDTO?
 
@@ -91,12 +93,14 @@ public struct PropertyHouseholdContent: Sendable, Hashable {
         groups: [HouseholdGroupDTO],
         questions: [HouseholdQuestionDTO],
         countyPage: HouseholdCountyPageDTO?,
+        countyCheck: HouseholdCountyCheckDTO? = nil,
         floorPlan: FloorPlanLayoutDTO? = nil
     ) {
         self.sections = sections
         self.groups = groups
         self.questions = questions
         self.countyPage = countyPage
+        self.countyCheck = countyCheck
         self.floorPlan = floorPlan
     }
 

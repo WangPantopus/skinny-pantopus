@@ -144,6 +144,23 @@ public struct HouseholdCountyPageDTO: Decodable, Sendable, Hashable {
     public let label: String
 }
 
+/// "Is this right?" once someone is back from the county's page, for a home no county record answers
+/// (link and confirm, `backend/services/householdFacts.js`): year built, size, bedrooms and baths.
+public struct HouseholdCountyCheckDTO: Decodable, Sendable, Hashable {
+    public let group: String
+    public let prompt: String?
+    public let lead: String
+    public let confirmed: String?
+    public let canUndo: Bool
+    public let fix: String
+    public let facts: [HouseholdFactDTO]
+
+    private enum CodingKeys: String, CodingKey {
+        case group, prompt, lead, confirmed, fix, facts
+        case canUndo = "can_undo"
+    }
+}
+
 /// One one-tap answer.
 public struct HouseholdAnswerDTO: Decodable, Sendable, Hashable {
     public let label: String
@@ -262,6 +279,8 @@ public struct HouseholdPartDTO: Decodable, Sendable, Hashable {
     public let groups: [HouseholdGroupDTO]
     public let questions: [HouseholdQuestionDTO]
     public let countyPage: HouseholdCountyPageDTO?
+    /// Link and confirm: "Is this right?" after the county's page.
+    public let countyCheck: HouseholdCountyCheckDTO?
     /// "Is this your layout?", for a unit its building's sheet names.
     public let floorPlan: FloorPlanLayoutDTO?
 
@@ -269,6 +288,7 @@ public struct HouseholdPartDTO: Decodable, Sendable, Hashable {
         case sections, groups, questions
         case canEdit = "can_edit"
         case countyPage = "county_page"
+        case countyCheck = "county_check"
         case floorPlan = "floor_plan"
     }
 }
@@ -310,9 +330,15 @@ public struct HouseholdFactChange: Encodable, Sendable, Hashable {
     public let group: String?
     public let action: String
     public let value: String?
+    /// "county_page": a fix sent from "Is this right?" after the county's page (link and confirm).
+    public var via: String?
 
     public static func correct(_ key: String, value: String) -> Self {
         Self(key: key, group: nil, action: "correct", value: value)
+    }
+
+    public static func correctFromCountyPage(_ key: String, value: String) -> Self {
+        Self(key: key, group: nil, action: "correct", value: value, via: "county_page")
     }
 
     public static func undo(_ key: String) -> Self {

@@ -32,6 +32,14 @@ final class PropertyDetailsViewModel {
     /// A change to the household's facts is on its way.
     private(set) var savingFacts = false
 
+    /// Link and confirm: the group "Fix something" saves for after the county's page, when the screen shows it.
+    var countyCheckGroup: String? {
+        switch state {
+        case let .clean(content), let .mismatch(content): content.household?.countyCheck?.group
+        case .loading, .error: nil
+        }
+    }
+
     let homeId: String
     private let api: APIClient
     private let store: ScreenStore
@@ -232,6 +240,7 @@ final class PropertyDetailsViewModel {
                     groups: $0.groups,
                     questions: $0.questions,
                     countyPage: $0.countyPage,
+                    countyCheck: $0.countyCheck,
                     floorPlan: $0.floorPlan
                 )
             }

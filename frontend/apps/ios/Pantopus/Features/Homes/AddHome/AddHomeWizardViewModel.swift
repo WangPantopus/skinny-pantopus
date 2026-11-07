@@ -96,6 +96,9 @@ final class AddHomeWizardViewModel: WizardModel {
     private(set) var propertySuggestions: PropertySuggestionsResponse?
     /// "Is this your layout?", answered on the form: goes with the new Home.
     var floorPlanAnswer: String?
+    /// Link and confirm, with no county record: the county's page was opened, and "Is this right?" answered.
+    var countyPageOpened = false
+    var countyChecked = false
     /// True once the suggestions lookup has finished (success or not), so
     /// the Details block can switch its headline from "Tell us about your
     /// home" to "Confirm property details" (RN `DetailsStep.tsx:57-70`).
@@ -418,6 +421,8 @@ final class AddHomeWizardViewModel: WizardModel {
         isFindingAddress = false
         propertySuggestions = nil
         floorPlanAnswer = nil
+        countyPageOpened = false
+        countyChecked = false
         propertyLookupComplete = false
         isLoadingPropertySuggestions = false
         propertyLookupPending = false
@@ -1300,7 +1305,8 @@ final class AddHomeWizardViewModel: WizardModel {
             moveInDate: details.justMoved ? Self.isoToday() : nil,
             noUnitAttestation: noUnitAttested ? true : nil,
             addressId: validatedAddressId,
-            floorPlanAnswer: propertySuggestions?.floorPlan?.prompt == nil ? nil : floorPlanAnswer
+            floorPlanAnswer: propertySuggestions?.floorPlan?.prompt == nil ? nil : floorPlanAnswer,
+            countyChecked: propertySuggestions?.countyCheck != nil && countyChecked ? true : nil
         )
         do {
             try scope.requireCurrent()
