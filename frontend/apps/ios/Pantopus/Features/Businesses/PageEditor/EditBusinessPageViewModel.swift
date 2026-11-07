@@ -520,7 +520,8 @@ public final class EditBusinessPageViewModel {
     /// `DELETE /api/businesses/:businessId`. A failure keeps the sheet and
     /// the typed word, with the server's sentence.
     public func closeBusiness() async {
-        guard canClose, !isClosing, case .loaded = state else { return }
+        // `canClose` clears during a recheck; the sheet's Retry has to survive a failed one.
+        guard showsCloseConfirm, !isClosing, case .loaded = state else { return }
         if isSaving || uploadingMedia != nil {
             closeFailure = CloseBusinessFailure(
                 message: "Wait for the current save or upload to finish, then try again.",
