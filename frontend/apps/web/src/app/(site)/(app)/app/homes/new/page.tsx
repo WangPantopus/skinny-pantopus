@@ -308,9 +308,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setCountyPage(res?.county_page ?? null);
     setFloorPlan(res?.floor_plan ?? null);
     setFloorPlanAnswer(null);
-    if (res?.provenance) {
-      return res.provenance.scope === 'building' && res.lookup_message ? `${res.lookup_message} ${res.provenance.label}` : res.provenance.label;
-    }
+    if (res?.provenance) return res.provenance.label;
     // No record behind the prefill: the server's words, not "public records".
     const lookup = res?.record_lookup ?? res?.attom_lookup;
     if ((res?.floor_plan?.match === 'exact' || lookup === 'unavailable' || lookup === 'none') && res?.lookup_message) return res.lookup_message;
