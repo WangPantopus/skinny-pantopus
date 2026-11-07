@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.businesses.owner_dashboard
 
 import android.content.SharedPreferences
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.api.models.businesses.BusinessAccessDto
 import app.pantopus.android.data.api.models.businesses.BusinessDashboardProfileDto
 import app.pantopus.android.data.api.models.businesses.BusinessDashboardResponse
 import app.pantopus.android.data.api.models.businesses.BusinessDetailResponse
@@ -151,7 +152,7 @@ class BusinessOwnerViewModelTest {
                     completedCount = 6,
                     totalCount = 8,
                 ),
-            access = null,
+            access = BusinessAccessDto(hasAccess = true, isOwner = true, roleBase = "owner"),
         )
 
     private fun insights(): BusinessInsightsResponse =

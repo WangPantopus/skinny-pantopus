@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.screens.businesses.page_editor.EditBusinessFieldMode
 import app.pantopus.android.ui.screens.businesses.page_editor.EditBusinessPageHoursRow
 import app.pantopus.android.ui.screens.businesses.page_editor.EditBusinessPageHoursState
 import app.pantopus.android.ui.theme.PantopusColors
@@ -65,7 +66,9 @@ fun EditBusinessHoursEditor(
     onDayChange: (String, EditBusinessPageHoursRow.State) -> Unit = { _, _ -> },
     onApplyWeekdays: () -> Unit = {},
     modifier: Modifier = Modifier,
+    mode: EditBusinessFieldMode = EditBusinessFieldMode.Editable,
 ) {
+    val readOnly = mode == EditBusinessFieldMode.ReadOnly
     var editingDay by remember { mutableStateOf<EditBusinessPageHoursRow?>(null) }
     val rows: List<EditBusinessPageHoursRow> =
         when (state) {
@@ -76,15 +79,18 @@ fun EditBusinessHoursEditor(
         modifier = modifier.testTag("editBusinessPage.hours"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        HoursCard(rows = rows, onEditDay = { editingDay = it })
-        when (state) {
-            is EditBusinessPageHoursState.Rows -> state.footerHint?.let { hint -> HintRow(hint = hint) }
-            is EditBusinessPageHoursState.QuickApply -> QuickApplyRow(onApplyWeekdays)
+        HoursCard(rows = rows, readOnly = readOnly, onEditDay = { editingDay = it })
+        if (!readOnly) {
+            when (state) {
+                is EditBusinessPageHoursState.Rows -> state.footerHint?.let { hint -> HintRow(hint = hint) }
+                is EditBusinessPageHoursState.QuickApply -> QuickApplyRow(onApplyWeekdays)
+            }
         }
     }
-    editingDay?.let { day ->
+    editingDay?.takeUnless { readOnly }?.let { day ->
         BusinessHoursDayDialog(
             day = day,
+            canApply = mode == EditBusinessFieldMode.Editable,
             onDismiss = { editingDay = null },
             onApply = { value ->
                 onDayChange(day.id, value)
@@ -101,6 +107,7 @@ fun EditBusinessHoursEditor(
 @Composable
 private fun HoursCard(
     rows: List<EditBusinessPageHoursRow>,
+    readOnly: Boolean,
     onEditDay: (EditBusinessPageHoursRow) -> Unit,
 ) {
     Column(
@@ -116,7 +123,7 @@ private fun HoursCard(
                 ),
     ) {
         rows.forEachIndexed { idx, row ->
-            HoursRowView(row = row, onClick = { onEditDay(row) })
+            HoursRowView(row = row, readOnly = readOnly, onClick = { onEditDay(row) })
             if (idx != rows.size - 1) {
                 HorizontalDivider(
                     color = PantopusColors.appBorderSubtle,
@@ -131,6 +138,7 @@ private fun HoursCard(
 @Composable
 private fun HoursRowView(
     row: EditBusinessPageHoursRow,
+    readOnly: Boolean,
     onClick: () -> Unit,
 ) {
     val bg = if (row.isDirty) PantopusColors.warningBg else PantopusColors.appSurface
@@ -139,7 +147,7 @@ private fun HoursRowView(
             Modifier
                 .fillMaxWidth()
                 .background(bg)
-                .clickable(role = Role.Button, onClick = onClick)
+                .then(if (readOnly) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick))
                 .padding(horizontal = Spacing.s3, vertical = 11.dp)
                 .heightIn(min = 44.dp)
                 .semantics { contentDescription = a11yLabel(row) },
@@ -167,12 +175,15 @@ private fun HoursRowView(
                 )
             }
         }
-        HoursStateView(state = row.state)
+        HoursStateView(state = row.state, readOnly = readOnly)
     }
 }
 
 @Composable
-private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
+private fun HoursStateView(
+    state: EditBusinessPageHoursRow.State,
+    readOnly: Boolean,
+) {
     when (state) {
         is EditBusinessPageHoursRow.State.Open ->
             Row(
@@ -192,12 +203,14 @@ private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
                     TimePill(value = closeForDisplay(state.closeLabel))
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                PantopusIconImage(
-                    icon = PantopusIcon.MoreHorizontal,
-                    contentDescription = null,
-                    size = 14.dp,
-                    tint = PantopusColors.appTextSecondary,
-                )
+                if (!readOnly) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.MoreHorizontal,
+                        contentDescription = null,
+                        size = 14.dp,
+                        tint = PantopusColors.appTextSecondary,
+                    )
+                }
             }
         EditBusinessPageHoursRow.State.Closed ->
             Row(
@@ -210,11 +223,13 @@ private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
                     color = PantopusColors.appTextSecondary,
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "Set hours",
-                    style = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
-                    color = PantopusColors.business,
-                )
+                if (!readOnly) {
+                    Text(
+                        text = "Set hours",
+                        style = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.business,
+                    )
+                }
             }
         EditBusinessPageHoursRow.State.NotSet ->
             Row(
@@ -227,23 +242,25 @@ private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
                     color = PantopusColors.appTextMuted,
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Box(
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
-                            .background(PantopusColors.businessBg)
-                            .border(
-                                width = 1.dp,
-                                color = PantopusColors.business.copy(alpha = 0.25f),
-                                shape = RoundedCornerShape(Radii.pill),
-                            )
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Text(
-                        text = "Add",
-                        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
-                        color = PantopusColors.businessDark,
-                    )
+                if (!readOnly) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(Radii.pill))
+                                .background(PantopusColors.businessBg)
+                                .border(
+                                    width = 1.dp,
+                                    color = PantopusColors.business.copy(alpha = 0.25f),
+                                    shape = RoundedCornerShape(Radii.pill),
+                                )
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = "Add",
+                            style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                            color = PantopusColors.businessDark,
+                        )
+                    }
                 }
             }
     }
@@ -358,6 +375,7 @@ internal fun BusinessHoursDayDialog(
     onDismiss: () -> Unit,
     onApply: (EditBusinessPageHoursRow.State) -> Unit,
     takenOpenings: List<String> = emptyList(),
+    canApply: Boolean = true,
 ) {
     val context = LocalContext.current
     val formatter = remember { DateTimeFormatter.ofPattern("h:mm a", Locale.US) }
@@ -414,7 +432,7 @@ internal fun BusinessHoursDayDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
+            TextButton(enabled = valid && canApply, onClick = {
                 when {
                     // Nothing changed: the row stays exactly as saved, seconds and a 24:00 close included.
                     unchanged -> onDismiss()

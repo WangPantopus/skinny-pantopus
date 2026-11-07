@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.data.api.models.businesses.BusinessRolePresetDto
@@ -80,6 +81,11 @@ private sealed interface TeamSheet {
     data class Permissions(val row: BusinessTeamMemberRow) : TeamSheet
 }
 
+private fun TeamSheet.isAllowed(
+    canInvite: Boolean,
+    canManage: Boolean,
+): Boolean = if (this == TeamSheet.Invite) canInvite else canManage
+
 /**
  * B2C — owner-side business team & roles management. A faithful clone of
  * the per-home Members screen: a roster grouped into role sections + a
@@ -105,7 +111,10 @@ fun BusinessTeamScreen(
     val context = LocalContext.current
     val inviteLink = remember(context) { InviteLinkHandoff(context) }
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.resume()
+        onPauseOrDispose { viewModel.pause() }
+    }
 
     val inviteEnabled =
         when (val s = state) {
@@ -113,6 +122,8 @@ fun BusinessTeamScreen(
             is BusinessTeamUiState.Empty -> s.canInvite
             else -> false
         }
+    // A permission revoked while a sheet or confirm was open closes it too: the server would refuse what it offers.
+    val manageEnabled = (state as? BusinessTeamUiState.Loaded)?.content?.canManage == true
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag(BUSINESS_TEAM_TAG)) {
         Column(Modifier.fillMaxSize()) {
@@ -167,7 +178,7 @@ fun BusinessTeamScreen(
     }
 
     // ─── Sheets ───────────────────────────────────────────────────
-    when (val s = sheet) {
+    when (val s = sheet?.takeIf { it.isAllowed(canInvite = inviteEnabled, canManage = manageEnabled) }) {
         null -> Unit
         TeamSheet.Invite ->
             InviteTeammateWizardSheet(
@@ -198,7 +209,7 @@ fun BusinessTeamScreen(
     // ─── Confirms ─────────────────────────────────────────────────
     InviteLinkDialog(inviteLink)
 
-    removeTarget?.let { row ->
+    removeTarget?.takeIf { manageEnabled }?.let { row ->
         AlertDialog(
             onDismissRequest = { removeTarget = null },
             title = { Text("Remove member?") },
@@ -216,7 +227,7 @@ fun BusinessTeamScreen(
         )
     }
 
-    cancelTarget?.let { row ->
+    cancelTarget?.takeIf { manageEnabled }?.let { row ->
         AlertDialog(
             onDismissRequest = { cancelTarget = null },
             title = { Text("Cancel invite?") },
