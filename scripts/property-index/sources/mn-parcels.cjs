@@ -24,7 +24,12 @@ function useOf(row, unit) {
   if (/DOUBLE BUNG|DUPLEX|TRIPLEX|2-3 UNIT|TWO|THREE/.test(use)) return ['building', 'multi_unit'];
   if (/APART/.test(use)) return ['building', 'apartment'];
   if (/VACANT/.test(use)) return ['parcel', null];
-  if (/RESID|S\.FAM/.test(use)) return unit ? ['unit', 'condo'] : ['property', 'house'];
+  if (/RESID|S\.FAM|\bRES\b|SINGLE/.test(use)) return unit ? ['unit', 'condo'] : ['property', 'house'];
+  // Some counties send the state's class number alone. 100 and 151 are land or a home: a building says which.
+  const code = String(row.useclass1 ?? '').trim();
+  const built = positive(row.emv_bldg) || year(row.year_built);
+  if (code === '201' || ((code === '100' || code === '151') && built)) return unit ? ['unit', 'condo'] : ['property', 'house'];
+  if (code === '100' || code === '151') return ['parcel', null];
   return ['other', null];
 }
 const said = (text) => {
@@ -66,7 +71,8 @@ function fromRow(row, fips, county) {
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.acres_deed) || positive(row.acres_poly));
   put(facts, 'subdivision', word(row.plat_name));
   put(facts, 'school_district', word(row.school_dst));
-  put(facts, 'land_use', word(row.useclass1));
+  // A class number isn't a word for a screen, and "homestead" says something about a person.
+  put(facts, 'land_use', /[a-z]{3}/i.test(row.useclass1 || '') && !/homestead/i.test(row.useclass1) ? word(row.useclass1) : null);
   put(facts, 'value_year', positive(row.mkt_year) || positive(row.tax_year));
   put(facts, 'market_value', positive(row.emv_total));
   put(facts, 'market_land_value', positive(row.emv_land));
@@ -104,6 +110,8 @@ async function* build({ work }) {
     log(`${county}: ${records.length} records, ${noAddress} without a street number`);
     const asOf = isoDate(acquired);
     if (!asOf) throw new Error(`${county}'s row no longer says when it was acquired`);
+    // A county whose file has no street numbers has nothing to look up.
+    if (!records.length) continue;
     for (const building of condoBuildings(records, { fips, county })) records.push(building);
     yield {
       fips, state: 'MN', name: county, publisher: `${county} and MnGeo`, dataset: 'open county parcels', method: 'state', source: 'mn-parcels', title: 'State records', as_of: asOf, stale_after_days: 730, records,

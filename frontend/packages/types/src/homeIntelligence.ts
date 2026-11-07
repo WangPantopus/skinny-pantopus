@@ -100,6 +100,38 @@ export interface RecordProvenance {
   title?: string | null;
 }
 
+/** One line of the value card: a county value with its year, or the last sale. */
+export interface HomeValueCardRow {
+  id: string;
+  label: string;
+  value: string;
+}
+
+/** The area's price change, from an index: never the home's value. */
+export interface HomeAreaTrend {
+  direction: 'up' | 'down' | 'flat';
+  scope: 'zip' | 'county';
+  change_pct: number;
+  year: number;
+  label: string;
+  note: string;
+}
+
+/** The value card in the server's words, drawn as it comes. Sent only for the new vocabulary and only to the confirmed owner. */
+export interface HomeValueCard {
+  title: string;
+  /** The card's number as text, or null when no county value is known. */
+  value: string | null;
+  /** The value in a few words for a list row ("county value $412,000"). */
+  summary: string | null;
+  /** What to say when there's no number. */
+  empty_message: string | null;
+  rows: HomeValueCardRow[];
+  notes: string[];
+  area_trend: HomeAreaTrend | null;
+  source: string | null;
+}
+
 export interface PropertyValueData {
   estimated_value: number | null;
   value_range_low: number | null;
@@ -114,6 +146,8 @@ export interface PropertyValueData {
   provenance?: RecordProvenance | null;
   /** The card's title when the record says what the number is ("County market value"). */
   value_title?: string | null;
+  /** The whole card, when the server sends it; a build reads this first. */
+  value_card?: HomeValueCard | null;
 }
 
 // ─── Timeline ────────────────────────────────────────────────

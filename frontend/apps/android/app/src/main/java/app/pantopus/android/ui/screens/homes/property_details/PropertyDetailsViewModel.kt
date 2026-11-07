@@ -5,9 +5,14 @@ package app.pantopus.android.ui.screens.homes.property_details
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homes.HouseholdFactChange
+import app.pantopus.android.data.api.models.homes.HouseholdPartDto
 import app.pantopus.android.data.api.models.homes.PropertyCountyRecordDto
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertyHomeDto
+import app.pantopus.android.data.api.models.homes.PropertyRecordSectionDto
+import app.pantopus.android.data.api.models.homes.RecordProblemRequest
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.StoreKind
@@ -60,6 +65,10 @@ class PropertyDetailsViewModel
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+        /** A change to the household's facts is on its way. */
+        private val _savingFacts = MutableStateFlow(false)
+        val savingFacts: StateFlow<Boolean> = _savingFacts.asStateFlow()
+
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.propertyDetails(homeId)))
         private var readGeneration = 0L
@@ -86,7 +95,9 @@ class PropertyDetailsViewModel
                 return
             }
             if (_state.value is PropertyDetailsUiState.Loading && gate.showsCopy) {
-                homesRepository.storedPropertyDetails(homeId)?.let { _state.value = projection(contentFrom(it.home, it.countyRecord)) }
+                homesRepository.storedPropertyDetails(homeId)?.let {
+                    _state.value = projection(contentFrom(it.home, it.countyRecord, it.household))
+                }
             }
             read(force = false)
         }
@@ -94,6 +105,35 @@ class PropertyDetailsViewModel
         /** Pull or Retry: read now without blanking a household copy. */
         fun refresh() {
             if (loader != null) apply() else read(force = true)
+        }
+
+        /** Confirm, correct or undo the household's facts, then show the server's answer. False leaves the screen as it was. */
+        fun saveFacts(
+            changes: List<HouseholdFactChange>,
+            onDone: (Boolean) -> Unit = {},
+        ) {
+            if (_savingFacts.value || changes.isEmpty()) return
+            _savingFacts.value = true
+            viewModelScope.launch {
+                val saved = homesRepository.updateHouseholdFacts(homeId, changes) is NetworkResult.Success
+                _savingFacts.value = false
+                if (saved) read(force = true)
+                onDone(saved)
+            }
+        }
+
+        /** "Report a problem": it reaches review, and the page stays as it is but for saying so. */
+        fun reportProblem(
+            section: String,
+            field: String?,
+            note: String?,
+            onDone: (Boolean) -> Unit,
+        ) {
+            viewModelScope.launch {
+                val sent = homesRepository.reportRecordProblem(homeId, RecordProblemRequest(section, field, note)) is NetworkResult.Success
+                if (sent) read(force = true)
+                onDone(sent)
+            }
         }
 
         fun suspendContent() {
@@ -135,7 +175,7 @@ class PropertyDetailsViewModel
                 if (generation != readGeneration) return@launch
                 _refreshing.value = false
                 _state.value =
-                    stored.data?.let { projection(contentFrom(it.home, it.countyRecord)) }
+                    stored.data?.let { projection(contentFrom(it.home, it.countyRecord, it.household)) }
                         ?: PropertyDetailsUiState.Error("Couldn't load property details. Pull to retry.")
                 _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
             }
@@ -170,6 +210,7 @@ class PropertyDetailsViewModel
             fun contentFrom(
                 home: PropertyHomeDto,
                 countyRecord: PropertyCountyRecordDto? = null,
+                household: HouseholdPartDto? = null,
             ): PropertyDetailsContent {
                 val line1 =
                     listOfNotNull(home.address?.nonBlank(), home.unitNumber?.nonBlank())
@@ -204,22 +245,7 @@ class PropertyDetailsViewModel
                     }
 
                 // The server words and formats every county-record row.
-                val sections =
-                    countyRecord?.sections.orEmpty().mapNotNull { section ->
-                        val rows =
-                            section.rows.map {
-                                PropertyFactRow(
-                                    id = it.id,
-                                    label = it.label,
-                                    value = it.value,
-                                    sub = it.tag?.takeIf(String::isNotBlank),
-                                    mono = it.mono == true,
-                                )
-                            }
-                        rows.takeIf { it.isNotEmpty() }?.let {
-                            PropertyRecordSection(id = section.id, title = section.title, rows = it, note = section.note)
-                        }
-                    }
+                val sections = countyRecord?.sections.orEmpty().mapNotNull(::recordSection)
 
                 return PropertyDetailsContent(
                     address =
@@ -234,7 +260,33 @@ class PropertyDetailsViewModel
                     recordFooter = countyRecord?.footer?.nonBlank()?.takeIf { sections.isNotEmpty() },
                     verification = emptyList(),
                     banner = null,
+                    household =
+                        household?.let {
+                            PropertyHouseholdContent(
+                                sections = it.sections.mapNotNull(::recordSection),
+                                groups = it.groups,
+                                questions = it.questions,
+                                countyPage = it.countyPage,
+                            )
+                        },
                 )
+            }
+
+            private fun recordSection(section: PropertyRecordSectionDto): PropertyRecordSection? {
+                val rows =
+                    section.rows.map {
+                        PropertyFactRow(
+                            id = it.id,
+                            label = it.label,
+                            value = it.value,
+                            // Where the row came from, and under it what stands beside it ("County record: 3").
+                            sub = listOfNotNull(it.tag, it.note).filter(String::isNotBlank).joinToString("\n").ifEmpty { null },
+                            mono = it.mono == true,
+                        )
+                    }
+                return rows.takeIf { it.isNotEmpty() }?.let {
+                    PropertyRecordSection(id = section.id, title = section.title, rows = it, note = section.note)
+                }
             }
 
             private fun humanize(raw: String): String =

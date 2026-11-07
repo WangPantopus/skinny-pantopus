@@ -67,6 +67,8 @@ data class AddHomeUiState(
     val postalNotice: AddHomePostalNotice? = null,
     /** USPS says this building needs a unit, and a home without one can say so. */
     val offersNoUnitAttestation: Boolean = false,
+    /** The units the address check found here, to pick from. */
+    val unitChoices: List<String> = emptyList(),
     val noUnitAttested: Boolean = false,
     val isCheckingAddress: Boolean = false,
     val isSubmitting: Boolean = false,
@@ -318,7 +320,7 @@ open class AddHomeWizardViewModel
             addressJob = null
             _state.update {
                 it.copy(
-                    postalNotice = null, offersNoUnitAttestation = false, noUnitAttested = false,
+                    postalNotice = null, offersNoUnitAttestation = false, unitChoices = emptyList(), noUnitAttested = false,
                     validatedAddressId = null, addressCheck = null, geocodedAddress = null,
                     existingHomeId = null, isClaimingExistingHome = false,
                     showsClaimedModal = false, showsConfirmAddressSheet = false,
@@ -831,6 +833,12 @@ open class AddHomeWizardViewModel
         }
 
         /** "My home doesn't have a unit number": the base address goes through, and mail proof still has to pass. */
+        fun chooseUnit(unit: String) {
+            if (_state.value.form.currentStep != AddHomeStep.Confirm) return
+            _state.update { it.copy(form = it.form.copy(address = it.form.address.copy(unit = unit))) }
+            viewModelScope.launch { runCheckAddress() }
+        }
+
         fun attestNoUnit() {
             if (_state.value.form.currentStep == AddHomeStep.Confirm) viewModelScope.launch { runCheckAddress(attestingNoUnit = true) }
         }
@@ -862,6 +870,7 @@ open class AddHomeWizardViewModel
                         it.copy(
                             errorMessage = addressValidationMessage(verdictStatus, validation.verdict.reasons.orEmpty()),
                             offersNoUnitAttestation = verdictStatus == "MISSING_UNIT",
+                            unitChoices = validation.verdict.unitChoices.orEmpty(),
                         )
                     }
                     return

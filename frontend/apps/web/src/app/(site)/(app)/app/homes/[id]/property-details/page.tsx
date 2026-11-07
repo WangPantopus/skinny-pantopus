@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import AttomStructuredFields from '@/components/homes/AttomStructuredFields';
+import { useHouseholdFacts } from '@/components/homes/HouseholdFacts';
 
 type AttomProperty = Record<string, any>;
 type HomeRecord = Record<string, any>;
@@ -58,11 +59,14 @@ function formatNumber(value: unknown, suffix = ''): string {
 
 type HeroFacts = { beds: unknown; baths: unknown; living: unknown; lot: unknown; yearBuilt: unknown; stories: unknown };
 
-// The county record's facts for a verified owner; everyone else sees the Home's own.
-function heroFacts(property: AttomProperty | null, home: HomeRecord | null): HeroFacts {
+// The county record's facts for a verified owner; everyone else sees the Home's own. A county record's year and
+// lot stay on top whatever the household says (the rows say so beside them); bedrooms, baths and size are the Home's.
+function heroFacts(property: AttomProperty | null, home: HomeRecord | null, countyRecord: CountyRecord | null): HeroFacts {
   if (!property) {
-    return { beds: home?.bedrooms, baths: home?.bathrooms, living: home?.sq_ft, lot: home?.lot_sq_ft,
-      yearBuilt: home?.year_built, stories: null };
+    const row = (id: string) => countyRecord?.sections.flatMap((section) => section.rows).find((candidate) => candidate.id === id)?.value;
+    const lot = row('lot_sqft');
+    return { beds: home?.bedrooms, baths: home?.bathrooms, living: home?.sq_ft, lot: lot ? lot.replace(/[^\d.]/g, '') : home?.lot_sq_ft,
+      yearBuilt: row('year_built') ?? home?.year_built, stories: null };
   }
   const rooms = property.building?.rooms || {};
   const size = property.building?.size || {};
@@ -166,9 +170,11 @@ export default function HomePropertyDetailsPage() {
     : '';
   const loading = !details && (!error || detailQuery.isFetching);
   const load = () => detailQuery.refetch();
+  const householdPart = details?.household ?? null;
+  const facts = useHouseholdFacts({ homeId, household: householdPart, sections: countyRecord?.sections, onChanged: load });
 
   const property = getAttomPropertyFromPayload(attomPayload);
-  const stats = buildHeroStats(heroFacts(property, home));
+  const stats = buildHeroStats(heroFacts(property, home, countyRecord));
   const hasRecord = !!property || !!countyRecord?.sections.length;
   const addressLine =
     property?.address?.oneLine ||
@@ -182,7 +188,7 @@ export default function HomePropertyDetailsPage() {
     property?.summary?.propclass ||
     home?.home_type ||
     null;
-  const yearBuilt = property?.summary?.yearbuilt ?? home?.year_built ?? null;
+  const yearBuilt = property?.summary?.yearbuilt ?? stats.find((stat) => stat.label === 'Year Built')?.value ?? null;
   const subdivision = property?.area?.subdname ?? null;
 
   // A first lookup runs on the server meanwhile; the record's arrival re-reads this page (sync signal).
@@ -259,6 +265,7 @@ export default function HomePropertyDetailsPage() {
             {lookingUp || noRecordsYet ? null : (
               <button type="button" onClick={() => void load()} className="mt-5 rounded-lg border border-app-border px-4 py-2 text-sm font-semibold">Retry property records</button>
             )}
+            {householdPart ? <div className="mt-8 space-y-4 text-left">{facts.lead}{facts.after}</div> : null}
           </div>
         ) : (
           <div className="space-y-6">
@@ -327,6 +334,14 @@ export default function HomePropertyDetailsPage() {
               </p>
             ) : null}
 
+            {facts.lead}
+
+            {householdPart?.sections.length ? (
+              <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">
+                <AttomStructuredFields sections={householdPart.sections} />
+              </section>
+            ) : null}
+
             {hasRecord ? (
               <>
                 <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
@@ -335,12 +350,15 @@ export default function HomePropertyDetailsPage() {
                 </div>
 
                 <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">
-                  <AttomStructuredFields attomPropertyDetail={attomPayload} sections={countyRecord?.sections} />
+                  <AttomStructuredFields attomPropertyDetail={attomPayload} sections={countyRecord?.sections} sectionFooter={facts.sectionFooter} />
                 </section>
               </>
             ) : null}
+
+            {facts.after}
           </div>
         )}
+        {facts.dialogs}
       </div>
     </div>
   );

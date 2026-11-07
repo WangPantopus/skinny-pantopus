@@ -1,7 +1,7 @@
 'use client';
 
 import { Home, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
-import type { PropertyValueData } from '@pantopus/types';
+import type { HomeValueCard, PropertyValueData } from '@pantopus/types';
 
 interface PropertyValueCardProps {
   data: PropertyValueData | null;
@@ -60,6 +60,62 @@ function trendMeta(trend: 'up' | 'down' | 'flat' | null) {
   }
 }
 
+// ── The server's card: each number says what it is ──────────────
+
+export function HomeValueCardRows({ card }: { card: HomeValueCard }) {
+  const trend = card.area_trend ? trendMeta(card.area_trend.direction) : null;
+  return (
+    <>
+      {card.rows.length > 0 && (
+        <dl className="mt-2 flex flex-col gap-1">
+          {card.rows.map((row) => (
+            <div key={row.id} className="flex items-baseline justify-between gap-3 text-[13px]">
+              <dt className="text-app-text-secondary">{row.label}</dt>
+              <dd className="text-right font-medium text-app-text-primary">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {card.notes.map((note) => (
+        <p key={note} className="mt-1.5 text-xs text-app-text-secondary">{note}</p>
+      ))}
+      {card.area_trend && trend && (
+        <div className="mt-2 flex items-start gap-1">
+          <trend.icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${trend.colorClass}`} />
+          <div>
+            <p className={`text-xs font-medium ${trend.colorClass}`}>{card.area_trend.label}</p>
+            <p className="mt-0.5 text-[11px] text-app-text-muted">{card.area_trend.note}</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function RecordValueCard({ data, card }: { data: PropertyValueData; card: HomeValueCard }) {
+  const details: string[] = [];
+  if (data.year_built) details.push(`Built ${data.year_built}`);
+  if (data.sqft) details.push(fmtSqft(data.sqft));
+  return (
+    <div className="rounded-xl border border-app-border bg-app-surface shadow-sm p-5">
+      <div className="flex items-center gap-1.5">
+        <Home className="h-4 w-4 text-app-primary" />
+        <span className="text-[13px] font-semibold text-app-text-secondary">{card.title}</span>
+      </div>
+      {card.value ? (
+        <p className="mt-2 text-[28px] font-bold leading-tight text-app-text-primary">{card.value}</p>
+      ) : (
+        <p className="mt-2 text-sm text-app-text-secondary">{card.empty_message}</p>
+      )}
+      <HomeValueCardRows card={card} />
+      {details.length > 0 && (
+        <p className="mt-2 text-xs text-app-text-secondary">{details.join(' \u2022 ')}</p>
+      )}
+      {card.source && <p className="mt-1.5 text-[11px] text-app-text-muted">{card.source}</p>}
+    </div>
+  );
+}
+
 // ── Component ───────────────────────────────────────────────────
 
 export default function PropertyValueCard({ data, loading }: PropertyValueCardProps) {
@@ -77,6 +133,8 @@ export default function PropertyValueCard({ data, loading }: PropertyValueCardPr
       </div>
     );
   }
+
+  if (data?.value_card) return <RecordValueCard data={data} card={data.value_card} />;
 
   // ── Null / unavailable state ────────────────────────────────
   if (!data || data.estimated_value == null) {

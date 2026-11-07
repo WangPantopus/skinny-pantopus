@@ -402,3 +402,26 @@ private struct AddressRecognizedRow: View {
         return base.isEmpty ? "a home" : base
     }
 }
+
+/// The units the address check found at this address: a tap fills the unit and checks again.
+struct AddHomeUnitChoices: View {
+    let choices: [String]
+    let onChoose: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            Text("Which one is yours?")
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appText)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Spacing.s2) {
+                    ForEach(choices, id: \.self) { choice in
+                        Button(choice) { onChoose(choice) }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("addHome_unitChoice_\(choice)")
+                    }
+                }
+            }
+        }
+    }
+}

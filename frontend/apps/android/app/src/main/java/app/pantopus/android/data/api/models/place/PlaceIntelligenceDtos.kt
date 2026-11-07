@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.place
 
+import app.pantopus.android.data.api.models.homedashboard.HomeValueCardDto
 import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -1033,6 +1034,8 @@ data class PlaceYourHomeData(
     val house: PlaceHouseShape? = null,
     /** Where the value came from, when the record names its source; the confirmed owner's, like the value. */
     @Json(name = "value_source") val valueSource: String? = null,
+    /** The value block in the server's words, the confirmed owner's. It comes first. */
+    @Json(name = "value_card") val valueCard: HomeValueCardDto? = null,
 )
 
 /**

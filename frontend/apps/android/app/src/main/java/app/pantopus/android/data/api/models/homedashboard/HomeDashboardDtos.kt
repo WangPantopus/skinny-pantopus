@@ -253,6 +253,40 @@ data class UpdateSeasonalChecklistItemRequest(
 
 /** Response of `GET /api/homes/:id/property-value`. */
 @JsonClass(generateAdapter = true)
+data class HomeValueCardRowDto(
+    val id: String,
+    val label: String,
+    val value: String,
+)
+
+/** The area's price change, from an index: never the home's value. */
+@JsonClass(generateAdapter = true)
+data class HomeAreaTrendDto(
+    /** `up` / `down` / `flat`. */
+    val direction: String,
+    val label: String,
+    val note: String? = null,
+)
+
+/**
+ * The value card in the server's words, drawn as it comes: each number says what
+ * it is. Sent only to the confirmed owner, and only for `vocabulary=2`.
+ */
+@JsonClass(generateAdapter = true)
+data class HomeValueCardDto(
+    val title: String = "Home value",
+    /** The card's number as text; null when no county value is known. */
+    val value: String? = null,
+    /** The value in a few words for a list row ("county value $412,000"). */
+    val summary: String? = null,
+    @Json(name = "empty_message") val emptyMessage: String? = null,
+    val rows: List<HomeValueCardRowDto> = emptyList(),
+    val notes: List<String> = emptyList(),
+    @Json(name = "area_trend") val areaTrend: HomeAreaTrendDto? = null,
+    val source: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class HomePropertyValueDto(
     @Json(name = "estimated_value") val estimatedValue: Double? = null,
     @Json(name = "value_range_low") val valueRangeLow: Double? = null,
@@ -269,6 +303,8 @@ data class HomePropertyValueDto(
     val provenance: RecordProvenanceDto? = null,
     /** The card's title when the record says what the number is ("County market value"). */
     @Json(name = "value_title") val valueTitle: String? = null,
+    /** The whole card, when the server sends it; it comes first. */
+    @Json(name = "value_card") val valueCard: HomeValueCardDto? = null,
 )
 
 // ── Bill trends ─────────────────────────────────────────────────────
