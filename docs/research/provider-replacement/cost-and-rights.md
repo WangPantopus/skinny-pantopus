@@ -110,6 +110,11 @@ Fields on `HomeAddress` that are Google content, and what happens to each (WP3, 
 | Place ID | Indefinitely | Keep |
 | Confirmation flags | 30 days, for correction requests | Clear with the USPS fields |
 
+Google's coordinates are never an input to the national floor by location (WP7): the platform terms (section 3.2.3(c),
+read November 7) forbid creating content from Google Maps content and give point-in-polygon analysis with its
+coordinates as an example. That floor reads only Pantopus's own registry points, and a stored Google coordinate stays
+out unless the founder decides otherwise after asking Google.
+
 Testing follows the "no made-up addresses" rule: synthetic cases run offline through the adapter, never against Google
 ([parity-and-acceptance.md](parity-and-acceptance.md#principles)).
 
