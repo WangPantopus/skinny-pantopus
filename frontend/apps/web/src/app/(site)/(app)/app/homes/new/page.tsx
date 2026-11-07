@@ -15,7 +15,7 @@ import AddressAutocomplete from '@/components/AddressAutocomplete';
 import MailVerificationFlow from '@/components/address/MailVerificationFlow';
 import PrivacyPromise from '@/components/place/PrivacyPromise';
 import { useHomeCreation } from '@/components/homes/creation/useHomeCreation';
-import { CountyPageLink, FloorPlanNote, QuickQuestion } from '@/components/homes/HouseholdFacts';
+import { CountyCheckNote, CountyPageLink, FloorPlanNote, QuickQuestion } from '@/components/homes/HouseholdFacts';
 import { validHomeCreationInput, type HomeCreationInput } from '@/components/homes/creation/homeCreationModel';
 import HomeCreationRecoveryView from '@/components/homes/creation/HomeCreationRecoveryView';
 import { validHomeResidencyInput, type HomeResidencyInput } from '@/components/homes/creation/homeResidencySubmissionModel';
@@ -109,6 +109,12 @@ const STEPS = [
   { id: 4, label: 'Review', icon: '✅' },
 ];
 
+// While the county record can't be read yet, Add Home asks again after 2 s, then twice as long each time up to
+// 15 s, for half an hour. Each ask waits up to 8 s on the server, so a long outage costs one ask about every 23 s.
+const LOOKUP_RETRY_FIRST_MS = 2_000;
+const LOOKUP_RETRY_MOST_MS = 15_000;
+const LOOKUP_RETRY_FOR_MS = 30 * 60_000;
+
 export default function NewHomePage() {
   const recovery = useHomeCreation();
   const [lastActor, setLastActor] = useState<string | null>(null);
@@ -173,6 +179,10 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   // One-tap answers for what the record lacks, and the county's own page, when the server sends them.
   const [factQuestions, setFactQuestions] = useState<NonNullable<PropertySuggestionsResponse['questions']>>([]);
   const [countyPage, setCountyPage] = useState<PropertySuggestionsResponse['county_page'] | null>(null);
+  // Link and confirm, with no county record: "Is this right?" once the person is back from the county's page.
+  const [countyCheck, setCountyCheck] = useState<PropertySuggestionsResponse['county_check'] | null>(null);
+  const [countyOpened, setCountyOpened] = useState(false);
+  const [countyChecked, setCountyChecked] = useState(false);
   const [floorPlan, setFloorPlan] = useState<PropertySuggestionsResponse['floor_plan'] | null>(null);
   const [floorPlanAnswer, setFloorPlanAnswer] = useState<'yes' | 'no' | null>(null);
   // The county record is looked up while the person is already on this step ('pending': the fields say
@@ -276,6 +286,9 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setNamedRecord(null);
     setFactQuestions([]);
     setCountyPage(null);
+    setCountyCheck(null);
+    setCountyOpened(false);
+    setCountyChecked(false);
     setFloorPlan(null);
     setFloorPlanAnswer(null);
   };
@@ -306,6 +319,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setNamedRecord(res?.provenance || res?.floor_plan ? res : null);
     setFactQuestions(res?.questions ?? []);
     setCountyPage(res?.county_page ?? null);
+    setCountyCheck(res?.county_check ?? null);
     setFloorPlan(res?.floor_plan ?? null);
     setFloorPlanAnswer(null);
     if (res?.provenance) return res.provenance.label;
@@ -323,20 +337,35 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   };
   const RECORDS_UNAVAILABLE = 'Public property records are unavailable right now. Confirm the details below.';
 
-  // Add Home's one follow-up while the county record is looked up: the server answers when it lands.
+  // Add Home's follow-up while the county record is looked up: the server answers when it lands, or after a few
+  // seconds says it's still looking (the records' storage can't be read). Then the step says records are unavailable
+  // and keeps asking, less and less often, so the fields fill in by themselves once storage answers.
   const finishPropertyLookup = async (request: Parameters<typeof api.homes.getPropertySuggestions>[0], current: () => boolean) => {
-    try {
-      const res = await api.homes.getPropertySuggestions(request, { lookup: 'check' });
+    const until = Date.now() + LOOKUP_RETRY_FOR_MS;
+    for (let gap = LOOKUP_RETRY_FIRST_MS; ; gap = Math.min(gap * 2, LOOKUP_RETRY_MOST_MS)) {
+      let res: PropertySuggestionsResponse | undefined;
+      let retry = true;
+      try {
+        res = await api.homes.getPropertySuggestions(request, { lookup: 'check' });
+      } catch (e) {
+        // A refusal stays one; a network error or the server's own trouble may pass.
+        const status = (e as { statusCode?: number } | null)?.statusCode;
+        retry = status === undefined || status >= 500;
+      }
       if (!current()) return;
-      const filled = applySuggestions(res?.suggestions, true);
-      setPropertyLookup('done');
       const lookup = res?.record_lookup ?? res?.attom_lookup;
-      setPropertySuggestionNote(lookup === 'found' || lookup === 'none' ? suggestionNote(res) : RECORDS_UNAVAILABLE);
-      if (filled && stepNow.current > 2) setLateDetails(true);
-    } catch {
-      if (!current()) return;
+      if (res && lookup !== 'pending') {
+        const filled = applySuggestions(res.suggestions, true);
+        setPropertyLookup('done');
+        setPropertySuggestionNote(lookup === 'found' || lookup === 'none' ? suggestionNote(res) : RECORDS_UNAVAILABLE);
+        if (filled && stepNow.current > 2) setLateDetails(true);
+        return;
+      }
       setPropertyLookup('done');
       setPropertySuggestionNote(RECORDS_UNAVAILABLE);
+      if (!retry || Date.now() + gap > until) return;
+      await new Promise((resolve) => { setTimeout(resolve, gap); });
+      if (!current()) return;
     }
   };
 
@@ -422,6 +451,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
       lot_sq_ft: parsedLotSqft,
       year_built: parsedYearBuilt,
       ...(floorPlanAnswer ? { floor_plan_answer: floorPlanAnswer } : {}),
+      ...(countyCheck && countyChecked ? { county_checked: true } : {}),
       description: description.trim() || undefined,
       amenities: Object.fromEntries(Object.entries(amenities).filter(([, v]) => v)),
       is_owner: isOwner,
@@ -1274,6 +1304,12 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
 
               {floorPlan ? <FloorPlanNote part={floorPlan} answer={floorPlanAnswer} onAnswer={setFloorPlanAnswer} /> : null}
 
+              {countyCheck && countyPage ? (
+                <CountyCheckNote page={countyPage} check={countyCheck} opened={countyOpened} checked={countyChecked}
+                  onOpen={() => setCountyOpened(true)} onChecked={setCountyChecked}
+                  onFix={() => { setCountyChecked(true); document.getElementById('add-home-year_built')?.focus(); }} />
+              ) : null}
+
               {/* What the record lacks: a tap fills the same field below. */}
               {factQuestions.length ? (
                 <div className="space-y-3">
@@ -1283,7 +1319,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                       onAnswer={(value) => (question.key === 'bedrooms' ? setBedrooms : setBathrooms)(value)}
                       onOther={() => document.getElementById(`add-home-${question.key}`)?.focus()} />
                   ))}
-                  {countyPage ? <CountyPageLink page={countyPage} /> : null}
+                  {countyPage && !countyCheck ? <CountyPageLink page={countyPage} /> : null}
                 </div>
               ) : null}
 
@@ -1307,7 +1343,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Sq ft</label>
-                  <input type="number" min="0" value={sqft} onChange={e => setSqft(e.target.value)} placeholder={lookingUpPlaceholder}
+                  <input id="add-home-sq_ft" type="number" min="0" value={sqft} onChange={e => setSqft(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('sq_ft')}
                   {...fieldA11y('sq_ft')} />
                   {fieldErrors.sq_ft ? <p id="err-sq_ft" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.sq_ft}</p> : null}
@@ -1315,7 +1351,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Year built</label>
-                  <input type="number" min="1600" max="2100" value={yearBuilt} onChange={e => setYearBuilt(e.target.value)} placeholder={lookingUpPlaceholder}
+                  <input id="add-home-year_built" type="number" min="1600" max="2100" value={yearBuilt} onChange={e => setYearBuilt(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('year_built')}
                   {...fieldA11y('year_built')} />
                   {fieldErrors.year_built ? <p id="err-year_built" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.year_built}</p> : null}

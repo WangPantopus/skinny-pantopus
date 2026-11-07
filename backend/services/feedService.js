@@ -42,6 +42,11 @@ const FILTER_CACHE_TTL = 60_000; // 60 seconds
 // ---------------------------------------------------------------------------
 
 const FEED_SURFACES = ['place', 'connections', 'personas'];
+// The most rows one round of a list feed reads (getListFeed's rounds double up to this).
+const MAX_ROUND_ROWS = 400;
+// How many muted or blocked people a list feed's query leaves out itself (the rest are filtered after the read).
+const MAX_QUERY_EXCLUDED_AUTHORS = 100;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LOCAL_AUTHOR_USER_SELECT = 'id, username, name, first_name, middle_name, last_name, profile_picture_url, bio, verified, review_count, gigs_completed';
 
 // ---------------------------------------------------------------------------
@@ -1255,15 +1260,20 @@ async function getListFeed({
     });
   }
 
-  const parsedLimit = Number(limit) || 20;
+  const parsedLimit = Math.max(Number(limit) || 20, 1);
   const overFetchLimit = parsedLimit + 20;
   const isFirstPage = !cursorCreatedAt && !cursorId;
+  // Place lists the global pins at the top of page 1 (step 12) and every other post newest first, so its cursor needs
+  // no pin state. Connections and Personas list their pinned posts first: the cursor post's pin state says where a
+  // page continues, and it is read alongside the scope.
+  const ordersByPin = surface !== 'place';
   // Read filters alongside the cursor and author graph; Connections also uses them
   // to keep muted or blocked people from introducing posts through a repost.
   const filtersRead = settle(getMuteAndHideFilters(userId));
+  const cursorPinRead = ordersByPin ? settle(getCursorPinState(cursorId)) : null;
   const scopeAccess = await (scopeAccessRead || postScopeAccess(userId));
   const globalPinsRead = isFirstPage ? settle(getGlobalPins(scopeAccess)) : null;
-  const initialCursorPinned = await getCursorPinState(cursorId);
+  const initialCursorPinned = cursorPinRead ? await outcome(cursorPinRead) : null;
 
   // 2–4. Resolve author IDs and distribution target per surface
   let authorIds = null;
@@ -1318,8 +1328,11 @@ async function getListFeed({
 
   // Fetch loop: keep fetching until we have enough visible posts or the
   // DB is exhausted. This prevents premature "all caught up" when many
-  // consecutive posts are filtered by mute/hide/politics rules.
+  // consecutive posts are filtered by mute/hide/politics rules. Each round
+  // reads twice as many rows as the one before (up to MAX_ROUND_ROWS), so a
+  // long run of filtered posts is crossed in a few rounds.
   const MAX_ROUNDS = 5;
+  let batch = overFetchLimit;
   let accumulated = [];
   let loopCursorCreatedAt = cursorCreatedAt;
   let loopCursorId = cursorId;
@@ -1351,6 +1364,17 @@ async function getListFeed({
     return query;
   };
 
+  // The query itself leaves out the posts of people the viewer muted or blocked (never the viewer's own), so someone
+  // who posts a great deal can't use up the rounds; step 9 still checks every row. Connections already left them out
+  // of its author graph.
+  const excludedAuthorIds = [];
+  if (surface !== 'connections') {
+    const filters = await outcome(filtersRead);
+    excludedAuthorIds.push(...[...new Set([...filters.mutedUserIds, ...filters.blockedUserIds])]
+      .filter((id) => id !== userId && UUID_PATTERN.test(String(id)))
+      .slice(0, MAX_QUERY_EXCLUDED_AUTHORS));
+  }
+
   for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
     let rawRows;
     if (surface === 'connections') {
@@ -1372,12 +1396,15 @@ async function getListFeed({
       rawRows = ordered.map(({ row }) => row);
       for (const { row, reached } of ordered) reachedAtById.set(row.id, reached.at);
     } else {
-      // 5. Build base query
-      let query = surfacePosts()
-        .order('is_pinned', { ascending: false })
+      // 5. Build base query. Place leaves the global pins out (they lead page 1) and reads newest first, an order the
+      // (created_at, id) index gives without sorting every post in the box; Personas reads its pinned posts first.
+      let query = surfacePosts();
+      query = ordersByPin ? query.order('is_pinned', { ascending: false }) : query.not('is_global_pin', 'is', true);
+      if (excludedAuthorIds.length) query = query.not('user_id', 'in', `(${excludedAuthorIds.join(',')})`);
+      query = query
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
-        .limit(overFetchLimit);
+        .limit(batch);
 
       // Distribution target filter
       if (surface === 'place') {
@@ -1400,7 +1427,9 @@ async function getListFeed({
       }
 
       // Cursor pagination
-      query = applyPinnedCursorCondition(query, loopCursorCreatedAt, loopCursorId, loopCursorPinned);
+      query = ordersByPin
+        ? applyPinnedCursorCondition(query, loopCursorCreatedAt, loopCursorId, loopCursorPinned)
+        : applyCursorCondition(query, loopCursorCreatedAt, loopCursorId);
 
       const { data, error } = await query;
       if (error) {
@@ -1408,9 +1437,10 @@ async function getListFeed({
         throw new Error(`Feed query failed: ${error.message}`);
       }
       rawRows = data || [];
-      if (rawRows.length < overFetchLimit) {
+      if (rawRows.length < batch) {
         dbExhausted = true;
       }
+      batch = Math.min(batch * 2, MAX_ROUND_ROWS);
     }
     // Loaded once (filtersRead above) and reused across fetch iterations.
     const filters = await outcome(filtersRead);
@@ -1476,10 +1506,17 @@ async function getListFeed({
     }
   }
 
-  // 11. Trim to limit. Query order already matches the display order:
-  // pinned first, then newest-first within each pin bucket (Connections: by when each post reached the viewer).
+  // 11. Trim to limit. Query order already matches the display order: Place newest first (its global pins lead page 1,
+  // step 12); Personas pinned first, then newest first within each pin bucket; Connections the same, by when each post
+  // reached the viewer.
   const hasMore = !dbExhausted || accumulated.length > parsedLimit;
   let posts = accumulated.slice(0, parsedLimit);
+  // Where the next page starts. A page cut at the limit continues after its last post. A page that came back short
+  // with rows still unread continues after the last row the rounds read: every row they read after its last post was
+  // filtered out, so the next page doesn't read those again, and a long run of them can't end the feed early.
+  const scanCursor = surface !== 'connections' && hasMore && accumulated.length <= parsedLimit && loopCursorId
+    ? { createdAt: loopCursorCreatedAt, id: loopCursorId }
+    : null;
 
   // 12. Prepend global pins on the first page (no cursor = first page).
   // These bypass the surface, location and author filters, but not the read check or the
@@ -1511,7 +1548,8 @@ async function getListFeed({
   return {
     posts: shown,
     pagination: {
-      nextCursor: lastPost ? { createdAt: reachedAtById.get(lastPost.id) || lastPost.created_at, id: lastPost.id } : null,
+      nextCursor: scanCursor
+        || (lastPost ? { createdAt: reachedAtById.get(lastPost.id) || lastPost.created_at, id: lastPost.id } : null),
       hasMore,
     },
   };
@@ -1540,6 +1578,8 @@ const SPORTS_ACTIVE_THREAD_MIN_COMMENTS = 3;
 const SPORTS_ACTIVE_THREAD_WINDOW_MS = 24 * 60 * 60 * 1000;
 const SPORTS_FETCH_PAGE_LIMIT = 200;
 const SPORTS_FETCH_MAX_ROWS_PER_SIDE = 5000;
+// computeSportsRankBucket's last bucket.
+const SPORTS_LAST_BUCKET = 5;
 
 /**
  * Compute the rank bucket (0 = best) for a sports post.
@@ -1832,11 +1872,18 @@ async function getSportsFeed({
 
   candidates.sort(compareSportsTuple);
 
-  // Keyset pagination on (rank_bucket, created_at, id): skip anything <= cursor tuple.
-  if (cursorCreatedAt && cursorId && cursorRankBucket != null) {
+  // Keyset pagination on (rank_bucket, created_at, id): skip anything <= cursor tuple. The iPhone and Android apps
+  // send the cursor back without its rank bucket: the cursor post's own bucket stands in, or the last bucket when it
+  // is no longer a candidate, so their next page continues instead of repeating page 1.
+  if (cursorCreatedAt && cursorId) {
+    let cursorBucket = cursorRankBucket;
+    if (!Number.isInteger(cursorBucket)) {
+      const cursorPost = candidates.find((p) => p.id === cursorId);
+      cursorBucket = cursorPost ? cursorPost._rankBucket : SPORTS_LAST_BUCKET;
+    }
     const cutoffTime = new Date(cursorCreatedAt).getTime();
     candidates = candidates.filter(p => {
-      if (p._rankBucket !== cursorRankBucket) return p._rankBucket > cursorRankBucket;
+      if (p._rankBucket !== cursorBucket) return p._rankBucket > cursorBucket;
       const pt = new Date(p.created_at).getTime();
       if (pt !== cutoffTime) return pt < cutoffTime;
       return p.id < cursorId;

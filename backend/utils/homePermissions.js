@@ -10,6 +10,7 @@
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
+const directDb = require('../config/directDb');
 const logger = require('../utils/logger');
 const { userFacing } = require('./userFacingError');
 
@@ -30,15 +31,6 @@ async function checked(query) {
   return result.data;
 }
 
-/** Is a household vote about removing this person open at this Home (SQL home_removal_vote_open)? */
-async function removalVoteOpen(homeId, userId) {
-  const rows = await checked(supabaseAdmin.from('HomeQuorumAction').select('id').eq('home_id', homeId)
-    .eq('action_type', 'REMOVE_MEMBER').in('state', ['proposed', 'collecting_votes'])
-    .gt('expires_at', new Date().toISOString()).eq('metadata->>target_user_id', userId).limit(1));
-  if (!Array.isArray(rows)) throw accessUnavailable();
-  return rows.length > 0;
-}
-
 // Home claims PR 3: a proof always beats a claim (home_proof_holder, home_claim_set_aside and home_effective_access in
 // SQL; keep these aligned). Someone who proved the address: source address or legacy, an adult, living there as a member.
 const PROOF_SOURCES = new Set(['address', 'legacy']);
@@ -51,12 +43,116 @@ async function claimSetAside(homeId, userId) {
   if (typeof setAside !== 'boolean') throw accessUnavailable();
   return setAside;
 }
-/** Does anyone else at this Home have (or had) access by a claim? */
-async function homeHasClaim(homeId, userId) {
-  const rows = await checked(supabaseAdmin.from('HomeOccupancy').select('id').eq('home_id', homeId)
-    .eq('verification_source', 'claim').neq('user_id', userId).limit(1));
-  if (!Array.isArray(rows)) throw accessUnavailable();
-  return rows.length > 0;
+// The Home row with this person's rows at it embedded (PostgREST resource embedding, one query): their occupancy,
+// their verified ownership, their permission overrides, whether anyone else there has access by a claim, and whether
+// a household vote about removing them is open (SQL home_removal_vote_open).
+function homeWithPersonRows(homeId, userId) {
+  return supabaseAdmin.from('Home')
+    .select('id, owner_id, occupancy:HomeOccupancy(*), owner:HomeOwner(id, subject_type, owner_status), '
+      + 'overrides:HomePermissionOverride(permission, allowed), other_claims:HomeOccupancy(id), removal_votes:HomeQuorumAction(id)')
+    .eq('id', homeId)
+    .eq('occupancy.user_id', userId)
+    .eq('owner.subject_id', userId).eq('owner.subject_type', 'user').eq('owner.owner_status', 'verified')
+    .eq('overrides.user_id', userId)
+    .eq('other_claims.verification_source', 'claim').neq('other_claims.user_id', userId)
+    .limit(1, { referencedTable: 'other_claims' })
+    .eq('removal_votes.action_type', 'REMOVE_MEMBER').in('removal_votes.state', ['proposed', 'collecting_votes'])
+    .gt('removal_votes.expires_at', new Date().toISOString()).eq('removal_votes.metadata->>target_user_id', userId)
+    .limit(1, { referencedTable: 'removal_votes' })
+    .maybeSingle();
+}
+
+const settle = (read) => read.then((value) => ({ value }), (error) => ({ error }));
+
+// The rows getUserAccess decides from, through the Data API: the Home with this person's rows embedded, and every
+// role's rows (settled, so their failure counts only where the decision uses them). One round trip of two calls.
+function apiAccessRows(homeId, userId) {
+  return Promise.all([
+    checked(homeWithPersonRows(homeId, userId)),
+    // Every role's rows (a few dozen): which role applies is known only once the occupancy is read.
+    settle(checked(supabaseAdmin.from('HomeRolePermission').select('role_base, permission, allowed'))),
+  ]).then(([home, roleRead]) => ({ home, roleRead }));
+}
+
+// The same rows in one query on a direct connection (config/directDb.js), with homeWithPersonRows's filters. The
+// database builds the JSON as PostgREST does, so values arrive exactly as the Data API sends them: timestamps as
+// text, not Date objects, and embedded rows as jsonb, whose keys come in jsonb's order (callers compare access
+// results as JSON text). $2 and $3 are the same person: a uuid for the id columns, text for the vote's metadata.
+const ACCESS_ROWS_SQL = `
+select
+  (select json_build_object(
+     'id', h.id,
+     'owner_id', h.owner_id,
+     'occupancy', coalesce((select jsonb_agg(o) from "HomeOccupancy" o where o.home_id = h.id and o.user_id = $2), '[]'),
+     'owner', coalesce((select jsonb_agg(jsonb_build_object('id', w.id, 'subject_type', w.subject_type, 'owner_status', w.owner_status))
+       from "HomeOwner" w
+       where w.home_id = h.id and w.subject_id = $2 and w.subject_type = 'user' and w.owner_status = 'verified'), '[]'),
+     'overrides', coalesce((select jsonb_agg(jsonb_build_object('permission', p.permission, 'allowed', p.allowed))
+       from "HomePermissionOverride" p where p.home_id = h.id and p.user_id = $2), '[]'),
+     'other_claims', coalesce((select jsonb_agg(jsonb_build_object('id', c.id)) from (
+       select c.id from "HomeOccupancy" c
+       where c.home_id = h.id and c.verification_source = 'claim' and c.user_id <> $2 limit 1) c), '[]'),
+     'removal_votes', coalesce((select jsonb_agg(jsonb_build_object('id', v.id)) from (
+       select v.id from "HomeQuorumAction" v
+       where v.home_id = h.id and v.action_type = 'REMOVE_MEMBER' and v.state in ('proposed', 'collecting_votes')
+         and v.expires_at > $4 and v.metadata->>'target_user_id' = $3 limit 1) v), '[]'))
+   from "Home" h where h.id = $1) as home,
+  (select coalesce(json_agg(json_build_object('role_base', r.role_base, 'permission', r.permission, 'allowed', r.allowed)), '[]')
+   from "HomeRolePermission" r) as roles`;
+
+async function directAccessRows(homeId, userId) {
+  const [row] = await directDb.read('home_access', ACCESS_ROWS_SQL, [homeId, userId, userId, new Date().toISOString()]);
+  return { home: row ? row.home : null, roleRead: { value: row ? row.roles : null } };
+}
+
+// Which parts of two reads of those rows differ (shadow mode). Lists may come back in any order, and of the claim
+// and vote checks only whether there is a row counts, as in the decision.
+function accessRowsDiffer(a, b) {
+  const listed = (rows) => (Array.isArray(rows) ? rows.map((row) => JSON.stringify(row)).sort() : rows ?? null);
+  const any = (rows) => (Array.isArray(rows) ? rows.length > 0 : rows ?? null);
+  const view = ({ home, roleRead }) => ({
+    home: home ? [home.id, home.owner_id] : null,
+    occupancy: home ? home.occupancy : null,
+    owner: home ? home.owner : null,
+    overrides: home ? listed(home.overrides) : null,
+    other_claims: home ? any(home.other_claims) : null,
+    removal_votes: home ? any(home.removal_votes) : null,
+    roles: roleRead.error ? undefined : listed(roleRead.value),
+  });
+  const [x, y] = [view(a), view(b)];
+  return Object.keys(x).filter((key) => x[key] !== undefined && JSON.stringify(x[key]) !== JSON.stringify(y[key]));
+}
+
+// DIRECT_DB_READS (config/directDb.js) picks the path. "on": the direct read, falling back to the Data API on any
+// failure but a malformed id, which the Data API refuses too. "shadow": the Data API decides and the direct read is
+// compared with it.
+async function readAccessRows(homeId, userId) {
+  const mode = directDb.mode();
+  if (mode === 'on') {
+    try {
+      return await directAccessRows(homeId, userId);
+    } catch (error) {
+      if (error.code === '22P02') throw accessUnavailable();
+      directDb.fellBack('home_access', error);
+      return apiAccessRows(homeId, userId);
+    }
+  }
+  if (mode !== 'shadow') return apiAccessRows(homeId, userId);
+  const started = performance.now();
+  const direct = directAccessRows(homeId, userId)
+    .then((rows) => ({ rows, ms: performance.now() - started }), (error) => ({ error }));
+  const api = await apiAccessRows(homeId, userId);
+  const apiMs = performance.now() - started;
+  direct.then(({ rows, ms, error }) => directDb.compared('home_access', error
+    ? { error } : { differs: accessRowsDiffer(api, rows), directMs: ms, apiMs }));
+  return api;
+}
+
+// At most one embedded row (one occupancy per person and Home, one current ownership): more is unreadable, as a
+// `.maybeSingle()` read of them on their own would be.
+function oneRow(rows) {
+  if (!Array.isArray(rows) || rows.length > 1) throw accessUnavailable();
+  return rows[0] || null;
 }
 
 /**
@@ -64,35 +160,27 @@ async function homeHasClaim(homeId, userId) {
  * membership; missing age is preserved as historical adult-compatible data.
  * Errors throw so callers cannot turn an unreadable deny into a base grant.
  *
- * Every read the decision may need goes out at once, one round trip: the role
- * and override rows, and the claim and removal-vote checks that apply to some
- * people only. Each answer is used exactly where the decision needs it, and
- * only a read that is used can fail the check. A claim's set-aside check stays
- * a second step; it applies to claims only.
+ * Every read the decision may need goes out at once, in one round trip
+ * (readAccessRows): the Home with this person's rows embedded, and every
+ * role's rows. Each answer is used exactly where the decision needs it.
+ * A claim's set-aside check stays a second step; it applies to claims only.
  */
 async function getUserAccess(homeId, userId) {
   const empty = { permissions: [], role_base: null, effective_role_base: null,
     occupancy: null, hasAccess: false, isOwner: false };
   if (!homeId || !userId) return empty;
-  const settle = (read) => read.then((value) => ({ value }), (error) => ({ error }));
   const used = ({ value, error }) => {
     if (error) throw error;
     return value;
   };
-  const [home, occupancy, owner, roleRead, overridesRead, otherClaimRead, removalVoteRead] = await Promise.all([
-    checked(supabaseAdmin.from('Home').select('id, owner_id').eq('id', homeId).maybeSingle()),
-    checked(supabaseAdmin.from('HomeOccupancy').select('*').eq('home_id', homeId).eq('user_id', userId).maybeSingle()),
-    checked(supabaseAdmin.from('HomeOwner').select('id, subject_type, owner_status')
-      .eq('home_id', homeId).eq('subject_id', userId).eq('subject_type', 'user')
-      .eq('owner_status', 'verified').maybeSingle()),
-    // Every role's rows (a few dozen): which role applies is known only once the occupancy is read.
-    settle(checked(supabaseAdmin.from('HomeRolePermission').select('role_base, permission, allowed'))),
-    settle(checked(supabaseAdmin.from('HomePermissionOverride').select('permission, allowed')
-      .eq('home_id', homeId).eq('user_id', userId))),
-    settle(homeHasClaim(homeId, userId)),
-    settle(removalVoteOpen(homeId, userId)),
-  ]);
+  const { home, roleRead } = await readAccessRows(homeId, userId);
   if (!home) return empty;
+  const occupancy = oneRow(home.occupancy);
+  const owner = oneRow(home.owner);
+  // Lists of at most one row: is there any? Unreadable only where the decision uses it.
+  const anyRow = rows => (Array.isArray(rows) ? { value: rows.length > 0 } : { error: accessUnavailable() });
+  const otherClaimRead = anyRow(home.other_claims);
+  const removalVoteRead = anyRow(home.removal_votes);
   const role = resolveHomeRole(occupancy);
   const verifiedOccupancy = currentOccupancy(occupancy) && occupancy.verification_status === 'verified' && !!role;
   const ownership = home.owner_id === userId || (owner && owner.subject_type === 'user')
@@ -107,7 +195,7 @@ async function getUserAccess(homeId, userId) {
   const ownerEntitlement = !!ownership;
   const baseRole = ownerEntitlement ? 'owner' : role;
   const allRoleRows = used(roleRead);
-  const overrides = used(overridesRead);
+  const { overrides } = home;
   if (!Array.isArray(allRoleRows)) throw accessUnavailable();
   const roleRows = allRoleRows.filter(row => row && row.role_base === baseRole);
   if (![roleRows, overrides].every(rows => Array.isArray(rows)

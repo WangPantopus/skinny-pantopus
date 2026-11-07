@@ -232,6 +232,8 @@ export type {
   CountyRecordRow,
   CountyRecordSection,
   CountyPage,
+  AddHomeCountyCheck,
+  HouseholdCountyCheck,
   FloorPlanLayout,
   FloorPlanSuggestion,
   HomePropertyDetailResponse,

@@ -5,8 +5,8 @@
  * one-person link they text themselves.
  *
  *  - An invitation is the host's yes. The person says "I'm in" with the ordinary ask (POST /api/plans/:id/requests)
- *    and is in: no distance, location or approval step (planService.askEligibility, planActions.askToJoin). A
- *    playdate still needs a verified address, and a full plan still puts them on the waitlist.
+ *    and is in: no distance, location or approval step (planService.askEligibility, planActions.askToJoin). A full
+ *    plan still puts them on the waitlist. Playdates need no verified address either (founder decision, November 7).
  *  - Each email or link invite is for one person: the first account that opens it takes it. An email invite opened
  *    by an account whose verified email isn't the invited address waits for the host's yes (needs_host_ok), so a
  *    forwarded email never shows a stranger a home address. An email invite also finds its person without the link:
@@ -108,16 +108,6 @@ function oneClickUnsubscribeUrl(token) {
 function isOpenForAnswers(plan) {
   if (!plan || plan.status !== 'open') return false;
   return rules.isAskingOpen(plan, planService.startsAt(plan), planService.endsAt(plan));
-}
-
-/**
- * A playdate this person would see with a verified address (board J9): their invitation waits for them, and the
- * app says who invited them and to verify, never the playdate's details.
- */
-function isLockedPlaydate(plan, viewer) {
-  return Boolean(plan && plan.kind === 'playdate' && viewer.playdatesFlag && !viewer.verified
-    && String(plan.host_user_id) !== viewer.id && plan.status === 'open'
-    && planService.isVisibleTo(plan, { ...viewer, seesPlaydates: true }));
 }
 
 /** Is the signed-in person's own address `email`, verified? Sign-in refuses unconfirmed addresses; a token without
@@ -382,7 +372,7 @@ function emailWords(plan, hostFirst) {
     noun: planNotify.noun(plan),
     icon: planNotify.ICON_BY_KIND[plan.kind] || '📅',
     playdate: hideTime,
-    // A playdate's title stays in the app, for verified neighbors, as on its share page.
+    // A playdate's title stays in the app, as on its share page.
     title: hideTime ? null : plan.post.title,
     when,
     where: [area ? area[0].toUpperCase() + area.slice(1) : null, city].filter(Boolean).join(', '),
@@ -762,8 +752,7 @@ async function claimInvite(user, postId, token) {
   const viewer = await loadViewer(user);
   if (!planService.isUuid(postId)) fail(404, 'not_found', "This plan isn't available.");
   const plan = await planService.loadPlanRow(postId);
-  const locked = isLockedPlaydate(plan, viewer);
-  if (!plan || (!locked && !planService.isVisibleTo(plan, viewer))) fail(404, 'not_found', "This plan isn't available.");
+  if (!plan || !planService.isVisibleTo(plan, viewer)) fail(404, 'not_found', "This plan isn't available.");
   const { data: row, error } = await supabaseAdmin.from('PlanInvite').select(INVITE_COLUMNS)
     .eq('token_hash', hashToken(token)).eq('post_id', postId).maybeSingle();
   if (error) throw new Error(`Failed to load the invitation: ${error.message}`);
@@ -776,7 +765,7 @@ async function claimInvite(user, postId, token) {
       fail(409, 'invite_used', 'Someone else already used this invitation. You can still ask to join.');
     }
     await supabaseAdmin.from('PlanInvite').update({ opened_at: nowIso(), updated_at: nowIso() }).eq('id', row.id);
-    return claimedAnswer(postId, viewer, locked);
+    return { plan: await planBody(postId, viewer) };
   }
   if (!row.invitee_user_id) {
     const needsHostOk = row.channel === 'email' && !(await hasVerifiedEmail(user, row.email));
@@ -787,12 +776,6 @@ async function claimInvite(user, postId, token) {
   } else if (!row.opened_at) {
     await supabaseAdmin.from('PlanInvite').update({ opened_at: nowIso(), updated_at: nowIso() }).eq('id', row.id);
   }
-  return claimedAnswer(postId, viewer, locked);
-}
-
-/** The plan as the person now sees it; a playdate they can't see yet keeps their invitation and says to verify. */
-async function claimedAnswer(postId, viewer, locked) {
-  if (locked) fail(403, 'needs_verified_address', 'Playdates are for verified neighbors. Verify your address to see this one.');
   return { plan: await planBody(postId, viewer) };
 }
 
@@ -871,23 +854,9 @@ async function nextInvite(user) {
   const plans = new Map((await planService.loadPlanRows(data.map((r) => r.post_id))).map((p) => [p.post_id, p]));
   for (const row of data) {
     const plan = plans.get(row.post_id);
-    // A playdate they can't see yet opens too: it says who invited them and to verify (J9).
-    const seen = plan && (planService.isVisibleTo(plan, viewer) || isLockedPlaydate(plan, viewer));
-    if (seen && isOpenForAnswers(plan)) return { plan_id: plan.post_id };
+    if (plan && planService.isVisibleTo(plan, viewer) && isOpenForAnswers(plan)) return { plan_id: plan.post_id };
   }
   return { plan_id: null };
-}
-
-/**
- * For the J9 answer of GET /api/plans/:id: the host's first name when this person holds an invitation to the
- * playdate (which then counts as opened), else null.
- */
-async function lockedInviteFrom(viewer, plan) {
-  if (!isLockedPlaydate(plan, viewer)) return null;
-  const invite = (await viewerInvites(viewer.id, [plan.post_id])).get(plan.post_id);
-  if (!invite) return null;
-  if (!invite.opened_at) await markOpened(viewer.id, plan.post_id);
-  return actions().firstOf((await actions().userNames([plan.host_user_id])).get(String(plan.host_user_id)));
 }
 
 /** Plans the viewer is invited to and hasn't answered: GET /api/plans/mine's `invited`. */
@@ -972,7 +941,6 @@ module.exports = {
   claimInvite,
   declineInvite,
   nextInvite,
-  lockedInviteFrom,
   attachEmailInvites,
   viewerInvites,
   hostInviteCounts,

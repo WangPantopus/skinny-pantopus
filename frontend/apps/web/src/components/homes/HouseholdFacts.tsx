@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import * as api from '@pantopus/api';
-import type { CountyPage, CountyRecordSection, FloorPlanSuggestion, HouseholdFact, HouseholdFactChange, HouseholdGroup, HouseholdPart, HouseholdQuestion } from '@pantopus/api';
+import type { AddHomeCountyCheck, CountyPage, CountyRecordSection, FloorPlanSuggestion, HouseholdCountyCheck, HouseholdFact, HouseholdFactChange, HouseholdGroup, HouseholdPart, HouseholdQuestion } from '@pantopus/api';
 import { ExternalLink } from 'lucide-react';
 import ModalShell from '@/components/ui/ModalShell';
 import { toast } from '@/components/ui/toast-store';
@@ -37,12 +37,113 @@ export function QuickQuestion({ question, value, disabled = false, onAnswer, onO
 }
 
 /** The county's own page: a person checks a fact at the source and comes back to confirm it. */
-export function CountyPageLink({ page }: { page: CountyPage }) {
+export function CountyPageLink({ page, onOpen }: { page: CountyPage; onOpen?: () => void }) {
   return (
-    <a href={page.url} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 ${LINK}`}>
+    <a href={page.url} target="_blank" rel="noopener noreferrer" onClick={onOpen} className={`inline-flex items-center gap-1 ${LINK}`}>
       {page.label}
       <ExternalLink className="h-3 w-3" aria-hidden="true" />
     </a>
+  );
+}
+
+/**
+ * Whether this person opened the county's page for this Home on this device (link and confirm): "Is this right?"
+ * waits for them to come back from it, and still asks after a reload. A browser that keeps nothing asks this visit only.
+ */
+export function useCountyPageOpened(homeId: string | null) {
+  const key = homeId ? `pantopus.countyPageOpened.${homeId}` : null;
+  const [opened, setOpened] = useState(() => {
+    if (!key || typeof window === 'undefined') return false;
+    try { return window.localStorage.getItem(key) === '1'; } catch { return false; }
+  });
+  const markOpened = useCallback(() => {
+    setOpened(true);
+    if (!key) return;
+    try { window.localStorage.setItem(key, '1'); } catch { /* this visit only */ }
+  }, [key]);
+  return [opened, markOpened] as const;
+}
+
+/** Add Home's link and confirm: the county's page, then "Is this right?" over the form's own fields once the person is back. */
+export function CountyCheckNote({ page, check, opened, checked, onOpen, onChecked, onFix }: {
+  page: CountyPage;
+  check: AddHomeCountyCheck;
+  opened: boolean;
+  checked: boolean;
+  onOpen: () => void;
+  onChecked: (checked: boolean) => void;
+  onFix: () => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-app-border bg-app-surface-sunken/40 px-4 py-3">
+      <CountyPageLink page={page} onOpen={onOpen} />
+      {checked ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-app-text-secondary">{check.confirmed}</span>
+          <button type="button" onClick={() => onChecked(false)} className={LINK}>Undo</button>
+        </div>
+      ) : opened ? (
+        <>
+          <p className="text-xs text-app-text-muted">{check.lead}</p>
+          <div role="group" aria-label={check.prompt} className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-sm font-medium text-app-text-strong">{check.prompt}</span>
+            <button type="button" onClick={() => onChecked(true)} className={chipClass(false)}>{check.confirm}</button>
+            <button type="button" onClick={onFix} className={LINK}>{check.fix}</button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Link and confirm on Property details, for a home no county record answers: the county's page, then "Is this
+ * right?" with year built, size, bedrooms and baths once the person is back. Yes keeps them as the household's own.
+ */
+function CountyCheckCard({ homeId, page, check, busy, onSave, onFix }: {
+  homeId: string;
+  page: CountyPage;
+  check: HouseholdCountyCheck;
+  busy: boolean;
+  onSave: (changes: HouseholdFactChange[]) => Promise<boolean>;
+  onFix: () => void;
+}) {
+  const [opened, markOpened] = useCountyPageOpened(homeId);
+  const asking = opened || !!check.confirmed;
+  return (
+    <section aria-label={page.label} className="space-y-3 rounded-[28px] border border-app-border bg-app-surface px-5 py-5 shadow-sm">
+      <CountyPageLink page={page} onOpen={markOpened} />
+      {asking ? (
+        <>
+          <p className="text-sm text-app-text-secondary">{check.lead}</p>
+          {check.facts.some((fact) => fact.value) ? (
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-4">
+              {check.facts.map((fact) => (
+                <div key={fact.key}>
+                  <dt className="text-xs text-app-text-muted">{fact.label}</dt>
+                  <dd className="font-medium text-app-text-strong">{fact.value ?? '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {check.confirmed ? (
+              <>
+                <span className="text-app-text-secondary">{check.confirmed}</span>
+                {check.can_undo ? <button type="button" disabled={busy} onClick={() => void onSave([{ group: check.group, action: 'undo' }])} className={LINK}>Undo</button> : null}
+              </>
+            ) : null}
+            {check.prompt ? (
+              <>
+                <span className="font-medium text-app-text-strong">{check.prompt}</span>
+                <button type="button" disabled={busy} onClick={() => void onSave([{ group: check.group, action: 'confirm' }])} className={chipClass(false)}>Yes</button>
+              </>
+            ) : null}
+            <button type="button" disabled={busy} onClick={onFix} className={check.prompt || check.confirmed ? LINK : chipClass(false)}>{check.fix}</button>
+          </div>
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -116,18 +217,20 @@ function FactField({ fact, draft, onDraft, onUndo, busy }: {
   );
 }
 
-function FactEditor({ group, busy, onClose, onSave }: {
+function FactEditor({ group, busy, onClose, onSave, checkGroup }: {
   group: HouseholdGroup;
   busy: boolean;
   onClose: () => void;
   onSave: (changes: HouseholdFactChange[]) => Promise<boolean>;
+  /** Opened from "Is this right?" after the county's page: what's saved is checked there, the facts left as they were too. */
+  checkGroup?: string;
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const changes: HouseholdFactChange[] = group.facts.flatMap((fact) => {
     const value = drafts[fact.key]?.trim();
-    return value && value !== fact.current ? [{ key: fact.key, action: 'correct' as const, value }] : [];
+    return value && value !== fact.current ? [{ key: fact.key, action: 'correct' as const, value, ...(checkGroup ? { via: 'county_page' as const } : {}) }] : [];
   });
-  const save = async () => { if (await onSave(changes)) onClose(); };
+  const save = async () => { if (await onSave(checkGroup ? [...changes, { group: checkGroup, action: 'confirm' }] : changes)) onClose(); };
   return (
     <ModalShell open onClose={onClose} onCancel={onClose} cancelLabel="Cancel" title={group.title}
       subtitle={group.lead || "Tap what's right. The county's own record stays as it is."}
@@ -203,6 +306,8 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
   const [editing, setEditing] = useState<HouseholdGroup | null>(null);
   const [reporting, setReporting] = useState<CountyRecordSection | null>(null);
   const groups = household?.groups ?? [];
+  // Link and confirm: the county's page and "Is this right?" sit in a card of their own, so the link isn't drawn twice.
+  const check = household?.county_check && household.county_page ? household.county_check : null;
 
   const save = async (changes: HouseholdFactChange[]) => {
     setBusy(true);
@@ -297,14 +402,20 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
         <QuickQuestion key={question.key} question={question} disabled={busy}
           onAnswer={(value) => void save([{ key: question.key, action: 'correct', value }])} onOther={() => answerOther(question)} />
       ))}
-      {household.county_page ? <CountyPageLink page={household.county_page} /> : null}
+      {household.county_page && !check ? <CountyPageLink page={household.county_page} /> : null}
     </section>
+  ) : null;
+  const fixCheck = () => {
+    if (check) setEditing({ id: check.group, section_id: null, title: check.prompt || check.fix, lead: check.lead, prompt: null, confirmed: null, fix: null, facts: check.facts, report: null, reported: null });
+  };
+  const checkCard = check && household?.county_page ? (
+    <CountyCheckCard homeId={homeId} page={household.county_page} check={check} busy={busy} onSave={save} onFix={fixCheck} />
   ) : null;
 
   const addDetails = groups.filter((group) => group.section_id === null);
   const after = (
     <>
-      {household?.county_page && !household.questions.length && sections?.length ? (
+      {household?.county_page && !check && !household.questions.length && sections?.length ? (
         <div className="text-center"><CountyPageLink page={household.county_page} /></div>
       ) : null}
       {addDetails.map((group) => (
@@ -318,10 +429,10 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
 
   const dialogs = (
     <>
-      {editing ? <FactEditor key={editing.id} group={editing} busy={busy} onClose={() => setEditing(null)} onSave={save} /> : null}
+      {editing ? <FactEditor key={editing.id} group={editing} busy={busy} onClose={() => setEditing(null)} onSave={save} checkGroup={check && editing.id === check.group ? check.group : undefined} /> : null}
       {reporting ? <ReportProblem section={reporting} homeId={homeId} onClose={() => setReporting(null)} onReported={() => void onChanged()} /> : null}
     </>
   );
 
-  return { sectionFooter, lead, after, dialogs };
+  return { sectionFooter, lead: lead || checkCard ? <>{lead}{checkCard}</> : null, after, dialogs };
 }

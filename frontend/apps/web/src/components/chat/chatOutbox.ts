@@ -52,6 +52,7 @@ export function chatReplyRoomHref(roomId: string, asBusinessUserId?: string, mes
 }
 
 export const REPLY_AUDIENCE_REFUSAL = 'This reply belongs to a different conversation. Open the original conversation to review its participants and reply there.';
+const REPLY_AUDIENCE_PENDING = 'The original conversation could not yet be verified. Your reply is saved and will retry.';
 
 type Listener = (pending: PendingChatSend[], accepted?: ChatMessage) => void;
 let accountId: string | null = null;
@@ -269,7 +270,7 @@ async function drain(): Promise<void> {
           if (!current(saved)) return;
           const audience = directReplyRoomStatus(result.room, message.roomId, message.asBusinessUserId || actorId, message.otherUserId);
           if (audience !== 'ready') throw Object.assign(new Error(audience === 'unsupported' ? REPLY_AUDIENCE_REFUSAL
-            : 'The original conversation could not yet be verified. Your reply is saved and will retry.'), { statusCode: audience === 'unsupported' ? 403 : 503 });
+            : REPLY_AUDIENCE_PENDING), { statusCode: audience === 'unsupported' ? 403 : 503 });
         }
         if (message.topicRequest && message.otherUserId && !message.topicId) {
           const result = await findOrCreateTopic(message.otherUserId, message.topicRequest);
@@ -328,13 +329,17 @@ async function drain(): Promise<void> {
 }
 
 export function pendingChatMessage(message: PendingChatSend, actorId: string): ChatMessage {
+  // A send retried on its own after a server or network failure asks nothing of
+  // the person, so its reason ("Please try again") stays hidden. A rate limit's
+  // wait, a reply whose conversation isn't verified yet and a final failure show theirs.
+  const quietRetry = message.state === 'queued' && message.lastStatus !== 429 && message.error !== REPLY_AUDIENCE_PENDING;
   return { id: message.clientMessageId, room_id: message.roomId, user_id: message.asBusinessUserId || actorId,
     sender_id: message.asBusinessUserId || actorId, message_text: message.text, message_type: message.messageType || (message.files.length ? 'file' : 'text'), metadata: message.metadata,
     created_at: message.createdAt, topic_id: message.topicId, reply_to_id: message.replyToId,
     attachments: message.uploadedFiles || message.files.map((file) => ({ original_filename: file.name, mime_type: file.type })),
     is_edited: false, is_deleted: false, _clientMessageId: message.clientMessageId,
     _optimistic: message.state === 'queued' || message.state === 'sending', _failed: message.state === 'failed' || message.state === 'refused',
-    _refused: message.state === 'refused', _outbox: true, _queued: message.state === 'queued', _error: message.error,
+    _refused: message.state === 'refused', _outbox: true, _queued: message.state === 'queued', _error: quietRetry ? undefined : message.error,
     _canRetryReply: Boolean(message.replyToId && message.otherUserId),
     _replyRoomHref: message.replyToId && message.otherUserId ? chatReplyRoomHref(message.roomId, message.asBusinessUserId) : undefined } as ChatMessage;
 }

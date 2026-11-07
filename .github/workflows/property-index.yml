@@ -22,14 +22,15 @@ on:
     - cron: "17 3 16 * *"
     - cron: "17 3 17 * *"
     - cron: "17 3 18 * *"
+    - cron: "17 3 19 * *"
     # FHFA's yearly price index: out by the end of March, and a second try in May.
     - cron: "29 5 12 4,5 *"
   workflow_dispatch:
     inputs:
       action:
-        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file); or models (refit each county's value model from the release it serves)"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file); or models (refit each county's value model from the release it serves); or gaps (the missing-facts ledger, which follows every publish by itself: county names counties, all redoes every one, blank does releases without one)"
         type: choice
-        options: [build, rollback, switch, estimates, floor-points, area-trends, models]
+        options: [build, rollback, switch, estimates, floor-points, area-trends, models, gaps]
         default: build
       sources:
         description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates, floor-points)"
@@ -40,7 +41,7 @@ on:
         required: false
         default: ""
       county:
-        description: "County FIPS (rollback); one or a comma separated list (switch, models; all refits every county)"
+        description: "County FIPS (rollback); one or a comma separated list (switch, models; all refits every county; build with accept_falls: the counties allowed to publish far fewer records, never a live one)"
         required: false
         default: ""
       state:
@@ -85,9 +86,10 @@ permissions:
   contents: read
 
 # A county's switch only writes its own file, so it never waits behind a build that takes hours. The national floor writes only under its own prefix and can take hours a state, so it has its own line too. So does a rollback: on the publish line it would wait behind a build of up to 340 minutes, and publish.cjs keeps a rollback that lands while a state's files upload. A waiting run is
-# replaced by a newer one, so several counties go in one run's list, not in a loop of runs.
+# replaced by a newer one, so several counties go in one run's list, not in a loop of runs. The missing-facts ledger by hand only
+# reads releases and writes its own files, so it has its own line and never replaces a waiting build.
 concurrency:
-  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || (inputs.action == 'estimates' && 'estimates') || (inputs.action == 'floor-points' && 'floor-points') || (inputs.action == 'rollback' && 'rollback') || 'publish' }}
+  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || (inputs.action == 'estimates' && 'estimates') || (inputs.action == 'floor-points' && 'floor-points') || (inputs.action == 'rollback' && 'rollback') || (inputs.action == 'gaps' && 'gaps') || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -107,6 +109,7 @@ jobs:
         run: |
           node scripts/property-index/build.cjs --source synthetic --out "$RUNNER_TEMP/property-index"
           node scripts/property-index/check-synthetic.cjs "$RUNNER_TEMP/property-index"
+          node scripts/property-index/gaps.cjs --root "$RUNNER_TEMP/property-index" --all
       # The real connectors need the network and their real files, which a pull request never reads. They must still load.
       - name: Every connector loads
         run: |
@@ -166,19 +169,22 @@ jobs:
       - name: Build and publish
         if: (github.event_name != 'workflow_dispatch' && github.event.schedule != '29 5 12 4,5 *') || inputs.action == 'build'
         env:
-          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-allegheny pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'co-denver co-adams dc-dc ok-oklahoma ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-miami-dade fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || (github.event.schedule == '17 3 18 * *' && 'tx-cameron tx-nueces tx-taylor tx-kaufman tx-grayson tx-liberty tx-atascosa tx-bell tx-gregg tx-bastrop tx-smith tx-brazos tx-johnson tx-ector wa-skagit nc-lincoln') || 'tx-dallas fl-roll' }}
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-allegheny pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'co-denver co-adams dc-dc ok-oklahoma ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-miami-dade fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || (github.event.schedule == '17 3 18 * *' && 'tx-cameron tx-nueces tx-taylor tx-kaufman tx-grayson tx-liberty tx-atascosa tx-bell tx-gregg tx-bastrop tx-smith tx-brazos tx-johnson tx-ector wa-skagit nc-lincoln') || (github.event.schedule == '17 3 19 * *' && 'ca-sonoma pa-berks va-chesterfield mo-st-charles co-boulder va-henrico sc-york mo-st-louis-county nc-cumberland pa-cumberland wa-kitsap') || 'tx-dallas fl-roll' }}
           # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
           # Only a run someone starts by hand, and only when they say so.
           ACCEPT_FALLS: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && '--accept-falls' || '' }}
           MOVED: ${{ inputs.moved }}
+          # With accept_falls only, the counties someone names may publish far fewer records: a fix dropping records that
+          # shouldn't exist. publish.cjs logs both counts and never lets a live county through.
+          SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && inputs.county || '' }}
         run: |
           status=0
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
             # What built still publishes; the run ends failed so someone looks.
             node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || status=1
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS ${MOVED:+--moved "$MOVED"} || status=1
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS ${MOVED:+--moved "$MOVED"} ${SHRINK:+--accept-shrink-for "$SHRINK"} || status=1
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done
           exit $status
@@ -193,6 +199,21 @@ jobs:
             all) node --max-old-space-size=12288 scripts/property-index/fit-models.cjs --bucket "$PROPERTY_INDEX_BUCKET" --all ;;
             "") node --max-old-space-size=12288 scripts/property-index/fit-models.cjs --bucket "$PROPERTY_INDEX_BUCKET" ;;
             *) node --max-old-space-size=12288 scripts/property-index/fit-models.cjs --bucket "$PROPERTY_INDEX_BUCKET" --counties "$COUNTIES" ;;
+          esac
+      # The missing-facts ledger (scripts/property-index/gaps.cjs) follows each new release: every home it leaves a Property
+      # details field empty on, beside the releases in private storage, with counts by county, kind and field. This log has
+      # counts only. After a build or rollback, what was published goes first, and nothing starts after an hour: the next
+      # run takes the rest. By hand: the counties named, all of them again (all, as after the rule changes), or blank.
+      - name: Missing-facts ledger
+        if: ${{ !cancelled() && (inputs.action == 'gaps' || inputs.action == 'build' || inputs.action == 'rollback' || (github.event_name == 'schedule' && github.event.schedule != '29 5 12 4,5 *')) }}
+        env:
+          COUNTIES: ${{ inputs.action == 'gaps' && inputs.county || '' }}
+          BUDGET: ${{ inputs.action != 'gaps' && '60' || '' }}
+        run: |
+          case "$COUNTIES" in
+            all) node --max-old-space-size=12288 scripts/property-index/gaps.cjs --bucket "$PROPERTY_INDEX_BUCKET" --all ;;
+            "") node --max-old-space-size=12288 scripts/property-index/gaps.cjs --bucket "$PROPERTY_INDEX_BUCKET" ${BUDGET:+--budget-minutes "$BUDGET"} ;;
+            *) node --max-old-space-size=12288 scripts/property-index/gaps.cjs --bucket "$PROPERTY_INDEX_BUCKET" --counties "$COUNTIES" ;;
           esac
       # The national floor's own index, under its own prefix. Large states need room: the runner's unused tools go first.
       - name: Build and publish estimates

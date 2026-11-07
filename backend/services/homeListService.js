@@ -28,12 +28,6 @@ const causeOf = error => ({
   errorName: error?.name || null, errorCode: error?.code || null,
   errorMessage: typeof error?.message === 'string' ? error.message.slice(0, 160) : null,
 });
-// A read started before it is known to be needed: its failure counts only where `used` takes its result.
-const settle = read => read.then(value => ({ value }), error => ({ error }));
-const used = ({ value, error }) => {
-  if (error) throw error;
-  return value;
-};
 async function checked(query) {
   let result;
   try { result = await query; } catch (err) { throw failure(false, causeOf(err)); }
@@ -56,15 +50,46 @@ async function candidates(actorId) {
   return [...new Set([...created.map(row => row.id), ...occupancies.map(row => row.home_id), ...owners.map(row => row.home_id)])].sort();
 }
 
+const STATE_COLUMNS = ['id', 'owner_id', 'created_by_user_id', 'home_status', 'security_state'];
+const OWNER_COLUMNS = ['id', 'owner_status', 'verification_tier', 'is_primary_owner'];
+const CLAIM_COLUMNS = ['id', 'home_id', 'claim_type', 'state', 'claim_phase_v2', 'merged_into_claim_id'];
+const listOfRows = value => Array.isArray(value) && value.every(object);
+// Embedded rows come back with their keys in jsonb order; each is put back in the order a read of its own gives.
+const inOrder = (row, columns) => Object.fromEntries(columns.map(key => [key, row[key]]));
+
+// The Home's state columns with this person's ownership rows embedded, one read (PostgREST resource embedding).
+// With `claims`, their claims on it come in the same read, and with `card`, the columns of its list card.
+function homeRead(homeId, actorId, { claims = false, card = false } = {}) {
+  const columns = card ? [...new Set([...STATE_COLUMNS, ...CARD_COLUMNS.split(', ')])] : STATE_COLUMNS;
+  let query = db.from('Home')
+    .select([...columns, `owners:HomeOwner(${OWNER_COLUMNS.join(', ')})`,
+      ...(claims ? [`claims:HomeOwnershipClaim(${CLAIM_COLUMNS.join(', ')})`] : [])].join(', '))
+    .eq('id', homeId)
+    .eq('owners.subject_id', actorId).eq('owners.subject_type', 'user').order('id', { referencedTable: 'owners' });
+  if (claims) {
+    query = query.eq('claims.claimant_user_id', actorId)
+      .order('created_at', { referencedTable: 'claims', ascending: false }).order('id', { referencedTable: 'claims' });
+  }
+  return checked(query.maybeSingle());
+}
+
 async function state(homeId, actorId) {
-  const [access, home, owners, context] = await Promise.all([
+  return (await readState(homeId, actorId)).state;
+}
+
+// state(), with the person's claims on the Home (`claims`) and its card row (`card`) from the same read. They are
+// kept apart from the state, which callers compare as a whole.
+async function readState(homeId, actorId, options = {}) {
+  const [access, row, context] = await Promise.all([
     getUserAccess(homeId, actorId),
-    checked(db.from('Home').select('id, owner_id, created_by_user_id, home_status, security_state')
-      .eq('id', homeId).maybeSingle()),
-    rows(db.from('HomeOwner').select('id, owner_status, verification_tier, is_primary_owner')
-      .eq('home_id', homeId).eq('subject_id', actorId).eq('subject_type', 'user').order('id')),
+    homeRead(homeId, actorId, options),
     checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: actorId })),
   ]);
+  const home = object(row) ? inOrder(row, STATE_COLUMNS) : null;
+  if (home && (!listOfRows(row.owners) || (options.claims && !listOfRows(row.claims)))) throw failure();
+  const owners = home ? row.owners.map(owner => inOrder(owner, OWNER_COLUMNS)) : [];
+  const claims = home && options.claims ? row.claims.map(claim => inOrder(claim, CLAIM_COLUMNS)) : [];
+  if (claims.some(claim => !uuid(claim.id) || claim.home_id !== homeId || typeof claim.state !== 'string')) throw failure();
   if (!home || home.id !== homeId || typeof home.home_status !== 'string' || typeof home.security_state !== 'string'
     || owners.some(owner => !uuid(owner.id) || !OWNER_STATUSES.includes(owner.owner_status) || typeof owner.is_primary_owner !== 'boolean')
     || !object(context) || typeof context.allowed !== 'boolean' || typeof context.private !== 'boolean'
@@ -92,29 +117,16 @@ async function state(homeId, actorId) {
   // a held list must not preserve obsolete metadata even if access still exists.
   // `blocked` (a frozen, disputed, archived or merged Home) also keeps an open
   // claim from showing the Home's public view (placeIntelligenceService.readAccess).
-  return { home, access, owners, context, mode, blocked };
+  return { state: { home, access, owners, context, mode, blocked }, claims, row };
 }
 
-async function readClaims(homeId, actorId) {
-  const claims = await rows(db.from('HomeOwnershipClaim').select('id, home_id, claim_type, state, claim_phase_v2, merged_into_claim_id')
-    .eq('home_id', homeId).eq('claimant_user_id', actorId).order('created_at', { ascending: false }).order('id'));
-  if (claims.some(claim => !uuid(claim.id) || claim.home_id !== homeId || typeof claim.state !== 'string')) throw failure();
-  return claims;
-}
-
-// The Home's card row, read alongside its opening state (see read()); card() projects it once the mode is known.
-function cardRow(homeId) {
-  return checked(db.from('Home').select(CARD_COLUMNS).eq('id', homeId).maybeSingle());
-}
-
-// `rowRead`, when given, is that row's read already under way (settled).
-async function card(homeId, mode, rowRead = null) {
+// The Home's card, projected from its row (read with its opening state, see read()) once the mode is known.
+function card(homeId, mode, row) {
   if (mode === 'verification') {
     // Personal progress is not shared Home access. The caller's submitted
     // evidence/address remains on its own authorized verification endpoint.
     return { id: homeId, name: 'Home verification', address: null, address2: null, city: null, state: null, zipcode: null, location: null };
   }
-  const row = rowRead ? used(await rowRead) : await cardRow(homeId);
   if (!object(row) || row.id !== homeId || typeof row.address !== 'string'
     || (row.address2 != null && typeof row.address2 !== 'string')) throw failure();
   const projected = Object.fromEntries(CARD_COLUMNS.split(', ').map(key => [key, row[key]]));
@@ -205,14 +217,11 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
   // card has its own opening authority. Homes load a few at a time (each is a
   // chain of database round trips), and all entries are rechecked at the end.
   const opened = await bounded(ids, async (homeId) => {
-    // The person's own claims and the Home's card row are read in the same round trip as its opening state.
-    // Each is used only when that state lists the Home, and the recheck below still follows both reads.
-    const claimsRead = settle(readClaims(homeId, actorId));
-    const rowRead = settle(cardRow(homeId));
-    const opening = await state(homeId, actorId);
+    // The person's own claims and the Home's card columns come in the same read as its opening state. Each is used
+    // only when that state lists the Home, and the recheck below still follows both.
+    const { state: opening, claims, row } = await readState(homeId, actorId, { claims: true, card: true });
     if (opening.mode === 'denied' || (primary && opening.mode !== 'shared')) return null;
-    const [claims, homeCard] = await Promise.all([claimsRead.then(used), card(homeId, opening.mode, rowRead)]);
-    return { homeId, opening, claims, card: materialize(opening, claims, homeCard) };
+    return { homeId, opening, claims, card: materialize(opening, claims, card(homeId, opening.mode, row)) };
   });
   const entries = opened.filter(Boolean);
   const privateSetups = entries.filter(entry => entry.opening.mode === 'private_setup');
@@ -220,11 +229,11 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
   const heldRead = heldClaims(actorId, privateSetups.map(entry => entry.homeId));
   await bounded(entries, async (entry) => {
     // Eligibility can change through records/history without a role change.
-    const [eligibility, claims, current] = await Promise.all([deleteEligibility(entry.homeId, actorId),
-      readClaims(entry.homeId, actorId), state(entry.homeId, actorId)]);
+    const [eligibility, current] = await Promise.all([deleteEligibility(entry.homeId, actorId),
+      readState(entry.homeId, actorId, { claims: true })]);
     entry.card.can_delete_home = eligibility.allowed;
-    if (JSON.stringify(claims) !== JSON.stringify(entry.claims)
-      || JSON.stringify(current) !== JSON.stringify(entry.opening)) throw failure(true);
+    if (JSON.stringify(current.claims) !== JSON.stringify(entry.claims)
+      || JSON.stringify(current.state) !== JSON.stringify(entry.opening)) throw failure(true);
   });
   const held = await heldRead;
   for (const entry of privateSetups) entry.card.claim_held = held.has(entry.homeId);

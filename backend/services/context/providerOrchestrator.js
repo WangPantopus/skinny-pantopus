@@ -258,6 +258,10 @@ function withinProviderBudget(promise, ms, provider) {
  *   past it counts as a failed provider in this payload (meta.partial_failures),
  *   and its request keeps running to fill the provider cache for the next read.
  *   Omitted: each waits for its provider's own timeout.
+ * @param {boolean} [options.householdContext=true]  false for a caller that shows only the providers' blocks (Place
+ *   reads weather, air quality, alerts, location, fetched_at and meta): the person's household records and the
+ *   address calendar, which only feed the signals and summary, aren't read, nor is the Home anchor rechecked for
+ *   that calendar. Such a payload is memoized under its own key, so it never answers a caller that wants them.
  * @returns {Promise<Object>} HubTodayResult
  */
 // The address calendar for the location's home (Wedge Phase 2, D6) — null
@@ -277,6 +281,7 @@ async function fetchAddressCalendar(location, userId, countyReads) {
 
 async function getHubToday(userId, options = {}) {
   const detail = options.detail === true;
+  const householdContext = options.householdContext !== false;
   const atLocation = options.atLocation ? locationFromCoordinates(options.atLocation) : null;
   const startMs = Date.now();
 
@@ -297,7 +302,7 @@ async function getHubToday(userId, options = {}) {
     };
   }
 
-  const memoKey = hubMemoKey(userId, detail, location);
+  const memoKey = `${hubMemoKey(userId, detail, location)}${householdContext ? '' : '|providers'}`;
   const memo = _hubTodayCache.get(memoKey);
   if (memo) {
     if (memoIsCurrent(memo, userId, location.homeId)) return memo.result;
@@ -318,8 +323,8 @@ async function getHubToday(userId, options = {}) {
     withinProviderBudget(fetchWeather(latitude, longitude), providerMs, 'weather'),
     withinProviderBudget(fetchAQI(latitude, longitude), providerMs, 'aqi'),
     withinProviderBudget(fetchAlerts(latitude, longitude), providerMs, 'alerts'),
-    collectInternalContext(userId, location.homeId, location.timezone),
-    fetchAddressCalendar(location, userId, countyReads),
+    householdContext ? collectInternalContext(userId, location.homeId, location.timezone) : defaultInternalContext(),
+    householdContext ? fetchAddressCalendar(location, userId, countyReads) : null,
   ]);
   const fetchMs = Date.now() - fetchStartMs;
 
@@ -339,7 +344,7 @@ async function getHubToday(userId, options = {}) {
   // internal.calendar_events. Refresh that projection after providers too, and
   // drop it if the user's current Home anchor changed during the wait. The
   // anchor and the calendar's authorized read go together, in one round.
-  if (location.homeId) {
+  if (householdContext && location.homeId) {
     try {
       const [currentLocation, currentCalendar] = await Promise.all([
         resolveLocation(userId),

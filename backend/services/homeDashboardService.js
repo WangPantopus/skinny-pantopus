@@ -12,8 +12,7 @@ const authority = require('./homeAuthorityService');
 const { getHealthScore, canReadHealthScore } = require('./homeHealthService');
 const { describeHomeActivity } = require('../utils/homeActivityLabels');
 const { isLaunchFeatureEnabled, excludeHiddenHomeActivity } = require('../utils/featureFlags');
-const { localDisplayNames } = require('../utils/identityProfiles');
-const { loadChatPeople } = require('./chatPeople');
+const { loadChatPeopleAndNames } = require('./chatPeople');
 
 const MESSAGES = {
   HOME_DASHBOARD_UNAVAILABLE: 'Could not load the Home summary. Please retry.',
@@ -43,7 +42,10 @@ async function count(query) {
   return total;
 }
 const permissionKey = permissions => JSON.stringify([...permissions].sort());
-async function readAccess(homeId, actorId, permission = 'home.view') {
+const settled = read => read.then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason }));
+const contextFor = (homeId, actorId) => checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: actorId }));
+// `reads`, when given, are the access check and the SQL context already made or under way (settled, in that order).
+async function readAccess(homeId, actorId, permission = 'home.view', reads = null) {
   const denied = permission === 'home.view' ? 'HOME_DASHBOARD_DENIED' : 'HOME_RESOURCE_DENIED';
   // Use the established SQL context as well: it fences frozen/archived Homes,
   // disputed ownership pointers and private setup. Private task first-use stays
@@ -51,9 +53,9 @@ async function readAccess(homeId, actorId, permission = 'home.view') {
   // It needs only the ids, so it is read alongside the access check (one
   // database round trip, not two); outcomes keep their order: an access error,
   // then a denial, then a failed context read.
-  const [accessRead, contextRead] = await Promise.allSettled([
-    getUserAccess(homeId, actorId),
-    checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: actorId })),
+  const [accessRead, contextRead] = await Promise.all(reads || [
+    settled(getUserAccess(homeId, actorId)),
+    settled(contextFor(homeId, actorId)),
   ]);
   if (accessRead.status === 'rejected') throw accessRead.reason;
   const access = accessRead.value;
@@ -94,14 +96,16 @@ function visibleScopes(access) {
 // A lightweight reauthorization boundary for mounted native summaries. The
 // general IAM navigation record alone does not fence frozen/archived Homes.
 async function readAuthority({ homeId, actorId }) {
+  // The SQL context is read alongside the access check (one round trip). When the check lets them in, the two are
+  // compared as readAccess compares them, from this one access read: nothing runs between them to recheck.
+  const contextRead = settled(contextFor(homeId, actorId));
   const opening = await getUserAccess(homeId, actorId);
   const revision = access => createHash('sha256').update(fingerprint(access)).digest('hex');
   const denied = access => ({ hasAccess: false, permissions: [], verification_required: false,
     verification_kind: null, verification_status: null, access_revision: revision(access), home_id: homeId });
   if (opening.hasAccess && opening.permissions.includes('home.view')) {
     try {
-      const current = await readAccess(homeId, actorId);
-      if (fingerprint(current) !== fingerprint(opening)) throw failure('HOME_DASHBOARD_ACCESS_CHANGED');
+      const current = await readAccess(homeId, actorId, 'home.view', [{ status: 'fulfilled', value: opening }, contextRead]);
       return { hasAccess: true, home_id: homeId, permissions: current.permissions, is_owner: current.isOwner,
         role_base: current.effective_role_base, access_revision: revision(current),
         access_expires_at: homeAccessExpiresAt(current.occupancy) };
@@ -201,6 +205,9 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
   const packages = extras ? resourceCount('HomePackage', 'packages.view') : null;
   const arriving = extras ? resourceCount('HomePackage', 'packages.view') : null;
   const documents = resourceCount('HomeDocument', 'docs.view');
+  // Whether they may delete the Home doesn't depend on the reads below, so it is read alongside them; it counts once
+  // the Home has been read, where it always did.
+  const deleteRead = settled(authority.deleteEligibility(homeId, actorId));
   const [homeResult, rawMembers, tasks, events, bills, unread, guestPasses, expectedPackages, arrivingPackages, openIssues, dueBills, documentCount, petCount, activity] = await Promise.all([
     checked(db.from('Home').select(HOME_LIST).eq('id', homeId).maybeSingle()),
     has('members.view') ? rows(db.from('HomeOccupancy')
@@ -229,19 +236,21 @@ async function read({ homeId, actorId, includeHealthScore = false }) {
   if (!home) throw failure('HOME_NOT_FOUND', 404);
   if (home.id !== homeId) throw failure();
   if (home.location) home.location = parsePostGISPoint(home.location) || home.location;
-  home.can_delete_home = (await authority.deleteEligibility(homeId, actorId)).allowed;
+  const deletion = await deleteRead;
+  if (deletion.status === 'rejected') throw deletion.reason;
+  home.can_delete_home = deletion.value.allowed;
 
   // Pending, future, ended and unknown-role rows are not active household members.
   const members = rawMembers.filter(member => currentOccupancy(member) && resolveHomeRole(member));
   // Members show by the name they show neighbors (a made-up username never stands in for it), with the handle and photo
   // they show neighbors (services/chatPeople.js: their Local Profile's, or the account's). Someone who removed their
-  // Local Profile photo shows none, so the account photo doesn't stand in for it either.
-  const [ownerRows, memberNames, memberPeople] = members.length ? await Promise.all([
+  // Local Profile photo shows none, so the account photo doesn't stand in for it either. Names, handles and photos
+  // come from one read of their accounts and Local Profiles.
+  const [ownerRows, { names: memberNames, people: memberPeople }] = members.length ? await Promise.all([
     rows(db.from('HomeOwner').select('subject_id, owner_status, verification_tier')
       .eq('home_id', homeId).eq('subject_type', 'user').in('subject_id', members.map(member => member.user_id)).neq('owner_status', 'revoked')),
-    localDisplayNames(members.map(member => member.user_id)).catch(() => { throw failure(); }),
-    loadChatPeople(members.map(member => member.user_id)),
-  ]) : [[], new Map(), new Map()];
+    loadChatPeopleAndNames(members.map(member => member.user_id)).catch(() => { throw failure(); }),
+  ]) : [[], { names: new Map(), people: new Map() }];
   const owners = new Map(ownerRows.map(owner => [owner.subject_id, owner]));
   const enrichedMembers = members.map(member => {
     const owner = owners.get(member.user_id);

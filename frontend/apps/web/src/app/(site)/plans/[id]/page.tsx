@@ -292,7 +292,7 @@ function StoreButtons({ path, copyPath }: { path: string; copyPath: string | nul
 const PRIMARY_BUTTON =
   'flex h-[50px] w-full items-center justify-center rounded-xl bg-primary-600 text-base font-semibold text-white shadow-[0_6px_16px_rgba(2,132,199,0.18)] hover:opacity-95';
 
-const PLAYDATE_CAPTION = 'Playdate links show no details here. Open them in the app with a verified address.';
+const PLAYDATE_CAPTION = 'Playdate links show no details here. Open them in the app.';
 
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { id } = await params;
@@ -390,7 +390,7 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
               </span>
               <div className="flex flex-col gap-1">
                 <h2 className="text-[17px] font-semibold leading-[22px]">
-                  {mine ? 'Playdate details stay in the app' : 'Playdates are for verified neighbors'}
+                  Playdate details stay in the app
                 </h2>
                 <p className="text-sm leading-5 text-app-text-secondary">
                   {viewer?.role === 'host'
@@ -398,8 +398,8 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
                     : viewer?.role === 'guest'
                       ? "You're in. Open it in the Pantopus app to see the time, the place and who's going."
                       : invitedBy
-                        ? "Open it in the Pantopus app with a verified address to see the time, the place and who's going, and to say you're in."
-                        : "Open it in the Pantopus app with a verified address to see the time, the place and who's going, and to ask to join."}
+                        ? "Open it in the Pantopus app to see the time, the place and who's going, and to say you're in."
+                        : "Open it in the Pantopus app to see the time, the place and who's going, and to ask to join."}
                 </p>
               </div>
             </div>

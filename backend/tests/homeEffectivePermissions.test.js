@@ -24,6 +24,22 @@ function seed(occupancy = {}, home = {}) {
 function override(permission, allowed = true) {
   db.getTable('HomePermissionOverride').push({ home_id: HOME, user_id: USER, permission, allowed });
 }
+// The person's occupancy, ownership and overrides come embedded in the access check's Home read
+// (utils/homePermissions homeWithPersonRows). A table is unreadable there when its rows don't come back.
+const EMBEDDED_AS = { HomeOccupancy: 'occupancy', HomeOwner: 'owner', HomePermissionOverride: 'overrides' };
+function unreadable(table, error = { code: 'unavailable' }) {
+  jest.spyOn(db, 'from').mockImplementation(name => {
+    const query = originalFrom(name);
+    if (name === table) query.then = (resolve, reject) => Promise.resolve({ data: null, error }).then(resolve, reject);
+    const alias = EMBEDDED_AS[table];
+    if (alias && name === 'Home') {
+      const read = query.then.bind(query);
+      query.then = (resolve, reject) => read(result => (result.data && alias in result.data
+        ? { ...result, data: { ...result.data, [alias]: null } } : result)).then(resolve, reject);
+    }
+    return query;
+  });
+}
 beforeEach(() => { db.resetTables(); seed(); });
 afterEach(() => jest.restoreAllMocks());
 
@@ -108,11 +124,7 @@ test('per-user true still overrides a role default false, within the ceiling', a
 test.each(['Home', 'HomeOccupancy', 'HomeOwner', 'HomePermissionOverride', 'HomeRolePermission'])('unreadable %s yields a retryable error, never a fall-through grant', async table => {
   seed({ role_base: 'owner' });
   override('finance.manage', false);
-  jest.spyOn(db, 'from').mockImplementation(name => {
-    const query = originalFrom(name);
-    if (name === table) query.then = (resolve, reject) => Promise.resolve({ data: null, error: { code: 'unavailable' } }).then(resolve, reject);
-    return query;
-  });
+  unreadable(table);
   await expect(checkHomePermission(HOME, USER, 'finance.manage')).rejects.toMatchObject({ code: 'HOME_ACCESS_UNAVAILABLE', statusCode: 503 });
   await expect(hasPermission(HOME, USER, 'finance.manage')).rejects.toMatchObject({ code: 'HOME_ACCESS_UNAVAILABLE' });
 });
@@ -194,11 +206,7 @@ test('/me reports a minor owner as limited and keeps explicit denial errors retr
   expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
     isOwner: false, is_owner: false, can_manage_home: false, can_manage_tasks: false, can_view_sensitive: false,
   }));
-  jest.spyOn(db, 'from').mockImplementation(name => {
-    const query = originalFrom(name);
-    if (name === 'HomePermissionOverride') query.then = (resolve, reject) => Promise.resolve({ data: null, error: {} }).then(resolve, reject);
-    return query;
-  });
+  unreadable('HomePermissionOverride', {});
   await handler({ params: { id: HOME }, user: { id: USER } }, response);
   expect(response.status).toHaveBeenCalledWith(503);
 });
@@ -306,12 +314,14 @@ test('Home detail does not reconstruct owner authority for a minor from HomeOwne
     created_at: '2026-09-10T00:00:00Z', user: { id: USER, username: 'household-handle' } });
   db.seedTable('HomeOwner', [{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', home_id: HOME,
     subject_id: USER, subject_type: 'user', owner_status: 'verified', is_primary_owner: true, verification_tier: 'strong' }]);
+  const context = async () => {
+    const access = await getUserAccess(HOME, USER);
+    return { allowed: true, private: false, user_id: USER, role: access.effective_role_base, permissions: access.permissions };
+  };
   db.setRpcMock(async name => {
-    if (name === 'home_record_context') {
-      const access = await getUserAccess(HOME, USER);
-      return { data: { allowed: true, private: false, user_id: USER,
-        role: access.effective_role_base, permissions: access.permissions }, error: null };
-    }
+    if (name === 'home_record_context') return { data: await context(), error: null };
+    // Every active, verified occupant's context in one call: here, the teen alone.
+    if (name === 'home_member_record_contexts') return { data: [{ user_id: USER, context: await context() }], error: null };
     if (name === 'home_delete_eligibility') return { data: { allowed: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null };
     return { data: null, error: { message: 'Unexpected RPC' } };
   });
@@ -322,10 +332,6 @@ test('Home detail does not reconstruct owner authority for a minor from HomeOwne
 test.each(['/:id/bills', '/:id/access', '/:id/dashboard', '/:id/household-access-requests'])('auth failure in %s aborts as retryable 5xx', async path => {
   seed({ role_base: 'owner' });
   if (['/:id/access','/:id/household-access-requests'].includes(path)) db.setRpcMock(async () => ({ data: null, error: { code: '55P03' } }));
-  jest.spyOn(db, 'from').mockImplementation(name => {
-    const query = originalFrom(name);
-    if (name === 'HomePermissionOverride') query.then = (resolve, reject) => Promise.resolve({ data: null, error: {} }).then(resolve, reject);
-    return query;
-  });
+  unreadable('HomePermissionOverride', {});
   expect((await homeRoute(path)).status).toHaveBeenCalledWith(['/:id/dashboard', '/:id/access','/:id/household-access-requests'].includes(path) ? 503 : 500);
 });

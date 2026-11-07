@@ -16,9 +16,26 @@ export const CATEGORIES = [
   { value: 'other', label: 'Other' },
 ] as const;
 
-export const CATEGORY_MAP: Record<string, string> = Object.fromEntries(
-  CATEGORIES.map((c) => [c.value, c.label]),
-);
+// The slugs the phone apps' Create business saved before it saved names. A
+// business created then still carries one, so it reads as its name here, as on
+// iOS (`BusinessCategory.label(forLegacySlug:)`) and Android
+// (`BusinessCategory.labelForLegacySlug`).
+const LEGACY_PHONE_CATEGORY_NAMES: Record<string, string> = {
+  home_services: 'Home services',
+  personal_services: 'Personal services',
+  tech_repair: 'Tech & repair',
+  delivery_errands: 'Delivery & errands',
+  goods_retail: 'Goods & retail',
+  rentals: 'Rentals',
+  vehicles_rideshare: 'Vehicles & rideshare',
+  other: 'Other',
+};
+
+/** How a saved business category reads: `CATEGORY_MAP[category] || category`. */
+export const CATEGORY_MAP: Record<string, string> = {
+  ...LEGACY_PHONE_CATEGORY_NAMES,
+  ...Object.fromEntries(CATEGORIES.map((c) => [c.value, c.label])),
+};
 
 export type DiscoverySort = 'relevance' | 'distance' | 'rating' | 'fastest_response';
 

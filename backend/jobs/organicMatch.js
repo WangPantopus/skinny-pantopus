@@ -56,7 +56,8 @@ async function matchBusinessesForPost(postId) {
 
     // 2. Search for businesses near the post location matching the service category.
     // Arguments are the SQL function's own parameters; it returns published
-    // businesses in the category within the radius, nearest first.
+    // businesses in the category within the radius, nearest first. The category
+    // matches as Discover's filters do, however either side is spelled.
     const { data: results, error: searchErr } = await supabaseAdmin.rpc(
       'find_businesses_nearby',
       {

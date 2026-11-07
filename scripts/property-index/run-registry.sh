@@ -31,7 +31,12 @@ for state in $states; do
     node scripts/property-index/publish.cjs --out "$out" "${publishing[@]}" || status=1
   fi
 done
-node scripts/property-index/registry-coverage.cjs --dir "$all"
+# A run of some states leaves every other state's rows as the report published has them.
+keep=()
+if [ -n "${STATES:-}" ] && aws s3 cp "s3://$PROPERTY_INDEX_BUCKET/index/registry/coverage.csv" "$RUNNER_TEMP/coverage-published.csv" --only-show-errors; then
+  keep=(--keep "$RUNNER_TEMP/coverage-published.csv")
+fi
+node scripts/property-index/registry-coverage.cjs --dir "$all" ${keep[@]+"${keep[@]}"}
 node scripts/property-index/registry-t2.cjs --summary "$all"
 if [ "$PUBLISH" = "true" ]; then
   aws s3 cp "$all/coverage.csv" "s3://$PROPERTY_INDEX_BUCKET/index/registry/coverage.csv" --only-show-errors

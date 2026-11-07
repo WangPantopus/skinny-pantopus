@@ -877,7 +877,7 @@ private fun NeighborsCard(
                         color = PantopusColors.appText,
                     )
                     // Neighbors see the badge when the host's address is verified (board H7).
-                    if (ui.canHostPlaydates) PlanVerifiedBadge(text = "Verified")
+                    if (ui.hostVerified) PlanVerifiedBadge(text = "Verified")
                     Text(
                         text = "· ${draft.spots} ${if (kind == PlanKind.PLAYDATE) {
                             if (draft.spots == 1) "family" else "families"

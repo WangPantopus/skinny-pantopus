@@ -20,6 +20,9 @@ const COUNTIES = {
   49035: ['Salt Lake', 'SaltLake'], 49037: ['San Juan', 'SanJuan'], 49039: ['Sanpete', 'Sanpete'], 49041: ['Sevier', 'Sevier'], 49043: ['Summit', 'Summit'], 49045: ['Tooele', 'Tooele'], 49047: ['Uintah', 'Uintah'], 49049: ['Utah', 'Utah'],
   49051: ['Wasatch', 'Wasatch'], 49053: ['Washington', 'Washington'], 49055: ['Wayne', 'Wayne'], 49057: ['Weber', 'Weber'],
 };
+// Counties send UGRC their files irregularly, and building facts barely change in three years: a county's file answers,
+// labeled with its own date, until it's three years old (the founder's call, November 7, 2026).
+const STALE_AFTER_DAYS = 1095;
 const COLUMNS = ['PARCEL_ID', 'SERIAL_NUM', 'PARCEL_ADD', 'PARCEL_CITY', 'TOTAL_MKT_VALUE', 'LAND_MKT_VALUE', 'PARCEL_ACRES', 'PROP_CLASS', 'PROP_TYPE', 'HOUSE_CNT', 'SUBDIV_NAME', 'BLDG_SQFT', 'FLOORS_CNT', 'BUILT_YR', 'EFFBUILT_YR', 'CURRENT_ASOF', 'TAX_DISTRICT'];
 
 function useOf(row, unit) {
@@ -92,7 +95,7 @@ async function* build({ work }) {
     if (!asOf) throw new Error(`${county}'s layer no longer says when it was current`);
     for (const building of condoBuildings(records, { fips, county })) records.push(building);
     yield {
-      fips, state: 'UT', name: county, publisher: `${name} County and Utah UGRC`, dataset: 'land information records', method: 'state', source: 'ut-lir', title: 'State records', as_of: asOf, stale_after_days: 730, extra_zips: zips.get(fips) || [], records,
+      fips, state: 'UT', name: county, publisher: `${name} County and Utah UGRC`, dataset: 'land information records', method: 'state', source: 'ut-lir', title: 'State records', as_of: asOf, stale_after_days: STALE_AFTER_DAYS, extra_zips: zips.get(fips) || [], records,
     };
   }
 }

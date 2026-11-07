@@ -233,7 +233,10 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
 
     func refresh() async {
         guard visible else { return }
-        await fetch()
+        // The read finishes outside the pull: SwiftUI cancels a pull's task
+        // once its list leaves the screen (a refresh that empties the tab, or
+        // a tab change while it runs), which would stop the read short.
+        await Task { await fetch() }.value
     }
 
     /// Backend has no pagination on tasks today.
@@ -243,11 +246,15 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
         guard visible, !isActing else { return }
         generation += 1
         let revision = generation
-        tasks = nil
-        canCreate = false
         pendingEvent = nil
         actionError = nil
-        state = .loading
+        // A refresh keeps the rows on screen until the new answer arrives:
+        // loading rows would replace the list whose pull started it.
+        if !state.showsContent {
+            tasks = nil
+            canCreate = false
+            state = .loading
+        }
         do {
             let response = try await access.list()
             guard revision == generation else { return }
@@ -257,6 +264,12 @@ final class HouseholdTasksListViewModel: ListOfRowsDataSource {
             await loadMemberNames(revision: revision)
         } catch {
             guard revision == generation else { return }
+            // A cancelled read says nothing new about the list, so it isn't a
+            // failed load. A session that changed under it still clears it.
+            if error is CancellationError || Task.isCancelled {
+                accessChanged()
+                return
+            }
             clearRecords(error)
         }
     }
