@@ -26,8 +26,9 @@ type NormalizedAddress = {
   state: string;
   zipcode: string;
   zip_code?: string;
-  latitude: number;
-  longitude: number;
+  // None until the address check answers, for an address typed by hand; some addresses have no point at all.
+  latitude?: number | null;
+  longitude?: number | null;
   label?: string;
 };
 
@@ -145,6 +146,11 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   }, []);
   const [normalized, setNormalized] = useState<NormalizedAddress | null>(null);
   const [unit, setUnit] = useState('');
+  // The units the address check found here, to pick from.
+  const [unitChoices, setUnitChoices] = useState<string[]>([]);
+  // Rural routes, military mail and Puerto Rico's urbanizaciones often aren't in the suggestions, so they can be typed.
+  const [manualEntry, setManualEntry] = useState(false);
+  const [manualAddress, setManualAddress] = useState({ line: '', city: '', state: '', zip: '' });
   const [validatedAddressId, setValidatedAddressId] = useState<string | null>(null);
   const [addressCheckResult, setAddressCheckResult] = useState<AddressCheckResult | null>(null);
   const [existingHomeId, setExistingHomeId] = useState<string | null>(null);
@@ -250,7 +256,10 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
 
   const resetAddressValidation = (invalidateSelection = true) => {
     addressRevision.current++;
-    if (invalidateSelection) addressSelectionRevision.current++;
+    if (invalidateSelection) {
+      addressSelectionRevision.current++;
+      setUnitChoices([]);
+    }
     setValidatingAddress(false);
     setValidatedAddressId(null);
     setNoUnitAttested(false);
@@ -373,7 +382,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setAmenities(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const getVerifiedNormalizedAddress = (): VerifiedNormalizedAddress | undefined => {
+  const getVerifiedNormalizedAddress = (): (Omit<VerifiedNormalizedAddress, 'lat' | 'lng'> & { lat?: number; lng?: number }) | undefined => {
     if (!normalized) return undefined;
 
     return {
@@ -382,8 +391,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
       city: normalized.city,
       state: normalized.state,
       zip: normalized.zipcode,
-      lat: normalized.latitude,
-      lng: normalized.longitude,
+      lat: normalized.latitude ?? undefined,
+      lng: normalized.longitude ?? undefined,
     };
   };
 
@@ -399,8 +408,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
       state: normalized.state,
       zip_code: normalized.zipcode,
       country: 'US',
-      latitude: normalized.latitude,
-      longitude: normalized.longitude,
+      latitude: normalized.latitude ?? undefined,
+      longitude: normalized.longitude ?? undefined,
       name: name.trim() || undefined,
       home_type: homeType,
       bedrooms: parsedBedrooms,
@@ -597,6 +606,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
         setUnit(resolved.line2 || '');
       }
 
+      setUnitChoices(verdict?.unit_choices ?? []);
       switch (verdict?.status) {
         case 'MISSING_UNIT':
           // USPS expects a secondary here — which is also what a basement,
@@ -896,7 +906,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
             <MailVerificationFlow
               addressId={addressStepUpRequirement.addressId}
               unit={unit.trim() || undefined}
-              normalized={getVerifiedNormalizedAddress()}
+              // It only prints the address's text, so a typed address with no point is fine here.
+              normalized={getVerifiedNormalizedAddress() as VerifiedNormalizedAddress | undefined}
               onVerified={() => {
                 void handleAddressStepUpVerified();
               }}
@@ -999,6 +1010,47 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 placeholder="Search address…"
                 labelId="home-address-label"
               />
+              <button
+                type="button"
+                onClick={() => setManualEntry((open) => !open)}
+                aria-expanded={manualEntry}
+                className="text-xs text-app-text-secondary underline underline-offset-2 hover:text-app-text"
+              >
+                {manualEntry ? 'Search for my address instead' : 'Can’t find your address? Enter it yourself'}
+              </button>
+              {manualEntry ? (
+                <div className="grid grid-cols-6 gap-2">
+                  {([
+                    ['line', 'Street address', 'col-span-6', 'Street, or RR 2 Box 152, PSC 3 Box 1234', 255],
+                    ['city', 'City', 'col-span-3', 'City', 100],
+                    ['state', 'State', 'col-span-1', 'ST', 2],
+                    ['zip', 'ZIP', 'col-span-2', 'ZIP', 10],
+                  ] as const).map(([field, label, span, placeholder, maxLength]) => (
+                    <input
+                      key={field}
+                      aria-label={label}
+                      placeholder={placeholder}
+                      maxLength={maxLength}
+                      value={manualAddress[field]}
+                      onChange={(e) => {
+                        const next = { ...manualAddress, [field]: field === 'state' ? e.target.value.toUpperCase() : e.target.value };
+                        setManualAddress(next);
+                        resetAddressValidation();
+                        setAddressText(next.line);
+                        const complete = next.line.trim() && next.city.trim() && next.state.trim().length === 2 && /^\d{5}(-\d{4})?$/.test(next.zip.trim());
+                        setNormalized(complete ? {
+                          address: next.line.trim(),
+                          city: next.city.trim(),
+                          state: next.state.trim(),
+                          zipcode: next.zip.trim(),
+                          label: buildAddressLabel(next.line.trim(), next.city.trim(), next.state.trim(), next.zip.trim()),
+                        } : null);
+                      }}
+                      className={`${span} ${inputClass('address')}`}
+                    />
+                  ))}
+                </div>
+              ) : null}
 
               {normalized ? (
                 <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm">
@@ -1044,6 +1096,37 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 <p id="home-unit-hint" className="mt-1 text-xs text-app-text-secondary">
                   Apt 12B, Unit 4, Ste 200, #3 — whichever appears on your mail.
                 </p>
+                {unitChoices.length > 0 ? (
+                  <div className="mt-2" role="group" aria-label="Units at this address">
+                    <p className="text-xs font-medium text-app-text-strong">Which one is yours?</p>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {unitChoices.map((choice) => (
+                        <button
+                          key={choice}
+                          type="button"
+                          aria-pressed={unit.trim() === choice}
+                          onClick={() => {
+                            resetAddressValidation(false);
+                            setUnit(choice);
+                            setFieldErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.unit_number;
+                              return next;
+                            });
+                            setError('');
+                          }}
+                          className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                            unit.trim() === choice
+                              ? 'border-primary-500 bg-primary-50 text-app-text-strong'
+                              : 'border-app-border text-app-text-secondary hover:border-primary-300'
+                          }`}
+                        >
+                          {choice}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {fieldErrors.unit_number ? (
                   <>
                     <p id="err-unit_number" role="alert" className="mt-1 text-xs text-red-600">
