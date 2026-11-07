@@ -479,6 +479,13 @@
           "statement": "Copyright (c) 2024 SEMCOG. All Rights Reserved. Reproduction or Use Without Permission is Prohibited."
         },
         {
+          "id": "us/md/statewide",
+          "publisher": "State of Maryland (MD iMAP, Maryland Department of Planning, SDAT)",
+          "url": "https://data.imap.maryland.gov/datasets/maryland::maryland-property-data-parcel-points/about",
+          "license": "Free to distribute, acknowledging the State of Maryland",
+          "dataset": "Maryland Property Data parcel points"
+        },
+        {
           "id": "us/ny/suffolk",
           "publisher": "Suffolk County GIS, New York",
           "url": "https://opendata.suffolkcountyny.gov/datasets/SuffolkGIS::site-address-point/about",

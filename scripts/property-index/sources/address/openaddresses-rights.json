@@ -116,6 +116,7 @@
     "us/ma/city_of_easton": {"use": true, "terms": "Published openly with a disclaimer of warranty; no limit on use stated", "credit": "Town of Easton, Massachusetts"},
     "us/md/baltimore": {"use": true, "terms": "Public domain, as the publisher or OpenAddresses records it"},
     "us/md/montgomery": {"use": true, "terms": "Published openly with a disclaimer of warranty; no limit on use stated", "credit": "Montgomery County, Maryland"},
+    "us/md/statewide": {"use": true, "terms": "MD iMAP Maryland Property Data parcel points (Maryland Department of Planning, SDAT): freely distributed with its metadata unchanged, and derived data acknowledges the State of Maryland. Read November 7", "credit": "State of Maryland (MD iMAP, Maryland Department of Planning, SDAT)"},
     "us/me/statewide": {"use": true, "terms": "Publisher: no restrictions", "credit": "Maine Emergency Services Communication Bureau"},
     "us/mi/antrim": {"use": true, "terms": "Published openly with a disclaimer of warranty; no limit on use stated"},
     "us/mi/barry": {"use": true, "terms": "Published openly with a disclaimer of warranty; no limit on use stated"},
