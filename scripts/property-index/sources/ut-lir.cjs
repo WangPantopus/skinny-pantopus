@@ -1,7 +1,7 @@
 'use strict';
 // Utah: UGRC's Land Information Records parcels, one layer per county, from what each county assessor agreed to share.
 // Year built, size, floors, market values; no bedrooms or baths, and sale prices aren't public in Utah. Published "as
-// is"; each county's layer points to that county's own disclaimer. PRIMARY_RES (a primary-residence flag says something
+// is" under CC BY 4.0 (web's data sources page); each county's layer points to that county's own disclaimer. PRIMARY_RES (a primary-residence flag says something
 // about a person) isn't asked for.
 
 const path = require('node:path');
@@ -33,6 +33,10 @@ function useOf(row, unit) {
     if (unit) return ['unit', 'condo'];
     return Number(row.HOUSE_CNT) > 1 ? ['building', 'multi_unit'] : ['property', 'house'];
   }
+  // Some counties send no class at all (Emery: "Unknown" on every parcel). Their house count still says a home stands there,
+  // but without a class it can count outbuildings, so it's one home, not several units; a county with neither (San Juan)
+  // can't tell a house from a barn, so its buildings stay other.
+  if ((!text.trim() || /^UNKNOWN\s*$/.test(text.trim())) && Number(row.HOUSE_CNT) >= 1) return unit ? ['unit', 'condo'] : ['property', null];
   return ['other', null];
 }
 
@@ -51,6 +55,7 @@ function fromRow(row, fips, county) {
   put(facts, 'usable_sqft', kind === 'property' || kind === 'unit' ? positive(row.BLDG_SQFT) : null);
   put(facts, 'gross_sqft', kind === 'building' ? positive(row.BLDG_SQFT) : null);
   put(facts, 'stories', on ? positive(row.FLOORS_CNT) : null);
+  if (kind === 'property' && !homeType && Number(row.HOUSE_CNT) > 1) facts.buildings_on_parcel = Number(row.HOUSE_CNT);
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.PARCEL_ACRES));
   put(facts, 'subdivision', word(row.SUBDIV_NAME));
   put(facts, 'land_use', word(row.PROP_CLASS));

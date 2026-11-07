@@ -196,6 +196,25 @@ Resources:
       AlarmActions: [!Ref JobAlarmTopic]
       OKActions: [!Ref JobAlarmTopic]
 
+  PropertyIndexHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHealthMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-property-index-health-${Environment}
+      AlarmDescription: 'The API could not read its property index for three of five minutes, or a live county is missing from its state file. Homes keep their stored copies; new addresses say Looking up. Check the API log for property_records.storage_paused or live_county_missing.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: PropertyIndexHealthy
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      # No reading where the index is off.
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
   DatabaseHealthAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: RunHealthMonitoring

@@ -173,7 +173,9 @@ struct HolidayCardLinkPagePicture: View {
                     .foregroundStyle(Theme.Color.appText)
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-                Text(verbatim: "Use \(page.sentTo), the address this card was sent to.")
+                Text(verbatim: page.sentTo.isEmpty
+                    ? "You’ll need a free Pantopus account to open it and keep it."
+                    : "Use \(page.sentTo), the address this card was sent to.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)

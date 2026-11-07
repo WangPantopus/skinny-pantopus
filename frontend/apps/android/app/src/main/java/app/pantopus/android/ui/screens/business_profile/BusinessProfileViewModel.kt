@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.businesses.BusinessDetailResponse
 import app.pantopus.android.data.api.models.businesses.BusinessHoursDto
+import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
+import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessPagesRepository
@@ -15,8 +17,7 @@ import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.ui.screens.businesses.page_blocks.BusinessPageBlock
 import app.pantopus.android.ui.screens.contentdetail.GigOpenChatEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -65,6 +66,12 @@ sealed interface BusinessProfileNamedPageState {
         val message: String,
     ) : BusinessProfileNamedPageState
 }
+
+/** The reads the page itself waits for. Reviews arrive apart from them (see [BusinessReviewsRead]). */
+private class BusinessProfilePage(
+    val detail: BusinessDetailResponse,
+    val publicResponse: BusinessPublicResponse?,
+)
 
 /** View-model for the single-scroll Business Profile screen (A10.6). The
  *  projection lives in [BusinessProfileMapper] so the owner dashboard can
@@ -115,15 +122,37 @@ class BusinessProfileViewModel
 
         private var isStartingInquiry = false
 
+        private var loadJob: Job? = null
+        private var quietJob: Job? = null
+        private var page: BusinessProfilePage? = null
+
+        private var reviewsJob: Job? = null
+        private var reviews: PublicProfileDto? = null
+        private var reviewsFetchedAt = 0L
+        private var reviewsRead: BusinessReviewsRead = BusinessReviewsRead.Loading
+
+        /**
+         * Entry and every return. Back on a loaded page, it stays as it is while its reads check for what changed
+         * meanwhile: an edit saved in the page editor, a reply saved by the owner.
+         */
         fun load() {
-            if (_state.value is BusinessProfileUiState.Loaded) return
+            if (_state.value is BusinessProfileUiState.Loaded) {
+                refreshQuietly()
+                return
+            }
             refresh()
         }
 
         fun refresh() {
+            loadJob?.cancel()
+            quietJob?.cancel()
+            page = null
             _state.value = BusinessProfileUiState.Loading
-            viewModelScope.launch { fetch() }
+            loadJob = viewModelScope.launch { fetch() }
         }
+
+        /** The Reviews section's retry; the rest of the page stays as it is. */
+        fun retryReviews() = readReviews(force = true)
 
         fun dismissToast() {
             _toastMessage.value = null
@@ -217,27 +246,16 @@ class BusinessProfileViewModel
             when (val detail = loadDetail()) {
                 is NetworkResult.Success -> {
                     val payload = detail.data
-                    coroutineScope {
-                        val publicDeferred =
-                            async {
-                                payload.business.username
-                                    ?.takeIf { it.isNotEmpty() }
-                                    ?.let { username ->
-                                        (businesses.publicBusiness(username) as? NetworkResult.Success)?.data
-                                    }
+                    readReviews()
+                    val publicResponse =
+                        payload.business.username
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.let { username ->
+                                (businesses.publicBusiness(username) as? NetworkResult.Success)?.data
                             }
-                        val reviewsDeferred =
-                            async {
-                                (profiles.publicProfile(businessId) as? NetworkResult.Success)?.data
-                            }
-                        val publicResponse = publicDeferred.await()
-                        val reviewsResponse = reviewsDeferred.await()
-                        _state.value =
-                            BusinessProfileUiState.Loaded(
-                                BusinessProfileMapper.build(payload, publicResponse, reviewsResponse),
-                            )
-                        loadNamedPage(payload.business.username)
-                    }
+                    page = BusinessProfilePage(payload, publicResponse)
+                    publish()
+                    loadNamedPage(payload.business.username)
                 }
                 is NetworkResult.Failure -> {
                     when (detail.error) {
@@ -246,6 +264,90 @@ class BusinessProfileViewModel
                     }
                 }
             }
+        }
+
+        /**
+         * The page's reads again, behind what it shows. A failed read leaves the page as it was; a business that's
+         * gone shows as not found, as a first read would. The named page isn't read again: its read counts a view.
+         */
+        private fun refreshQuietly() {
+            readReviews()
+            quietJob?.cancel()
+            quietJob =
+                viewModelScope.launch {
+                    when (val detail = businesses.business(businessId)) {
+                        is NetworkResult.Success -> {
+                            val payload = detail.data
+                            val previous = page?.publicResponse
+                            val publicResponse =
+                                payload.business.username
+                                    ?.takeIf { it.isNotEmpty() }
+                                    ?.let { username ->
+                                        when (val result = businesses.publicBusiness(username)) {
+                                            is NetworkResult.Success -> result.data
+                                            // No public page any more (unpublished) shows as a first read would.
+                                            is NetworkResult.Failure -> previous.takeUnless { result.error == NetworkError.NotFound }
+                                        }
+                                    }
+                            page = BusinessProfilePage(payload, publicResponse)
+                            publish()
+                        }
+                        is NetworkResult.Failure ->
+                            if (detail.error == NetworkError.NotFound) {
+                                page = null
+                                _state.value = BusinessProfileUiState.NotFound
+                            }
+                    }
+                }
+        }
+
+        /**
+         * `GET /api/users/id/:id` through the store, on its own so a slow or failed read touches only the Reviews
+         * section. A copy still fresh and unmarked answers without a request; a reply saved here marks it, so the next
+         * read asks the server.
+         */
+        private fun readReviews(force: Boolean = false) {
+            reviewsJob?.cancel()
+            // What the section already shows stays during the read; only a section with no answer yet waits.
+            val unanswered = reviews == null && reviewsRead != BusinessReviewsRead.Loaded
+            reviewsRead = if (unanswered) BusinessReviewsRead.Loading else BusinessReviewsRead.Loaded
+            publish()
+            reviewsJob =
+                viewModelScope.launch {
+                    reviewsRead =
+                        when (val result = profiles.publicProfile(businessId, force)) {
+                            is NetworkResult.Success -> {
+                                reviews = result.data
+                                val copy = profiles.publicProfileCopy(businessId)
+                                reviewsFetchedAt = copy.fetchedAt
+                                if (copy.failure != null) BusinessReviewsRead.RefreshFailed(copy.fetchedAt) else BusinessReviewsRead.Loaded
+                            }
+                            is NetworkResult.Failure -> reviewsAfterFailure(result.error)
+                        }
+                    publish()
+                }
+        }
+
+        private fun reviewsAfterFailure(error: NetworkError): BusinessReviewsRead =
+            when {
+                // A retry can't change a refusal (a draft's own page, a private or blocked profile): nothing public to show.
+                error == NetworkError.NotFound || error == NetworkError.Forbidden -> {
+                    reviews = null
+                    BusinessReviewsRead.Loaded
+                }
+                reviews != null -> BusinessReviewsRead.RefreshFailed(reviewsFetchedAt)
+                else -> BusinessReviewsRead.Failed(friendlyMessage(error))
+            }
+
+        /** Shows the page with the reviews as they stand. Until the page's own reads answer, there is no page to show. */
+        private fun publish() {
+            val current = page ?: return
+            _state.value =
+                BusinessProfileUiState.Loaded(
+                    BusinessProfileMapper
+                        .build(current.detail, current.publicResponse, reviews)
+                        .copy(reviewsRead = reviewsRead),
+                )
         }
 
         /**

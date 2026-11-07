@@ -23,9 +23,12 @@ const same = (a, b) => (a || '') === (b || '');
 // Equal, or one side doesn't say.
 const agrees = (a, b) => !a || !b || a === b;
 
+// Some rolls pad a house number to a fixed width ("00123"), and people don't. The sort key that finds a block already ignores it.
+const unpadded = (number) => String(number || '').replace(/^0+(?=\d)/, '');
+
 /** The records on this person's street: an exact reading of direction and type first, then any that only leave one out. */
 function onStreet(query, records) {
-  const here = records.filter((record) => record.address.number === query.number && record.address.name === query.name);
+  const here = records.filter((record) => unpadded(record.address.number) === unpadded(query.number) && record.address.name === query.name);
   const strict = here.filter(({ address }) => same(address.pre, query.pre) && same(address.suffix, query.suffix) && same(address.post, query.post));
   if (strict.length) return strict;
   return here.filter(({ address }) => agrees(address.pre, query.pre) && agrees(address.suffix, query.suffix) && agrees(address.post, query.post));
@@ -49,10 +52,16 @@ function unitChoices(buildings, others) {
   return { unit_count: units.size, ...(units.size && units.size <= MAX_CHOICES ? { choices: [...units].sort(naturally.compare) } : {}) };
 }
 
-/** ZIP decides when both sides have one: the same street line can exist in two towns of a county. */
+/**
+ * ZIP decides when both sides have one: the same street line can exist in two towns of a county. When the person's ZIP names
+ * none of the records here but exactly one is in the person's town, the source's ZIP was off and the town decides.
+ */
 function inZip(query, records) {
   if (!query.zip) return records;
-  return records.filter(({ address }) => !address.zip || address.zip === query.zip);
+  const named = records.filter(({ address }) => !address.zip || address.zip === query.zip);
+  if (named.length || !query.city) return named;
+  const town = records.filter(({ address }) => address.city === query.city);
+  return town.length === 1 ? town : named;
 }
 
 /**
@@ -146,9 +155,9 @@ function resolve(address, records) {
     return ambiguous(parcels, requested, 'several_parcels');
   }
 
-  // No unit given. A home with its own street number needs none.
+  // No unit given. A home with its own street number needs none. One filed both with and without a unit is still one home.
   const whole = [...properties, ...units].filter((record) => !record.address.unit);
-  const withUnits = [...properties, ...units].filter((record) => record.address.unit);
+  const withUnits = [...properties, ...units].filter((record) => record.address.unit && !whole.some((home) => home.id === record.id));
   if (buildings.length === 1 && !whole.length) return buildingOnly(buildings[0], requested, 'unit_needed');
   if (buildings.length > 1 && !whole.length) return ambiguous(buildings, requested, 'several_buildings');
   // A condo with its own street number shares that number with its own building's record, and with nothing else.

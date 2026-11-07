@@ -16,10 +16,15 @@ const {
 } = require('./propertyIntelligenceService');
 const propertyRecords = require('../propertyRecords');
 const homeRecords = require('../propertyRecords/homeRecord');
+const floorPlans = require('../propertyRecords/floorPlans');
+const { planFacts, PLAN_SOURCE_WORD } = require('../propertyRecords/floorPlanFormat');
+const { usableFloorPlan } = require('../householdFacts');
 
 const LLM_TIMEOUT_MS = 12000;
 // Several plausible records at an address: which one isn't for us to guess, so nothing fills in and the person is told why.
 const SEVERAL_RECORDS_NOTE = 'More than one home is on record at this address, so we left the details for you. Add your unit if you have one, or tell us the basics.';
+// A county that stopped publishing its file: what it had isn't shown any more.
+const WITHDRAWN_NOTE = 'The county no longer publishes these records. Tell us the basics; you can change them anytime.';
 // A leftover PROPERTY_SUGGESTIONS_LLM_MODEL naming another provider's model is ignored.
 const LLM_MODEL = resolveModel(process.env.PROPERTY_SUGGESTIONS_LLM_MODEL, DRAFT_MODEL);
 const LLM_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
@@ -147,8 +152,9 @@ function normalizeLlmHomeType(v) {
  * @param {'wait'|'background'|'check'} [options.lookup='wait'] How a validated address's ATTOM lookup runs
  *   (propertyIntelligenceService.fetchAttomPropertyDetailBundleForAddress); the answer's `attom_lookup` says where it
  *   stands, so Add Home can show the step at once and fill the fields in when the record lands.
+ * @param {boolean} [options.floorPlans=false] A build that understands a building's floor-plan sheet is asking.
  */
-async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } = {}) {
+async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', floorPlans: wantsFloorPlans = false } = {}) {
   const {
     address,
     unit_number: unitNumber,
@@ -199,7 +205,8 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     ? { line1: homeAddressRow.address_line1_norm, unit: homeAddressRow.address_line2_norm, city: homeAddressRow.city_norm, state: homeAddressRow.state, zip: homeAddressRow.postal_code }
     : { line1: address, unit: unitNumber, city, state, zip: zipCode };
   propertyRecords.shadow(recordAddress);
-  const record = await homeRecords.forAddress(recordAddress);
+  // Add Home's follow-up, and builds that make only one ask, can wait a few seconds for storage to answer.
+  const record = await homeRecords.forAddress(recordAddress, { patient: lookup !== 'background' });
   const fieldTags = {};
   let provenance = null;
   let lookupNote = null;
@@ -213,6 +220,8 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
       provenance = homeRecords.provenanceOf(record.copy);
     } else if (record.answer?.match === 'ambiguous') {
       lookupNote = SEVERAL_RECORDS_NOTE;
+    } else if (record.answer?.reason === 'withdrawn') {
+      lookupNote = WITHDRAWN_NOTE;
     }
   } else { // Tier 1 — ATTOM (strongest structured signal; one /property/detail call). Stored responses remain available without a live provider credential.
     try {
@@ -265,6 +274,20 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
         merged.year_built = attom.year_built;
         sources.year_built = 'attom';
       }
+    }
+  }
+
+  // The building's own floor-plan sheet: for this exact unit, it fills what the record lacks and a vendor can't say.
+  // Short of that it fills nothing, and says what plans the building has, as the building's.
+  let floorPlan = null;
+  if (wantsFloorPlans && attomLookup !== 'pending') {
+    floorPlan = usableFloorPlan(await floorPlans.forAddress(recordAddress), record?.whole);
+    const facts = planFacts(floorPlan);
+    for (const [fact, field] of [['bedrooms', 'bedrooms'], ['bathrooms', 'bathrooms'], ['living_sqft', 'sq_ft']]) {
+      if (facts[fact] === undefined || !(merged[field] == null || sources[field] === 'attom')) continue;
+      merged[field] = facts[fact];
+      sources[field] = 'floor_plan';
+      fieldTags[field] = PLAN_SOURCE_WORD;
     }
   }
 
@@ -348,8 +371,10 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     llm_enabled: isLlmEnabled(),
     ...(homeAddressRow && attomLookup ? { attom_lookup: attomLookup } : {}),
     ...(provenance ? { provenance, field_tags: fieldTags } : {}),
+    ...(!provenance && Object.keys(fieldTags).length ? { field_tags: fieldTags } : {}),
     ...(lookupNote ? { lookup_note: lookupNote } : {}),
     ...(countyPage ? { county_page: countyPage } : {}),
+    ...(floorPlan ? { floor_plan: floorPlan } : {}),
   };
 }
 

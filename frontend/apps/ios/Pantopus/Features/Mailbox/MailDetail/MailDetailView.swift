@@ -92,7 +92,12 @@ public struct MailDetailView: View {
             case .loading:
                 LoadingLayout(onBack: back)
             case let .loaded(content):
-                loaded(content)
+                // Under the card on the table: its colour, so closing it shows no other screen.
+                if viewModel.cardTable != nil {
+                    MailPaper.tableNight.ignoresSafeArea()
+                } else {
+                    loaded(content)
+                }
             case let .error(message):
                 errorLayout(message)
             }
@@ -133,7 +138,7 @@ public struct MailDetailView: View {
         }
         .pantopusAnimation(.componentState, value: viewModel.toast)
         .sheet(isPresented: Binding(
-            get: { viewModel.showsSenderSheet },
+            get: { viewModel.showsSenderSheet && viewModel.cardTable == nil },
             set: { viewModel.showsSenderSheet = $0 }
         )) {
             if case let .loaded(content) = viewModel.state, let letter = content.letter {
@@ -142,7 +147,8 @@ public struct MailDetailView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .modifier(MailVaultFolderPickers(viewModel: viewModel))
+        .modifier(MailVaultFolderPickers(viewModel: viewModel, isShown: viewModel.cardTable == nil))
+        .modifier(MailCardTableCover(viewModel: viewModel, senderLink: { senderLink($0) }, onClose: back))
         .confirmationDialog(
             "Done with it?",
             isPresented: Binding(get: { viewModel.confirmsDone }, set: { viewModel.confirmsDone = $0 }),
@@ -156,7 +162,7 @@ public struct MailDetailView: View {
         }
         .confirmationDialog(
             "Shred this?",
-            isPresented: Binding(get: { viewModel.confirmsShred }, set: { viewModel.confirmsShred = $0 }),
+            isPresented: Binding(get: { viewModel.confirmsShred && viewModel.cardTable == nil }, set: { viewModel.confirmsShred = $0 }),
             titleVisibility: .visible
         ) {
             Button("Shred", role: .destructive) { Task { await viewModel.act(.shred) } }
@@ -474,7 +480,7 @@ public struct MailDetailView: View {
             bundleFailure: viewModel.bundleFailure,
             removed: viewModel.removed,
             restoreInFlight: viewModel.restoreInFlight,
-            cardFirstOpen: viewModel.cardFirstOpen ?? false,
+            cardFirstOpen: !LaunchFeatures.cardTable && viewModel.cardFirstOpen ?? false,
             onEnvelope: { viewModel.showsSenderSheet = true },
             onAction: { action in
                 if action == .pay {
@@ -607,8 +613,10 @@ private struct ErrorLayout: View {
 }
 
 /// Keep the ordinary folder dialogs; a scrollable sheet fits large text on narrow Duo layouts.
-private struct MailVaultFolderPickers: ViewModifier {
+struct MailVaultFolderPickers: ViewModifier {
     let viewModel: MailDetailViewModel
+    /// False while the card on the table covers this screen: its pickers come up from there.
+    var isShown = true
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func body(content: Content) -> some View {
@@ -616,7 +624,7 @@ private struct MailVaultFolderPickers: ViewModifier {
             .confirmationDialog(
                 "File in the Vault",
                 isPresented: Binding(
-                    get: { viewModel.showsFilePicker && !dynamicTypeSize.isAccessibilitySize },
+                    get: { isShown && viewModel.showsFilePicker && !dynamicTypeSize.isAccessibilitySize },
                     set: { viewModel.showsFilePicker = $0 }
                 ),
                 titleVisibility: .visible
@@ -632,7 +640,7 @@ private struct MailVaultFolderPickers: ViewModifier {
             .confirmationDialog(
                 "Save to vault",
                 isPresented: Binding(
-                    get: { viewModel.showsSaveToVaultPicker && !dynamicTypeSize.isAccessibilitySize },
+                    get: { isShown && viewModel.showsSaveToVaultPicker && !dynamicTypeSize.isAccessibilitySize },
                     set: { viewModel.showsSaveToVaultPicker = $0 }
                 ),
                 titleVisibility: .visible
@@ -646,7 +654,7 @@ private struct MailVaultFolderPickers: ViewModifier {
                 Text("Pick a folder to keep this mail in.")
             }
             .sheet(isPresented: Binding(
-                get: { dynamicTypeSize.isAccessibilitySize && (viewModel.showsFilePicker || viewModel.showsSaveToVaultPicker) },
+                get: { isShown && dynamicTypeSize.isAccessibilitySize && (viewModel.showsFilePicker || viewModel.showsSaveToVaultPicker) },
                 set: { if !$0 { closePickers() } }
             )) {
                 accessiblePicker

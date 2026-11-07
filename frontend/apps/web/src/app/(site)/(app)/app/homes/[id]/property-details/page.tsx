@@ -4,6 +4,7 @@ import { useState, type ComponentType } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { showsHouseholdHomeCopy, useAfterRecheck } from '@/lib/householdCopy';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { AttomPropertyDetailPayload, CountyRecord } from '@pantopus/api';
@@ -195,11 +196,15 @@ export default function HomePropertyDetailsPage() {
   const lookingUp = unavailableReason === 'LOOKUP_PENDING';
   // No source of county records yet: trying again wouldn't change the answer.
   const noRecordsYet = unavailableReason === 'ATTOM_NOT_CONFIGURED';
+  // The county stopped publishing its file, so what it had isn't shown any more.
+  const sourceWithdrawn = unavailableReason === 'SOURCE_WITHDRAWN';
   // With no record to wait for, an owner's page shows what the household entered, as everyone else's does.
-  const ownFactsOnly = !hasRecord && (noRecordsYet || unavailableReason === 'NO_PROPERTY_FOUND') && stats.length > 0;
+  const ownFactsOnly = !hasRecord && (noRecordsYet || sourceWithdrawn || unavailableReason === 'NO_PROPERTY_FOUND') && stats.length > 0;
   const emptyDescription =
     lookingUp
       ? "Pantopus is reading this home's county record. It shows here by itself, usually within a few seconds."
+      : sourceWithdrawn
+      ? 'The county no longer publishes these records. What your household entered stays, and you can change it anytime.'
       : unavailableReason === 'ATTOM_UNAVAILABLE'
       ? 'Public records could not be loaded right now. Try again in a moment.'
       : noRecordsYet
@@ -262,7 +267,7 @@ export default function HomePropertyDetailsPage() {
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-app-text-secondary">
               {emptyDescription}
             </p>
-            {lookingUp || noRecordsYet ? null : (
+            {lookingUp || noRecordsYet || sourceWithdrawn ? null : (
               <button type="button" onClick={() => void load()} className="mt-5 rounded-lg border border-app-border px-4 py-2 text-sm font-semibold">Retry property records</button>
             )}
             {householdPart ? <div className="mt-8 space-y-4 text-left">{facts.lead}{facts.after}</div> : null}
@@ -346,7 +351,15 @@ export default function HomePropertyDetailsPage() {
               <>
                 <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
                   <ShieldCheck className="h-4 w-4 shrink-0" />
-                  <span>{countyRecord?.footer || details?.provenance?.label || 'Data from public records'}</span>
+                  <span>
+                    {countyRecord?.footer || details?.provenance?.label || 'Data from public records'}
+                    {countyRecord || details?.provenance ? (
+                      <>
+                        {' · '}
+                        <Link href="/about/data-sources" className="underline underline-offset-2">Data sources</Link>
+                      </>
+                    ) : null}
+                  </span>
                 </div>
 
                 <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">

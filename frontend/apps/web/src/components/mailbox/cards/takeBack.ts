@@ -12,10 +12,12 @@ export function takeBackMessage(error: MailboxApiError | null): string {
  * "Take your card back?": asked before a card is taken back, from the card flow (on its way, today's card) and from
  * Sent. Taking back today's card frees the day; an older one doesn't, so it doesn't say so.
  */
-export function askTakeBack({ byEmail, sentToday }: { byEmail: boolean; sentToday: boolean }): Promise<boolean> {
-  const what = byEmail
-    ? 'The link in their email will say you took it back.'
-    : 'It won’t go out with the morning mail.';
+export function askTakeBack({ byEmail, byLink = false, sentToday }: { byEmail: boolean; byLink?: boolean; sentToday: boolean }): Promise<boolean> {
+  const what = byLink
+    ? 'Your link will say you took it back.'
+    : byEmail
+      ? 'The link in their email will say you took it back.'
+      : 'It won’t go out with the morning mail.';
   return confirmStore.open({
     title: 'Take your card back?',
     description: sentToday ? `${what} You can send a card again today.` : what,

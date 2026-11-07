@@ -251,4 +251,4 @@ never fill a home's fields.
 - North Carolina's statewide building layer mixes county data with model estimates; only the parcel-derived share
   counts.
 - Correctness: presence was measured, accuracy was not (see [parity-and-acceptance.md](parity-and-acceptance.md)).
-- A per-state inventory of statewide files beyond those found.
+- A per-state inventory of statewide files beyond those found: done November 7 in [statewide-inventory.md](statewide-inventory.md).

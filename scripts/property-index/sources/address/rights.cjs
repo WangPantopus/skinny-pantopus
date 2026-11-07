@@ -22,6 +22,8 @@ const NAD = {
   checked: CHECKED,
 };
 
+// A source that asks for credit is on the web's data sources page (credits.json). credits-report.cjs compares the two.
+//
 // Overture's licence on a row, for the sources Overture distributes. Overture's attribution page says what each is
 // (https://docs.overturemaps.org/attribution/, read on the date above).
 const OVERTURE_LICENSES = {
@@ -30,9 +32,19 @@ const OVERTURE_LICENSES = {
   'LicenseRef-Public-Domain-US-FL-Law': { use: true, terms: 'Public domain by judicial decision in Florida (Microdecisions v. Skinner, 2004)' },
   'CC0-1.0': { use: true, terms: 'CC0' },
   'PDDL-1.0': { use: true, terms: 'Public Domain Dedication and License' },
-  'CC-BY-4.0': { use: true, credit: true, terms: 'CC BY 4.0: credit on the data sources page' },
+  'CC-BY-4.0': { use: true, credit: true, terms: 'CC BY 4.0: credit on the data sources page; a dataset not in OVERTURE_CC_BY stays out until it is' },
   // A label for "see this source's terms": each is read below, and anything not listed stays out.
   'LicenseRef-Proprietary': { use: false, terms: 'Per source' },
+};
+
+// Overture's rows under CC BY: who gets credit. A new one stays out until it's named here and on the page.
+const OVERTURE_CC_BY = {
+  'us/id/ada': 'City of Boise, Idaho',
+  'us/ga/clarke': 'Athens-Clarke County GIS, Georgia',
+  'us/ga/dekalb': 'DeKalb County, Georgia',
+  'us/fl/hillsborough': 'Hillsborough County, Florida',
+  'us/fl/manatee': 'Manatee County, Florida',
+  'us/wi/waupaca': 'Waupaca County, Wisconsin',
 };
 
 // Per source, by OpenAddresses's name for it. Wins over the licence on the row.
@@ -42,7 +54,7 @@ const SOURCES = {
   'us/mn/statewide': { use: true, terms: 'Minnesota Department of Public Safety: public data' },
   'us/or/statewide': { use: true, terms: 'Oregon GeoHub: no usage restrictions; credits and caveats in the metadata', credit: 'Oregon GeoHub' },
   'us/ny/city_of_new_york': { use: true, terms: 'NYC Open Data terms of use; NYC Department of City Planning', credit: 'NYC Department of City Planning' },
-  'us/ca/los_angeles': { use: true, terms: 'Los Angeles County: license to copy, publish, distribute, adapt and exploit the data for commercial or personal use' },
+  'us/ca/los_angeles': { use: true, terms: 'Los Angeles County: license to copy, publish, distribute, adapt and exploit the data for commercial or personal use; a citation format is recommended', credit: 'County of Los Angeles' },
   'us/ca/santa_cruz': { use: true, terms: 'CC0 as Overture assumes, and the California Public Records Act' },
   'us/fl/palm_beach': { use: true, terms: 'Public domain by judicial decision in Florida' },
   'us/fl/orange': { use: true, terms: 'Public domain by judicial decision in Florida' },
@@ -77,7 +89,8 @@ function overtureRow(dataset, license) {
   if (named) return named.use;
   // Overture marks each of Mississippi's county sources LicenseRef-Proprietary and credits MARIS's open data for them.
   if (dataset.startsWith('us/ms/')) return true;
+  if (license === 'CC-BY-4.0') return Boolean(OVERTURE_CC_BY[dataset]);
   return Boolean(OVERTURE_LICENSES[license]?.use);
 }
 
-module.exports = { CHECKED, NAD, OVERTURE_LICENSES, SOURCES, POINT_LAYERS, overtureRow };
+module.exports = { CHECKED, NAD, OVERTURE_LICENSES, OVERTURE_CC_BY, SOURCES, POINT_LAYERS, overtureRow };

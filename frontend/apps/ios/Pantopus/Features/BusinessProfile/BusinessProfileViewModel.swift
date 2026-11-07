@@ -4,9 +4,10 @@
 //
 //  A10.6 — View-model for the single-scroll Business Profile. Loads
 //  `GET /api/businesses/:businessId` (the authenticated detail) and,
-//  best-effort, the `/public/:username` payload (hours + catalog) + the
-//  public-profile endpoint (rating + reviews), then projects them onto
-//  the section models the view renders.
+//  best-effort, the `/public/:username` payload (hours + catalog), then
+//  projects them onto the section models the view renders. The reviews
+//  (`GET /api/users/id/:id`) and a named page load after the page shows,
+//  each with its own loading and failure state.
 //
 //  B3.1 reshape: no more tabs. The projection now derives the stat strip
 //  (rating / jobs / followers-or-"New"), category accents, an open/closed
@@ -65,6 +66,20 @@ public final class BusinessProfileViewModel {
     private let logger = Logger(label: "app.pantopus.ios.BusinessProfile")
     private var isStartingInquiry = false
 
+    /// The reads the page itself waits for. Reviews arrive apart from them.
+    private struct PageReads {
+        let detail: BusinessDetailResponse
+        let publicResponse: BusinessPublicResponse?
+        let hours: [BusinessHoursDTO]
+    }
+
+    private var page: PageReads?
+    /// The reviews' last answer, when it came, and where their own read stands.
+    private var reviews: PublicProfile?
+    private var reviewsReadAt: Date?
+    private var reviewsRead: BusinessReviewsRead = .loading
+    private var reviewsGeneration = 0
+
     init(businessId: String, pageSlug: String? = nil, client: APIClient = .shared) {
         self.businessId = businessId
         self.pageSlug = pageSlug
@@ -81,6 +96,11 @@ public final class BusinessProfileViewModel {
 
     public func refresh() async {
         await fetch()
+    }
+
+    /// The Reviews section's retry; the rest of the page stays as it is.
+    public func retryReviews() async {
+        await readReviews()
     }
 
     /// Save/follow this business through the backend.
@@ -141,20 +161,18 @@ public final class BusinessProfileViewModel {
         }
     }
 
+    /// The page shows once its own reads answer. The reviews and a named page then load on their own, so a slow
+    /// or failed read touches only its section. Returns once both have settled (the owner dashboard reads the
+    /// finished page).
     private func fetch() async {
+        page = nil
+        let detail: BusinessDetailResponse
         do {
-            let detail = try await loadDetail()
+            detail = try await loadDetail()
             let publicResponse = await loadPublic(username: detail.business.username)
             let hours = try await loadHours(from: detail, publicResponse: publicResponse)
-            let reviewsResponse = await loadReviewsAndStats()
-            await loadNamedPage(username: detail.business.username)
-            let content = build(
-                from: detail,
-                publicResponse: publicResponse,
-                hours: hours,
-                reviewsResponse: reviewsResponse
-            )
-            state = .loaded(content)
+            page = PageReads(detail: detail, publicResponse: publicResponse, hours: hours)
+            publish()
         } catch let error as APIError {
             switch error {
             case .notFound:
@@ -164,10 +182,15 @@ public final class BusinessProfileViewModel {
                 logger.warning("Business detail load failed: \(error)")
                 state = .error(message: friendlyMessage(for: error))
             }
+            return
         } catch {
             logger.warning("Business detail load failed: \(error)")
             state = .error(message: "Something went wrong")
+            return
         }
+        async let reviewsSettled: Void = readReviews()
+        await loadNamedPage(username: detail.business.username)
+        await reviewsSettled
     }
 
     /// `/b/:username` links (a business's shared public page) carry the
@@ -271,16 +294,51 @@ public final class BusinessProfileViewModel {
         }
     }
 
-    private func loadReviewsAndStats() async -> PublicProfile? {
+    /// `GET /api/users/id/:id`, on its own so a slow or failed read touches only the Reviews section. Rows already
+    /// on screen stay during the read; only a section with no answer yet shows its loading state.
+    private func readReviews() async {
+        reviewsGeneration &+= 1
+        let generation = reviewsGeneration
+        reviewsRead = reviews == nil && reviewsRead != .loaded ? .loading : .loaded
+        publish()
         do {
-            return try await client.request(
-                PublicProfileEndpoints.profile(id: businessId),
-                as: PublicProfile.self
-            )
+            let profile = try await client.request(PublicProfileEndpoints.profile(id: businessId), as: PublicProfile.self)
+            guard generation == reviewsGeneration else { return }
+            reviews = profile
+            reviewsReadAt = Date()
+            reviewsRead = .loaded
         } catch {
-            logger.debug("Public-profile fallback skipped for business: \(error)")
-            return nil
+            // A newer read owns the section, or the page went away mid-read and reads again when it's back.
+            guard generation == reviewsGeneration, !Task.isCancelled else { return }
+            logger.debug("Business reviews read failed: \(error)")
+            reviewsRead = reviewsAfterFailure(error)
         }
+        publish()
+    }
+
+    private func reviewsAfterFailure(_ error: any Error) -> BusinessReviewsRead {
+        let apiError = error as? APIError
+        switch apiError {
+        case .notFound?, .forbidden?:
+            // A retry can't change a refusal (a draft's own page, a private or blocked profile): nothing public to show.
+            reviews = nil
+            return .loaded
+        default:
+            if reviews != nil, let reviewsReadAt { return .refreshFailed(shownAt: reviewsReadAt) }
+            return .failed(message: apiError.map { friendlyMessage(for: $0) } ?? "Something went wrong. Try again.")
+        }
+    }
+
+    /// Shows the page with the reviews as they stand. Until the page's own reads answer, there is no page to show.
+    private func publish() {
+        guard let page else { return }
+        state = .loaded(build(
+            from: page.detail,
+            publicResponse: page.publicResponse,
+            hours: page.hours,
+            reviewsResponse: reviews,
+            reviewsRead: reviewsRead
+        ))
     }
 
     private func friendlyMessage(for error: APIError) -> String {
@@ -308,7 +366,8 @@ extension BusinessProfileViewModel {
         from detail: BusinessDetailResponse,
         publicResponse: BusinessPublicResponse?,
         hours: [BusinessHoursDTO],
-        reviewsResponse: PublicProfile?
+        reviewsResponse: PublicProfile?,
+        reviewsRead: BusinessReviewsRead
     ) -> BusinessProfileContent {
         let business = detail.business
         let profile = detail.profile
@@ -385,6 +444,7 @@ extension BusinessProfileViewModel {
             gallery: [],
             reviewSummary: buildReviewSummary(business: business, reviewsResponse: reviewsResponse),
             reviews: (reviewsResponse?.reviews ?? []).map(buildReview),
+            reviewsRead: reviewsRead,
             dock: buildDock(status: status, phoneNumber: profile?.publicPhone ?? primaryLocation?.phone),
             savedPlace: pendingSavePlace,
             isNewlyClaimed: isNewlyClaimed,
@@ -507,8 +567,9 @@ extension BusinessProfileViewModel {
         return scoped.isEmpty ? rows : scoped
     }
 
+    /// By day, then by opening time: the hours reads order by day only.
     private func buildHours(from rows: [BusinessHoursDTO], weekday: Int) -> [BusinessHoursRow] {
-        rows.sorted { $0.dayOfWeek < $1.dayOfWeek }.map { row in
+        rows.sorted { ($0.dayOfWeek, minutes($0.openTime) ?? -1) < ($1.dayOfWeek, minutes($1.openTime) ?? -1) }.map { row in
             let dayIndex = max(0, min(6, row.dayOfWeek))
             let isClosed = row.isClosed == true
             let time = if isClosed {
@@ -541,18 +602,24 @@ extension BusinessProfileViewModel {
         let weekday = calendar.component(.weekday, from: now) - 1
         let minutesNow = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
         let byDay = Dictionary(grouping: rows) { max(0, min(6, $0.dayOfWeek)) }
+        let today = byDay[weekday] ?? []
 
+        if today.contains(where: { isAllDay($0) }) {
+            return BusinessOpenState(isOpen: true, statusLabel: "Open now", statusDetail: "Open 24 hours", chipLabel: "Open now")
+        }
         // Overnight hours belong to the day the business opened, even when
         // the following day's own schedule is closed.
-        if let previous = byDay[(weekday + 6) % 7]?.first,
-           previous.isClosed != true,
-           let open = minutes(previous.openTime),
-           let close = minutes(previous.closeTime),
-           close < open, minutesNow < close {
-            return openState(closingAt: previous.closeTime)
+        let intervals = openIntervals(byDay[(weekday + 6) % 7] ?? [], dayOffset: -1) + openIntervals(today, dayOffset: 0)
+        if let close = closingTime(of: intervals, at: minutesNow) {
+            return BusinessOpenState(
+                isOpen: true,
+                statusLabel: "Open now",
+                statusDetail: "Closes \(formatTime(close))",
+                chipLabel: "Open now"
+            )
         }
-        if let today = byDay[weekday]?.first, let state = todayOpenState(today, minutesNow: minutesNow) {
-            return state
+        if let next = intervals.filter({ $0.start > minutesNow }).min(by: { $0.start < $1.start }) {
+            return closedState(opening: "today", at: next.openTime)
         }
         if let next = nextOpening(byDay: byDay, weekday: weekday) {
             return next
@@ -560,50 +627,66 @@ extension BusinessProfileViewModel {
         return BusinessOpenState(isOpen: false, statusLabel: "Closed", statusDetail: "Hours vary", chipLabel: "Closed")
     }
 
-    private func todayOpenState(_ today: BusinessHoursDTO, minutesNow: Int) -> BusinessOpenState? {
-        guard today.isClosed != true,
-              let openM = minutes(today.openTime),
-              let closeM = minutes(today.closeTime) else { return nil }
-        if isAllDay(today) {
-            return BusinessOpenState(isOpen: true, statusLabel: "Open now", statusDetail: "Open 24 hours", chipLabel: "Open now")
-        }
-        if minutesNow >= openM, closeM < openM || minutesNow < closeM {
-            return openState(closingAt: today.closeTime)
-        }
-        if minutesNow < openM {
-            return BusinessOpenState(
-                isOpen: false,
-                statusLabel: "Closed now",
-                statusDetail: "Opens today at \(formatTime(today.openTime ?? ""))",
-                chipLabel: "Closed · opens \(formatTime(today.openTime ?? ""))"
-            )
-        }
-        return nil
+    /// One saved interval, in minutes from today's midnight: yesterday's start
+    /// below zero, and an overnight interval ends past 24 hours.
+    private struct OpenInterval {
+        let start: Int
+        let end: Int
+        let openTime: String
+        let closeTime: String
     }
 
-    private func openState(closingAt time: String?) -> BusinessOpenState {
+    private func openIntervals(_ rows: [BusinessHoursDTO], dayOffset: Int) -> [OpenInterval] {
+        let day = 24 * 60
+        return rows.compactMap { row in
+            guard row.isClosed != true,
+                  let openTime = row.openTime, let open = minutes(openTime),
+                  let closeTime = row.closeTime, let close = minutes(closeTime) else { return nil }
+            return OpenInterval(
+                start: open + dayOffset * day,
+                end: (close < open ? close + day : close) + dayOffset * day,
+                openTime: openTime,
+                closeTime: closeTime
+            )
+        }
+    }
+
+    /// When the business next closes, or nil when no interval covers `minute`.
+    /// Intervals that overlap or touch count as one: 9–2 and 12–5 close at 5.
+    private func closingTime(of intervals: [OpenInterval], at minute: Int) -> String? {
+        let covering = intervals.filter { $0.start <= minute && minute < $0.end }
+        guard var last = covering.max(by: { $0.end < $1.end }) else { return nil }
+        for interval in intervals.sorted(by: { $0.start < $1.start })
+            where interval.start <= last.end && interval.end > last.end {
+            last = interval
+        }
+        return last.closeTime
+    }
+
+    private func closedState(opening whenLabel: String, at time: String) -> BusinessOpenState {
         BusinessOpenState(
-            isOpen: true,
-            statusLabel: "Open now",
-            statusDetail: "Closes \(formatTime(time ?? ""))",
-            chipLabel: "Open now"
+            isOpen: false,
+            statusLabel: "Closed now",
+            statusDetail: "Opens \(whenLabel) at \(formatTime(time))",
+            chipLabel: "Closed · opens \(formatTime(time))"
         )
     }
 
     private func nextOpening(byDay: [Int: [BusinessHoursDTO]], weekday: Int) -> BusinessOpenState? {
         for offset in 1...7 {
             let day = (weekday + offset) % 7
-            guard let row = byDay[day]?.first, row.isClosed != true,
-                  let open = row.openTime, minutes(open) != nil else { continue }
-            let whenLabel = offset == 1 ? "tomorrow" : fullDayName(day)
-            return BusinessOpenState(
-                isOpen: false,
-                statusLabel: "Closed now",
-                statusDetail: "Opens \(whenLabel) at \(formatTime(open))",
-                chipLabel: "Closed · opens \(formatTime(open))"
-            )
+            guard let open = earliestOpening(byDay[day] ?? []) else { continue }
+            return closedState(opening: offset == 1 ? "tomorrow" : fullDayName(day), at: open)
         }
         return nil
+    }
+
+    private func earliestOpening(_ rows: [BusinessHoursDTO]) -> String? {
+        let openings = rows.compactMap { row -> (minute: Int, time: String)? in
+            guard row.isClosed != true, let time = row.openTime, let minute = minutes(time) else { return nil }
+            return (minute, time)
+        }
+        return openings.min { $0.minute < $1.minute }?.time
     }
 
     /// 00:00–23:59, or a `24:00` close: the editor's "Open 24 hours".
@@ -738,9 +821,10 @@ extension BusinessProfileViewModel {
             reviewerName: raw.reviewerName ?? "Anonymous",
             reviewerAvatarURL: raw.reviewerAvatar.flatMap(URL.init(string:)),
             rating: raw.rating,
-            body: raw.content ?? "",
+            body: raw.comment ?? raw.content ?? "",
             timestamp: relativeTimestamp(raw.createdAt),
-            verified: false
+            verified: false,
+            ownerReply: raw.ownerResponse.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         )
     }
 

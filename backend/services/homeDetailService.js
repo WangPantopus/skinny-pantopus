@@ -5,9 +5,12 @@ const invitations = require('./homeInvitationService');
 const claimConfig = require('../config/householdClaims');
 const claimPolicy = require('./homeClaimRoutingService');
 const property = require('./ai/propertyIntelligenceService');
+const valueEstimate = require('./propertyRecords/valueEstimate');
 const { serializeCountyRecord, serializePropertyRecord } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
 const householdFacts = require('./householdFacts');
+const floorPlans = require('./propertyRecords/floorPlans');
+const { changeNicheData } = require('./homeNicheData');
 const addressReview = require('./addressValidation/addressReviewService');
 const countyPages = require('./countyPages');
 const logger = require('../utils/logger');
@@ -43,6 +46,9 @@ function failure(code = 'HOME_DETAIL_UNAVAILABLE', statusCode = 503) {
     HOME_MEMBER_HISTORY_DENIED: 'You do not have permission to view household history.',
     HOME_RECORD_PROBLEM_DENIED: 'Only this home\'s verified owner can report a problem with its record.',
     HOME_RECORD_PROBLEM_INVALID: 'That detail isn\'t on this home\'s record.',
+    HOME_FLOOR_PLAN_OFF: 'Not found.',
+    HOME_FLOOR_PLAN_DENIED: 'Only someone who lives here can answer that.',
+    HOME_FLOOR_PLAN_INVALID: 'This home isn\'t on its building\'s floor-plan sheet.',
   }[code] || 'Could not load this Home information. Please retry.'), { code, statusCode });
 }
 async function checked(query) {
@@ -72,9 +78,12 @@ function localRef(ref, people) {
   return person ? { ...ref, username: person.handle || ref.username, profile_picture_url: person.avatarUrl || null } : ref;
 }
 
-async function readHome(homeId, access, { provider = false } = {}) {
+// `early`: the Home read beside the access check, with every column this might use. Only what this access allows stays.
+async function readHome(homeId, access, { provider = false, early = null } = {}) {
   const fields = [...HOME_FIELDS, ...(access.permissions.includes('access.view_codes') ? INSTRUCTION_FIELDS : [])];
-  const raw = await checked(db.from('Home').select([...fields, ...(provider ? ['niche_data', 'address_id'] : [])].join(', ')).eq('id', homeId).maybeSingle());
+  const columns = [...fields, ...(provider ? ['niche_data', 'address_id'] : [])];
+  const found = await (early || checked(db.from('Home').select(columns.join(', ')).eq('id', homeId).maybeSingle()));
+  const raw = early && object(found) ? Object.fromEntries(columns.filter(key => Object.hasOwn(found, key)).map(key => [key, found[key]])) : found;
   if (!object(raw) || raw.id !== homeId || fields.some(key => !Object.hasOwn(raw, key))
     || ['address', 'city', 'state', 'zipcode', 'home_status', 'security_state'].some(key => typeof raw[key] !== 'string')) throw failure();
   for (const key of fields.filter(key => !['is_owner', 'location', 'bedrooms', 'bathrooms', 'sq_ft', 'lot_sq_ft', 'year_built'].includes(key))) {
@@ -212,15 +221,18 @@ async function verifiedWritersAt(homeId, userIds) {
 }
 
 // What the household has said, for someone it's meant for. A failed read leaves the page as it is without it.
-async function householdPart({ homeId, home, raw, access, actorId, copy = null, countyRecord = null }) {
+async function householdPart({ homeId, home, raw, access, actorId, problems, copy = null, countyRecord = null, otherRecord = null, seesEntries = true }) {
   try {
     const canEdit = access.permissions.includes('home.edit');
-    const [verifiedWriters, reports, countyPage] = await Promise.all([
+    const [verifiedWriters, reports, countyPage, sheet] = await Promise.all([
       verifiedWritersAt(homeId, householdFacts.unverifiedWriters(raw.niche_data, actorId)),
-      copy && canEdit ? addressReview.openRecordProblems(homeId, actorId) : null,
+      copy && canEdit ? problems : null,
       canEdit ? countyPages.forHome({ copy, home }) : null,
+      householdFacts.isResident(access) ? floorPlans.forHome(raw) : null,
     ]);
-    return householdFacts.project({ home, nicheData: raw.niche_data, copy, countyRecord, canEdit, viewerId: actorId, verifiedWriters, reports, countyPage });
+    return householdFacts.project({ home, nicheData: raw.niche_data, copy, countyRecord, canEdit, viewerId: actorId, verifiedWriters, reports, countyPage,
+      // The county's record goes first for everyone, including those who don't see it.
+      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries });
   } catch (error) {
     logger.warn('Home household facts unavailable', { homeId, error: error.message });
     return null;
@@ -228,28 +240,41 @@ async function householdPart({ homeId, home, raw, access, actorId, copy = null, 
 }
 
 async function propertyDetail(homeId, actorId) {
+  // Read beside the access check, a round trip a person waits through anyway, not after it. Nothing read here leaves
+  // until that check has passed, and it runs once more after the last read.
+  const early = checked(db.from('Home').select([...HOME_FIELDS, ...INSTRUCTION_FIELDS, 'niche_data', 'address_id'].join(', ')).eq('id', homeId).maybeSingle());
+  early.catch(() => {});
+  const problems = addressReview.openRecordProblems(homeId, actorId);
   return authority.withCurrentAccess({ homeId, actorId }, async access => {
     // The county record is the verified owner's, as the Home's value is on Place. Everyone else who can open
     // the Home sees its own facts and, in the household, what the household has entered; their visit never asks ATTOM.
     if (!access.isOwner) {
       const sees = householdFacts.seesHousehold(access);
-      const { home, raw } = await readHome(homeId, access, { provider: sees });
-      return { home, attom_property_detail: null, source: 'unavailable', unavailable_reason: 'OWNER_ONLY', county_record: null,
-        household: sees ? await householdPart({ homeId, home, raw, access, actorId }) : null };
+      // A renter gets a household part only for the building's floor plan, which is theirs as much as anyone's.
+      const planOnly = !sees && householdFacts.isResident(access) && floorPlans.enabled();
+      // The household and its residents see the Home's facts as Place shows them to them: a bedrooms, baths or size
+      // column Add Home only filled from ATTOM's copy reads as a live county's record (householdFacts.shownColumns).
+      const facts = sees || householdFacts.isResident(access);
+      const { home, raw } = await readHome(homeId, access, { provider: facts, early });
+      return { home: facts ? { ...home, ...householdFacts.shownColumns(raw, homeRecords.liveCopy(raw)) } : home,
+        attom_property_detail: null, source: 'unavailable', unavailable_reason: 'OWNER_ONLY', county_record: null,
+        household: sees || planOnly ? await householdPart({ homeId, home, raw, access, actorId, problems, seesEntries: sees }) : null };
     }
     // ATTOM's value estimate comes from the cache only, read alongside the Home. A Home without its record gets it
     // looked up in the background (LOOKUP_PENDING): this answer never waits for ATTOM, and the record's arrival on
     // the Home tells the page to read again.
-    const { home, raw } = await readHome(homeId, access, { provider: true });
+    const { home: columns, raw } = await readHome(homeId, access, { provider: true, early });
     // A Home with a county record answers from it; a live county never reads ATTOM's copies.
     const record = await homeRecords.forHome(raw);
+    // Bedrooms, baths and size as Place shows them (householdFacts.shownColumns); the household part reads the columns.
+    const home = { ...columns, ...householdFacts.shownColumns(raw, record?.copy) };
     if (record) {
-      const county = record.copy ? serializePropertyRecord(record.copy) : null;
+      const county = record.copy ? serializePropertyRecord(record.copy, await valueEstimate.forCopy(record.copy, raw)) : null;
       return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
-        unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : 'NO_PROPERTY_FOUND'), county_record: county,
+        unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : (record.reason === 'withdrawn' ? 'SOURCE_WITHDRAWN' : 'NO_PROPERTY_FOUND')), county_record: county,
         ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}),
         // While the record is still being read, nothing asks for what it may answer.
-        household: record.lookup === 'pending' ? null : await householdPart({ homeId, home, raw, access, actorId, copy: county ? record.copy : null, countyRecord: county }) };
+        household: record.lookup === 'pending' ? null : await householdPart({ homeId, home: columns, raw, access, actorId, problems, copy: county ? record.copy : null, countyRecord: county }) };
     }
     const avm = await property.getCachedAttomValue(homeId);
     const result = await property.getHomeAttomPropertyDetail(raw);
@@ -258,9 +283,10 @@ async function propertyDetail(homeId, actorId) {
       || (result.source === 'unavailable' && result.attomPayload !== null)) throw failure();
     // Only the property bundle is returned, never the rest of niche_data or
     // unrelated raw Home fields. Deeper vendor-content validation is separate.
+    const stored = serializeCountyRecord(result.attomPayload, avm);
     return { home, attom_property_detail: result.attomPayload, source: result.source,
-      unavailable_reason: result.unavailableReason || null, county_record: serializeCountyRecord(result.attomPayload, avm),
-      household: await householdPart({ homeId, home, raw, access, actorId }) };
+      unavailable_reason: result.unavailableReason || null, county_record: stored,
+      household: await householdPart({ homeId, home, raw, access, actorId, problems, otherRecord: stored }) };
   });
 }
 
@@ -274,7 +300,8 @@ async function factChange({ homeId, actorId, asked, fields }) {
     const home = await checked(db.from('Home').select(`id, address, address2, city, state, zipcode, home_type, niche_data, ${householdFacts.COLUMN_FACTS.map(([, column]) => column).join(', ')}`)
       .eq('id', homeId).maybeSingle());
     if (!object(home)) throw failure();
-    return householdFacts.plan({ home, copy: homeRecords.liveCopy(home), seesRecord: !access || access.isOwner, asked, fields, actorId });
+    const copy = homeRecords.liveCopy(home);
+    return householdFacts.plan({ home, copy, seesRecord: !access || access.isOwner, asked, fields, actorId, floorPlan: householdFacts.usableFloorPlan(floorPlans.storedCopy(home), copy) });
   } catch (error) {
     // A plain edit goes on without its who and when; asking for the facts themselves has to be answered.
     if (asked) throw error;
@@ -291,14 +318,59 @@ async function reportRecordProblem(homeId, actorId, { section, field = null, not
     const { raw } = await readHome(homeId, access, { provider: true });
     const copy = homeRecords.liveCopy(raw);
     const shown = copy ? serializePropertyRecord(copy)?.sections.find(candidate => candidate.id === section) : null;
-    const row = field ? shown?.rows.find(candidate => candidate.id === field) : null;
-    if (!shown || (field && !row)) throw failure('HOME_RECORD_PROBLEM_INVALID', 400);
+    // A card can hold the building's floor plans beside the record's rows; "something here" is the most this can say about those.
+    const named = /^floor_plan/.test(field || '') ? null : field;
+    const row = named ? shown?.rows.find(candidate => candidate.id === named) : null;
+    if (!shown || (named && !row)) throw failure('HOME_RECORD_PROBLEM_INVALID', 400);
     const caseId = await addressReview.flagRecordProblem({ homeId, userId: actorId, reason: {
       kind: 'record_problem', section, field: row?.id ?? null, label: row?.label ?? null, shown: row?.value ?? null, note: note || null,
       jurisdiction: copy.jurisdiction, release: copy.release, at: new Date().toISOString(),
     } });
     if (!caseId) throw failure();
     return { reported: true };
+  });
+}
+
+// "Is this your layout?": a resident answers for a unit the building's sheet names. Yes fills what the Home is missing,
+// for someone who can edit it. No reaches Pantopus review, and nothing shown changes for anyone. Undo goes back.
+async function answerFloorPlan(homeId, actorId, answer) {
+  if (!floorPlans.enabled()) throw failure('HOME_FLOOR_PLAN_OFF', 404);
+  return authority.withCurrentAccess({ homeId, actorId }, async access => {
+    if (!householdFacts.isResident(access)) throw failure('HOME_FLOOR_PLAN_DENIED', 403);
+    const { raw } = await readHome(homeId, access, { provider: true });
+    const sheet = householdFacts.usableFloorPlan(await floorPlans.forHome(raw), homeRecords.liveCopy(raw));
+    if (sheet?.match !== 'exact') throw failure('HOME_FLOOR_PLAN_INVALID', 400);
+    const canEdit = access.permissions.includes('home.edit');
+    const previous = raw.niche_data?.floor_plan_answer || null;
+    const review = kind => addressReview.flagRecordProblem({ homeId, userId: actorId, reason: {
+      kind, sheet: sheet.sheet, release: sheet.release, plan: sheet.plan.id, at: new Date().toISOString() } });
+    // The same transaction as an edit: the record of who changed what, and its own authority check. The answer stands either way.
+    const writeColumns = async columns => {
+      if (!canEdit || !Object.keys(columns).length) return [];
+      const { data, error } = await db.rpc('update_home_settings', { p_home_id: homeId, p_actor_id: actorId, p_fields: columns, p_preferences: {} });
+      if (error || !data?.ok) {
+        logger.warn('Home floor plan facts not written', { homeId, code: data?.code || null });
+        return [];
+      }
+      return Object.keys(columns);
+    };
+    if (answer === 'undo') {
+      if (!previous) return { answered: false };
+      if (previous.answer === 'no') await review('floor_plan_no_undone');
+      await writeColumns(householdFacts.layoutColumnsToClear(previous, sheet, raw));
+      await changeNicheData(homeId, stored => {
+        const [latest, ...rest] = stored.floor_plan_answer?.history || [];
+        if (latest) stored.floor_plan_answer = { ...latest, history: rest };
+        else delete stored.floor_plan_answer;
+        return stored;
+      });
+      return { answered: false };
+    }
+    if (answer === 'no' && !(await review('floor_plan_no'))) throw failure();
+    const filled = answer === 'yes' ? await writeColumns(householdFacts.layoutColumns(sheet, raw)) : [];
+    await changeNicheData(homeId, stored => ({ ...stored, floor_plan_answer: householdFacts.layoutAnswer({
+      answer, floorPlan: sheet, actorId, via: 'details', verified: true, previous: stored.floor_plan_answer || null, filled }) }));
+    return { answered: true };
   });
 }
 
@@ -351,7 +423,7 @@ async function withClaimReview(homeId, actorId, occupants) {
 }
 function sendError(res, error) {
   if (['HOME_DASHBOARD_DENIED', 'HOME_DASHBOARD_ACCESS_CHANGED', 'HOME_RESOURCE_DENIED'].includes(error?.code)) return authority.sendError(res, error);
-  const safe = ['HOME_DETAIL_UNAVAILABLE', 'HOME_MEMBER_HISTORY_DENIED', 'HOME_RECORD_PROBLEM_DENIED', 'HOME_RECORD_PROBLEM_INVALID', 'HOME_FACTS_INVALID'].includes(error?.code) ? error : failure();
+  const safe = ['HOME_DETAIL_UNAVAILABLE', 'HOME_MEMBER_HISTORY_DENIED', 'HOME_RECORD_PROBLEM_DENIED', 'HOME_RECORD_PROBLEM_INVALID', 'HOME_FACTS_INVALID', 'HOME_FLOOR_PLAN_OFF', 'HOME_FLOOR_PLAN_DENIED', 'HOME_FLOOR_PLAN_INVALID'].includes(error?.code) ? error : failure();
   return res.status(safe.statusCode).json({ error: safe.message, code: safe.code });
 }
-module.exports = { detail, propertyDetail, members, factChange, reportRecordProblem, sendError };
+module.exports = { detail, propertyDetail, members, factChange, reportRecordProblem, answerFloorPlan, sendError };

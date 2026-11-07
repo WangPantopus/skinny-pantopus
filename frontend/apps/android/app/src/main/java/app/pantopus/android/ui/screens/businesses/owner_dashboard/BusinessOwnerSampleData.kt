@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.businesses.owner_dashboard
 
+import app.pantopus.android.data.api.models.businesses.BusinessAccessDto
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileSampleData
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -63,5 +64,6 @@ object BusinessOwnerSampleData {
                 ),
             publicProfile = BusinessProfileSampleData.populated,
             canPostAsBusiness = true,
+            access = BusinessAccessDto(hasAccess = true, isOwner = true, roleBase = "owner"),
         )
 }

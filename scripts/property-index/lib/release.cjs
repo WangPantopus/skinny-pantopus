@@ -22,20 +22,12 @@ function fillReport(records) {
 }
 
 /**
- * @param {string} out      The build's output directory
- * @param {object} county   { fips, release, ... } the state file's entry for it, without its `path`
- * @param {object[]} records  A county's records; each gets its sort key here
- * @returns the release's report
+ * Writes a release's blocks and manifest, key by key: records come in sorted, and all of one key stay in one block.
+ * @returns {{ add: (key: string, json: string) => void, close: (records: number, fill: object) => object }}
  */
-function writeRelease(out, county, records) {
+function blockWriter(out, county) {
   const dir = path.join(out, releasePath(county.fips, county.release));
   fs.mkdirSync(dir, { recursive: true });
-  for (const record of records) {
-    if (!KINDS.has(record.kind)) throw new Error(`A record of unknown kind ${record.kind}`);
-    record.key = sortKey(record.address);
-  }
-  records.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-
   const keys = [];
   const lengths = [];
   const fd = fs.openSync(path.join(dir, 'data.bin'), 'w');
@@ -54,32 +46,51 @@ function writeRelease(out, county, records) {
     raw = 0;
   };
   let previousKey = null;
-  for (const record of records) {
-    // A block closes only between keys: all of one street name and number stay together.
-    if (record.key !== previousKey && raw >= BLOCK_RAW_BYTES) flush();
-    if (!current.length) keys.push(record.key);
-    const json = JSON.stringify(record);
-    current.push(json);
-    raw += json.length + 1;
-    previousKey = record.key;
-  }
-  flush();
-  fs.closeSync(fd);
-
-  const report = {
-    fips: county.fips,
-    release: county.release,
-    records: records.length,
-    blocks: keys.length,
-    bytes,
-    largest_block_bytes: largest,
-    bytes_per_record: records.length ? Math.round(bytes / records.length) : 0,
-    fill: fillReport(records),
+  return {
+    add(key, json) {
+      // A block closes only between keys: all of one street name and number stay together.
+      if (key !== previousKey && raw >= BLOCK_RAW_BYTES) flush();
+      if (!current.length) keys.push(key);
+      current.push(json);
+      raw += json.length + 1;
+      previousKey = key;
+    },
+    close(records, fill) {
+      flush();
+      fs.closeSync(fd);
+      const report = {
+        fips: county.fips,
+        release: county.release,
+        records,
+        blocks: keys.length,
+        bytes,
+        largest_block_bytes: largest,
+        bytes_per_record: records ? Math.round(bytes / records) : 0,
+        fill,
+      };
+      fs.writeFileSync(path.join(dir, 'manifest.json.gz'), zlib.gzipSync(JSON.stringify({ v: FORMAT, fips: county.fips, release: county.release, keys, lengths })));
+      fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report));
+      log(`${county.fips} ${county.release}: ${records} records, ${keys.length} blocks, ${(bytes / 1e6).toFixed(1)} MB, ${report.bytes_per_record} B/record, largest block ${(largest / 1e3).toFixed(0)} KB`);
+      return report;
+    },
   };
-  fs.writeFileSync(path.join(dir, 'manifest.json.gz'), zlib.gzipSync(JSON.stringify({ v: FORMAT, fips: county.fips, release: county.release, keys, lengths })));
-  fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report));
-  log(`${county.fips} ${county.release}: ${records.length} records, ${keys.length} blocks, ${(bytes / 1e6).toFixed(1)} MB, ${report.bytes_per_record} B/record, largest block ${(largest / 1e3).toFixed(0)} KB`);
-  return report;
 }
 
-module.exports = { writeRelease };
+/**
+ * @param {string} out      The build's output directory
+ * @param {object} county   { fips, release, ... } the state file's entry for it, without its `path`
+ * @param {object[]} records  A county's records; each gets its sort key here
+ * @returns the release's report
+ */
+function writeRelease(out, county, records) {
+  for (const record of records) {
+    if (!KINDS.has(record.kind)) throw new Error(`A record of unknown kind ${record.kind}`);
+    record.key = sortKey(record.address);
+  }
+  records.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const writer = blockWriter(out, county);
+  for (const record of records) writer.add(record.key, JSON.stringify(record));
+  return writer.close(records.length, fillReport(records));
+}
+
+module.exports = { writeRelease, blockWriter };

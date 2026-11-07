@@ -65,6 +65,7 @@ import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.core.security.SensitiveScreenGuard
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.api.models.businesses.BusinessPermission
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.ClosesKeyboardOnNavigation
@@ -90,7 +91,11 @@ import app.pantopus.android.ui.screens.beacon_profile.BeaconProfileScreen
 import app.pantopus.android.ui.screens.business_profile.BUSINESS_PROFILE_BUSINESS_ID_KEY
 import app.pantopus.android.ui.screens.business_profile.BUSINESS_PROFILE_PAGE_SLUG_KEY
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileScreen
+import app.pantopus.android.ui.screens.businesses.BusinessAccessGate
 import app.pantopus.android.ui.screens.businesses.MyBusinessesScreen
+import app.pantopus.android.ui.screens.businesses.canOpenInvoices
+import app.pantopus.android.ui.screens.businesses.canOpenLegal
+import app.pantopus.android.ui.screens.businesses.canOpenPayments
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessWizardScreen
 import app.pantopus.android.ui.screens.businesses.invoices.BusinessInvoicesScreen
 import app.pantopus.android.ui.screens.businesses.legal.BusinessLegalScreen
@@ -7210,19 +7215,39 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.BUSINESS_PAYMENTS_OWNER,
                     arguments = listOf(navArgument(ChildRoutes.BUSINESS_OWNER_ID_KEY) { type = NavType.StringType }),
                 ) {
-                    BusinessPaymentsScreen(onBack = { navController.popBackStack() })
+                    BusinessAccessGate(
+                        title = "Payments",
+                        refusal = "Only an owner can manage this business's payments.",
+                        allows = { it.canOpenPayments },
+                        onBack = { navController.popBackStack() },
+                    ) { BusinessPaymentsScreen(onBack = { navController.popBackStack() }) }
                 }
                 composable(
                     route = ChildRoutes.BUSINESS_INVOICES_OWNER,
                     arguments = listOf(navArgument(ChildRoutes.BUSINESS_OWNER_ID_KEY) { type = NavType.StringType }),
                 ) {
-                    BusinessInvoicesScreen(onBack = { navController.popBackStack() })
+                    BusinessAccessGate(
+                        title = "Invoices",
+                        refusal = "You don't have permission to bill for this business.",
+                        allows = { it.canOpenInvoices },
+                        onBack = { navController.popBackStack() },
+                    ) { BusinessInvoicesScreen(onBack = { navController.popBackStack() }) }
                 }
                 composable(
                     route = ChildRoutes.BUSINESS_LEGAL,
                     arguments = listOf(navArgument(ChildRoutes.BUSINESS_OWNER_ID_KEY) { type = NavType.StringType }),
                 ) {
-                    BusinessLegalScreen(onBack = { navController.popBackStack() })
+                    BusinessAccessGate(
+                        title = "Legal & verification",
+                        refusal = "You don't have permission to see this business's legal details.",
+                        allows = { it.canOpenLegal },
+                        onBack = { navController.popBackStack() },
+                    ) { access ->
+                        BusinessLegalScreen(
+                            onBack = { navController.popBackStack() },
+                            canVerify = access.allows(BusinessPermission.PROFILE_EDIT),
+                        )
+                    }
                 }
                 composable(
                     route = ChildRoutes.BUSINESS_LOCATIONS,

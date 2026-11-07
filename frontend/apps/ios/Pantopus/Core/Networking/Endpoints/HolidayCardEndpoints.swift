@@ -35,6 +35,16 @@ public enum HolidayCardEndpoints {
         Endpoint(method: .post, path: "/api/mailbox/cards/preview", body: body)
     }
 
+    /// `POST /api/mailbox/cards/shared`: counts one share of a card's picture (`card_table`). Answers 204.
+    public static func shared(_ body: HolidayCardSharedBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/mailbox/cards/shared", body: body)
+    }
+
+    /// `GET /api/mailbox/cards/:id/link`: the link again, for its sender, while it waits. 409 with the reason otherwise.
+    public static func link(cardId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/mailbox/cards/\(cardId)/link")
+    }
+
     /// `POST /api/mailbox/cards/:id/take-back` — route
     /// `backend/routes/mailbox.js:1988`. Until the carrier's 7 a.m. pickup (by
     /// email: until they open it).

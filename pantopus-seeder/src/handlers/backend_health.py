@@ -26,15 +26,21 @@ _SAMPLE = re.compile(r'^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(.*)\})?\s+([^\s]+)')
 def _probe_api(secrets):
     started = time.monotonic()
     healthy = False
+    index = None
     try:
         response = _client.get(
             secrets.pantopus_api_base_url.rstrip('/') + '/health',
         )
         body = response.json() if response.status_code == 200 else {}
         healthy = body.get('status') == 'healthy' and body.get('database') == 'connected'
+        # Present only where the API reads Pantopus's own property index.
+        index = body.get('property_index')
     except (httpx.HTTPError, ValueError, AttributeError):
         pass
-    return {'ApiHealthy': int(healthy), 'ApiLatencyMs': (time.monotonic() - started) * 1000}
+    metrics = {'ApiHealthy': int(healthy), 'ApiLatencyMs': (time.monotonic() - started) * 1000}
+    if isinstance(index, str):
+        metrics['PropertyIndexHealthy'] = int(index == 'ok')
+    return metrics
 
 
 def _probe_database(secrets):

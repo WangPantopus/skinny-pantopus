@@ -18,6 +18,9 @@ struct MailSentPieceView: View {
     /// Back to Sent.
     private let onBack: () -> Void
     @State private var showBack = false
+    /// "See it the way they did": the real moment, full screen.
+    @State private var tableContent: CardTableContent?
+    @State private var tableSharesSealed = false
 
     init(viewModel: MailSentPieceViewModel, onBack: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
@@ -43,6 +46,12 @@ struct MailSentPieceView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("mailSentPiece")
+        .modifier(CardTablePreviewCover(
+            content: $tableContent,
+            closeLabel: "Back to your card",
+            isSender: true,
+            sharesSealed: tableSharesSealed
+        ))
     }
 
     /// After "Take your card back?": gone from Sent, and back to it.
@@ -103,11 +112,13 @@ struct MailSentPieceView: View {
         let first = MailSentWords.recipientFirst(piece)
         let envelope = MailPieceModel.sent(piece)
         let delivered = piece.status == .delivered || piece.status == .claimed
-        let waiting = piece.byEmail ? "Once they claim it" : "Addressed to \(first)"
+        let waiting = piece.byLink ? "Once someone opens your link" : (piece.byEmail ? "Once they claim it" : "Addressed to \(first)")
         let mailbox = delivered ? "In \(HolidayCardWords.possessive(first)) Mailbox" : waiting
         return VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "Your \(piece.isLetter ? "letter" : "card") to \(piece.toName)")
+                Text(verbatim: piece.byLink && piece.status != .claimed
+                    ? "Your card by link"
+                    : "Your \(piece.isLetter ? "letter" : "card") to \(piece.toName)")
                     .font(.system(size: 24, weight: .bold))
                     .tracking(-0.36)
                     .foregroundStyle(Theme.Color.appText)
@@ -121,6 +132,10 @@ struct MailSentPieceView: View {
             .padding(.top, Spacing.s1)
             section(mailbox) {
                 MailPieceView(model: envelope)
+                // While nobody has opened it, its link can still be copied.
+                if piece.byLink, piece.canTakeBack {
+                    CardTableLinkActions(cardId: piece.id, link: nil, fromName: envelope.from)
+                }
             }
             if piece.isLetter {
                 section("The letter you sent") {
@@ -129,24 +144,23 @@ struct MailSentPieceView: View {
             } else {
                 section("The card you sent") { theCard(piece, envelope: envelope) }
             }
+            if LaunchFeatures.cardTable, !piece.isLetter {
+                let content = CardTableContent(sent: piece, from: envelope.from, mailedOn: envelope.postmarkDate)
+                VStack(spacing: 10) {
+                    HolidayCardPaperButton(title: "See it the way they did", fullWidth: true) {
+                        tableSharesSealed = piece.sealed
+                        tableContent = content
+                    }
+                    .accessibilityIdentifier("mailSentSeeIt")
+                    CardTableSentShareButton(content: content, sharesSealed: piece.sealed)
+                }
+            }
             trail(piece)
             if piece.canTakeBack {
                 takeBack(piece)
             } else if let error = viewModel.takeBackError {
                 errorLine(error)
             }
-        }
-    }
-
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(verbatim: title)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.66)
-                .textCase(.uppercase)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityAddTraits(.isHeader)
-            content()
         }
     }
 
@@ -263,17 +277,6 @@ struct MailSentPieceView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Sealed in wax red, with them in green, a card back unopened in grey,
-    /// the carrier and the email in ink (the web's colors).
-    private func dotColor(_ step: MailSentPiece.TrailStep) -> Color {
-        switch step.step {
-        case "sealed": MailPaper.wax
-        case "delivered", "joined", "opens": Theme.Color.success
-        case "returned": Theme.Color.appTextMuted
-        default: Theme.Color.appTextStrong
-        }
-    }
-
     /// "Changed your mind?" while it can still come back.
     private func takeBack(_ piece: MailSentPiece) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -326,6 +329,29 @@ struct MailSentPieceView: View {
 }
 
 private extension MailSentPieceView {
+    func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(verbatim: title)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.66)
+                .textCase(.uppercase)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .accessibilityAddTraits(.isHeader)
+            content()
+        }
+    }
+
+    /// Sealed in wax red, with them in green, a card back unopened in grey,
+    /// the carrier and the email in ink (the web's colors).
+    func dotColor(_ step: MailSentPiece.TrailStep) -> Color {
+        switch step.step {
+        case "sealed": MailPaper.wax
+        case "delivered", "joined", "opens": Theme.Color.success
+        case "returned": Theme.Color.appTextMuted
+        default: Theme.Color.appTextStrong
+        }
+    }
+
     func errorLine(_ text: String) -> some View {
         Text(verbatim: text)
             .font(.system(size: 14, weight: .medium))

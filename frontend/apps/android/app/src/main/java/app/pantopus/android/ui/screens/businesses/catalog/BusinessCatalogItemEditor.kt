@@ -58,13 +58,15 @@ internal fun BusinessCatalogItemEditor(
     isSaving: Boolean,
     onClose: () -> Unit,
     onSave: (BusinessCatalogItemDraft) -> Unit,
+    canSave: Boolean = true,
+    accessNotice: @Composable () -> Unit = {},
 ) {
     val original = initialDraft
     var draft by remember(initialDraft) { mutableStateOf(initialDraft) }
 
     FormShell(
         title = if (isEditing) "Edit item" else "New item",
-        isValid = draft.isValid,
+        isValid = draft.isValid && canSave,
         isDirty = draft != original,
         onClose = onClose,
         onCommit = { onSave(draft) },
@@ -76,6 +78,7 @@ internal fun BusinessCatalogItemEditor(
             modifier = Modifier.fillMaxWidth().testTag("businessCatalog.editor"),
             verticalArrangement = Arrangement.spacedBy(Spacing.s5),
         ) {
+            accessNotice()
             FormFieldGroup(title = "Item") {
                 PantopusTextField(
                     label = "Name",
