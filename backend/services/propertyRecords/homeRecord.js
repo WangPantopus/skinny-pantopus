@@ -358,4 +358,4 @@ async function readForAddress(address, { patient = false } = {}) {
   }
 }
 
-module.exports = { copyFromAnswer, provenanceOf, storedCopy, liveCopy, storeCopy, forHome, forAddress, unitQuestion, noteLookup, homeAddress, dateLabel };
+module.exports = { copyFromAnswer, provenanceOf, storedCopy, liveCopy, storeCopy, forHome, forAddress, finishLater, unitQuestion, noteLookup, homeAddress, dateLabel };

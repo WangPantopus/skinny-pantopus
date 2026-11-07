@@ -6,7 +6,7 @@
 
 const path = require('node:path');
 const { download, USER_AGENT } = require('./tables.cjs');
-const { streetParts, year, realUnit, zipCode, onRecord } = require('./addresses.cjs');
+const { streetParts, situsParts, year, realUnit, zipCode, onRecord } = require('./addresses.cjs');
 const { positive, put, word } = require('./values.cjs');
 const { properties, mainImprovements, codes, exportDate } = require('./pacs.cjs');
 const { CATEGORY_WORDS, useOf } = require('./texas.cjs');
@@ -79,7 +79,8 @@ function pacsCounty({ fips, county, publisher, source, page, pattern, bedrooms =
   const attributes = [...new Set([...bedrooms, ...baths, 'Fireplaces'])];
 
   function fromProperty(row, imp, words) {
-    const address = streetParts({ number: row.number, pre: row.pre, name: row.street, suffix: row.suffix, unit: realUnit(row.unit) });
+    const typed = situsParts({ number: row.number, street: row.street, suffix: row.suffix, unit: realUnit(row.unit) });
+    const address = streetParts({ number: typed.number, pre: row.pre, name: typed.street, suffix: typed.suffix, unit: typed.unit });
     const account = row.partial && row.group ? row.group : row.id;
     if (!address) return null;
     const [kind, homeType] = uses[row.state] ? USES[uses[row.state]](address.unit) : useOf(row.state, address.unit, Boolean(imp?.area));
