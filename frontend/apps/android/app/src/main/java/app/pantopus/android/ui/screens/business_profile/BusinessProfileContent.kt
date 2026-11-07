@@ -129,7 +129,27 @@ data class BusinessReviewCard(
     val body: String,
     val timestamp: String,
     val verified: Boolean = false,
+    /** The business's published reply; `null` until it answers. */
+    val ownerReply: String? = null,
 )
+
+/**
+ * Where the Reviews section's own read stands. The page never waits for it, and the section doesn't say
+ * "No reviews yet" until a read has said so.
+ */
+sealed interface BusinessReviewsRead {
+    /** The first read is out and there is nothing to show yet. */
+    data object Loading : BusinessReviewsRead
+
+    /** The rows are the last answer (a refused read leaves none); another read may be out behind them. */
+    data object Loaded : BusinessReviewsRead
+
+    /** The first read failed, so there are no rows. [message] says why; the section offers a retry. */
+    data class Failed(val message: String) : BusinessReviewsRead
+
+    /** A later read failed. The rows from [shownAt] (wall clock) stay, and the section offers a retry. */
+    data class RefreshFailed(val shownAt: Long) : BusinessReviewsRead
+}
 
 /** The sticky bottom dock. Primary is always "Contact" (message). */
 data class BusinessActionDock(
@@ -156,6 +176,7 @@ data class BusinessProfileContent(
     val gallery: List<BusinessGalleryItem>,
     val reviewSummary: BusinessReviewSummary?,
     val reviews: List<BusinessReviewCard>,
+    val reviewsRead: BusinessReviewsRead = BusinessReviewsRead.Loaded,
     val dock: BusinessActionDock,
     val savedPlace: PendingSavePlace? = null,
     val isNewlyClaimed: Boolean,

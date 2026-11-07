@@ -95,6 +95,20 @@ data class BusinessOwnerContent(
      */
     val isVerified: Boolean = false,
 ) {
+    /**
+     * [publicProfile] for the preview frame, with the replies this dashboard holds: the public read comes from
+     * before a reply saved here, and the preview shows what neighbors see now.
+     */
+    val previewProfile: BusinessProfileContent
+        get() =
+            publicProfile.copy(
+                reviews =
+                    publicProfile.reviews.map { card ->
+                        val reply = reviews.firstOrNull { it.id == card.id }?.reply
+                        if (reply != null) card.copy(ownerReply = reply) else card
+                    },
+            )
+
     /** Returns a copy with [reply] set on the review matching [reviewId]. */
     fun applyingReply(
         reply: String,
