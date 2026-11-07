@@ -117,6 +117,7 @@ class BusinessTeamViewModel
         private var members: List<BusinessTeamMemberDto> = emptyList()
         private var pendingSeats: List<BusinessSeatDto> = emptyList()
         private var loadedOnce = false
+        private var generation = 0
 
         /** Idempotent — re-running won't refetch once content is loaded. */
         fun load() {
@@ -127,26 +128,44 @@ class BusinessTeamViewModel
         /** Pull-to-refresh / retry. */
         fun refresh() = reload()
 
-        private fun reload() {
-            _state.value = BusinessTeamUiState.Loading
+        /** Every arrival: what this person may do can have changed while the app was away. The roster stays meanwhile. */
+        fun resume() {
+            if (loadedOnce) reload(showLoading = false) else load()
+        }
+
+        /** A reply from before the app went away decides nothing. */
+        fun pause() {
+            generation++
+        }
+
+        private fun reload(showLoading: Boolean = true) {
+            val request = ++generation
+            if (showLoading) _state.value = BusinessTeamUiState.Loading
             viewModelScope.launch {
-                when (val accessResult = repo.access(businessId)) {
+                val accessResult = repo.access(businessId)
+                if (request != generation) return@launch
+                when (accessResult) {
                     is NetworkResult.Failure -> {
-                        _state.value = BusinessTeamUiState.Error(accessResult.error.message)
+                        refuse(accessResult.error.message)
                         return@launch
                     }
                     is NetworkResult.Success -> {
                         access = accessResult.data
                         if (!accessResult.data.hasAccess) {
-                            _state.value = BusinessTeamUiState.Error("You don't have access to this team.")
+                            refuse("You don't have access to this team.")
                             return@launch
                         }
                     }
                 }
+                // The answer takes effect now, whatever the reads below take.
+                if (loadedOnce) applyState()
 
-                when (val memberResult = repo.members(businessId)) {
+                val memberResult = repo.members(businessId)
+                if (request != generation) return@launch
+                when (memberResult) {
                     is NetworkResult.Failure -> {
-                        _state.value = BusinessTeamUiState.Error(memberResult.error.message)
+                        // A roster already on screen stays through a failed re-read; the answer above still applies.
+                        if (!loadedOnce || memberResult.error is NetworkError.Forbidden) refuse(memberResult.error.message)
                         return@launch
                     }
                     is NetworkResult.Success -> {
@@ -158,15 +177,25 @@ class BusinessTeamViewModel
                 (repo.seats(businessId) as? NetworkResult.Success)?.let { result ->
                     pendingSeats = result.data.seats.filter { (it.inviteStatus ?: "").lowercase() == "pending" }
                 }
-                if (_rolePresets.value.isEmpty()) {
-                    (repo.rolePresets(businessId) as? NetworkResult.Success)?.let { result ->
-                        _rolePresets.value = result.data.presets.sortedBy { it.sortOrder }
-                    }
+                val presets = repo.rolePresets(businessId) as? NetworkResult.Success
+                if (request != generation) return@launch
+                presets?.let { result ->
+                    _rolePresets.value =
+                        result.data.presets
+                            .filter { outranks(BusinessRole.parse(it.roleBase)) }
+                            .sortedBy { it.sortOrder }
                 }
 
                 loadedOnce = true
                 applyState()
             }
+        }
+
+        /** A refused or failed read allows nothing, and the next arrival starts over. */
+        private fun refuse(message: String) {
+            access = null
+            loadedOnce = false
+            _state.value = BusinessTeamUiState.Error(message)
         }
 
         // ─── Gating ───────────────────────────────────────────────
@@ -179,6 +208,12 @@ class BusinessTeamViewModel
         private fun canInvite(): Boolean {
             val a = access ?: return false
             return a.isOwner || a.permissions.contains("team.invite")
+        }
+
+        /** The server only lets someone change roles below their own (`assertCanMutateTarget`); an owner, any role. */
+        private fun outranks(role: BusinessRole): Boolean {
+            val a = access ?: return false
+            return a.isOwner || role.rank < BusinessRole.parse(a.roleBase).rank
         }
 
         // ─── Mutations ────────────────────────────────────────────
@@ -307,7 +342,7 @@ class BusinessTeamViewModel
                         email = seat.inviteEmail,
                         role = role,
                         invitedText = relativeText(seat.createdAt, now, zone)?.let { "Invited $it" },
-                        canManage = manage,
+                        canManage = manage && outranks(role),
                     )
                 }
 
@@ -338,7 +373,7 @@ class BusinessTeamViewModel
                 role = role,
                 avatarGradient = BusinessTeamAvatarTone.toneFor(userId).gradient,
                 joinedText = relativeText(member.joinedAt ?: member.invitedAt, now, zone)?.let { "Joined $it" },
-                canManage = canManage && role != BusinessRole.Owner,
+                canManage = canManage && role != BusinessRole.Owner && outranks(role),
             )
         }
 

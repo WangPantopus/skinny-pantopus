@@ -1,7 +1,7 @@
 'use strict';
 // A table in an Esri file geodatabase, row by row, with no packages: the format is the one GDAL's OpenFileGDB driver
-// documents. Only the columns a connector names are decoded; geometry and everything else is skipped over, so owner
-// names and mailing addresses never become text in this process.
+// documents. Only the columns a connector names are decoded; everything else is skipped over, so owner names and mailing
+// addresses never become text in this process. A geometry column named in the list reads as its rings.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -22,6 +22,62 @@ function varUint(buffer, start) {
     if (byte < 0x80) return [value, position];
     shift *= 128;
   }
+}
+
+/** A signed one: the first byte's bit 6 is the sign. */
+function varInt(buffer, start) {
+  let byte = buffer[start];
+  let position = start + 1;
+  const negative = (byte & 0x40) !== 0;
+  let value = byte & 0x3f;
+  let shift = 64;
+  while (byte >= 0x80) {
+    byte = buffer[position];
+    position += 1;
+    value += (byte & 0x7f) * shift;
+    shift *= 128;
+  }
+  return [negative ? -value : value, position];
+}
+
+const POLYGON_TYPES = new Set([5, 15, 19, 25, 51]);
+
+/** A polygon's rings as [[x, y], ...] in the table's coordinates, or null for anything else or an empty shape. */
+function readPolygon(buffer, start, { xOrigin, yOrigin, xyScale }) {
+  let [type, p] = varUint(buffer, start);
+  if (!POLYGON_TYPES.has(type % 256)) return null;
+  let points;
+  [points, p] = varUint(buffer, p);
+  if (!points) return null;
+  let parts;
+  [parts, p] = varUint(buffer, p);
+  // The curves' count, when the type's flag says there are any.
+  if (Math.floor(type / 0x20000000) % 2 === 1) [, p] = varUint(buffer, p);
+  for (let i = 0; i < 4; i += 1) [, p] = varUint(buffer, p); // the shape's box
+  const sizes = [];
+  let left = points;
+  for (let i = 0; i < parts - 1; i += 1) {
+    let size;
+    [size, p] = varUint(buffer, p);
+    sizes.push(size);
+    left -= size;
+  }
+  sizes.push(left);
+  let x = 0;
+  let y = 0;
+  return sizes.map((size) => {
+    const ring = [];
+    for (let i = 0; i < size; i += 1) {
+      let dx;
+      let dy;
+      [dx, p] = varInt(buffer, p);
+      [dy, p] = varInt(buffer, p);
+      x += dx;
+      y += dy;
+      ring.push([x / xyScale + xOrigin, y / xyScale + yOrigin]);
+    }
+    return ring;
+  });
 }
 
 /** The columns of a table: name, type and whether a row's null bits cover it. */
@@ -45,6 +101,7 @@ function readFields(fd) {
     const type = section[p];
     p += 1;
     let nullable = false;
+    let grid = null;
     if (type === TYPE.STRING) {
       const flags = section[p + 4];
       nullable = (flags & 1) !== 0;
@@ -65,6 +122,7 @@ function readFields(fd) {
       p += 1;
       const hasM = (flags & 2) !== 0;
       const hasZ = (flags & 4) !== 0;
+      grid = { xOrigin: section.readDoubleLE(p), yOrigin: section.readDoubleLE(p + 8), xyScale: section.readDoubleLE(p + 16) };
       p += 24 + (hasM ? 16 : 0) + (hasZ ? 16 : 0) + 8 + (hasM ? 8 : 0) + (hasZ ? 8 : 0) + 32;
       // Newer tables carry Z and M extents here: the grid's count is the first place that reads as a small number.
       for (let tries = 0; tries < 3; tries += 1) {
@@ -84,7 +142,7 @@ function readFields(fd) {
       p += 2;
       if (flags & 4) p += 1 + section[p];
     }
-    fields.push({ name, type, nullable });
+    fields.push({ name, type, nullable, grid });
   }
   return fields;
 }
@@ -129,7 +187,7 @@ function* readRows(base, columns, { optional = [] } = {}) {
         const out = {};
         let nullIndex = 0;
         let p = nullBytes;
-        for (const { name, type, nullable } of fields) {
+        for (const { name, type, nullable, grid } of fields) {
           // An object ID isn't stored: it's the row's place in the index.
           if (type === TYPE.OBJECTID) {
             if (wanted.has(name)) out[name] = start + i + 1;
@@ -147,6 +205,7 @@ function* readRows(base, columns, { optional = [] } = {}) {
             p = after + bytes;
           } else if (type === TYPE.GEOMETRY || type === TYPE.BINARY) {
             const [bytes, after] = varUint(row, p);
+            if (keep && type === TYPE.GEOMETRY) out[name] = readPolygon(row, after, grid);
             p = after + bytes;
           } else if (type === TYPE.INT16) {
             if (keep) out[name] = row.readInt16LE(p);

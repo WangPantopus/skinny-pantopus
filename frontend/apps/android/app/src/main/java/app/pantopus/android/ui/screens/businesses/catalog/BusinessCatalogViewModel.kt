@@ -7,9 +7,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.businesses.BusinessCatalogItemRequest
 import app.pantopus.android.data.api.models.businesses.BusinessCatalogManagedItemDto
+import app.pantopus.android.data.api.models.businesses.BusinessPermission
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessCatalogRepository
+import app.pantopus.android.data.businesses.BusinessTeamRepository
+import app.pantopus.android.ui.screens.businesses.BusinessAccessCheck
+import app.pantopus.android.ui.screens.businesses.BusinessAccessState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +29,9 @@ import javax.inject.Inject
  * `BusinessOwnerViewModel` reads.
  */
 const val BUSINESS_CATALOG_BUSINESS_ID_KEY = "businessId"
+
+private const val NO_CATALOG_ACCESS = "You don't have permission to manage this catalog."
+private const val CATALOG_CHECK_FAILED = "Couldn't check catalog access. Your changes are kept. Retry to continue."
 
 /** Toast kinds surfaced by the catalog manager. */
 enum class BusinessCatalogToastKind { Success, Error }
@@ -43,14 +50,17 @@ data class BusinessCatalogToast(
  *  - categories POST / PATCH / DELETE `…/catalog/categories[/:catId]`
  *
  * Mutations are awaited (not optimistic) and followed by a re-fetch, so
- * the list always reflects the server's `sort_order` / `status`. Mirrors
- * iOS `BusinessCatalogViewModel.swift`.
+ * the list always reflects the server's `sort_order` / `status`. Each one
+ * asks `GET /:businessId/me` first, and access is asked again on every return,
+ * so a draft is only sent under a fresh answer. Mirrors iOS
+ * `BusinessCatalogViewModel.swift`.
  */
 @HiltViewModel
 class BusinessCatalogViewModel
     @Inject
     constructor(
         private val repo: BusinessCatalogRepository,
+        private val team: BusinessTeamRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val businessId: String =
@@ -71,6 +81,12 @@ class BusinessCatalogViewModel
         private val _toast = MutableStateFlow<BusinessCatalogToast?>(null)
         val toast: StateFlow<BusinessCatalogToast?> = _toast.asStateFlow()
 
+        private val _access = MutableStateFlow(BusinessCatalogAccess(isChecking = true))
+        val access: StateFlow<BusinessCatalogAccess> = _access.asStateFlow()
+
+        private val accessCheck = BusinessAccessCheck(viewModelScope, { team.access(businessId) }, ::applyAccess)
+        private var fetchGeneration = 0
+
         // One client key per intended create, reused while the same item or category is retried, so a lost reply
         // can't add it twice. Cleared once the create sticks.
         private var pendingItemCreate: Pair<BusinessCatalogItemRequest, String>? = null
@@ -79,11 +95,48 @@ class BusinessCatalogViewModel
         fun load() {
             if (_state.value is BusinessCatalogUiState.Loaded) return
             _state.value = BusinessCatalogUiState.Loading
-            viewModelScope.launch { fetch() }
+            viewModelScope.launch { checkThenFetch() }
         }
 
         fun refresh() {
-            viewModelScope.launch { fetch() }
+            viewModelScope.launch { checkThenFetch() }
+        }
+
+        /** Every arrival: the first load, or a fresh check of what's allowed that keeps the list and any draft. */
+        fun resume() {
+            val current = _state.value
+            if (current is BusinessCatalogUiState.Loaded || current is BusinessCatalogUiState.Empty) {
+                retryAccess()
+            } else {
+                load()
+            }
+        }
+
+        /** The screen left or the app went away: what was allowed no longer counts, and no late reply can restore it. */
+        fun pause() {
+            accessCheck.forget()
+        }
+
+        fun retryAccess() {
+            viewModelScope.launch { accessCheck.confirm() }
+        }
+
+        private fun applyAccess(state: BusinessAccessState) {
+            _access.value =
+                when (state) {
+                    BusinessAccessState.Unknown, BusinessAccessState.Checking -> _access.value.copy(isChecking = true, notice = null)
+                    is BusinessAccessState.Known -> {
+                        val canEditItems = state.access.allows(BusinessPermission.CATALOG_EDIT)
+                        val canManage = state.access.allows(BusinessPermission.CATALOG_MANAGE)
+                        BusinessCatalogAccess(
+                            canEditItems = canEditItems,
+                            canManage = canManage,
+                            notice = NO_CATALOG_ACCESS.takeUnless { canEditItems || canManage },
+                        )
+                    }
+                    BusinessAccessState.Refused -> BusinessCatalogAccess(notice = NO_CATALOG_ACCESS)
+                    BusinessAccessState.Failed -> BusinessCatalogAccess(notice = CATALOG_CHECK_FAILED)
+                }
         }
 
         fun dismissToast() {
@@ -97,9 +150,24 @@ class BusinessCatalogViewModel
 
         // ---- Fetch ----------------------------------------------------
 
-        private suspend fun fetch() {
+        /** The catalog stays closed until the business says this person may read it; a failed answer opens nothing. */
+        private suspend fun checkThenFetch() {
+            val request = ++fetchGeneration
+            val answer = accessCheck.confirm()
+            if (request != fetchGeneration || answer == BusinessAccessState.Unknown) return
+            val access = (answer as? BusinessAccessState.Known)?.access
+            when {
+                answer == BusinessAccessState.Failed -> _state.value = BusinessCatalogUiState.Error(CATALOG_CHECK_FAILED)
+                access?.allows(BusinessPermission.CATALOG_VIEW) == true -> fetch(request)
+                else -> _state.value = BusinessCatalogUiState.Error(NO_CATALOG_ACCESS)
+            }
+        }
+
+        private suspend fun fetch(request: Int = ++fetchGeneration) {
+            val categoriesResult = repo.categories(businessId)
+            if (request != fetchGeneration) return
             val categories =
-                when (val categoriesResult = repo.categories(businessId)) {
+                when (categoriesResult) {
                     is NetworkResult.Failure -> {
                         _state.value = BusinessCatalogUiState.Error(message(categoriesResult.error))
                         return
@@ -114,7 +182,9 @@ class BusinessCatalogViewModel
                         }
                 }
 
-            when (val itemsResult = repo.items(businessId)) {
+            val itemsResult = repo.items(businessId)
+            if (request != fetchGeneration) return
+            when (itemsResult) {
                 is NetworkResult.Failure -> _state.value = BusinessCatalogUiState.Error(message(itemsResult.error))
                 is NetworkResult.Success -> {
                     val rows =
@@ -150,7 +220,9 @@ class BusinessCatalogViewModel
                 if (ok) pendingItemCreate = null
                 onDone(ok)
             }
-            mutate("Item added", onCreated) { repo.createItem(businessId, body.copy(clientRequestId = pending.second)) }
+            mutate(BusinessPermission.CATALOG_EDIT, "Item added", onCreated) {
+                repo.createItem(businessId, body.copy(clientRequestId = pending.second))
+            }
         }
 
         /** `PATCH …/catalog/items/:itemId`. */
@@ -164,12 +236,12 @@ class BusinessCatalogViewModel
                 onDone(false)
                 return
             }
-            mutate("Item saved", onDone) { repo.updateItem(businessId, itemId, draft.asRequest()) }
+            mutate(BusinessPermission.CATALOG_EDIT, "Item saved", onDone) { repo.updateItem(businessId, itemId, draft.asRequest()) }
         }
 
         /** `DELETE …/catalog/items/:itemId` — archives the item. */
         fun deleteItem(itemId: String) {
-            mutate("Item archived") { repo.deleteItem(businessId, itemId) }
+            mutate(BusinessPermission.CATALOG_MANAGE, "Item archived") { repo.deleteItem(businessId, itemId) }
         }
 
         /**
@@ -193,7 +265,11 @@ class BusinessCatalogViewModel
 
             // Optimistic local reorder so the list doesn't wait a round-trip.
             _state.value = BusinessCatalogUiState.Loaded(current.content.copy(items = reordered))
-            mutate(successText = null, onDone = { ok -> if (!ok) _state.value = current }) {
+            mutate(
+                permission = BusinessPermission.CATALOG_EDIT,
+                successText = null,
+                onDone = { ok -> if (!ok) _state.value = current },
+            ) {
                 repo.reorderItems(businessId, reordered.map { it.id })
             }
         }
@@ -217,7 +293,9 @@ class BusinessCatalogViewModel
                 if (ok) pendingCategoryCreate = null
                 onDone(ok)
             }
-            mutate("Category added", onCreated) { repo.createCategory(businessId, trimmed, pending.second) }
+            mutate(BusinessPermission.CATALOG_MANAGE, "Category added", onCreated) {
+                repo.createCategory(businessId, trimmed, pending.second)
+            }
         }
 
         /** `PATCH …/catalog/categories/:catId`. */
@@ -232,21 +310,23 @@ class BusinessCatalogViewModel
                 onDone(false)
                 return
             }
-            mutate("Category renamed", onDone) { repo.renameCategory(businessId, categoryId, trimmed) }
+            mutate(BusinessPermission.CATALOG_MANAGE, "Category renamed", onDone) { repo.renameCategory(businessId, categoryId, trimmed) }
         }
 
         /** `DELETE …/catalog/categories/:catId` — soft-delete. */
         fun deleteCategory(categoryId: String) {
-            mutate("Category deleted") { repo.deleteCategory(businessId, categoryId) }
+            mutate(BusinessPermission.CATALOG_MANAGE, "Category deleted") { repo.deleteCategory(businessId, categoryId) }
         }
 
         // ---- Plumbing --------------------------------------------------
 
         /**
-         * Run a mutation, surface a toast, then re-fetch. [onDone] gets true
-         * on success so callers can keep / dismiss their editor sheet.
+         * Ask the server whether [permission] still holds, run the mutation,
+         * surface a toast, then re-fetch. [onDone] gets true on success so
+         * callers can keep / dismiss their editor sheet; a refusal sends nothing.
          */
         private fun mutate(
+            permission: String,
             successText: String?,
             onDone: (Boolean) -> Unit = {},
             call: suspend () -> NetworkResult<*>,
@@ -259,10 +339,17 @@ class BusinessCatalogViewModel
             _toast.value = null
             viewModelScope.launch {
                 try {
+                    mutationRefusal(permission)?.let { refusal ->
+                        _toast.value = BusinessCatalogToast(refusal, BusinessCatalogToastKind.Error)
+                        onDone(false)
+                        return@launch
+                    }
                     val result = call()
                     if (result is NetworkResult.Failure) {
                         _toast.value = BusinessCatalogToast(message(result.error), BusinessCatalogToastKind.Error)
                         onDone(false)
+                        // Refused after the check said yes: the screen should show what's allowed now.
+                        if (result.error is NetworkError.Forbidden) retryAccess()
                     } else {
                         successText?.let {
                             _toast.value = BusinessCatalogToast(it, BusinessCatalogToastKind.Success)
@@ -276,9 +363,16 @@ class BusinessCatalogViewModel
             }
         }
 
+        private suspend fun mutationRefusal(permission: String): String? =
+            when (val answer = accessCheck.confirm()) {
+                is BusinessAccessState.Known -> NO_CATALOG_ACCESS.takeUnless { answer.access.allows(permission) }
+                BusinessAccessState.Refused -> NO_CATALOG_ACCESS
+                else -> CATALOG_CHECK_FAILED
+            }
+
         private fun message(error: NetworkError): String =
             when (error) {
-                NetworkError.Forbidden -> "You don't have permission to manage this catalog."
+                NetworkError.Forbidden -> NO_CATALOG_ACCESS
                 NetworkError.NotFound -> "This business no longer exists."
                 else -> error.message
             }

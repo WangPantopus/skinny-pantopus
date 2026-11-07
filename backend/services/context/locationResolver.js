@@ -124,7 +124,12 @@ function preferDefaultHome(candidates, homeId) {
   return index > 0 ? [candidates[index], ...candidates.slice(0, index), ...candidates.slice(index + 1)] : candidates;
 }
 
-async function loadFallbackHomeCandidates(userId) {
+// A caller that keeps the answer passes `report`; it learns whether a read failed and the answer rests on the rest.
+function markDegraded(report) {
+  if (report) report.degraded = true;
+}
+
+async function loadFallbackHomeCandidates(userId, report = null) {
   const [ownerResult, legacyResult] = await Promise.all([
     supabaseAdmin
       .from('HomeOwner')
@@ -140,6 +145,7 @@ async function loadFallbackHomeCandidates(userId) {
   ]);
 
   if (ownerResult.error) {
+    markDegraded(report);
     logger.warn('locationResolver: owner fallback query error', {
       userId,
       error: ownerResult.error.message,
@@ -147,6 +153,7 @@ async function loadFallbackHomeCandidates(userId) {
   }
 
   if (legacyResult.error) {
+    markDegraded(report);
     logger.warn('locationResolver: legacy owner fallback query error', {
       userId,
       error: legacyResult.error.message,
@@ -163,9 +170,10 @@ async function loadFallbackHomeCandidates(userId) {
  * Resolve the best location for a user.
  *
  * @param {string} userId
+ * @param {{degraded: boolean}|null} [report] set to degraded when a read failed and the answer comes from the others
  * @returns {Promise<{latitude: number|null, longitude: number|null, label: string, source: string, timezone: string, geohash: string|null, confidence: number, homeId: string|null}>}
  */
-async function resolveLocation(userId) {
+async function resolveLocation(userId, report = null) {
   try {
     // The viewing location and the homes don't depend on the preferences, so
     // all three reads start together: one round trip instead of three (Today
@@ -190,7 +198,7 @@ async function resolveLocation(userId) {
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('created_at', { ascending: true }),
-      loadFallbackHomeCandidates(userId),
+      loadFallbackHomeCandidates(userId, report),
     ]));
     // Read on its own so a database without the column (before its migration) keeps every other preference.
     const defaultHomeRead = settle(supabaseAdmin
@@ -207,6 +215,7 @@ async function resolveLocation(userId) {
       .maybeSingle();
 
     if (prefsErr) {
+      markDegraded(report);
       logger.warn('locationResolver: prefs query error', { userId, error: prefsErr.message });
     }
 
@@ -226,6 +235,7 @@ async function resolveLocation(userId) {
 
     if (vlErr && vlErr.code !== 'PGRST116') {
       // PGRST116 = no rows found, which is expected
+      markDegraded(report);
       logger.warn('locationResolver: VL query error', { userId, error: vlErr.message });
     }
 
@@ -235,10 +245,12 @@ async function resolveLocation(userId) {
     const [{ data: occupancies, error: occErr }, fallbackHomes] = await outcome(homesRead);
 
     if (occErr) {
+      markDegraded(report);
       logger.warn('locationResolver: occupancy query error', { userId, error: occErr.message });
     }
 
-    const { value: defaultHome } = await defaultHomeRead;
+    const { value: defaultHome, error: defaultHomeError } = await defaultHomeRead;
+    if (defaultHomeError || defaultHome?.error) markDegraded(report);
     const homeCandidates = preferDefaultHome(
       dedupeHomeCandidates(occupancies || [], fallbackHomes),
       defaultHome?.error ? null : defaultHome?.data?.default_home_id || null,
@@ -307,6 +319,7 @@ async function resolveLocation(userId) {
       .limit(1)
       .maybeSingle();
     if (savedError) {
+      markDegraded(report);
       logger.warn('locationResolver: saved place query error', { userId, error: savedError.message });
     }
     if (!savedError && saved && Number.isFinite(saved.latitude) && Number.isFinite(saved.longitude)
@@ -325,6 +338,7 @@ async function resolveLocation(userId) {
     logger.debug('locationResolver: no location found', { userId });
     return { ...EMPTY_RESULT, timezone: fallbackTimezone };
   } catch (err) {
+    markDegraded(report);
     logger.error('locationResolver: unexpected error', { userId, error: err.message });
     return { ...EMPTY_RESULT };
   }
@@ -345,7 +359,7 @@ function locationFromCoordinates({ latitude, longitude, label, homeId } = {}) {
   return makeResult(lat, lng, label || 'Home', 'home', homeId || null);
 }
 
-async function resolveNotificationTimezone(userId, prefs) {
+async function resolveNotificationTimezone(userId, prefs, report = null) {
   if (prefs === undefined) {
     const { data, error } = await supabaseAdmin.from('UserNotificationPreferences')
       .select('daily_briefing_timezone').eq('user_id', userId).maybeSingle();
@@ -354,7 +368,7 @@ async function resolveNotificationTimezone(userId, prefs) {
   }
   // The selected briefing location defines its clock. A legacy Pacific
   // default (or a phone's old zone) must not override a known location.
-  const location = await resolveLocation(userId);
+  const location = await resolveLocation(userId, report);
   if (location?.source && location.source !== 'none') return validTimezone(location.timezone);
   return validTimezone(prefs?.daily_briefing_timezone);
 }

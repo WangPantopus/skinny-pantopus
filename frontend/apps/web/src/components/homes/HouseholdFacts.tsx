@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import * as api from '@pantopus/api';
-import type { CountyPage, CountyRecordSection, HouseholdFact, HouseholdFactChange, HouseholdGroup, HouseholdPart, HouseholdQuestion } from '@pantopus/api';
+import type { CountyPage, CountyRecordSection, FloorPlanSuggestion, HouseholdFact, HouseholdFactChange, HouseholdGroup, HouseholdPart, HouseholdQuestion } from '@pantopus/api';
 import { ExternalLink } from 'lucide-react';
 import ModalShell from '@/components/ui/ModalShell';
 import { toast } from '@/components/ui/toast-store';
@@ -43,6 +43,28 @@ export function CountyPageLink({ page }: { page: CountyPage }) {
       {page.label}
       <ExternalLink className="h-3 w-3" aria-hidden="true" />
     </a>
+  );
+}
+
+/** What the building's own floor-plan sheet says, above Add Home's fields: this unit's plan with "Is this your layout?", or the building's plans. */
+export function FloorPlanNote({ part, answer, onAnswer }: {
+  part: FloorPlanSuggestion;
+  answer: 'yes' | 'no' | null;
+  onAnswer: (answer: 'yes' | 'no') => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-app-border bg-app-surface-sunken/40 px-4 py-3">
+      <p className="text-sm font-medium text-app-text-strong">{part.line}</p>
+      <p className="text-xs text-app-text-muted">{part.source}</p>
+      {part.prompt ? (
+        <div role="group" aria-label={part.prompt} className="flex flex-wrap items-center gap-2 pt-1">
+          <span className="mr-1 text-sm font-medium text-app-text-strong">{part.prompt}</span>
+          <button type="button" aria-pressed={answer === 'yes'} onClick={() => onAnswer('yes')} className={chipClass(answer === 'yes')}>Yes</button>
+          <button type="button" aria-pressed={answer === 'no'} onClick={() => onAnswer('no')} className={chipClass(answer === 'no')}>No</button>
+        </div>
+      ) : null}
+      {answer === 'no' ? <p className="text-xs text-app-text-secondary">Thanks. We&apos;ll check this layout with the building. Change anything that&apos;s different below.</p> : null}
+    </div>
   );
 }
 
@@ -196,7 +218,41 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
     }
   };
 
-  const sectionFooter = (sectionId: string) => {
+  const answerLayout = async (answer: 'yes' | 'no' | 'undo') => {
+    setBusy(true);
+    try {
+      await api.homes.answerFloorPlan(homeId, answer);
+      await onChanged();
+    } catch {
+      toast.error("Couldn't send that. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // "Is this your layout?": for a unit its building's sheet names, whoever lives there.
+  const layout = household?.floor_plan;
+  const layoutFooter = (sectionId: string) => {
+    if (layout?.section_id !== sectionId || !(layout.prompt || layout.answered)) return null;
+    return (
+      <div className="flex flex-wrap items-center gap-2 bg-app-surface-sunken/40 px-3 py-2.5 text-xs">
+        {layout.answered ? (
+          <>
+            <span className="text-app-text-secondary">{layout.answered}</span>
+            {layout.can_undo ? <button type="button" disabled={busy} onClick={() => void answerLayout('undo')} className={LINK}>Undo</button> : null}
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-app-text-strong">{layout.prompt}</span>
+            <button type="button" disabled={busy} onClick={() => void answerLayout('yes')} className={chipClass(false)}>Yes</button>
+            <button type="button" disabled={busy} onClick={() => void answerLayout('no')} className={chipClass(false)}>No</button>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const groupFooter = (sectionId: string) => {
     const group = groups.find((candidate) => candidate.section_id === sectionId);
     const section = sections?.find((candidate) => candidate.id === sectionId);
     if (!group || !section) return null;
@@ -221,6 +277,11 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
         {group.report ? <button type="button" onClick={() => setReporting(section)} className={LINK}>{group.report}</button> : null}
       </div>
     );
+  };
+
+  const sectionFooter = (sectionId: string) => {
+    const parts = [layoutFooter(sectionId), groupFooter(sectionId)].filter(Boolean);
+    return parts.length ? <>{parts[0]}{parts[1]}</> : null;
   };
 
   const questionFact = (key: string) => groups.flatMap((group) => group.facts).find((fact) => fact.key === key);

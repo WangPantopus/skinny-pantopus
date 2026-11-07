@@ -45,6 +45,7 @@ const recordVocabulary = require('../services/recordVocabulary');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const homeRecords = require('../services/propertyRecords/homeRecord');
 const householdFacts = require('../services/householdFacts');
+const floorPlans = require('../services/propertyRecords/floorPlans');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
@@ -132,6 +133,8 @@ const createHomeSchema = Joi.object({
   year_built: Joi.number().integer().min(1600).max(2100).optional().allow(null),
   move_in_date: Joi.string().optional().allow('', null),
   is_owner: Joi.boolean().optional(),
+  // "Is this your layout?", answered on the form (services/propertyRecords/floorPlans.js).
+  floor_plan_answer: Joi.string().valid('yes', 'no').optional(),
   // "My home doesn't have a unit number" — clears the MISSING_UNIT refusal
   // only; see the gate in POST / for what it does and does not relax.
   no_unit_attestation: Joi.boolean().optional(),
@@ -213,6 +216,10 @@ const updateHomeSchema = Joi.object({
     value: Joi.alternatives().try(Joi.string().max(200), Joi.number()),
   }).xor('key', 'group')).min(1).max(40),
 }).min(1);
+
+const floorPlanAnswerSchema = Joi.object({
+  answer: Joi.string().valid('yes', 'no', 'undo').required(),
+});
 
 const recordProblemSchema = Joi.object({
   section: Joi.string().max(40).required(),
@@ -615,8 +622,9 @@ router.post('/property-suggestions', verifyToken,
   validate(propertySuggestionsSchema), async (req, res) => {
   try {
     const lookup = PROPERTY_LOOKUPS.has(req.query.lookup) ? req.query.lookup : 'wait';
-    const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin, { lookup });
-    res.json(recordVocabulary.suggestions(result, recordVocabulary.wantsRecordVocabulary(req)));
+    const wanted = recordVocabulary.wantsRecordVocabulary(req);
+    const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin, { lookup, floorPlans: wanted });
+    res.json(recordVocabulary.suggestions(result, wanted));
   } catch (err) {
     logger.error('property-suggestions error', { error: err.message });
     res.status(500).json({ error: 'Failed to load property suggestions' });
@@ -1198,6 +1206,10 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       line1: normalizedLine1, unit: normalizedLine2, city: normalizedCity, state: normalizedState, zip: normalizedZip,
     }).catch(() => null);
     const attomPropertyDetail = countyRecord ? null : await propertyIntelligenceService.getAddressAttomPropertyDetail(canonicalAddress.id);
+    // The building's own floor-plan sheet, the same way: the server's lookup, after the county's record.
+    const floorPlan = householdFacts.usableFloorPlan(await floorPlans.forAddress({
+      line1: normalizedLine1, unit: normalizedLine2, city: normalizedCity, state: normalizedState, zip: normalizedZip,
+    }), countyRecord?.whole);
 
     const homeData = {
       address: normalizedLine1,
@@ -1246,8 +1258,12 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       ...(countyRecord?.whole ? { niche_data: { property_record: countyRecord.whole } } : {}),
     };
     // Who and when for what the form sent, beside the record. Beside ATTOM's copy, the form's prefill can't be told from an entry.
-    const addedFacts = attomPropertyDetail ? null : householdFacts.fromAddHome({ values: homeData, copy: countyRecord?.copy, actorId: userId });
+    const addedFacts = attomPropertyDetail ? null : householdFacts.fromAddHome({ values: homeData, copy: countyRecord?.copy, actorId: userId, floorPlan });
     if (addedFacts) homeData.niche_data = { ...homeData.niche_data, household_facts: addedFacts };
+    if (floorPlan) homeData.niche_data = { ...homeData.niche_data, floor_plan: floorPlan };
+    if (floorPlan?.match === 'exact' && req.body.floor_plan_answer) {
+      homeData.niche_data.floor_plan_answer = householdFacts.layoutAnswer({ answer: req.body.floor_plan_answer, floorPlan, actorId: userId, via: 'add_home', verified: false });
+    }
 
     // Add location if provided.
     //
@@ -1396,6 +1412,12 @@ router.post('/', verifyToken, (req, res, next) => {
       await recordCreateHomeOutcomeSafe({ ...prepared.audit, address_id: prepared.home.address_id, outcome: 'created',
         code: 'HOME_CREATED', status_code: 201,
         message: 'Home and private setup saved; verification remains required.' });
+      // "That isn't my layout", said on the form: it reaches a person now that there's a Home to say it about.
+      const niche = prepared.home.niche_data;
+      if (niche?.floor_plan_answer?.answer === 'no') {
+        await addressReviewService.flagRecordProblem({ homeId: result.home_id, userId: actorId, reason: {
+          kind: 'floor_plan_no', sheet: niche.floor_plan.sheet, release: niche.floor_plan.release, plan: niche.floor_plan.plan.id, at: new Date().toISOString() } });
+      }
       // A home outside every content region starts one, as a new viewing area
       // does (location.js); in the background, so the response doesn't wait.
       if (Number.isFinite(prepared.home.map_center_lat)) {
@@ -2148,6 +2170,18 @@ router.patch('/:id', verifyToken, requireSharedHomeContent, validate(updateHomeS
 router.post('/:id/record-problem', verifyToken, requireSharedHomeContent, validate(recordProblemSchema), async (req, res) => {
   try { res.json(await homeDetailService.reportRecordProblem(req.params.id, req.user.id, req.body)); }
   catch (err) { homeDetailService.sendError(res, err); }
+});
+
+/**
+ * POST /api/homes/:id/floor-plan-answer
+ * "Is this your layout?" for a unit the building's sheet names. A no reaches Pantopus review and nothing shown changes.
+ */
+router.post('/:id/floor-plan-answer', verifyToken, requireSharedHomeContent, validate(floorPlanAnswerSchema), async (req, res) => {
+  try {
+    const result = await homeDetailService.answerFloorPlan(req.params.id, req.user.id, req.body.answer);
+    await writeAuditLog(req.params.id, req.user.id, 'home_floor_plan_answer', 'Home', req.params.id, { answer: req.body.answer });
+    res.json(result);
+  } catch (err) { homeDetailService.sendError(res, err); }
 });
 
 /**

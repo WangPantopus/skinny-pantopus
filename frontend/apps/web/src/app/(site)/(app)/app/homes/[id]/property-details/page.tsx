@@ -4,6 +4,7 @@ import { useState, type ComponentType } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { showsHouseholdHomeCopy, useAfterRecheck } from '@/lib/householdCopy';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { AttomPropertyDetailPayload, CountyRecord } from '@pantopus/api';
@@ -346,7 +347,15 @@ export default function HomePropertyDetailsPage() {
               <>
                 <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
                   <ShieldCheck className="h-4 w-4 shrink-0" />
-                  <span>{countyRecord?.footer || details?.provenance?.label || 'Data from public records'}</span>
+                  <span>
+                    {countyRecord?.footer || details?.provenance?.label || 'Data from public records'}
+                    {countyRecord || details?.provenance ? (
+                      <>
+                        {' · '}
+                        <Link href="/about/data-sources" className="underline underline-offset-2">Data sources</Link>
+                      </>
+                    ) : null}
+                  </span>
                 </div>
 
                 <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">

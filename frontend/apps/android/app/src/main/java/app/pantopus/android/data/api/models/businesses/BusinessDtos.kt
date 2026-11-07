@@ -218,7 +218,30 @@ data class BusinessAccessDto(
     val isOwner: Boolean = false,
     @Json(name = "role_base") val roleBase: String? = null,
     val permissions: List<String> = emptyList(),
-)
+) {
+    /** Whether this answer allows [permission]. An owner holds every permission; an empty answer allows nothing. */
+    fun allows(permission: String): Boolean = hasAccess && (isOwner || permission in permissions)
+}
+
+/** The `business_permission` names the owner screens check (`backend/utils/businessPermissions.js`). */
+object BusinessPermission {
+    const val PROFILE_EDIT = "profile.edit"
+    const val LOCATIONS_EDIT = "locations.edit"
+    const val HOURS_VIEW = "hours.view"
+    const val HOURS_EDIT = "hours.edit"
+    const val CATALOG_VIEW = "catalog.view"
+    const val CATALOG_EDIT = "catalog.edit"
+    const val CATALOG_MANAGE = "catalog.manage"
+    const val PAGES_EDIT = "pages.edit"
+    const val TEAM_VIEW = "team.view"
+    const val TEAM_INVITE = "team.invite"
+    const val TEAM_MANAGE = "team.manage"
+    const val REVIEWS_VIEW = "reviews.view"
+    const val REVIEWS_RESPOND = "reviews.respond"
+    const val MAIL_VIEW = "mail.view"
+    const val INSIGHTS_VIEW = "insights.view"
+    const val SENSITIVE_VIEW = "sensitive.view"
+}
 
 /**
  * `GET /api/businesses/:businessId` envelope — route
@@ -245,6 +268,7 @@ data class BusinessHoursDto(
     @Json(name = "open_time") val openTime: String? = null,
     @Json(name = "close_time") val closeTime: String? = null,
     @Json(name = "is_closed") val isClosed: Boolean? = null,
+    val notes: String? = null,
 )
 
 /**
@@ -544,6 +568,7 @@ data class SetBusinessHoursDayRequest(
     @Json(name = "open_time") val openTime: String? = null,
     @Json(name = "close_time") val closeTime: String? = null,
     @Json(name = "is_closed") val isClosed: Boolean,
+    val notes: String? = null,
 )
 
 /** Body for `PUT /api/businesses/:businessId/locations/:locationId/hours`. */

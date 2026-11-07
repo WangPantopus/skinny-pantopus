@@ -250,8 +250,11 @@ async function unitLinks(report, unitsDir, state, read) {
     for (const line of zlib.gunzipSync(fs.readFileSync(file)).toString('utf8').split('\n').filter(Boolean)) {
       const address = JSON.parse(line);
       const where = parts(address);
-      if (!where?.unit) continue;
-      const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), unit: where.unit, city: address.city, state, zip: address.zip }, read);
+      // A person always gives a ZIP. A roll entry without one can't be asked the way they would: its town may be a
+      // municipality rather than the postal city.
+      if (!where?.unit || !address.zip) continue;
+      // As the roll writes it, building and all: "A9" alone reads as building A, unit 9.
+      const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), unit: where.building ? `BLDG ${where.building} ${where.unit}` : where.unit, city: address.city, state, zip: address.zip }, read);
       report.unit_links.n += 1;
       if (found.match === 'exact' && found.subject.kind === 'unit') {
         // A building letter can sit in the unit on one side and in its own column on the other: A101 and BLDG A UNIT 101.
@@ -265,7 +268,7 @@ async function unitLinks(report, unitsDir, state, read) {
     for (const line of zlib.gunzipSync(fs.readFileSync(homesFile)).toString('utf8').split('\n').filter(Boolean)) {
       const address = JSON.parse(line);
       const where = parts(address);
-      if (!where) continue;
+      if (!where || !address.zip) continue;
       const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), city: address.city, state, zip: address.zip }, read);
       report.roll_homes.n += 1;
       if (found.match === 'exact' || found.match === 'building_only') report.roll_homes.reached += 1;

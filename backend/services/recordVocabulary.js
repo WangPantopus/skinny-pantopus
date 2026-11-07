@@ -18,6 +18,7 @@
 // ============================================================
 
 const { addHomeQuestions } = require('./householdFacts');
+const { addHomePart } = require('./propertyRecords/floorPlanFormat');
 
 const VOCABULARY = '2';
 const RECORD_TIER = 'record';
@@ -40,11 +41,13 @@ function lookupMessage(tiers, lookup, provenance) {
 
 /** POST /api/homes/property-suggestions: the new words sit beside today's, so `tiers_used` still says `attom` for ATTOM. */
 function suggestions(result, wanted) {
-  const { provenance = null, field_tags: fieldTags = null, lookup_note: note = null, county_page: countyPage = null, ...legacy } = result;
+  const { provenance = null, field_tags: fieldTags = null, lookup_note: note = null, county_page: countyPage = null, floor_plan: floorPlan = null, ...legacy } = result;
   if (!wanted) return legacy;
+  const planPart = floorPlan ? addHomePart(floorPlan) : null;
   const tiers = legacy.tiers_used || [];
   const lookup = legacy.attom_lookup;
-  const message = note || lookupMessage(tiers, lookup, provenance);
+  // A sheet that found this unit isn't a public record, and isn't "no record" to the person reading the form either.
+  const message = note || (planPart?.match === 'exact' && !provenance ? "We found your unit on the building's floor-plan sheet. Check the details below." : lookupMessage(tiers, lookup, provenance));
   const questions = addHomeQuestions(legacy.suggestions, lookup);
   return {
     ...legacy,
@@ -55,6 +58,7 @@ function suggestions(result, wanted) {
     ...(fieldTags ? { field_tags: fieldTags } : {}),
     ...(questions.length ? { questions } : {}),
     ...(countyPage ? { county_page: countyPage } : {}),
+    ...(planPart ? { floor_plan: planPart } : {}),
   };
 }
 
