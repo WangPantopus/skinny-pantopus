@@ -535,6 +535,11 @@ export async function updateFeedPreferences(data: {
   return put('/api/posts/feed-preferences', data);
 }
 
+/** The Nearby feed was seen: the account's "since you last looked" marker moves to now (POST /api/posts/feed/seen). */
+export async function markFeedSeen(): Promise<{ ok: boolean; through: string | null }> {
+  return post('/api/posts/feed/seen');
+}
+
 export async function muteTopicOnSurface(data: {
   postType: string;
   surface?: FeedSurface;
