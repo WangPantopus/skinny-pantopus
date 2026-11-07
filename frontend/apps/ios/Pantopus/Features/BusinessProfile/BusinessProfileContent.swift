@@ -298,6 +298,8 @@ public struct BusinessReviewCard: Sendable, Hashable, Identifiable {
     /// Relative timestamp + optional service context ("1w · Standard clean").
     public let timestamp: String
     public let verified: Bool
+    /// The business's published reply; `nil` until it answers.
+    public internal(set) var ownerReply: String?
 
     public init(
         id: String,
@@ -306,7 +308,8 @@ public struct BusinessReviewCard: Sendable, Hashable, Identifiable {
         rating: Int,
         body: String,
         timestamp: String,
-        verified: Bool = false
+        verified: Bool = false,
+        ownerReply: String? = nil
     ) {
         self.id = id
         self.reviewerName = reviewerName
@@ -315,7 +318,21 @@ public struct BusinessReviewCard: Sendable, Hashable, Identifiable {
         self.body = body
         self.timestamp = timestamp
         self.verified = verified
+        self.ownerReply = ownerReply
     }
+}
+
+/// Where the Reviews section's own read stands. The page never waits for it, and the section doesn't say
+/// "No reviews yet" until a read has said so.
+public enum BusinessReviewsRead: Sendable, Hashable {
+    /// The first read is out and there is nothing to show yet.
+    case loading
+    /// The rows are the last answer (a refused read leaves none); another read may be out behind them.
+    case loaded
+    /// The first read failed, so there are no rows. `message` says why; the section offers a retry.
+    case failed(message: String)
+    /// A later read failed. The rows read at `shownAt` stay, and the section offers a retry.
+    case refreshFailed(shownAt: Date)
 }
 
 // MARK: - Action dock
@@ -356,7 +373,9 @@ public struct BusinessProfileContent: Sendable, Hashable {
     public let services: [BusinessServiceRow]
     public let gallery: [BusinessGalleryItem]
     public let reviewSummary: BusinessReviewSummary?
-    public let reviews: [BusinessReviewCard]
+    public internal(set) var reviews: [BusinessReviewCard]
+    /// Where the reviews' own read stands; content built with its reviews in hand is `.loaded`.
+    public let reviewsRead: BusinessReviewsRead
     public let dock: BusinessActionDock
     /// Seed for the Saved Places bookmark affordance when this profile has a saveable location.
     public let savedPlace: PendingSavePlace?
@@ -387,6 +406,7 @@ public struct BusinessProfileContent: Sendable, Hashable {
         gallery: [BusinessGalleryItem],
         reviewSummary: BusinessReviewSummary?,
         reviews: [BusinessReviewCard],
+        reviewsRead: BusinessReviewsRead = .loaded,
         dock: BusinessActionDock,
         savedPlace: PendingSavePlace? = nil,
         isNewlyClaimed: Bool,
@@ -408,6 +428,7 @@ public struct BusinessProfileContent: Sendable, Hashable {
         self.gallery = gallery
         self.reviewSummary = reviewSummary
         self.reviews = reviews
+        self.reviewsRead = reviewsRead
         self.dock = dock
         self.savedPlace = savedPlace
         self.isNewlyClaimed = isNewlyClaimed
