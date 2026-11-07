@@ -38,11 +38,12 @@ struct AddressTodayTabView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            content
-        }
-        .background(Theme.Color.appBg)
+        content
+            // The day scrolls under the title, which slides away while it
+            // scrolls down and comes back near the top (founder request 2026-11-07).
+            .scrollAwayHeader { header }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Theme.Color.appBg)
         .task(id: resolveKey) {
             if rootTabs.selected == .today { await resolveHome() }
         }

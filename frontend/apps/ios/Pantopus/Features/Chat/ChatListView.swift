@@ -35,19 +35,24 @@ public struct ChatListView: View {
     }
 
     public var body: some View {
-        VStack(spacing: Spacing.s0) {
-            ChatListTopBar(onCompose: onCompose)
-            ChatListSearchBar(skeleton: viewModel.state.isLoading) {
-                onOpenSearch()
+        content
+            // The title, search and filters slide away while the list scrolls
+            // down, and come back near its top (founder request 2026-11-07).
+            .scrollAwayHeader(fill: Theme.Color.appSurface) {
+                VStack(spacing: Spacing.s0) {
+                    ChatListTopBar(onCompose: onCompose)
+                    ChatListSearchBar(skeleton: viewModel.state.isLoading) {
+                        onOpenSearch()
+                    }
+                    ChatListFilterTabs(
+                        active: viewModel.activeFilter,
+                        unreadByFilter: viewModel.unreadByFilter,
+                        skeleton: viewModel.state.isLoading
+                    ) { viewModel.selectFilter($0) }
+                }
             }
-            ChatListFilterTabs(
-                active: viewModel.activeFilter,
-                unreadByFilter: viewModel.unreadByFilter,
-                skeleton: viewModel.state.isLoading
-            ) { viewModel.selectFilter($0) }
-            content
-        }
-        .background(Theme.Color.appSurface)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Theme.Color.appSurface)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .task {

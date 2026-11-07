@@ -14,13 +14,20 @@
 //  whole screen has no bar at all (`hidesTabBar`). `RootTabBar` keeps it in place
 //  while VoiceOver or Switch Control is on.
 //
+//  Every screen's header goes the same way (founder request 2026-11-07): on
+//  the same pages, scrolling down past the top slides it away, and it stays
+//  away until the reader is back near the top of the page (another page, tab
+//  or screen brings it back too). The headers that do are the stacks' system
+//  bar and the headers drawn above a page (`ScrollAwayHeader.swift`).
+//
 
+import SwiftUI
 import UIKit
 
 /// Watches the page being scrolled in `RootTabContainer` and sets
-/// `RootTabModel.barScrolledAway`. The page is the scroll view under the
-/// finger when a touch starts, noted by a recognizer that never takes a
-/// touch, so every gesture and control works as before.
+/// `RootTabModel.barScrolledAway` and `headerAwayScreen`. The page is the
+/// scroll view under the finger when a touch starts, noted by a recognizer
+/// that never takes a touch, so every gesture and control works as before.
 @MainActor
 final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
     /// Scrolling this far down sends the bar away, and this far up brings
@@ -32,6 +39,12 @@ final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
     /// A page fills at least this share of the tab's height: a row of
     /// chips, a card's carousel or a text box isn't one.
     static let pageShare: CGFloat = 0.4
+    /// The header slides away only this far down the page, so the top of a
+    /// page reads with its header and a short scroll doesn't flap it.
+    static let headerHideOffset: CGFloat = 120
+    /// Back within this of the top of the page, the header comes back: about
+    /// a header's height, so it's there before the page's first line is.
+    static let headerReturnZone: CGFloat = 44
 
     /// The tabs' model, where the bar reads whether it's away.
     weak var tabs: RootTabModel?
@@ -47,10 +60,24 @@ final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
     private let sentinel = PageSentinel()
     /// The page's last offset from its top, rubber band left out.
     private var lastOffset: CGFloat?
+    /// The page's top inset at that offset: a header sliding away or back
+    /// changes it, which moves the page's top without a scroll.
+    private var lastTopInset: CGFloat?
+    /// The room the page's headers take above its first line, the most seen
+    /// on this page: the header goes only once the page is past it, so the
+    /// room it leaves doesn't bring the page back to its top and the header
+    /// with it.
+    private var headerRoom: CGFloat = 0
     /// Travel in the current direction: > 0 down the page, < 0 up.
     private var travel: CGFloat = 0
     /// A change on its way to the model (sent on the next turn).
     private var pendingAway: Bool?
+    /// The same for the header: the screen whose header goes, or nil for back.
+    private var pendingHeader: HeaderChange?
+
+    private struct HeaderChange {
+        let screen: ObjectIdentifier?
+    }
 
     private final class TouchProbe: UIGestureRecognizer {}
 
@@ -77,8 +104,10 @@ final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
             return
         }
         watch(found)
-        // Another page than the one that sent the bar away: it comes back.
+        // Another page than the one that sent the bar away: it comes back,
+        // and so does the header.
         setAway(false)
+        setHeaderAway(false)
     }
 
     /// The nearest scroll view around `view` that pages up and down under
@@ -119,19 +148,44 @@ final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
         sentinel.removeFromSuperview()
         page = nil
         lastOffset = nil
+        lastTopInset = nil
+        headerRoom = 0
         travel = 0
+    }
+
+    /// From the top of the tabs' safe area (under the status bar) to where
+    /// the page's first line sits at its top: the headers above it.
+    private func topRoom(of scrollView: UIScrollView) -> CGFloat {
+        guard let container else { return 0 }
+        let frameTop = scrollView.convert(scrollView.bounds, to: container).minY
+        return max(0, frameTop + scrollView.adjustedContentInset.top - container.safeAreaInsets.top)
     }
 
     private func scrolled(_ scrollView: UIScrollView) {
         guard scrollView === page, barHeight > 0 else { return }
-        let fromTop = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        let topInset = scrollView.adjustedContentInset.top
+        let fromTop = scrollView.contentOffset.y + topInset
         let range = Self.scrollRange(of: scrollView)
         let offset = min(max(fromTop, 0), range)
+        headerRoom = max(headerRoom, topRoom(of: scrollView))
+        // A header sliding away or back moves the top of the page: that's no
+        // scroll of the person's, so the next move counts from here.
         defer { lastOffset = offset }
+        if let lastTopInset, abs(topInset - lastTopInset) > 0.5 {
+            self.lastTopInset = topInset
+            travel = 0
+            return
+        }
+        lastTopInset = topInset
         // At the top of the page, or pulled down past it (to refresh).
         if fromTop <= 0.5 {
             setAway(false)
+            setHeaderAway(false)
             return
+        }
+        // Back near the top, however it got there: the header comes back.
+        if fromTop <= Self.headerReturnZone {
+            setHeaderAway(false)
         }
         // Only the person's scrolling moves the bar, not a page settling or
         // jumping to a row by itself.
@@ -149,15 +203,26 @@ final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
         if (delta > 0) != (travel > 0) { travel = 0 }
         travel += delta
         if travel >= Self.travelToMove {
-            // Not in the last few points, where it would only come back.
-            if !isAway, range >= Self.minimumScroll, range - offset > Self.travelToMove, !UIAccessibility.isVoiceOverRunning,
-               !UIAccessibility.isSwitchControlRunning, !hasOwnBottomBar(scrollView) {
-                setAway(true)
-            } else {
-                travel = 0
-            }
+            scrolledDown(scrollView, fromTop: fromTop, offset: offset, range: range)
         } else if travel <= -Self.travelToMove {
             setAway(false)
+        }
+    }
+
+    /// The person has scrolled the page down a step.
+    private func scrolledDown(_ scrollView: UIScrollView, fromTop: CGFloat, offset: CGFloat, range: CGFloat) {
+        let assisted = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
+        // Past the top of the page (and its headers' room): the header goes,
+        // and comes back only near the top, not on the way up as the bar does.
+        let hideAt = max(Self.headerHideOffset, headerRoom + Self.headerReturnZone + Self.travelToMove)
+        if fromTop >= hideAt, range >= Self.minimumScroll, !assisted {
+            setHeaderAway(true)
+        }
+        // Not in the last few points, where it would only come back.
+        if !isAway, range >= Self.minimumScroll, range - offset > Self.travelToMove, !assisted, !hasOwnBottomBar(scrollView) {
+            setAway(true)
+        } else {
+            travel = 0
         }
     }
 
@@ -171,11 +236,12 @@ final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
     }
 
     /// The page left the screen (another screen opened over it, its tab or
-    /// screen closed): the bar comes back.
+    /// screen closed): the bar and the header come back.
     private func pageLeftIfGone() {
         if let page, page.window != nil { return }
         stopWatching()
         setAway(false)
+        setHeaderAway(false)
     }
 
     private var isAway: Bool {
@@ -191,6 +257,30 @@ final class RootTabBarScrollWatcher: NSObject, UIGestureRecognizerDelegate {
             guard let self, let away = pendingAway else { return }
             pendingAway = nil
             if let tabs, tabs.barScrolledAway != away { tabs.barScrolledAway = away }
+        }
+    }
+
+    private var isHeaderAway: Bool {
+        if let pendingHeader { return pendingHeader.screen != nil }
+        return tabs?.headerAwayScreen != nil
+    }
+
+    private func setHeaderAway(_ away: Bool) {
+        guard away != isHeaderAway else { return }
+        // Only the header of the screen this page is on goes: a screen pushed
+        // over it, or a sheet, starts with its own.
+        let screen = away ? page?.screenID : nil
+        guard !away || screen != nil else { return }
+        pendingHeader = HeaderChange(screen: screen)
+        // On the next turn, as the bar's; animated, so the page takes the
+        // header's room as it goes (faded with Reduce Motion, as the bar).
+        Task { @MainActor [weak self] in
+            guard let self, let change = pendingHeader else { return }
+            pendingHeader = nil
+            guard let tabs, tabs.headerAwayScreen != change.screen else { return }
+            let animation: Animation = UIAccessibility.isReduceMotionEnabled
+                ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3)
+            withAnimation(animation) { tabs.headerAwayScreen = change.screen }
         }
     }
 }

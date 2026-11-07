@@ -275,10 +275,11 @@ private struct OnboardingStepRow: View {
     }
 }
 
+/// The Overview tab's cards. Property details is a tile at the top of the
+/// dashboard (`HomeDashboardProjection.quickActions`), not a link down here.
 struct HomeOverviewSection: View {
     let content: HomeDashboardContent
     let onOpenEmergency: () -> Void
-    let onOpenPropertyDetails: () -> Void
     /// Shown only when set: the viewer can see this home's issues.
     var onOpenIssues: (() -> Void)?
     var canViewActivity = true
@@ -341,20 +342,6 @@ struct HomeOverviewSection: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("homeDashboard_issuesRow")
             }
-
-            Button(action: onOpenPropertyDetails) {
-                HStack(spacing: Spacing.s2) {
-                    Icon(.home, size: 16, color: Theme.Color.home)
-                    Text("Property details")
-                        .pantopusTextStyle(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Theme.Color.home)
-                }
-                .frame(minHeight: 44)
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("homeDashboard_propertyDetailsRow")
         }
     }
 }

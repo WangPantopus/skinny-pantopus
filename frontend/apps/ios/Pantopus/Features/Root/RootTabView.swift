@@ -147,6 +147,12 @@ public final class RootTabModel {
     /// The drawn bar has slid away while a page scrolls down
     /// (`RootTabBarScrollWatcher`); only `RootTabBar` reads it.
     var barScrolledAway = false
+    /// The screen whose header has slid away while its page scrolls down,
+    /// until the page is back near its top (`RootTabBarScrollWatcher`, founder
+    /// request 2026-11-07); nil while every header shows. A screen opening
+    /// over it, or a sheet, keeps its own header. Read through
+    /// `navigationBarScrollsAway()` and `scrollAwayHeader(_:)`.
+    var headerAwayScreen: ObjectIdentifier?
     /// The selected tab tapped again, for the drawn bar's container.
     var reselection: RootTabReselection?
     /// A screen from your own profile's "Your account" list, asked for where
@@ -622,15 +628,21 @@ extension RootTabView {
                     )
                 }
             }
-            .onChange(of: verticalEdge) { _, _ in model.barScrolledAway = false }
+            .onChange(of: verticalEdge) { _, _ in showChrome() }
         }
         // The keyboard covers the bar, as it covers the system one; each
         // tab's screens make room for it in their own hosting controller.
         .ignoresSafeArea(.keyboard)
         // Another tab, or the bar back after a screen that hid it, starts
-        // with the bar in view.
-        .onChange(of: model.selected) { _, _ in model.barScrolledAway = false }
-        .onChange(of: showsBar) { _, _ in model.barScrolledAway = false }
+        // with the bar and the header in view.
+        .onChange(of: model.selected) { _, _ in showChrome() }
+        .onChange(of: showsBar) { _, _ in showChrome() }
+    }
+
+    /// The bar and the screen's header back in view.
+    private func showChrome() {
+        model.barScrolledAway = false
+        model.headerAwayScreen = nil
     }
 
     /// A tab's root for the container, made the first time the tab opens.

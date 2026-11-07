@@ -39,7 +39,8 @@ struct HomeDashboardView: View {
         "view_emergency": "Emergency info",
         "view_tasks": "Tasks",
         "access_codes": "Access codes",
-        "view_claims": "Claims"
+        "view_claims": "Claims",
+        "view_property_details": "Property details"
     ]
     private let homeId: String
     private let onBack: (() -> Void)?
@@ -233,6 +234,9 @@ struct HomeDashboardView: View {
         .toolbar(onBack == nil ? .automatic : .hidden, for: .navigationBar)
     }
 
+    /// Room below the last card for the floating + button and its margin.
+    private static let fabClearance: CGFloat = 72
+
     private var createActions: [FABSheetAction] {
         [
             FABSheetAction(id: "add_task", title: "Add Task", icon: .listChecks),
@@ -322,7 +326,6 @@ struct HomeDashboardView: View {
                                     HomeOverviewSection(
                                         content: content,
                                         onOpenEmergency: { if viewModel.can("sensitive.view") { onOpenEmergency?(homeId) } },
-                                        onOpenPropertyDetails: { if viewModel.can("home.view") { onOpenPropertyDetails?(homeId) } },
                                         onOpenIssues: viewModel.can("maintenance.view")
                                             ? onOpenIssues.map { openIssues in { openIssues(homeId) } } : nil,
                                         canViewActivity: viewModel.shows("security.manage"),
@@ -332,17 +335,21 @@ struct HomeDashboardView: View {
                             }
                         }
                     )
+                    // The last card scrolls clear of the floating + button.
+                    if !createActions.isEmpty {
+                        Color.clear.frame(height: Self.fabClearance)
+                    }
                 }
             }
         )
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // The + button floats over the page, which runs to the bottom of the
+        // screen and under the tab bar (founder request 2026-11-07); a band
+        // behind it took a fifth of the screen and kept the bar from sliding
+        // away.
+        .overlay(alignment: .bottomTrailing) {
             if !createActions.isEmpty {
-                HStack {
-                    Spacer()
-                    FABCreateCTA(actions: createActions) { handleFabAction($0) }
-                }
-                .padding(Spacing.s4)
-                .background(Theme.Color.appBg)
+                FABCreateCTA(actions: createActions) { handleFabAction($0) }
+                    .padding(Spacing.s4)
             }
         }
         .sheet(isPresented: $showsInviteOwner) {
@@ -501,7 +508,8 @@ struct HomeDashboardView: View {
             "view_packages": { onOpenPackages?(homeId) },
             "access_codes": { onOpenAccessCodes?(homeId, currentAddress) },
             "view_tasks": { onOpenTasks?(homeId) },
-            "view_claims": { onOpenClaimsList?() }
+            "view_claims": { onOpenClaimsList?() },
+            "view_property_details": { onOpenPropertyDetails?(homeId) }
         ]
     }
 

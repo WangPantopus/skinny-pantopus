@@ -296,7 +296,7 @@ final class HomeDashboardViewModel {
             "view_maintenance": "maintenance.view", "view_issues": "maintenance.view", "pets": "home.view",
             "calendar": "calendar.view",
             "view_docs": "docs.view", "view_emergency": "sensitive.view", "view_packages": "packages.view",
-            "view_tasks": "tasks.view", "view_claims": "ownership.view"
+            "view_tasks": "tasks.view", "view_claims": "ownership.view", "view_property_details": "home.view"
         ]
         if action == "access_codes" { return can("access.view_wifi") || can("access.view_codes") }
         return permissions[action].map(can) ?? false

@@ -26,12 +26,13 @@ struct PlaceDetailView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            content
-        }
-        .background(Theme.Color.appBg)
-        .navigationBarBackButtonHidden(true)
+        content
+            // The section scrolls under its header, which slides away while it
+            // scrolls down and comes back near the top (founder request 2026-11-07).
+            .scrollAwayHeader { header }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Theme.Color.appBg)
+            .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .refreshFailureToast($viewModel.refreshFailureMessage)
