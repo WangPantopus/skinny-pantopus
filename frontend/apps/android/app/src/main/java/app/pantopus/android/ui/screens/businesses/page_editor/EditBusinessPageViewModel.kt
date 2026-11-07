@@ -394,6 +394,7 @@ class EditBusinessPageViewModel
                         content.copy(bookingLink = booking.copy(current = value))
                     }
                     EditBusinessPageFieldKey.Address,
+                    EditBusinessPageFieldKey.Suite,
                     EditBusinessPageFieldKey.City,
                     EditBusinessPageFieldKey.State,
                     EditBusinessPageFieldKey.Zip,
@@ -408,6 +409,7 @@ class EditBusinessPageViewModel
             val allowed =
                 when (key) {
                     EditBusinessPageFieldKey.Address,
+                    EditBusinessPageFieldKey.Suite,
                     EditBusinessPageFieldKey.City,
                     EditBusinessPageFieldKey.State,
                     EditBusinessPageFieldKey.Zip,
@@ -432,6 +434,12 @@ class EditBusinessPageViewModel
                         location.address.copy(current = value)
                     } else {
                         location.address
+                    },
+                suite =
+                    if (key == EditBusinessPageFieldKey.Suite) {
+                        location.suite.copy(current = value)
+                    } else {
+                        location.suite
                     },
                 city =
                     if (key == EditBusinessPageFieldKey.City) {
@@ -807,13 +815,24 @@ class EditBusinessPageViewModel
         private suspend fun pushLocation(content: EditBusinessPageContent): String? {
             if (!content.location.hasAddressEdits) return null
             val locationId = primaryLocationId ?: return NO_LOCATION_MESSAGE
-            return failureMessage(
+            val result =
                 businesses.updateLocation(
                     businessId,
                     locationId,
                     EditBusinessPageMapper.locationPayload(content.location),
-                ),
-            )
+                )
+            val refusal =
+                ((result as? NetworkResult.Failure)?.error as? NetworkError.ClientError)
+                    ?.takeIf { it.code == 409 || it.code == 422 }
+                    ?: return failureMessage(result)
+            // The address check refused it: the reason also stays under Address, and the edits stay.
+            (_state.value as? EditBusinessPageUiState.Loaded)?.let { loaded ->
+                _state.value =
+                    EditBusinessPageUiState.Loaded(
+                        loaded.content.copy(location = loaded.content.location.copy(error = refusal.message)),
+                    )
+            }
+            return refusal.message
         }
 
         private suspend fun pushHours(content: EditBusinessPageContent): String? {
@@ -1036,6 +1055,7 @@ private fun EditBusinessPageGalleryState.cleaned(): EditBusinessPageGalleryState
 private fun EditBusinessPageLocation.cleaned(): EditBusinessPageLocation =
     copy(
         address = address.cleaned(),
+        suite = suite.cleaned(),
         city = city.cleaned(),
         state = state.cleaned(),
         zip = zip.cleaned(),
@@ -1046,6 +1066,7 @@ private fun EditBusinessPageLocation.cleaned(): EditBusinessPageLocation =
 private fun EditBusinessPageLocation.reverted(): EditBusinessPageLocation =
     copy(
         address = address.reverted(),
+        suite = suite.reverted(),
         city = city.reverted(),
         state = state.reverted(),
         zip = zip.reverted(),

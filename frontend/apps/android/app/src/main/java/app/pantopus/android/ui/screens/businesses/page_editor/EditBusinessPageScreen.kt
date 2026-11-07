@@ -745,11 +745,26 @@ private fun LocationSection(
                 },
             )
             AddressSuggestionList(addressSuggestions, testTagPrefix = "editBusinessPage.addressSuggestion") { picked ->
-                picked.address?.takeIf { it.isNotBlank() }?.let { onFieldChange(EditBusinessPageFieldKey.Address, it) }
+                picked.address?.takeIf { it.isNotBlank() }?.let { street ->
+                    onFieldChange(EditBusinessPageFieldKey.Address, street)
+                    // A suite belongs to its building; one the owner typed stays.
+                    val suite = content.location.suite
+                    if (!suite.isDirty && suite.current.isNotEmpty() && !sameStreet(street, content.location.address.original)) {
+                        onFieldChange(EditBusinessPageFieldKey.Suite, "")
+                    }
+                }
                 picked.city?.takeIf { it.isNotBlank() }?.let { onFieldChange(EditBusinessPageFieldKey.City, it) }
                 picked.state?.takeIf { it.isNotBlank() }?.let { onFieldChange(EditBusinessPageFieldKey.State, it) }
                 picked.zipcode?.takeIf { it.isNotBlank() }?.let { onFieldChange(EditBusinessPageFieldKey.Zip, it) }
             }
+            BizField(
+                label = "Suite / unit",
+                hint = "Optional",
+                field = content.location.suite,
+                mode = mode,
+                testTag = "editBusinessPage.field.suite",
+                onValueChange = { onFieldChange(EditBusinessPageFieldKey.Suite, it) },
+            )
             BizField(
                 label = "City",
                 required = true,
@@ -789,6 +804,15 @@ private fun LocationSection(
             }
         }
     }
+}
+
+/** "805 Broadway St." and "805  broadway st" are the same street line. */
+private fun sameStreet(
+    lhs: String,
+    rhs: String,
+): Boolean {
+    fun folded(value: String) = value.lowercase().split(Regex("[\\s.,]+")).filter { it.isNotEmpty() }.joinToString(" ")
+    return folded(lhs) == folded(rhs)
 }
 
 // MARK: - BizLabel + BizField

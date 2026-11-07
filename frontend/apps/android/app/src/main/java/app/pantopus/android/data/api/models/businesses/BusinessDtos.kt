@@ -591,6 +591,8 @@ data class BusinessLocationHoursResponse(
 @JsonClass(generateAdapter = true)
 data class UpdateBusinessLocationRequest(
     val address: String? = null,
+    /** Suite / unit. "" clears the saved one; null (left out) keeps it, and the route checks the address with it. */
+    val address2: String? = null,
     val city: String? = null,
     val state: String? = null,
     val zipcode: String? = null,
