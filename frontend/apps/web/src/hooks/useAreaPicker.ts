@@ -53,6 +53,13 @@ export function useAreaPicker(showToast: (msg: string) => void) {
   // The first resolve of a visit is skipped while the kept area is fresh.
   const keptFreshUntil = useRef(keptArea && kept ? kept.at + AREA_FRESH_MS : 0);
 
+  // An area the person picks (their location, a searched area, the map's location, the location sheet) wins over a
+  // saved-area read still on its way: that read no longer writes the area when it lands, and the feed doesn't wait for it.
+  const areaChosen = useCallback(() => {
+    resolveGeneration.current++;
+    setAreaStatus('ready');
+  }, []);
+
   const refreshDeviceLocation = useCallback(async () => {
     if (!navigator.geolocation) return null;
     return await new Promise<{ latitude: number; longitude: number; timestamp: string } | null>((resolve) => {
@@ -150,6 +157,7 @@ export function useAreaPicker(showToast: (msg: string) => void) {
       showToast('Could not get your location. Check browser location permission.');
       return;
     }
+    areaChosen();
     setViewingLat(loc.latitude);
     setViewingLng(loc.longitude);
     setViewingLabel('Current location');
@@ -157,7 +165,7 @@ export function useAreaPicker(showToast: (msg: string) => void) {
     setShowAreaPicker(false);
     setAreaQuery('');
     setAreaSuggestions([]);
-  }, [refreshDeviceLocation, showToast]);
+  }, [refreshDeviceLocation, showToast, areaChosen]);
 
   const selectAreaSuggestion = useCallback((suggestion: Record<string, any>) => {
     // Backend returns center as [lng, lat]; API type uses { lat, lng }. Accept both.
@@ -172,6 +180,7 @@ export function useAreaPicker(showToast: (msg: string) => void) {
       lng = Number((raw as { lat: number; lng: number }).lng);
     }
     if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    areaChosen();
     setViewingLat(lat);
     setViewingLng(lng);
     setViewingLabel((suggestion?.primary_text as string) || (suggestion?.text as string) || (suggestion?.label as string) || 'selected area');
@@ -179,10 +188,11 @@ export function useAreaPicker(showToast: (msg: string) => void) {
     setShowAreaPicker(false);
     setAreaQuery('');
     setAreaSuggestions([]);
-  }, []);
+  }, [areaChosen]);
 
   const handleMapUseCurrentLocation = useCallback(async (coords?: { latitude: number; longitude: number }) => {
     if (coords) {
+      areaChosen();
       setUserLat(coords.latitude);
       setUserLng(coords.longitude);
       setGpsTimestamp(new Date().toISOString());
@@ -197,14 +207,16 @@ export function useAreaPicker(showToast: (msg: string) => void) {
       showToast('Could not get your location. Check browser location permission.');
       return;
     }
+    areaChosen();
     setViewingLat(loc.latitude);
     setViewingLng(loc.longitude);
     setViewingLabel('Current location');
     setRadiusMiles(null);
-  }, [refreshDeviceLocation, showToast]);
+  }, [refreshDeviceLocation, showToast, areaChosen]);
 
   /** Apply a server-returned ViewingLocation (from FeedLocationSheet) */
   const applyViewingLocation = useCallback((vl: { label: string; latitude: number; longitude: number; radiusMiles: number }) => {
+    areaChosen();
     setViewingLat(vl.latitude);
     setViewingLng(vl.longitude);
     setViewingLabel(vl.label || 'Set area');
@@ -213,7 +225,7 @@ export function useAreaPicker(showToast: (msg: string) => void) {
     const old = queryClient.getQueryData<ResolvedArea>(queryKeys.viewingArea());
     if (old?.viewingLocation) queryClient.setQueryData<ResolvedArea>(queryKeys.viewingArea(), { ...old, viewingLocation: { ...old.viewingLocation, ...vl } });
     else queryClient.removeQueries({ queryKey: queryKeys.viewingArea(), exact: true });
-  }, [queryClient]);
+  }, [queryClient, areaChosen]);
 
   return {
     userLat,
