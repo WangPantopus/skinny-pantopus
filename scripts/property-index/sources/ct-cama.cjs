@@ -12,6 +12,7 @@ const { getJson, socrataRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
 
 const DOMAIN = 'data.ct.gov';
@@ -69,7 +70,7 @@ const TOWNS_BY_NUMBER = [...REGION_OF.keys()].sort();
 const COLUMNS = ['pid', 'town_id', 'location', 'address_number', 'street_name', 'unit', 'property_city', 'property_zip', 'assessed_total', 'assessed_building', 'assessed_land', 'appraised_total', 'appraised_building', 'appraised_land',
   'valuation_year', 'land_acres', 'zone', 'state_use', 'state_use_description', 'style_desc', 'grade_desc', 'condition_description', 'neighborhood', 'ayb', 'eyb', 'gross_area_of_primary_building', 'living_area', 'stories',
   'frame_type_description', 'roof_structure_description', 'roof_cover_description', 'number_of_buildings', 'total_rooms', 'number_of_bedroom', 'number_of_baths', 'number_of_half_baths', 'int_flr1_description', 'ext_wall1_description',
-  'heat_type_description', 'heat_fuel_description', 'ac_type_description', 'no_of_fireplaces', 'fin_bsm_area', 'book_page', 'sale_price', 'sale_date', 'number_of_units'];
+  'heat_type_description', 'heat_fuel_description', 'ac_type_description', 'no_of_fireplaces', 'fin_bsm_area', 'bsm_gar', 'book_page', 'sale_price', 'sale_date', 'instrument', 'number_of_units'];
 
 /** What the town's use and style words say this record is. */
 function useOf(row) {
@@ -108,6 +109,8 @@ function fromRow(row, fips, county, town) {
   const on = kind === 'property' || kind === 'unit' || kind === 'building';
   const home = kind === 'property' || kind === 'unit';
   put(facts, 'address_on_record', onRecord(row.location, unit));
+  const plus4 = /^(\d{5})-(\d{4})$/.exec(String(row.property_zip ?? '').trim());
+  if (plus4 && plus4[2] !== '0000') facts.zip_plus4 = `${plus4[1]}-${plus4[2]}`;
   put(facts, 'year_built', on ? year(row.ayb) : null);
   put(facts, 'effective_year_built', on ? year(row.eyb) : null);
   put(facts, 'living_sqft', home ? number(row.living_area) : null);
@@ -126,6 +129,13 @@ function fromRow(row, fips, county, town) {
     if (full || half) facts.bathrooms = (full || 0) + (half || 0) * 0.5;
     put(facts, 'fireplaces', number(row.no_of_fireplaces));
     put(facts, 'basement_finished_sqft', number(row.fin_bsm_area));
+    // The flat file has a garage only when it's in the basement: the towns keep other garages in their outbuilding tables.
+    const cars = number(row.bsm_gar);
+    if (cars && cars <= 6) {
+      facts.garage = `${cars} car basement garage`;
+      facts.parking_type = 'Basement garage';
+      facts.parking_spaces = cars;
+    }
     put(facts, 'condition', said(row.condition_description));
     put(facts, 'flooring', said(row.int_flr1_description));
     put(facts, 'heating', said(row.heat_type_description));
@@ -151,7 +161,8 @@ function fromRow(row, fips, county, town) {
   put(facts, 'assessed_land_value', number(row.assessed_land));
   put(facts, 'assessed_building_value', number(row.assessed_building));
   const sold = isoDate(row.sale_date);
-  if (number(row.sale_price) > 100 && sold) {
+  // Most towns write the deed as their own number; a quit claim is left out where the word says it.
+  if (isHomeSale(number(row.sale_price), row.instrument) && sold) {
     facts.sale_price = number(row.sale_price);
     facts.sale_date = sold;
     const document = /^(\S+)\/(\S+)$/.exec(String(row.book_page ?? '').trim());
