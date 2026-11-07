@@ -652,12 +652,16 @@ extension RootTabView {
             AnyView(PlansTabRoot())
         case .mail:
             // The Mailbox at the root of its own stack, with the mailbox
-            // cluster's destinations.
-            AnyView(HubTabRoot(
-                mode: .mailbox,
-                onOpenProfile: { showProfile = true },
-                onOpenProfileScreen: { route in presentProfile(at: route) }
-            ))
+            // cluster's destinations. Everything on the tab asks who's holding
+            // the phone first (founder, 2026-11-06): on a cancel the tab stays
+            // on its cover, and the bar still goes elsewhere.
+            AnyView(SensitiveScreenGuard(reason: HubRoute.mailGuardReason) {
+                HubTabRoot(
+                    mode: .mailbox,
+                    onOpenProfile: { showProfile = true },
+                    onOpenProfileScreen: { route in presentProfile(at: route) }
+                )
+            })
         case .messages:
             AnyView(InboxTabRoot())
         }

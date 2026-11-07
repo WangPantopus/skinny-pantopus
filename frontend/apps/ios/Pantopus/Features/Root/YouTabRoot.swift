@@ -940,7 +940,13 @@ public struct YouTabRoot: View {
     @ViewBuilder
     private func launchScopedDestination(for route: YouRoute) -> some View {
         if route.isAvailableAtLaunch {
-            destination(for: route)
+            if route.isMailScreen {
+                SensitiveScreenGuard(reason: HubRoute.mailGuardReason, onRejected: pop) {
+                    destination(for: route)
+                }
+            } else {
+                destination(for: route)
+            }
         } else {
             NotYetAvailableView(tabName: "This feature", icon: .info)
         }
@@ -2908,6 +2914,20 @@ extension YouRoute {
         switch self {
         case .addHome, .addHomeAt, .joinHome: true
         default: false
+        }
+    }
+}
+
+/// Personal mail asks who's holding the phone first, as in the Mail tab.
+extension YouRoute {
+    var isMailScreen: Bool {
+        switch self {
+        case .mailboxRoot, .mailboxMap, .mailDay, .mailItemDetail, .mailboxSearch, .vacationHold, .mailTask, .mailTaskList,
+             .mailTranslation, .unboxing, .packageGig, .communityMail, .ceremonialMail, .ceremonialMailOpen, .mailRoutingQueue,
+             .mailSentCard, .mailParty, .christmasCards, .stamps, .homeRecords, .earn:
+            true
+        default:
+            false
         }
     }
 }

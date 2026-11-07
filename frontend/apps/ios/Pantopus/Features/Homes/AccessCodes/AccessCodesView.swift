@@ -16,12 +16,19 @@ struct AccessCodesView: View {
     @State private var isVisible = false
     @State private var needsForegroundRead = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
 
     init(viewModel: AccessCodesViewModel) {
         _viewModel = State(initialValue: viewModel)
     }
 
     var body: some View {
+        SensitiveScreenGuard(reason: AccessCodesCopy.guardReason, onRejected: dismiss.callAsFunction) {
+            guardedBody
+        }
+    }
+
+    private var guardedBody: some View {
         ListOfRowsView(dataSource: viewModel)
             .accessibilityIdentifier(AccessCodesA11y.screen)
             .onAppear {

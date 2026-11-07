@@ -22,8 +22,14 @@ struct AccessCodesSearchView: View {
     }
 
     var body: some View {
+        SensitiveScreenGuard(reason: AccessCodesCopy.guardReason, onRejected: viewModel.cancel) {
+            guardedBody
+        }
+    }
+
+    private var guardedBody: some View {
         @Bindable var viewModel = viewModel
-        SearchListShell(
+        return SearchListShell(
             placeholder: "Search access codes",
             query: $viewModel.query,
             results: viewModel.results,

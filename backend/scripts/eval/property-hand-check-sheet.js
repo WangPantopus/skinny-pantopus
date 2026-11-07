@@ -4,6 +4,8 @@
 // county uses shows up at least once, with what we would show next to each home's account number. The person marks each
 // row right or wrong and copies the result back. Real homes: the page stays out of Git, in ~/.config/pantopus/provider-truth.
 //   node backend/scripts/eval/property-hand-check-sheet.js --county 53011 --out <build dir> --lookup <county page url> [--per-type 10]
+//     --codes <PACS zip>  Clark only: also collects the words for its wall, roof, heat, foundation and flooring codes. It publishes no
+//                         code list, so the sheet names one or two homes per code and a box for the word the county's page shows.
 'use strict';
 
 const fs = require('fs');
@@ -11,6 +13,8 @@ const os = require('os');
 const path = require('path');
 const { openRelease } = require('./lib/propertyRelease');
 const { FACTS } = require('../../services/propertyRecords/facts');
+const { zipTable } = require('../../../scripts/property-index/lib/tables.cjs');
+const { CODE_WORDS } = require('../../../scripts/property-index/sources/wa-clark.cjs');
 
 const opt = (name, fallback) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : fallback; };
 const fips = opt('--county');
@@ -62,9 +66,39 @@ const sections = [...groups].map(([type, records]) => {
   return `<h2>${esc(type)}</h2>${homes}`;
 }).join('');
 
+// What each of the county's codes means, by hand: a word from its own page, never a guess.
+const CODE_ATTRIBUTES = new Map([['Roof Covering', ['roof_cover', 'Roof cover']], ['Exterior Wall', ['exterior_walls', 'Exterior walls']], ['HEAT TYPE', ['heating', 'Heating']], ['Foundation', ['foundation', 'Foundation']], ['Flooring', ['flooring', 'Flooring']]]);
+const CODES_IN_REAL_USE = 10;
+async function codeTable(zip) {
+  const homes = new Map();
+  for (const record of release.records()) if (['property', 'unit'].includes(record.kind) && !record.restricted) homes.set(record.facts.parcel_number, record);
+  const codes = new Map();
+  for await (const row of zipTable(zip, 'PropImpDetailAttrVw.txt', ['prop_id', 'ImpAttr', 'ImpAttrVal'], { delimiter: '|', quoted: false })) {
+    const attribute = CODE_ATTRIBUTES.get(row.ImpAttr);
+    const code = String(row.ImpAttrVal || '').trim().toUpperCase();
+    if (!attribute || !code || !homes.has(row.prop_id) || CODE_WORDS[attribute[0]][code]) continue;
+    const key = `${attribute[0]}:${code}`;
+    if (!codes.has(key)) codes.set(key, { label: attribute[1], code, accounts: new Set() });
+    codes.get(key).accounts.add(row.prop_id);
+  }
+  const used = [...codes].filter(([, entry]) => entry.accounts.size >= CODES_IN_REAL_USE).sort(([a, x], [b, y]) => a.split(':')[0].localeCompare(b.split(':')[0]) || y.accounts.size - x.accounts.size);
+  const rows = used.map(([key, { label, code, accounts }]) => {
+    const pair = [...accounts].slice(0, 2).map(esc).join(', ');
+    return `<tr><td>${esc(label)}</td><td><b>${esc(code)}</b></td><td>${accounts.size.toLocaleString('en-US')} homes</td><td>${pair}</td><td><input class=word data-code="${esc(key)}" placeholder="the page's word"></td></tr>`;
+  }).join('');
+  console.log(`${used.length} codes in real use, of ${codes.size}`);
+  return `<h2>What the county's codes mean</h2><p>The county's file says only codes for these, and it publishes no list. For each code, search one of its accounts${lookup ? ` on <a target=_blank href="${esc(lookup)}">the county's page</a>` : ''} and type the word the page shows next to that part of the home. If the page shows the code itself or nothing, try the other account, then leave the box empty. An empty box keeps that row hidden; nothing is guessed.</p><table><tr><th align=left>Row</th><th align=left>Code</th><th align=left>Used on</th><th align=left>Accounts</th><th align=left>Word on the page</th></tr>${rows}</table>`;
+}
+
+(async () => {
+const codeSection = opt('--codes') ? await codeTable(opt('--codes')) : '';
 const file = path.join(os.homedir(), '.config/pantopus/provider-truth/t3', `${fips}-hand-check.html`);
 fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
 fs.writeFileSync(file, `<!doctype html><meta charset=utf-8><title>County check ${fips}</title><style>body{font:15px system-ui;max-width:760px;margin:24px auto;padding:0 16px}td{padding:3px 10px 3px 0;vertical-align:top}table{margin-bottom:8px}#out{width:100%;height:90px}</style>
-<h1>${esc(release.county.name)}: check by hand</h1><p>${esc(release.county.publisher)}, ${esc(release.county.as_of)}. For each home, open the county's page and search the account number. Tick \"wrong\" only on a row that doesn't match, then tick \"I checked this home\". A row the page doesn't show is fine: leave it. About 30 seconds a home. When you're done, press the button and paste the result in the chat: it holds no addresses.</p>${sections}
-<p><button onclick="const w=[...document.querySelectorAll('input.wrong:checked')].map(i=>i.dataset.row);document.getElementById('out').value='checked '+document.querySelectorAll('input.done:checked').length+' homes; '+w.length+' rows wrong\\n'+w.join('\\n')">Make the result</button></p><textarea id=out></textarea>`, { mode: 0o600 });
+<h1>${esc(release.county.name)}: check by hand</h1>${codeSection}<p>${esc(release.county.publisher)}, ${esc(release.county.as_of)}. For each home, open the county's page and search the account number. Tick \"wrong\" only on a row that doesn't match, then tick \"I checked this home\". A row the page doesn't show is fine: leave it. About 30 seconds a home. When you're done, press the button and paste the result in the chat: it holds no addresses.</p>${sections}
+<p><button onclick="const w=[...document.querySelectorAll('input.wrong:checked')].map(i=>i.dataset.row);const c=[...document.querySelectorAll('input.word')].filter(i=>i.value.trim()).map(i=>i.dataset.code+' = '+i.value.trim());document.getElementById('out').value='checked '+document.querySelectorAll('input.done:checked').length+' homes; '+w.length+' rows wrong\\n'+w.join('\\n')+(c.length?'\\nwords\\n'+c.join('\\n'):'')">Make the result</button></p><textarea id=out></textarea>`, { mode: 0o600 });
 console.log(`${rowId} rows across ${[...groups.keys()].length} property types: ${file}`);
+})().catch((err) => {
+  console.error(err.constructor === Error ? err.message : err.name);
+  process.exit(1);
+});

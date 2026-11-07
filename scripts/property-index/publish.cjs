@@ -182,6 +182,8 @@ function rollback(store, fips, state) {
     as_of: county.previous_as_of,
     previous: null,
     previous_as_of: null,
+    // Measured on the release being taken back, so no estimate rests on it. The next release brings its own.
+    value_model: null,
     rolled_back_from: county.release,
     rolled_back_as_of: county.as_of,
     rolled_back_at: new Date().toISOString(),
