@@ -115,7 +115,8 @@ function summary() {
     live: named.filter(([, mode]) => mode === 'live').length,
     shadow: named.filter(([, mode]) => mode === 'shadow').length,
     estimates: estimates.length,
-    hash: crypto.createHash('sha256').update(JSON.stringify([named, withheld, estimates])).digest('hex').slice(0, 12),
+    // Estimates join the hash only when a county has them, so servers before and after them agree on a file without any.
+    hash: crypto.createHash('sha256').update(JSON.stringify(estimates.length ? [named, withheld, estimates] : [named, withheld])).digest('hex').slice(0, 12),
   };
 }
 
