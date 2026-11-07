@@ -4,7 +4,8 @@
 //
 //  Ten-way classification for Pulse posts. Drives the chip-row filter,
 //  the per-card colored chip and the compose FAB's pre-fill (a post's
-//  reaction follows its type: `PostReactionKind(postType:)`). The `all`
+//  reaction follows its type, `PostReactionKind(postType:)`: Going on an
+//  Event, emoji on the rest). The `all`
 //  case is a chip-row-only sentinel; real posts resolve to one of the
 //  other nine, or to `generic` when their type is one this build doesn't
 //  know (Pulse S2: a plain card).
@@ -142,34 +143,44 @@ public extension PulseIntent {
     }
 }
 
-/// The post's one reaction on its card: its kind's button (Helpful, Going,
-/// Celebrate) and how many people tapped it (`POST /api/posts/:id/like`).
+/// The post's reaction on its card (`POST /api/posts/:id/like`): an Event's
+/// Going and how many are going, or every other post's emoji reactions.
 public struct PulseReaction: Sendable, Hashable {
     public let kind: PostReactionKind
+    /// Going: how many are going. Emoji: how many reacted.
     public let likeCount: Int
+    /// Emoji: each emoji's count and the viewer's own; empty for Going.
+    public let emoji: PostReactions
 
     public init(kind: PostReactionKind, likeCount: Int) {
         self.kind = kind
         self.likeCount = likeCount
+        emoji = PostReactions()
     }
 
-    public init(postType: String?, likeCount: Int) {
-        self.init(kind: PostReactionKind(postType: postType), likeCount: likeCount)
+    /// Every post but an Event: its emoji reactions.
+    public init(emoji: PostReactions) {
+        kind = .emoji
+        likeCount = emoji.total
+        self.emoji = emoji
     }
 
-    /// What VoiceOver reads: "Helpful, 3", or "Helpful" before anyone tapped it.
+    /// What VoiceOver reads: "Going, 3", or "Going" before anyone tapped it;
+    /// "Reactions, 6: 3 Like, 2 Love, 1 Haha", or "React" before anyone reacted.
     public var accessibilityLabel: String {
-        likeCount == 0 ? kind.label : "\(kind.label), \(likeCount)"
+        switch kind {
+        case .going: likeCount == 0 ? kind.label : "\(kind.label), \(likeCount)"
+        case .emoji: emoji.accessibilityLabel
+        }
     }
 }
 
 public extension PostReactionKind {
-    /// The button's icon: a light bulb, a calendar check, a party popper.
+    /// The button's icon: a calendar check for Going, a smile for the emoji picker.
     var icon: PantopusIcon {
         switch self {
-        case .helpful: .lightbulb
         case .going: .calendarCheck
-        case .celebrate: .partyPopper
+        case .emoji: .smile
         }
     }
 }

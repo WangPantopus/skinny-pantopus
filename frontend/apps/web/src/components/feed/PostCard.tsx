@@ -6,7 +6,7 @@ import React, { useState, type CSSProperties, type ReactNode } from 'react';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper, X,
-  Trophy, Compass, User, Bookmark, Lightbulb, CalendarCheck, PartyPopper,
+  Trophy, Compass, User, Bookmark, CalendarCheck, Smile,
   MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share, Repeat2, Camera,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -18,12 +18,13 @@ import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
 import {
-  formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, POST_REACTION_LABEL, postReaction,
+  formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, postReaction,
   type PostTypeConfig,
 } from '@pantopus/ui-utils';
 import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import PostMetadata from './PostMetadata';
+import { PostReactionPill } from './PostReactions';
 import { canSharePost, sharePostLink } from './sharePostLink';
 import type { AudienceProfile, Post } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -53,13 +54,9 @@ function getTypeIcon(type: string): ReactNode {
   return <Icon className="w-4 h-4" />;
 }
 
-/** The icon of the post's one reaction, named by its kind (Going, Celebrate, Helpful); the post page uses it too. */
+/** The icon for a post's reactions: Going's calendar on an event, a smile for the emoji on every other kind. */
 export function postReactionIcon(type: string | null | undefined): LucideIcon {
-  switch (postReaction(type)) {
-    case 'going': return CalendarCheck;
-    case 'celebrate': return PartyPopper;
-    default: return Lightbulb;
-  }
+  return postReaction(type) === 'going' ? CalendarCheck : Smile;
 }
 
 function getTypeCtaIcon(type: string): ReactNode | null {
@@ -108,7 +105,10 @@ function repostedByText(repostedBy: Post['reposted_by']): string | null {
 
 interface PostCardProps {
   post: Post;
+  /** Going on an event (a like). */
   onLike: (postId: string) => void;
+  /** The viewer's emoji on every other kind of post, or null to take it away. */
+  onReact: (postId: string, reaction: string | null) => void;
   onComment: (postId: string) => void;
   onOpenDetail: (postId: string) => void;
   onReport?: (postId: string) => void;
@@ -128,7 +128,7 @@ interface PostCardProps {
   /** Dismisses a cold-start tip (a seeded fact, not a post). */
   onDismissSeeded?: (factId: string) => void;
   currentUserId?: string;
-  /** A like or save is waiting for the server: the button shows it as pending. */
+  /** A reaction or save is waiting for the server: the button shows it as pending. */
   isLiking?: boolean;
   isSaving?: boolean;
   surface?: string;
@@ -143,6 +143,7 @@ interface PostCardProps {
 function PostCard({
   post,
   onLike,
+  onReact,
   onComment,
   onOpenDetail,
   onReport,
@@ -168,8 +169,7 @@ function PostCard({
   const config = getPostTypeConfig(post.post_type || 'general');
   const typeIconNode = getTypeIcon(post.post_type || 'general');
   const ctaIconNode = getTypeCtaIcon(post.post_type || 'general');
-  const reactionLabel = POST_REACTION_LABEL[postReaction(post.post_type)];
-  const ReactionIcon = postReactionIcon(post.post_type);
+  const isEvent = postReaction(post.post_type) === 'going';
   // A "Save" call to action saves the post, like the bookmark; the others open the replies.
   const ctaSaves = config.ctaIcon === 'bookmark' && Boolean(onSave);
   const authorUserId = post.author_user_id || post.user_id;
@@ -520,23 +520,27 @@ function PostCard({
       {/* ─── Action bar (none on a tip) ──────────────── */}
       {!seeded && (
       <div className="flex items-center gap-1 px-3 py-2 border-t border-app">
-        {/* The post's one reaction, named by its kind: Going (event), Celebrate (win), Helpful (the rest) */}
-        <button
-          onClick={() => onLike(post.id)}
-          disabled={isLiking}
-          aria-busy={isLiking || undefined}
-          aria-pressed={Boolean(post.userHasLiked)}
-          aria-label={post.like_count > 0 ? `${reactionLabel}, ${post.like_count}` : reactionLabel}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isLiking ? 'opacity-60 ' : ''}${
-            post.userHasLiked
-              ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300'
-              : 'text-app-muted hover-bg-app'
-          }`}
-        >
-          <ReactionIcon className="w-4 h-4" aria-hidden="true" />
-          <span>{reactionLabel}</span>
-          {post.like_count > 0 && <span>{post.like_count}</span>}
-        </button>
+        {/* Going on an event; an emoji on every other kind */}
+        {isEvent ? (
+          <button
+            onClick={() => onLike(post.id)}
+            disabled={isLiking}
+            aria-busy={isLiking || undefined}
+            aria-pressed={Boolean(post.userHasLiked)}
+            aria-label={post.like_count > 0 ? `Going, ${post.like_count}` : 'Going'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isLiking ? 'opacity-60 ' : ''}${
+              post.userHasLiked
+                ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300'
+                : 'text-app-muted hover-bg-app'
+            }`}
+          >
+            <CalendarCheck className="w-4 h-4" aria-hidden="true" />
+            <span>Going</span>
+            {post.like_count > 0 && <span>{post.like_count}</span>}
+          </button>
+        ) : (
+          <PostReactionPill post={post} pending={isLiking} onReact={(reaction) => onReact(post.id, reaction)} />
+        )}
 
         {/* Comment */}
         <button
@@ -667,6 +671,9 @@ export default React.memo(PostCard, (prev, next) => {
   return prev.post.id === next.post.id
     && prev.post.updated_at === next.post.updated_at
     && prev.post.like_count === next.post.like_count
+    && prev.post.userHasLiked === next.post.userHasLiked
+    && prev.post.userReaction === next.post.userReaction
+    && prev.post.reactions === next.post.reactions
     && prev.post.comment_count === next.post.comment_count
     && prev.post.userHasSaved === next.post.userHasSaved
     && prev.post.profile_pinned === next.post.profile_pinned
@@ -676,6 +683,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.currentUserId === next.currentUserId
     && prev.surface === next.surface
     && prev.onLike === next.onLike
+    && prev.onReact === next.onReact
     && prev.onComment === next.onComment
     && prev.onOpenDetail === next.onOpenDetail
     && prev.onReport === next.onReport

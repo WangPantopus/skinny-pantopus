@@ -20,6 +20,7 @@ const s3 = require('./s3Service');
 const { readablePosts, postScopeAccess } = require('./pulse/readAccess');
 const { unpublishedBusinessIds } = require('../utils/visibilityPolicy');
 const { localDisplayNames } = require('../utils/identityProfiles');
+const { reactionSummary, shownReaction } = require('../utils/postReaction');
 const {
   SAFE_CREATOR_SELECT,
   serializeAudienceProfileForViewer,
@@ -200,6 +201,9 @@ function normalizeFeedPostRow(row, likedPostIds = new Set(), savedPostIds = new 
     userHasLiked: likedPostIds.has(row.id),
     userHasSaved: savedPostIds.has(row.id),
     userHasReposted: false,
+    // Each emoji's count and the viewer's own emoji (utils/postReaction.js); enrichWithUserStatus fills them in.
+    reactions: [],
+    userReaction: null,
     home_id: row.home_id || null,
     latitude: row.latitude || null,
     longitude: row.longitude || null,
@@ -538,7 +542,7 @@ function loadUserStatusRows(posts, userId) {
   // Which of the viewer's own posts they pinned to their profile (PRF SRV-3), for their Pin / Unpin menu item.
   const ownIds = userId ? posts.filter(p => p.user_id === userId).map(p => p.id) : [];
   return Promise.all([
-    supabaseAdmin.from('PostLike').select('post_id').eq('user_id', userId).in('post_id', postIds),
+    supabaseAdmin.from('PostLike').select('post_id, reaction').eq('user_id', userId).in('post_id', postIds),
     supabaseAdmin.from('PostSave').select('post_id').eq('user_id', userId).in('post_id', postIds),
     supabaseAdmin.from('PostShare').select('post_id').eq('user_id', userId).eq('share_type', 'repost').in('post_id', postIds),
     ownIds.length
@@ -547,16 +551,40 @@ function loadUserStatusRows(posts, userId) {
   ]);
 }
 
+// Each post's reactions as [{ reaction, count }], the most used emoji first (utils/postReaction.js), by post id. Only
+// posts someone reacted to are read. A failed read leaves the counts out (the apps then show like_count as 👍)
+// rather than failing the page.
+async function loadReactionSummaries(posts) {
+  const summaries = new Map();
+  const ids = posts.filter((post) => Number(post.like_count) > 0).map((post) => post.id);
+  if (!ids.length) return summaries;
+  const { data, error } = await supabaseAdmin.rpc('post_reaction_counts', { p_post_ids: ids });
+  if (error) {
+    logger.warn('Post reaction counts unavailable', { error: error.message, posts: ids.length });
+    return summaries;
+  }
+  const rowsByPost = new Map();
+  for (const row of Array.isArray(data) ? data : []) {
+    if (!rowsByPost.has(row.post_id)) rowsByPost.set(row.post_id, []);
+    rowsByPost.get(row.post_id).push(row);
+  }
+  for (const [postId, rows] of rowsByPost) summaries.set(postId, reactionSummary(rows));
+  return summaries;
+}
+
 // NOTE: This function applies location privacy via applyPostLocationPrivacy.
 // Callers should NOT also call applyPostLocationPrivacy.
 async function enrichWithUserStatus(posts, userId) {
   if (!posts.length) return posts;
-  // The matched businesses' state and the viewer's likes, saves and reposts don't depend on each other.
-  const [[{ data: likes }, { data: saves }, { data: reposts }, { data: pinned }]] = await Promise.all([
+  // The matched businesses' state, the reaction counts and the viewer's likes, saves and reposts don't depend on each
+  // other.
+  const [[{ data: likes }, { data: saves }, { data: reposts }, { data: pinned }], reactionSummaries] = await Promise.all([
     loadUserStatusRows(posts, userId),
+    loadReactionSummaries(posts),
     dropUnpublishedMatches(posts),
   ]);
-  const likedSet = new Set((likes || []).map(r => r.post_id));
+  // The viewer's own reaction on each post they reacted to (a mark from before emoji reactions shows as 👍).
+  const viewerReactions = new Map((likes || []).map(r => [r.post_id, shownReaction(r.reaction)]));
   const savedSet = new Set((saves || []).map(r => r.post_id));
   const repostSet = new Set((reposts || []).map(r => r.post_id));
   // Left off when the read failed, so a menu never offers Pin for a pinned post.
@@ -565,7 +593,9 @@ async function enrichWithUserStatus(posts, userId) {
     applyPostLocationPrivacy(p, userId);
     return {
       ...p,
-      userHasLiked: likedSet.has(p.id),
+      userHasLiked: viewerReactions.has(p.id),
+      userReaction: viewerReactions.get(p.id) || null,
+      reactions: reactionSummaries.get(p.id) || [],
       userHasSaved: savedSet.has(p.id),
       userHasReposted: repostSet.has(p.id),
       ...(userId && p.user_id === userId && pinnedSet ? { profile_pinned: pinnedSet.has(p.id) } : {}),
@@ -2012,6 +2042,7 @@ module.exports = {
   applyMuteHideFilters,
   enrichWithUserStatus,
   enrichFeedPosts,
+  loadReactionSummaries,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
   dropUnpublishedMatches,

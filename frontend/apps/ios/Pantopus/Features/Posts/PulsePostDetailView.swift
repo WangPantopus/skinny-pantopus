@@ -293,6 +293,7 @@ public struct PulsePostDetailView: View {
             onBack: onBack,
             onOpenProfile: onOpenProfile,
             onReactionTap: { Task { await viewModel.tapReaction() } },
+            onReactionPick: { emoji in Task { await viewModel.pickReaction(emoji) } },
             onSendTap: { Task { await viewModel.sendComment() } },
             onShowMoreReplies: { viewModel.showMoreReplies() },
             onCancelReply: { viewModel.cancelReply() },

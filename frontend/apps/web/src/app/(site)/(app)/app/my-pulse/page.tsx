@@ -9,6 +9,7 @@ import { getAuthToken } from '@pantopus/api';
 import type { Post } from '@pantopus/types';
 import { EditPostDialog, PostCard, PostDetailPanel } from '@/components/feed';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
+import { reactedPostPatch, reactionFieldsOf, serverReactionPatch } from '@/components/feed/PostReactions';
 import { useProfilePin } from '@/hooks/useProfilePin';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
@@ -241,6 +242,48 @@ export default function MyPulsePage() {
     likeMutation.mutate({ postId, liked: !(listedPost(postId)?.userHasLiked ?? false) });
   };
 
+  // An emoji on any post but an event (whose Going is the like above): shown at once in both tabs, put back if refused.
+  const reactMutation = useMutation({
+    mutationFn: ({ postId, reaction }: { postId: string; reaction: string | null }) => api.posts.setReaction(postId, reaction),
+    onMutate: ({ postId, reaction }) => {
+      setLikingIds((prev) => new Set(prev).add(postId));
+      const before = listedPost(postId);
+      if (!before) return undefined;
+      const patch = reactedPostPatch(before, reaction);
+      const apply = (p: Post) => (p.id === postId ? { ...p, ...patch } : p);
+      setPosts((prev) => prev.map(apply));
+      setSaved((prev) => prev.map(apply));
+      return { previous: reactionFieldsOf(before) };
+    },
+    onSuccess: (res, { postId }) => {
+      const patch = serverReactionPatch(res, listedPost(postId)?.reactions);
+      const apply = (p: Post) => (p.id === postId ? { ...p, ...patch } : p);
+      setPosts((prev) => prev.map(apply));
+      setSaved((prev) => prev.map(apply));
+      patchPostInFeedCaches(queryClient, postId, patch);
+    },
+    onError: (_err, { postId }, context) => {
+      if (context) {
+        const undo = (p: Post) => (p.id === postId ? { ...p, ...context.previous } : p);
+        setPosts((prev) => prev.map(undo));
+        setSaved((prev) => prev.map(undo));
+      }
+      toast.error("Couldn't update your reaction. Please try again.");
+    },
+    onSettled: (_data, _err, { postId }) => {
+      setLikingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(postId);
+        return next;
+      });
+    },
+  });
+
+  const handleReact = (postId: string, reaction: string | null) => {
+    if (likingIds.has(postId)) return;
+    reactMutation.mutate({ postId, reaction });
+  };
+
   // A listed save that goes (unsaved, or its post deleted) moves every later save up one,
   // so the next page starts one earlier or Load more would skip a saved post.
   const dropFromSaved = (postId: string) => {
@@ -338,6 +381,7 @@ export default function MyPulsePage() {
             <PostCard
               post={post}
               onLike={handleLike}
+              onReact={handleReact}
               onComment={(id) => setDetailPostId(id)}
               onOpenDetail={(id) => setDetailPostId(id)}
               onSave={handleSave}

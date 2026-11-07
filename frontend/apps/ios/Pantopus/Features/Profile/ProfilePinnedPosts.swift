@@ -205,10 +205,12 @@ enum ProfilePinnedPost {
     }
 
     /// The count that says most about it, as on web and Android: its
-    /// reaction ("18 going", "4 celebrated", "12 helpful"), else its replies;
+    /// reactions ("18 going", "1 reaction", "12 reactions"), else its replies;
     /// nil when it has neither.
     static func mainCount(_ post: FeedPostDTO) -> String? {
-        if post.likeCount > 0 { return PostReactionKind(postType: post.postType).countText(post.likeCount) }
+        let kind = PostReactionKind(postType: post.postType)
+        let reacted = kind == .going ? post.likeCount : post.emojiReactions.total
+        if reacted > 0 { return kind.countText(reacted) }
         if post.commentCount > 0 { return "\(post.commentCount) \(post.commentCount == 1 ? "reply" : "replies")" }
         return nil
     }

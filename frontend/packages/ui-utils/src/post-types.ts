@@ -175,33 +175,112 @@ export function getPostTypeConfig(type: string): PostTypeConfig {
   return POST_TYPE_CONFIG[type] || POST_TYPE_CONFIG.general;
 }
 
-// ── The post's reaction ──
-// Every post has one reaction (POST /api/posts/:id/like, counted in like_count), named for what it means on that
-// kind of post, the same on web, iPhone and Android and in the author's notice (backend/utils/postReaction.js):
-// Going on an event, Celebrate on a win, Helpful on every other kind.
+// ── How people react to a post ──
+// One reaction per person (POST /api/posts/:id/like, counted in like_count), the same on web, iPhone and Android and
+// in the author's notice (backend/utils/postReaction.js): Going on an event; on every other kind, one of the emoji
+// below, and each emoji's count shows under the post.
 
-export type PostReaction = 'going' | 'celebrate' | 'helpful';
+export type PostReaction = 'going' | 'emoji';
 
 export function postReaction(type: string | null | undefined): PostReaction {
-  if (type === 'event') return 'going';
-  if (type === 'neighborhood_win' || type === 'progress_wins') return 'celebrate';
-  return 'helpful';
+  return type === 'event' ? 'going' : 'emoji';
 }
 
-/** The reaction's button: "Going", "Celebrate", "Helpful". */
-export const POST_REACTION_LABEL: Record<PostReaction, string> = {
-  going: 'Going',
-  celebrate: 'Celebrate',
-  helpful: 'Helpful',
+/** The emoji a post can get, in the order the apps offer them; the backend accepts only these. */
+export const POST_REACTION_EMOJIS: ReadonlyArray<{ emoji: string; name: string; id: string }> = [
+  { emoji: '\u{1F44D}', name: 'Like', id: 'like' },
+  { emoji: '\u{2764}\u{FE0F}', name: 'Love', id: 'love' },
+  { emoji: '\u{1F602}', name: 'Haha', id: 'haha' },
+  { emoji: '\u{1F62E}', name: 'Wow', id: 'wow' },
+  { emoji: '\u{1F622}', name: 'Sad', id: 'sad' },
+  { emoji: '\u{1F64F}', name: 'Thanks', id: 'thanks' },
+  { emoji: '\u{1F389}', name: 'Celebrate', id: 'celebrate' },
+];
+
+/** A mark made before emoji reactions has no emoji and shows as this one. */
+const DEFAULT_REACTION = POST_REACTION_EMOJIS[0].emoji;
+
+const emojiOrder = (emoji: string) => {
+  const index = POST_REACTION_EMOJIS.findIndex((option) => option.emoji === emoji);
+  return index < 0 ? POST_REACTION_EMOJIS.length : index;
 };
 
-/** The reaction's count in words: "2 going", "4 celebrated", "3 helpful". */
+/** The emoji's name for screen readers ("Love"); one this build doesn't know reads as itself. */
+export function postReactionName(emoji: string): string {
+  return POST_REACTION_EMOJIS.find((option) => option.emoji === emoji)?.name ?? emoji;
+}
+
+/** The emoji's id for test ids ("love"). */
+export function postReactionId(emoji: string): string {
+  return POST_REACTION_EMOJIS.find((option) => option.emoji === emoji)?.id ?? 'other';
+}
+
+/** The reaction's count in words: "2 going", "3 reactions". */
 export function postReactionCount(type: string | null | undefined, count: number): string {
-  switch (postReaction(type)) {
-    case 'going': return `${count} going`;
-    case 'celebrate': return `${count} celebrated`;
-    default: return `${count} helpful`;
-  }
+  if (postReaction(type) === 'going') return `${count} going`;
+  return `${count} ${count === 1 ? 'reaction' : 'reactions'}`;
+}
+
+export interface PostReactionCount {
+  reaction: string;
+  count: number;
+}
+
+type ReactedPost = {
+  reactions?: PostReactionCount[] | null;
+  like_count?: number | null;
+  userReaction?: string | null;
+  userHasLiked?: boolean | null;
+};
+
+/** Most used first; ties in the order the apps offer them. */
+function sortReactions(reactions: PostReactionCount[]): PostReactionCount[] {
+  return [...reactions].sort((a, b) => b.count - a.count || emojiOrder(a.reaction) - emojiOrder(b.reaction));
+}
+
+/**
+ * Each emoji's count as the post shows it: the server's counts, or every mark as 👍 when it sent none (a server from
+ * before emoji reactions; older marks are 👍).
+ */
+export function shownPostReactions(post: ReactedPost): PostReactionCount[] {
+  const counts = (post.reactions ?? []).filter((entry) => entry.count > 0);
+  if (counts.length) return sortReactions(counts);
+  const total = post.like_count ?? 0;
+  return total > 0 ? [{ reaction: DEFAULT_REACTION, count: total }] : [];
+}
+
+/** How many people reacted. */
+export function postReactionTotal(post: ReactedPost): number {
+  return shownPostReactions(post).reduce((sum, entry) => sum + entry.count, 0);
+}
+
+/** The viewer's own emoji: what the server said, or 👍 for a like from before emoji reactions. */
+export function viewerPostReaction(post: ReactedPost): string | null {
+  return post.userReaction ?? (post.userHasLiked ? DEFAULT_REACTION : null);
+}
+
+/** The counts after the viewer switches from `from` to `to` (either can be none), to show a tap at once. */
+export function withViewerReaction(
+  reactions: PostReactionCount[],
+  from: string | null,
+  to: string | null,
+): PostReactionCount[] {
+  const counts = new Map(reactions.map((entry) => [entry.reaction, entry.count]));
+  if (from) counts.set(from, Math.max(0, (counts.get(from) ?? 0) - 1));
+  if (to) counts.set(to, (counts.get(to) ?? 0) + 1);
+  return sortReactions([...counts.entries()].map(([reaction, count]) => ({ reaction, count })).filter((entry) => entry.count > 0));
+}
+
+/** The card's few emoji: the most used first, up to `max`, the viewer's own always among them. */
+export function summaryReactionEmojis(reactions: PostReactionCount[], viewer: string | null, max = 3): string[] {
+  const top = reactions.slice(0, max).map((entry) => entry.reaction);
+  if (!viewer || top.includes(viewer)) return top;
+  return [viewer, ...top].slice(0, max);
+}
+
+/** What a screen reader hears for the counts: "3 Like, 2 Love". */
+export function postReactionsSpoken(reactions: PostReactionCount[]): string {
+  return reactions.map((entry) => `${entry.count} ${postReactionName(entry.reaction)}`).join(', ');
 }
 
 // ── Platform-specific icon maps ──
