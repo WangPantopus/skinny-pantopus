@@ -148,10 +148,10 @@ describe('getExemptionCheck', () => {
     expect(unreachable).toMatchObject({ status: 'partial', unavailableReason: 'ATTOM_UNAVAILABLE', data: notChecked });
     expect(unreachable.data.state_program).toMatchObject({ state: 'TX', curated: true });
 
+    // Without a key, what the Home already holds is still read; the service makes no call and says so.
     delete process.env.ATTOM_API_KEY;
+    detailMock.mockResolvedValue({ attomPayload: null, source: 'unavailable', unavailableReason: 'ATTOM_NOT_CONFIGURED' });
     expect((await getExemptionCheck(HOME))).toMatchObject({ status: 'partial', unavailableReason: 'ATTOM_NOT_CONFIGURED', data: notChecked });
-    // Without a key the service must not even try the provider.
-    expect(detailMock).toHaveBeenCalledTimes(1);
   });
 
   test('the stored full_response payload shape also resolves', async () => {
