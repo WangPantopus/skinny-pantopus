@@ -61,6 +61,7 @@ function saleFrom(record, fips, asOf) {
   // A home finished after its value was set sells for far more than a value of its lot and frame.
   if (validYear(facts.year_built) >= Number(valueDate.slice(0, 4))) return { why: 'built after its value was set' };
   if (facts.sale_price < LOWEST_PRICE) return { why: 'price too low' };
+  if (facts.sale_parcels > 1) return { why: 'a deed for several homes' };
   return {
     sale: {
       price: facts.sale_price,

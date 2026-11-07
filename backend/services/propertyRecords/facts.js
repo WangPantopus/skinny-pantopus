@@ -112,6 +112,8 @@ const FACTS = {
   sale_date: { section: 'sale', label: 'Sale date', format: 'date', scope: 'unit', value: true },
   sale_month: { section: 'sale', label: 'Sale date', format: 'raw', scope: 'unit', value: true },
   sale_document: { section: 'sale', label: 'Document number', format: 'code', scope: 'unit', value: true },
+  // How many homes share this sale's deed, where several do (scripts/property-index/lib/shared-deeds.cjs): its price is the deed's.
+  sale_parcels: { section: 'sale', format: 'none', scope: 'unit', value: true },
 };
 
 const SECTIONS = [

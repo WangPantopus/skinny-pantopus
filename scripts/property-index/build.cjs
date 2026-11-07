@@ -16,6 +16,7 @@ const zlib = require('node:zlib');
 const { FACTS } = require('../../backend/services/propertyRecords/facts');
 const { writeRelease } = require('./lib/release.cjs');
 const { buildModel } = require('./lib/value-model.cjs');
+const { markSharedDeeds } = require('./lib/shared-deeds.cjs');
 const { deriveFacts } = require('./lib/derive.cjs');
 const { log } = require('./lib/log.cjs');
 
@@ -66,6 +67,8 @@ async function main() {
     // parse() also says which form an address came in (addressKey.js). A record keeps only its parts.
     for (const { address } of records) delete address.form;
     deriveFacts(records);
+    const shared = markSharedDeeds(records);
+    if (shared) log(`${about.fips}: ${shared} homes' last sales are one deed for several homes`);
     assertAllowed(records);
     const release = releaseId(about.as_of, built);
     const report = writeRelease(opts.out, { fips: about.fips, release }, records);
