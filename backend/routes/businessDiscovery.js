@@ -19,6 +19,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const verificationAge = require('../utils/verificationAge');
+const parsePostGISPoint = require('../utils/parsePostGISPoint');
 const { VERIFICATION_MULTIPLIERS } = require('../utils/businessConstants');
 const {
   isNewBusiness,
@@ -148,34 +149,27 @@ async function resolveViewerHomeId(userId) {
 
 /**
  * Resolve viewer home location (lat/lon) from home_id.
+ *
+ * Home has no latitude/longitude columns: asking for them failed the whole read,
+ * so a search without lat/lon (the phone apps send none) answered "Location
+ * required" for everyone. The geography comes back as WKB hex; a home without
+ * one may still have its map center.
  */
 async function resolveHomeLocation(homeId) {
   const { data } = await supabaseAdmin
     .from('Home')
-    .select('id, parent_home_id, location, latitude, longitude')
+    .select('id, parent_home_id, location, map_center_lat, map_center_lng')
     .eq('id', homeId)
     .maybeSingle();
 
   if (!data) return null;
 
-  // Parse geography column (GeoJSON or WKT)
-  let lat = null, lon = null;
-  if (data.location) {
-    if (typeof data.location === 'object' && data.location.coordinates) {
-      lon = data.location.coordinates[0];
-      lat = data.location.coordinates[1];
-    } else if (typeof data.location === 'string') {
-      const m = data.location.match(/POINT\(([^ ]+) ([^ ]+)\)/);
-      if (m) {
-        lon = parseFloat(m[1]);
-        lat = parseFloat(m[2]);
-      }
-    }
-  }
-  // Fallback to latitude/longitude columns if location not parsed
-  if ((lat == null || lon == null) && data.latitude != null && data.longitude != null) {
-    lat = Number(data.latitude);
-    lon = Number(data.longitude);
+  const point = parsePostGISPoint(data.location);
+  let lat = point?.latitude ?? null;
+  let lon = point?.longitude ?? null;
+  if ((lat == null || lon == null) && data.map_center_lat != null && data.map_center_lng != null) {
+    lat = Number(data.map_center_lat);
+    lon = Number(data.map_center_lng);
   }
 
   return { lat, lon, parent_home_id: data.parent_home_id };
@@ -311,7 +305,8 @@ function formatSearchResult(row) {
  *
  * Query params:
  *   south, west, north, east — bounding box (required)
- *   categories               — comma-separated filter
+ *   categories               — comma-separated filter; any one matches, however
+ *                              either side is spelled (SQL business_category_key)
  *   open_now                 — boolean
  *   limit                    — max results (default 500)
  */
@@ -451,7 +446,8 @@ router.get('/map', async (req, res) => {
  *   lat / longitude        — center point (required if no home)
  *   lon / latitude         — center point
  *   radius_miles           — search radius (default 5, max 25)
- *   categories             — comma-separated category filter (array overlap)
+ *   categories             — comma-separated category filter; any one matches, however
+ *                            either side is spelled (SQL business_category_key)
  *   sort                   — Trust Lens: relevance | distance | rating | fastest_response
  *   rating_min             — minimum average rating (1-5)
  *   open_now               — boolean, filter to currently open businesses
