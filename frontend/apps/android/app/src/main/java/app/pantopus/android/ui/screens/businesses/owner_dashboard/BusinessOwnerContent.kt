@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.businesses.owner_dashboard
 
+import app.pantopus.android.data.api.models.businesses.BusinessAccessDto
 import app.pantopus.android.ui.screens.business_profile.BusinessProfileContent
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -79,13 +80,7 @@ data class BusinessOwnerContent(
     val reviewsToReplyLabel: String?,
     val reviews: List<OwnerReviewItem>,
     val publicProfile: BusinessProfileContent,
-    /**
-     * True when `access.role_base` is owner / admin / editor — the same gate
-     * React Native puts on its "Post as this business" composer
-     * (`src/app/businesses/[id]/index.tsx:67`). `POST
-     * /api/businesses/:businessId/posts` requires `profile.edit`, so a staff
-     * or viewer seat never sees the affordance.
-     */
+    /** `POST /api/businesses/:businessId/posts` requires `profile.edit`, so only that permission offers it. */
     val canPostAsBusiness: Boolean = false,
     /** Founding-business offer banner; `null` renders nothing. */
     val foundingOffer: OwnerFoundingOffer? = null,
@@ -94,7 +89,14 @@ data class BusinessOwnerContent(
      * otherwise the "Not verified" state the My businesses card shows.
      */
     val isVerified: Boolean = false,
+    /**
+     * What `GET /:businessId/dashboard` says this person may do. Every control on this screen follows it, and the
+     * default allows nothing.
+     */
+    val access: BusinessAccessDto = BusinessAccessDto(),
 ) {
+    fun allows(permission: String): Boolean = access.allows(permission)
+
     /**
      * [publicProfile] for the preview frame, with the replies this dashboard holds: the public read comes from
      * before a reply saved here, and the preview shows what neighbors see now.
@@ -124,14 +126,6 @@ data class BusinessOwnerContent(
             reviewsToReplyLabel = if (pending > 0) "$pending to reply" else null,
         )
     }
-
-    companion object {
-        /**
-         * Roles the backend's `profile.edit` permission resolves to for the
-         * business-post route (`backend/routes/businesses.js:4198`).
-         */
-        val POSTING_ROLES = setOf("owner", "admin", "editor")
-    }
 }
 
 /** Observed UI state for the owner dashboard. */
@@ -142,5 +136,6 @@ sealed interface BusinessOwnerUiState {
 
     data object NotFound : BusinessOwnerUiState
 
-    data class Error(val message: String) : BusinessOwnerUiState
+    /** [refused]: the business said this person isn't on its team, not that the read failed. */
+    data class Error(val message: String, val refused: Boolean = false) : BusinessOwnerUiState
 }

@@ -131,6 +131,17 @@ object HolidayCardArt {
         context.imageLoader.enqueue(request)
     }
 
+    /**
+     * Today's copy of [design], its border baked in: the app's own for the pictures it carries, else the website's. The
+     * table falls back to it when its trimmed copy can't be loaded. Null for an id that isn't one.
+     */
+    fun olderCopy(design: String): String? =
+        if (designId.matches(design)) {
+            webPicture(design, thumb = false) ?: "file:///android_asset/holiday-cards/${fileName(design, thumb = false)}"
+        } else {
+            null
+        }
+
     /** The website's address for a picture the app doesn't carry; null for one it carries or an id that isn't one. */
     private fun webPicture(
         design: String,
@@ -286,6 +297,19 @@ object HolidayCardTimes {
             1L -> "tomorrow"
             else -> "in $days days"
         }
+    }
+
+    /** Whole days until [value], counted by calendar day in [zone]; null for a time that isn't one. */
+    fun daysUntil(
+        value: String?,
+        zone: ZoneId,
+        now: Instant = Instant.now(),
+    ): Int? {
+        val day = parse(value)?.atZone(zone)?.toLocalDate() ?: return null
+        return ChronoUnit.DAYS
+            .between(now.atZone(zone).toLocalDate(), day)
+            .coerceAtLeast(0)
+            .toInt()
     }
 
     /** "OCT 30" for the postmark, from a calendar day ("2026-10-30") or a time. */

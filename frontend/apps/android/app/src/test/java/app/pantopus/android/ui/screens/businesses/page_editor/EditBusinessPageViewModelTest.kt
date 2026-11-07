@@ -3,9 +3,11 @@
 package app.pantopus.android.ui.screens.businesses.page_editor
 
 import androidx.lifecycle.SavedStateHandle
+import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.upload.UploadRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,8 @@ class EditBusinessPageViewModelTest {
             mockk<BusinessesRepository>(relaxed = true),
             networkMonitor,
             mockk<UploadRepository>(relaxed = true),
+            mockk<BusinessTeamRepository>(relaxed = true),
+            mockk<HomeClaimSessionScopeFactory>(relaxed = true),
         )
 
     @Test

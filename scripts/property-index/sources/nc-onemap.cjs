@@ -4,7 +4,9 @@
 // Program, NC Emergency Management). That layer says where each figure came from: only what it marks as derived from
 // the parcel or an appraisal is taken, never its modeled half (HAZUS, "estimated"). Values are whatever the county's
 // valuation type says, so an assessment is only ever labeled one. The Eastern Band of Cherokee Indians' lands have their
-// own file and aren't read here: their data is theirs. Owner and mailing columns are never decoded.
+// own file and aren't read here: their data is theirs. Owner and mailing columns are never decoded. A few counties' newest
+// files have lost their street numbers (and sometimes values), while an older file of OneMap's still has them: those parcels
+// read the older file's columns wherever the newest is blank, by parcel number.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -38,8 +40,10 @@ const COUNTY_FILES = [
 
 // Counties word their uses their own way, or use a letter of their own. What the building layer calls the building decides
 // when the words don't.
-function useOf(text, unit, occupancy) {
+function useOf(text, unit, occupancy, improved) {
   const use = String(text ?? '').toUpperCase();
+  // A county that only says R for residential: a house where something's built, land where nothing is.
+  if (/^\s*R\s*$/.test(use) && !occupancy) return improved ? (unit ? ['unit', 'condo'] : ['property', 'house']) : ['parcel', null];
   if (/CONDO|TOWN ?H/.test(use)) return /CONDO/.test(use) || unit ? ['unit', 'condo'] : ['property', 'townhouse'];
   if (/MOBILE|MANUFACT/.test(use)) return ['property', 'mobile_home'];
   if (/DUPLEX|TRIPLEX|TWO FAM|2 FAM|MULTI/.test(use)) return ['building', 'multi_unit'];
@@ -92,8 +96,18 @@ async function buildingsOf(work, fips, lists) {
     held.frame = WALLS[lists.frame.get(String(row.BUILD_TYPE))] || null;
     held.foundation = FOOTINGS[lists.foundation.get(String(row.FOUND_TYPE))] || null;
   }
+  // Some counties' parcel numbers carry the layer's PIN without its punctuation and suffix: 4907-83-01270000 is 4907830127.
+  // Only when that reading names one parcel.
+  const bare = new Map();
+  for (const [parcel, held] of parcels) {
+    const key = pinOf(parcel);
+    bare.set(key, bare.has(key) ? null : held);
+  }
+  for (const [key, held] of bare) if (held && !parcels.has(key)) parcels.set(key, held);
   return parcels;
 }
+
+const pinOf = (parcel) => String(parcel).toUpperCase().replace(/[^0-9A-Z]/g, '').replace(/0+$/, '');
 
 function fromRow(row, fips, county, buildings) {
   const unit = realUnit(row.SUNIT);
@@ -101,8 +115,9 @@ function fromRow(row, fips, county, buildings) {
   // Some counties' newest files leave PARNO blank and put the same number here, the one the building layer uses.
   const parcel = word(row.PARNO) || word(row.ALTPARNO);
   if (!parsed || !parcel) return null;
-  const building = buildings.get(parcel);
-  const [kind, homeType] = useOf(`${row.PARUSEDESC || ''} ${row.PARUSECODE || ''}`, parsed.unit, building?.occupancy);
+  // The building layer keys some counties by the other parcel number OneMap carries.
+  const building = [parcel, word(row.ALTPARNO)].filter(Boolean).flatMap((id) => [buildings.get(id), buildings.get(pinOf(id))]).find(Boolean);
+  const [kind, homeType] = useOf(`${row.PARUSEDESC || ''} ${row.PARUSECODE || ''}`, parsed.unit, building?.occupancy, positive(row.IMPROVVAL) || year(row.STRUCTYEAR));
   const facts = { parcel_number: parcel, county, fips };
   const on = kind === 'property' || kind === 'unit' || kind === 'building';
   put(facts, 'address_on_record', onRecord(row.SITEADD, unit));
@@ -128,9 +143,9 @@ function fromRow(row, fips, county, buildings) {
   return { id: `pp:${kind}:${fips}:${parcel}`, kind, home_type: homeType, address: { ...parsed, city: String(word(row.SCITY) || '').toUpperCase(), zip: zipCode(row.SZIP) }, facts };
 }
 
-/** Each county's newest file, from the bucket's listing. */
+/** Each county's newest file, with its older ones, newest first, from the bucket's listing. */
 async function newestFiles() {
-  const newest = new Map();
+  const listed = new Map();
   let token = null;
   do {
     const query = new URLSearchParams({ 'list-type': '2', prefix: 'NCOM-data/parcels/', 'max-keys': '1000' });
@@ -140,12 +155,54 @@ async function newestFiles() {
     const listing = await response.text();
     for (const [, key, name, month, day, yearText] of listing.matchAll(/<Key>(NCOM-data\/parcels\/([a-z-]+)-parcels-(\d\d)-(\d\d)-(\d{4})\.zip)<\/Key>/g)) {
       const date = `${yearText}-${month}-${day}`;
-      if (!newest.has(name) || newest.get(name).date < date) newest.set(name, { key, date });
+      if (!listed.has(name)) listed.set(name, []);
+      listed.get(name).push({ key, date });
     }
     token = /<NextContinuationToken>([^<]+)/.exec(listing)?.[1] || null;
   } while (token);
+  const newest = new Map();
+  for (const [name, files] of listed) {
+    files.sort((a, b) => (a.date < b.date ? 1 : -1));
+    newest.set(name, { ...files[0], older: files.slice(1) });
+  }
   return newest;
 }
+
+function tableOf(zip, name) {
+  const member = execFileSync('unzip', ['-Z1', zip], { encoding: 'latin1', maxBuffer: 1e7 }).split('\n').find((entry) => /_pt\.dbf$/i.test(entry));
+  if (!member) throw new Error(`The file for ${name} has no table`);
+  return member;
+}
+
+const parcelOf = (row) => word(row.PARNO) || word(row.ALTPARNO);
+const OPTIONAL = { optional: ['ALTPARNO'] };
+// Fewer of its parcels than this with a street number and an older file isn't one that still has them.
+const OLDER_FILE_SHARE = 0.3;
+// No file OneMap holds for these has street numbers, back to 2015 (checked November 2026): they need the county's own file.
+const NEVER_NUMBERED = new Set(['franklin', 'orange', 'perquimans', 'richmond']);
+
+/** The newest older file that still has street numbers, as its rows by parcel number. Null when none does. */
+async function olderRows(work, name, older) {
+  for (const { key, date } of older) {
+    const zip = path.join(work, 'nc-onemap', `${name}-older.zip`);
+    download(`${BUCKET}/${key}`, zip);
+    const rows = new Map();
+    let total = 0;
+    for await (const row of dbfRows(zip, tableOf(zip, name), COLUMNS, OPTIONAL)) {
+      total += 1;
+      const parcel = parcelOf(row);
+      if (parcel && parse(row.SITEADD, realUnit(row.SUNIT))) rows.set(parcel, row);
+    }
+    fs.rmSync(zip, { force: true });
+    if (rows.size >= total * OLDER_FILE_SHARE) {
+      log(`${name}: ${rows.size} of ${total} parcels have street numbers in its ${date} file`);
+      return rows;
+    }
+  }
+  return null;
+}
+
+const filled = (row) => Object.fromEntries(Object.entries(row).filter(([, value]) => String(value ?? '').trim()));
 
 async function* build({ work }) {
   const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
@@ -156,7 +213,7 @@ async function* build({ work }) {
   const lists = { stories: parcelWords(field('NUM_STORY')), frame: parcelWords(field('BUILD_TYPE')), foundation: parcelWords(field('FOUND_TYPE')), occupancy: occupancyWords(field('OCCUP_TYPE')) };
   if (!lists.stories.size || !lists.frame.size) throw new Error('The building layer no longer says what its codes mean');
   if (files.size < 95) throw new Error(`Only ${files.size} county files are listed`);
-  for (const [name, { key, date }] of [...files].sort()) {
+  for (const [name, { key, date, older }] of [...files].sort()) {
     const place = COUNTY_FILES.indexOf(name);
     if (place < 0) {
       log('A file that is not one of the 100 counties isn\'t read');
@@ -167,18 +224,27 @@ async function* build({ work }) {
     const buildings = await buildingsOf(work, fips, lists);
     const zip = path.join(work, 'nc-onemap', `${name}.zip`);
     download(`${BUCKET}/${key}`, zip);
-    const member = execFileSync('unzip', ['-Z1', zip], { encoding: 'latin1', maxBuffer: 1e7 }).split('\n').find((entry) => /_pt\.dbf$/i.test(entry));
-    if (!member) throw new Error(`The file for ${name} has no table`);
+    const member = tableOf(zip, name);
     const byCounty = [];
     const seen = new Set();
     const county = `${name.replace(/-/g, ' ').replace(/(^|\s)\S/g, (first) => first.toUpperCase()).replace(/^Mc(\w)/, (_, next) => `Mc${next.toUpperCase()}`)} County`;
     let noAddress = 0;
-    for await (const row of dbfRows(zip, member, COLUMNS, { optional: ['ALTPARNO'] })) {
-      const record = fromRow(row, fips, county, buildings);
-      if (!record) noAddress += 1;
-      else if (!seen.has(record.id)) {
-        seen.add(record.id);
-        byCounty.push(record);
+    const read = async (earlier) => {
+      for await (const row of dbfRows(zip, member, COLUMNS, OPTIONAL)) {
+        const record = fromRow(earlier ? { ...earlier.get(parcelOf(row)), ...filled(row) } : row, fips, county, buildings);
+        if (!record) noAddress += 1;
+        else if (!seen.has(record.id)) {
+          seen.add(record.id);
+          byCounty.push(record);
+        }
+      }
+    };
+    await read(null);
+    if (!byCounty.length && !NEVER_NUMBERED.has(name)) {
+      const earlier = await olderRows(work, name, older);
+      if (earlier) {
+        noAddress = 0;
+        await read(earlier);
       }
     }
     fs.rmSync(zip, { force: true });

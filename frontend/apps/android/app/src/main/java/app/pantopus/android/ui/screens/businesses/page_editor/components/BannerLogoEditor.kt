@@ -46,7 +46,8 @@ import coil.compose.AsyncImage
  * variants: empty (dashed drop targets) and filled (the uploaded image,
  * or the background palette without one, with optional dirty rim +
  * "New" chip + Change buttons). Each target calls [onPick] to choose a
- * new image; [uploading] dims the one being uploaded.
+ * new image, and a null [onPick] leaves them as pictures with nothing to
+ * tap; [uploading] dims the one being uploaded.
  */
 @Composable
 fun EditBusinessBannerLogoEditor(
@@ -54,7 +55,7 @@ fun EditBusinessBannerLogoEditor(
     logo: EditBusinessPageLogoState,
     modifier: Modifier = Modifier,
     uploading: EditBusinessMediaKind? = null,
-    onPick: (EditBusinessMediaKind) -> Unit = {},
+    onPick: ((EditBusinessMediaKind) -> Unit)? = {},
 ) {
     Box(
         modifier =
@@ -66,7 +67,7 @@ fun EditBusinessBannerLogoEditor(
             BannerView(
                 banner = banner,
                 uploading = uploading == EditBusinessMediaKind.Banner,
-                onPick = { if (uploading == null) onPick(EditBusinessMediaKind.Banner) },
+                onPick = onPick?.let { pick -> { if (uploading == null) pick(EditBusinessMediaKind.Banner) } },
             )
             Box(modifier = Modifier.height(44.dp))
         }
@@ -79,7 +80,7 @@ fun EditBusinessBannerLogoEditor(
             LogoView(
                 logo = logo,
                 uploading = uploading == EditBusinessMediaKind.Logo,
-                onPick = { if (uploading == null) onPick(EditBusinessMediaKind.Logo) },
+                onPick = onPick?.let { pick -> { if (uploading == null) pick(EditBusinessMediaKind.Logo) } },
             )
         }
     }
@@ -89,7 +90,7 @@ fun EditBusinessBannerLogoEditor(
 private fun BannerView(
     banner: EditBusinessPageBannerState,
     uploading: Boolean,
-    onPick: () -> Unit,
+    onPick: (() -> Unit)?,
 ) {
     when (banner) {
         EditBusinessPageBannerState.Empty -> EmptyBanner(uploading = uploading, onPick = onPick)
@@ -119,7 +120,7 @@ private fun BoxScope.UploadingOverlay() {
 @Composable
 private fun EmptyBanner(
     uploading: Boolean,
-    onPick: () -> Unit,
+    onPick: (() -> Unit)?,
 ) {
     Box(
         modifier =
@@ -133,7 +134,7 @@ private fun EmptyBanner(
                     color = PantopusColors.appBorderStrong,
                     shape = RoundedCornerShape(Radii.lg),
                 )
-                .clickable(onClickLabel = "Add banner", onClick = onPick),
+                .then(if (onPick != null) Modifier.clickable(onClickLabel = "Add banner", onClick = onPick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -146,16 +147,18 @@ private fun EmptyBanner(
                 size = 22.dp,
                 tint = PantopusColors.appTextSecondary,
             )
-            Text(
-                text = "Add banner",
-                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                color = PantopusColors.appTextSecondary,
-            )
-            Text(
-                text = "1600 × 700 · JPG or PNG",
-                style = TextStyle(fontSize = 10.sp),
-                color = PantopusColors.appTextMuted,
-            )
+            if (onPick != null) {
+                Text(
+                    text = "Add banner",
+                    style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                    color = PantopusColors.appTextSecondary,
+                )
+                Text(
+                    text = "1600 × 700 · JPG or PNG",
+                    style = TextStyle(fontSize = 10.sp),
+                    color = PantopusColors.appTextMuted,
+                )
+            }
         }
         if (uploading) UploadingOverlay()
     }
@@ -166,7 +169,7 @@ private fun FilledBanner(
     dirty: Boolean,
     imageUrl: String?,
     uploading: Boolean,
-    onPick: () -> Unit,
+    onPick: (() -> Unit)?,
 ) {
     Box(
         modifier =
@@ -195,7 +198,7 @@ private fun FilledBanner(
                         Modifier
                     },
                 )
-                .clickable(onClickLabel = "Change banner", onClick = onPick),
+                .then(if (onPick != null) Modifier.clickable(onClickLabel = "Change banner", onClick = onPick) else Modifier),
     ) {
         if (imageUrl != null) {
             // Sized by the 16:7 box, so any upload fills it instead of resizing it.
@@ -245,27 +248,29 @@ private fun FilledBanner(
             } else {
                 Box(modifier = Modifier.size(0.dp))
             }
-            Row(
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appText.copy(alpha = 0.7f))
-                        .padding(horizontal = Spacing.s2, vertical = 6.dp)
-                        .testTag("editBusinessPage.changeBanner"),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                PantopusIconImage(
-                    icon = PantopusIcon.Image,
-                    contentDescription = null,
-                    size = 12.dp,
-                    tint = PantopusColors.appTextInverse,
-                )
-                Text(
-                    text = "Change banner",
-                    style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
-                    color = PantopusColors.appTextInverse,
-                )
+            if (onPick != null) {
+                Row(
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(Radii.pill))
+                            .background(PantopusColors.appText.copy(alpha = 0.7f))
+                            .padding(horizontal = Spacing.s2, vertical = 6.dp)
+                            .testTag("editBusinessPage.changeBanner"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Image,
+                        contentDescription = null,
+                        size = 12.dp,
+                        tint = PantopusColors.appTextInverse,
+                    )
+                    Text(
+                        text = "Change banner",
+                        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.appTextInverse,
+                    )
+                }
             }
         }
         if (uploading) UploadingOverlay()
@@ -276,7 +281,7 @@ private fun FilledBanner(
 private fun LogoView(
     logo: EditBusinessPageLogoState,
     uploading: Boolean,
-    onPick: () -> Unit,
+    onPick: (() -> Unit)?,
 ) {
     when (logo) {
         EditBusinessPageLogoState.Empty ->
@@ -291,17 +296,19 @@ private fun LogoView(
                             color = PantopusColors.appBorderStrong,
                             shape = RoundedCornerShape(Radii.xl),
                         )
-                        .clickable(onClickLabel = "Add logo", onClick = onPick)
+                        .then(if (onPick != null) Modifier.clickable(onClickLabel = "Add logo", onClick = onPick) else Modifier)
                         .testTag("editBusinessPage.logoEmpty"),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Plus,
-                        contentDescription = null,
-                        size = 18.dp,
-                        tint = PantopusColors.appTextSecondary,
-                    )
+                    if (onPick != null) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Plus,
+                            contentDescription = null,
+                            size = 18.dp,
+                            tint = PantopusColors.appTextSecondary,
+                        )
+                    }
                     Text(
                         text = "Logo",
                         style = TextStyle(fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold),
@@ -314,7 +321,7 @@ private fun LogoView(
             Column(
                 modifier =
                     Modifier
-                        .clickable(onClickLabel = "Change logo", onClick = onPick)
+                        .then(if (onPick != null) Modifier.clickable(onClickLabel = "Change logo", onClick = onPick) else Modifier)
                         .testTag("editBusinessPage.logoFilled"),
             ) {
                 Box(
@@ -360,12 +367,14 @@ private fun LogoView(
                     }
                     if (uploading) UploadingOverlay()
                 }
-                Text(
-                    text = "Change logo",
-                    style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                    color = PantopusColors.business,
-                    modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-                )
+                if (onPick != null) {
+                    Text(
+                        text = "Change logo",
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.business,
+                        modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+                    )
+                }
             }
     }
 }
