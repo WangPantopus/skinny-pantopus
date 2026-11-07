@@ -303,7 +303,8 @@ function setAuthMocks(overrides = {}) {
 // As PostgREST embeds them, `alias:Child(...)` keeps the parent row and puts the matching child rows under `alias`;
 // `alias.column` filters and `limit(n, { referencedTable: alias })` apply to those rows only.
 const EMBEDDED_CHILDREN = {
-  Home: { HomeOccupancy: 'home_id', HomeOwner: 'home_id', HomePermissionOverride: 'home_id', HomeQuorumAction: 'home_id' },
+  Home: { HomeOccupancy: 'home_id', HomeOwner: 'home_id', HomePermissionOverride: 'home_id', HomeQuorumAction: 'home_id',
+    HomeOwnershipClaim: 'home_id' },
 };
 const embeddedValue = (row, column) => {
   const [name, jsonKey] = column.split('->>');
