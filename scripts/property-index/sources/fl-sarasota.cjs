@@ -94,7 +94,9 @@ function fromRow(row, uses, subdivisions, details, words) {
   const card = details.cards.get(parcel);
   if (home || kind === 'building') {
     put(facts, 'year_built', year(row.YRBL));
-    put(facts, 'quality', said(words.grade.get(String(row.BUILD_CLAS ?? '').trim()))?.replace(/^(Res|Commercial)\s+/, ''));
+    // "Res Avg Quality Materials & Design", "Com Average/Good"; a commercial cost class ("Commercial 70") says nothing of quality.
+    const grade = said(words.grade.get(String(row.BUILD_CLAS ?? '').trim()));
+    put(facts, 'quality', grade && !/^Commercial\s/.test(grade) ? grade.replace(/^(Res|Com)\s+/, '') : null);
     if (card) buildingFacts(facts, card, kind, words);
     if (card?.cards > 1) facts.buildings_on_parcel = card.cards;
   }
