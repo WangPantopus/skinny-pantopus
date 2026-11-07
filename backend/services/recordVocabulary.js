@@ -56,12 +56,17 @@ function suggestions(result, wanted) {
 /** What the Home's value came from, when it isn't the same record as its facts. */
 const valueProvenance = (profile) => profile?.value_provenance || profile?.provenance || null;
 
-/** GET /api/homes/:id/property-value. For older builds a record-based answer stays `source: cache`. */
-function propertyValue(answer, profile, wanted) {
-  const provenance = wanted ? valueProvenance(profile) : null;
-  if (!provenance) return answer;
+/**
+ * GET /api/homes/:id/property-value. For older builds a record-based answer stays `source: cache`.
+ * `card`: the value card (services/homeValueCard.js), which a build that asks for the new words draws.
+ */
+function propertyValue(answer, profile, wanted, card = null) {
+  if (!wanted) return answer;
+  const provenance = valueProvenance(profile);
+  const withCard = { ...answer, ...(card ? { value_card: card } : {}) };
+  if (!provenance) return withCard;
   return {
-    ...answer,
+    ...withCard,
     source: answer.source === 'cache_stale' ? 'record_stale' : 'record',
     provenance,
     ...(profile.value_title ? { value_title: profile.value_title } : {}),
@@ -84,11 +89,12 @@ function propertyDetail(result, wanted) {
 }
 
 /** Place's value block: nulled with the other value fields for anyone but the confirmed owner. */
-function placeValueFields(profile) {
+function placeValueFields(profile, card = null) {
   const label = valueProvenance(profile)?.label;
   return {
     ...(label ? { value_source: label } : {}),
     ...(profile.value_title ? { value_title: profile.value_title } : {}),
+    ...(card ? { value_card: card } : {}),
   };
 }
 

@@ -54,6 +54,8 @@ const { isConnecticutPlanningRegion } = require('../data/connecticutTowns');
 const exemptionCheckService = require('./exemptionCheckService');
 const propertyRecordsConfig = require('../config/propertyRecords');
 const recordVocabulary = require('./recordVocabulary');
+const homeValueCard = require('./homeValueCard');
+const areaTrend = require('./propertyRecords/areaTrend');
 const realRentService = require('./realRentService');
 const { locationFromCoordinates, inferTimezone } = require('./context/locationResolver');
 
@@ -111,7 +113,7 @@ const NOT_BY_MAIL_REASON = 'Available once your address is verified.';
 const verifyReason = (id) => (mailVendorService.canSendPostcards() ? VERIFY_BY_MAIL_REASONS[id] : NOT_BY_MAIL_REASON);
 const OWNERSHIP_PENDING_REASON = 'Available once your ownership is confirmed.';
 const CLAIM_REVIEW_REASON = 'Available once your claim is approved.';
-const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value', 'value_source', 'value_title'];
+const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value', 'value_source', 'value_title', 'value_card'];
 
 function resolveViewer(access, tier, ownershipPending) {
   const base = (access && (access.effective_role_base || access.role_base)) || null;
@@ -1038,6 +1040,10 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   const valueAge = Date.now() - Date.parse(profile.value_as_of);
   // A county's value keeps its own date: an annual roll isn't out of date at 30 days.
   const oldValue = !profile.provenance && Boolean(viewerAccess && viewerAccess.isOwner) && profile.estimated_value != null && valueAge >= VALUE_FRESH_MS;
+  // The value card is the confirmed owner's, and nobody else's read waits on its area trend.
+  const valueCard = wantsRecordVocabulary && viewerAccess?.isOwner && profile.area
+    ? homeValueCard.build(profile, { trend: await areaTrend.lookup(profile.area), lookup: result.lookup })
+    : null;
 
   return [serializePlaceSection('your_home', {
     access,
@@ -1061,7 +1067,7 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
       // The home's outline for the Today sky: the county record's, with the
       // kind of home the household chose over it.
       house: resolveHouse(profile.house, home.home_type),
-      ...(wantsRecordVocabulary ? recordVocabulary.placeValueFields(profile) : {}),
+      ...(wantsRecordVocabulary ? recordVocabulary.placeValueFields(profile, valueCard) : {}),
     },
   })];
 }
