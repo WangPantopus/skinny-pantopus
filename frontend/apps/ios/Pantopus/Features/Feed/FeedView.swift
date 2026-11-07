@@ -994,6 +994,10 @@ public struct FeedView: View {
                 viewModel.readsFeedTop = true
                 withAnimation { proxy.scrollTo(firstPostID ?? Self.listTopID, anchor: .top) }
             }
+            // A new area's (or filter's) posts start at their top, as the pill's do.
+            .onChange(of: viewModel.listReplacements) { _, _ in
+                Task { @MainActor in scrollToTopRequest += 1 }
+            }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
             .onChange(of: listWidth) { oldWidth, _ in
                 // The feed's column changed width (a fold or a turn, the split view settling): the posts re-wrap
