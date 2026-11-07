@@ -6,7 +6,7 @@
 
 const path = require('node:path');
 const { download, zipMembers, zipDates, zipTable } = require('./tables.cjs');
-const { streetParts, year, realUnit, onRecord } = require('./addresses.cjs');
+const { streetParts, situsParts, year, realUnit, onRecord } = require('./addresses.cjs');
 const { positive, put, word } = require('./values.cjs');
 const { newestFile, bathsIn, USES, whole } = require('./pacs-county.cjs');
 const { CATEGORY_WORDS, useOf } = require('./texas.cjs');
@@ -27,8 +27,9 @@ function tabCounty({ fips, county, publisher, source, page, pattern, table = 'ex
 
   function fromRow(row, element, acres, frontLot, valueYear) {
     const pick = (key) => row[names[key]];
-    const unit = names.unit && realUnit(word(pick('unit')));
-    const address = streetParts({ number: pick('number'), pre: pick('pre'), name: word(pick('street')), suffix: word(pick('suffix')), unit });
+    const typed = situsParts({ number: pick('number'), street: word(pick('street')), suffix: word(pick('suffix')) || '', unit: (names.unit && realUnit(word(pick('unit')))) || '' });
+    const { unit } = typed;
+    const address = streetParts({ number: typed.number, pre: pick('pre'), name: typed.street, suffix: typed.suffix, unit });
     const account = String(pick('account') || '').trim();
     if (!address || !account) return null;
     const code = String(pick('use') || '').trim().toUpperCase();
