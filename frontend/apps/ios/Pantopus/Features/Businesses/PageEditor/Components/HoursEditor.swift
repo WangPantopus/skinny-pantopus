@@ -34,10 +34,14 @@ public struct EditBusinessHoursEditor: View {
         }
         .accessibilityIdentifier("editBusinessPage.hours")
         .sheet(item: $editingRow) { row in
+            let range = timeRange(for: row)
             TimeRangePickerSheet(
-                range: timeRange(for: row),
+                range: range,
                 validationMessage: { validationMessage(for: row, start: $0, end: $1) },
                 onCommit: { start, end in
+                    // Nothing moved on an open row: it stays as saved, because
+                    // a `24:00` close has no wheel position of its own.
+                    if case .open = row.state, start == range.start, end == range.end { return }
                     onChange?(row.id, .open(
                         openLabel: EditBusinessPageMapper.formatAPITime(start.hhmm) ?? start.hhmm,
                         closeLabel: EditBusinessPageMapper.formatAPITime(end.hhmm) ?? end.hhmm
@@ -124,9 +128,9 @@ public struct EditBusinessHoursEditor: View {
     }
 
     private func timeRange(for row: EditBusinessPageHoursRow) -> TimeRange {
-        guard case let .open(open, close) = row.state,
+        guard case let .open(open, close) = row.state.isAllDay ? EditBusinessPageHoursRow.State.allDay : row.state,
               let start = EditBusinessPageMapper.parseDisplayTime(open).flatMap(TimeOfDay.init),
-              let end = EditBusinessPageMapper.parseDisplayTime(close).flatMap(TimeOfDay.init) else {
+              let end = EditBusinessPageMapper.parseDisplayTime(closeForDisplay(close)).flatMap(TimeOfDay.init) else {
             return .nineToFive
         }
         return TimeRange(start: start, end: end)
@@ -213,7 +217,7 @@ private struct EditHoursRowView: View {
                     Text("—")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.Color.appTextMuted)
-                    TimePill(value: closeLabel == "24:00" ? "12:00 AM" : closeLabel)
+                    TimePill(value: closeForDisplay(closeLabel))
                 }
                 Spacer()
                 if isEnabled {
@@ -257,13 +261,18 @@ private struct EditHoursRowView: View {
 
     private var a11yLabel: String {
         let stateLabel = switch row.state {
-        case let .open(open, close): row.state.isAllDay ? "Open 24 hours" : "\(open) to \(close)"
+        case let .open(open, close): row.state.isAllDay ? "Open 24 hours" : "\(open) to \(closeForDisplay(close))"
         case .closed: "Closed"
         case .notSet: "Not set"
         }
         let dirtyTag = row.isDirty ? ", unsaved" : ""
         return "\(row.dayLabel), \(stateLabel)\(dirtyTag)"
     }
+}
+
+/// A saved `24:00` close is midnight at the end of the day.
+private func closeForDisplay(_ close: String) -> String {
+    close == "24:00" ? "12:00 AM" : close
 }
 
 private struct TimePill: View {
