@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -36,6 +35,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,6 +43,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -321,6 +323,9 @@ internal fun BusinessProfileLoadedFrame(
     // Reads the reviews again. The owner preview never offers it.
     onRetryReviews: () -> Unit = {},
 ) {
+    // The page ends clear of the dock: 132dp as designed, more once large text makes the dock taller.
+    var dockHeightPx by remember { mutableIntStateOf(0) }
+    val pageBottom = maxOf(132.dp, with(LocalDensity.current) { dockHeightPx.toDp() } + Spacing.s5)
     Box(modifier = Modifier.fillMaxSize().testTag("businessProfile.loaded")) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -344,7 +349,7 @@ internal fun BusinessProfileLoadedFrame(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.s4)
-                        .padding(top = 14.dp, bottom = 132.dp),
+                        .padding(top = 14.dp, bottom = pageBottom),
             ) {
                 BusinessProfileNamedPageSection(state = namedPage)
                 Sections(content, onContact = onContact, onShare = onShare, onReport = onReport, onRetryReviews = onRetryReviews)
@@ -361,12 +366,15 @@ internal fun BusinessProfileLoadedFrame(
             modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
         )
 
+        // The app's tab bar, or the strip it leaves over the system navigation area while slid away, already sits
+        // below this screen, so the dock goes right on it. Padding for the navigation area again floated it above the
+        // bar, with the page showing through the gap.
         ActionBar(
             dock = content.dock,
             onContact = onContact,
             onBook = onBook,
             onCall = onCall,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+            modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { dockHeightPx = it.height },
         )
     }
 }
@@ -527,7 +535,7 @@ private fun ReviewsSection(
         RatingDistribution(
             average = summary.average,
             count = summary.count,
-            distribution = summary.distribution.map { it.toFloat() },
+            distribution = summary.distribution?.map { it.toFloat() },
         )
     }
     if (read is BusinessReviewsRead.RefreshFailed) {
