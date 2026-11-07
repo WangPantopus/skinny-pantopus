@@ -336,7 +336,7 @@ public struct RootTabView: View {
         // "not in the app yet" placeholder for them instead.
         case .vacationHold, .mailDay,
              .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn,
-             .mailbox, .mailItem, .mailSentCard:
+             .mailbox, .mailItem, .mailSentCard, .mailCards:
             model.selected = LaunchFeatures.mailbox ? .mail : .place
         case .supportTrain, .supportTrainManage, .user, .beaconProfile,
              .connections, .beacons, .discoverHub,

@@ -65,6 +65,8 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
     /// whole, never as a first name.
     public let toHousehold: Bool
     public let byEmail: Bool
+    /// By link (`card_table`): `by_email` is true too, for older apps.
+    public let byLink: Bool
     public let arrival: HolidayCardArrival?
     public let status: Status
     public let arrivesAt: String?
@@ -158,6 +160,7 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
         case toName = "to_name"
         case toHousehold = "to_household"
         case byEmail = "by_email"
+        case byLink = "by_link"
         case arrivesAt = "arrives_at"
         case arrivesOn = "arrives_on"
         case opensOn = "opens_on"
@@ -174,6 +177,7 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
         toName = (try? c.decodeIfPresent(String.self, forKey: .toName)) ?? ""
         toHousehold = (try? c.decodeIfPresent(Bool.self, forKey: .toHousehold)) ?? false
         byEmail = (try? c.decodeIfPresent(Bool.self, forKey: .byEmail)) ?? false
+        byLink = (try? c.decodeIfPresent(Bool.self, forKey: .byLink)) ?? false
         arrival = (try? c.decodeIfPresent(String.self, forKey: .arrival)).flatMap(HolidayCardArrival.init(rawValue:))
         let status = (try? c.decodeIfPresent(String.self, forKey: .status)).flatMap(Status.init(rawValue:))
         self.status = status ?? .delivered
