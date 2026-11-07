@@ -17,6 +17,8 @@ import app.pantopus.android.data.api.models.place.IssueFridgeCardRequest
 import app.pantopus.android.data.api.models.place.IssueResidencyClaimRequest
 import app.pantopus.android.data.api.models.place.IssueResidencyLetterRequest
 import app.pantopus.android.data.api.models.place.MailboxCheckResponse
+import app.pantopus.android.data.api.models.place.NeighborAddressCheck
+import app.pantopus.android.data.api.models.place.NeighborAddressCheckRequest
 import app.pantopus.android.data.api.models.place.NeighborMessageAck
 import app.pantopus.android.data.api.models.place.NeighborMessageTemplates
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
@@ -216,6 +218,9 @@ class PlaceRepository
         // ── Neighbor messages (T4, template-only) ────────────────
 
         suspend fun neighborMessageTemplates(): NetworkResult<NeighborMessageTemplates> = safeApiCall { neighborMessagesApi.templates() }
+
+        suspend fun checkNeighborAddress(body: NeighborAddressCheckRequest): NetworkResult<NeighborAddressCheck> =
+            safeApiCall { neighborMessagesApi.checkAddress(body) }
 
         suspend fun sendNeighborMessage(body: SendNeighborMessageRequest): NetworkResult<SentNeighborMessage> =
             safeApiCall { neighborMessagesApi.send(body) }

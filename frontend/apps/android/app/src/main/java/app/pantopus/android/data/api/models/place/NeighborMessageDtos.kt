@@ -94,12 +94,46 @@ data class SentNeighborMessage(
     val recipient: SentNeighborMessageRecipient,
 )
 
+/** The address a note goes to: any address on the sender's block. */
+@JsonClass(generateAdapter = true)
+data class NeighborRecipientAddress(
+    val address: String,
+    val unit: String? = null,
+    val city: String? = null,
+    val state: String? = null,
+    val zipcode: String? = null,
+)
+
 /** `POST /api/neighbor-messages` body. */
 @JsonClass(generateAdapter = true)
 data class SendNeighborMessageRequest(
     @Json(name = "sender_home_id") val senderHomeId: String,
-    @Json(name = "recipient_home_id") val recipientHomeId: String,
+    @Json(name = "recipient_address") val recipientAddress: NeighborRecipientAddress,
     @Json(name = "template_id") val templateId: String,
+)
+
+/** `POST /api/neighbor-messages/address-check` body. Without a city, the server uses the sender's town. */
+@JsonClass(generateAdapter = true)
+data class NeighborAddressCheckRequest(
+    @Json(name = "sender_home_id") val senderHomeId: String,
+    val address: String,
+    val city: String? = null,
+    val state: String? = null,
+    val zipcode: String? = null,
+)
+
+/**
+ * Whether an address can get a note: "on_block", or "off_block", "not_found", "own_home" with a [message]. Nothing here
+ * says who lives there.
+ */
+@JsonClass(generateAdapter = true)
+data class NeighborAddressCheck(
+    val status: String,
+    val address: String? = null,
+    val city: String? = null,
+    val state: String? = null,
+    val zipcode: String? = null,
+    val message: String? = null,
 )
 
 /** `POST /api/neighbor-messages/:id/reply` body. */

@@ -1,5 +1,7 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.place.NeighborAddressCheck
+import app.pantopus.android.data.api.models.place.NeighborAddressCheckRequest
 import app.pantopus.android.data.api.models.place.NeighborMessageAck
 import app.pantopus.android.data.api.models.place.NeighborMessageTemplates
 import app.pantopus.android.data.api.models.place.ReceivedNeighborMessage
@@ -26,10 +28,17 @@ interface NeighborMessagesApi {
     @GET("api/neighbor-messages/templates")
     suspend fun templates(): NeighborMessageTemplates
 
+    /** Is this address on the sender's block? Says nothing about who lives there. */
+    @POST("api/neighbor-messages/address-check")
+    suspend fun checkAddress(
+        @Body body: NeighborAddressCheckRequest,
+    ): NeighborAddressCheck
+
     /**
-     * Send a template-only note to a verified home on your block. The
-     * server enforces the T4 sender gate, same-block recipient, and the
-     * weekly cap. Route `backend/routes/neighborMessages.js:102`.
+     * Send a template-only note to an address on your block. The server
+     * enforces the T4 sender gate, same-block address, and the weekly cap.
+     * The answer is the same whether or not a verified household lives there.
+     * Route `backend/routes/neighborMessages.js:102`.
      */
     @POST("api/neighbor-messages")
     suspend fun send(
