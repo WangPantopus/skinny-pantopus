@@ -36,12 +36,7 @@ public struct EditBusinessHoursEditor: View {
         .sheet(item: $editingRow) { row in
             TimeRangePickerSheet(
                 range: timeRange(for: row),
-                validationMessage: { start, end in
-                    guard rows.contains(where: { $0.id == row.id }) else {
-                        return "These hours changed. Close this sheet and select the current hours."
-                    }
-                    return start == end ? "Opening and closing times must be different." : nil
-                },
+                validationMessage: { validationMessage(for: row, start: $0, end: $1) },
                 onCommit: { start, end in
                     onChange?(row.id, .open(
                         openLabel: EditBusinessPageMapper.formatAPITime(start.hhmm) ?? start.hhmm,
@@ -110,6 +105,22 @@ public struct EditBusinessHoursEditor: View {
             .buttonStyle(.plain)
             .disabled(onApplyWeekdays == nil)
         }
+    }
+
+    private func validationMessage(for row: EditBusinessPageHoursRow, start: TimeOfDay, end: TimeOfDay) -> String? {
+        guard rows.contains(where: { $0.id == row.id }) else {
+            return "These hours changed. Close this sheet and select the current hours."
+        }
+        if start == end { return "Opening and closing times must be different." }
+        // The server keeps one interval per opening time on a day. A backend
+        // without the atomic save deletes the whole week before refusing a repeat.
+        let opening = EditBusinessPageMapper.formatAPITime(start.hhmm)
+        let isTaken = rows.contains { other in
+            guard other.id != row.id, other.dayLabel == row.dayLabel,
+                  case let .open(otherOpening, _) = other.state else { return false }
+            return otherOpening == opening
+        }
+        return isTaken ? "Another \(row.dayLabel) interval already opens at this time." : nil
     }
 
     private func timeRange(for row: EditBusinessPageHoursRow) -> TimeRange {
