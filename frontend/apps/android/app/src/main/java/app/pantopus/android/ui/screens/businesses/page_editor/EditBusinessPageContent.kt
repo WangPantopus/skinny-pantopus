@@ -184,6 +184,8 @@ sealed interface EditBusinessPageDescriptionState {
 data class EditBusinessPageLocation(
     /** Street line only — never the concatenated display address. */
     val address: EditBusinessPageField,
+    /** Suite / unit — the `BusinessLocation.address2` column. */
+    val suite: EditBusinessPageField = EditBusinessPageField(original = "", current = ""),
     val city: EditBusinessPageField = EditBusinessPageField(original = "", current = ""),
     val state: EditBusinessPageField = EditBusinessPageField(original = "", current = ""),
     val zip: EditBusinessPageField = EditBusinessPageField(original = "", current = ""),
@@ -211,7 +213,7 @@ data class EditBusinessPageLocation(
 
     /** True when any address component carries an unsaved edit. */
     val hasAddressEdits: Boolean
-        get() = address.isDirty || city.isDirty || state.isDirty || zip.isDirty
+        get() = address.isDirty || suite.isDirty || city.isDirty || state.isDirty || zip.isDirty
 }
 
 /** Render-ready payload — mirrors the iOS struct field-by-field. */
@@ -306,6 +308,7 @@ enum class EditBusinessPageFieldKey {
     Website,
     BookingLink,
     Address,
+    Suite,
     City,
     State,
     Zip,

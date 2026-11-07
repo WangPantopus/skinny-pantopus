@@ -126,6 +126,7 @@ internal object EditBusinessPageMapper {
         if (content.location.city.isDirty) count++
         if (content.location.state.isDirty) count++
         if (content.location.zip.isDirty) count++
+        if (content.location.suite.isDirty) count++
         if (content.location.pinDirty) count++
         return count
     }
@@ -219,11 +220,14 @@ internal object EditBusinessPageMapper {
      * address parts it receives (`backend/routes/businesses.js:1811`), so a
      * partial body would relocate the pin from a partial address. Every
      * component therefore travels whenever any one of them changed, keeping
-     * the geocode input a complete, coherent address.
+     * the geocode input a complete, coherent address. The suite travels too,
+     * empty when the box is: left out, the route would check the new address
+     * with the saved suite and keep it.
      */
     fun locationPayload(location: EditBusinessPageLocation): UpdateBusinessLocationRequest =
         UpdateBusinessLocationRequest(
             address = location.address.current.trim(),
+            address2 = location.suite.current.trim(),
             city = location.city.current.trim(),
             state = location.state.current.trim(),
             zipcode = location.zip.current.trim(),
@@ -446,6 +450,7 @@ internal object EditBusinessPageMapper {
     private fun locationState(location: BusinessLocationDto?): EditBusinessPageLocation =
         EditBusinessPageLocation(
             address = field(location?.address, "Street address"),
+            suite = field(location?.address2, "Suite 200, Unit B"),
             city = field(location?.city, "City"),
             state = field(location?.state, "State"),
             zip = field(location?.zipcode, "ZIP"),
