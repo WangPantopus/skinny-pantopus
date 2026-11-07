@@ -674,6 +674,10 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
     public let provenance: RecordProvenanceDTO?
     /// A short tag per field ("County"), once the record names its source.
     public let fieldTags: [String: String]?
+    /// One-tap answers for what the record lacks, once the lookup has had its say.
+    public let questions: [HouseholdQuestionDTO]?
+    /// The county's own page, where a person can check what's missing.
+    public let countyPage: HouseholdCountyPageDTO?
 
     public init(
         suggestions: PropertySuggestionsFields? = nil,
@@ -684,7 +688,9 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         recordLookup: String? = nil,
         lookupMessage: String? = nil,
         provenance: RecordProvenanceDTO? = nil,
-        fieldTags: [String: String]? = nil
+        fieldTags: [String: String]? = nil,
+        questions: [HouseholdQuestionDTO]? = nil,
+        countyPage: HouseholdCountyPageDTO? = nil
     ) {
         self.suggestions = suggestions
         self.fieldSources = fieldSources
@@ -695,6 +701,8 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         self.lookupMessage = lookupMessage
         self.provenance = provenance
         self.fieldTags = fieldTags
+        self.questions = questions
+        self.countyPage = countyPage
     }
 
     public init(from decoder: any Decoder) throws {
@@ -709,10 +717,13 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         lookupMessage = try? container.decodeIfPresent(String.self, forKey: .lookupMessage)
         provenance = try? container.decodeIfPresent(RecordProvenanceDTO.self, forKey: .provenance)
         fieldTags = try? container.decodeIfPresent([String: String].self, forKey: .fieldTags)
+        questions = try? container.decodeIfPresent([HouseholdQuestionDTO].self, forKey: .questions)
+        countyPage = try? container.decodeIfPresent(HouseholdCountyPageDTO.self, forKey: .countyPage)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case suggestions, provenance
+        case suggestions, provenance, questions
+        case countyPage = "county_page"
         case fieldSources = "field_sources"
         case tiersUsed = "tiers_used"
         case llmEnabled = "llm_enabled"
