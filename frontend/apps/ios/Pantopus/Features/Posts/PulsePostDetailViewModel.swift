@@ -603,6 +603,11 @@ public final class PulsePostDetailViewModel {
             )
             isReposted = response.reposted ?? !original
             postChanged()
+            // Lists showing the post change its card, which would otherwise keep the old repost and count.
+            var change = PulsePostChange(postId: postId)
+            change.isReposted = isReposted
+            change.shareCount = response.shareCount
+            PulsePostsRefresh.notifyPostChanged(change)
         } catch {
             logger.warning("Repost toggle failed: \(error)")
             toastMessage = "Couldn't update your repost"
