@@ -48,7 +48,7 @@ class PropertyDetailsViewModel
         private val homesRepository: HomesRepository,
         gates: HomeCopyGateFactory,
     ) : ViewModel() {
-        private val homeId: String =
+        val homeId: String =
             requireNotNull(savedStateHandle[PROPERTY_DETAILS_HOME_ID_KEY]) {
                 "PropertyDetailsViewModel requires a '$PROPERTY_DETAILS_HOME_ID_KEY' nav arg."
             }
@@ -278,6 +278,7 @@ class PropertyDetailsViewModel
                                 groups = it.groups,
                                 questions = it.questions,
                                 countyPage = it.countyPage,
+                                countyCheck = it.countyCheck,
                                 floorPlan = it.floorPlan,
                             )
                         },

@@ -353,6 +353,8 @@ data class CreateHomeRequest(
     @Json(name = "no_unit_attestation") val noUnitAttestation: Boolean? = null,
     /** "Is this your layout?", answered on the form: `yes` or `no`. */
     @Json(name = "floor_plan_answer") val floorPlanAnswer: String? = null,
+    /** "Is this right?" after the county's page was answered (link and confirm). */
+    @Json(name = "county_checked") val countyChecked: Boolean? = null,
     @Json(name = "address_id") val addressId: String? = null,
     @Json(name = "request_id") val requestId: String? = null,
     @Json(name = "access_secrets") val accessSecrets: List<CreateAccessSecretRequest>? = null,
@@ -473,6 +475,8 @@ data class PropertySuggestionsResponse(
     val questions: List<HouseholdQuestionDto>? = null,
     /** The county's own page, where a person can check what's missing. */
     @Json(name = "county_page") val countyPage: HouseholdCountyPageDto? = null,
+    /** Link and confirm, with no county record: "Is this right?" once the person is back from the county's page. */
+    @Json(name = "county_check") val countyCheck: AddHomeCountyCheckDto? = null,
     /** What the building's own floor-plan sheet says about this address. */
     @Json(name = "floor_plan") val floorPlan: FloorPlanSuggestionDto? = null,
 ) {
@@ -581,4 +585,14 @@ data class NormalizedAddressDto(
     val lat: Double? = null,
     val lng: Double? = null,
     @Json(name = "is_multi_unit") val isMultiUnit: Boolean? = null,
+)
+
+/** Add Home's "Is this right?" after the county's page (link and confirm): its words. The facts are the form's own fields. */
+@JsonClass(generateAdapter = true)
+data class AddHomeCountyCheckDto(
+    val prompt: String,
+    val lead: String,
+    val confirm: String,
+    val fix: String,
+    val confirmed: String,
 )

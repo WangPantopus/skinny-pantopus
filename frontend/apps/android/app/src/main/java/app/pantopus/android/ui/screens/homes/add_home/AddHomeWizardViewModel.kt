@@ -107,6 +107,9 @@ data class AddHomeUiState(
     val propertySuggestions: PropertySuggestionsResponse? = null,
     /** "Is this your layout?", answered on the form: goes with the new Home. */
     val floorPlanAnswer: String? = null,
+    /** Link and confirm, with no county record: the county's page was opened, and "Is this right?" answered. */
+    val countyPageOpened: Boolean = false,
+    val countyChecked: Boolean = false,
     /** True once the lookup has finished, success or not. */
     val propertyLookupComplete: Boolean = false,
     /** Copy under the public-records card (RN `useHomeForm.ts:641-647`). */
@@ -330,6 +333,7 @@ open class AddHomeWizardViewModel
                     existingHomeId = null, isClaimingExistingHome = false,
                     showsClaimedModal = false, showsConfirmAddressSheet = false,
                     isCheckingAddress = false, isFindingAddress = false, propertySuggestions = null, floorPlanAnswer = null,
+                    countyPageOpened = false, countyChecked = false,
                     propertyLookupComplete = false, isLoadingPropertySuggestions = false,
                     propertyLookupPending = false, lateDetailsAdded = false,
                     addressSearchError = null, canOpenLocationSettings = false, errorMessage = null,
@@ -590,6 +594,10 @@ open class AddHomeWizardViewModel
         }
 
         fun answerFloorPlan(answer: String?) = _state.update { it.copy(floorPlanAnswer = answer) }
+
+        fun openedCountyPage() = _state.update { it.copy(countyPageOpened = true) }
+
+        fun answerCountyCheck(checked: Boolean) = _state.update { it.copy(countyChecked = checked) }
 
         fun updateBedrooms(value: String) = updateDetails { it.copy(bedrooms = digitsOnly(value)) }
 
@@ -1297,6 +1305,7 @@ open class AddHomeWizardViewModel
                     role = role.claimedRole,
                     noUnitAttestation = if (_state.value.noUnitAttested) true else null,
                     floorPlanAnswer = _state.value.floorPlanAnswer.takeIf { _state.value.propertySuggestions?.floorPlan?.prompt != null },
+                    countyChecked = true.takeIf { _state.value.countyChecked && _state.value.propertySuggestions?.countyCheck != null },
                 )
             _state.update { it.copy(showsCreationRecovery = true) }
             try {

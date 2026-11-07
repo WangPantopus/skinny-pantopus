@@ -106,15 +106,20 @@ fun PropertyDetailsScreen(
                     edit = { editing = it },
                     report = { reporting = it },
                     answerLayout = viewModel::answerFloorPlan,
+                    homeId = viewModel.homeId,
                 ),
         )
     }
     editing?.let { group ->
+        val countyCheck =
+            (state as? PropertyDetailsUiState.Clean)?.content?.household?.countyCheck
+                ?: (state as? PropertyDetailsUiState.Mismatch)?.content?.household?.countyCheck
         HouseholdFactEditorSheet(
             group = group,
             saving = savingFacts,
             onSave = { changes, onDone -> viewModel.saveFacts(changes, onDone) },
             onDismiss = { editing = null },
+            checkGroup = countyCheck?.group?.takeIf { it == group.id },
         )
     }
     reporting?.let { section ->
@@ -210,6 +215,7 @@ private fun LoadedBody(
                 content.household?.takeIf { it.questions.isNotEmpty() }?.let { household ->
                     HouseholdQuestionsCard(household = household, actions = householdActions)
                 }
+                content.household?.let { HouseholdCountyCheckCard(household = it, actions = householdActions) }
                 // The county record comes for verified owners only,
                 // so everyone else sees just the Property card.
                 content.recordSections.forEach { section ->
@@ -232,7 +238,7 @@ private fun LoadedBody(
                     household.sections.forEach { section ->
                         PropertySection(title = section.title, rows = section.rows, note = section.note)
                     }
-                    household.countyPage?.takeIf { household.questions.isEmpty() }?.let { HouseholdCountyPageLink(it) }
+                    household.countyLink?.takeIf { household.questions.isEmpty() }?.let { HouseholdCountyPageLink(it) }
                     household.addDetails.forEach { group ->
                         HouseholdAddDetailsCard(group = group, actions = householdActions)
                     }
