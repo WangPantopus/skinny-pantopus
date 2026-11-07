@@ -5,30 +5,33 @@
 // pictures): who it's for → pick a card → write on the back → seal it for the
 // day → look it over (exactly what they will get) and seal and send. One card
 // a day: once it's sent, this page shows today's card, which can be taken
-// back until the 7 a.m. pickup (by email: until they open it).
+// back until the 7 a.m. pickup (by email or link: until they open it). With
+// launch key card_table it can also go as a link anyone can open.
 // ============================================================
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
-import { ChevronLeft, Check, Loader2, Mail, Search, Send, X } from 'lucide-react';
+import { ChevronLeft, Check, Link2, Loader2, Mail, Search, Send, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
 import { useCardArrivals, useCardRecipients, useHolidayCards, usePreviewHolidayCard, useSendHolidayCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
 import { useMe, useOwnLocalProfile } from '@/lib/me';
 import ErrorState from '@/components/ui/ErrorState';
+import { launchFeatures } from '@/lib/featureFlags';
 import MailPiece from '../MailPiece';
 import { mailLoadMessage } from '../mailLoadMessage';
 import CardFront from './CardFront';
 import CardBack, { BACK_TEXT, RULED } from './CardBack';
 import CardFlip from './CardFlip';
+import CardLinkActions from './CardLinkActions';
 import LookItOver from './LookItOver';
 import { askTakeBack } from './takeBack';
 import { cardPicture, clockTime, SERIF, shortDay, WAX } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
-type Recipient = { kind: 'person'; userId: string; name: string } | { kind: 'email'; email: string };
+type Recipient = { kind: 'person'; userId: string; name: string } | { kind: 'email'; email: string } | { kind: 'link' };
 
 const STEPS: Step[] = ['to', 'pick', 'write', 'seal', 'look'];
 const TITLES: Record<Step, string> = {
@@ -75,13 +78,26 @@ function firstName(name: string): string {
 
 function toName(to: Recipient | null): string {
   if (!to) return '';
+  if (to.kind === 'link') return 'whoever opens your link';
   return to.kind === 'person' ? to.name : to.email;
+}
+
+/** The name on the envelope: a card by link has none until someone opens it. */
+function envelopeName(to: Recipient): string {
+  return to.kind === 'link' ? 'Their name' : toName(to);
 }
 
 /** How a sent card arrives, in a sentence. */
 function arrivalLine(card: SentHolidayCard): string {
   const who = card.to_name || 'They';
   if (card.status === 'withdrawn') return 'You took this card back.';
+  if (card.by_link) {
+    if (card.status === 'claimed') return `${who} opened your link and has your card.`;
+    if (card.status === 'expired') return 'Nobody opened your link in 90 days.';
+    return card.arrival === 'sealed_christmas'
+      ? 'It waits for someone to open your link and join. Then it’s in their mailbox and opens on Christmas morning.'
+      : 'It waits for someone to open your link and join.';
+  }
   if (card.by_email) {
     if (card.status === 'claimed') return `${who} joined Pantopus and has your card.`;
     return card.arrival === 'sealed_christmas'
@@ -98,8 +114,22 @@ function arrivalLine(card: SentHolidayCard): string {
   return `${who} gets it with their 7 a.m. mail on ${day}.`;
 }
 
+/** Before it's sent we don't know their clock; the sent card says the time on this one. */
+function takeBackBefore(to: Recipient): string {
+  if (to.kind === 'link') return 'You can take it back until someone opens it.';
+  return to.kind === 'email'
+    ? 'You can take it back until they open it.'
+    : 'You can take it back until the carrier picks it up at 7 a.m. their time.';
+}
+
+/** The last button. */
+function sendWords(to: Recipient): string {
+  return to.kind === 'link' ? 'Seal it and get the link' : 'Seal and send';
+}
+
 function takeBackLine(card: SentHolidayCard): string | null {
   if (!card.can_take_back) return null;
+  if (card.by_link) return 'You can take it back until someone opens it.';
   if (card.by_email) return 'You can take it back until they open it.';
   return `You can take it back until ${clockTime(card.take_back_until)} ${shortDay(card.take_back_until)}, when the carrier picks it up.`;
 }
@@ -234,6 +264,20 @@ function ToStep({ onChoose }: { onChoose: (to: Recipient) => void }) {
         <Mail className="h-[18px] w-[18px]" aria-hidden />
         Not on Pantopus? Send it to their email
       </button>
+      {launchFeatures.cardTable ? (
+        <div className="mt-2.5 text-center">
+          <button
+            type="button"
+            data-testid="sendCardByLink"
+            onClick={() => onChoose({ kind: 'link' })}
+            className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] [@media(prefers-color-scheme:dark)]:text-[#e8b996]"
+          >
+            <Link2 className="h-[18px] w-[18px]" aria-hidden />
+            Send it by link
+          </button>
+          <p className={`mx-auto mt-0.5 max-w-[340px] text-[13px] leading-[18px] ${muted}`}>Text it, or paste it anywhere. The first person to open it keeps the card.</p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -485,13 +529,16 @@ function arrivalChoice(
     case 'sealed_christmas':
       return {
         title: 'Sealed until Christmas',
-        detail: to.kind === 'email'
+        detail: to.kind === 'link'
+          ? 'Whoever opens your link and joins gets it now, with a “Do not open until Christmas” seal. It opens on December 25.'
+          : to.kind === 'email'
           ? 'They get an email now. Once they join with that address, it waits in their mailbox with a “Do not open until Christmas” seal. It opens on December 25.'
           : `It comes with the ${day} morning mail and waits in their mailbox with a “Do not open until Christmas” seal. It opens on December 25.`,
       };
     case 'christmas_morning':
       return { title: 'On Christmas morning', detail: `${shortDay(cards.christmas_morning_at)}, with the 7 a.m. mail.` };
     default:
+      if (to.kind === 'link') return { title: 'Right away', detail: 'Whoever opens your link can open the card as soon as they join.' };
       return { title: 'Right away, by email', detail: 'They get an email now and can open it once they join with that address.' };
   }
 }
@@ -540,7 +587,7 @@ function SealStep({
   return (
     <div className="mt-3 px-4">
       <div className="mx-auto max-w-[380px] rotate-1">
-        <MailPiece item={preview} recipientName={toName(to)} opened={false} />
+        <MailPiece item={preview} recipientName={envelopeName(to)} opened={false} />
       </div>
       <fieldset className="mx-auto mt-6 max-w-[420px]">
         <legend className="text-[16px] font-semibold">When should it arrive?</legend>
@@ -566,9 +613,7 @@ function SealStep({
       </fieldset>
       <p className="mx-auto mt-3.5 max-w-[420px] rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
         {/* Before it's sent we don't know their clock; the sent card says the time on this one. */}
-        {to.kind === 'email'
-          ? 'You can take it back until they open it.'
-          : 'You can take it back until the carrier picks it up at 7 a.m. their time.'}
+        {takeBackBefore(to)}
       </p>
       {error ? <p role="alert" className="mx-auto mt-3 max-w-[420px] text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
@@ -581,7 +626,7 @@ function SealStep({
           style={{ backgroundColor: WAX }}
         >
           {looking || sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
-          {sendsHere ? 'Seal and send' : 'Look it over'}
+          {sendsHere ? sendWords(to) : 'Look it over'}
         </button>
       </div>
     </div>
@@ -605,17 +650,15 @@ function LookStep({
 }) {
   return (
     <div data-testid="sendCardLook">
-      <LookItOver preview={preview} toName={toName(to)} toFirstName={to.kind === 'person' ? firstName(to.name) : ''} byEmail={to.kind === 'email'} />
+      <LookItOver preview={preview} toName={envelopeName(to)} toFirstName={to.kind === 'person' ? firstName(to.name) : ''} byEmail={to.kind !== 'person'} byLink={to.kind === 'link'} />
       <div className="mx-auto mt-7 max-w-[420px] px-4 pb-4">
         <p className="rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
-          {to.kind === 'email'
-            ? 'You can take it back until they open it.'
-            : 'You can take it back until the carrier picks it up at 7 a.m. their time.'}
+          {takeBackBefore(to)}
         </p>
         {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
         <button type="button" data-testid="sendCardLookSend" disabled={sending} onClick={onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
           {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
-          Seal and send
+          {sendWords(to)}
         </button>
       </div>
     </div>
@@ -629,6 +672,8 @@ function SentCard({
   designs,
   title,
   seeInSent = false,
+  link = null,
+  fromName,
   onTakeBack,
   takingBack,
   takeBackError,
@@ -638,12 +683,16 @@ function SentCard({
   title: string;
   /** Just sent: a way to it in Sent. */
   seeInSent?: boolean;
+  /** Just sent by link: the link itself. */
+  link?: string | null;
+  fromName: string;
   onTakeBack: () => void;
   takingBack: boolean;
   takeBackError: string | null;
 }) {
   const design = designs.find((d) => d.id === card.design);
   const line = takeBackLine(card);
+  const linkWaiting = Boolean(card.by_link) && card.can_take_back;
   return (
     <section aria-label={title} className="mx-auto mt-4 max-w-[420px] px-4 pb-4">
       <div className="flex items-start gap-4 rounded-2xl border border-[#e3d8c3] bg-[#fffdf8] p-4 text-[#111827]">
@@ -653,10 +702,15 @@ function SentCard({
         ) : null}
         <div className="min-w-0">
           <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#4e5563]">{title}</p>
-          <p className="mt-0.5 truncate text-[17px] font-semibold">To {card.to_name || 'them'}</p>
+          <p className="mt-0.5 truncate text-[17px] font-semibold">{card.by_link && card.status !== 'claimed' ? 'To whoever opens your link' : `To ${card.to_name || 'them'}`}</p>
           <p className="mt-1 text-[14px] leading-5 text-[#374151]">{arrivalLine(card)}</p>
         </div>
       </div>
+      {linkWaiting ? (
+        <div className="mt-4">
+          <CardLinkActions cardId={card.id} link={link} fromName={fromName} again={!link} />
+        </div>
+      ) : null}
       {line ? <p className={`mt-3 text-center text-[13px] leading-[18px] ${muted}`}>{line}</p> : null}
       {takeBackError ? <p role="alert" className="mt-2 text-center text-[14px] font-medium text-[#a81a1a]">{takeBackError}</p> : null}
       <div className="mt-4 space-y-2.5">
@@ -709,6 +763,8 @@ export default function SendCardFlow() {
   const [message, setMessage] = useState('');
   const [arrival, setArrival] = useState<HolidayCardArrival | null>(null);
   const [sent, setSent] = useState<SentHolidayCard | null>(null);
+  // A card by link, just sent: its link, to copy and share.
+  const [sentLink, setSentLink] = useState<string | null>(null);
   const [takeBackError, setTakeBackError] = useState<string | null>(null);
   const [tookBack, setTookBack] = useState(false);
   // A retry of a card that was taken back meanwhile: the server's sentence, on a new card's first step.
@@ -723,7 +779,7 @@ export default function SendCardFlow() {
   const today = sent ?? (data?.today && data.today.status !== 'withdrawn' ? data.today : null);
   const options = useMemo<HolidayCardArrival[]>(() => {
     if (!data || !to) return [];
-    return to.kind === 'email' ? data.arrivals.email : (theirs.data?.arrivals ?? data.arrivals.person);
+    return to.kind === 'person' ? (theirs.data?.arrivals ?? data.arrivals.person) : data.arrivals.email;
   }, [data, to, theirs.data]);
 
   // Each step starts at its heading, for keyboards and screen readers.
@@ -749,7 +805,10 @@ export default function SendCardFlow() {
     if (!to || !design || !arrival) return null;
     requestId.current ??= crypto.randomUUID();
     return {
-      design: design.id, message: message.trim(), arrival, to: to.kind === 'person' ? { user_id: to.userId } : { email: to.email },
+      design: design.id,
+      message: message.trim(),
+      arrival,
+      to: to.kind === 'person' ? { user_id: to.userId } : to.kind === 'email' ? { email: to.email } : { link: true as const },
       request_id: requestId.current,
     };
   };
@@ -758,6 +817,7 @@ export default function SendCardFlow() {
   const startOver = () => {
     requestId.current = null;
     setSent(null);
+    setSentLink(null);
     setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null); setLookUnavailable(false);
     setStep('to');
   };
@@ -805,7 +865,7 @@ export default function SendCardFlow() {
     const fromSeal = step === 'seal';
     setSealError(null);
     send.mutate(card, {
-      onSuccess: (res) => { requestId.current = null; setSent(res.card); setLook(null); setStep('sent'); },
+      onSuccess: (res) => { requestId.current = null; setSent(res.card); setSentLink(res.link ?? null); setLook(null); setStep('sent'); },
       onError: (error) => {
         if (wentEarlier(error)) return;
         if (error.serverCode !== 'CARD_ARRIVAL_CLOSED') {
@@ -826,7 +886,7 @@ export default function SendCardFlow() {
   const doTakeBack = async () => {
     if (!today) return;
     // Today's card: taking it back frees the day.
-    const yes = await askTakeBack({ byEmail: today.by_email, sentToday: true });
+    const yes = await askTakeBack({ byEmail: today.by_email, byLink: today.by_link, sentToday: true });
     if (!yes) return;
     setTakeBackError(null);
     takeBack.mutate(today.id, {
@@ -861,7 +921,7 @@ export default function SendCardFlow() {
       <div className={page}>
         <div className="mx-auto w-full max-w-[560px]">
           <StepHeader step="sent" title="Today's card" onBack={() => router.push('/app/mailbox/personal')} headingRef={headingRef} />
-          <SentCard card={today} designs={data.designs} title="Today's card" onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
+          <SentCard card={today} designs={data.designs} title="Today's card" fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
         </div>
       </div>
     );
@@ -883,7 +943,7 @@ export default function SendCardFlow() {
   return (
     <div className={`${page} pb-6`}>
       <div className="mx-auto w-full max-w-[560px]">
-      <StepHeader step={step} onBack={back} headingRef={headingRef} />
+      <StepHeader step={step} title={step === 'sent' && sent?.by_link ? 'Your card is ready.' : undefined} onBack={back} headingRef={headingRef} />
       {(tookBack || takenBackNote) && step === 'to' ? (
         <p role="status" className="mx-4 mt-2 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[14px] text-[#374151]">
           {takenBackNote ?? 'You took your card back. You can send a card again today.'}
@@ -946,7 +1006,7 @@ export default function SendCardFlow() {
         />
       ) : null}
       {step === 'sent' && sent ? (
-        <SentCard card={sent} designs={data.designs} title="On its way" seeInSent onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
+        <SentCard card={sent} designs={data.designs} title={sent.by_link ? 'Your card' : 'On its way'} seeInSent link={sentLink} fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
       ) : null}
       </div>
     </div>

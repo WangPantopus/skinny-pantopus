@@ -57,7 +57,7 @@ export default function SentList({ selectedId }: { selectedId?: string }) {
 
   const onTakeBack = async (piece: SentPiece) => {
     const today = calendarDay(new Date(), timeZone);
-    const yes = await askTakeBack({ byEmail: piece.by_email, sentToday: calendarDay(new Date(piece.sent_at), timeZone) === today });
+    const yes = await askTakeBack({ byEmail: piece.by_email, byLink: piece.by_link, sentToday: calendarDay(new Date(piece.sent_at), timeZone) === today });
     if (!yes) return;
     setTakingId(piece.id);
     takeBack.mutate(piece.id, {
