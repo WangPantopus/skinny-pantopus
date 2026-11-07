@@ -48,6 +48,10 @@ private const val NO_LOCATION_MESSAGE =
 private const val NO_ACCESS_MESSAGE = "You don't have access to edit this business."
 
 private const val OFFLINE_MESSAGE = "You're offline. Try again when you're back online."
+private const val MAX_WEEKLY_HOURS_ROWS = 7
+private const val TOO_MANY_HOURS_MESSAGE =
+    "A week can hold 7 sets of hours, and this one has more. Mark a day with two sets as closed to save. Your edits are kept."
+private val WEEKEND_DAY_LABELS = setOf("Sun", "Sat")
 
 private const val COUNTRY_CODE_PREFIX = "+1"
 
@@ -163,15 +167,15 @@ class EditBusinessPageViewModel
             id: String,
             value: EditBusinessPageHoursRow.State,
         ) {
-            changeHours { rows -> rows.map { row -> if (row.id == id) row.copy(state = value, isDirty = true) else row } }
+            changeHours { rows -> EditBusinessPageMapper.withRowHours(rows, savedHours?.rows.orEmpty(), id, value) }
         }
 
         fun applyWeekdayHours() {
             changeHours { rows ->
-                rows.mapIndexed { index, row ->
+                rows.map { row ->
                     row.copy(
                         state =
-                            if (index in 1..5) {
+                            if (row.dayLabel !in WEEKEND_DAY_LABELS) {
                                 EditBusinessPageHoursRow.State.Open(
                                     "9:00 AM",
                                     "5:00 PM",
@@ -445,7 +449,9 @@ class EditBusinessPageViewModel
             loadedPhoneHadCountryCode =
                 detail.profile?.publicPhone.orEmpty().trim().startsWith(COUNTRY_CODE_PREFIX)
 
-            var hours = fetchHours(location?.id)
+            // Hours come only from this location's own read: the public payload holds every location's,
+            // and saving a week built from it, or from nothing, would replace what is saved.
+            val hours = fetchHours(location?.id)
             // Owner-scoped catalog first. `/public/:username` 404s until the
             // profile is published, so deriving Services from it alone left
             // the setup checklist permanently short one item and made publish
@@ -454,7 +460,6 @@ class EditBusinessPageViewModel
             val publicPayload = fetchPublicPayload(detail.business.username)
             if (publicPayload != null) {
                 if (catalog == null) catalog = publicPayload.catalog
-                if (hours == null) hours = publicPayload.hours
             }
 
             if (hours == null || catalog == null) {
@@ -519,7 +524,13 @@ class EditBusinessPageViewModel
         /** Reason the save can't be attempted, or null when it can. */
         private fun saveBlock(content: EditBusinessPageContent): SaveBlock? {
             if (isMediaOnlyEdit(content)) return SaveBlock.Toast(MEDIA_ONLY_MESSAGE)
-            return addressBlock(content) ?: offlineBlock()
+            return addressBlock(content) ?: hoursBlock(content) ?: offlineBlock()
+        }
+
+        /** The hours API takes at most 7 rows, so a longer week can't be saved until it shrinks. */
+        private fun hoursBlock(content: EditBusinessPageContent): SaveBlock? {
+            val rows = EditBusinessPageMapper.hoursPayload(content.hours)?.size ?: 0
+            return if (rows > MAX_WEEKLY_HOURS_ROWS) SaveBlock.Toast(TOO_MANY_HOURS_MESSAGE) else null
         }
 
         private fun isMediaOnlyEdit(content: EditBusinessPageContent): Boolean =
@@ -563,9 +574,10 @@ class EditBusinessPageViewModel
                     _toast.value = failure
                     return false
                 }
+                val saved = savedContent(content)
                 _state.value =
                     EditBusinessPageUiState.Loaded(
-                        EditBusinessPageMapper.withRecomputedMode(savedContent(content)),
+                        EditBusinessPageMapper.withRecomputedMode(saved.copy(hours = savedHours ?: saved.hours)),
                     )
                 if (successToast != null) _toast.value = successToast
                 return true
@@ -602,9 +614,15 @@ class EditBusinessPageViewModel
         private suspend fun pushHours(content: EditBusinessPageContent): String? {
             val body = EditBusinessPageMapper.hoursPayload(content.hours) ?: return null
             val locationId = primaryLocationId ?: return "Add a business location before setting hours."
-            val failure = failureMessage(businesses.setLocationHours(businessId, locationId, SetBusinessHoursRequest(body)))
-            if (failure == null) savedHours = content.hours.cleaned()
-            return failure
+            return when (val result = businesses.setLocationHours(businessId, locationId, SetBusinessHoursRequest(body))) {
+                is NetworkResult.Failure -> result.error.message
+                is NetworkResult.Success -> {
+                    // Later edits compare with, and send back, what the server now holds.
+                    val saved = result.data.hours
+                    savedHours = if (saved.isEmpty()) content.hours.cleaned() else EditBusinessPageMapper.mapHours(saved)
+                    null
+                }
+            }
         }
 
         private fun <T> failureMessage(result: NetworkResult<T>): String? =
