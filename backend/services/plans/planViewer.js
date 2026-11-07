@@ -151,8 +151,9 @@ async function loadViewer(user, opts = {}) {
     role: user.role || null,
     scopeAccess,
     verified,
-    // Playdates exist for a viewer only with the flag on and a verified address.
-    seesPlaydates: Boolean(playdatesFlag) && verified,
+    // Playdates exist for everyone on Pantopus with the flag on. A verified address is no longer a
+    // Plans rule (founder decision, November 7); it still earns the badge and the "verified" auto rule.
+    seesPlaydates: Boolean(playdatesFlag),
     playdatesFlag: Boolean(playdatesFlag),
     sportsFlag: Boolean(sportsFlag),
     // Hosts can invite people (planInvites.js).
