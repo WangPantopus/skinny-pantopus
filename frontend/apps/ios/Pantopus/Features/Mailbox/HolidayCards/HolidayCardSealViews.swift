@@ -234,7 +234,12 @@ struct HolidayCardSentView: View {
                 }
             }
             .padding(.top, Spacing.s4)
-            muted("One card a day. You can send another tomorrow.").padding(.top, Spacing.s3)
+            muted(cards
+                .postageEnabled ? "One digital stamp per card. Receiving and replies are free." :
+                "One card a day. You can send another tomorrow.").padding(
+                .top,
+                Spacing.s3
+            )
         }
         .confirmationDialog("Take your card back?", isPresented: $viewModel.confirmsTakeBack, titleVisibility: .visible) {
             Button("Take it back", role: .destructive) { Task { await viewModel.takeBack() } }

@@ -22,6 +22,7 @@ public enum HolidayCardArrival: String, Sendable, Hashable, CaseIterable {
 /// sending is open, the pictures and their collections, the arrivals open
 /// now and today's card.
 public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
+    public let postageEnabled: Bool
     public let open: Bool
     public let holiday: String
     public let year: Int
@@ -47,6 +48,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case open, holiday, year, designs, collections, arrivals, today
+        case postageEnabled = "postage_enabled"
         case closesOn = "closes_on"
         case messageLimit = "message_limit"
         case nextRoundAt = "next_round_at"
@@ -62,6 +64,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         open = try c.decode(Bool.self, forKey: .open)
+        postageEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .postageEnabled)) ?? false
         holiday = (try? c.decodeIfPresent(String.self, forKey: .holiday)) ?? "christmas"
         year = (try? c.decodeIfPresent(Int.self, forKey: .year)) ?? 2026
         closesOn = try? c.decodeIfPresent(String.self, forKey: .closesOn)
@@ -222,10 +225,12 @@ public struct SendHolidayCardBody: Encodable, Sendable {
     /// One per card draft, sent with every look and retry of it: the server
     /// answers a repeat with the card it stored, never a second one.
     public let requestId: String?
+    public let useStamp: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case design, message, arrival, to
         case requestId = "request_id"
+        case useStamp = "use_stamp"
     }
 
     public enum Recipient: Encodable, Sendable {
@@ -250,12 +255,20 @@ public struct SendHolidayCardBody: Encodable, Sendable {
         }
     }
 
-    public init(design: String, message: String, arrival: HolidayCardArrival, to: Recipient, requestId: String? = nil) {
+    public init(
+        design: String,
+        message: String,
+        arrival: HolidayCardArrival,
+        to: Recipient,
+        requestId: String? = nil,
+        useStamp: Bool? = nil
+    ) {
         self.design = design
         self.message = message
         self.arrival = arrival.rawValue
         self.to = to
         self.requestId = requestId
+        self.useStamp = useStamp
     }
 }
 

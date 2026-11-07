@@ -94,7 +94,7 @@ struct HolidayCardRow: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(today == nil ? MailPaper.wax : MailPaper.cardText)
                         .lineLimit(1)
-                    Text(HolidayCardWords.rowLine(today: today))
+                    Text(HolidayCardWords.rowLine(today: today, postageEnabled: cards.postageEnabled))
                         .font(.system(size: 13))
                         .foregroundStyle(MailPaper.cardTextMuted)
                         .fixedSize(horizontal: false, vertical: true)

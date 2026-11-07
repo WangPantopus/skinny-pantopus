@@ -20,7 +20,7 @@ export default function SendCardRow() {
   if (!enabled || !data?.open) return null;
   const today = data.today && data.today.status !== 'withdrawn' ? data.today : null;
 
-  let line = 'Pick a picture and write a note. One card a day.';
+  let line = data.postage_enabled ? 'Pick a picture and write a note. Your first 3 sends are free.' : 'Pick a picture and write a note. One card a day.';
   if (today) {
     if (today.by_email) line = today.status === 'claimed' ? 'They joined Pantopus and have it.' : 'Waiting for them to open the email.';
     else if (today.status === 'delivered') line = 'In their mailbox now.';

@@ -37,6 +37,7 @@ const { localDisplayNames } = require('../utils/identityProfiles');
 const { maskContact } = require('../jobs/mailEscrowExpiry');
 // Christmas cards (launch key holiday_cards): the season's pictures, arrivals and the sealed note.
 const holidayCards = require('../services/holidayCards');
+const mailStamps = require('../services/mailStamps');
 const { personFindableBy } = require('./mailCompose');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
 const { presentMailSender, presentMailSenders, nameMailSender, nameMailSenders, objectForRecipient, payloadForRecipient,
@@ -1725,6 +1726,7 @@ router.get('/campaigns', verifyToken, async (req, res) => {
 
 const CARD_ARRIVALS = [...new Set([...holidayCards.PERSON_ARRIVALS, ...holidayCards.EMAIL_ARRIVALS])];
 const sendCardSchema = Joi.object({
+  use_stamp: Joi.boolean(),
   design: Joi.string().max(64).required(),
   message: Joi.string().allow('').max(4000).required(),
   arrival: Joi.string().valid(...CARD_ARRIVALS).required(),
@@ -1822,6 +1824,7 @@ async function cardOfRequest(rowId, senderId) {
  * it can't decide (a read or a write failed); a card with a request ID is then left for a retry to settle.
  */
 async function settleCard(mail, senderZone) {
+  if (mail.mail_extracted?.card?.postage_v1) return { outcome: mail.escrow_status === 'withdrawn' ? 'taken_back' : 'sent', mail };
   const request = cardRequestOf(mail);
   const day = await cardsSentToday(mail.sender_user_id, senderZone, new Date(mail.created_at));
   if (day[day.length - 1]?.id === mail.id) {
@@ -1912,7 +1915,7 @@ async function checkCard(senderId, body, now) {
 
   const senderZone = (await mailDelivery.personTimeZone(senderId)) || mailDelivery.FALLBACK_TIME_ZONE;
   if (!holidayCards.seasonOpen(senderZone, now)) return refuse(410, 'Christmas cards are done for this year.', 'CARDS_CLOSED');
-  if ((await cardsSentToday(senderId, senderZone, now)).length) {
+  if (!mailStamps.enabled() && (await cardsSentToday(senderId, senderZone, now)).length) {
     return refuse(429, 'You’ve sent today’s card. You can send another tomorrow.', 'CARD_DAILY_LIMIT');
   }
 
@@ -1985,7 +1988,8 @@ router.get('/cards', verifyToken, async (req, res) => {
       next_round_at: mailDelivery.nextRound(timeZone, now).toISOString(),
       christmas_morning_at: holidayCards.christmasMorning(timeZone).toISOString(),
       time_zone: timeZone,
-      today: today ? holidayCards.sentSummary(today, now) : null,
+      today: !mailStamps.enabled() && today ? holidayCards.sentSummary(today, now) : null,
+      postage_enabled: mailStamps.enabled(),
     });
   } catch (err) {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });
@@ -2080,6 +2084,12 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
 router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) => {
   if (!cardsOn()) return sendCardsOff(res);
   const senderId = req.user.id;
+  if (mailStamps.enabled() && (!req.body.request_id || req.body.use_stamp !== true)) {
+    return res.status(409).json({
+      error: 'Update Pantopus to send cards with digital stamps.',
+      code: 'CARD_UPDATE_REQUIRED',
+    });
+  }
   const requestId = req.body.request_id ? String(req.body.request_id).toLowerCase() : null;
   const rowId = requestId ? holidayCards.requestRowId(senderId, requestId) : null;
   try {
@@ -2103,7 +2113,8 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     const checked = await checkCard(senderId, req.body, now);
     if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
     const { design, message, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
-    if (requestId) card.request = { id: requestId, digest };
+    if (requestId) card.request = { id: requestId, digest, ...(mailStamps.enabled() ? { settled_at: now.toISOString() } : {}) };
+    if (mailStamps.enabled()) card.postage_v1 = true;
     const byLink = Boolean(card.by_link);
     // A link's token comes from the row's id, so the id is known before the insert.
     const linkRowId = byLink ? (rowId || crypto.randomUUID()) : null;
@@ -2156,6 +2167,14 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
         mail = found;
       } else {
         await removeCardObject(objectResult.objectId);
+        if (['STAMPS_REQUIRED', 'STAMP_DAILY_LIMIT'].includes(insertError?.message)) {
+          const needsStamp = insertError.message === 'STAMPS_REQUIRED';
+          return res.status(needsStamp ? 402 : 429).json({
+            code: insertError.message,
+            error: needsStamp ? 'You need a digital stamp to send this card.'
+              : 'You can send up to 50 cards in 24 hours. Please try again later.',
+          });
+        }
         if (insertError?.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
           return res.status(403).json({ error: 'This person can’t receive your card.', code: 'CARD_RECIPIENT_UNAVAILABLE' });
         }

@@ -383,7 +383,8 @@ final class HolidayCardFlowViewModel {
             message: message.trimmingCharacters(in: .whitespacesAndNewlines),
             arrival: arrival,
             to: to,
-            requestId: requestId
+            requestId: requestId,
+            useStamp: cards?.postageEnabled == true ? true : nil
         )
     }
 
@@ -454,7 +455,7 @@ final class HolidayCardFlowViewModel {
 
     /// Everything written goes, and the next card starts on step 1 with a
     /// request ID of its own.
-    private func startOver() {
+    func startOver() {
         requestId = nil
         sent = nil
         preview = nil

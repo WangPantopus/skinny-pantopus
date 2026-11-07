@@ -312,6 +312,7 @@ if (buildingRelease) {
 }
 
 dependencies {
+    implementation("com.android.billingclient:billing-ktx:8.0.0")
     // Core + lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

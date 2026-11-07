@@ -32,13 +32,22 @@ struct HolidayCardFlowView: View {
             header
             ScrollViewReader { scroller in
                 ScrollView {
-                    content
-                        .frame(maxWidth: 560)
-                        .padding(.horizontal, Spacing.s4)
-                        .padding(.top, Spacing.s3)
-                        .padding(.bottom, Spacing.s8)
-                        .frame(maxWidth: .infinity)
-                        .id(Self.top)
+                    VStack(alignment: .leading, spacing: Spacing.s3) {
+                        if viewModel.cards?.postageEnabled == true {
+                            MailStampBooksView(refreshKey: "\(viewModel.step):\(viewModel.sent?.id ?? "")")
+                            if viewModel.step == .sent {
+                                Button("Send another card") { viewModel.startOver() }
+                                    .tint(MailPaper.wax)
+                            }
+                        }
+                        content
+                    }
+                    .frame(maxWidth: 560)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s3)
+                    .padding(.bottom, Spacing.s8)
+                    .frame(maxWidth: .infinity)
+                    .id(Self.top)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 // Each step starts at its top (Look it over is long).

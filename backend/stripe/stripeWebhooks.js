@@ -168,6 +168,7 @@ router.post('/', async (req, res) => {
         break;
 
       case 'charge.refunded':
+        if (await require('../services/mailStamps').stripeChargeChanged(event.data.object, event.account)) break;
         await handleChargeRefunded(event.data.object);
         // P1.9 — persona-membership refund handling runs alongside
         // gig/marketplace refund handling. The persona handler is a
@@ -178,6 +179,7 @@ router.post('/', async (req, res) => {
       // ============ DISPUTE EVENTS ============
 
       case 'charge.dispute.created':
+        if (await require('../services/mailStamps').stripeChargeChanged(event.data.object, event.account)) break;
         await handleDisputeCreated(event.data.object);
         await handlePersonaChargeDisputeCreated(event.data.object, event.account);
         break;
@@ -259,7 +261,9 @@ router.post('/', async (req, res) => {
       // membership row directly for paid tiers.
 
       case 'checkout.session.completed':
-        await handlePersonaCheckoutCompleted(event.data.object);
+        if (event.data.object.metadata?.stamp_product) {
+          await require('../services/mailStamps').confirm('stripe', event.data.object.id, event.data.object.metadata.stamp_user);
+        } else await handlePersonaCheckoutCompleted(event.data.object);
         break;
 
       case 'customer.subscription.created':

@@ -193,6 +193,10 @@ class SendCardViewModel
         private val _form = MutableStateFlow(restoredForm())
         val form: StateFlow<SendCardForm> = _form.asStateFlow()
 
+        fun startAnotherCard() {
+            _form.value = SendCardForm()
+        }
+
         private val _query = MutableStateFlow("")
         val query: StateFlow<String> = _query.asStateFlow()
 

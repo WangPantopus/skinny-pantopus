@@ -13,6 +13,7 @@ import com.squareup.moshi.JsonClass
  */
 @JsonClass(generateAdapter = true)
 data class HolidayCardsResponse(
+    @Json(name = "postage_enabled") val postageEnabled: Boolean = false,
     val open: Boolean = false,
     val holiday: String? = null,
     val year: Int = 2026,
@@ -120,6 +121,7 @@ data class SendHolidayCardBody(
      * repeat with the card it stored, never a second one.
      */
     @Json(name = "request_id") val requestId: String? = null,
+    @Json(name = "use_stamp") val useStamp: Boolean? = null,
 )
 
 /** `POST /api/mailbox/cards/shared` (launch key `card_table`): what was shared, for the counts; never the note or a name. */

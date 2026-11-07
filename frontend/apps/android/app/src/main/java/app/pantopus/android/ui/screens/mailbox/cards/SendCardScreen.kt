@@ -97,6 +97,12 @@ fun SendCardScreen(
                     .verticalScroll(scroll)
                     .padding(bottom = Spacing.s6),
         ) {
+            if (season?.postageEnabled == true) {
+                MailStampBooks(refreshKey = "${form.step}:${form.sent?.id}")
+                if (page == SendCardPage.Sent) {
+                    TextButton(onClick = viewModel::startAnotherCard) { Text("Send another card") }
+                }
+            }
             when (page) {
                 SendCardPage.Reading -> {
                     val failed = load as? SendCardLoad.Failed
@@ -514,7 +520,11 @@ internal fun SentCardSection(
             }
         }
         Text(
-            "One card a day. You can send another tomorrow.",
+            if (cards.postageEnabled) {
+                "One digital stamp per card. Receiving and replies are free."
+            } else {
+                "One card a day. You can send another tomorrow."
+            },
             fontSize = 13.sp,
             lineHeight = 18.sp,
             color = PantopusColors.cardTextQuiet,

@@ -45,7 +45,7 @@ import java.time.ZoneId
 
 /** Today's card, unless it was taken back. */
 val HolidayCardsResponse.todaysCard: SentHolidayCard?
-    get() = today?.takeIf { it.status != "withdrawn" }
+    get() = today?.takeIf { !postageEnabled && it.status != "withdrawn" }
 
 /**
  * The way in to Christmas cards, at the top of Me in the Mailbox: "Send a Christmas card" over a fan of three pictures,
@@ -66,7 +66,14 @@ fun HolidayCardRow(
             today.byLink && today.status != "claimed" -> "Today’s card · by link"
             else -> "Today’s card · to ${today.toName ?: "them"}"
         }
-    val line = if (today != null) todayLine(today, zone) else "Pick a picture and write a note. One card a day."
+    val line =
+        if (today != null) {
+            todayLine(today, zone)
+        } else if (cards.postageEnabled) {
+            "Pick a picture and write a note. Your first 3 sends are free."
+        } else {
+            "Pick a picture and write a note. One card a day."
+        }
     val shape = RoundedCornerShape(Radii.lg)
     Row(
         modifier =

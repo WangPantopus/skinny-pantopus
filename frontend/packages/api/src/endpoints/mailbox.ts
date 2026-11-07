@@ -669,6 +669,7 @@ export interface SentHolidayCard {
 }
 
 export interface HolidayCards {
+  postage_enabled?: boolean;
   /** Sending is open (until December 31 ends where you are). */
   open: boolean;
   holiday: string;

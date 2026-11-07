@@ -442,6 +442,7 @@ app.use('/api/gigs', gigRoutes);
 app.use('/api/gigs', require('./routes/gigsV2'));     // Gigs MVP v2 endpoints (instant-accept, share-status, etc.)
 app.use('/api/v2', require('./routes/offersV2'));      // Offers v2 with scoring & trust capsules
 app.use('/api/mailbox/compose', require('./routes/mailCompose'));   // Mail Compose — four-moment flow
+app.use('/api/mailbox/stamp-books', require('./routes/mailStamps'));
 app.use('/api/mailbox', mailboxRoutes);
 app.use('/api/mailbox/v2/mailday', require('./routes/mailDay'));   // My Mail Day physical-mail triage (before v2 so /mailday/* matches)
 app.use('/api/mailbox/v2', require('./routes/mailboxV2'));

@@ -120,8 +120,12 @@ enum HolidayCardWords {
     }
 
     /// The Mailbox row's second line: the invitation, or how today's card comes.
-    static func rowLine(today: SentHolidayCard?, calendar: Calendar = .current) -> String {
-        guard let today else { return "Pick a picture and write a note. One card a day." }
+    static func rowLine(today: SentHolidayCard?, postageEnabled: Bool = false, calendar: Calendar = .current) -> String {
+        guard let today
+        else {
+            return postageEnabled ? "Pick a picture and write a note. Your first 3 sends are free." :
+                "Pick a picture and write a note. One card a day."
+        }
         if today.byLink {
             return today.status == "claimed" ? "Someone opened your link and has it." : "Waiting for someone to open your link."
         }
@@ -136,7 +140,7 @@ enum HolidayCardWords {
 
     /// Today's card while it still counts (one taken back doesn't).
     static func today(_ cards: HolidayCardsResponse?) -> SentHolidayCard? {
-        guard let today = cards?.today, today.status != "withdrawn" else { return nil }
+        guard cards?.postageEnabled != true, let today = cards?.today, today.status != "withdrawn" else { return nil }
         return today
     }
 

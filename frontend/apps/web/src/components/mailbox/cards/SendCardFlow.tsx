@@ -9,6 +9,7 @@
 // launch key card_table it can also go as a link anyone can open.
 // ============================================================
 
+import StampBooks from './StampBooks';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -679,6 +680,7 @@ function SentCard({
   designs,
   title,
   seeInSent = false,
+  postageEnabled = false,
   link = null,
   fromName,
   onTakeBack,
@@ -690,6 +692,7 @@ function SentCard({
   title: string;
   /** Just sent: a way to it in Sent. */
   seeInSent?: boolean;
+  postageEnabled?: boolean;
   /** Just sent by link: the link itself. */
   link?: string | null;
   fromName: string;
@@ -739,7 +742,7 @@ function SentCard({
           </Link>
         ) : null}
       </div>
-      <p className={`mt-3 text-center text-[13px] ${muted}`}>One card a day. You can send another tomorrow.</p>
+      <p className={`mt-3 text-center text-[13px] ${muted}`}>{postageEnabled ? 'One digital stamp per card. Receiving and replies are free.' : 'One card a day. You can send another tomorrow.'}</p>
     </section>
   );
 }
@@ -820,6 +823,7 @@ export default function SendCardFlow({ chosenDesign = null }: {
       arrival,
       to: to.kind === 'person' ? { user_id: to.userId } : to.kind === 'email' ? { email: to.email } : { link: true as const },
       request_id: requestId.current,
+      ...(data?.postage_enabled ? { use_stamp: true } : {}),
     };
   };
 
@@ -954,6 +958,8 @@ export default function SendCardFlow({ chosenDesign = null }: {
     <div className={`${page} pb-6`}>
       <div className="mx-auto w-full max-w-[560px]">
       <StepHeader step={step} title={step === 'sent' && sent?.by_link ? 'Your card is ready.' : undefined} onBack={back} headingRef={headingRef} />
+      {data.postage_enabled && <StampBooks refreshKey={`${sent?.id ?? ''}:${tookBack}:${step}`} />}
+      {data.postage_enabled && step === 'sent' && <div className="px-4 my-3"><button className={primary} style={{ backgroundColor: WAX }} onClick={startOver}>Send another card</button></div>}
       {(tookBack || takenBackNote) && step === 'to' ? (
         <p role="status" className="mx-4 mt-2 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[14px] text-[#374151]">
           {takenBackNote ?? 'You took your card back. You can send a card again today.'}
@@ -1016,7 +1022,7 @@ export default function SendCardFlow({ chosenDesign = null }: {
         />
       ) : null}
       {step === 'sent' && sent ? (
-        <SentCard card={sent} designs={data.designs} title={sent.by_link ? 'Your card' : 'On its way'} seeInSent link={sentLink} fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
+        <SentCard postageEnabled={data.postage_enabled} card={sent} designs={data.designs} title={sent.by_link ? 'Your card' : 'On its way'} seeInSent link={sentLink} fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
       ) : null}
       </div>
     </div>
