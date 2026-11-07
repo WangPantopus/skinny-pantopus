@@ -28,7 +28,7 @@ export default function PrivacyPage() {
               We built Pantopus around real homes and real people, so we treat privacy as a default — not a setting you have to hunt for.
             </p>
             <p className="text-sm text-app-text-muted dark:text-app-text-secondary">
-              Last updated: October 2026
+              Last updated: November 2026
             </p>
           </div>
         </section>
@@ -76,7 +76,7 @@ export default function PrivacyPage() {
             <p>We collect the minimum data needed to operate the platform and keep communities safe. Here is what that includes:</p>
             <PolicyList items={[
               { label: 'Account information', detail: 'Name, email address or phone number, and profile details you choose to provide (bio, photo, skills, interests).' },
-              { label: 'Content you create', detail: 'Posts, messages, gig listings, offers, reviews, any files you upload, and what you ask the Pantopus assistant.' },
+              { label: 'Content you create', detail: 'Posts, messages, gig listings, offers, reviews, any files you upload, what you ask the Pantopus assistant, and anything you ask it to remember.' },
               { label: 'Home and residency information (optional)', detail: 'If you claim or join a home, we collect address details and residency relationship (owner, tenant, etc.) used for home features and mailbox routing. Your precise address is not publicly displayed.' },
               { label: 'Location data (optional)', detail: 'General location for map and local discovery features, only if you grant permission. You can use most features without sharing precise location.' },
               { label: 'Usage and device data', detail: 'Basic analytics such as feature usage patterns, device type, and error logs used to improve reliability and prevent abuse.' },
@@ -91,7 +91,7 @@ export default function PrivacyPage() {
               { label: 'Safety and moderation', detail: 'Detecting fraud, preventing abuse, enforcing community standards, and responding to reports.' },
               { label: 'Product improvement', detail: 'Understanding how features are used so we can make the platform more reliable and useful.' },
               { label: 'Communications', detail: 'Sending you notifications, important updates, and (with your consent) relevant product announcements.' },
-              { label: 'AI features', detail: 'Answering your questions in the Pantopus assistant, preparing posts, plans and reminders for you to check, writing your daily briefings and optional suggestions, and reading photos and PDFs you choose to share with it. Section 5 explains what this involves.' },
+              { label: 'AI features', detail: 'Answering your questions in the Pantopus assistant, preparing posts, plans and reminders for you to check, remembering what you ask it to, checking back when you ask, carrying out standing rules you turn on, writing your daily briefings and optional suggestions, and reading photos and PDFs you choose to share with it. Section 5 explains what this involves.' },
             ]} />
           </PolicySection>
 
@@ -129,12 +129,21 @@ export default function PrivacyPage() {
             <PolicyList items={[
               { label: 'What you send', detail: 'Your messages to the assistant and any photos or files you attach.' },
               { label: 'What you were looking at', detail: 'When you tap Ask on a screen, what that screen shows you, such as a plan, a post, a section of your home, or your day on Today.' },
-              { label: 'What it looks up to answer you', detail: "Only what you can already see in Pantopus, checked the same way as the app's own screens: your homes and the facts on your Place tab, your household's tasks and members' names, your plans and plans near you, posts and replies on your Nearby feed, and your notification settings." },
+              { label: 'What it looks up to answer you', detail: "Only what you can already see in Pantopus, checked the same way as the app's own screens: your homes and the facts on your Place tab, your household's tasks and members' names, your plans and plans near you, posts and replies on your Nearby feed, what's waiting on you (such as invitations and requests to join your plans, your home or your connections, with the names of the people who sent them), and your notification settings." },
+              { label: 'What you asked it to remember', detail: 'Facts you saved, added to a request when they help answer it (private ones only when the request is about them), and your check-backs and standing rules when you ask about them.' },
               { label: 'Your general area', detail: 'Your city and, if you share your location with the app, an approximate location, so answers fit where you are.' },
             ]} />
             <p>
-              The assistant does not look up your private conversations with other people or your home&apos;s emergency and medical details. Pantopus does not supply it with your password or payment credentials; information you choose to include in an assistant message or attachment is processed as described above. When Suggestions is on, Pantopus can prepare a morning brief and up to two nudges a day using information available to your account. You can turn Suggestions off in notification settings or choose “Fewer like this” on a suggestion. Saving or sending something the assistant prepares requires you to review and confirm its card.
+              The assistant does not look up your private conversations with other people or your home&apos;s emergency and medical details. Pantopus does not supply it with your password or payment credentials; information you choose to include in an assistant message or attachment is processed as described above. When Suggestions is on, Pantopus can prepare a morning brief and up to two nudges a day using information available to your account. You can turn Suggestions off in notification settings or choose “Fewer like this” on a suggestion. Saving or sending something the assistant prepares requires you to review and confirm its card. The one exception is a standing rule you turned on, described below.
             </p>
+            <PolicyList items={[
+              { label: 'What Pantopus remembers', detail: "When you ask the assistant to remember something, such as your furnace filter size, it shows the fact on a card and saves it only when you tap Remember. Only you see the list, in Settings → What Pantopus remembers, where you can edit a fact, delete any item or forget everything. Your household doesn't see it, and the assistant never tells another member what you saved. Facts about health, children, money or beliefs are kept as private and used only when a request is about them. Pantopus won't save passwords, PINs, codes or long numbers such as account or ID numbers. If you ask to hear about new plans near you, such as pickup games, that request is saved in the same list, and new public plans near your home are checked against it without AI." },
+              { label: 'Check-backs', detail: 'When you ask Pantopus to check back on something, it keeps what to check and when, up to 30 days ahead, and sends you one notification at that time.' },
+              { label: 'Standing rules', detail: 'A standing rule, such as posting your weekly pickup game or reminding a household member the night before pickup, starts only when you turn it on from a card that shows its exact terms. From then on Pantopus does that one thing on its own, within those limits, and tells you each time it posts a plan. A household member you set a reminder for sees that you set it. You can see what a rule did, switch it off or delete it in Settings → What Pantopus does for you.' },
+              { label: 'Cards on all your devices', detail: 'Pantopus records which cards the assistant showed you and what you did with them, so a card you used on one phone shows as done on your others. For each request it also logs which lookups ran, whether they worked and how long they took, but not what they returned.' },
+              { label: 'Siri and shortcuts', detail: "On iPhone, Siri can tell you your next pickup, what's on today or what's new nearby in Pantopus, only while your iPhone is unlocked. Apple handles the voice request under its own terms; the answer comes from your Pantopus account. Starting a plan or reminding your household from Siri opens Pantopus with your words, and nothing is posted or saved until you tap the card. On Android, the shortcuts open the app, and the catch-up one also asks the assistant what's new nearby." },
+              { label: 'Notification buttons', detail: 'Some assistant notifications have buttons, such as Mark done, Mark solved or Fewer like this. Tapping one does that one thing for your account, as the same button in the app would.' },
+            ]} />
             {/* Founder to confirm before this ships: the Anthropic account's data-retention setting
                 and that Anthropic's commercial terms (no training on API data, data processing
                 addendum) cover this account. Adjust this paragraph if either differs. */}
@@ -162,6 +171,9 @@ export default function PrivacyPage() {
                 privacy@pantopus.com
               </a>. Assistant photos and PDFs are removed after processing, with a cleanup job for leftover uploads more than an hour old.
             </p>
+            <p>
+              What Pantopus remembers stays until you delete it or your account; deleting a conversation doesn&apos;t remove it, and once a year we remind you to review the list. Check-backs stay with their conversation, and deleting the conversation cancels one that hasn&apos;t run yet. Standing rules stay until you delete them, and the record of what each rule did is kept for a year. The cards the assistant showed you stay with their conversation, and the log of its steps for each request is kept for 90 days.
+            </p>
           </PolicySection>
 
           <PolicySection title="7. Your rights and choices">
@@ -169,6 +181,7 @@ export default function PrivacyPage() {
               { label: 'Update your profile', detail: 'Edit or remove profile details, bio, skills, and interests at any time from account settings.' },
               { label: 'Control post audiences', detail: 'Every post lets you choose exactly who can see it: Nearby, Followers, Household, or Connections.' },
               { label: 'Location permissions', detail: 'Grant or revoke location access from your device settings at any time.' },
+              { label: 'Review what the assistant keeps', detail: 'See, edit or delete what Pantopus remembers, and switch off or delete standing rules, in Settings in the iPhone and Android apps.' },
               { label: 'Request your data', detail: 'You can request a copy of the personal data we hold about you.' },
               { label: 'Request deletion', detail: 'You can request account deletion and removal of associated personal data.' },
             ]} />
