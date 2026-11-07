@@ -73,7 +73,8 @@ public struct PropertyDetailsView: View {
             saving: viewModel.savingFacts,
             save: { changes in Task { await viewModel.saveFacts(changes) } },
             edit: { editing = $0 },
-            report: { reporting = $0 }
+            report: { reporting = $0 },
+            answerLayout: { answer in Task { await viewModel.answerFloorPlan(answer) } }
         )
     }
 
@@ -137,6 +138,9 @@ private struct LoadedBody: View {
                     // only, so everyone else sees just the Property card.
                     ForEach(content.recordSections) { section in
                         PropertySection(title: section.title, rows: section.rows, note: section.note) {
+                            if let layout = content.household?.layout(forSection: section.id) {
+                                FloorPlanLayoutFooter(layout: layout, actions: householdActions)
+                            }
                             if let group = content.household?.group(forSection: section.id) {
                                 HouseholdGroupFooter(group: group, section: section, actions: householdActions)
                             }

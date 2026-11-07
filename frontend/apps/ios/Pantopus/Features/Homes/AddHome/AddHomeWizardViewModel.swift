@@ -94,6 +94,8 @@ final class AddHomeWizardViewModel: WizardModel {
     /// (`useHomeForm.ts:625-662`). Drives the Details block's public
     /// records card and pre-fills the editable fields.
     private(set) var propertySuggestions: PropertySuggestionsResponse?
+    /// "Is this your layout?", answered on the form: goes with the new Home.
+    var floorPlanAnswer: String?
     /// True once the suggestions lookup has finished (success or not), so
     /// the Details block can switch its headline from "Tell us about your
     /// home" to "Confirm property details" (RN `DetailsStep.tsx:57-70`).
@@ -415,6 +417,7 @@ final class AddHomeWizardViewModel: WizardModel {
         isCheckingAddress = false
         isFindingAddress = false
         propertySuggestions = nil
+        floorPlanAnswer = nil
         propertyLookupComplete = false
         isLoadingPropertySuggestions = false
         propertyLookupPending = false
@@ -1269,7 +1272,8 @@ final class AddHomeWizardViewModel: WizardModel {
             role: role.claimedRole,
             moveInDate: details.justMoved ? Self.isoToday() : nil,
             noUnitAttestation: noUnitAttested ? true : nil,
-            addressId: validatedAddressId
+            addressId: validatedAddressId,
+            floorPlanAnswer: propertySuggestions?.floorPlan?.prompt == nil ? nil : floorPlanAnswer
         )
         do {
             try scope.requireCurrent()

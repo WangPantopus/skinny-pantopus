@@ -83,17 +83,27 @@ public struct PropertyHouseholdContent: Sendable, Hashable {
     public let groups: [HouseholdGroupDTO]
     public let questions: [HouseholdQuestionDTO]
     public let countyPage: HouseholdCountyPageDTO?
+    /// "Is this your layout?", for a unit its building's sheet names.
+    public let floorPlan: FloorPlanLayoutDTO?
 
     public init(
         sections: [PropertyRecordSection],
         groups: [HouseholdGroupDTO],
         questions: [HouseholdQuestionDTO],
-        countyPage: HouseholdCountyPageDTO?
+        countyPage: HouseholdCountyPageDTO?,
+        floorPlan: FloorPlanLayoutDTO? = nil
     ) {
         self.sections = sections
         self.groups = groups
         self.questions = questions
         self.countyPage = countyPage
+        self.floorPlan = floorPlan
+    }
+
+    /// The layout question, if it sits at the foot of this card.
+    public func layout(forSection id: String) -> FloorPlanLayoutDTO? {
+        guard let floorPlan, floorPlan.sectionId == id, floorPlan.prompt != nil || floorPlan.answered != nil else { return nil }
+        return floorPlan
     }
 
     public func group(forSection id: String) -> HouseholdGroupDTO? {
