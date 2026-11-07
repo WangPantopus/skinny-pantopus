@@ -18,6 +18,46 @@ export function cardPicture(design: string, size: 'full' | 'thumb' = 'full'): st
   return `/holiday-cards/${design}${size === 'thumb' ? '-thumb' : ''}.jpg`;
 }
 
+/** A picture trimmed to the one shape every card has (launch key card_table). */
+export function cardTrimmedPicture(design: string): string {
+  return `/holiday-cards/card/${design}.jpg`;
+}
+
+/** The card on the table's art (launch key card_table). */
+export const TABLE_ART = '/holiday-cards/table/';
+/** The serif the card on the table prints in. */
+export const PAPER_SERIF = 'ui-serif, "New York", Georgia, "Times New Roman", serif';
+
+/** The small stamp a card carries, by its picture's number: the same in every app. */
+export function cardStampFile(number: number | null | undefined, design: string): string {
+  const picture = number ?? Number(design.split('-').pop());
+  const stamps = ['fir', 'peak', 'river'];
+  return `${TABLE_ART}stamp-${stamps[((Number.isInteger(picture) && picture > 0 ? picture : 1) - 1) % 3]}.webp`;
+}
+
+/** The one shared grey cloth is multiplied by this colour to make a picture's table. */
+export function tableTint(hex: string | null | undefined): string {
+  const value = /^#[0-9a-f]{6}$/i.test(hex ?? '') ? (hex as string) : '#3b4c6e';
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16) / 255);
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  const channel = (c: number) => Math.round(Math.min(1, Math.max(0, (lum + (c - lum) * 1.12) * (0.135 / lum) * 1.7)) * 255);
+  return `rgb(${channel(r)}, ${channel(g)}, ${channel(b)})`;
+}
+
+/** The first name of a shown name ("Juniper H." is Juniper). */
+export function firstNameOf(name: string | null | undefined): string {
+  return (name || '').trim().split(/\s+/)[0] || 'Someone';
+}
+
+/** A small repeatable random: the same seed draws the same numbers in every app. */
+export function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
 /** Paper grain over a flat colour, so the printed strip reads as card stock. */
 export function paperStyle(paper: string): CSSProperties {
   return {

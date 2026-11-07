@@ -1,0 +1,43 @@
+/* The Christmas card on real paper (launch key card_table): 1cqw is 1% of the card's width, so it looks the same at
+   every size. The numbers are design.md section 2 and sample/index.html. */
+.face { position: relative; width: 100%; aspect-ratio: 5 / 6; container-type: inline-size; }
+.inner { position: absolute; inset: 0; overflow: hidden; border-radius: 0.7cqw; isolation: isolate; }
+.photo {
+  position: absolute; left: 1.7cqw; top: 1.7cqw; width: 96.6cqw; height: 103cqw; max-width: none; object-fit: cover;
+  box-shadow: 0 0 0 0.5px rgba(70, 50, 20, 0.25); filter: contrast(1.03) saturate(1.04);
+  -webkit-user-drag: none; user-select: none;
+}
+.caption { position: absolute; left: 4.2cqw; top: 107.4cqw; color: #1d2b63; white-space: nowrap; line-height: 1; }
+.year {
+  position: absolute; left: 4.2cqw; top: 114.2cqw; font: 2.2cqw/1 var(--card-serif); letter-spacing: 0.42em; color: #2b2622;
+  white-space: nowrap;
+}
+.pm { position: absolute; left: 77.5cqw; top: 106.2cqw; width: 20cqw; height: 12cqw; transform: rotate(-3deg); }
+.pm svg { display: block; width: 100%; height: 100%; }
+.grain {
+  position: absolute; inset: 0; background: url('/holiday-cards/table/paper.webp'); background-size: 60cqw;
+  mix-blend-mode: multiply; pointer-events: none;
+}
+.grainFront { opacity: 0.5; }
+.grainSoft { opacity: 0.6; }
+.edges {
+  position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 2.6cqw rgba(110, 80, 30, 0.2); pointer-events: none;
+}
+.rules {
+  position: absolute; left: 8cqw; right: 8cqw; top: 9cqw; height: 83.6cqw;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) calc(7.6cqw - 1px), rgba(74, 84, 118, 0.2) calc(7.6cqw - 1px), rgba(74, 84, 118, 0.2) 7.6cqw);
+}
+.note { position: absolute; left: 8cqw; right: 7cqw; top: 9cqw; color: #1b2a5c; mix-blend-mode: multiply; overflow: hidden; height: 83.6cqw; }
+.note p { margin: 0; min-height: 1lh; }
+.word { display: inline-block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.writing { position: absolute; left: 8cqw; right: 7cqw; top: 9cqw; height: 83.6cqw; }
+.from { position: absolute; left: 8cqw; right: 8cqw; top: 97cqw; display: flex; align-items: baseline; gap: 2cqw; }
+.from b { font: 2.3cqw/1 var(--card-serif); letter-spacing: 0.24em; color: #6a5f52; font-weight: 400; flex: none; }
+.from span {
+  font-size: 6.4cqw; line-height: 1; color: #1b2a5c; mix-blend-mode: multiply; min-width: 0; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.foot {
+  position: absolute; left: 0; right: 0; bottom: 3.2cqw; text-align: center; font: 1.9cqw/1 var(--card-serif);
+  letter-spacing: 0.3em; color: #8a7f70;
+}
