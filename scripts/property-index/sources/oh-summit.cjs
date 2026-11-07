@@ -2,11 +2,16 @@
 // Summit County, Ohio: the Fiscal Office's public tax parcels. No terms are stated on the service. Year built, finished floor area,
 // floors and values on residential parcels. Owner and mailing columns are in the layer and never asked for. Bedrooms and baths
 // come from the dwelling file (SC710_DWELL) and lot size from the land file (SC709_LAND), among the Fiscal Office's free CAMA
-// downloads, matched by parcel; its owner and mailing files aren't downloaded. The layer has no ZIP for a site, so the county's ZIPs come from the Census. Assessed values
-// are Ohio's 35% of market.
+// downloads, matched by parcel; its owner and mailing files aren't downloaded. The layer has no ZIP or town for a site (its
+// city column is the taxpayer's mailing city, never read), so the county's ZIPs come from the Census, and a record's town
+// comes from Pantopus's own address registry for the county, matched by number and street: routing only, so a lookup that
+// names a town finds the county. Assessed values are Ohio's 35% of market.
 
+const fs = require('node:fs');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const { execFileSync } = require('node:child_process');
+const { statePath, releasePath } = require('../../../backend/services/propertyRecords/format');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, realUnit, onRecord } = require('../lib/addresses.cjs');
@@ -113,6 +118,48 @@ async function lots(work, page) {
 // 2,000 acres: a larger sum is a land record that isn't one lot.
 const MOST_LOT_SQFT = 2000 * 43560;
 
+const streetLine = ({ number, pre, name, suffix, post }) => [number, pre || '', name, suffix || '', post || ''].join('|').toUpperCase();
+
+/**
+ * Each street line's town from Pantopus's own address registry for the county (registry/ in the index's storage, which a
+ * build can read). A line the registry places in two towns gets none. No storage here (a local run without its key): no towns.
+ */
+function registryTowns(work) {
+  const towns = new Map();
+  const bucket = process.env.PROPERTY_INDEX_BUCKET;
+  if (!bucket) {
+    log(`${COUNTY}: no address registry here, so its records name no town`);
+    return towns;
+  }
+  const root = `s3://${bucket}/index/registry`;
+  const dir = path.join(work, 'oh-summit', 'registry');
+  fs.mkdirSync(dir, { recursive: true });
+  const copy = (name) => {
+    const to = path.join(dir, path.basename(name));
+    execFileSync('aws', ['s3', 'cp', `${root}/${name}`, to, '--only-show-errors'], { stdio: ['ignore', 'ignore', 'inherit'] });
+    return to;
+  };
+  const county = JSON.parse(fs.readFileSync(copy(statePath('OH')), 'utf8')).jurisdictions[FIPS];
+  if (!county) {
+    log(`${COUNTY}: the address registry has no release here, so its records name no town`);
+    return towns;
+  }
+  const release = releasePath(FIPS, county.release);
+  const { lengths } = JSON.parse(zlib.gunzipSync(fs.readFileSync(copy(`${release}/manifest.json.gz`))));
+  const bytes = fs.readFileSync(copy(`${release}/data.bin`));
+  let offset = 0;
+  for (const length of lengths) {
+    for (const { kind, address } of JSON.parse(zlib.gunzipSync(bytes.subarray(offset, offset + length)))) {
+      if (kind === 'unit' || !address.city) continue;
+      const line = streetLine(address);
+      towns.set(line, towns.has(line) && towns.get(line) !== address.city ? null : address.city);
+    }
+    offset += length;
+  }
+  log(`${COUNTY}: ${towns.size} street lines in the address registry's release ${county.release}`);
+  return towns;
+}
+
 async function* build({ work }) {
   const about = await getJson(`${LAYER}?f=json`, 'The layer\'s description');
   const asOf = isoDate(about.editingInfo?.dataLastEditDate || about.editingInfo?.lastEditDate);
@@ -144,6 +191,18 @@ async function* build({ work }) {
     }
   }
   log(`${COUNTY}: ${lotted} homes and buildings gained a lot size from the land file`);
+  // Routing only: a record that names its town is found by a lookup that names the town without a ZIP. Lines the registry
+  // doesn't hold, or holds in two towns, stay as they were: found by ZIP, as before.
+  const towns = registryTowns(work);
+  let named = 0;
+  for (const { address } of records) {
+    const town = towns.get(streetLine(address));
+    if (town && !address.city) {
+      address.city = town;
+      named += 1;
+    }
+  }
+  log(`${COUNTY}: ${named} of ${records.length} records name their town from the address registry`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'OH', name: COUNTY, publisher: 'Summit County Fiscal Office', dataset: 'tax parcels and CAMA dwelling and land data', method: 'county', source: 'oh-summit', as_of: asOf, stale_after_days: 730, extra_zips: zipsByCounty(work, ['39']).get(FIPS) || [], records,
