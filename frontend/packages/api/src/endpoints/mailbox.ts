@@ -745,7 +745,9 @@ export interface HolidayCardPreview {
   sealed_days: number | null;
   take_back_until: string | null;
   /** By email: the email they get, in its own words. */
-  email: { subject: string; heading: string; lines: string[]; button: string; footnote: string; footer?: string[] } | null;
+  email: { subject: string; heading: string; lines: string[]; button: string; footnote: string; footer?: string[];
+    /** The sealed envelope at its top (launch key card_table). */
+    picture?: string } | null;
   /** By email: the page its link opens (the address masked, as on that page). */
   link_page: { sender_name: string; sender_verified: boolean; sealed: boolean; sent_to: string; sent_on: string; by_link?: boolean } | null;
 }
