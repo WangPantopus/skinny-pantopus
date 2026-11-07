@@ -16,15 +16,13 @@
 
 const { stateCode } = require('./propertyRecords/addressKey');
 const { dateLabel } = require('./propertyRecords/homeRecord');
+const { coversMoreThanHome, COVERS_MORE_NOTE } = require('./propertyRecords/salePrice');
 const areaTrend = require('./propertyRecords/areaTrend');
 const { SALE_PRICES_NOT_PUBLIC, ASSESSMENT_SHARE, ASSESSED_VALUE_NOTE } = require('../data/valuePractice');
 
 const TAXABLE_VALUE_NOTE = 'Taxable value is what the county uses to figure property tax, not what the home would sell for.';
 // Below this a deed's price is a formality, not a sale ($1, $10, "love and affection").
 const LOWEST_SALE_PRICE = 1000;
-// Above this many times the county's market value, a deed's price is for more than this home: some towns list a whole
-// condo building's sale on every unit.
-const MOST_SALE_TIMES_VALUE = 8;
 
 const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
 
@@ -34,10 +32,6 @@ const EMPTY_MESSAGES = {
   record: 'The county\'s record for this home doesn\'t include a value.',
   none: 'We don\'t have county records for this home yet.',
 };
-
-/** Whether a record's sale price is for more than this home: the deed's price, not the home's. */
-const coversMoreThanHome = (facts) => facts.market_value > 0 && facts.sale_price > MOST_SALE_TIMES_VALUE * facts.market_value;
-const COVERS_MORE_NOTE = 'The recorded price for this sale covers more than this home, so it isn\'t shown.';
 
 function lastSale(facts, state) {
   const many = coversMoreThanHome(facts);
@@ -110,4 +104,4 @@ function build(profile, { trend = null, lookup = null } = {}) {
   };
 }
 
-module.exports = { build, coversMoreThanHome, COVERS_MORE_NOTE };
+module.exports = { build };

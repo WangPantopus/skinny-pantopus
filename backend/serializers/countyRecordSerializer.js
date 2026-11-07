@@ -24,7 +24,8 @@
 // ============================================================
 
 const { FACTS, SECTIONS: RECORD_SECTIONS } = require('../services/propertyRecords/facts');
-const { coversMoreThanHome, COVERS_MORE_NOTE } = require('../services/homeValueCard');
+
+const { coversMoreThanHome, COVERS_MORE_NOTE } = require('../services/propertyRecords/salePrice');
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 // A record is vendor data (and, for older Homes, whatever the app sent at
