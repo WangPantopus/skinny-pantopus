@@ -15,7 +15,7 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '36055';
 const COUNTY = 'Monroe County';
 const LAYER = 'https://maps.monroecounty.gov/server/rest/services/Hosted/Parcels_Public/FeatureServer/0';
-const COLUMNS = ['countysbl', 'printkey', 'parceladdress', 'parceladdressnumber', 'parceladdressstreetprefixdir', 'parceladdressstreetname', 'parceladdressstreetsuffix', 'parceladdressstreetpostdir', 'parceladdresscity', 'parceladdresszipcode', 'parceladdressunit', 'parceladdressunitnumber', 'frontagefeet', 'depthfeet', 'acres', 'rollyear', 'totalassessedvalue', 'landassessedvalue', 'schooldistrictname', 'propertyclass', 'propertyclassdescription', 'yearbuilt', 'buildingstyle', 'exteriorwallmaterial', 'numberofstories', 'squarefeetlivingarea', 'numberofbedrooms', 'numberoffullbathrooms', 'numberofhalfbathrooms', 'numberofkitchens', 'numberoffireplaces', 'basementtype', 'centralair', 'heattype', 'sewertype', 'watersupply'];
+const COLUMNS = ['countysbl', 'printkey', 'parceladdress', 'parceladdressnumber', 'parceladdressstreetprefixdir', 'parceladdressstreetname', 'parceladdressstreetsuffix', 'parceladdressstreetpostdir', 'parceladdresscity', 'parceladdresszipcode', 'parceladdressunit', 'parceladdressunitnumber', 'frontagefeet', 'depthfeet', 'acres', 'rollyear', 'totalassessedvalue', 'landassessedvalue', 'schooldistrictname', 'propertyclass', 'propertyclassdescription', 'yearbuilt', 'buildingstyle', 'exteriorwallmaterial', 'numberofstories', 'squarefeetlivingarea', 'numberofbedrooms', 'numberoffullbathrooms', 'numberofhalfbathrooms', 'numberofkitchens', 'numberoffireplaces', 'basementtype', 'centralair', 'heattype', 'sewertype', 'watersupply', 'swis', 'description1', 'description2', 'description3'];
 
 function useOf(code, hasUnit) {
   const c = String(code ?? '').slice(0, 3);
@@ -45,6 +45,9 @@ function fromRow(row) {
   put(facts, 'land_use', word(row.propertyclassdescription));
   put(facts, 'county_use_code', word(row.propertyclass));
   put(facts, 'school_district', word(row.schooldistrictname));
+  // The roll's municipality: "Town of Greece", "Village of Fairport", "City of Rochester".
+  put(facts, 'municipality', word(row.swis));
+  put(facts, 'legal_description', [row.description1, row.description2, row.description3].map(word).filter(Boolean).join(' ').slice(0, 300) || null);
   if (home || kind === 'building') {
     put(facts, 'year_built', year(row.yearbuilt));
     put(facts, 'style', said(row.buildingstyle));

@@ -11,6 +11,7 @@ const { execFileSync } = require('node:child_process');
 const { parse, parts, zip5, unitKey } = require('../../../backend/services/propertyRecords/addressKey');
 const { resolve } = require('../../../backend/services/propertyRecords/identity');
 const { download, zipTable, cachedLayer } = require('../lib/tables.cjs');
+const { lotNumber } = require('../lib/legal.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '53011';
@@ -143,14 +144,15 @@ function addBuildingAreas(records, buildings) {
   return dwellings;
 }
 
-// A legal description's lot, only when it plainly names one whole lot: not "LOTS 3 & 4", "PTN LOT 3", "E 1/2 LOT 3",
-// "S 5 FT OF LOT 3" or "LOT 3 EX THE N 5 FT".
-const PART_OF_A_LOT = /\b(?:PTN|PORT|POR|PT|PART|FT|EX|EXC|EXCEPT|LESS|TGW|TOG|AND|OF\s+LOT)\b|&|\d\/\d/;
-function lotNumber(legal) {
-  const text = String(legal || '').toUpperCase();
-  const lots = text.match(/\bLOTS?\b/g) || [];
-  if (lots.length !== 1 || lots[0] !== 'LOT' || PART_OF_A_LOT.test(text)) return null;
-  return /\bLOT\s+#?(\d+[A-Z]?)(?![\w/-])/.exec(text)?.[1] || null;
+/** Where the Assessor's own text says an account is: this file's street columns, and the unit that follows them in its address line. */
+function assessorAddress(row) {
+  if (!row.Situs_PACS) return null;
+  const head = row.Situs_PACS.split(',')[0].replace(/\s+/g, ' ').trim();
+  const street = [row.SitusNum, row.SitusStPre, row.SitusSt, row.SitusSuf].filter(Boolean).join(' ');
+  let unit = head.startsWith(street) ? head.slice(street.length).trim() : '';
+  if (row.SitusCity && unit.endsWith(row.SitusCity)) unit = unit.slice(0, -row.SitusCity.length).trim();
+  const address = parse(street, unit);
+  return address && { ...address, city: String(row.SitusCity || '').trim().toUpperCase(), zip: zip5(row.SitusZip) };
 }
 
 /** Where the Assessor's own text says an account is: this file's street columns, and the unit that follows them in its address line. */

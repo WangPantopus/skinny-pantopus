@@ -8,6 +8,7 @@ const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '08001';
@@ -19,8 +20,8 @@ const VALUES = `${BASE}/Property_Values/FeatureServer/0`;
 const SALES = `${BASE}/Property_Sales/FeatureServer/0`;
 const PARCEL_COLUMNS = ['PIN', 'PARCELNB', 'SUBNAME', 'STREETNO', 'STREETDIR', 'STREETNAME', 'STREETSUF', 'STREETPOSTDIR', 'STREETALP', 'LOCCITY', 'LOCZIP', 'LEGAL'];
 const IMPROVEMENT_COLUMNS = ['pin', 'bltasdesc', 'proptype', 'yrblt', 'sf', 'rooms', 'bedrooms', 'baths', 'exterior', 'attgarsf', 'detgarsf', 'bsmntsf', 'finbsmntsf'];
-const VALUE_COLUMNS = ['PIN', 'ACTLANDVAL', 'ACTIMPSVAL', 'ACTTOTALVAL', 'ASDLANDVAL', 'ASDIMPSVAL', 'ASDTOTALVAL', 'LOTSIZE', 'LOTMEASURE', 'SCHOOLNAME'];
-const SALE_COLUMNS = ['pin', 'recptno', 'saledt', 'salep'];
+const VALUE_COLUMNS = ['PIN', 'AREAID', 'ACCTTYPE', 'ACTLANDVAL', 'ACTIMPSVAL', 'ACTTOTALVAL', 'ASDLANDVAL', 'ASDIMPSVAL', 'ASDTOTALVAL', 'LOTSIZE', 'LOTMEASURE', 'SCHOOLNAME'];
+const SALE_COLUMNS = ['pin', 'recptno', 'deedtype', 'saledt', 'salep'];
 
 function useOf(building, unit) {
   const use = String(building?.proptype || '').toUpperCase();
@@ -57,12 +58,15 @@ function fromRow(row, { building, value, sale }) {
   put(facts, 'subdivision', word(row.SUBNAME));
   put(facts, 'legal_description', word(row.LEGAL)?.slice(0, 300));
   put(facts, 'school_district', word(value?.SCHOOLNAME));
+  put(facts, 'tax_code_area', word(value?.AREAID));
+  put(facts, 'property_class', word(value?.ACCTTYPE));
   put(facts, 'land_use', word(building?.proptype));
   if (building && (home || kind === 'building')) {
     put(facts, 'year_built', year(Math.trunc(Number(building.yrblt))));
     put(facts, 'style', word(building.bltasdesc));
     put(facts, 'stories', storiesOf(word(building.bltasdesc)));
     put(facts, 'exterior_walls', word(building.exterior));
+    if (building.count > 1) facts.buildings_on_parcel = building.count;
   }
   if (building && home) {
     put(facts, 'living_sqft', positive(building.sf));
@@ -106,13 +110,16 @@ async function* build({ work }) {
   for await (const row of cached(path.join(dir, 'improvements.jsonl.gz'), () => layerRows(IMPROVEMENTS, IMPROVEMENT_COLUMNS))) {
     if (/^(COMMERCIAL|OUT BUILDING)$/i.test(row.proptype || '')) continue;
     const was = buildings.get(row.pin);
-    if (!was || Number(row.sf) > Number(was.sf)) buildings.set(row.pin, row);
+    const count = (was?.count || 0) + 1;
+    if (!was || Number(row.sf) > Number(was.sf)) buildings.set(row.pin, { ...row, count });
+    else was.count = count;
   }
   const values = new Map();
   for await (const row of cached(path.join(dir, 'values.jsonl.gz'), () => layerRows(VALUES, VALUE_COLUMNS))) values.set(row.PIN, row);
   const sales = new Map();
   for await (const row of cached(path.join(dir, 'sales.jsonl.gz'), () => layerRows(SALES, SALE_COLUMNS))) {
-    if (!(positive(row.salep) > 100)) continue;
+    // A quit claim moves no home at a price.
+    if (!isHomeSale(positive(row.salep)) || String(row.deedtype ?? '').trim() === 'QC') continue;
     const was = sales.get(row.pin);
     if (!was || Number(row.saledt) > Number(was.saledt)) sales.set(row.pin, row);
   }

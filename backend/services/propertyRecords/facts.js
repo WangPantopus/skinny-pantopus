@@ -77,6 +77,7 @@ const FACTS = {
   property_type: { section: 'records', label: 'Property type', format: 'text', scope: 'parcel' },
   property_subtype: { section: 'records', label: 'Property subtype', format: 'text', scope: 'parcel' },
   address_on_record: { section: 'records', label: 'Address on record', format: 'raw', scope: 'unit' },
+  zip_plus4: { section: 'records', label: 'ZIP+4', format: 'code', scope: 'unit' },
   parcel_number: { section: 'records', label: 'Parcel number (APN)', format: 'code', scope: 'parcel' },
   county: { section: 'records', label: 'County', format: 'name', scope: 'parcel' },
   fips: { section: 'records', label: 'County code (FIPS)', format: 'code', scope: 'parcel' },

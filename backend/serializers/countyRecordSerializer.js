@@ -588,6 +588,8 @@ function serializePropertyRecord(copy, estimate = null) {
   addFacts(lot, { ...copy.building, ...facts }, ['lot'], (fact) => !(commonLand && fact.label !== 'Zoning' && fact.scope === 'parcel'));
   const records = titled('records');
   addFacts(records, { ...copy.building, ...facts }, ['records'], (fact) => copy.match !== 'building_only' || fact.scope === 'parcel');
+  // Pantopus's own ID for the home, where ATTOM's record showed its ID.
+  if (copy.match === 'exact' && copy.subject?.id) records.add('pantopus_id', 'Pantopus ID', String(copy.subject.id), true);
   sections.push(lot, records);
 
   if (copy.match !== 'building_only') {
