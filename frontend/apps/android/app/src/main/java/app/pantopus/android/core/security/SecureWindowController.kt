@@ -1,6 +1,7 @@
 package app.pantopus.android.core.security
 
 import android.app.Activity
+import android.os.Build
 import android.view.WindowManager
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -44,9 +45,33 @@ class SecureWindowController
          */
         private var privacyHold = false
 
+        /** Screens showing that keep out of the recents thumbnail but can still be screenshotted. */
+        private val recentsHiddenCount = AtomicInteger(0)
+
         fun bind(activity: Activity) {
             activityRef = WeakReference(activity)
             applyFlag(activity, secured = refCount.get() > 0)
+            applyRecentsHidden(activity, hidden = recentsHiddenCount.get() > 0)
+        }
+
+        /** A private screen that a person may still screenshot (a letter, a card). Android 13 and later. */
+        fun hideFromRecents() {
+            val count = recentsHiddenCount.incrementAndGet()
+            activityRef?.get()?.let { applyRecentsHidden(it, hidden = count > 0) }
+        }
+
+        fun showInRecents() {
+            val count = recentsHiddenCount.updateAndGet { current -> (current - 1).coerceAtLeast(0) }
+            activityRef?.get()?.let { applyRecentsHidden(it, hidden = count > 0) }
+        }
+
+        private fun applyRecentsHidden(
+            activity: Activity,
+            hidden: Boolean,
+        ) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                activity.setRecentsScreenshotEnabled(!hidden)
+            }
         }
 
         fun acquire() {

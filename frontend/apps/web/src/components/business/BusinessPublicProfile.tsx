@@ -18,7 +18,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { BusinessUser, BusinessProfile, BusinessLocation, BusinessHours, BusinessPage, CatalogItem, BusinessReview, PageBlock } from '@pantopus/types';
-import { PublicBlock } from './PublicBlockRenderer';
+import { formatHoursInterval, PublicBlock } from './PublicBlockRenderer';
 import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { EndorsementSummary, EndorsementButton } from '@/components/endorsement';
@@ -531,14 +531,6 @@ function InfoCard({ icon, label, children }: { icon: string; label: string; chil
 function LocationsHoursTab({ locations, hours }: { locations: BusinessLocation[]; hours: BusinessHours[] }) {
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  const formatTime = (t: string | null) => {
-    if (!t) return '';
-    const [h, m] = t.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-  };
-
   const hoursByLocation: Record<string, BusinessHours[]> = {};
   for (const h of hours) {
     if (!hoursByLocation[h.location_id]) hoursByLocation[h.location_id] = [];
@@ -589,7 +581,7 @@ function LocationsHoursTab({ locations, hours }: { locations: BusinessLocation[]
                     <div key={h.id} className="flex justify-between text-sm">
                       <span className="text-app-text-strong font-medium">{DAY_NAMES[h.day_of_week]}</span>
                       <span className={h.is_closed ? 'text-red-500' : 'text-app-text-secondary'}>
-                        {h.is_closed ? 'Closed' : `${formatTime(h.open_time)} – ${formatTime(h.close_time)}`}
+                        {h.is_closed ? 'Closed' : formatHoursInterval(h.open_time, h.close_time)}
                       </span>
                     </div>
                   ))}

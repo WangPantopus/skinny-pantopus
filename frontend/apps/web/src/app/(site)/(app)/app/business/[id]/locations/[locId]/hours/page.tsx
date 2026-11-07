@@ -252,6 +252,7 @@ function BusinessLocationHoursEditor({ businessId, locationId }: { businessId: s
                     className="w-full min-w-0 sm:col-span-3 rounded border border-app-border px-2 py-1 text-sm disabled:bg-app-surface-sunken"
                   />
                   {h.notes && <p className="sm:col-span-12 text-xs text-app-text-secondary break-words">{h.notes}</p>}
+                  {!h.is_closed && h.close_time?.startsWith('24:00') && <p className="sm:col-span-12 text-xs text-app-text-secondary">24:00 is midnight at the end of the day.</p>}
                   </>}
                 </div>
               ); })}

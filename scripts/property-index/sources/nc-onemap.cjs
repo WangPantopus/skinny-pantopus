@@ -22,7 +22,7 @@ const BUCKET = 'https://dit-cgia-gis-data.s3.amazonaws.com';
 const BUILDINGS = 'https://services1.arcgis.com/YBWrN5qiESVpqi92/arcgis/rest/services/NC_Risk_Building_Footprints/FeatureServer/0';
 const BUILDING_COLUMNS = ['PID', 'OCCUP_TYPE', 'YEAR_BUILT', 'YRBUILTSRC', 'HTD_SQ_FT', 'HTDSQFTSRC', 'NUM_STORY', 'FOUND_TYPE', 'BUILD_TYPE'];
 const COUNTY_SOURCED = new Set(['1000', '2000', '2010']);
-const COLUMNS = ['PARNO', 'GISACRES', 'IMPROVVAL', 'LANDVAL', 'PARVAL', 'PARVALTYPE', 'SITEADD', 'SUNIT', 'SCITY', 'SZIP', 'STRUCTYEAR', 'SALEDATE', 'SUBDIVISIO', 'PARUSEDESC', 'PARUSECODE', 'REVISEYEAR'];
+const COLUMNS = ['PARNO', 'ALTPARNO', 'GISACRES', 'IMPROVVAL', 'LANDVAL', 'PARVAL', 'PARVALTYPE', 'SITEADD', 'SUNIT', 'SCITY', 'SZIP', 'STRUCTYEAR', 'SALEDATE', 'SUBDIVISIO', 'PARUSEDESC', 'PARUSECODE', 'REVISEYEAR'];
 
 // The state's counties in FIPS order: the file names, and each one's code is its place times two, minus one.
 const COUNTY_FILES = [
@@ -72,7 +72,7 @@ const FOOTINGS = { BASEMENT: 'Basement', 'CRAWL SPACE': 'Crawl space', FILL: 'Fi
 
 // Each parcel's largest building, in the county's own figures. How many it has goes on the record too.
 // Counties with a connector of their own, for the bedrooms and baths these parcels lack.
-const OWN_CONNECTOR = new Set(['37081', '37119']);
+const OWN_CONNECTOR = new Set(['37081', '37119', '37183']);
 
 async function buildingsOf(work, fips, lists) {
   const parcels = new Map();
@@ -98,7 +98,8 @@ async function buildingsOf(work, fips, lists) {
 function fromRow(row, fips, county, buildings) {
   const unit = realUnit(row.SUNIT);
   const parsed = parse(row.SITEADD, unit);
-  const parcel = word(row.PARNO);
+  // Some counties' newest files leave PARNO blank and put the same number here, the one the building layer uses.
+  const parcel = word(row.PARNO) || word(row.ALTPARNO);
   if (!parsed || !parcel) return null;
   const building = buildings.get(parcel);
   const [kind, homeType] = useOf(`${row.PARUSEDESC || ''} ${row.PARUSECODE || ''}`, parsed.unit, building?.occupancy);
@@ -172,7 +173,7 @@ async function* build({ work }) {
     const seen = new Set();
     const county = `${name.replace(/-/g, ' ').replace(/(^|\s)\S/g, (first) => first.toUpperCase()).replace(/^Mc(\w)/, (_, next) => `Mc${next.toUpperCase()}`)} County`;
     let noAddress = 0;
-    for await (const row of dbfRows(zip, member, COLUMNS)) {
+    for await (const row of dbfRows(zip, member, COLUMNS, { optional: ['ALTPARNO'] })) {
       const record = fromRow(row, fips, county, buildings);
       if (!record) noAddress += 1;
       else if (!seen.has(record.id)) {
@@ -182,6 +183,8 @@ async function* build({ work }) {
     }
     fs.rmSync(zip, { force: true });
     log(`${county}: ${byCounty.length} records, ${noAddress} without a street number`);
+    // A county whose file has no street numbers has nothing to look up.
+    if (!byCounty.length) continue;
     for (const building of condoBuildings(byCounty, { fips, county })) byCounty.push(building);
     yield {
       fips, state: 'NC', name: county, publisher: 'NC OneMap', dataset: 'county parcels and building layer', method: 'state', source: 'nc-onemap', title: 'State records', as_of: date, stale_after_days: 400, records: byCounty,

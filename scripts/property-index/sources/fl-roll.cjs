@@ -13,6 +13,8 @@ const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
+// Counties read by their own connector.
+const OWN_CONNECTOR = new Set(['12011', '12057', '12086', '12115', '12117']);
 // [county, the Department's county number, FIPS]
 const COUNTIES = [
   ['Alachua', 11, '12001'],
@@ -180,12 +182,14 @@ async function buildCounty(work, year, [name, number, fips]) {
   };
 }
 
+const rollYear = (today) => (today.getMonth() >= 9 ? today.getFullYear() : today.getFullYear() - 1);
+
 // One county at a time, so the state fits in memory. PROPERTY_INDEX_ONLY limits a run to some FIPS codes.
 async function* build({ work, today = new Date() }) {
-  const year = today.getMonth() >= 9 ? today.getFullYear() : today.getFullYear() - 1;
+  const year = rollYear(today);
   const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   for (const county of COUNTIES) {
-    if (only.length && !only.includes(county[2])) continue;
+    if (OWN_CONNECTOR.has(county[2]) || (only.length && !only.includes(county[2]))) continue;
     // One county's trouble doesn't hold up the others: they publish, and the run ends failed so someone looks.
     let built = null;
     try {
@@ -199,4 +203,7 @@ async function* build({ work, today = new Date() }) {
   }
 }
 
-module.exports = { build };
+// One county's roll, for a connector whose county's own file leaves homes out.
+const countyRoll = (work, fips, today = new Date()) => buildCounty(work, rollYear(today), COUNTIES.find((county) => county[2] === fips));
+
+module.exports = { build, countyRoll };

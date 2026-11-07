@@ -21,11 +21,14 @@ async function* records(stream, delimiter) {
       } else if (char === delimiter) {
         row.push(field);
         field = '';
-      } else if (char === '\n') {
-        row.push(field.endsWith('\r') ? field.slice(0, -1) : field);
-        yield row;
-        row = [];
-        field = '';
+      } else if (char === '\n' || char === '\r') {
+        // A line ends in a line feed, a carriage return, or both (one city's file uses a bare return).
+        if (char === '\r' || previous !== '\r') {
+          row.push(field);
+          yield row;
+          row = [];
+          field = '';
+        }
       } else field += char;
       previous = char;
     }

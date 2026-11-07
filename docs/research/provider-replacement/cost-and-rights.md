@@ -7,7 +7,7 @@ contacted, no paid lookup was made. Merges #3433's cost model and rights review 
 
 | Vendor | What Pantopus has | Monthly cost |
 |---|---|---|
-| ATTOM | The free trial, which **ended November 4, 2026** (founder, November 5); its terms are below | $0; no paid plan |
+| ATTOM | Kept in the founder's private notes, outside this public repository | No paid plan |
 | Smarty | No paid agreement (founder, November 5); a key exists on the founder's machine; production has had no key since Oct 9 | $0 |
 | Google Address Validation | Already called with USPS CASS; billed per request (the SKU is a founder-only fact); no production key since Oct 9 | Per request |
 | Lob | Developer plan, no monthly fee; about $0.87-0.91 per 4x6 postcard with postage (first pass); no production key since Oct 9 | Per piece |
@@ -40,8 +40,9 @@ lookups, so the real count grows with demand.
 S3-compatible storage that is a few dollars a month plus small per-request charges for range reads, inside the model's
 $200 allowance.
 
-**A value estimate (optional, D9).** #3433 sized an in-house residential estimate at about $57,200 of initial labor and
-$51,360 a year, before any sales-data rights. It ships only where measured.
+**A value estimate (D9).** #3433 sized a full in-house residential estimate at about $57,200 of initial labor and
+$51,360 a year, before any sales-data rights. The founder decided on November 7 to show one everywhere we can; WP12
+builds a simpler version from official values and public sales.
 
 ## 3. Prices found, for decisions only
 
@@ -68,7 +69,7 @@ Every source passes this before production use. "Checked" means the terms were r
 
 | Source | What the terms allow | What they forbid or require | Status |
 |---|---|---|---|
-| ATTOM free trial | Internal evaluation, to decide whether to license | A database built from it; storing anything past 24 hours; disclosing it to anyone (including showing it in a product); see section 5 | Checked November 5 (published trial terms) |
+| ATTOM | Kept in the founder's private notes, outside this public repository | See section 5 | Founder |
 | Google Address Validation | Keeping the address, USPS data and components 30 days for later transactions, then delete or replace with what the person confirmed; confirmation flags 30 days for correction requests; coordinates 30 days, then delete; place IDs indefinitely | No artificially-created US or Puerto Rico addresses (Google stops USPS checks and reports the account to USPS); attribution when Google content is shown | Checked November 5 (non-EEA service terms, modified October 28, 2026); section 6 |
 | Smarty | As the published terms say; the founder signed no paid agreement | The published agreement restricts competitive development, benchmarking and compiling databases (sections 6-7) and has duties after termination; never build a registry from Smarty answers, and don't score Google against Smarty | Founder confirmed no paid agreement, November 5 |
 | Lob | Printing and mailing (terms of August 14 and July 6, 2026) | Customer data stays Pantopus's; piece data is deleted at 90 days, so Pantopus keeps its own record of each piece. Performance information is Lob's confidential information, so printer results stay out of Git. The API section bars "any product evaluation, benchmarking, or other comparative analysis", so the founder asks Lob in writing before any comparison. A complaint about a mailpiece can suspend the account, with a fee of up to 10% of annual spend, so invitations can route to a different printer | Checked November 6; founder's question to Lob open |
@@ -76,11 +77,14 @@ Every source passes this before production use. "Checked" means the terms were r
 | Stannp | Fallback candidate, not built | Reverse-engineering clause; no benchmarking or competing clause found. First-Class is an add-on with no published price | Checked November 6 |
 | USPS (AMS, DPV, CASS) | A licensed local engine with periodic updates | Field of use, display, retention, replicas and exit in writing | Later, if AMS is chosen |
 | County and state files | Per source | King County: no redistribution without permission (and Washington's commercial-use acknowledgement before download); SanGIS: its own license; DuPage: written permission; Will County: no redistribution without written permission; Stanislaus and KGIS: own use only; Los Angeles County: its terms of use; Arizona: commercial-purpose declaration for records requests; Washington (RCW 42.56.070): no commercial use of lists of individuals | Per connector, before its first release |
+| County and city files with their own connector | Stated open: San Francisco (PDDL), Allegheny (CC0), Ramsey (public domain), Adams, DC, Milwaukee, DeKalb and Charlottesville (CC BY, credited in the record's footer), Los Angeles's license, Deschutes ("free to download and use"), Metro RLIS for Multnomah, Washington and Clackamas (credit Metro). Published with disclaimers and no limit stated: Cook, Riverside, San Joaquin, Contra Costa, Montgomery PA, Franklin, Cuyahoga, Summit, Montgomery OH, Hamilton, Denver, Oklahoma, Tulsa, Jackson, Miami-Dade, Broward, Hillsborough, Sarasota, Seminole, Mecklenburg, Guilford, Wake, Monroe NY, Douglas NE, Davidson, Bernalillo, Pierce, Madison, Bexar, Travis, Collin, Denton, Fort Bend, Hidalgo, Montgomery TX | Hold-harmless or indemnity on the user: Philadelphia, Oakland, Detroit, Los Angeles. San Diego: say "derived from SanGIS". San Bernardino: its property file says "internal use", so a written question goes first. Texas: a protected person's account (Tax Code 25.025) is left out. Washington: no names are read (RCW 42.56.070(8)). Waiting on written permission or the founder: Fairfax, King, Spokane, Snohomish, Lee, Washoe, Maricopa, Pinal, Polk IA, El Paso TX, El Paso CO, Arapahoe, Chester | Checked November 6 and 7; going live is the founder's, county by county |
+| Statewide parcel and assessor files | Stated open or no restriction found: MassGIS parcels; Boston and Cambridge assessor files (PDDL); NYC PLUTO (Admin. Code 23-502(d), no restrictions on use); New York's public parcels, only the 33 upstate counties it lists as authorized; Connecticut's parcels and CAMA; Maryland (public domain); Utah's LIR parcels; Texas's StratMap parcels; Minnesota, only counties its state table marks open (59 of 87); North Carolina OneMap, and the building layer it lists, parcel or appraisal figures only; Maine; Montana; West Virginia; Williamson CAD (no terms stated) | Owner, mailing, taxpayer, grantor and homestead columns are never requested. Texas's owner column is read only for the protected marker under Tax Code 25.025, then dropped, and those accounts carry no facts. New Jersey asks for acknowledgement, its web conditions of use are still to read, and Daniel's Law means no address tied to a person. Montana: no list of persons kept (MCA 2-6-1017). Credit each publisher. Written questions drafted, not sent: West Virginia | Checked November 6 |
+| Harris and Tarrant appraisal districts | Harris's page says its data is "available to users for import into other applications". Tarrant's page states no terms | Harris's Public Access Policies PDF is unread. Both carry a copyright notice. Published to private storage, off. Written questions drafted, not sent; neither county goes live before they're answered | Read November 6; open |
 | U.S. DOT National Address Database | Federal work, no copyright, re-use without limitation; CC0 on data.gov | Not to be used as a mailing list: nothing in Pantopus mails from the registry. As is. Credit DOT, Census and partners | Checked November 6 |
 | Overture Maps addresses | Per row: public domain, CC0, PDDL, CC BY 4.0; "proprietary" read per source | No OpenStreetMap data in this theme; each row's dataset is checked; CC BY needs credit | Checked November 6 |
 | OpenAddresses sources | Per source, in `scripts/property-index/sources/address/openaddresses-rights.json`: 179 clear | Share-alike, no-sale and internal-use sources stay out; sources stating nothing stay out until someone asks | Checked November 6 |
 | County address points | Clark County WA: public layer, disclaimers only. Held until read: San Diego, Stanislaus, Kent, Allegan and Muskegon MI, Carson City | | Per county |
-| Federal data (Census, FEMA USA Structures, USACE NSI) | Public data | Attribution; NSI keeps its label (modeled) | To confirm per dataset |
+| Federal data (Census, FEMA USA Structures, USACE NSI) | Public data. FEMA's file states no access or use constraints; ACS is public; NSI is a public download | Credit ORNL and FEMA. NSI keeps its label (modeled). Own index, never a record field | Checked November 6 |
 | FHFA House Price Index, annual ZIP and county files | Federal agency's public download; the data.gov entry says public with no license stated; FHFA calls these annual series developmental | Keeps its name on every line; an area's price change, never a home's value or a median sale price | Read November 6; a written question to FHFA is on the founder's list |
 | Building floor-plan sheets | Use with the building's written permission | Images only if the owner agrees | Per building |
 | Household entries | Pantopus's own privacy policy | Never shown outside the household; never in the shared index | — |
@@ -89,37 +93,10 @@ Every source passes this before production use. "Checked" means the terms were r
 A fee for copying public records and a license to republish them are separate questions; an unauthenticated download
 proves only that the file can be read.
 
-## 5. ATTOM free trial
+## 5. ATTOM
 
-**The trial ended November 4, 2026** (founder, November 5), which makes the deadline for the purge and signed affidavit
-about November 18 (10 business days; the founder confirms the date from ATTOM's notice). ATTOM's key stops being used,
-and no ATTOM copy may keep serving screens.
-
-**The terms** (ATTOM's published API terms at api.developer.attomdata.com/legal, re-read November 5, paraphrased): the
-products may be used only to test and evaluate them before deciding on a license, for internal evaluation, with no
-commercial use. Among the prohibited uses: building or enhancing a database of any kind from them, disclosing or
-publishing any portion to others, and storing the content for more than 24 hours. The trial runs 90 days from its
-effective date; at the end Pantopus must stop using the content, purge it from every system, and sign an affidavit of
-destruction within 10 business days.
-
-**What the code does today** ([current-system.md](current-system.md#five-stored-copies)): five stored copies, property
-detail kept forever, values for 30 days, shown in the apps; the November 1-2 prefill saved 195 trial responses. All of
-that sits outside the trial terms.
-
-**What happens now** (hosted deletes and contacts with ATTOM are founder-only):
-1. Confirm the end date from ATTOM's notice.
-2. Nobody runs the operator prefill again.
-3. Take `ATTOM_API_KEY` out of every server's env file and restart, so no screen asks ATTOM or keeps saying "Looking up".
-4. Purge `Home.niche_data.attom_property_detail`, `AttomPropertyCache`, the per-address `PlaceSectionCache` sections, ATTOM
-   rows in `ExternalFeedCache` and `PropertyIntelligenceCache`, on every hosted database and on local machines (including
-   the operator prefill's saved responses), handle backups as the affidavit requires, then sign it.
-5. No ATTOM content in the new index, its mappings or its evaluation sets.
-
-**The timing risk happened.** The trial ended before the replacement was built, so screens lose ATTOM's facts at the
-purge. Measured on production, November 5: 1 Home snapshot, 2 per-home copies, 0 per-address copies, 195 shared answers
-(the prefill), 2 built profiles. Few homes depend on them. Until a county qualifies, its screens use the "trial ended"
-routing in section 7; the build plan's first property slice targets the counties where Pantopus homes already are
-([build-plan.md](build-plan.md#wp5-property-index-foundation-and-the-first-vertical-slice)).
+ATTOM's agreement, its status and any steps it requires are kept in the founder's private notes, outside this public repository. No ATTOM content goes into the index, its
+mappings or its evaluation sets.
 
 ## 6. Google Address Validation: retention
 
@@ -138,14 +115,14 @@ Testing follows the "no made-up addresses" rule: synthetic cases run offline thr
 
 ## 7. The ATTOM transition, county by county
 
-With no paid plan and the trial over, there is no ATTOM bridge. Routing per county:
+Routing per county:
 
 | County state | Routing |
 |---|---|
 | Qualified (its gates passed, founder's OK) | The record; zero ATTOM calls there, including background and operator paths |
-| Not qualified (the trial ended November 4, so every other county) | Labeled partial results and household entries; ATTOM calls zero |
+| Not qualified | Stays as it is until its gates pass; the founder decides what serves it meanwhile |
 
-Tracked per county and property type: latency, errors, and ATTOM calls, which must stay zero.
+Tracked per county and property type: latency, errors and ATTOM calls.
 
 ## 8. Smarty and Lob exits
 

@@ -5,8 +5,9 @@
 // card is sent, drawn with the parts their own Mailbox draws it with: the
 // envelope in their Mailbox and the line under it, the sealed notice, the card
 // sliding out of its envelope and its back. By email: the email, the page its
-// link opens, and the card once they join with that address. It comes from
-// the server's preview, which runs every check sending runs and keeps nothing.
+// link opens, and the card once they join with that address. By link: the
+// page and the card once they join. It comes from the server's preview, which
+// runs every check sending runs and keeps nothing.
 // ============================================================
 
 import { useState, type ReactNode } from 'react';
@@ -15,12 +16,15 @@ import { Mail } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import MailPiece, { pieceSentence } from '../MailPiece';
 import { PieceLine, pieceLineBits } from '../MailRow';
-import { LINK_PAGE_PANEL, LinkPageSignIn, LinkPageSummary, type LinkPageLetter } from '../OpenLetterView';
+import { CardLinkSignIn, CardLinkWords, LINK_PAGE_PANEL, LinkPageSignIn, LinkPageSummary, type LinkPageLetter } from '../OpenLetterView';
+import CardLinkScene from './CardLinkScene';
 import CardFront from './CardFront';
 import CardBack from './CardBack';
 import CardFlip from './CardFlip';
 import { CardFromEnvelope, SealedNotice, useCardOpening } from './HolidayCardView';
 import { daysAway, longDay, SERIF } from './cardArt';
+import CardTable from './CardTable';
+import { launchFeatures } from '@/lib/featureFlags';
 
 // Their morning mail comes at 7 a.m. where they live: that's when it's in their Mailbox.
 const MORNING = '7:00 a.m.';
@@ -49,7 +53,7 @@ function Back({ piece }: { piece: MailItemV2 }) {
     <CardFlip
       showBack
       front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />}
-      back={<CardBack paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} className={shadow} />}
+      back={<CardBack number={card.number} paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} className={shadow} />}
     />
   );
 }
@@ -65,12 +69,15 @@ export default function LookItOver({
   toName,
   toFirstName,
   byEmail,
+  byLink = false,
 }: {
   preview: HolidayCardPreview;
   /** Their name as step 1 showed it, or the address typed for them. */
   toName: string;
   toFirstName: string;
+  /** Not to a person: by email, or (`byLink`) as a link. */
   byEmail: boolean;
+  byLink?: boolean;
 }) {
   const { piece, email } = preview;
   const card = piece.card!;
@@ -81,10 +88,37 @@ export default function LookItOver({
   const addressee = piece.recipient_name || toName;
   const { stage, plays, open } = useCardOpening(false);
   const [showBack, setShowBack] = useState(false);
+  const [onTable, setOnTable] = useState(false);
   // On Christmas morning the seal is off: the card leaves its envelope the way an unsealed one does.
   const unsealed: MailItemV2 = sealed ? { ...piece, card: { ...card, sealed: false } } : piece;
+  // The real moment, full screen, as the other person would have it. Nothing is marked as read: nothing is sent yet.
+  const theWayTheyWill = onTable ? (
+    <CardTable
+      card={{ ...card, sealed: false }}
+      note={piece.content || ''}
+      fromName={from}
+      toName={addressee}
+      mailedOn={piece.postmark?.date || piece.created_at}
+      closeLabel="Back to Look it over"
+      onClose={() => setOnTable(false)}
+    />
+  ) : null;
+  const openOnTable = launchFeatures.cardTable ? (
+    <div className="mt-4 flex justify-center">
+      <button
+        type="button"
+        data-testid="sendCardLookOnTable"
+        onClick={() => setOnTable(true)}
+        className={`${button} border border-[#d6cbb6] bg-[#fffdf8] text-[#374151] hover:bg-[#f5efe3]`}
+      >
+        Open it the way they will
+      </button>
+    </div>
+  ) : null;
 
-  const intro = byEmail
+  const intro = byLink
+    ? 'The first person to open your link keeps the card. The page it opens never shows the card; they open it in Pantopus once they join.'
+    : byEmail
     ? 'They aren’t on Pantopus yet. The email never shows the card; they open it in Pantopus once they join with this address.'
     : sealed
       ? 'It comes sealed and stays shut until Christmas morning. Use Back to change anything.'
@@ -101,7 +135,7 @@ export default function LookItOver({
     outcomeDescription: null,
     sentTo: preview.link_page.sent_to,
     createdAt: preview.link_page.sent_on,
-    card: { holiday: card.holiday, year: card.year, sealed: preview.link_page.sealed },
+    card: { holiday: card.holiday, year: card.year, sealed: preview.link_page.sealed, by_link: preview.link_page.by_link },
   } : null;
 
   return (
@@ -124,7 +158,10 @@ export default function LookItOver({
                   <p className="mt-0.5 text-[14px] font-semibold leading-[19px] text-[#111827]">{email.subject}</p>
                 </div>
                 <div className="bg-[#8b1d1d] px-4 pb-4 pt-5 text-center">
-                  <Mail className="mx-auto h-[30px] w-[30px] text-[#fff7ed]" strokeWidth={1.8} aria-hidden />
+                  {email.picture ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={email.picture} alt="" className="-mx-4 -mt-5 mb-3 block h-auto w-[calc(100%+2rem)] max-w-none" />
+                  ) : <Mail className="mx-auto h-[30px] w-[30px] text-[#fff7ed]" strokeWidth={1.8} aria-hidden />}
                   <p className="mt-1.5 text-[17px] font-semibold leading-[22px] text-[#fff7ed]">{email.heading}</p>
                 </div>
                 <div className="px-[18px] pb-4 pt-[18px]">
@@ -148,15 +185,24 @@ export default function LookItOver({
           {linkPage ? (
             <section aria-label="The page its link opens" data-testid="sendCardLookLinkPage" className="mx-3 mt-[26px]">
               <h3 className={`${label} px-1`}>The page its link opens</h3>
-              <div className={`mt-2 ${LINK_PAGE_PANEL}`}>
-                <LinkPageSummary letter={linkPage} />
-                <LinkPageSignIn letter={linkPage} />
-              </div>
+              {launchFeatures.cardTable ? (
+                <div className="mt-2">
+                  <CardLinkScene framed>
+                    <CardLinkWords letter={linkPage} />
+                    <CardLinkSignIn letter={linkPage} />
+                  </CardLinkScene>
+                </div>
+              ) : (
+                <div className={`mt-2 ${LINK_PAGE_PANEL}`}>
+                  <LinkPageSummary letter={linkPage} />
+                  <LinkPageSignIn letter={linkPage} />
+                </div>
+              )}
             </section>
           ) : null}
 
-          <section aria-label="After they join with that address" className="mx-3 mt-[26px]">
-            <h3 className={`${label} px-1`}>After they join with that address</h3>
+          <section aria-label={byLink ? 'After they join' : 'After they join with that address'} className="mx-3 mt-[26px]">
+            <h3 className={`${label} px-1`}>{byLink ? 'After they join' : 'After they join with that address'}</h3>
             <MailboxFrame day="In their Mailbox">
               <div role="img" aria-label={pieceSentence(piece, false)}>
                 <MailPiece item={piece} recipientName={addressee} opened={false} />
@@ -165,6 +211,7 @@ export default function LookItOver({
                 <CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />
                 <Back piece={piece} />
               </div>
+              {openOnTable}
             </MailboxFrame>
           </section>
         </>
@@ -210,14 +257,25 @@ export default function LookItOver({
                   >
                     {showBack ? 'Turn it back' : 'Turn it over'}
                   </button>
-                  <button
-                    type="button"
-                    data-testid="sendCardLookOpenAgain"
-                    onClick={() => { setShowBack(false); open(); }}
-                    className={`${button} px-3.5 text-[#7c4a2d] hover:bg-black/5 [@media(prefers-color-scheme:dark)]:text-[#e8b996]`}
-                  >
-                    Open it again
-                  </button>
+                  {launchFeatures.cardTable ? (
+                    <button
+                      type="button"
+                      data-testid="sendCardLookOnTable"
+                      onClick={() => setOnTable(true)}
+                      className={`${button} px-3.5 text-[#7c4a2d] hover:bg-black/5 [@media(prefers-color-scheme:dark)]:text-[#e8b996]`}
+                    >
+                      Open it the way they will
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      data-testid="sendCardLookOpenAgain"
+                      onClick={() => { setShowBack(false); open(); }}
+                      className={`${button} px-3.5 text-[#7c4a2d] hover:bg-black/5 [@media(prefers-color-scheme:dark)]:text-[#e8b996]`}
+                    >
+                      Open it again
+                    </button>
+                  )}
                 </div>
               </CardFromEnvelope>
             </div>
@@ -231,6 +289,7 @@ export default function LookItOver({
           </section>
         </>
       )}
+      {theWayTheyWill}
     </div>
   );
 }

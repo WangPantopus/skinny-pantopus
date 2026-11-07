@@ -200,8 +200,6 @@ async function getExemptionCheck(home) {
       },
     };
   }
-  if (!process.env.ATTOM_API_KEY) return notChecked(home, 'ATTOM_NOT_CONFIGURED');
-
   let result;
   try {
     result = await propertyIntelligenceService.getHomeAttomPropertyDetail(home);
