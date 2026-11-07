@@ -61,6 +61,8 @@ type FeedPage = Awaited<ReturnType<typeof api.posts.getFeedV2>>;
 const FEED_FRESH_MS = 30_000;
 // Sports lane returns a richer cursor tuple: (rankBucket, createdAt, id).
 type FeedCursor = { createdAt: string; id: string; rankBucket?: number } | null;
+const sameCursor = (a: FeedCursor, b: FeedCursor) => !!a && !!b
+  && a.createdAt === b.createdAt && a.id === b.id && (a.rankBucket ?? null) === (b.rankBucket ?? null);
 
 /**
  * Patch one post in every cached feed list. A save or like made on the post's own page or
@@ -228,8 +230,12 @@ export function useFeedData({
 
       return api.posts.getFeedV2(params);
     },
-    getNextPageParam: (lastPage) =>
-      lastPage.pagination.hasMore ? (lastPage.pagination.nextCursor ?? null) : undefined,
+    getNextPageParam: (lastPage, _pages, _lastPageParam, pageParams) => {
+      const next = lastPage.pagination.hasMore ? lastPage.pagination.nextCursor : null;
+      // A cursor the list has already asked for would read the same pages again and again: the list ends there.
+      if (!next || pageParams.some((asked) => sameCursor(asked, next))) return undefined;
+      return next;
+    },
     staleTime: FEED_FRESH_MS,
     enabled: surface !== 'place' || areaReady,
   });
@@ -252,9 +258,18 @@ export function useFeedData({
   const postsRef = useRef(posts);
   postsRef.current = posts;
 
-  const loading = feedQuery.isPending;
-  const loadingMore = feedQuery.isFetchingNextPage;
   const hasMore = feedQuery.hasNextPage ?? false;
+  // A page can come back empty with more to read: the server stops at its row limit while it skips a long run of
+  // muted, hidden or politics posts. The next page is asked at once, and the list keeps showing it's loading (the
+  // skeleton before any post, the spinner after) until a post comes or the list ends.
+  const lastPage = feedQuery.data?.pages.at(-1);
+  const skippingEmptyPage = !!lastPage && !lastPage.posts?.length && hasMore && !feedQuery.isError;
+  const { isFetching, fetchNextPage } = feedQuery;
+  useEffect(() => {
+    if (skippingEmptyPage && !isFetching) void fetchNextPage();
+  }, [skippingEmptyPage, isFetching, fetchNextPage]);
+  const loading = feedQuery.isPending || (skippingEmptyPage && posts.length === 0);
+  const loadingMore = feedQuery.isFetchingNextPage || skippingEmptyPage;
 
   const retryFeed = useCallback(async () => {
     if (feedQuery.isFetchNextPageError) {
