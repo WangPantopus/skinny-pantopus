@@ -31,6 +31,7 @@ const propertyRecords = require('../propertyRecords');
 const homeRecords = require('../propertyRecords/homeRecord');
 const { changeNicheData } = require('../homeNicheData');
 const householdFacts = require('../householdFacts');
+const { pickAttomRooms, pickAttomSummaryLot } = require('./attomFacts');
 
 const ATTOM_BASE = 'https://api.gateway.attomdata.com/propertyapi/v1.0.0';
 const ATTOM_RAW_CACHE_TABLE = 'AttomPropertyCache';
@@ -406,68 +407,6 @@ async function persistAttomPropertyDetailOnHome(home, attomPayload) {
   return true;
 }
 
-/**
- * ATTOM often returns lowercase keys (beds, bathsfull) on rooms; summary may use livingsize.
- */
-function pickAttomRooms(building) {
-  const rooms = building?.rooms || {};
-  const beds =
-    rooms.beds ?? rooms.bedrooms ?? rooms.Beds ?? rooms.bedroomsCount;
-  const baths =
-    rooms.bathstotal
-    ?? rooms.bathsTotal
-    ?? rooms.bathsfull
-    ?? rooms.bathsFull
-    ?? rooms.bathscalc
-    ?? rooms.calcBathrooms;
-  return {
-    bedrooms: beds != null && beds !== '' ? Number(beds) : null,
-    bathrooms: baths != null && baths !== '' ? Number(baths) : null,
-  };
-}
-
-/** ATTOM /property/detail: sqft lives under building.size; year/type under property.summary; lot sqft often lot.lotsize2 */
-function pickAttomSummaryLot(property) {
-  if (!property) {
-    return { sqft: null, lot_sq_ft: null, year_built: null, raw_property_type: null };
-  }
-  const pSum = property.summary || {};
-  const building = property.building || {};
-  const bSize = building.size || {};
-  const lot = property.lot || {};
-
-  const sqft =
-    bSize.livingsize
-    ?? bSize.livingSize
-    ?? bSize.universalsize
-    ?? bSize.universalSize
-    ?? bSize.grosssizeadjusted
-    ?? bSize.grossSizeAdjusted
-    ?? bSize.bldgsize
-    ?? bSize.bldgSize;
-
-  const lotSq =
-    lot.lotsize2
-    ?? lot.lotSize2
-    ?? null;
-
-  const year =
-    pSum.yearbuilt
-    ?? pSum.yearBuilt;
-
-  const propType =
-    pSum.propertyType
-    ?? pSum.proptype
-    ?? pSum.propclass;
-
-  return {
-    sqft: sqft != null && sqft !== '' ? Number(sqft) : null,
-    lot_sq_ft: lotSq != null && lotSq !== '' ? Number(lotSq) : null,
-    year_built: year != null && year !== '' ? Number(year) : null,
-    raw_property_type: propType != null && propType !== '' ? String(propType) : null,
-  };
-}
-
 // Where the Home is, for the area's price change. `fips`: the county its record names.
 const homeArea = (home, fips = null) => ({ state: home.state, zip: home.zipcode, fips });
 
@@ -569,8 +508,10 @@ function factsOnly(profile) {
  * A PropertyProfile from a Home's copy of its county record: the same fields
  * every screen already reads, with where they came from. Bedrooms, baths and size
  * show the household's own entry first (a person may know better than the roll,
- * and it is their home); year built and lot are the record's. For the apps in the
- * stores `estimated_value` is the county's own market value: a county's estimate of
+ * and it is their home), but a column Add Home only filled from ATTOM's saved copy
+ * isn't one, so the record's number shows (householdFacts.prefilledFromCopy); year
+ * built and lot are the record's. For the apps in the stores `estimated_value` is
+ * the county's own market value: a county's estimate of
  * market value, and never a fractional assessment (facts.js), and not a bare land
  * parcel's value, which would read as the home's.
  */
@@ -582,14 +523,15 @@ function buildProfileFromRecord(home, copy) {
   const lotFromAcres = facts.lot_acres ? Math.round(facts.lot_acres * 43560) : null;
   const countyFacts = [
     ['year_built', facts.year_built ?? building.year_built ?? null, home.year_built, false],
-    ['sqft', facts.living_sqft ?? null, home.sq_ft, true],
-    ['bedrooms', facts.bedrooms ?? null, home.bedrooms, true],
-    ['bathrooms', facts.bathrooms ?? null, home.bathrooms, true],
+    ['sqft', facts.living_sqft ?? null, home.sq_ft, true, 'living_sqft'],
+    ['bedrooms', facts.bedrooms ?? null, home.bedrooms, true, 'bedrooms'],
+    ['bathrooms', facts.bathrooms ?? null, home.bathrooms, true, 'bathrooms'],
     ['lot_sqft', ownLot ? facts.lot_sqft ?? lotFromAcres : null, home.lot_sq_ft, false],
   ];
   const shown = {};
   const householdFields = [];
-  for (const [field, county, own, ownFirst] of countyFacts) {
+  for (const [field, county, column, ownFirst, fact] of countyFacts) {
+    const own = county != null && householdFacts.prefilledFromCopy(fact, column, home.niche_data) ? null : column;
     // Whole numbers: the apps in the stores decode these as integers, and a county may write 1234.5.
     const figure = ownFirst ? own ?? county : county ?? own ?? null;
     shown[field] = typeof figure === 'number' && field !== 'bathrooms' ? Math.round(figure) : figure;

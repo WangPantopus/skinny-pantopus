@@ -18,6 +18,11 @@
  * unverified writer's entry (Add Home's creator holds pending access) stays theirs alone
  * until they verify.
  *
+ * A bedrooms, bathrooms or living-area column Add Home filled from ATTOM's saved copy
+ * isn't the household's either: with no entry for it, beside a live county's record,
+ * the record's number is the fact (prefilledFromCopy). Nothing here changes the column
+ * or the copy.
+ *
  * Who may do what follows the Home's permissions: `home.edit` writes, verified household
  * members read, and a renter, guest or restricted member gets nothing new. County figures
  * stay the verified owner's, here as on the record itself.
@@ -27,6 +32,7 @@ const { FACTS } = require('./propertyRecords/facts');
 const { factValue, factIsMono } = require('../serializers/countyRecordSerializer');
 const { changeNicheData } = require('./homeNicheData');
 const { planFacts, planKey, withFloorPlan, PLAN_PROMPT, PLAN_SOURCE_WORD } = require('./propertyRecords/floorPlanFormat');
+const { savedCopyFacts } = require('./ai/attomFacts');
 
 const SCHEMA = 1;
 const MAX_HISTORY = 9;
@@ -81,6 +87,8 @@ const CATALOG = {
 };
 // Fact → the Home column it writes, for the columns any build can PATCH.
 const COLUMN_FACTS = Object.entries(CATALOG).filter(([, def]) => def.column).map(([key, def]) => [key, def.column]);
+// The columns Add Home filled from ATTOM's copy before a county answered from its record.
+const PREFILLED = ['bedrooms', 'bathrooms', 'living_sqft'];
 
 const failure = (code = 'HOME_FACTS_INVALID', status = 400) => Object.assign(new Error('Check those details and try again.'), { code, statusCode: status });
 const object = (value) => value && typeof value === 'object' && !Array.isArray(value);
@@ -113,6 +121,18 @@ function sameValue(def, a, b) {
 /** A Home column holds a record's value rounded (bathrooms to one decimal, the rest to whole numbers): the same number, not the household's own. */
 function columnAgrees(key, column, value) {
   return Math.abs(Number(column) - Number(value)) <= (key === 'bathrooms' ? 0.05 : 0.5) + 1e-9;
+}
+
+/**
+ * Whether a Home column only holds what Add Home filled from the Home's saved ATTOM copy: bedrooms, bathrooms or
+ * living area equal to the copy's value (2.5 and 2.50 baths, whole square feet) with no household entry for the fact.
+ * Beside a live county's record such a column isn't the household's, so the record's number is the fact. A value the
+ * household typed that differs from the copy stays theirs, and an entry always wins.
+ */
+function prefilledFromCopy(key, column, nicheData) {
+  if (!PREFILLED.includes(key) || column === null || column === undefined || storedFields(nicheData)[key]) return false;
+  const saved = savedCopyFacts(nicheData)[key];
+  return Number.isFinite(saved) && columnAgrees(key, column, saved);
 }
 
 /** How a value reads on a screen. A zero is an answer here ("Fireplaces: 0"), where a record's zero means nothing recorded. */
@@ -217,10 +237,12 @@ function factStates({ home, nicheData, copy, viewerId, verifiedWriters, floorPla
     const recordValue = sheet ? fromSheet[key] : record[key] ?? null;
     const column = def.column ? home[def.column] ?? null : null;
     const confirmed = entry?.action === 'confirmed' && sameValue(def, entry.value, recordValue);
+    const prefilled = !sheet && recordValue !== null && prefilledFromCopy(key, column, nicheData);
     let own = null;
     if (entry && entry.action !== 'confirmed') own = entry.value;
-    // A column that differs from the record is the household's, as on Place (buildProfileFromRecord).
-    else if ((copy || sheet) && !confirmed && column !== null && (recordValue === null || !columnAgrees(key, column, recordValue))) own = column;
+    // A column that differs from the record is the household's, as on Place (buildProfileFromRecord), unless Add Home
+    // only filled it from ATTOM's copy.
+    else if ((copy || sheet) && !confirmed && !prefilled && column !== null && (recordValue === null || !columnAgrees(key, column, recordValue))) own = column;
     states[key] = { key, def, entry, record: recordValue, column, confirmed, own, sheet };
   }
   return states;
@@ -558,6 +580,21 @@ function addHomeQuestions(suggestions, lookup) {
     .map(([key, def]) => ({ key, prompt: def.ask, options: def.options, other: 'Other' }));
 }
 
+/**
+ * The Home's bedrooms, bathrooms and living area as screens show them beside a live county's record (`copy`): a
+ * column Add Home only filled from ATTOM's copy reads as the record's number. Only the columns that change; `home`
+ * carries its niche_data. Nothing is written.
+ */
+function shownColumns(home, copy) {
+  const record = recordFacts(copy);
+  const shown = {};
+  for (const key of PREFILLED) {
+    const def = CATALOG[key];
+    if (record[key] != null && prefilledFromCopy(key, home[def.column], home.niche_data)) shown[def.column] = columnValue(def, record[key]);
+  }
+  return shown;
+}
+
 /** The record's facts with a verified household's corrections in them, for what's drawn from them (Today's house). */
 function factsWithEntries(facts, nicheData) {
   const entries = Object.entries(storedFields(nicheData))
@@ -569,5 +606,6 @@ function factsWithEntries(facts, nicheData) {
 
 module.exports = {
   plan, project, fromAddHome, addHomeQuestions, factsWithEntries, seesHousehold, isResident, usableFloorPlan, unverifiedWriters, columnAgrees, COLUMN_FACTS,
+  prefilledFromCopy, shownColumns,
   layoutAnswer, layoutColumns, layoutColumnsToClear,
 };
