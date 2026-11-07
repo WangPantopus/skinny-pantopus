@@ -182,10 +182,15 @@ const MAIL_UNPROVEN_RESIDENT_STATUSES = ['verified', 'provisional', 'provisional
  * address, or their verification went stale). Guests and service providers
  * aren't residents, so their Homes aren't listed. Throws on a read failure.
  *
+ * `openHomeIds`, when given, is trustedHomeIdsOrThrow(userId) already under way (the mailbox's drawers read it once
+ * for their counts too); otherwise it is read here, alongside the occupancies.
+ *
  * @returns {Promise<Array<{home_id: string, address_line: string|null, name: string|null, mail_access: 'open'|'needs_proof'}>>}
  */
-async function mailHomesOrThrow(userId) {
+async function mailHomesOrThrow(userId, { openHomeIds = null } = {}) {
   if (!userId) return [];
+  // Settled until used below, so a failed occupancy read is still the error reported first.
+  const openRead = (openHomeIds || trustedHomeIdsOrThrow(userId)).then((ids) => ({ ids }), (error) => ({ error }));
   const { data, error } = await supabaseAdmin
     .from('HomeOccupancy')
     .select(`${OCCUPANCY_SELECT}, home:home_id(id, address, address2, name, home_status, security_state)`)
@@ -193,7 +198,9 @@ async function mailHomesOrThrow(userId) {
     .eq('is_active', true)
     .in('verification_status', MAIL_UNPROVEN_RESIDENT_STATUSES);
   if (error) throw new Error(error.message);
-  const open = new Set(await trustedHomeIdsOrThrow(userId));
+  const opened = await openRead;
+  if (opened.error) throw opened.error;
+  const open = new Set(opened.ids);
   const seen = new Set();
   const homes = [];
   for (const r of data || []) {
