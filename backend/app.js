@@ -326,6 +326,9 @@ app.get('/', (req, res) => {
   });
 });
 
+const propertyRecordsConfig = require('./config/propertyRecords');
+const propertyRecordsRouter = require('./services/propertyRecords/router');
+
 app.get('/health', async (req, res) => {
   try {
     // Connectivity only: a HEAD request through the service client makes PostgREST run a query
@@ -342,6 +345,8 @@ app.get('/health', async (req, res) => {
     res.json({
       status: 'healthy',
       database: 'connected',
+      // Pantopus's own property index, where it's on: a reading for the monitor, never a reason to call the API unhealthy.
+      ...(propertyRecordsConfig.enabled() ? { property_index: propertyRecordsRouter.health() } : {}),
       timestamp: new Date().toISOString()
     });
   } catch (err) {
