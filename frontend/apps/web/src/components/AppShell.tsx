@@ -420,6 +420,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         throw new Error('Post could not be confirmed. Try again.');
       }
       void queryClient.invalidateQueries({ queryKey: ['posts', 'mine'], refetchType: 'none' });
+      // Every cached feed list reads again when it's next shown (the feed on screen reads at once: notifyFeedPostCreated).
+      void queryClient.invalidateQueries({ queryKey: ['feed'], refetchType: 'none' });
       const files = Array.isArray(mediaFiles) ? mediaFiles : [];
 
       if (files.length > 0) {
