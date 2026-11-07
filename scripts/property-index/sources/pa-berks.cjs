@@ -2,12 +2,12 @@
 // Berks County, Pennsylvania: the Assessment Department's CAMA residential file on the county's GIS site, with its published data dictionary. Year built,
 // living area, bedrooms, baths, stories, rooms, fireplaces and assessed values. The county's terms: its data may not be copied or redistributed in its
 // original format, and a product that incorporates it says "Information is based on geospatial data from the County of Berks": the record's dataset
-// line says so. Values stand on the county's 1994 base year: assessed, never market. Owner and mailing columns are never asked for; the site's city
-// comes from the county's parcel layer, and its ZIPs from the Census.
+// line says so. Values stand on the county's 1994 base year: assessed, never market. Owner and mailing columns are never asked for. Site
+// addresses carry no city or ZIP, so the county's ZIPs come from the Census.
 
 const path = require('node:path');
-const { layerRows, offsetRows, cached } = require('../lib/services.cjs');
-const { streetParts, year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
+const { offsetRows, cached } = require('../lib/services.cjs');
+const { streetParts, year, isoDate, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
@@ -17,7 +17,6 @@ const FIPS = '42011';
 const COUNTY = 'Berks County';
 const BASE = 'https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services';
 const RESIDENTIAL = `${BASE}/Berks_Assessment_CAMA_Residential_File/FeatureServer/15`;
-const PARCELS = `${BASE}/Berks_County_Parcels_V2/FeatureServer/2`;
 const COLUMNS = ['PARID', 'CARD', 'TAXYR', 'ADRNO', 'ADRADD', 'ADRDIR', 'ADRSTR', 'ADRSUF', 'TOTACRES', 'LUC', 'LIVUNITS', 'STORIES', 'YRBLT', 'BEDROOMS', 'FULLBATHS', 'HALFBATHS', 'SFLA', 'TOTROOMS', 'WBFP_OPENINGS', 'MET_FIREPL', 'LAND_VALUE', 'BLDG_VALUE', 'TOTAL_VALUE', 'PRICE', 'SALEDT'];
 // Land use codes by kind, read from the county's CAMA data dictionary (residential codes; "/ROW" and "DOUBLE" share a wall).
 const KINDS = {
@@ -40,7 +39,7 @@ const USES = {
   other: () => ['other', null],
 };
 
-function fromRow(row, place) {
+function fromRow(row) {
   const unit = word(row.ADRADD) && !/^\d+\/\d+$/.test(row.ADRADD) ? word(row.ADRADD) : '';
   const address = streetParts({ number: row.ADRNO, pre: row.ADRDIR, name: word(row.ADRSTR), suffix: word(row.ADRSUF), unit });
   const parcel = word(row.PARID);
@@ -77,26 +76,20 @@ function fromRow(row, place) {
     put(facts, 'sale_price', positive(row.PRICE));
     put(facts, 'sale_date', isoDate(row.SALEDT));
   }
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: place?.city || '', zip: zipCode(place?.zip) }, facts };
+  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: null }, facts };
 }
 
 async function* build({ work, today }) {
-  const places = new Map();
-  for await (const row of cached(path.join(work, 'pa-berks', 'parcels.jsonl.gz'), () => layerRows(PARCELS, ['OBJECTID', 'PROPID', 'SITEADDRESS_CSZ']))) {
-    // The site's place is a city or township name, no ZIP: the county's ZIPs come from the Census.
-    const city = String(word(row.SITEADDRESS_CSZ) || '').toUpperCase();
-    if (city && row.PROPID) places.set(String(row.PROPID).trim(), { city, zip: null });
-  }
   const records = new Map();
   let noAddress = 0;
   for await (const row of cached(path.join(work, 'pa-berks', 'residential.jsonl.gz'), () => offsetRows(RESIDENTIAL, COLUMNS, { orderBy: 'PARID,CARD', pageSize: 2000 }))) {
     if (Number(row.CARD) > 1) continue;
-    const record = fromRow(row, places.get(String(row.PARID || '').trim()));
+    const record = fromRow(row);
     if (!record) noAddress += 1;
     else if (!records.has(record.id)) records.set(record.id, record);
   }
   const list = [...records.values()];
-  log(`${COUNTY}: ${list.length} residential parcels, ${noAddress} without a street number, ${places.size} parcels with a site city`);
+  log(`${COUNTY}: ${list.length} residential parcels, ${noAddress} without a street number`);
   for (const building of condoBuildings(list, { fips: FIPS, county: COUNTY })) list.push(building);
   yield {
     fips: FIPS, state: 'PA', name: COUNTY, publisher: 'County of Berks Assessment Department', dataset: 'CAMA residential file; information is based on geospatial data from the County of Berks', method: 'county', source: 'pa-berks', as_of: isoDate(today.getTime()), stale_after_days: 450, extra_zips: zipsByCounty(work, ['42']).get(FIPS) || [], records: list,
