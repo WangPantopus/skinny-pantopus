@@ -7,6 +7,7 @@
  */
 
 const logger = require('../../utils/logger');
+const countyPages = require('../countyPages');
 const { getAnthropicClient, resolveModel, resolveEffort, DRAFT_MODEL } = require('../../config/anthropic');
 const { complete, isTimeoutError, parseJsonObject } = require('./llm');
 const {
@@ -169,7 +170,7 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
         .select(`
           id, building_type, parcel_type, google_place_types,
           residential_unit_count, parcel_land_use, parcel_property_type,
-          address_line1_norm, address_line2_norm, city_norm, state, postal_code
+          address_line1_norm, address_line2_norm, city_norm, state, postal_code, geocode_lat, geocode_lng
         `)
         .eq('id', addressId)
         .maybeSingle();
@@ -332,6 +333,11 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     }
   }
 
+  // What's still missing can be checked on the county's own page, once the lookup has had its say.
+  const countyPage = attomLookup !== 'pending' && (merged.bedrooms == null || merged.bathrooms == null)
+    ? await countyPages.forAddress({ jurisdiction: record?.answer?.jurisdiction, state: homeAddressRow?.state || state, lat: homeAddressRow?.geocode_lat, lng: homeAddressRow?.geocode_lng })
+    : null;
+
   // 'attom' in tiers_used is how the apps know a county record was found.
   // `attom_lookup` ('found', 'none', 'pending', 'unavailable') is answered for
   // a validated address: 'pending' means ask again with lookup=check.
@@ -343,6 +349,7 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     ...(homeAddressRow && attomLookup ? { attom_lookup: attomLookup } : {}),
     ...(provenance ? { provenance, field_tags: fieldTags } : {}),
     ...(lookupNote ? { lookup_note: lookupNote } : {}),
+    ...(countyPage ? { county_page: countyPage } : {}),
   };
 }
 

@@ -321,7 +321,11 @@ enum PlacePresentation {
             var parts: [String] = []
             if let y = d.yearBuilt { parts.append("Built \(y)") }
             if let s = d.sqft { parts.append("\(grouped(s)) sqft") }
-            if let v = money(d.estimatedValue) { parts.append("est. value \(v)") }
+            if let summary = d.valueCard?.summary {
+                parts.append(summary)
+            } else if let v = money(d.estimatedValue) {
+                parts.append("est. value \(v)")
+            }
             return .init(value: parts.isEmpty ? "Property details on file" : parts.joined(separator: " · "))
         case .flood:
             guard let d = env.flood else { return .init() }

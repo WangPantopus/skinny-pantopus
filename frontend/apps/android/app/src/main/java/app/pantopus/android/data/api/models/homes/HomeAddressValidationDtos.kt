@@ -24,6 +24,8 @@ data class HomeAddressVerdict(
     val status: String,
     val normalized: ValidatedHomeAddress? = null,
     val reasons: List<String>? = null,
+    /** The units the check found at this address, when there are few enough to offer. */
+    @Json(name = "unit_choices") val unitChoices: List<String>? = null,
 )
 
 @JsonClass(generateAdapter = true)

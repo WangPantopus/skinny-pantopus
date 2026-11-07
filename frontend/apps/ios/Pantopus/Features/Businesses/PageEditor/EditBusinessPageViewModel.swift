@@ -66,7 +66,23 @@ public final class EditBusinessPageViewModel {
     public var showsDiscardConfirm = false
     public var showsCatalog = false
     public private(set) var canManageCatalog = false
+    public private(set) var canEditProfile = false
+    public private(set) var canEditLocation = false
+    public private(set) var canEditHours = false
+    public private(set) var accessError: String?
+    public private(set) var isCheckingAccess = false
+    public private(set) var isLoadingHours = false
+    public private(set) var isLoadingServices = false
+    public private(set) var hoursError: String?
+    public private(set) var servicesError: String?
+    public private(set) var hasLoadedHours = false
+    public private(set) var hasLoadedServices = false
+    private var hoursGeneration = 0
+    private var servicesGeneration = 0
+    private var originalHours: EditBusinessPageHoursState?
     private var isCheckingCatalog = false
+    private var accessGeneration = 0
+    private var loadGeneration = 0
     /// The banner or logo upload in flight, if any.
     public private(set) var uploadingMedia: BusinessMediaKind?
     /// Only an owner can close the business; `DELETE /:businessId` refuses
@@ -82,6 +98,7 @@ public final class EditBusinessPageViewModel {
     private let api: APIClient
     private let uploader: MultipartUploader
     private let localPreviewPersistenceEnabled: Bool
+    private let sessionScope: HomeClaimSessionScope
 
     /// Primary location id for hours / address PATCH.
     private var primaryLocationId: String?
@@ -101,6 +118,11 @@ public final class EditBusinessPageViewModel {
         return EditBusinessPageMapper.unsavedCount(in: content) > 0
     }
 
+    /// Without a location there is nothing to read until one is added.
+    public var canRetryHours: Bool {
+        primaryLocationId != nil
+    }
+
     public var hasInFlightOperation: Bool {
         isSaving || isPublishing || uploadingMedia != nil || isClosing
     }
@@ -114,10 +136,17 @@ public final class EditBusinessPageViewModel {
         self.businessId = businessId
         self.api = api
         self.uploader = uploader
+        sessionScope = HomeClaimSessionScope(api: api)
         localPreviewPersistenceEnabled = preview != nil
         if let preview {
             state = .loaded(preview)
             hasLoadedOnce = true
+            canEditProfile = true
+            canEditLocation = true
+            canEditHours = true
+            hasLoadedHours = true
+            hasLoadedServices = true
+            originalHours = preview.hours.cleaned
         } else {
             state = .loading
         }
@@ -127,7 +156,10 @@ public final class EditBusinessPageViewModel {
 
     public func load() async {
         if localPreviewPersistenceEnabled { return }
-        if hasLoadedOnce, case .loaded = state { return }
+        if hasLoadedOnce, case .loaded = state {
+            await refreshAccess()
+            return
+        }
         await fetch(showLoading: true)
     }
 
@@ -137,21 +169,21 @@ public final class EditBusinessPageViewModel {
     }
 
     private func fetch(showLoading: Bool) async {
+        if await fetchProfile(showLoading: showLoading) { await loadSections() }
+    }
+
+    /// Detail and current authority only. Returns whether the profile loaded.
+    private func fetchProfile(showLoading: Bool) async -> Bool {
+        loadGeneration &+= 1
+        let generation = loadGeneration
         if showLoading { state = .loading }
         do {
-            async let catalogAccess: BusinessTeamAccessDTO? = try? api.request(
-                BusinessTeamEndpoints.access(businessId: businessId)
-            )
+            async let access = confirmAccess()
             let detail: BusinessDetailResponse = try await api.request(
                 BusinessesEndpoints.business(businessId: businessId)
             )
-            guard detail.access?.hasAccess == true else {
-                state = .error(message: noAccessMessage)
-                hasLoadedOnce = false
-                return
-            }
-            canClose = detail.access?.isOwner == true
-            canManageCatalog = await Self.allowsCatalog(catalogAccess)
+            _ = try await access
+            guard isCurrentLoad(generation) else { return false }
             let location = detail.profile?.primaryLocation
                 ?? detail.locations.first { $0.isPrimary == true }
                 ?? detail.locations.first
@@ -162,52 +194,118 @@ public final class EditBusinessPageViewModel {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .hasPrefix(countryCodePrefix)
 
-            var hours: [BusinessHoursDTO] = []
-            if let locationId = location?.id {
-                if let hoursResponse: BusinessLocationHoursResponse = try? await api.request(
-                    BusinessesEndpoints.locationHours(businessId: businessId, locationId: locationId)
-                ) {
-                    hours = hoursResponse.hours
-                }
-            }
-
-            // Owner-scoped catalog first. `/public/:username` 404s until the
-            // profile is published, so deriving Services from it alone left
-            // the setup checklist permanently short one item and made publish
-            // unreachable for every unpublished business.
-            var catalog: [BusinessCatalogItemDTO]?
-            if let itemsResponse: BusinessCatalogItemsResponse = try? await api.request(
-                BusinessesEndpoints.catalogItems(businessId: businessId, status: "active")
-            ) {
-                catalog = itemsResponse.items
-            }
-
-            if let username = detail.business.username, !username.isEmpty {
-                if let publicPayload: BusinessPublicResponse = try? await api.request(
-                    BusinessesEndpoints.publicBusiness(username: username)
-                ) {
-                    if catalog == nil { catalog = publicPayload.catalog }
-                    if hours.isEmpty { hours = publicPayload.hours }
-                }
-            }
-
+            // Profile fields can be used as soon as detail and authority are
+            // ready. Optional sections load independently and merge only their
+            // own values, so a slow catalog cannot hold up typing a name.
+            hasLoadedHours = false
+            hasLoadedServices = false
+            originalHours = nil
             state = .loaded(
                 EditBusinessPageMapper.content(
                     from: detail,
-                    hours: hours,
-                    catalog: catalog ?? []
+                    hours: [],
+                    catalog: []
                 )
             )
             hasLoadedOnce = true
+            return true
         } catch {
+            guard isCurrentLoad(generation) else { return false }
             if isNotFound(error) {
                 state = .empty
             } else {
                 state = .error(
-                    message: (error as? APIError)?.errorDescription ?? "Couldn't load editor."
+                    message: (error as? SaveFailure)?.message
+                        ?? (error as? APIError)?.errorDescription ?? "Couldn't load editor."
                 )
             }
             hasLoadedOnce = false
+            return false
+        }
+    }
+
+    private func isCurrentLoad(_ generation: Int) -> Bool {
+        generation == loadGeneration && sessionScope.isCurrent && !Task.isCancelled
+    }
+
+    private func loadSections() async {
+        async let hours: Void = refreshUneditedHours()
+        async let services: Void = refreshServices()
+        _ = await (hours, services)
+    }
+
+    private func refreshUneditedHours() async {
+        guard case let .loaded(content) = state,
+              EditBusinessPageMapper.hoursPayload(from: content.hours) == nil else { return }
+        await refreshHours()
+    }
+
+    // MARK: - Current edit authority
+
+    public func suspend() {
+        guard !localPreviewPersistenceEnabled else { return }
+        loadGeneration &+= 1
+        accessGeneration &+= 1
+        hoursGeneration &+= 1
+        servicesGeneration &+= 1
+        clearAccess()
+        isCheckingAccess = false
+        isLoadingHours = false
+        isLoadingServices = false
+    }
+
+    public func refreshAccess() async {
+        guard !localPreviewPersistenceEnabled else { return }
+        _ = try? await confirmAccess()
+        // A read interrupted while access was unavailable still has to finish.
+        if canEditProfile { await loadSections() }
+    }
+
+    private func clearAccess() {
+        canEditProfile = false
+        canEditLocation = false
+        canEditHours = false
+        canManageCatalog = false
+        canClose = false
+    }
+
+    @discardableResult
+    private func confirmAccess() async throws -> BusinessTeamAccessDTO {
+        accessGeneration &+= 1
+        let generation = accessGeneration
+        clearAccess()
+        // A toast queued behind the notice is out of date once the notice goes.
+        if accessError != nil { toastMessage = nil }
+        accessError = nil
+        isCheckingAccess = true
+        defer { if generation == accessGeneration { isCheckingAccess = false } }
+        do {
+            try requireSession()
+            let access: BusinessTeamAccessDTO = try await api.request(
+                BusinessTeamEndpoints.access(businessId: businessId)
+            )
+            guard generation == accessGeneration, !Task.isCancelled else { throw CancellationError() }
+            try requireSession()
+            let permissions = access.hasAccess ? Set(access.permissions) : []
+            canEditProfile = permissions.contains("profile.edit")
+            canEditLocation = permissions.contains("locations.edit")
+            canEditHours = permissions.contains("hours.edit")
+            canManageCatalog = permissions.contains("catalog.edit")
+            canClose = access.hasAccess && access.isOwner == true
+            guard canEditProfile else { throw SaveFailure(message: noAccessMessage) }
+            return access
+        } catch {
+            if generation == accessGeneration {
+                accessError = (error as? SaveFailure)?.message
+                    ?? "Couldn't check edit access. Your changes are kept. Retry to continue."
+            }
+            throw error
+        }
+    }
+
+    private func requireSession() throws {
+        guard sessionScope.isCurrent else {
+            throw SaveFailure(message: "Your session changed. Reopen the business to continue.")
         }
     }
 
@@ -219,10 +317,7 @@ public final class EditBusinessPageViewModel {
         isCheckingCatalog = true
         defer { isCheckingCatalog = false }
         do {
-            let access: BusinessTeamAccessDTO = try await api.request(
-                BusinessTeamEndpoints.access(businessId: businessId)
-            )
-            canManageCatalog = Self.allowsCatalog(access)
+            try await confirmAccess()
             guard canManageCatalog else {
                 toastMessage = "You don't have permission to manage this catalog."
                 return
@@ -234,21 +329,98 @@ public final class EditBusinessPageViewModel {
     }
 
     public func refreshServices() async {
+        guard canEditProfile else { return }
+        servicesGeneration &+= 1
+        let generation = servicesGeneration
+        let load = loadGeneration
+        isLoadingServices = true
+        servicesError = nil
+        defer { if generation == servicesGeneration { isLoadingServices = false } }
         do {
             let response: BusinessCatalogItemsResponse = try await api.request(
                 BusinessesEndpoints.catalogItems(businessId: businessId, status: "active")
             )
-            guard case let .loaded(content) = state else { return }
+            guard generation == servicesGeneration, isCurrentLoad(load),
+                  case let .loaded(content) = state else { return }
+            hasLoadedServices = true
             state = .loaded(EditBusinessPageMapper.withRecomputedMode(
                 EditBusinessPageMapper.copy(content, services: EditBusinessPageMapper.mapServices(response.items))
             ))
         } catch {
-            toastMessage = "Couldn't refresh services. Your other edits are kept."
+            guard generation == servicesGeneration, isCurrentLoad(load) else { return }
+            servicesError = "Couldn't load services. Your other edits are kept."
         }
     }
 
-    private static func allowsCatalog(_ access: BusinessTeamAccessDTO?) -> Bool {
-        access?.hasAccess == true && access?.permissions.contains("catalog.edit") == true
+    // MARK: - Hours
+
+    public func refreshHours() async {
+        guard canEditProfile else { return }
+        guard let locationId = primaryLocationId else {
+            hoursError = "Add a business location before setting hours."
+            return
+        }
+        hoursGeneration &+= 1
+        let generation = hoursGeneration
+        let load = loadGeneration
+        isLoadingHours = true
+        hoursError = nil
+        defer { if generation == hoursGeneration { isLoadingHours = false } }
+        do {
+            let response: BusinessLocationHoursResponse = try await api.request(
+                BusinessesEndpoints.locationHours(businessId: businessId, locationId: locationId)
+            )
+            guard generation == hoursGeneration, isCurrentLoad(load),
+                  case let .loaded(content) = state,
+                  EditBusinessPageMapper.hoursPayload(from: content.hours) == nil else { return }
+            let hours = EditBusinessPageMapper.mapHours(response.hours)
+            originalHours = hours
+            hasLoadedHours = true
+            state = .loaded(EditBusinessPageMapper.withRecomputedMode(
+                EditBusinessPageMapper.copy(content, hours: hours)
+            ))
+        } catch {
+            guard generation == hoursGeneration, isCurrentLoad(load) else { return }
+            hoursError = "Couldn't load hours. Retry before editing the week."
+        }
+    }
+
+    public func updateHours(dayId: String, to value: EditBusinessPageHoursRow.State) {
+        guard canEditProfile, canEditHours, hasLoadedHours, !hasInFlightOperation,
+              case let .loaded(content) = state,
+              let selected = content.hours.rows.first(where: { $0.id == dayId }) else { return }
+        let replacesDay = value == .closed || value == .allDay
+        let removesIntervals = replacesDay && content.hours.rows.filter { $0.dayLabel == selected.dayLabel }.count > 1
+        let hasRemovedIntervals = content.hours.rows.filter { $0.dayLabel == selected.dayLabel }.count
+            != originalHours?.rows.filter { $0.dayLabel == selected.dayLabel }.count
+        let rows = content.hours.rows.compactMap { row -> EditBusinessPageHoursRow? in
+            if removesIntervals, row.dayLabel == selected.dayLabel, row.id != dayId { return nil }
+            guard row.id == dayId else { return row }
+            let original = originalHours?.rows.first { $0.id == dayId }
+            let isDirty = value != original?.state || removesIntervals || hasRemovedIntervals
+            return EditBusinessPageHoursRow(
+                id: row.id,
+                dayLabel: row.dayLabel,
+                state: value,
+                isDirty: isDirty,
+                notes: row.notes,
+                source: isDirty ? nil : original?.source
+            )
+        }
+        state = .loaded(EditBusinessPageMapper.withRecomputedMode(
+            EditBusinessPageMapper.copy(content, hours: .rows(rows: rows, footerHint: nil))
+        ))
+    }
+
+    public func applyWeekdayHours() {
+        guard case let .loaded(content) = state else { return }
+        for row in content.hours.rows {
+            updateHours(
+                dayId: row.id,
+                to: ["Sun", "Sat"].contains(row.dayLabel)
+                    ? .closed : .open(openLabel: "9:00 AM", closeLabel: "5:00 PM")
+            )
+        }
     }
 
     // MARK: - Banner and logo
@@ -264,6 +436,7 @@ public final class EditBusinessPageViewModel {
         defer { uploadingMedia = nil }
         let ext = mimeType == "image/png" ? "png" : "jpg"
         do {
+            try await confirmAccess()
             let response = try await uploader.uploadBusinessMedia(
                 businessId: businessId,
                 kind: kind,
@@ -276,7 +449,7 @@ public final class EditBusinessPageViewModel {
                     data: data
                 )
             )
-            guard case let .loaded(content) = state else { return }
+            guard sessionScope.isCurrent, case let .loaded(content) = state else { return }
             let updated = switch kind {
             case .banner:
                 EditBusinessPageMapper.copy(
@@ -304,7 +477,7 @@ public final class EditBusinessPageViewModel {
     // MARK: - Field setters
 
     public func update(_ key: EditBusinessPageFieldKey, to value: String) {
-        guard case let .loaded(content) = state else { return }
+        guard case let .loaded(content) = state, canEdit(key) else { return }
         var next = content
         switch key {
         case .name:
@@ -347,6 +520,10 @@ public final class EditBusinessPageViewModel {
         state = .loaded(EditBusinessPageMapper.withRecomputedMode(next))
     }
 
+    private func canEdit(_ key: EditBusinessPageFieldKey) -> Bool {
+        canEditProfile && (![.address, .city, .state, .zip].contains(key) || canEditLocation)
+    }
+
     /// Applies an address-component edit while leaving the other
     /// components untouched — the street line never absorbs the locality.
     private func updatedLocation(
@@ -368,6 +545,7 @@ public final class EditBusinessPageViewModel {
 
     /// Setup-mode description prompt CTA — opens an empty About field.
     public func beginDescriptionEditing() {
+        guard canEditProfile else { return }
         guard case let .loaded(content) = state else { return }
         guard case .prompt = content.description else { return }
         let next = EditBusinessPageMapper.copy(
@@ -405,9 +583,13 @@ public final class EditBusinessPageViewModel {
         let saved = await persist(successToast: nil)
         guard saved else { return }
         do {
+            try await confirmAccess()
             _ = try await api.request(BusinessesEndpoints.publishBusiness(businessId: businessId))
+            try requireSession()
             toastMessage = "Published"
-            await fetch(showLoading: false)
+            let refreshed = await fetchProfile(showLoading: false)
+            isPublishing = false
+            if refreshed { await loadSections() }
         } catch {
             toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't publish."
         }
@@ -442,7 +624,8 @@ public final class EditBusinessPageViewModel {
     /// `DELETE /api/businesses/:businessId`. A failure keeps the sheet and
     /// the typed word, with the server's sentence.
     public func closeBusiness() async {
-        guard canClose, !isClosing, case .loaded = state else { return }
+        // `canClose` clears during a recheck; the sheet's Retry has to survive a failed one.
+        guard showsCloseConfirm, !isClosing, case .loaded = state else { return }
         if isSaving || uploadingMedia != nil {
             closeFailure = CloseBusinessFailure(
                 message: "Wait for the current save or upload to finish, then try again.",
@@ -454,7 +637,10 @@ public final class EditBusinessPageViewModel {
         closeFailure = nil
         defer { isClosing = false }
         do {
+            let access = try await confirmAccess()
+            guard access.isOwner == true else { throw SaveFailure(message: "Only an owner can close this business.") }
             _ = try await api.request(BusinessesEndpoints.closeBusiness(businessId: businessId))
+            try requireSession()
         } catch {
             if await wasAlreadyClosed(after: error) {
                 finishClosing()
@@ -492,6 +678,9 @@ public final class EditBusinessPageViewModel {
 
     private static func closeFailure(for error: any Error) -> CloseBusinessFailure {
         let fallback = "Couldn't close the business. Please try again."
+        if let failure = error as? SaveFailure {
+            return CloseBusinessFailure(message: failure.message, canRetry: false)
+        }
         guard let apiError = error as? APIError else {
             return CloseBusinessFailure(message: fallback, canRetry: true)
         }
@@ -529,6 +718,7 @@ public final class EditBusinessPageViewModel {
         _ content: EditBusinessPageContent,
         successToast: String?
     ) -> Bool {
+        originalHours = content.hours.cleaned
         state = .loaded(promoteCurrentToOriginal(content))
         if let successToast { toastMessage = successToast }
         return true
@@ -567,14 +757,32 @@ public final class EditBusinessPageViewModel {
         isSaving = true
         defer { isSaving = false }
         do {
+            try await confirmAccess()
+            if content.location.hasAddressEdits, !canEditLocation {
+                throw SaveFailure(message: "You don't have permission to edit this business's location. Your changes are kept.")
+            }
+            if EditBusinessPageMapper.hoursPayload(from: content.hours) != nil, !canEditHours {
+                throw SaveFailure(message: "You don't have permission to edit business hours. Your changes are kept.")
+            }
             try await pushProfile(content)
             try await pushLocation(content)
             try await pushHours(content)
-            state = .loaded(EditBusinessPageMapper.withRecomputedMode(savedContent(content)))
+            try requireSession()
+            var saved = savedContent(content)
+            if case let .loaded(current) = state {
+                saved = EditBusinessPageMapper.copy(
+                    saved,
+                    hours: EditBusinessPageMapper.hoursPayload(from: content.hours) == nil ? current.hours : saved.hours,
+                    services: current.services
+                )
+            }
+            if hasLoadedHours { originalHours = saved.hours.cleaned }
+            state = .loaded(EditBusinessPageMapper.withRecomputedMode(saved))
             if let successToast { toastMessage = successToast }
             return true
         } catch let failure as SaveFailure {
-            toastMessage = failure.message
+            accessError = failure.message
+            toastMessage = nil
             return false
         } catch {
             toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't save changes."
@@ -585,6 +793,7 @@ public final class EditBusinessPageViewModel {
     private func pushProfile(_ content: EditBusinessPageContent) async throws {
         let patch = buildPatch(from: content)
         guard patchHasValues(patch) else { return }
+        try requireSession()
         _ = try await api.request(
             BusinessesEndpoints.updateBusiness(businessId: businessId, body: patch)
         )
@@ -596,6 +805,7 @@ public final class EditBusinessPageViewModel {
         guard let locationId = primaryLocationId else {
             throw SaveFailure(message: noLocationMessage)
         }
+        try requireSession()
         _ = try await api.request(
             BusinessesEndpoints.updateLocation(
                 businessId: businessId,
@@ -611,6 +821,7 @@ public final class EditBusinessPageViewModel {
               let locationId = primaryLocationId else {
             return
         }
+        try requireSession()
         _ = try await api.request(
             BusinessesEndpoints.setLocationHours(
                 businessId: businessId,
@@ -774,7 +985,7 @@ public final class EditBusinessPageViewModel {
             categoryRequired: content.categoryRequired,
             price: content.price.reverted,
             description: content.description.reverted,
-            hours: content.hours.reverted,
+            hours: originalHours ?? content.hours.reverted,
             services: content.services.reverted,
             gallery: content.gallery.reverted,
             phone: content.phone.reverted,
@@ -839,11 +1050,23 @@ private extension EditBusinessPageDescriptionState {
 }
 
 private extension EditBusinessPageHoursState {
+    var rows: [EditBusinessPageHoursRow] {
+        switch self {
+        case let .rows(rows, _), let .quickApply(rows): rows
+        }
+    }
+
     var cleaned: EditBusinessPageHoursState {
         switch self {
         case let .rows(rows, hint):
             .rows(rows: rows.map {
-                EditBusinessPageHoursRow(id: $0.id, dayLabel: $0.dayLabel, state: $0.state, isDirty: false)
+                EditBusinessPageHoursRow(
+                    id: $0.id,
+                    dayLabel: $0.dayLabel,
+                    state: $0.state,
+                    notes: $0.notes,
+                    source: $0.isDirty ? nil : $0.source
+                )
             }, footerHint: hint)
         case .quickApply: self
         }

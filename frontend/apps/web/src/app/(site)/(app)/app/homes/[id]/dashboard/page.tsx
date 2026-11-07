@@ -294,10 +294,11 @@ function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft, guestPass
   // Deferred intelligence data: load below-the-fold components when dashboard tab is active
   useEffect(() => {
     if (tab === 'dashboard') {
-      intelligence.ensurePropertyValue();
+      // The Home's value is its confirmed owner's, as on Place.
+      if (myAccess.isOwner) intelligence.ensurePropertyValue();
       intelligence.ensureBillTrends();
     }
-  }, [tab, intelligence.ensurePropertyValue, intelligence.ensureBillTrends]);
+  }, [tab, myAccess.isOwner, intelligence.ensurePropertyValue, intelligence.ensureBillTrends]);
 
   // Timeline loads separately (further below the fold)
   useEffect(() => {
@@ -528,6 +529,7 @@ function HomeDashboardReady({ homeId, data, issueDraft, settingsDraft, guestPass
           secrets={secrets}
           emergencies={emergencies}
           can={can}
+          isOwner={Boolean(myAccess.isOwner)}
           expandedCard={expandedCard}
           onExpandCard={setExpandedCard}
           onAddTask={() => openTaskPanel()}
@@ -637,6 +639,7 @@ function DashboardTab({
   secrets,
   emergencies,
   can,
+  isOwner,
   expandedCard: requestedCard,
   onExpandCard,
   onAddTask,
@@ -683,6 +686,7 @@ function DashboardTab({
   secrets: Record<string, any>[];
   emergencies: Record<string, any>[];
   can: (perm: string) => boolean;
+  isOwner: boolean;
   expandedCard: string | null;
   onExpandCard: (card: string | null) => void;
   onAddTask: () => void;
@@ -900,10 +904,10 @@ function DashboardTab({
             onGenerate={() => void intelligence.generateChecklist()} />
         </HomeSummaryBoundary>
       </div>
-      <div className={`grid grid-cols-1 ${intelligence.canReadBills ? 'md:grid-cols-2' : ''} gap-4`}>
-        <HomeSummaryBoundary title="Property information" error={intelligence.errors.property} loading={intelligence.propertyValueLoading} onRetry={() => void intelligence.reloadSummary('property')}>
+      <div className={`grid grid-cols-1 ${isOwner && intelligence.canReadBills ? 'md:grid-cols-2' : ''} gap-4`}>
+        {isOwner && <HomeSummaryBoundary title="Property information" error={intelligence.errors.property} loading={intelligence.propertyValueLoading} onRetry={() => void intelligence.reloadSummary('property')}>
           <PropertyValueCard data={intelligence.propertyValue} loading={intelligence.propertyValueLoading} />
-        </HomeSummaryBoundary>
+        </HomeSummaryBoundary>}
         {intelligence.canReadBills && <HomeSummaryBoundary title="Bill trends" error={intelligence.errors.bills} loading={intelligence.billTrendsLoading} onRetry={() => void intelligence.reloadSummary('bills')}>
           <BillTrendChart data={intelligence.billTrends} selectedType={selectedBillType} onTypeChange={onBillTypeChange}
             // Launch cut #7 (Household extras): no "Add a bill"; the benchmark opt-in stays.

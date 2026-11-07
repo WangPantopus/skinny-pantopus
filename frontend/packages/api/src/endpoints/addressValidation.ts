@@ -64,6 +64,8 @@ export type AddressVerdict = {
   classification?: PlaceClassification;
   candidates: AddressCandidate[];
   next_actions: string[];
+  /** The units at this address, when there are few enough to offer. */
+  unit_choices?: string[];
 };
 
 export type ValidateAddressResponse = {

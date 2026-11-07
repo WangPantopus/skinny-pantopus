@@ -479,6 +479,54 @@ public struct SeasonalChecklistItemDTO: Decodable, Sendable, Hashable, Identifia
 // MARK: - Property value
 
 /// Response of `GET /api/homes/:id/property-value`.
+/// The value card in the server's words, drawn as it comes: each number says what
+/// it is. Sent only to the confirmed owner, and only for `vocabulary=2`.
+public struct HomeValueCardDTO: Decodable, Sendable, Hashable {
+    public struct Row: Decodable, Sendable, Hashable {
+        public let id: String
+        public let label: String
+        public let value: String
+    }
+
+    /// The area's price change, from an index: never the home's value.
+    public struct AreaTrend: Decodable, Sendable, Hashable {
+        /// `up` / `down` / `flat`.
+        public let direction: String
+        public let label: String
+        public let note: String?
+    }
+
+    public let title: String
+    /// The card's number as text; nil when no county value is known.
+    public let value: String?
+    /// The value in a few words for a list row ("county value $412,000").
+    public let summary: String?
+    public let emptyMessage: String?
+    public let rows: [Row]
+    public let notes: [String]
+    public let areaTrend: AreaTrend?
+    public let source: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case title, value, summary, rows, notes, source
+        case emptyMessage = "empty_message"
+        case areaTrend = "area_trend"
+    }
+
+    /// Each field decodes on its own, so an unexpected value never fails the card.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = (try? container.decode(String.self, forKey: .title)) ?? "Home value"
+        value = try? container.decodeIfPresent(String.self, forKey: .value)
+        summary = try? container.decodeIfPresent(String.self, forKey: .summary)
+        emptyMessage = try? container.decodeIfPresent(String.self, forKey: .emptyMessage)
+        rows = (try? container.decode([Row].self, forKey: .rows)) ?? []
+        notes = (try? container.decode([String].self, forKey: .notes)) ?? []
+        areaTrend = try? container.decodeIfPresent(AreaTrend.self, forKey: .areaTrend)
+        source = try? container.decodeIfPresent(String.self, forKey: .source)
+    }
+}
+
 public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
     public let estimatedValue: Double?
     public let valueRangeLow: Double?
@@ -496,6 +544,8 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
     public let provenance: RecordProvenanceDTO?
     /// The card's title when the record says what the number is ("County market value").
     public let valueTitle: String?
+    /// The whole card, when the server sends it; it comes first.
+    public let valueCard: HomeValueCardDTO?
 
     private enum CodingKeys: String, CodingKey {
         case estimatedValue = "estimated_value"
@@ -508,6 +558,7 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
         case lastUpdated = "last_updated"
         case source, provenance
         case valueTitle = "value_title"
+        case valueCard = "value_card"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -524,6 +575,7 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
         // A malformed label never fails the card.
         provenance = try? container.decodeIfPresent(RecordProvenanceDTO.self, forKey: .provenance)
         valueTitle = try? container.decodeIfPresent(String.self, forKey: .valueTitle)
+        valueCard = try? container.decodeIfPresent(HomeValueCardDTO.self, forKey: .valueCard)
     }
 
     public init(
@@ -537,7 +589,8 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
         lastUpdated: String? = nil,
         source: String? = nil,
         provenance: RecordProvenanceDTO? = nil,
-        valueTitle: String? = nil
+        valueTitle: String? = nil,
+        valueCard: HomeValueCardDTO? = nil
     ) {
         self.estimatedValue = estimatedValue
         self.valueRangeLow = valueRangeLow
@@ -550,6 +603,7 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
         self.source = source
         self.provenance = provenance
         self.valueTitle = valueTitle
+        self.valueCard = valueCard
     }
 }
 

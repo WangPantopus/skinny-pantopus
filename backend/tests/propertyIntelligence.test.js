@@ -302,12 +302,16 @@ describe('PropertyIntelligenceService', () => {
       process.env.ATTOM_API_KEY = 'test-key';
       mockMaybeSingle.mockResolvedValue({ data: null, error: null });
 
-      const updateEq = jest.fn().mockResolvedValue({ error: null });
+      // The write changes only its own key on the row as it stands, and only if the row hasn't moved since.
+      const updateEq = jest.fn().mockReturnValue({
+        eq: jest.fn().mockReturnValue({ select: jest.fn().mockResolvedValue({ data: [{ id: MOCK_HOME_ID }], error: null }) }),
+      });
       const update = jest.fn().mockReturnValue({ eq: updateEq });
+      const homeRow = { maybeSingle: jest.fn().mockResolvedValue({ data: { niche_data: {}, updated_at: '2026-11-06T00:00:00+00:00' }, error: null }) };
 
       mockFrom.mockImplementation((table) => {
         if (table === 'Home') {
-          return { update };
+          return { update, select: jest.fn().mockReturnValue({ eq: jest.fn().mockReturnValue(homeRow) }) };
         }
         return {
           select: mockSelect,

@@ -591,4 +591,6 @@ function serializePropertyRecord(copy) {
   return { sections: shown, footer: recordFooter(copy), as_of: copy.as_of || null };
 }
 
-module.exports = { serializeCountyRecord, serializePropertyRecord };
+const factIsMono = (kind) => MONO.has(kind);
+
+module.exports = { serializeCountyRecord, serializePropertyRecord, factValue, factIsMono };

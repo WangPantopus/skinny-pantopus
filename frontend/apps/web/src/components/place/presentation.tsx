@@ -242,7 +242,8 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
       if (d.year_built) parts.push(`Built ${d.year_built}`);
       if (d.sqft) parts.push(`${d.sqft.toLocaleString('en-US')} sqft`);
       const val = money(d.estimated_value);
-      if (val) parts.push(`est. value ${val}`);
+      if (d.value_card?.summary) parts.push(d.value_card.summary);
+      else if (val) parts.push(`est. value ${val}`);
       return { value: parts.join(' · ') || 'Property details on file' };
     },
   },

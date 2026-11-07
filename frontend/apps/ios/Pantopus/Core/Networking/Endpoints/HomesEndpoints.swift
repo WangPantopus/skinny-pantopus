@@ -44,6 +44,18 @@ public enum HomesEndpoints {
         Endpoint(method: .get, path: "/api/homes/\(homeId)/property-details", query: recordVocabulary)
     }
 
+    /// `PATCH /api/homes/:id` with `household_facts`: confirm, correct or undo a fact
+    /// (`backend/services/householdFacts.js`).
+    public static func updateHouseholdFacts(homeId: String, changes: [HouseholdFactChange]) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/homes/\(homeId)", body: HouseholdFactsRequest(householdFacts: changes))
+    }
+
+    /// `POST /api/homes/:id/record-problem`: "Report a problem" on a fact a household can't
+    /// correct. It reaches Pantopus review, and nothing on the page changes.
+    public static func reportRecordProblem(homeId: String, request: RecordProblemRequest) -> Endpoint {
+        Endpoint(method: .post, path: "/api/homes/\(homeId)/record-problem", body: request)
+    }
+
     /// Asks Add Home's suggestions, Property details, the Home's value and Place
     /// for the new record words (`backend/services/recordVocabulary.js`). Older
     /// servers ignore it, so the DTOs read both vocabularies.

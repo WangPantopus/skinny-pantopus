@@ -489,7 +489,7 @@ router.get('/property-profile', verifyToken, asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Home not found' });
   }
 
-  res.json(result);
+  res.json(access.isOwner ? result : { ...result, profile: propertyIntelligenceService.factsOnly(result.profile) });
 }));
 
 // ─── Neighborhood Pulse ──────────────────────────────────────────────────────
@@ -508,7 +508,7 @@ router.get('/pulse', verifyToken, asyncHandler(async (req, res) => {
     return res.status(403).json({ error: 'You do not have access to this home' });
   }
 
-  const result = await neighborhoodPulseComposer.compose({ homeId, userId });
+  const result = await neighborhoodPulseComposer.compose({ homeId, userId, viewerIsOwner: Boolean(access.isOwner) });
 
   if (result.error) {
     const status = result.error === 'HOME_NOT_FOUND' ? 404 : 500;
