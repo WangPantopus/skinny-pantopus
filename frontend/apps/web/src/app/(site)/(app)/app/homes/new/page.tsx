@@ -109,6 +109,12 @@ const STEPS = [
   { id: 4, label: 'Review', icon: '✅' },
 ];
 
+// While the county record can't be read yet, Add Home asks again after 2 s, then twice as long each time up to
+// 15 s, for half an hour. Each ask waits up to 8 s on the server, so a long outage costs one ask about every 23 s.
+const LOOKUP_RETRY_FIRST_MS = 2_000;
+const LOOKUP_RETRY_MOST_MS = 15_000;
+const LOOKUP_RETRY_FOR_MS = 30 * 60_000;
+
 export default function NewHomePage() {
   const recovery = useHomeCreation();
   const [lastActor, setLastActor] = useState<string | null>(null);
@@ -323,20 +329,35 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   };
   const RECORDS_UNAVAILABLE = 'Public property records are unavailable right now. Confirm the details below.';
 
-  // Add Home's one follow-up while the county record is looked up: the server answers when it lands.
+  // Add Home's follow-up while the county record is looked up: the server answers when it lands, or after a few
+  // seconds says it's still looking (the records' storage can't be read). Then the step says records are unavailable
+  // and keeps asking, less and less often, so the fields fill in by themselves once storage answers.
   const finishPropertyLookup = async (request: Parameters<typeof api.homes.getPropertySuggestions>[0], current: () => boolean) => {
-    try {
-      const res = await api.homes.getPropertySuggestions(request, { lookup: 'check' });
+    const until = Date.now() + LOOKUP_RETRY_FOR_MS;
+    for (let gap = LOOKUP_RETRY_FIRST_MS; ; gap = Math.min(gap * 2, LOOKUP_RETRY_MOST_MS)) {
+      let res: PropertySuggestionsResponse | undefined;
+      let retry = true;
+      try {
+        res = await api.homes.getPropertySuggestions(request, { lookup: 'check' });
+      } catch (e) {
+        // A refusal stays one; a network error or the server's own trouble may pass.
+        const status = (e as { statusCode?: number } | null)?.statusCode;
+        retry = status === undefined || status >= 500;
+      }
       if (!current()) return;
-      const filled = applySuggestions(res?.suggestions, true);
-      setPropertyLookup('done');
       const lookup = res?.record_lookup ?? res?.attom_lookup;
-      setPropertySuggestionNote(lookup === 'found' || lookup === 'none' ? suggestionNote(res) : RECORDS_UNAVAILABLE);
-      if (filled && stepNow.current > 2) setLateDetails(true);
-    } catch {
-      if (!current()) return;
+      if (res && lookup !== 'pending') {
+        const filled = applySuggestions(res.suggestions, true);
+        setPropertyLookup('done');
+        setPropertySuggestionNote(lookup === 'found' || lookup === 'none' ? suggestionNote(res) : RECORDS_UNAVAILABLE);
+        if (filled && stepNow.current > 2) setLateDetails(true);
+        return;
+      }
       setPropertyLookup('done');
       setPropertySuggestionNote(RECORDS_UNAVAILABLE);
+      if (!retry || Date.now() + gap > until) return;
+      await new Promise((resolve) => { setTimeout(resolve, gap); });
+      if (!current()) return;
     }
   };
 
