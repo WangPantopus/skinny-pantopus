@@ -8,6 +8,7 @@
 
 import React from 'react';
 import Image from 'next/image';
+import { formatTime } from '@/components/scheduling/business/weeklyHours';
 
 interface BlockData {
   id?: string;
@@ -281,16 +282,18 @@ function PublicCatalogGrid({ data, catalog }: { data: Record<string, any>; catal
   );
 }
 
+/**
+ * One saved interval as visitors read it. A `24:00` close is midnight at the end
+ * of the day, and a whole day, saved as 00:00–24:00 or 00:00–23:59, reads as it
+ * does in the apps.
+ */
+export function formatHoursInterval(open?: string | null, close?: string | null): string {
+  if (open?.startsWith('00:00') && (close?.startsWith('24:00') || close?.startsWith('23:59'))) return 'Open 24 hours';
+  return `${open ? formatTime(open) : ''} – ${close ? formatTime(close) : ''}`;
+}
+
 function PublicHours({ data, locations, hours }: { data: Record<string, any>; locations: Record<string, any>[]; hours: Record<string, any>[] }) {
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-  const formatTime = (t: string | null) => {
-    if (!t) return '';
-    const [h, m] = t.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-  };
 
   // Group hours by location
   const locationHoursMap: Record<string, Record<string, any>[]> = {};
@@ -319,7 +322,7 @@ function PublicHours({ data, locations, hours }: { data: Record<string, any>; lo
                   <div key={h.id as string} className="flex justify-between text-sm">
                     <span className="text-app-text-strong font-medium">{DAY_NAMES[h.day_of_week as number]}</span>
                     <span className={h.is_closed ? 'text-red-500' : 'text-app-text-secondary'}>
-                      {h.is_closed ? 'Closed' : `${formatTime(h.open_time as string | null)} – ${formatTime(h.close_time as string | null)}`}
+                      {h.is_closed ? 'Closed' : formatHoursInterval(h.open_time as string | null, h.close_time as string | null)}
                     </span>
                   </div>
                 ))}
