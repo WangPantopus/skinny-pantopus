@@ -88,6 +88,12 @@ const KINDS = {
   condo_building: { label: 'Condo building', fields: ids([...STRUCTURE.filter((id) => id !== 'buildings_on_parcel'), 'county', 'fips', 'municipality', 'property_type']) },
 };
 
+// Homes missing any one of these, counted as well: the founder's first ask, then the facts a person looks for first.
+const SETS = {
+  bedrooms_or_bathrooms: ['bedrooms', 'bathrooms'],
+  core: ['bedrooms', 'bathrooms', 'living_area', 'year_built', 'lot_size'],
+};
+
 /** The ledger's kind for a record, or null when it isn't a home (land, a business, a public building). */
 function kindOf(record) {
   if (record.kind === 'property') return { house: 'house', townhouse: 'townhouse', mobile_home: 'mobile_home', condo: 'condo_unit' }[record.home_type] || 'home';
@@ -175,6 +181,7 @@ const RULE = {
   fields: FIELDS.map(({ id, label }) => [id, label]),
   kinds: Object.fromEntries(Object.entries(KINDS).map(([id, { label, fields }]) => [id, { label, fields }])),
   not_counted: NOT_COUNTED,
+  sets: SETS,
 };
 
-module.exports = { FIELDS, KINDS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed, STRUCTURE };
+module.exports = { FIELDS, KINDS, SETS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed, STRUCTURE };

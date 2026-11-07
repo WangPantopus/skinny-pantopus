@@ -26,7 +26,7 @@ const zlib = require('node:zlib');
 const { execFileSync } = require('node:child_process');
 const { releasePath, switchesPath, SUPPRESSIONS_PATH } = require('../../backend/services/propertyRecords/format');
 const { openRelease } = require('../../backend/scripts/eval/lib/propertyRelease');
-const { FIELDS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed } = require('./lib/gaps.cjs');
+const { FIELDS, SETS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed } = require('./lib/gaps.cjs');
 const { log } = require('./lib/log.cjs');
 
 const COUNTS_PATH = 'gaps/counts.json';
@@ -158,7 +158,7 @@ function countyLedger(release, county, file, { live, suppressions }) {
   const counts = {
     fips: county.fips, state: county.state, name: county.name || null, source: county.source || null, release: county.release, as_of: county.as_of || null,
     live, written_at: new Date().toISOString(), homes: {}, complete: {}, rows: 0,
-    missing: {}, zero: {}, next_build: {}, on_building_record: {}, restricted: 0, suppressed: 0, not_homes: 0,
+    missing: {}, missing_any: {}, zero: {}, next_build: {}, on_building_record: {}, restricted: 0, suppressed: 0, not_homes: 0,
   };
   const writer = lineWriter(file);
   writer.add(JSON.stringify({ ledger: 1, fips: county.fips, state: county.state, release: county.release, as_of: county.as_of || null, rule: 'scripts/property-index/lib/gaps.cjs' }));
@@ -199,6 +199,7 @@ function countyLedger(release, county, file, { live, suppressions }) {
       return;
     }
     for (const id of gaps.missing) bump(counts.missing, kind, id);
+    for (const [name, set] of Object.entries(SETS)) if (set.some((id) => gaps.missing.includes(id))) bump(counts.missing_any, kind, name);
     for (const id of gaps.zero) bump(counts.zero, kind, id);
     for (const id of gaps.next_build) bump(counts.next_build, kind, id);
     const apn = record.facts?.parcel_number;
