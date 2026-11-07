@@ -353,7 +353,7 @@ object PlacePresentation {
                     buildList {
                         d.yearBuilt?.let { add("Built $it") }
                         d.sqft?.let { add("${grouped(it)} sqft") }
-                        money(d.estimatedValue)?.let { add("est. value $it") }
+                        (d.valueCard?.summary ?: money(d.estimatedValue)?.let { "est. value $it" })?.let { add(it) }
                     }
                 PlaceSectionReading(value = if (parts.isEmpty()) "Property details on file" else parts.joinToString(" · "))
             }

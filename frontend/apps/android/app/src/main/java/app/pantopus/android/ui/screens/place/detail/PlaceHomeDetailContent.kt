@@ -26,11 +26,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.homedashboard.HomeValueCardDto
 import app.pantopus.android.data.api.models.place.PlaceHomeSystemsData
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceYourHomeData
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.homes.HomeValueCardDetails
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.PlaceValueAccess
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
@@ -111,17 +113,26 @@ private fun ValueSection(
     when (access) {
         PlaceValueAccess.SHOWN -> {
             PlaceDetailSectionLabel("Value")
-            ValueCard(data)
-            data.assessedValue?.let { AssessmentCard(it) }
-            val valueSource = data.valueSource
-            if (valueSource != null) {
-                PlaceSourceNote(valueSource)
-            } else if (data.estimatedValue != null || data.assessedValue != null) {
-                PlaceSourceNote("County public records · estimate model", asOf)
+            val card = data.valueCard
+            if (card != null) {
+                RecordValueCard(card)
+                card.source?.let { PlaceSourceNote(it) }
+            } else {
+                ValueCard(data)
+                data.assessedValue?.let { AssessmentCard(it) }
+                val valueSource = data.valueSource
+                if (valueSource != null) {
+                    PlaceSourceNote(valueSource)
+                } else if (data.estimatedValue != null || data.assessedValue != null) {
+                    PlaceSourceNote("County public records · estimate model", asOf)
+                }
             }
 
-            PlaceDetailSectionLabel("Equity")
-            EquityCalculator(data.estimatedValue)
+            // An assessment alone isn't a value to borrow against.
+            if (card == null || data.estimatedValue != null) {
+                PlaceDetailSectionLabel("Equity")
+                EquityCalculator(data.estimatedValue)
+            }
         }
         PlaceValueAccess.PENDING -> {
             PlaceDetailSectionLabel("Value")
@@ -222,6 +233,24 @@ private fun ValueCard(data: PlaceYourHomeData) {
                 }
                 // No trend line or block comparison: there is no value history to chart.
             }
+        }
+    }
+}
+
+/** The server's card: each number says what it is. */
+@Composable
+private fun RecordValueCard(card: HomeValueCardDto) {
+    PlaceDetailCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(card.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextMuted)
+            val number = card.value
+            val message = card.emptyMessage
+            if (number != null) {
+                Text(number, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+            } else if (message != null) {
+                Text(message, fontSize = 13.sp, color = PantopusColors.appTextMuted)
+            }
+            HomeValueCardDetails(card)
         }
     }
 }
