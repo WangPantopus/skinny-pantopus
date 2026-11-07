@@ -45,6 +45,10 @@ data class HolidayCardDesign(
     val collection: String? = null,
     /** The picture's height at 960 pixels wide, so it keeps its shape before it loads. */
     val height: Int? = null,
+    /** The picture's name on its public page (launch key `card_table`). */
+    val slug: String? = null,
+    /** The picture's table colour, a colour like `#3b4c6e` (launch key `card_table`). */
+    val table: String? = null,
 )
 
 /** A collection on "Pick a card" (Christmas as a Kid …): its name, who it's for, and its pictures in order. */
@@ -85,6 +89,8 @@ data class SentHolidayCard(
     /** Their name as they show it, or the masked email address. */
     @Json(name = "to_name") val toName: String? = null,
     @Json(name = "by_email") val byEmail: Boolean = false,
+    /** Sent by a link: [byEmail] stays true as well, so older apps still show something sensible. */
+    @Json(name = "by_link") val byLink: Boolean = false,
     val arrival: String? = null,
     /** When it goes into their mailbox (their 7 a.m. mail); null by email. */
     @Json(name = "arrives_at") val arrivesAt: String? = null,
@@ -98,6 +104,8 @@ data class SentHolidayCard(
     /** `waiting`, `delivered`, `claimed`, `expired` or `withdrawn`. */
     val status: String? = null,
     @Json(name = "sent_at") val sentAt: String? = null,
+    /** The link to send on, right after sending a card by link (the answer's own `link`, kept with the card here). */
+    @Transient val link: String? = null,
 )
 
 /** `POST /api/mailbox/cards`: today's card, to one person found by name or by email to someone not on Pantopus. */
@@ -125,16 +133,26 @@ data class HolidayCardSharedBody(
     @Json(name = "with_note") val withNote: Boolean,
 )
 
-/** Exactly one of the two. */
+/** Exactly one of these. */
 @JsonClass(generateAdapter = true)
 data class HolidayCardRecipient(
     @Json(name = "user_id") val userId: String? = null,
     val email: String? = null,
+    /** By a link: the first person to open it keeps the card (launch key `card_table`). */
+    val link: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class SendHolidayCardResponse(
     val card: SentHolidayCard,
+    /** The link to send on, for a card by link. */
+    val link: String? = null,
+)
+
+/** `GET /api/mailbox/cards/:id/link`: the link of a card by link that's still waiting for someone. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardLinkResponse(
+    val link: String,
 )
 
 /** `POST /api/mailbox/cards/:id/take-back`. */
@@ -226,6 +244,8 @@ data class SentCard(
     /** A letter to a Home itself: [toName] ("their household") is said whole, never as a first name. */
     @Json(name = "to_household") val toHousehold: Boolean = false,
     @Json(name = "by_email") val byEmail: Boolean = false,
+    /** Sent by a link: [byEmail] stays true as well, so older apps still show something sensible. */
+    @Json(name = "by_link") val byLink: Boolean = false,
     val arrival: String? = null,
     val status: String? = null,
     @Json(name = "arrives_at") val arrivesAt: String? = null,
@@ -262,6 +282,9 @@ data class SentCardFace(
     val year: Int? = null,
     /** The picture's height at 960 pixels wide (null for a picture the server doesn't know). */
     val height: Int? = null,
+    /** The picture's name on its public page and its table colour (launch key `card_table`). */
+    val slug: String? = null,
+    val table: String? = null,
 )
 
 /**
@@ -284,4 +307,6 @@ data class HolidayCardPreviewLinkPage(
     val sealed: Boolean = false,
     @Json(name = "sent_to") val sentTo: String = "",
     @Json(name = "sent_on") val sentOn: String? = null,
+    /** A card by link: any account opens it, so the page names no address. */
+    @Json(name = "by_link") val byLink: Boolean = false,
 )

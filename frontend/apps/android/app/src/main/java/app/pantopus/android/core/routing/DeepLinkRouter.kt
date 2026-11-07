@@ -292,6 +292,11 @@ object DeepLinkRouter {
          */
         data class MailSentCard(val id: String) : Destination
 
+        /**
+         * `/app/mailbox/cards?design=` — the steps of sending a card, with that picture chosen (launch key `card_table`).
+         */
+        data class SendCard(val design: String?) : Destination
+
         /** `/mailbox` — the Mail tab (the Mail Day summary notification). */
         data object Mailbox : Destination
 
@@ -591,7 +596,7 @@ object DeepLinkRouter {
             // Package unboxing is package tracking (#7), as on web.
             is Destination.Unboxing -> setOf(LaunchFeature.HOUSEHOLD_EXTRAS, LaunchFeature.MAILBOX)
             Destination.Mailbox, is Destination.MailItem, Destination.MailDay, Destination.VacationHold, Destination.Stamps,
-            is Destination.MailTask, is Destination.MailSentCard,
+            is Destination.MailTask, is Destination.MailSentCard, is Destination.SendCard,
             -> setOf(LaunchFeature.MAILBOX)
             // A mailbox page the app has no route for (`/app/mailbox/vault`) is still the Mailbox.
             is Destination.Unknown -> if (isMailboxLink(destination.uri)) setOf(LaunchFeature.MAILBOX) else emptySet()
@@ -1153,6 +1158,13 @@ object DeepLinkRouter {
                         val taskId = segments.getOrNull(2)
                         if (taskId.isNullOrBlank()) Destination.Unknown(raw) else Destination.MailTask(taskId)
                     }
+                    // "Send this card to someone" on a public card page; with the table off it's still the Mailbox.
+                    "cards" ->
+                        if (LaunchFeatures.cardTable) {
+                            Destination.SendCard(Paths.queryParam(queryPart, "design")?.takeIf(Paths::isSafeSegment))
+                        } else {
+                            Destination.Unknown(raw)
+                        }
                     // A sent card's page; Sent itself is a drawer of the Mailbox.
                     "sent" -> {
                         val id = segments.getOrNull(2)
