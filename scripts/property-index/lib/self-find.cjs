@@ -18,10 +18,18 @@ const BLOCKS = 100;
 const isHome = (record) => !record.restricted && record.address?.number && record.address?.name
   && (record.kind === 'property' || (record.kind === 'unit' && record.address.unit));
 
+// The reader writes a name's first ST, STE, MT or FT out in full; a person types the short word. It matters where the rest
+// would read differently: DC's E ST SE is a street named E, but E SAINT SE reads as SAINT in the SE quadrant.
+const SHORT = { SAINT: 'ST', SAINTE: 'STE', MOUNT: 'MT', FORT: 'FT' };
+const typedName = (name) => {
+  const [first, ...rest] = String(name).split(' ');
+  return rest.length && SHORT[first] ? [SHORT[first], ...rest].join(' ') : name;
+};
+
 /** The street line and second line a person would type for a record's address. "121/2" is twelve and a half. */
 function typed({ number, pre, name, suffix, post, unit, building }) {
   return {
-    line1: [String(number).replace(/(\d)(\d\/\d)$/, '$1 $2'), pre, name, suffix, post].filter(Boolean).join(' '),
+    line1: [String(number).replace(/(\d)(\d\/\d)$/, '$1 $2'), pre, typedName(name), suffix, post].filter(Boolean).join(' '),
     unit: [building && `BLDG ${building}`, unit && `UNIT ${unit}`].filter(Boolean).join(' '),
   };
 }
