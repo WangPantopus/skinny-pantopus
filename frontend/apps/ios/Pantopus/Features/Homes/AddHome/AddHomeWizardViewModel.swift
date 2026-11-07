@@ -96,9 +96,27 @@ final class AddHomeWizardViewModel: WizardModel {
     private(set) var propertySuggestions: PropertySuggestionsResponse?
     /// "Is this your layout?", answered on the form: goes with the new Home.
     var floorPlanAnswer: String?
-    /// Link and confirm, with no county record: the county's page was opened, and "Is this right?" answered.
-    var countyPageOpened = false
-    var countyChecked = false
+    /// Link and confirm, with no county record: the address the county's page was opened for, and the one "Is this
+    /// right?" was answered for. Going to the browser sends the wizard back to the address step, which retires the
+    /// address check; these stay, so once the same address is checked again the question is still there.
+    private var countyPageOpenedFor: String?
+    private var countyCheckedFor: String?
+    private var countyAddressKey: String {
+        [form.address.street, form.address.unit, form.address.zipCode]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .joined(separator: "|")
+    }
+
+    var countyPageOpened: Bool {
+        get { countyPageOpenedFor == countyAddressKey }
+        set { countyPageOpenedFor = newValue ? countyAddressKey : nil }
+    }
+
+    var countyChecked: Bool {
+        get { countyCheckedFor == countyAddressKey }
+        set { countyCheckedFor = newValue ? countyAddressKey : nil }
+    }
+
     /// True once the suggestions lookup has finished (success or not), so
     /// the Details block can switch its headline from "Tell us about your
     /// home" to "Confirm property details" (RN `DetailsStep.tsx:57-70`).
@@ -421,8 +439,6 @@ final class AddHomeWizardViewModel: WizardModel {
         isFindingAddress = false
         propertySuggestions = nil
         floorPlanAnswer = nil
-        countyPageOpened = false
-        countyChecked = false
         propertyLookupComplete = false
         isLoadingPropertySuggestions = false
         propertyLookupPending = false
