@@ -65,6 +65,9 @@ landing built work first and D9. Open, with recommendations: D6-D8, D10-D12 and 
 | [build-plan.md](build-plan.md) | Work packages WP0-WP16 with files, switches, gates, checks, rollout and rollback | Building |
 | [cost-and-rights.md](cost-and-rights.md) | Costs, prices, the rights register and Google retention plans | Anything that costs money or keeps data |
 | [public-records-requests.md](public-records-requests.md) | Requests for the 41 large counties without a free file, prices found, and why not to scrape lookup sites | Sending requests or buying a file |
+| [statewide-inventory.md](statewide-inventory.md) | Every state's and territory's statewide parcel, assessment and building-fact files, ranked by homes gained beyond storage | Adding statewide sources (WP7) |
+| [other-routes.md](other-routes.md) | Records-law bulk copies, state tax departments, clearinghouses, federal sets, what changed for the 41 counties, bedrooms and baths | Choosing the next route |
+| [lookup-sites.md](lookup-sites.md) | One-home reads of county lookup sites: platforms, terms, robots, law by state, cost, and a recommendation for D2 | Deciding D2's open question |
 | [mail-pilot.md](mail-pilot.md) | The real-mail pilot for each printer | Running the pilot |
 | [HANDOFF.md](HANDOFF.md) | Where the work stands and the next steps | Continuing this work |
 
