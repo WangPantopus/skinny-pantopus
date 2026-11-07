@@ -37,6 +37,13 @@
    "src": "netr",
    "ref": "Mobile Revenue Commission"
   },
+  "01125": {
+   "name": "Tuscaloosa County",
+   "url": "https://www.alproptax.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Tuscaloosa Revenue Commission"
+  },
   "02020": {
    "name": "Anchorage Municipality",
    "url": "https://www.muni.org/pw/public.html",
@@ -272,9 +279,11 @@
   "08001": {
    "name": "Adams County",
    "url": "https://gisapp.adcogov.org/PropertySearch",
-   "kind": "search",
-   "src": "netr",
-   "ref": "Adams Assessor"
+   "deep": "https://gisapp.adcogov.org/quicksearch/doreport.aspx?pid={parcel}",
+   "form": "digits",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "gisapp.adcogov.org/quicksearch/doreport.aspx?pid=<13-digit parcel number> pages listed by a search engine"
   },
   "08005": {
    "name": "Arapahoe County",
@@ -1959,6 +1968,14 @@
    "kind": "search",
    "src": "netr",
    "ref": "Forsyth Assessor",
+   "was_http": true
+  },
+  "37071": {
+   "name": "Gaston County",
+   "url": "https://gastonnc.devnetwedge.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Gaston Tax Department (Appraisals & Tax Collection)",
    "was_http": true
   },
   "37081": {
