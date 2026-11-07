@@ -5,12 +5,17 @@
 // FHFA calls these annual series developmental. FHFA leaves a thin area's year blank, and a blank stays blank.
 //
 // A ZIP with no number of its own uses its county's, labeled as the county's, through the Census Bureau's ZIP-to-county file.
+//
+// The same files carry what a rough estimate reads (services/propertyRecords/valueEstimate.js): each county's price level by
+// year and FHFA's median purchase appraisal there; and what a neighborhood's figures read: the Census Bureau's home values by ZIP.
 
+const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
-const { download } = require('../lib/tables.cjs');
+const { download, zipTable } = require('../lib/tables.cjs');
 const { largestCountiesByZip } = require('../lib/zcta.cjs');
 const { stateOfCounty } = require('../../../backend/services/propertyRecords/addressKey');
+const { zipValues } = require('./us-acs.cjs');
 const { log } = require('../lib/log.cjs');
 
 const BASE = 'https://www.fhfa.gov/hpi/download/annual';
@@ -28,6 +33,9 @@ const TEXT = /<t[^>]*>([^<]*)<\/t>/g;
 const LARGEST_CHANGE_PCT = 40;
 // So is a ZIP this far from its own county (measured on the 2025 file: 3.7% of ZIPs; half are within 2.6 points).
 const LARGEST_GAP_FROM_COUNTY = 15;
+// The years of a county's price index kept for moving a value forward in time.
+const LEVEL_YEARS = 15;
+const APPRAISALS_PAGE = 'https://www.fhfa.gov/data/uniform-appraisal-dataset-aggregate-statistics';
 // A new file smaller than these is a changed or broken file: nothing is published and last year's stays.
 const MIN_ZIPS = 10000;
 const MIN_COUNTIES = 2000;
@@ -92,15 +100,69 @@ async function readIndex(work, { file, area, pad }) {
 
 const rounded = (pct) => Math.round(pct * 10) / 10;
 
+/** Each county's price level by year, from FHFA's yearly changes: { years, counties: { fips: [level, ...] } }. */
+function countyLevels(byYear, lastYear) {
+  const years = [...byYear.keys()].filter((year) => year > lastYear - LEVEL_YEARS && year <= lastYear).sort((a, b) => a - b);
+  const levels = new Map();
+  for (const fips of byYear.get(lastYear).keys()) {
+    let level = 1;
+    levels.set(fips, years.map((year) => {
+      const change = byYear.get(year).get(fips);
+      if (change !== undefined) level *= 1 + change / 100;
+      return Math.round(level * 1000) / 1000;
+    }));
+  }
+  return { years, levels };
+}
+
+/** The median purchase appraisal of single-family homes in each county, last full year: FHFA's public appraisal statistics. */
+async function countyAppraisals(work) {
+  const page = path.join(work, 'us-fhfa', 'appraisals.html');
+  download(APPRAISALS_PAGE, page);
+  const link = /href="([^"]*UADAggs_ent_sf_county[^"]*\.zip)"/.exec(fs.readFileSync(page, 'utf8'));
+  if (!link) throw new Error('FHFA\'s appraisal page changed');
+  const name = path.basename(link[1]);
+  const zip = path.join(work, 'us-fhfa', name);
+  download(`https://www.fhfa.gov${link[1]}`, zip);
+  const byYear = new Map();
+  for await (const row of zipTable(zip, name.replace('.zip', '.csv'), ['SERIESID', 'FIPS', 'PURPOSE', 'YEAR', 'QUARTER', 'CHARACTERISTIC1', 'VALUE'], { encoding: 'latin1' })) {
+    // A year's own row, not a quarter's.
+    if (row.SERIESID === 'MEDIAN' && row.PURPOSE === 'Purchase' && row.CHARACTERISTIC1 === 'No Characteristic' && Number(row.QUARTER) === 5 && Number(row.VALUE) > 0) {
+      const year = Number(row.YEAR);
+      if (!byYear.has(year)) byYear.set(year, new Map());
+      byYear.get(year).set(row.FIPS, Number(row.VALUE));
+    }
+  }
+  const year = Math.max(...byYear.keys());
+  log(`FHFA appraisals: ${year}, ${byYear.get(year).size} counties`);
+  return { year, medians: byYear.get(year) };
+}
+
 /** One file per state: { v, year, as_of, zips: { zip: pct }, counties: { fips: pct }, zip_county: { zip: fips } }. */
 async function buildAreaTrends({ work }) {
   const zips = await readIndex(work, FILES.zip);
   const counties = await readIndex(work, FILES.county);
+  const appraisals = await countyAppraisals(work);
+  const census = zipValues(work);
+  const { years: levelYears, levels } = countyLevels(counties.byYear, counties.year);
   if (zips.year !== counties.year) throw new Error(`FHFA's ZIP and county files end in different years: ${zips.year}, ${counties.year}`);
   if (zips.changes.size < MIN_ZIPS || counties.changes.size < MIN_COUNTIES) throw new Error('FHFA\'s files are smaller than expected');
   const states = new Map();
   const stateFile = (state) => {
-    if (!states.has(state)) states.set(state, { v: 1, year: zips.year, as_of: zips.asOf, zips: {}, counties: {}, zip_county: {} });
+    if (!states.has(state)) states.set(state, {
+      v: 1,
+      year: zips.year,
+      as_of: zips.asOf,
+      zips: {},
+      counties: {},
+      zip_county: {},
+      level_years: levelYears,
+      county_levels: {},
+      appraisal_year: appraisals.year,
+      appraisals: {},
+      census_source: census.source,
+      zip_values: {},
+    });
     return states.get(state);
   };
   const skipped = { noisy_counties: 0, zips_without_a_state: 0, counties_without_a_state: 0 };
@@ -110,10 +172,20 @@ async function buildAreaTrends({ work }) {
     else if (Math.abs(change) > LARGEST_CHANGE_PCT) skipped.noisy_counties += 1;
     else stateFile(state).counties[fips] = rounded(change);
   }
+  for (const [fips, list] of levels) {
+    const state = stateOfCounty(fips);
+    if (state) stateFile(state).county_levels[fips] = list;
+  }
+  for (const [fips, value] of appraisals.medians) {
+    const state = stateOfCounty(fips);
+    if (state) stateFile(state).appraisals[fips] = value;
+  }
   const placed = new Set();
   const noisyZips = new Set();
   // A ZIP across a state line is in both states' files, with each state's largest county.
   for (const [zip, fipsList] of largestCountiesByZip(work)) {
+    const values = census.zips.get(zip);
+    if (values) for (const fips of fipsList) if (stateOfCounty(fips)) stateFile(stateOfCounty(fips)).zip_values[zip] = values;
     const change = zips.changes.get(zip);
     const near = counties.changes.get(fipsList[0]);
     const noisy = change !== undefined && (Math.abs(change) > LARGEST_CHANGE_PCT || (near !== undefined && Math.abs(change - near) > LARGEST_GAP_FROM_COUNTY));
