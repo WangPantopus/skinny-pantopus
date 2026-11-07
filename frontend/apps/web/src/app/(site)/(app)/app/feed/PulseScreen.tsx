@@ -178,8 +178,7 @@ export default function FeedPage() {
     modalOnly?: boolean;
   }>({ scope: null, metadata: {} });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const prefs = useFeedPreferences(showToast, useCallback(() => feed.loadFeed(true), [feed.loadFeed]));
+  const prefs = useFeedPreferences(showToast);
 
   const showComposer = feed.surface !== 'personas' && !(feed.surface === 'place' && !feed.placeEligible);
 

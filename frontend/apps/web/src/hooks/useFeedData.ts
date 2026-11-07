@@ -595,14 +595,14 @@ export function useFeedData({
   const handleMute = useCallback(async (target: Parameters<typeof api.posts.muteEntity>[0]) => {
     try {
       await api.posts.muteEntity(target);
-      if (target.entityType === 'persona') {
-        await queryClient.cancelQueries({ queryKey: ['feed'] });
-      }
+      // A page still on its way can't bring their posts back.
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      // Out of every cached list, not just this one: another filter or area shown within 30 s would still list them.
       removePostsFromCache((p) => target.entityType === 'persona'
         ? p.identity_context_type === 'persona' && p.identity_context_id === target.entityId
           && !(p.author as AudienceProfile | null)?.viewer?.isOwner
         // The author's user id, as PostCard reads it: post.creator.id is their public profile id.
-        : (p.author_user_id || p.user_id) === target.entityId, target.entityType === 'persona');
+        : (p.author_user_id || p.user_id) === target.entityId, true);
       if (target.entityType === 'user') {
         // A repost names its reposters but carries no ids. Re-read Connections to remove
         // posts that reached this viewer only through the person they just muted.

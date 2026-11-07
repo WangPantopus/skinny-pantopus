@@ -14,7 +14,7 @@ export interface FeedPrefs {
   show_politics_place?: boolean;
 }
 
-export function useFeedPreferences(showToast: (msg: string) => void, onPrefChanged: () => void) {
+export function useFeedPreferences(showToast: (msg: string) => void) {
   const [showPrefs, setShowPrefs] = useState(false);
   const [unmutingCategory, setUnmutingCategory] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -58,11 +58,12 @@ export function useFeedPreferences(showToast: (msg: string) => void, onPrefChang
     try {
       const res = await api.posts.updateFeedPreferences({ [key]: value } as Record<string, any>);
       queryClient.setQueryData(queryKeys.feedPreferences(), res.preferences as FeedPrefs);
-      onPrefChanged();
+      // Every feed list reads again, as after unmuting a category: the one on screen now, the others when next shown.
+      void queryClient.resetQueries({ queryKey: ['feed'] });
     } catch {
       setActionError('Failed to update preference. Try again.');
     }
-  }, [onPrefChanged, queryClient]);
+  }, [queryClient]);
 
   return {
     showPrefs,
