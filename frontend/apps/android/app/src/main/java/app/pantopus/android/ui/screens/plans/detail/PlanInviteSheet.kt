@@ -59,7 +59,6 @@ import app.pantopus.android.data.api.models.plans.PlanInviteCandidateDto
 import app.pantopus.android.data.api.models.plans.PlanInviteCountsDto
 import app.pantopus.android.data.api.models.plans.PlanInviteRowDto
 import app.pantopus.android.data.plans.isAtHome
-import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PantopusCheckbox
 import app.pantopus.android.ui.components.PrimaryButton

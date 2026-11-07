@@ -131,6 +131,8 @@ data class HostUi(
     val homePoints: List<Pair<Double, Double>> = emptyList(),
     val origin: Pair<Double, Double>? = null,
     val playdatesOn: Boolean = false,
+    /** The host's address is verified (`/mine`): H7's "Verified" badge, as neighbors will see it. Unknown means no. */
+    val hostVerified: Boolean = false,
     val hostName: String = "You",
     val hostAvatar: String? = null,
     val posting: Boolean = false,
@@ -254,7 +256,8 @@ class HostFlowViewModel
             val homePoints = payload?.homes.orEmpty().mapNotNull { h -> h.latitude?.let { lat -> h.longitude?.let { lat to it } } }
             val reply = (repository.games("composer") as? NetworkResult.Success)?.data
             val games = reply?.games.orEmpty()
-            _ui.update { it.copy(home = home, homePoints = homePoints) }
+            val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: false
+            _ui.update { it.copy(home = home, homePoints = homePoints, hostVerified = verified) }
             warmPlaces(home)
             if (generation != gamesGeneration) return
             _ui.update { it.copy(games = games, sports = reply?.sports) }
