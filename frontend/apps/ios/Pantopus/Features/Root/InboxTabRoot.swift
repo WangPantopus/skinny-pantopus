@@ -375,7 +375,7 @@ private extension InboxTabRoot {
                 }
             },
             onShare: { systemSheet = .share(items: [$0]) },
-            onEdit: { router.handle(path: "/businesses/\(businessId)/page-editor") }
+            onEdit: { router.handle(path: "/businesses/\($0)/page-editor") }
         )
     }
 

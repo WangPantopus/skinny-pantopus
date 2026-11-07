@@ -69,8 +69,9 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       return res.status(400).json({ error: sectionsError });
     }
 
-    // The Home row is read alongside the access check and used only once access holds.
-    const homeRead = placeIntelligenceService.readHome(id);
+    // The Home row is read alongside the access check and used only once access holds,
+    // with the property record's columns when a requested section reads them.
+    const homeRead = placeIntelligenceService.readHome(id, { sectionIds });
     const reader = await placeIntelligenceService.readAccess(id, userId);
     if (!reader) {
       return res.status(403).json({ error: 'You do not have access to this place.' });

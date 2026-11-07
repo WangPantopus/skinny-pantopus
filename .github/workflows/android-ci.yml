@@ -86,15 +86,26 @@ jobs:
         # P14 acceptance: a deliberately broken snapshot (e.g. a colour
         # change) must fail CI. The `paparazziVerify` task is wired in
         # `app/build.gradle.kts` and runs `verifyPaparazziDebug`.
+        #
+        # Three single-use Gradle runs, so the Kotlin compiler (an 8 GB heap
+        # of its own) has the runner's 16 GB to itself. After ktlint and
+        # detekt in the same run, the compile took 14-23 minutes and once ran
+        # out of memory. The instrumented job, which only compiles, does it in
+        # about 10 minutes. Android Lint runs last, after the compiler has
+        # exited.
+        #
+        # Unit tests run for the debug variant only. The release variant has
+        # no source set or BuildConfig field of its own, so `test` compiled the
+        # whole app a second time (13+ minutes) to run the same tests again.
         run: |
-          ./gradlew \
-            ktlintCheck \
-            detekt \
-            :app:lintDebug \
-            test \
-            paparazziVerify \
-            :app:assembleDebug \
-            --no-daemon
+          ./gradlew ktlintCheck detekt --no-daemon
+          ./gradlew :app:testDebugUnitTest paparazziVerify :app:assembleDebug --no-daemon
+          # The Kotlin daemon normally exits shortly after the Gradle run that used it.
+          for attempt in {1..30}; do
+            jps -l | awk '$2 == "org.jetbrains.kotlin.daemon.KotlinCompileDaemon" { found=1 } END { exit !found }' || break
+            sleep 1
+          done
+          ./gradlew :app:lintDebug --no-daemon
 
       - name: Upload test reports
         if: always()

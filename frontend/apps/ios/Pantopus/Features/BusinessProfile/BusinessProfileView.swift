@@ -32,8 +32,9 @@ public struct BusinessProfileView: View {
     private let onOpenWebsite: @MainActor (URL) -> Void
     /// "Book" dock action — stubbed by the host (real booking ships later).
     private let onBook: @MainActor () -> Void
-    /// A13.10 Edit Business Page, surfaced via overflow when viewer is owner.
-    private let onEdit: @MainActor () -> Void
+    /// A13.10 Edit Business Page, surfaced via overflow when viewer is owner. Gets the business id the page
+    /// resolved: a `/b/:username` link opens the page with the username.
+    private let onEdit: @MainActor (String) -> Void
 
     public init(
         businessId: String,
@@ -43,7 +44,7 @@ public struct BusinessProfileView: View {
         onShare: @escaping @MainActor (String) -> Void = { _ in },
         onOpenWebsite: @escaping @MainActor (URL) -> Void = { _ in },
         onBook: @escaping @MainActor () -> Void = {},
-        onEdit: @escaping @MainActor () -> Void = {}
+        onEdit: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         _viewModel = State(
             initialValue: BusinessProfileViewModel(businessId: businessId, pageSlug: pageSlug)
@@ -79,8 +80,8 @@ public struct BusinessProfileView: View {
             ),
             titleVisibility: .hidden
         ) {
-            if viewerOwnsLoadedBusiness {
-                Button("Edit business page") { onEdit() }
+            if let ownedBusinessId {
+                Button("Edit business page") { onEdit(ownedBusinessId) }
             }
             if let pending = loadedSavedPlace {
                 Button(savedPlaceIsSaved(pending) ? "Remove saved place" : "Save business") {
@@ -123,11 +124,12 @@ public struct BusinessProfileView: View {
         }
     }
 
-    private var viewerOwnsLoadedBusiness: Bool {
-        if case let .loaded(payload) = viewModel.state {
-            return payload.viewerIsOwner
+    /// The loaded business's id when the viewer owns it.
+    private var ownedBusinessId: String? {
+        if case let .loaded(payload) = viewModel.state, payload.viewerIsOwner {
+            return payload.businessId
         }
-        return false
+        return nil
     }
 
     /// The business's own public page when it's live; the app link while the

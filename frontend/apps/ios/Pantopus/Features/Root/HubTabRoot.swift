@@ -2609,7 +2609,7 @@ public struct HubTabRoot: View {
                     Task { @MainActor in push(.chatConversation(destination)) }
                 },
                 onShare: { text in systemSheet = .share(items: [text]) },
-                onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
+                onEdit: { id in Task { @MainActor in push(.editBusinessPage(businessId: id)) } }
             )
         case let .businessProfilePage(businessId, pageSlug):
             BusinessProfileDestination(
@@ -2620,7 +2620,7 @@ public struct HubTabRoot: View {
                     Task { @MainActor in push(.chatConversation(destination)) }
                 },
                 onShare: { text in systemSheet = .share(items: [text]) },
-                onEdit: { Task { @MainActor in push(.editBusinessPage(businessId: businessId)) } }
+                onEdit: { id in Task { @MainActor in push(.editBusinessPage(businessId: id)) } }
             )
         case let .businessPages(businessId):
             BusinessPagesView(
@@ -4208,7 +4208,8 @@ struct BusinessProfileDestination: View {
     let onBack: @MainActor () -> Void
     let onOpenMessages: @MainActor (InboxConversationDestination) -> Void
     let onShare: @MainActor (String) -> Void
-    let onEdit: @MainActor () -> Void
+    /// Gets the id the page resolved; `businessId` is the username on a `/b/:username` link.
+    let onEdit: @MainActor (String) -> Void
 
     @Environment(\.openURL) private var openURL
 
