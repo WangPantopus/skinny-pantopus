@@ -145,16 +145,22 @@ function displayNameFromUser(user) {
  */
 async function localDisplayNames(userIds) {
   const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
-  const names = new Map();
-  if (ids.length === 0) return names;
+  if (ids.length === 0) return new Map();
   const [users, profiles] = await Promise.all([
     supabaseAdmin.from('User').select('id, username, name, first_name, middle_name, last_name').in('id', ids),
     supabaseAdmin.from('LocalProfile').select('user_id, display_name').in('user_id', ids),
   ]);
   if (users.error) throw users.error;
   if (profiles.error) throw profiles.error;
-  const profileNames = new Map((profiles.data || []).map((row) => [String(row.user_id), nameText(row.display_name)]));
-  for (const user of users.data || []) {
+  return localDisplayNamesFrom(users.data, profiles.data);
+}
+
+/** localDisplayNames from rows already read: the accounts (id, username, name, first/middle/last name) and their
+ * Local Profiles (user_id, display_name). */
+function localDisplayNamesFrom(users, profiles) {
+  const names = new Map();
+  const profileNames = new Map((profiles || []).map((row) => [String(row.user_id), nameText(row.display_name)]));
+  for (const user of users || []) {
     const name = profileNames.get(String(user.id))
       || cleanIdentityText(user.name)
       || fullNameFromUserParts(user)
@@ -765,6 +771,7 @@ module.exports = {
   syncLocalProfileLocality,
   displayNameFromUser,
   localDisplayNames,
+  localDisplayNamesFrom,
   ensureLocalProfile,
   localProfileCopyOfAccount,
   localProfileFollowsAccount,

@@ -18,8 +18,7 @@ const logger = require('../utils/logger');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
-const { localDisplayNames } = require('../utils/identityProfiles');
-const { loadChatPeople } = require('./chatPeople');
+const { loadChatPeople, loadChatPeopleAndNames } = require('./chatPeople');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // A shared Home is not a container for every sensitive column/file reference.
@@ -148,10 +147,10 @@ async function readMembers(homeId, { history = false } = {}) {
 async function withDisplayNames(occupants) {
   if (occupants.length === 0) return occupants;
   const ids = occupants.map(member => member.user_id);
+  // Names, handles and photos come from one read of their accounts and Local Profiles.
   let names;
-  const people = loadChatPeople(ids);
-  try { names = await localDisplayNames(ids); } catch (_) { throw failure(); }
-  const shown = await people;
+  let shown;
+  try { ({ names, people: shown } = await loadChatPeopleAndNames(ids)); } catch (_) { throw failure(); }
   return occupants.map((member) => {
     const user = localRef(member.user, shown);
     return { ...member, user, display_name: names.get(String(member.user_id)) || 'Household member',
