@@ -31,14 +31,15 @@ async function* dbfRows(zip, member, columns, { optional = [] } = {}) {
       const at = new Map();
       let offset = 1;
       for (let position = 32; position + 32 <= headerLength && buffer[position] !== 0x0d; position += 32) {
-        const name = buffer.toString('latin1', position, position + 11).split('\0')[0];
+        // Some counties' tools write column names in lower case.
+        const name = buffer.toString('latin1', position, position + 11).split('\0')[0].toUpperCase();
         const length = buffer[position + 16];
         at.set(name, [offset, length]);
         offset += length;
       }
-      const missing = columns.filter((column) => !at.has(column) && !optional.includes(column));
+      const missing = columns.filter((column) => !at.has(column.toUpperCase()) && !optional.includes(column));
       if (missing.length) throw new Error(`A table no longer has ${missing.join(', ')}`);
-      wanted = columns.filter((column) => at.has(column)).map((column) => [column, ...at.get(column)]);
+      wanted = columns.filter((column) => at.has(column.toUpperCase())).map((column) => [column, ...at.get(column.toUpperCase())]);
       buffer = buffer.subarray(headerLength);
     }
     let position = 0;

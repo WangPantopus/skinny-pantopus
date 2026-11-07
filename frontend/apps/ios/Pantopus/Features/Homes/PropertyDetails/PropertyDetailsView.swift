@@ -22,6 +22,8 @@ public struct PropertyDetailsView: View {
     @State private var viewModel: PropertyDetailsViewModel
     private let onBack: () -> Void
     private let onRequestCorrection: () -> Void
+    @State private var editing: HouseholdGroupDTO?
+    @State private var reporting: PropertyRecordSection?
 
     public init(
         homeId: String,
@@ -54,6 +56,25 @@ public struct PropertyDetailsView: View {
             .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(viewModel.homeId), kind: .place) }, perform: {
                 await viewModel.load()
             })
+            .sheet(item: $editing) { group in
+                HouseholdFactEditorSheet(group: group) { changes in
+                    await viewModel.saveFacts(changes)
+                }
+            }
+            .sheet(item: $reporting) { section in
+                HouseholdReportSheet(section: section) { field, note in
+                    await viewModel.reportProblem(section: section.id, field: field, note: note)
+                }
+            }
+    }
+
+    private var householdActions: HouseholdActions {
+        HouseholdActions(
+            saving: viewModel.savingFacts,
+            save: { changes in Task { await viewModel.saveFacts(changes) } },
+            edit: { editing = $0 },
+            report: { reporting = $0 }
+        )
     }
 
     @ViewBuilder private var content: some View {
@@ -76,6 +97,7 @@ public struct PropertyDetailsView: View {
             content: content,
             isMismatch: isMismatch,
             staleNotice: viewModel.staleNotice,
+            householdActions: householdActions,
             onBack: onBack,
             onRequestCorrection: onRequestCorrection
         ) { Task { await viewModel.refresh() } }
@@ -88,6 +110,7 @@ private struct LoadedBody: View {
     let content: PropertyDetailsContent
     let isMismatch: Bool
     let staleNotice: String?
+    let householdActions: HouseholdActions
     let onBack: () -> Void
     let onRequestCorrection: () -> Void
     let onRetry: () -> Void
@@ -107,10 +130,17 @@ private struct LoadedBody: View {
                         MismatchBanner(data: banner)
                     }
                     PropertySection(title: "Property", rows: content.propertyFacts)
+                    if let household = content.household, !household.questions.isEmpty {
+                        HouseholdQuestionsCard(household: household, actions: householdActions)
+                    }
                     // The county record comes for verified owners
                     // only, so everyone else sees just the Property card.
                     ForEach(content.recordSections) { section in
-                        PropertySection(title: section.title, rows: section.rows, note: section.note)
+                        PropertySection(title: section.title, rows: section.rows, note: section.note) {
+                            if let group = content.household?.group(forSection: section.id) {
+                                HouseholdGroupFooter(group: group, section: section, actions: householdActions)
+                            }
+                        }
                     }
                     if let footer = content.recordFooter {
                         Text(footer)
@@ -118,6 +148,17 @@ private struct LoadedBody: View {
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("propertyDetails_recordFooter")
+                    }
+                    if let household = content.household {
+                        ForEach(household.sections) { section in
+                            PropertySection(title: section.title, rows: section.rows, note: section.note)
+                        }
+                        if household.questions.isEmpty, let page = household.countyPage {
+                            HouseholdCountyPageLink(page: page)
+                        }
+                        ForEach(household.addDetails) { group in
+                            HouseholdAddDetailsCard(group: group, actions: householdActions)
+                        }
                     }
                     // Verification sources have no clean backend mapping
                     // today, so they're hidden when the projection leaves
@@ -252,10 +293,11 @@ private struct HouseholdPill: View {
 
 // MARK: - Sections
 
-private struct PropertySection: View {
+private struct PropertySection<Footer: View>: View {
     let title: String
     let rows: [PropertyFactRow]
     var note: String?
+    @ViewBuilder var footer: Footer
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -274,6 +316,7 @@ private struct PropertySection: View {
                         RowDivider()
                     }
                 }
+                footer
             }
             if let note {
                 Text(note)
@@ -282,6 +325,12 @@ private struct PropertySection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+extension PropertySection where Footer == EmptyView {
+    init(title: String, rows: [PropertyFactRow], note: String? = nil) {
+        self.init(title: title, rows: rows, note: note) { EmptyView() }
     }
 }
 

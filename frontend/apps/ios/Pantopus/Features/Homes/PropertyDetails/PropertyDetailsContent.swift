@@ -76,6 +76,40 @@ public struct PropertyRecordSection: Identifiable, Sendable, Hashable {
     }
 }
 
+/// What the household has said and can say, as the server sends it. Empty parts draw nothing.
+public struct PropertyHouseholdContent: Sendable, Hashable {
+    /// "From your household", where there's no record to set it beside.
+    public let sections: [PropertyRecordSection]
+    public let groups: [HouseholdGroupDTO]
+    public let questions: [HouseholdQuestionDTO]
+    public let countyPage: HouseholdCountyPageDTO?
+
+    public init(
+        sections: [PropertyRecordSection],
+        groups: [HouseholdGroupDTO],
+        questions: [HouseholdQuestionDTO],
+        countyPage: HouseholdCountyPageDTO?
+    ) {
+        self.sections = sections
+        self.groups = groups
+        self.questions = questions
+        self.countyPage = countyPage
+    }
+
+    public func group(forSection id: String) -> HouseholdGroupDTO? {
+        groups.first { $0.sectionId == id }
+    }
+
+    /// A card of its own: nothing in the record to sit under.
+    public var addDetails: [HouseholdGroupDTO] {
+        groups.filter { $0.sectionId == nil }
+    }
+
+    public func fact(_ key: String) -> HouseholdFactDTO? {
+        groups.lazy.flatMap(\.facts).first { $0.key == key }
+    }
+}
+
 /// Status pill spec attached to a verification source row.
 public struct SourcePillSpec: Sendable, Hashable {
     public let label: String
@@ -127,6 +161,8 @@ public struct PropertyDetailsContent: Sendable, Hashable {
     /// Non-nil when external sources disagree — drives the mismatch banner
     /// and the sticky "Request correction" CTA. `nil` for the clean state.
     public let banner: MismatchBannerData?
+    /// `nil` for anyone the household's facts aren't for, and from a server that doesn't send them.
+    public let household: PropertyHouseholdContent?
 
     public init(
         address: PropertyAddress,
@@ -134,7 +170,8 @@ public struct PropertyDetailsContent: Sendable, Hashable {
         recordSections: [PropertyRecordSection],
         recordFooter: String? = nil,
         verification: [VerificationSource],
-        banner: MismatchBannerData? = nil
+        banner: MismatchBannerData? = nil,
+        household: PropertyHouseholdContent? = nil
     ) {
         self.address = address
         self.propertyFacts = propertyFacts
@@ -142,6 +179,7 @@ public struct PropertyDetailsContent: Sendable, Hashable {
         self.recordFooter = recordFooter
         self.verification = verification
         self.banner = banner
+        self.household = household
     }
 }
 

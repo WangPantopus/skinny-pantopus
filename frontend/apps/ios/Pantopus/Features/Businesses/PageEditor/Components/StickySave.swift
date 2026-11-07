@@ -23,6 +23,8 @@ public enum EditBusinessStickySaveMode: Sendable, Equatable {
 @MainActor
 public struct EditBusinessStickySave: View {
     private let mode: EditBusinessStickySaveMode
+    private let canSave: Bool
+    private let canPublish: Bool
     private let onDiscard: @MainActor () -> Void
     private let onSave: @MainActor () -> Void
     private let onSaveDraft: @MainActor () -> Void
@@ -30,12 +32,16 @@ public struct EditBusinessStickySave: View {
 
     public init(
         mode: EditBusinessStickySaveMode,
+        canSave: Bool = true,
+        canPublish: Bool = true,
         onDiscard: @escaping @MainActor () -> Void = {},
         onSave: @escaping @MainActor () -> Void = {},
         onSaveDraft: @escaping @MainActor () -> Void = {},
         onPublish: @escaping @MainActor () -> Void = {}
     ) {
         self.mode = mode
+        self.canSave = canSave
+        self.canPublish = canPublish
         self.onDiscard = onDiscard
         self.onSave = onSave
         self.onSaveDraft = onSaveDraft
@@ -81,6 +87,7 @@ public struct EditBusinessStickySave: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("editBusinessPage.save")
+                    .disabled(!canSave)
 
                 case let .setup(remaining):
                     Button {
@@ -97,6 +104,7 @@ public struct EditBusinessStickySave: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("editBusinessPage.saveDraft")
+                    .disabled(!canSave)
 
                     Spacer(minLength: Spacing.s2)
 
@@ -106,7 +114,7 @@ public struct EditBusinessStickySave: View {
                         publishLabel(remaining: remaining)
                     }
                     .buttonStyle(.plain)
-                    .disabled(remaining > 0)
+                    .disabled(remaining > 0 || !canPublish)
                     .accessibilityIdentifier("editBusinessPage.publish")
                 }
             }

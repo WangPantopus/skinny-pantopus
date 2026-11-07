@@ -1,7 +1,8 @@
 name: Property Index
 
 # Pantopus's own index of public county property records (backend/services/propertyRecords, scripts/property-index),
-# published to private storage. Weekly for Clark County's weekly file, monthly for the rest, and by hand. This
+# published to private storage. Weekly for Clark County's weekly file, monthly for the rest, and by hand, with the
+# labeled national estimates in their own index beside it, by hand (they change yearly). This
 # repository is public, so its logs and uploaded artifacts are too: a real county's run prints counts only and uploads
 # nothing here, and only master can reach the storage key. A pull request builds a made-up county and publishes nothing.
 
@@ -17,12 +18,12 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build; rollback one county to its previous release; switch one county off, shadow or live"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates (sources are state codes)"
         type: choice
-        options: [build, rollback, switch]
+        options: [build, rollback, switch, estimates]
         default: build
       sources:
-        description: "Connectors in scripts/property-index/sources, space separated (build)"
+        description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates)"
         required: false
         default: "wa-clark"
       county:
@@ -50,6 +51,7 @@ on:
     paths:
       - scripts/property-index/**
       - backend/services/propertyRecords/addressKey.js
+      - backend/services/propertyRecords/estimateFacts.js
       - backend/services/propertyRecords/facts.js
       - backend/services/propertyRecords/format.js
       - backend/services/propertyRecords/identity.js
@@ -151,3 +153,20 @@ jobs:
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done
           exit $status
+      # The national floor's own index, under its own prefix. Large states need room: the runner's unused tools go first.
+      - name: Build and publish estimates
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'estimates'
+        env:
+          STATES: ${{ inputs.sources }}
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
+          out="$RUNNER_TEMP/estimates"
+          work="$RUNNER_TEMP/estimates-work"
+          node scripts/property-index/build-estimates.cjs --areas --out "$out" --work "$work"
+          aws s3 cp "$out/areas" "s3://$PROPERTY_INDEX_BUCKET/index/estimates/areas" --recursive --only-show-errors
+          for state in $STATES; do
+            rm -rf "$out"
+            node --disable-warning=ExperimentalWarning --max-old-space-size=12288 scripts/property-index/build-estimates.cjs --states "$state" --out "$out" --work "$work"
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/estimates
+            rm -rf "$work/us-structures/$state"
+          done

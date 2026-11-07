@@ -301,5 +301,45 @@ async function notifyProbationDisputeToReview({ caseId, home }) {
   }
 }
 
+/**
+ * Someone reported a problem with a Home's county record, or a household's entry disagrees with a fact the record
+ * keeps showing, so an AddressReviewCase (trigger record_problem) waits for a look (addressReviewService). One email
+ * per new case with the case id; never names, the address or the person's note. No admin screen lists these cases
+ * yet, so the email says which API calls do.
+ *
+ * @param {object} params
+ * @param {string} params.caseId
+ * @param {object} [params.home] The Home row (city, state): city only is printed.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyRecordProblemToReview({ caseId, home }) {
+  const to = recipients();
+  if (!to.length || !caseId) return false;
+
+  const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
+  const subject = `[Pantopus] County record problem to review · ${where}`;
+  const resolve = `POST /api/admin/address-review/${caseId}/resolve`;
+  const text = [
+    'A household says something on its county record looks wrong. Nothing on their page changed.',
+    '',
+    `Case: ${caseId}`,
+    `Area: ${where}`,
+    '',
+    `Close it: ${resolve} with {"outcome": "approved"} if the record is wrong, "rejected" if it's right, or "dismissed".`,
+    'Open cases: GET /api/admin/address-review/queue',
+  ].join('\n');
+  const html = `<p>A household says something on its county record looks wrong. Nothing on their page changed.</p>
+<ul><li>Case: <code>${caseId}</code></li><li>Area: ${where}</li></ul>
+<p>Close it: <code>${resolve}</code></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: record problem email failed (non-fatal)', { caseId, error: err.message });
+    return false;
+  }
+}
+
 module.exports = { notifyClaimToReview, notifyClaimInfoSent, notifyReportToReview, notifyRemovalVoteToReview,
-  notifyAddressWatchCase, notifyProbationDisputeToReview, recipients };
+  notifyAddressWatchCase, notifyProbationDisputeToReview, notifyRecordProblemToReview, recipients };

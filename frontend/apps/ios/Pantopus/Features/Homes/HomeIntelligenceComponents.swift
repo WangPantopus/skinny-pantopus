@@ -543,7 +543,9 @@ struct PropertyValueCard: View {
                 }
                 .padding(.vertical, Spacing.s2)
             case let .loaded(value):
-                if let estimate = value.estimatedValue {
+                if let card = value.valueCard {
+                    recordBody(value, card: card)
+                } else if let estimate = value.estimatedValue {
                     loadedBody(value, estimate: estimate)
                 } else {
                     unavailableBody
@@ -555,7 +557,7 @@ struct PropertyValueCard: View {
 
     /// The record may say what the number is ("County market value").
     private var title: String {
-        if case let .loaded(value) = state, let title = value.valueTitle { return title }
+        if case let .loaded(value) = state, let title = value.valueCard?.title ?? value.valueTitle { return title }
         return "Estimated home value"
     }
 
@@ -581,6 +583,39 @@ struct PropertyValueCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.s3)
+    }
+
+    /// The server's card: what the county says, the last sale and the area's price change, each labeled.
+    private func recordBody(_ value: HomePropertyValueDTO, card: HomeValueCardDTO) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            if let number = card.value {
+                Text(number)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(Theme.Color.appText)
+            } else if let message = card.emptyMessage {
+                Text(message)
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HomeValueCardDetails(card: card)
+
+            if !details(value).isEmpty {
+                Text(details(value).joined(separator: " - "))
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+
+            if let source = card.source {
+                Text(source)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, Spacing.s1)
     }
 
     private func loadedBody(_ value: HomePropertyValueDTO, estimate: Double) -> some View {
@@ -642,6 +677,70 @@ struct PropertyValueCard: View {
         case "down": (.arrowDown, Theme.Color.error, "Trending down in your ZIP")
         case "flat": (.arrowRight, Theme.Color.appTextSecondary, "Flat trend in your ZIP")
         default: nil
+        }
+    }
+}
+
+/// The value card's rows, notes and the area's price change, as the server wrote
+/// them. The Home page and Place's Value block both draw these.
+struct HomeValueCardDetails: View {
+    let card: HomeValueCardDTO
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            ForEach(card.rows, id: \.id) { row in
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
+                    Text(row.label)
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Spacer(minLength: 0)
+                    Text(row.value)
+                        .pantopusTextStyle(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Theme.Color.appText)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+            ForEach(card.notes, id: \.self) { note in
+                Text(note)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let trend = card.areaTrend {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.s1) {
+                    Icon(icon(trend.direction), size: 14, color: color(trend.direction))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(trend.label)
+                            .pantopusTextStyle(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(color(trend.direction))
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let note = trend.note {
+                            Text(note)
+                                .pantopusTextStyle(.caption)
+                                .foregroundStyle(Theme.Color.appTextMuted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func icon(_ direction: String) -> PantopusIcon {
+        switch direction {
+        case "up": .arrowUp
+        case "down": .arrowDown
+        default: .arrowRight
+        }
+    }
+
+    private func color(_ direction: String) -> Color {
+        switch direction {
+        case "up": Theme.Color.success
+        case "down": Theme.Color.error
+        default: Theme.Color.appTextSecondary
         }
     }
 }

@@ -58,6 +58,19 @@ async function* layerRows(url, fields, { where = '1=1', oid = 'OBJECTID', pageSi
   }
 }
 
+/** A table's rows by page offset, for a table whose object ID column can't be paged on. */
+async function* offsetRows(url, fields, { where = '1=1', orderBy, pageSize = 1000 } = {}) {
+  let offset = 0;
+  for (;;) {
+    const query = new URLSearchParams({ where, outFields: fields.join(','), returnGeometry: 'false', orderByFields: orderBy, resultOffset: String(offset), resultRecordCount: String(pageSize), f: 'json' });
+    const page = await getJson(`${url}/query?${query}`, `A map table at row ${offset}`);
+    const features = page.features || [];
+    if (!features.length) break;
+    for (const feature of features) yield feature.attributes;
+    offset += features.length;
+  }
+}
+
 /** Rows of a Socrata dataset, in row order. */
 async function* socrataRows(domain, id, fields, { where, pageSize = 50000 } = {}) {
   let offset = 0;
@@ -68,6 +81,34 @@ async function* socrataRows(domain, id, fields, { where, pageSize = 50000 } = {}
     for (const row of page) yield row;
     offset += page.length;
     if (page.length < pageSize) break;
+  }
+}
+
+/** Rows of a CARTO table, in row order. */
+async function* cartoRows(base, table, fields, { where = 'true', pageSize = 20000 } = {}) {
+  let last = -1;
+  for (;;) {
+    const sql = `SELECT cartodb_id,${fields.join(',')} FROM ${table} WHERE (${where}) AND cartodb_id > ${last} ORDER BY cartodb_id LIMIT ${pageSize}`;
+    const page = await getJson(`${base}?${new URLSearchParams({ q: sql })}`, `A table after row ${last}`);
+    const rows = page.rows || [];
+    if (!rows.length) break;
+    for (const row of rows) {
+      last = row.cartodb_id;
+      yield row;
+    }
+  }
+}
+
+/** Rows of a CKAN datastore table, in row order. */
+async function* ckanRows(domain, resource, fields, { pageSize = 20000 } = {}) {
+  let offset = 0;
+  for (;;) {
+    const query = new URLSearchParams({ resource_id: resource, fields: fields.join(','), sort: '_id', limit: String(pageSize), offset: String(offset) });
+    const page = await getJson(`https://${domain}/api/3/action/datastore_search?${query}`, `A table at row ${offset}`);
+    const rows = page.result?.records || [];
+    for (const row of rows) yield row;
+    offset += rows.length;
+    if (rows.length < pageSize) break;
   }
 }
 
@@ -94,4 +135,4 @@ async function* cached(file, source) {
   }
 }
 
-module.exports = { getJson, layerRows, socrataRows, cached };
+module.exports = { getJson, layerRows, offsetRows, socrataRows, cartoRows, ckanRows, cached };
