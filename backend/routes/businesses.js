@@ -2305,15 +2305,43 @@ router.put('/:businessId/locations/:locationId/hours', verifyToken, validate(wee
 });
 
 
+// These routes use the service client, so permission on the business alone
+// does not scope a supplied location ID. Check both before reading or writing.
+async function requireHoursLocation(req, res, permission) {
+  const { businessId, locationId } = req.params;
+  // A malformed ID can't name a location, and the 503s below would tell the owner to retry it.
+  if ([businessId, locationId].some((id) => Joi.string().uuid().validate(id).error)) {
+    res.status(404).json({ error: 'Location not found' });
+    return false;
+  }
+  const access = await checkBusinessPermission(businessId, req.user.id, permission, { throwOnError: true });
+  if (!access.hasAccess) {
+    res.status(403).json({ error: 'No access to these hours' });
+    return false;
+  }
+
+  const { data: location, error } = await supabaseAdmin
+    .from('BusinessLocation')
+    .select('id')
+    .eq('id', locationId)
+    .eq('business_user_id', businessId)
+    .maybeSingle();
+  if (error) {
+    logger.error('Error checking hours location', { error: error.message });
+    res.status(503).json({ error: 'Location access could not be checked right now. Please try again.' });
+    return false;
+  }
+  if (!location) {
+    res.status(404).json({ error: 'Location not found' });
+    return false;
+  }
+  return true;
+}
+
 router.get('/:businessId/locations/:locationId/hours', verifyToken, async (req, res) => {
   try {
-    const { businessId, locationId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkBusinessPermission(businessId, userId, 'hours.view');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No access' });
-    }
+    const { locationId } = req.params;
+    if (!await requireHoursLocation(req, res, 'hours.view')) return;
 
     const { data: hours, error } = await supabaseAdmin
       .from('BusinessHours')
@@ -2329,20 +2357,15 @@ router.get('/:businessId/locations/:locationId/hours', verifyToken, async (req, 
     res.json({ hours: hours || [] });
   } catch (err) {
     logger.error('Get hours error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch hours' });
+    res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to fetch hours. Please try again.' });
   }
 });
 
 
 router.post('/:businessId/locations/:locationId/special-hours', verifyToken, validate(specialHoursSchema), async (req, res) => {
   try {
-    const { businessId, locationId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkBusinessPermission(businessId, userId, 'hours.edit');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No permission to edit hours' });
-    }
+    const { locationId } = req.params;
+    if (!await requireHoursLocation(req, res, 'hours.edit')) return;
 
     const body = req.body;
     const { data: specialHour, error } = await supabaseAdmin
@@ -2367,20 +2390,15 @@ router.post('/:businessId/locations/:locationId/special-hours', verifyToken, val
     res.status(201).json({ specialHour });
   } catch (err) {
     logger.error('Create special hours error', { error: err.message });
-    res.status(500).json({ error: 'Failed to create special hours' });
+    res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to create special hours. Please try again.' });
   }
 });
 
 
 router.get('/:businessId/locations/:locationId/special-hours', verifyToken, async (req, res) => {
   try {
-    const { businessId, locationId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkBusinessPermission(businessId, userId, 'hours.view');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No access' });
-    }
+    const { locationId } = req.params;
+    if (!await requireHoursLocation(req, res, 'hours.view')) return;
 
     const { data: specialHours, error } = await supabaseAdmin
       .from('BusinessSpecialHours')
@@ -2396,20 +2414,15 @@ router.get('/:businessId/locations/:locationId/special-hours', verifyToken, asyn
     res.json({ specialHours: specialHours || [] });
   } catch (err) {
     logger.error('Get special hours error', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch special hours' });
+    res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to fetch special hours. Please try again.' });
   }
 });
 
 
 router.delete('/:businessId/locations/:locationId/special-hours/:shId', verifyToken, async (req, res) => {
   try {
-    const { businessId, locationId, shId } = req.params;
-    const userId = req.user.id;
-
-    const access = await checkBusinessPermission(businessId, userId, 'hours.edit');
-    if (!access.hasAccess) {
-      return res.status(403).json({ error: 'No permission to edit hours' });
-    }
+    const { locationId, shId } = req.params;
+    if (!await requireHoursLocation(req, res, 'hours.edit')) return;
 
     const { error } = await supabaseAdmin
       .from('BusinessSpecialHours')
@@ -2425,7 +2438,7 @@ router.delete('/:businessId/locations/:locationId/special-hours/:shId', verifyTo
     res.json({ message: 'Special hours deleted' });
   } catch (err) {
     logger.error('Delete special hours error', { error: err.message });
-    res.status(500).json({ error: 'Failed to delete special hours' });
+    res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to delete special hours. Please try again.' });
   }
 });
 
