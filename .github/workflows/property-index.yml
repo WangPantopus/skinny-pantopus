@@ -40,7 +40,7 @@ on:
         required: false
         default: ""
       county:
-        description: "County FIPS (rollback); one or a comma separated list (switch, models; all refits every county)"
+        description: "County FIPS (rollback); one or a comma separated list (switch, models; all refits every county; build with accept_falls: the counties allowed to publish far fewer records, never a live one)"
         required: false
         default: ""
       state:
@@ -172,13 +172,16 @@ jobs:
           # Only a run someone starts by hand, and only when they say so.
           ACCEPT_FALLS: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && '--accept-falls' || '' }}
           MOVED: ${{ inputs.moved }}
+          # With accept_falls only, the counties someone names may publish far fewer records: a fix dropping records that
+          # shouldn't exist. publish.cjs logs both counts and never lets a live county through.
+          SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && inputs.county || '' }}
         run: |
           status=0
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
             # What built still publishes; the run ends failed so someone looks.
             node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || status=1
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS ${MOVED:+--moved "$MOVED"} || status=1
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS ${MOVED:+--moved "$MOVED"} ${SHRINK:+--accept-shrink-for "$SHRINK"} || status=1
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done
           exit $status
