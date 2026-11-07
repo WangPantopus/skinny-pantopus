@@ -97,8 +97,18 @@ enum MailSentWords {
         piece.toHousehold ? piece.toName : HolidayCardWords.firstName(piece.toName)
     }
 
+    /// A card by link's own words for a step; nil where they're the usual ones.
+    private static func linkTrailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String? {
+        switch step.step {
+        case "emailed": "Your link is ready"
+        case "joined": step.done ? "\(piece.toName) opened your link and has your card" : "Someone opens your link"
+        default: nil
+        }
+    }
+
     /// A step's words: "Sealed by you", "Delivered with Maya’s 7 a.m. mail" …
     static func trailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String {
+        if piece.byLink, let words = linkTrailTitle(step, piece: piece) { return words }
         let first = HolidayCardWords.possessive(recipientFirst(piece))
         let title = switch step.step {
         case "sealed": "Sealed by you"
@@ -107,9 +117,6 @@ enum MailSentWords {
         case "picked_up": "Picked up by the carrier"
         case "opens": "Opens on Christmas morning"
         // Once claimed, the name is whoever joined, not the address it went to.
-        case "emailed" where piece.byLink: "Your link is ready"
-        case "joined" where piece.byLink && !step.done: "Someone opens your link"
-        case "joined" where piece.byLink: "\(piece.toName) opened your link and has your card"
         case "emailed": "\(piece.isLetter ? "Sent" : "Emailed") to \(piece.status == .claimed ? "them" : piece.toName)"
         // Not yet: the drawing's words, as on the web and Android.
         case "joined" where !step.done: piece.isLetter ? "They claim your letter" : "They join Pantopus and have it"
