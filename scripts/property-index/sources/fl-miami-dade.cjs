@@ -2,7 +2,8 @@
 // Miami-Dade County, Florida: the Property Appraiser's Property Point View on the county's open data site. It gives this county the
 // bedrooms and baths the state's roll lacks. The county provides it "as is". Owner and mailing columns are in the layer and never asked
 // for. Florida's protected people's records are the Appraiser's to withhold; none of the owner columns are read here. ASSESSED_VAL_CUR
-// is the assessed value, capped by law, so it's never a market value. Florida's just value stays with the state's roll.
+// is the assessed value, capped by law, so it's never a market value. Florida's just value stays with the state's roll. The same roll, as the
+// Appraiser files it with the state (fl-roll.cjs), says what the point view doesn't: effective year built, buildings and tax district.
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
@@ -10,6 +11,7 @@ const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { countyRoll } = require('./fl-roll.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '12086';
@@ -88,7 +90,19 @@ async function* build({ work }) {
       records.push(record);
     }
   }
-  log(`${COUNTY}: ${records.length} folios, ${noAddress} without a street number`);
+  const roll = new Map();
+  for (const record of (await countyRoll(work, FIPS)).records) if (record.kind !== 'building') roll.set(record.facts.parcel_number, record.facts);
+  let joined = 0;
+  for (const record of records) {
+    const filed = roll.get(record.facts.parcel_number);
+    if (!filed) continue;
+    joined += 1;
+    const lives = record.kind === 'property' || record.kind === 'unit' || record.kind === 'building';
+    if (lives) put(record.facts, 'effective_year_built', filed.effective_year_built);
+    if (lives && filed.buildings_on_parcel > 1) record.facts.buildings_on_parcel = filed.buildings_on_parcel;
+    put(record.facts, 'tax_code_area', filed.tax_code_area);
+  }
+  log(`${COUNTY}: ${records.length} folios, ${noAddress} without a street number, ${joined} on the state's roll`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'FL', name: COUNTY, publisher: 'Miami-Dade County Property Appraiser', dataset: 'Property Point View, open data', method: 'county', source: 'fl-miami-dade', as_of: asOf, stale_after_days: 60, records,
