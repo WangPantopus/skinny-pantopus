@@ -46,7 +46,12 @@ struct MailSentPieceView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("mailSentPiece")
-        .modifier(CardTablePreviewCover(content: $tableContent, closeLabel: "Back to your card", isSender: true, sharesSealed: tableSharesSealed))
+        .modifier(CardTablePreviewCover(
+            content: $tableContent,
+            closeLabel: "Back to your card",
+            isSender: true,
+            sharesSealed: tableSharesSealed
+        ))
     }
 
     /// After "Take your card back?": gone from Sent, and back to it.
@@ -156,18 +161,6 @@ struct MailSentPieceView: View {
             } else if let error = viewModel.takeBackError {
                 errorLine(error)
             }
-        }
-    }
-
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(verbatim: title)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.66)
-                .textCase(.uppercase)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityAddTraits(.isHeader)
-            content()
         }
     }
 
@@ -284,17 +277,6 @@ struct MailSentPieceView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Sealed in wax red, with them in green, a card back unopened in grey,
-    /// the carrier and the email in ink (the web's colors).
-    private func dotColor(_ step: MailSentPiece.TrailStep) -> Color {
-        switch step.step {
-        case "sealed": MailPaper.wax
-        case "delivered", "joined", "opens": Theme.Color.success
-        case "returned": Theme.Color.appTextMuted
-        default: Theme.Color.appTextStrong
-        }
-    }
-
     /// "Changed your mind?" while it can still come back.
     private func takeBack(_ piece: MailSentPiece) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -347,6 +329,29 @@ struct MailSentPieceView: View {
 }
 
 private extension MailSentPieceView {
+    func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(verbatim: title)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.66)
+                .textCase(.uppercase)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .accessibilityAddTraits(.isHeader)
+            content()
+        }
+    }
+
+    /// Sealed in wax red, with them in green, a card back unopened in grey,
+    /// the carrier and the email in ink (the web's colors).
+    func dotColor(_ step: MailSentPiece.TrailStep) -> Color {
+        switch step.step {
+        case "sealed": MailPaper.wax
+        case "delivered", "joined", "opens": Theme.Color.success
+        case "returned": Theme.Color.appTextMuted
+        default: Theme.Color.appTextStrong
+        }
+    }
+
     func errorLine(_ text: String) -> some View {
         Text(verbatim: text)
             .font(.system(size: 14, weight: .medium))

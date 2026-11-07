@@ -129,7 +129,8 @@ struct HolidayCardLookStep: View {
     private var intro: String {
         if recipient.isEmail {
             if recipient.isLink {
-                return "The first person to open your link keeps the card. The page it opens never shows the card; they open it in Pantopus once they join."
+                return "The first person to open your link keeps the card. "
+                    + "The page it opens never shows the card; they open it in Pantopus once they join."
             }
             return "They aren’t on Pantopus yet. The email never shows the card; they open it in Pantopus once they join with this address."
         }
@@ -280,17 +281,7 @@ struct HolidayCardLookStep: View {
                 }
                 .padding(.top, 6)
                 if LaunchFeatures.cardTable {
-                    Button {
-                        tableContent = lookContent
-                    } label: {
-                        Text("Open it the way they will")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(HolidayCardDesk.link(scheme))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("sendCardLookOnTable")
+                    openOnTable
                 }
             }
             .padding(.top, Spacing.s2)
@@ -379,6 +370,21 @@ struct HolidayCardLookStep: View {
 // MARK: - The footer
 
 private extension HolidayCardLookStep {
+    /// "Open it the way they will", on a card by email or by link.
+    var openOnTable: some View {
+        Button {
+            tableContent = lookContent
+        } label: {
+            Text("Open it the way they will")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(HolidayCardDesk.link(scheme))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("sendCardLookOnTable")
+    }
+
     /// The card as it'll lie on the table, for "Open it the way they will".
     var lookContent: CardTableContent {
         CardTableContent(

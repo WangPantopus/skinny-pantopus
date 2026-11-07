@@ -70,7 +70,7 @@ struct CardTableScreen: View {
                     onClose: onClose,
                     onShare: canShare ? { isSharing = true } : nil
                 )
-                    .frame(width: screen.width, height: screen.height, alignment: .topLeading)
+                .frame(width: screen.width, height: screen.height, alignment: .topLeading)
             }
             .frame(width: screen.width, height: screen.height, alignment: .topLeading)
             .ignoresSafeArea()
