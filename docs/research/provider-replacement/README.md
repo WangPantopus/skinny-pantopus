@@ -69,6 +69,7 @@ landing built work first and D9. Open, with recommendations: D6-D8, D10-D12 and 
 | [statewide-inventory.md](statewide-inventory.md) | Every state's and territory's statewide parcel, assessment and building-fact files, ranked by homes gained beyond storage | Adding statewide sources (WP7) |
 | [other-routes.md](other-routes.md) | Records-law bulk copies, state tax departments, clearinghouses, federal sets, what changed for the 41 counties, bedrooms and baths | Choosing the next route |
 | [lookup-sites.md](lookup-sites.md) | One-home reads of county lookup sites: platforms, terms, robots, law by state, cost, and a recommendation for D2 | Deciding D2's open question |
+| [missing-facts.md](missing-facts.md) | Every route to fill records' missing facts, ranked by homes; what Zillow, Redfin and other listing sites and data vendors allow; what's filled | Filling bedrooms, baths and the rest |
 | [mail-pilot.md](mail-pilot.md) | The real-mail pilot for each printer | Running the pilot |
 | [HANDOFF.md](HANDOFF.md) | Where the work stands and the next steps | Continuing this work |
 
