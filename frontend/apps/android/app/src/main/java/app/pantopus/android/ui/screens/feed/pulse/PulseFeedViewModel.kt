@@ -46,6 +46,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -54,6 +55,9 @@ private const val MAX_HELD_POSTS = 100
 
 /** How long "Set an area" keeps looking for a slow first fix, in the background, once a read has given up on it. */
 private const val LATE_FIX_TIMEOUT_MILLIS = 30_000L
+
+/** How long a device fix found for Nearby serves later reads without looking again (a pull always looks again). */
+private const val DEVICE_FIX_REUSE_MILLIS = 5 * 60_000L
 
 private data class FeedArea(
     val latitude: Double?,
@@ -295,6 +299,9 @@ class PulseFeedViewModel
         private var longitude: Double? = null
         private var resolvedLatitude: Double? = null
         private var resolvedLongitude: Double? = null
+
+        /** When this view model last asked the device for its place and got it (wall-clock millis), or 0. */
+        private var resolvedAtMillis = 0L
         private var lateFix: Job? = null
 
         /** The last chosen-area read listed a Home, which Pulse falls back to when the feed sends no coordinates. */
@@ -380,6 +387,11 @@ class PulseFeedViewModel
         /** The screen collects own-post events only while visible; hidden feeds wait for their next entry. */
         val postChanges = postsRefresh.ticks
 
+        init {
+            // A block made elsewhere (a profile, a chat) takes that person's posts out of this list at once.
+            viewModelScope.launch { moderation.blockedUserIds.drop(1).collect { if (postsLoaded) rebuildLoadedState() } }
+        }
+
         /** Wire location coordinates from the host before the first load. */
         fun configureLocation(
             latitude: Double?,
@@ -416,12 +428,20 @@ class PulseFeedViewModel
 
         fun refresh() = fetch(isRefresh = true)
 
+        /** Bumped each time a read of the first page succeeds: the screen moves the "since you last looked" marker then. */
+        private val _currentReads = MutableStateFlow(0)
+        val currentReads: StateFlow<Int> = _currentReads.asStateFlow()
+
+        /** The posts on screen came from a read that succeeded, not a stored copy shown while a read is out or failed. */
+        private var postsAreCurrent = false
+
         /**
          * The Nearby posts are on screen: the person's "since you last looked" marker moves to now, at most every
-         * 5 minutes (AI assistant phase 2 contract §6.1), so the assistant's catch-up starts from here.
+         * 5 minutes (AI assistant phase 2 contract §6.1), so the assistant's catch-up starts from here. Only once a read
+         * brought them: a stored copy can be days old, and posts since then were never on screen.
          */
         fun markNearbySeen() {
-            if (_surface.value != FeedSurface.Pulse) return
+            if (_surface.value != FeedSurface.Pulse || !postsAreCurrent) return
             val userId = viewerId ?: return
             viewModelScope.launch { repo.markNearbySeen(userId) }
         }
@@ -1292,6 +1312,10 @@ class PulseFeedViewModel
                                 reconcileActions(response.posts, revision)
                             }
                             applyFirstPage(response, area, query, inPlace = !isRefresh)
+                            if (failure == null) {
+                                postsAreCurrent = true
+                                _currentReads.value++
+                            }
                             readOnPastEmptyFirstPage(failure)
                             if (response.requiresViewingLocation == true) keepLookingForFix()
                         }
@@ -1316,6 +1340,7 @@ class PulseFeedViewModel
             isRefresh: Boolean,
             quiet: Boolean,
         ) {
+            postsAreCurrent = false
             if (!quiet) {
                 heldPosts = emptyList()
                 heldFirstPage = null
@@ -1523,8 +1548,19 @@ class PulseFeedViewModel
         private suspend fun resolvedArea(force: Boolean = false): FeedArea =
             explicitCoordinates()?.let { (lat, lng) -> FeedArea(lat, lng) }
                 ?: viewingArea(force)
-                ?: (storedCoordinates() ?: awaitFreshCoordinates())?.let { (lat, lng) -> FeedArea(lat, lng) }
+                ?: deviceCoordinates(force)?.let { (lat, lng) -> FeedArea(lat, lng) }
                 ?: FeedArea(null, null)
+
+        /**
+         * Where the device is. A fix found here is reused for a few minutes, so coming back or a filter doesn't wait for
+         * location; a pull, or an older fix, looks again (the person may have moved), keeping the last fix if none comes.
+         */
+        private suspend fun deviceCoordinates(force: Boolean): Pair<Double, Double>? {
+            val stored = storedCoordinates()
+            val recent = System.currentTimeMillis() - resolvedAtMillis < DEVICE_FIX_REUSE_MILLIS
+            if (stored != null && recent && !force) return stored
+            return awaitFreshCoordinates() ?: stored
+        }
 
         /**
          * With no area chosen the server names the place it fell back to. When the feed looked around the device
@@ -1577,6 +1613,8 @@ class PulseFeedViewModel
             val coordinate = fresh ?: return null
             resolvedLatitude = coordinate.latitude
             resolvedLongitude = coordinate.longitude
+            // The provider's kept fix (under 2 minutes old) is reused as it is: only a new one starts the reuse window.
+            if (cached == null) resolvedAtMillis = System.currentTimeMillis()
             return coordinate.latitude to coordinate.longitude
         }
 
@@ -1592,6 +1630,7 @@ class PulseFeedViewModel
                     val fix = locationProvider.requestCurrent(timeoutMillis = LATE_FIX_TIMEOUT_MILLIS) ?: return@launch
                     resolvedLatitude = fix.latitude
                     resolvedLongitude = fix.longitude
+                    resolvedAtMillis = System.currentTimeMillis()
                     if ((_state.value as? PulseFeedUiState.Empty)?.needsArea == true) fetch()
                 }
         }
