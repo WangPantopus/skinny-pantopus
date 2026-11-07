@@ -23,9 +23,12 @@ const same = (a, b) => (a || '') === (b || '');
 // Equal, or one side doesn't say.
 const agrees = (a, b) => !a || !b || a === b;
 
+// Some rolls pad a house number to a fixed width ("00123"), and people don't. The sort key that finds a block already ignores it.
+const unpadded = (number) => String(number || '').replace(/^0+(?=\d)/, '');
+
 /** The records on this person's street: an exact reading of direction and type first, then any that only leave one out. */
 function onStreet(query, records) {
-  const here = records.filter((record) => record.address.number === query.number && record.address.name === query.name);
+  const here = records.filter((record) => unpadded(record.address.number) === unpadded(query.number) && record.address.name === query.name);
   const strict = here.filter(({ address }) => same(address.pre, query.pre) && same(address.suffix, query.suffix) && same(address.post, query.post));
   if (strict.length) return strict;
   return here.filter(({ address }) => agrees(address.pre, query.pre) && agrees(address.suffix, query.suffix) && agrees(address.post, query.post));
