@@ -20,6 +20,7 @@ struct MailSentPieceView: View {
     @State private var showBack = false
     /// "See it the way they did": the real moment, full screen.
     @State private var tableContent: CardTableContent?
+    @State private var tableSharesSealed = false
 
     init(viewModel: MailSentPieceViewModel, onBack: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
@@ -45,9 +46,10 @@ struct MailSentPieceView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("mailSentPiece")
-        .modifier(CardTablePreviewCover(content: $tableContent, isSender: true))
+        .modifier(CardTablePreviewCover(content: $tableContent, closeLabel: "Back to your card", isSender: true, sharesSealed: tableSharesSealed))
     }
 
+    /// After "Take your card back?": gone from Sent, and back to it.
     private func confirmTakeBack() {
         Task {
             guard await viewModel.takeBack() else { return }
@@ -105,11 +107,13 @@ struct MailSentPieceView: View {
         let first = MailSentWords.recipientFirst(piece)
         let envelope = MailPieceModel.sent(piece)
         let delivered = piece.status == .delivered || piece.status == .claimed
-        let waiting = piece.byEmail ? "Once they claim it" : "Addressed to \(first)"
+        let waiting = piece.byLink ? "Once someone opens your link" : (piece.byEmail ? "Once they claim it" : "Addressed to \(first)")
         let mailbox = delivered ? "In \(HolidayCardWords.possessive(first)) Mailbox" : waiting
         return VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "Your \(piece.isLetter ? "letter" : "card") to \(piece.toName)")
+                Text(verbatim: piece.byLink && piece.status != .claimed
+                    ? "Your card by link"
+                    : "Your \(piece.isLetter ? "letter" : "card") to \(piece.toName)")
                     .font(.system(size: 24, weight: .bold))
                     .tracking(-0.36)
                     .foregroundStyle(Theme.Color.appText)
@@ -123,6 +127,10 @@ struct MailSentPieceView: View {
             .padding(.top, Spacing.s1)
             section(mailbox) {
                 MailPieceView(model: envelope)
+                // While nobody has opened it, its link can still be copied.
+                if piece.byLink, piece.canTakeBack {
+                    CardTableLinkActions(cardId: piece.id, link: nil, fromName: envelope.from)
+                }
             }
             if piece.isLetter {
                 section("The letter you sent") {
@@ -132,15 +140,17 @@ struct MailSentPieceView: View {
                 section("The card you sent") { theCard(piece, envelope: envelope) }
             }
             if LaunchFeatures.cardTable, !piece.isLetter {
-                HolidayCardPaperButton(title: "See it the way they did", fullWidth: true) {
-                    tableContent = CardTableContent(sent: piece, from: envelope.from, mailedOn: envelope.postmarkDate)
+                let content = CardTableContent(sent: piece, from: envelope.from, mailedOn: envelope.postmarkDate)
+                VStack(spacing: 10) {
+                    HolidayCardPaperButton(title: "See it the way they did", fullWidth: true) {
+                        tableSharesSealed = piece.sealed
+                        tableContent = content
+                    }
+                    .accessibilityIdentifier("mailSentSeeIt")
+                    CardTableSentShareButton(content: content, sharesSealed: piece.sealed)
                 }
-                .accessibilityIdentifier("mailSentSeeIt")
             }
             trail(piece)
-            if piece.byLink, piece.canTakeBack {
-                CardTableCopyLinkAgain(cardId: piece.id)
-            }
             if piece.canTakeBack {
                 takeBack(piece)
             } else if let error = viewModel.takeBackError {

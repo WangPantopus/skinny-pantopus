@@ -16,6 +16,11 @@ struct CardTableScreen: View {
     let menuItems: [CardTableMenuItem]
     /// The person sent this card, so sharing talks about their own note.
     var isSender = false
+    /// A card you sent, still sealed for them: the surprise is theirs, so it shares as the sealed envelope.
+    var sharesSealed = false
+    var closeLabel = "Back to the Mailbox"
+    /// Off where there's nothing to share yet (Look it over).
+    var canShare = true
     let onClose: () -> Void
 
     @State private var isSharing = false
@@ -60,8 +65,11 @@ struct CardTableScreen: View {
                     menuItems: menuItems,
                     safeArea: safeArea,
                     contentWidth: layout.width,
-                    onClose: onClose
-                ) { isSharing = true }
+                    closeLabel: closeLabel,
+                    shareLabel: shareContent.sealed ? "Share the sealed card" : "Share this card",
+                    onClose: onClose,
+                    onShare: canShare ? { isSharing = true } : nil
+                )
                     .frame(width: screen.width, height: screen.height, alignment: .topLeading)
             }
             .frame(width: screen.width, height: screen.height, alignment: .topLeading)
@@ -76,7 +84,7 @@ struct CardTableScreen: View {
         .task { await model.prepare() }
         .sheet(isPresented: $isSharing) {
             if let art = model.art {
-                CardTableShareSheet(content: model.content, art: art, picture: model.picture, isSender: isSender)
+                CardTableShareSheet(content: shareContent, art: art, picture: model.picture, isSender: isSender)
             }
         }
         .onChange(of: isSharing) { _, sharing in model.setPaused(sharing) }
@@ -95,6 +103,12 @@ struct CardTableScreen: View {
             model.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
             model.refreshRunning()
         }
+    }
+
+    private var shareContent: CardTableContent {
+        var content = model.content
+        if sharesSealed { content.sealed = true }
+        return content
     }
 
     /// The finger on the table: down, moved, lifted.

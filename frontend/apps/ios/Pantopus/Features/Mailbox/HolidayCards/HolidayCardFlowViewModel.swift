@@ -65,6 +65,11 @@ enum HolidayCardRecipient: Hashable {
     var isLink: Bool {
         self == .link
     }
+
+    /// The name on the envelope: a card by link has none until someone opens it.
+    var envelopeName: String {
+        isLink ? "Their name" : name
+    }
 }
 
 /// The name search under "Who it's for".
@@ -163,9 +168,10 @@ final class HolidayCardFlowViewModel {
     private var searchTask: Task<Void, Never>?
     private var theirsTask: Task<Void, Never>?
 
-    init(api: APIClient = .shared, fromName: String) {
+    init(api: APIClient = .shared, fromName: String, designId: String? = nil) {
         self.api = api
         self.fromName = fromName
+        self.designId = designId
     }
 
     // MARK: - Reading
@@ -239,6 +245,8 @@ final class HolidayCardFlowViewModel {
     private func fetch() async {
         do {
             let response: HolidayCardsResponse = try await api.request(HolidayCardEndpoints.cards())
+            // A link can name a picture that isn't one of this year's: nothing is chosen then.
+            if let designId, !response.designs.contains(where: { $0.id == designId }) { self.designId = nil }
             state = .loaded(response)
         } catch {
             state = .error(message: Self.loadFailure(error))

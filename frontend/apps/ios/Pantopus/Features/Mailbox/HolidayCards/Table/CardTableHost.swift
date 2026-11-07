@@ -47,7 +47,7 @@ extension CardTableContent {
         self.mailedOn = mailedOn
         note = MailPieceModel.firstText(piece.note) ?? ""
         fromName = from
-        toName = piece.byLink && piece.status != .claimed ? "You" : piece.toName
+        toName = piece.byLink && piece.status != .claimed ? "Their name" : piece.toName
         sealed = false
         sealedUntil = nil
         sealedInDays = ""

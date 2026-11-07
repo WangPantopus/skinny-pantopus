@@ -52,7 +52,7 @@ struct HolidayCardLookStep: View {
         // Their name, or the address typed: never their own address.
         let shut = MailPieceModel(
             mail: preview.piece,
-            recipient: MailPieceRecipient(name: recipient.name, addressLine: nil),
+            recipient: MailPieceRecipient(name: recipient.envelopeName, addressLine: nil),
             opened: false
         )
         // Their mail comes at 7 a.m. where they live: the line their Mailbox
@@ -75,7 +75,7 @@ struct HolidayCardLookStep: View {
                 personSections
             }
         }
-        .modifier(CardTablePreviewCover(content: $tableContent))
+        .modifier(CardTablePreviewCover(content: $tableContent, closeLabel: "Back to Look it over"))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sendCardLook")
     }
@@ -129,7 +129,7 @@ struct HolidayCardLookStep: View {
     private var intro: String {
         if recipient.isEmail {
             if recipient.isLink {
-                return "Whoever opens your link first joins Pantopus to read it. The link never shows the card."
+                return "The first person to open your link keeps the card. The page it opens never shows the card; they open it in Pantopus once they join."
             }
             return "They aren’t on Pantopus yet. The email never shows the card; they open it in Pantopus once they join with this address."
         }
@@ -259,10 +259,16 @@ struct HolidayCardLookStep: View {
             if let page = preview.linkPage {
                 sectionLabel(recipient.isLink ? "The page your link opens" : "The page its link opens")
                     .padding(.top, 26)
-                HolidayCardLinkPagePicture(page: page)
-                    .padding(.top, Spacing.s2)
+                Group {
+                    if LaunchFeatures.cardTable {
+                        CardTableLinkPagePicture(page: page)
+                    } else {
+                        HolidayCardLinkPagePicture(page: page)
+                    }
+                }
+                .padding(.top, Spacing.s2)
             }
-            sectionLabel("After they join with that address")
+            sectionLabel(recipient.isLink ? "After they join" : "After they join with that address")
                 .padding(.top, 26)
             mailboxFrame(label: "In their Mailbox", showsLine: false) {
                 HStack(alignment: .top, spacing: Spacing.s3) {
@@ -273,6 +279,19 @@ struct HolidayCardLookStep: View {
                         .accessibilityLabel("On the back: \(note)")
                 }
                 .padding(.top, 6)
+                if LaunchFeatures.cardTable {
+                    Button {
+                        tableContent = lookContent
+                    } label: {
+                        Text("Open it the way they will")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(HolidayCardDesk.link(scheme))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("sendCardLookOnTable")
+                }
             }
             .padding(.top, Spacing.s2)
         }
@@ -373,7 +392,7 @@ private extension HolidayCardLookStep {
             mailedOn: envelope.postmarkDate,
             note: note,
             fromName: from,
-            toName: recipient.isLink ? "You" : recipient.name,
+            toName: recipient.envelopeName,
             sealed: false,
             sealedUntil: nil,
             sealedInDays: "",
@@ -391,7 +410,7 @@ struct HolidayCardLookFooter: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(HolidayCardWords.sealNote(byEmail: byEmail))
+            Text(viewModel.recipient?.isLink == true ? HolidayCardWords.sealNoteByLink : HolidayCardWords.sealNote(byEmail: byEmail))
                 .font(.system(size: 13))
                 .foregroundStyle(MailPaper.cardTextSoft)
                 .fixedSize(horizontal: false, vertical: true)

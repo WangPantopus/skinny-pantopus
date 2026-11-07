@@ -26,8 +26,12 @@ struct CardTableControls: View {
     /// Top and sides of the safe area, and how much the words and buttons take (measured by the screen).
     let safeArea: EdgeInsets
     let contentWidth: CGFloat
+    /// What ✕ says it does.
+    let closeLabel: String
+    let shareLabel: String
     let onClose: () -> Void
-    let onShare: () -> Void
+    /// Nil where there's nothing to share yet (Look it over).
+    let onShare: (() -> Void)?
 
     @ScaledMetric(relativeTo: .title3) private var wordsSize: CGFloat = 18
     @ScaledMetric(relativeTo: .subheadline) private var primarySize: CGFloat = 15
@@ -52,10 +56,12 @@ struct CardTableControls: View {
 
     private var topRow: some View {
         HStack(spacing: 8) {
-            CardTableRoundButton(icon: .x, label: "Back to the Mailbox", identifier: "cardTableClose", action: onClose)
+            CardTableRoundButton(icon: .x, label: closeLabel, identifier: "cardTableClose", action: onClose)
             Spacer(minLength: 0)
             if model.showsTopRight {
-                CardTableRoundButton(icon: .share, label: "Share this card", identifier: "cardTableShare", action: onShare)
+                if let onShare {
+                    CardTableRoundButton(icon: .share, label: shareLabel, identifier: "cardTableShare", action: onShare)
+                }
                 CardTableRoundButton(icon: .moreHorizontal, label: "More", identifier: "cardTableMore") {
                     model.menuOpen.toggle()
                 }

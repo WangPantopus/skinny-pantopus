@@ -63,6 +63,7 @@ struct HolidayCardFlowView: View {
     /// What the header says and whether the dots show.
     private var heading: (title: String, dots: HolidayCardStep?) {
         guard let cards = viewModel.cards else { return ("Christmas cards", nil) }
+        if viewModel.step == .sent, viewModel.sent?.byLink == true { return ("Your card is ready.", nil) }
         if viewModel.step != .sent, viewModel.today != nil { return ("Today’s card", nil) }
         if !cards.open, viewModel.step != .sent { return ("Christmas cards", nil) }
         return (viewModel.step.title, viewModel.step == .sent ? nil : viewModel.step)
@@ -135,7 +136,7 @@ struct HolidayCardFlowView: View {
                 viewModel: viewModel,
                 card: sent,
                 cards: cards,
-                title: "On its way",
+                title: sent.byLink ? "Your card" : "On its way",
                 onDone: onClose,
                 onSeeInSent: onSeeInSent.map { open in { open(sent.id) } }
             )

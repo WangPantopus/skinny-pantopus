@@ -89,8 +89,10 @@ enum HolidayCardWords {
         if card.status == "withdrawn" { return "You took this card back." }
         if card.byLink {
             if card.status == "claimed" { return "\(who) opened your link and has your card." }
-            if card.status == "expired" { return "Nobody opened your link in 90 days. Your card stays in Sent." }
-            return "Waiting for someone to open your link."
+            if card.status == "expired" { return "Nobody opened your link in 90 days." }
+            return card.arrival == .sealedChristmas
+                ? "It waits for someone to open your link and join. Then it’s in their mailbox and opens on Christmas morning."
+                : "It waits for someone to open your link and join."
         }
         if card.byEmail {
             if card.status == "claimed" { return "\(who) joined Pantopus and has your card." }
@@ -162,7 +164,7 @@ enum HolidayCardWords {
         case .sealedChristmas where recipient.isLink:
             return (
                 "Sealed until Christmas",
-                "Once someone opens your link and joins, it waits in their mailbox, sealed until Christmas morning."
+                "Whoever opens your link and joins gets it now, with a “Do not open until Christmas” seal. It opens on December 25."
             )
         case .sealedChristmas where recipient.isEmail:
             return (
@@ -180,7 +182,7 @@ enum HolidayCardWords {
             return ("On Christmas morning", "\(shortDay(cards.christmasMorningAt, calendar: calendar)), with the 7 a.m. mail.")
         case .now:
             if recipient.isLink {
-                return ("Right away", "Whoever opens your link first joins Pantopus and opens it right away.")
+                return ("Right away", "Whoever opens your link can open the card as soon as they join.")
             }
             return ("Right away, by email", "They get an email now and can open it once they join with that address.")
         }
@@ -191,6 +193,8 @@ enum HolidayCardWords {
     static func sealNote(byEmail: Bool) -> String {
         byEmail ? "You can take it back until they open it." : "You can take it back until the carrier picks it up at 7 a.m. their time."
     }
+
+    static let sealNoteByLink = "You can take it back until someone opens it."
 
     /// A caption as a sentence for VoiceOver: most end in a full stop or a
     /// question mark already.

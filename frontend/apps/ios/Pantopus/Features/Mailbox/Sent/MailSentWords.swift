@@ -14,7 +14,9 @@ import Foundation
 enum MailSentWords {
     /// "To Maya O. · Christmas card", or "To m***@example.com · by email".
     static func toLine(_ piece: MailSentPiece) -> String {
-        if piece.byLink, piece.status != .claimed { return "To whoever opens your link" }
+        if piece.byLink {
+            return piece.status == .claimed ? "To \(piece.toName) · by link" : "To whoever opens your link"
+        }
         return "To \(piece.toName) · \(piece.isLetter ? "Letter" : (piece.byEmail ? "by email" : "Christmas card"))"
     }
 
@@ -60,9 +62,9 @@ enum MailSentWords {
     /// A card by link, where it stands; nil when the usual words fit (taken back).
     static func linkStatusLine(_ piece: MailSentPiece) -> String? {
         switch piece.status {
-        case .claimed: "\(piece.toName) opened your link and has your card."
-        case .expired: "Nobody opened your link in 90 days."
-        case .emailWaiting: "Waiting for someone to open your link."
+        case .claimed: "\(recipientFirst(piece)) opened your link and has your card"
+        case .expired: "Nobody opened your link in 90 days"
+        case .emailWaiting: "Waiting for someone to open your link"
         default: nil
         }
     }
@@ -100,15 +102,16 @@ enum MailSentWords {
     /// A card by link's own words for a step; nil where they're the usual ones.
     private static func linkTrailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String? {
         switch step.step {
-        case "emailed": "Your link is ready"
-        case "joined": step.done ? "\(piece.toName) opened your link and has your card" : "Someone opens your link"
+        case "emailed": "Your link was ready"
+        case "joined": step.done ? "\(recipientFirst(piece)) opened your link and has your card" : "Someone opens your link"
+        case "returned": "Nobody opened your link in 90 days"
         default: nil
         }
     }
 
     /// A step's words: "Sealed by you", "Delivered with Maya’s 7 a.m. mail" …
     static func trailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String {
-        if piece.byLink, let words = linkTrailTitle(step, piece: piece) { return words }
+        if piece.byLink, let words = linkTrailTitle(step, piece: piece) { return step.done ? words : "\(words) · not yet" }
         let first = HolidayCardWords.possessive(recipientFirst(piece))
         let title = switch step.step {
         case "sealed": "Sealed by you"
@@ -172,7 +175,7 @@ extension MailPieceModel {
             trust: .neighbor,
             from: MailPieceModel.firstText(piece.envelope.from) ?? "You",
             fromLine: nil,
-            to: piece.toName,
+            to: piece.byLink && piece.status != .claimed ? "Their name" : piece.toName,
             toLine: nil,
             note: nil,
             postmarkTown: nil,
