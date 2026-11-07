@@ -23,28 +23,12 @@ public enum AppLockCapability: String, Sendable {
     }
 }
 
-/// Per-user answer to the one-time "turn on app lock?" offer made after an
-/// interactive sign-in. Persisted so the offer is made exactly once per
-/// account, never on every launch. Mirrors RN's
-/// `AppLockSetupPromptState` (`src/lib/biometrics.ts:10`) and the Android
-/// `AppLockManager.SetupPromptState`.
-public enum AppLockSetupPromptState: String, Sendable {
-    /// Never answered — the prompt is still owed.
-    case pending
-    /// The user said "Not Now" (or the attempt failed) — never ask again.
-    case declined
-    /// App lock is on; nothing left to offer.
-    case enabled
-}
-
-/// Which surface asked to enable app lock. Only the post-login offer
-/// records a `declined` answer when the user backs out — turning the
-/// preference on from Settings and cancelling the biometric sheet must not
-/// burn the one-time prompt. Mirrors RN's `enableAppLock(source)`
-/// (`src/contexts/AppLockContext.tsx:118`).
-public enum AppLockEnableSource: Sendable {
-    case settings
-    case postLoginPrompt
+/// The app came back from the background, and how long it was gone. Sensitive
+/// screens read it: they ask again after a long enough absence. Mirrors Android's
+/// `AppLockManager.ForegroundReturn`.
+public struct AppForegroundReturn: Equatable, Sendable {
+    let count: UInt
+    public let awayFor: TimeInterval
 }
 
 /// Outcome of a one-shot re-auth gate in front of an irreversible action
@@ -71,12 +55,8 @@ public final class AppLockManager {
     public private(set) var biometricLabel = "Biometric"
     public private(set) var preferenceEnabled = false
     public private(set) var lastError: String?
-
-    /// Per-user answer to the one-time post-login "turn on app lock?" offer.
-    /// `nil` while signed out. Hydrated by `configure(userID:)` from the same
-    /// per-user `UserDefaults` namespace as the preference itself. Mirrors
-    /// RN's `AppLockContext.setupPromptState`.
-    public private(set) var setupPromptState: AppLockSetupPromptState?
+    /// The last time the app came back from the background.
+    public private(set) var foregroundReturn: AppForegroundReturn?
 
     /// Immediate-on-resume today; persisted as a number so 1/15 minute choices
     /// can be added without migrating the per-user preference format.
@@ -86,12 +66,12 @@ public final class AppLockManager {
     }
 
     private let defaults: UserDefaults
-    /// Home of the `enabled` preference (`SecureStoreKey.appLockEnabled(uid)`).
+    /// Home of the lock's on/off preference (`SecureStoreKey.appLockOnLeave(uid)`).
     /// The Keychain survives an app delete + reinstall, `UserDefaults` does
     /// not — and the design requires a locked account to come back locked
     /// (design §8 "AppLockManager pref → Keychain"). The other, cosmetic
-    /// fields (`setupPrompt`, `lockAfterMs`, `backgroundAt`, `unlockedAt`)
-    /// stay in `UserDefaults`.
+    /// fields (`lockAfterMs`, `backgroundAt`, `unlockedAt`) stay in
+    /// `UserDefaults`.
     private let secureStore: any SecureStore
     private let makeContext: () -> LAContext
     private var userID: String?
@@ -100,17 +80,16 @@ public final class AppLockManager {
 
     /// RN's `SENSITIVE_AUTH_GRACE_MS` (`contexts/AppLockContext.tsx:32`) —
     /// a screen guard that ran a successful check within this window lets
-    /// the next money surface straight through.
+    /// the next sensitive screen straight through.
     public static let sensitiveAuthGrace: TimeInterval = 5 * 60
 
     /// In-memory (never persisted, exactly like RN's `useRef`) timestamp of
-    /// the last *successful* sensitive-action check. Feeds
-    /// `isWithinSensitiveGracePeriod(_:)`.
+    /// the last *successful* sensitive-action check, moved up when someone
+    /// leaves a sensitive screen. Feeds `isWithinSensitiveGracePeriod(_:)`.
     private var lastSensitiveAuthAt: Date?
-    /// When a sensitive action was last verified on this account. The one-time
-    /// app-lock offer follows the first one: right after sign-in it was the
-    /// third prompt in a row (notifications, Save Password, then this).
-    public private(set) var sensitiveActionVerifiedAt: Date?
+    /// The sensitive-screen check under way: guards that ask while it is up
+    /// share it, so two of them never raise two prompts.
+    private var sensitiveScreenCheck: Task<SensitiveActionOutcome, Never>?
 
     /// Set by `appDidEnterBackground()`, consumed by `appDidBecomeActive()`.
     /// Mirrors Android's `onStop` → `onStart` pairing so a foreground pass
@@ -142,7 +121,7 @@ public final class AppLockManager {
         guard self.userID != userID else { return }
         identityGeneration &+= 1
         lastSensitiveAuthAt = nil
-        sensitiveActionVerifiedAt = nil
+        sensitiveScreenCheck = nil
         isPrompting = false
         backgroundedWhilePrompting = false
         self.userID = userID
@@ -151,38 +130,15 @@ public final class AppLockManager {
         guard let userID else {
             preferenceEnabled = false
             isLocked = false
-            setupPromptState = nil
             return
         }
+        forgetRetiredLockSettings(userID: userID)
         preferenceEnabled = readEnabledPreference(userID: userID)
-        setupPromptState = AppLockSetupPromptState(
-            rawValue: defaults.string(forKey: key("setupPrompt", userID)) ?? ""
-        ) ?? .pending
         refreshCapability()
         autoDisableForUnavailableCapability()
-        // RN's "sync setup prompt state with preferences" effect
-        // (`AppLockContext.tsx:395`): a user who already turned the lock on
-        // is never offered it again.
-        if preferenceEnabled, setupPromptState == .pending {
-            persistSetupPromptState(.enabled)
-        }
         if preferenceEnabled {
             isLocked = true
         }
-    }
-
-    /// Record the user's answer to the one-time post-login offer.
-    /// No-op while signed out (there is no per-user namespace to write to).
-    private func persistSetupPromptState(_ next: AppLockSetupPromptState) {
-        guard let userID else { return }
-        defaults.set(next.rawValue, forKey: key("setupPrompt", userID))
-        setupPromptState = next
-    }
-
-    /// "Not Now" on the post-login offer — burn the prompt for this user.
-    /// Mirrors RN `AppLockContext.dismissSetupPrompt`.
-    public func dismissSetupPrompt() {
-        persistSetupPromptState(.declined)
     }
 
     /// The app left the foreground.
@@ -212,30 +168,29 @@ public final class AppLockManager {
         if preferenceEnabled {
             isLocked = true
             attemptedCurrentLock = false
+            lastError = nil
         }
     }
 
     public func appDidBecomeActive() {
         guard didEnterBackground else { return }
         didEnterBackground = false
-        guard userID != nil, preferenceEnabled else { return }
-        let elapsedMs: Int = if let userID,
-                                let backgroundAt = defaults.object(forKey: key("backgroundAt", userID)) as? TimeInterval {
-            Int(max(0, Date().timeIntervalSince1970 - backgroundAt) * 1000)
+        guard let userID else { return }
+        let elapsed: TimeInterval = if let backgroundAt = defaults.object(forKey: key("backgroundAt", userID)) as? TimeInterval {
+            max(0, Date().timeIntervalSince1970 - backgroundAt)
         } else {
             0
         }
-        if elapsedMs >= lockAfterMs {
+        foregroundReturn = AppForegroundReturn(count: (foregroundReturn?.count ?? 0) &+ 1, awayFor: elapsed)
+        guard preferenceEnabled else { return }
+        if Int(elapsed * 1000) >= lockAfterMs {
             isLocked = true
         }
     }
 
-    /// - Parameter source: `.postLoginPrompt` records a `declined` answer on
-    ///   every non-success path so the one-time offer is never repeated —
-    ///   RN's `enableAppLock('post_login_prompt')`
-    ///   (`AppLockContext.tsx:118-198`). `.settings` (the default) leaves the
-    ///   prompt state untouched on failure.
-    public func setEnabled(_ enabled: Bool, source: AppLockEnableSource = .settings) async -> Bool {
+    /// Turns the whole-app lock (the "Lock Pantopus when I leave the app"
+    /// switch) on or off. Sensitive screens ask either way.
+    public func setEnabled(_ enabled: Bool) async -> Bool {
         guard let userID else { return false }
         if !enabled {
             writeEnabledPreference(false, userID: userID)
@@ -248,33 +203,31 @@ public final class AppLockManager {
         refreshCapability()
         guard capability == .available else {
             autoDisableForUnavailableCapability()
-            if source == .postLoginPrompt { persistSetupPromptState(.declined) }
             return false
         }
         let generation = identityGeneration
         let succeeded = await authenticate(reason: "Turn on app lock for Pantopus")
-        guard generation == identityGeneration else { return false }
-        guard succeeded else {
-            if source == .postLoginPrompt { persistSetupPromptState(.declined) }
-            return false
-        }
+        guard generation == identityGeneration, succeeded else { return false }
         writeEnabledPreference(true, userID: userID)
         defaults.set(0, forKey: key("lockAfterMs", userID))
         preferenceEnabled = true
         isLocked = false
         recordUnlock()
-        // Turning the lock on — from anywhere — resolves the one-time offer.
-        persistSetupPromptState(.enabled)
         return true
     }
 
+    /// - Parameter automatic: the try that needs no tap. The lock goes up as
+    ///   the app leaves, when iOS refuses to ask ("User interaction required"),
+    ///   so it waits for the app to come back (`appDidBecomeActive()`, then the
+    ///   scene's `.active`) and doesn't use up the one try on its way out.
     public func unlockIfNeeded(automatic: Bool = false) async {
         guard isLocked, preferenceEnabled, userID != nil, !isPrompting else { return }
-        if automatic && attemptedCurrentLock { return }
+        if automatic, didEnterBackground || attemptedCurrentLock { return }
         attemptedCurrentLock = true
         if await authenticate(reason: "Unlock Pantopus") {
             isLocked = false
             lastError = nil
+            lastSensitiveAuthAt = Date()
             recordUnlock()
         }
     }
@@ -305,7 +258,6 @@ public final class AppLockManager {
         }
         if verified {
             lastSensitiveAuthAt = Date()
-            sensitiveActionVerifiedAt = lastSensitiveAuthAt
             return .verified
         }
         let message = lastError ?? "We couldn't verify your identity. Please try again."
@@ -315,6 +267,7 @@ public final class AppLockManager {
     /// The single string `message(for:)` produces for every user- /
     /// system-initiated cancel, matched by `verifySensitiveAction`.
     static let cancelledMessage = "Authentication was cancelled."
+    private static let couldNotCheckMessage = "Couldn't check it's you just now. Try again."
 
     public func clearTransientState() {
         identityGeneration &+= 1
@@ -327,7 +280,7 @@ public final class AppLockManager {
         userID = nil
         preferenceEnabled = false
         lastSensitiveAuthAt = nil
-        setupPromptState = nil
+        sensitiveScreenCheck = nil
     }
 
     public func refreshCapability() {
@@ -391,7 +344,7 @@ public final class AppLockManager {
             return false
         } catch {
             guard generation == identityGeneration else { return false }
-            lastError = error.localizedDescription
+            lastError = Self.couldNotCheckMessage
             return false
         }
     }
@@ -412,30 +365,24 @@ public final class AppLockManager {
         "appLock.\(userID).\(field)"
     }
 
-    // MARK: - `enabled` preference (Keychain-backed)
+    // MARK: - On/off preference (Keychain-backed)
 
-    /// Read the per-user `enabled` flag from the Keychain. One-time
-    /// migration: a value that only exists in `UserDefaults` (written by a
-    /// build that pre-dates persistent login) is copied into the Keychain
-    /// and then removed from `UserDefaults`, so the Keychain is the single
-    /// source of truth from then on.
     private func readEnabledPreference(userID: String) -> Bool {
-        let keychainKey = SecureStoreKey.appLockEnabled(userID)
-        if let stored = secureStore.get(keychainKey) {
-            return stored == "1"
-        }
-        let legacyKey = key("enabled", userID)
-        guard defaults.object(forKey: legacyKey) != nil else { return false }
-        let legacy = defaults.bool(forKey: legacyKey)
-        try? secureStore.set(legacy ? "1" : "0", for: keychainKey)
-        defaults.removeObject(forKey: legacyKey)
-        return legacy
+        secureStore.get(SecureStoreKey.appLockOnLeave(userID)) == "1"
     }
 
     private func writeEnabledPreference(_ enabled: Bool, userID: String) {
-        try? secureStore.set(enabled ? "1" : "0", for: SecureStoreKey.appLockEnabled(userID))
-        // Never leave a stale legacy copy behind.
+        try? secureStore.set(enabled ? "1" : "0", for: SecureStoreKey.appLockOnLeave(userID))
+    }
+
+    /// The old switch and its one-time offer said "sensitive actions" and locked
+    /// the whole app (founder, 2026-11-06). Sensitive screens now always ask, so
+    /// nobody keeps the whole-app lock from that promise: its settings are
+    /// dropped, and only the renamed switch turns it on.
+    private func forgetRetiredLockSettings(userID: String) {
+        try? secureStore.delete(SecureStoreKey.retiredAppLockEnabled(userID))
         defaults.removeObject(forKey: key("enabled", userID))
+        defaults.removeObject(forKey: key("setupPrompt", userID))
     }
 
     /// Whether app lock is turned on for `userID` — readable *before*
@@ -446,8 +393,8 @@ public final class AppLockManager {
 
     /// Forget the per-user preference (account deletion / "Not you? Remove").
     public func clearPreference(forUserID userID: String) {
-        try? secureStore.delete(SecureStoreKey.appLockEnabled(userID))
-        defaults.removeObject(forKey: key("enabled", userID))
+        try? secureStore.delete(SecureStoreKey.appLockOnLeave(userID))
+        forgetRetiredLockSettings(userID: userID)
     }
 
     private static func capability(for error: NSError?) -> AppLockCapability {
@@ -468,7 +415,8 @@ public final class AppLockManager {
         case .passcodeNotSet: "Set a device passcode to use app lock."
         case .biometryNotEnrolled: "Enroll biometrics in Device Settings."
         case .biometryNotAvailable: "Biometric authentication is not available."
-        default: error.localizedDescription
+        // Never iOS's own wording ("User interaction required.").
+        default: couldNotCheckMessage
         }
     }
 }
@@ -478,7 +426,19 @@ public final class AppLockManager {
 public final class CapturePrivacyManager {
     public static let shared = CapturePrivacyManager()
     public private(set) var isCaptured = false
-    public var coversAppSwitcher = false
+    /// The app is leaving, or isn't in front: what's private has to be covered
+    /// before iOS takes the app switcher's picture.
+    public var coversAppSwitcher = false {
+        didSet { syncAppSwitcherCover() }
+    }
+
+    /// Every screen is private: signed in with the whole-app lock on.
+    public var coversWholeApp = false {
+        didSet { syncAppSwitcherCover() }
+    }
+
+    /// Screens showing that say they are private (`hiddenInAppSwitcher()`).
+    private var privateScreensShowing = 0
     private var observer: NSObjectProtocol?
 
     private init() {
@@ -489,6 +449,24 @@ public final class CapturePrivacyManager {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.isCaptured = Self.screenIsCaptured }
+        }
+    }
+
+    func privateScreenAppeared() {
+        privateScreensShowing += 1
+        syncAppSwitcherCover()
+    }
+
+    func privateScreenDisappeared() {
+        privateScreensShowing = max(0, privateScreensShowing - 1)
+        syncAppSwitcherCover()
+    }
+
+    private func syncAppSwitcherCover() {
+        if coversAppSwitcher, coversWholeApp || privateScreensShowing > 0 {
+            AppSwitcherCoverPresenter.shared.present()
+        } else {
+            AppSwitcherCoverPresenter.shared.dismiss()
         }
     }
 
@@ -504,18 +482,46 @@ public struct SecureScreenPrivacyModifier: ViewModifier {
     let active: Bool
 
     public func body(content: Content) -> some View {
-        content.overlay {
-            if active && privacy.isCaptured {
-                SecurityPrivacyOverlay()
-                    .accessibilityIdentifier("secureScreenPrivacyOverlay")
+        content
+            .overlay {
+                if active && privacy.isCaptured {
+                    SecurityPrivacyOverlay()
+                        .accessibilityIdentifier("secureScreenPrivacyOverlay")
+                }
             }
-        }
+            .hiddenInAppSwitcher(active: active)
+    }
+}
+
+/// Counts this screen among the private ones while it shows.
+private struct AppSwitcherHiddenModifier: ViewModifier {
+    @State private var isCounted = false
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                guard active, !isCounted else { return }
+                isCounted = true
+                CapturePrivacyManager.shared.privateScreenAppeared()
+            }
+            .onDisappear {
+                guard isCounted else { return }
+                isCounted = false
+                CapturePrivacyManager.shared.privateScreenDisappeared()
+            }
     }
 }
 
 public extension View {
+    /// Money and codes: hidden in the app switcher and while the screen is recorded or mirrored.
     func sensitiveScreen(active: Bool = true) -> some View {
         modifier(SecureScreenPrivacyModifier(active: active))
+    }
+
+    /// Hidden in the app switcher only: a letter or a card can still be recorded or screenshotted to share.
+    func hiddenInAppSwitcher(active: Bool = true) -> some View {
+        modifier(AppSwitcherHiddenModifier(active: active))
     }
 }
 
@@ -536,9 +542,8 @@ public struct SecurityPrivacyOverlay: View {
 /// Cover raised before iOS snapshots the app for the app switcher.
 ///
 /// Android has no drawn equivalent: there the recents thumbnail is
-/// suppressed by `FLAG_SECURE`, which the host window holds under exactly
-/// the same condition (signed in with app lock on) — see
-/// `SecureWindowController.setPrivacyHold`.
+/// suppressed by the host window, under the same conditions (signed in with
+/// app lock on, or a private screen showing) — see `SecureWindowController`.
 public struct AppSwitcherPrivacyOverlay: View {
     public init() {}
 
@@ -655,9 +660,46 @@ public final class AppLockWindowPresenter {
         window = nil
     }
 
-    private static func hostScene() -> UIWindowScene? {
+    /// A sheet or a full-screen cover is up, over whatever view asks.
+    static var isSomethingPresented: Bool {
+        hostScene()?.windows.contains { $0.rootViewController?.presentedViewController != nil } ?? false
+    }
+
+    fileprivate static func hostScene() -> UIWindowScene? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    }
+}
+
+/// Hosts `AppSwitcherPrivacyOverlay` in its own window for the same reason as
+/// the lock's seal: a window outranks a sheet a private screen has open.
+@MainActor
+final class AppSwitcherCoverPresenter {
+    static let shared = AppSwitcherCoverPresenter()
+
+    private static let coverWindowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue + 2)
+
+    private var window: UIWindow?
+
+    private init() {}
+
+    func present() {
+        guard window == nil, let scene = AppLockWindowPresenter.hostScene() else { return }
+        let host = UIHostingController(
+            rootView: AppSwitcherPrivacyOverlay().accessibilityIdentifier("appSwitcherPrivacyOverlay")
+        )
+        host.view.backgroundColor = .clear
+        let coverWindow = UIWindow(windowScene: scene)
+        coverWindow.windowLevel = Self.coverWindowLevel
+        coverWindow.rootViewController = host
+        coverWindow.isHidden = false
+        window = coverWindow
+    }
+
+    func dismiss() {
+        window?.isHidden = true
+        window?.rootViewController = nil
+        window = nil
     }
 }
 
@@ -736,7 +778,21 @@ public extension AppLockManager {
         if capability == .available, isWithinSensitiveGracePeriod(gracePeriod) {
             return .verified
         }
-        return await verifySensitiveAction(reason: reason)
+        if let check = sensitiveScreenCheck { return await check.value }
+        let generation = identityGeneration
+        let check = Task { await verifySensitiveAction(reason: reason) }
+        sensitiveScreenCheck = check
+        let outcome = await check.value
+        if generation == identityGeneration { sensitiveScreenCheck = nil }
+        return outcome
+    }
+
+    /// Someone was on a sensitive screen until now: the grace runs from here,
+    /// not from their last check, so a long read doesn't ask again on the way
+    /// back from a quick look at another tab.
+    func noteSensitiveScreenLeft() {
+        guard lastSensitiveAuthAt != nil else { return }
+        lastSensitiveAuthAt = Date()
     }
 
     /// `true` when a successful sensitive-action check happened inside the

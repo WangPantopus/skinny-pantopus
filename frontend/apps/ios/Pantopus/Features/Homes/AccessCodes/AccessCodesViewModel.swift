@@ -30,6 +30,11 @@ enum AccessCodesChip {
 }
 
 /// Stable a11y identifiers used by the screen + tests on both platforms.
+/// Door codes ask who's holding the phone first (founder, 2026-11-06).
+enum AccessCodesCopy {
+    static let guardReason = "Verify to see access codes"
+}
+
 enum AccessCodesA11y {
     static let screen = "accessCodes_screen"
     static let row = "accessCodes_row"

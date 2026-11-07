@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ChangeLocationModal from '@/components/hub/ChangeLocationModal';
@@ -9,11 +9,7 @@ import {
   ArrowLeft,
   Briefcase,
   Calendar,
-  Cloud,
-  CloudDrizzle,
-  CloudLightning,
   CloudRain,
-  CloudSnow,
   Clock,
   CreditCard,
   Droplets,
@@ -38,25 +34,14 @@ import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTo
 import { claimInReviewNote, claimsInReview, myClaimsQuery } from '@/lib/myHomes';
 import { VerifyBanner } from '@/components/archetypes/place';
 import TodayDetail from '@/components/place/detail/TodayDetail';
+import SkyCard from '@/components/sky/SkyCard';
+import type { TodaySkyInput } from '@/components/sky/todaySky';
 import { claimWaitingLabel } from '@/components/homes/ClaimApprovalChecklist';
+import { usePrimaryHome } from '@/lib/primaryHome';
 import { PLACE_FRESH_MS, gatedStaleTime, useAfterRecheck } from '@/lib/householdCopy';
 import { useHydrated } from '@/hooks/useHydrated';
 
 // ── Icon helpers ─────────────────────────────────────────────────
-
-function WeatherIcon({ code, className }: { code: string; className?: string }) {
-  const cls = className || 'w-12 h-12 text-blue-500 dark:text-blue-400';
-  const c = (code || '').toLowerCase();
-  if (c.includes('clear') || c === 'hot' || c.includes('mostly_clear')) return <Sun className={cls} />;
-  if (c.includes('heavy_rain') || c.includes('violent')) return <CloudRain className={cls} />;
-  if (c.includes('rain') || c.includes('shower')) return <CloudRain className={cls} />;
-  if (c.includes('drizzle')) return <CloudDrizzle className={cls} />;
-  if (c.includes('snow') || c.includes('flurr') || c.includes('blizzard') || c.includes('sleet') || c.includes('freezing') || c === 'frigid') return <CloudSnow className={cls} />;
-  if (c.includes('thunder') || c.includes('storm')) return <CloudLightning className={cls} />;
-  if (c.includes('wind') || c.includes('breez')) return <Wind className={cls} />;
-  if (c.includes('cloudy') || c.includes('overcast') || c.includes('fog') || c.includes('haze') || c.includes('smoke') || c.includes('dust')) return <Cloud className={cls} />;
-  return <Sun className={cls} />;
-}
 
 function SignalIcon({ kind, className }: { kind: string; className?: string }) {
   const cls = className || 'w-4 h-4';
@@ -156,6 +141,23 @@ export default function HubTodayPage() {
   const ballot = useBallotToday(hasToken);
 
   const today = query.data ? withoutLaunchCutTodayRows(query.data) : null;
+  // The Weather box's sky: the briefing's own weather, sun times and clock. The kind of home comes from your primary
+  // home, which the page already holds (first content, or the shell's read), when the briefing is about that home.
+  // Guests and service providers get the scene's first house, as on the apps, where the Your Home section isn't theirs.
+  const primaryHome = usePrimaryHome({ enabled: false }).data?.home;
+  const weather = today?.weather ?? null;
+  const location = today?.location;
+  const homeType = location?.source === 'primary_home' && primaryHome?.role_base !== 'guest' && primaryHome?.role_base !== 'service_provider'
+    ? primaryHome?.home_type
+    : null;
+  const sky = useMemo<TodaySkyInput | null>(() => (weather ? {
+    condition: weather.condition_code,
+    tempF: weather.current_temp_f,
+    sunrise: weather.sunrise_utc,
+    sunset: weather.sunset_utc,
+    timeZone: location?.timezone,
+    homeType,
+  } : null), [weather, location?.timezone, homeType]);
   // No briefing yet, but a claim in review: say so, as the apps' Today does (a claim makes its Home
   // yours only once it's approved).
   const noBriefing = query.isSuccess && (!today || today.display_mode === 'hidden');
@@ -315,25 +317,15 @@ export default function HubTodayPage() {
               </div>
 
               {/* Weather panel */}
-              {today.weather && (
-                <div className="flex items-center gap-5 px-5 py-4">
-                  <WeatherIcon code={today.weather.condition_code} />
-                  <div className="flex-1 min-w-0">
-                    {today.weather.current_temp_f != null && (
-                      <div className="text-4xl font-bold text-gray-900 dark:text-white leading-none">
-                        {today.weather.current_temp_f}°
-                      </div>
-                    )}
-                    <div className="text-sm text-app-text-secondary mt-1">
-                      {today.weather.condition_label}
-                    </div>
-                    {(today.weather.high_f != null && today.weather.low_f != null) && (
-                      <div className="text-xs text-app-text-muted mt-0.5">
-                        H {today.weather.high_f}° · L {today.weather.low_f}°
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {today.weather && sky && (
+                <SkyCard
+                  input={sky}
+                  at={Date.parse(today.fetched_at)}
+                  temp={today.weather.current_temp_f}
+                  label={today.weather.condition_label}
+                  chips={today.weather.high_f != null && today.weather.low_f != null ? [`H ${today.weather.high_f}° · L ${today.weather.low_f}°`] : []}
+                  className="mt-3 mb-4"
+                />
               )}
 
               {/* Precipitation outlook */}

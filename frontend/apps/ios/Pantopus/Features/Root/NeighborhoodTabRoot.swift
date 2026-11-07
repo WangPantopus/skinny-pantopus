@@ -62,7 +62,8 @@ public struct NeighborhoodTabRoot: View {
                 PulseTabRoot(
                     onAddHome: onAddHome,
                     header: AnyView(NearbySegmentHeader(segment: $segment)),
-                    sideBySide: sideBySide
+                    sideBySide: sideBySide,
+                    isShowing: segment == .pulse
                 )
                 .opacity(segment == .pulse ? 1 : 0)
                 .allowsHitTesting(segment == .pulse)

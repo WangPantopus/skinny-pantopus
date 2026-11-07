@@ -166,7 +166,7 @@ final class HomeCreationRecoveryJourneyUITests: XCTestCase {
             let buttons = app.buttons.matching(NSPredicate(format: "label == %@", "Not Now"))
             guard buttons.firstMatch.waitForExistence(timeout: 3) else { break }
             let passwordDismiss = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier == %@", "Not Now", "")).firstMatch
-            let topmost = passwordDismiss.exists ? passwordDismiss : app.buttons["appLockSetupPromptDismiss"].firstMatch
+            let topmost = passwordDismiss
             let frame = topmost.frame
             XCTAssertFalse(frame.isEmpty)
             app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()

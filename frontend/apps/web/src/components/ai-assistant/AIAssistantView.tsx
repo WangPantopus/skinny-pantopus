@@ -101,7 +101,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
         {onBack && (
           <button aria-label="Back"
             onClick={onBack}
-            className="p-1.5 rounded-lg hover:bg-app-surface/60 transition-colors"
+            className="md:hidden p-1.5 rounded-lg hover:bg-app-surface/60 transition-colors"
           >
             <ChevronLeft className="w-5 h-5 text-app-text-secondary" />
           </button>
@@ -183,7 +183,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
       </div>
 
       {/* Input */}
-      <div className="border-t border-app-border-subtle px-4 py-3 bg-app-surface-raised/50">
+      <div className="border-t border-app-border-subtle px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-app-surface-raised/50">
         <div className="flex items-end gap-2 max-w-3xl mx-auto">
           <div className="flex-1 relative">
             <textarea
@@ -193,7 +193,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
               onKeyDown={handleKeyDown}
               rows={1}
               placeholder="Describe what you need…"
-              className="w-full resize-none rounded-xl border border-app-border bg-app-surface pl-4 pr-12 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 placeholder:text-app-text-muted max-h-32 scrollbar-thin"
+              className="w-full resize-none rounded-xl border border-app-border bg-app-surface pl-4 pr-12 py-2.5 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 placeholder:text-app-text-muted max-h-32 scrollbar-thin"
               style={{
                 height: 'auto',
                 minHeight: '40px',

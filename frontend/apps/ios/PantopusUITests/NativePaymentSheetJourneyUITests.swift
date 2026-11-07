@@ -284,7 +284,7 @@ final class NativePaymentSheetJourneyUITests: XCTestCase {
             let passwordDismiss = app.buttons.matching(NSPredicate(
                 format: "label == %@ AND identifier == %@", "Not Now", ""
             )).firstMatch
-            let topmost = passwordDismiss.exists ? passwordDismiss : app.buttons["appLockSetupPromptDismiss"].firstMatch
+            let topmost = passwordDismiss
             let frame = topmost.frame
             app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY)).tap()
         }

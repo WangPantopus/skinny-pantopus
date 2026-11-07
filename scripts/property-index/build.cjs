@@ -15,6 +15,7 @@ const path = require('node:path');
 const zlib = require('node:zlib');
 const { FACTS } = require('../../backend/services/propertyRecords/facts');
 const { writeRelease } = require('./lib/release.cjs');
+const { buildModel } = require('./lib/value-model.cjs');
 const { log } = require('./lib/log.cjs');
 
 const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'parent', 'roster', 'restricted', 'key']);
@@ -66,6 +67,8 @@ async function main() {
     assertAllowed(records);
     const release = releaseId(about.as_of, built);
     const report = writeRelease(opts.out, { fips: about.fips, release }, records);
+    // What this file's sales say about its values, measured here so it moves with the release (lib/value-model.cjs).
+    const valueModel = buildModel(records, about.fips, about.as_of);
     // A source with no property ZIP says which ZIP codes reach its county (lib/zcta.cjs).
     const zips = new Set(extraZips);
     const cities = new Set();
@@ -82,6 +85,7 @@ async function main() {
       zips: [...zips].sort(),
       cities: [...cities].sort(),
       records: report.records,
+      ...(valueModel ? { value_model: valueModel } : {}),
     }));
     // Which accounts it holds, for the next release's retention check.
     fs.writeFileSync(path.join(opts.out, 'releases', about.fips, release, 'ids.json.gz'),
