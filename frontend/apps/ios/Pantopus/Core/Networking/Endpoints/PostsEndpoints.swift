@@ -22,6 +22,7 @@ public enum PostsEndpoints {
         limit: Int = 20,
         cursorCreatedAt: String? = nil,
         cursorId: String? = nil,
+        cursorRankBucket: Int? = nil,
         topic: String? = nil,
         sportsMode: String? = nil,
         eventKey: String? = nil
@@ -36,6 +37,8 @@ public enum PostsEndpoints {
         if let postType { query["postType"] = postType }
         if let cursorCreatedAt { query["cursorCreatedAt"] = cursorCreatedAt }
         if let cursorId { query["cursorId"] = cursorId }
+        // The Sports lane pages on (rank bucket, created_at, id).
+        if let cursorRankBucket { query["cursorRankBucket"] = String(cursorRankBucket) }
         // Topic lane params — validated at
         // `backend/routes/posts.js:1478-1489`. `topic` is Place-only and
         // `sportsMode` must be one of for_you|local|event|watch.

@@ -288,6 +288,10 @@ public final class PulseFeedViewModel {
     private var hasMore = false
     private var nextCursorCreatedAt: String?
     private var nextCursorId: String?
+    private var nextCursorRankBucket: Int?
+    /// Pages in a row one scroll reads while none adds a post to show.
+    private static let quietPageLimit = 10
+
     /// Optimistic per-post state layered over `loadedItems`.
     private var overrides: [String: PulsePostOverride] = [:]
     /// Posts removed client-side by *this* surface (deleted / dismissed).
@@ -954,6 +958,7 @@ public final class PulseFeedViewModel {
             newPostsCount = 0
             reconcileActions(response.posts, revision: revision, confirmed: confirmed)
             applyFirstPage(response, area: area, query: query, viewingLocation: viewingLocation)
+            await readPastEmptyFirstPage()
         } catch is CancellationError {
             return
         } catch {
@@ -985,7 +990,22 @@ public final class PulseFeedViewModel {
         )
     }
 
-    private func feedEndpoint(_ query: FeedQuery) -> Endpoint {
+    /// Nothing to show yet while the server says there is more (a short page
+    /// as it skips a long run of filtered posts): read on rather than calling
+    /// the area empty.
+    private func readPastEmptyFirstPage() async {
+        guard hasMore, !loadedItems.contains(where: isVisible) else { return }
+        state = .loading
+        await fetchNextPage()
+    }
+
+    /// The query's first page, or (with a cursor) the page after it.
+    private func feedEndpoint(
+        _ query: FeedQuery,
+        cursorCreatedAt: String? = nil,
+        cursorId: String? = nil,
+        cursorRankBucket: Int? = nil
+    ) -> Endpoint {
         PostsEndpoints.feed(
             surface: query.surface,
             latitude: query.area.latitude,
@@ -993,6 +1013,9 @@ public final class PulseFeedViewModel {
             radiusMiles: query.area.radiusMiles,
             postType: query.postType,
             limit: 20,
+            cursorCreatedAt: cursorCreatedAt,
+            cursorId: cursorId,
+            cursorRankBucket: cursorRankBucket,
             topic: query.topic,
             sportsMode: query.sportsMode,
             eventKey: query.eventKey
@@ -1068,45 +1091,57 @@ public final class PulseFeedViewModel {
         return (FeedArea(latitude: cached.latitude, longitude: cached.longitude), nil)
     }
 
-    /// Keyset-paged follow-up fetch — appends below the loaded rows.
+    /// Keyset-paged follow-up fetch — appends below the loaded rows. Later
+    /// pages continue the query the rows on screen came from (its area,
+    /// filters and topic), never one chosen since: Sports tapped while its
+    /// events load would otherwise add Sports posts under the old list.
+    /// A page that adds no post to show (each one hidden here or already
+    /// listed, or a short page while the server skips a long run of filtered
+    /// posts) leaves no new last row to appear and ask for more, so the next
+    /// page is read at once, up to `quietPageLimit` pages in a row.
     private func fetchNextPage() async {
-        guard let cursorCreatedAt = nextCursorCreatedAt, let cursorId = nextCursorId else { return }
+        guard let query = lastQuery else { return }
         let generation = fetchGeneration
         isLoadingMore = true
         loadMoreError = nil
         defer { if generation == fetchGeneration { isLoadingMore = false } }
-        do {
-            // Later pages stay in the area the first page used.
-            let area = if let lastArea { lastArea } else { try await resolvedArea().0 }
-            guard generation == fetchGeneration else { return }
-            let response: FeedResponse = try await api.request(
-                PostsEndpoints.feed(
-                    surface: surface.backendSurface,
-                    latitude: area.latitude,
-                    longitude: area.longitude,
-                    radiusMiles: area.radiusMiles,
-                    postType: isInSportsLane ? nil : activeIntent.postType,
-                    limit: 20,
+        var quietPages = 0
+        while let cursorCreatedAt = nextCursorCreatedAt, let cursorId = nextCursorId {
+            let shownBefore = loadedItems.filter(isVisible).count
+            do {
+                let response: FeedResponse = try await api.request(feedEndpoint(
+                    query,
                     cursorCreatedAt: cursorCreatedAt,
                     cursorId: cursorId,
-                    topic: topicQueryValue,
-                    sportsMode: isInSportsLane ? sportsMode.rawValue : nil,
-                    eventKey: isInSportsLane ? resolvedEventKey : nil
-                )
-            )
-            guard generation == fetchGeneration else { return }
-            // Seeded/system cards can repeat across pages — dedupe by id.
-            let known = Set(loadedItems.map(\.id))
-            loadedItems += response.posts.filter { !known.contains($0.id) }
-            seedPostDetails(response.posts)
-            applyPagination(response.pagination)
-            rebuildLoadedState()
-        } catch {
-            guard generation == fetchGeneration else { return }
-            // Keep the current rows and cursor until the user retries.
-            hasMore = true
-            loadMoreError = "Couldn't load more posts. Try again."
+                    cursorRankBucket: nextCursorRankBucket
+                ))
+                guard generation == fetchGeneration else { return }
+                // Seeded/system cards can repeat across pages — dedupe by id.
+                let known = Set(loadedItems.map(\.id))
+                loadedItems += response.posts.filter { !known.contains($0.id) }
+                seedPostDetails(response.posts)
+                applyPagination(response.pagination)
+            } catch {
+                guard generation == fetchGeneration else { return }
+                // Keep the current rows and cursor until the user retries.
+                hasMore = true
+                loadMoreError = "Couldn't load more posts. Try again."
+                rebuildLoadedState()
+                return
+            }
+            if !hasMore || loadedItems.filter(isVisible).count > shownBefore { break }
+            // A cursor that didn't move can't reach anything new.
+            if nextCursorId == cursorId, nextCursorCreatedAt == cursorCreatedAt {
+                hasMore = false
+                break
+            }
+            quietPages += 1
+            if quietPages == Self.quietPageLimit {
+                loadMoreError = "Couldn't load more posts. Try again."
+                break
+            }
         }
+        rebuildLoadedState()
     }
 
     /// `topic` param — Place-only, and only while a lane is active
@@ -1125,6 +1160,7 @@ public final class PulseFeedViewModel {
         hasMore = pagination?.hasMore ?? false
         nextCursorId = pagination?.nextCursor
         nextCursorCreatedAt = pagination?.nextCursorCreatedAt
+        nextCursorRankBucket = pagination?.nextCursorRankBucket
         if nextCursorId == nil || nextCursorCreatedAt == nil { hasMore = false }
     }
 
