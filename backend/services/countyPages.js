@@ -31,6 +31,8 @@ const PARCEL_FORMS = {
   // A number the state's file writes as 3141.0.
   whole: (parcel) => parcel.replace(/\.0+$/, ''),
   as_is: (parcel) => parcel,
+  // Allegheny's search box: the first ten characters, lowercase.
+  lower10: (parcel) => parcel.slice(0, 10).toLowerCase(),
 };
 
 async function countyFrom({ jurisdiction, state, lat, lng }, states = STATES) {
@@ -59,11 +61,17 @@ function linkedRow(fips, municipality, city) {
   return byCity || byRecord ? { row: byCity || byRecord, deep: Boolean(byCity && byCity === byRecord) } : null;
 }
 
-/** The home's own page when the row has a pattern and we have its number, the search page otherwise. */
+/**
+ * The home's own page when the row has a pattern and we have its number, the search page otherwise. `extra` names any
+ * other place the pattern writes the number, and how ({ parcel10: 'lower10' } fills {parcel10}).
+ */
 function linkFor(row, parcel) {
-  const number = parcel && row.deep ? PARCEL_FORMS[row.form || 'as_is'](String(parcel).trim()) : '';
-  if (number) return { url: row.deep.replace('{parcel}', encodeURIComponent(number)), kind: 'deep' };
-  return row.url ? { url: row.url, kind: 'search' } : null;
+  const raw = parcel && row.deep ? String(parcel).trim() : '';
+  const number = raw ? PARCEL_FORMS[row.form || 'as_is'](raw) : '';
+  if (!number) return row.url ? { url: row.url, kind: 'search' } : null;
+  const url = Object.entries(row.extra || {}).reduce((link, [name, form]) => link.replace(`{${name}}`, encodeURIComponent(PARCEL_FORMS[form](raw))),
+    row.deep.replace('{parcel}', encodeURIComponent(number)));
+  return { url, kind: 'deep' };
 }
 
 async function linkedPage({ parcel, municipality, city, ...where }) {
