@@ -82,7 +82,7 @@ internal fun SubmissionMessage(
 
 private fun summaryRows(state: CreateBusinessUiState): List<ReviewSummaryRow> {
     val rows = mutableListOf<ReviewSummaryRow>()
-    rows += ReviewSummaryRow("Category", state.selectedCategory?.label ?: "—")
+    rows += ReviewSummaryRow("Category", state.categoryName ?: "—")
     rows += ReviewSummaryRow("Name", state.businessName.trim())
     rows += ReviewSummaryRow("Username", "@${state.cleanedUsername}")
     rows += ReviewSummaryRow("Email", state.email.trim())

@@ -508,7 +508,8 @@ extension BusinessProfileViewModel {
         categories.prefix(4).enumerated().map { index, name in
             BusinessCategoryChip(
                 id: name,
-                label: name,
+                // Businesses created before the wizard saved names carry its old slugs ("home_services").
+                label: BusinessCategory.label(forLegacySlug: name) ?? name,
                 icon: categoryIcon(name),
                 accent: index == 0 ? categoryAccent(name) : .neutral
             )

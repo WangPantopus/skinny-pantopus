@@ -2,9 +2,9 @@
 //  CreateBusinessSampleData.swift
 //  Pantopus
 //
-//  Deterministic fixtures for the A12.10 Create Business wizard. The
-//  populated frame ships a fixed "What you'll get" payload for Home
-//  Services; the search frame ships a fixed 3-result match for "tutor".
+//  Fixed content for the A12.10 Create Business wizard: the "What you'll
+//  get" payload shown under Home services. The search list lives in
+//  `CreateBusinessCategoryCatalog`.
 //
 
 import Foundation
@@ -32,73 +32,4 @@ enum CreateBusinessSampleData {
             subcopy: "Keep your page hidden until you publish"
         )
     ]
-
-    /// Catalog the search frame ranks against. Each row carries the
-    /// matching category plus the sub-area label rendered under the hit.
-    /// The label is what `Highlighted` substring-matches against.
-    static let searchCatalog: [CategorySearchHit] = [
-        CategorySearchHit(
-            id: "tutoring-core",
-            category: .personal,
-            label: "Tutoring · K-12, test prep, music"
-        ),
-        CategorySearchHit(
-            id: "tutoring-centers",
-            category: .personal,
-            label: "Tutoring centers"
-        ),
-        CategorySearchHit(
-            id: "tutoring-tech",
-            category: .tech,
-            label: "Tutoring — tech & coding"
-        ),
-        CategorySearchHit(
-            id: "lawncare",
-            category: .home,
-            label: "Lawn care · mowing & seasonal"
-        ),
-        CategorySearchHit(
-            id: "petcare",
-            category: .personal,
-            label: "Pet care · sitting & walks"
-        ),
-        CategorySearchHit(
-            id: "moving",
-            category: .home,
-            label: "Moving · local & long-distance"
-        ),
-        CategorySearchHit(
-            id: "delivery-grocery",
-            category: .delivery,
-            label: "Grocery delivery"
-        ),
-        CategorySearchHit(
-            id: "rideshare",
-            category: .vehicles,
-            label: "Rideshare driving"
-        )
-    ]
-
-    /// Filter the catalog against a query and rank prefix matches first.
-    /// Returns up to 3 hits — the audit explicitly shows "3 matches for
-    /// 'tutor'" so the search frame is sized for exactly that count.
-    static func searchHits(query: String, limit: Int = 3) -> [CategorySearchHit] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        let q = trimmed.lowercased()
-        let categories = BusinessCategory.allCases.map {
-            CategorySearchHit(id: "category-\($0.rawValue)", category: $0, label: $0.label)
-        }
-        let scored: [(hit: CategorySearchHit, score: Int)] = (searchCatalog + categories).compactMap { hit in
-            let lower = hit.label.lowercased()
-            if lower.hasPrefix(q) { return (hit, 0) }
-            if lower.contains(" \(q)") { return (hit, 1) }
-            if lower.contains(q) { return (hit, 2) }
-            return nil
-        }
-        return scored
-            .sorted { $0.score < $1.score }
-            .prefix(limit)
-            .map(\.hit)
-    }
 }

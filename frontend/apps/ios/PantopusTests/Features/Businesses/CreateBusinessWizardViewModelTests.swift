@@ -3,8 +3,8 @@
 //  PantopusTests
 //
 //  Covers the A12.10 Create Business wizard state machine: step
-//  transitions, category selection, search filtering, custom-category
-//  backend blocking, and the chrome's dirty-tracking.
+//  transitions, category selection, search filtering, custom
+//  categories, and the chrome's dirty-tracking.
 //
 
 import Foundation
@@ -46,10 +46,13 @@ final class CreateBusinessWizardViewModelTests: XCTestCase {
     func testSearchHitsAreFilteredAndCapped() {
         let vm = makeVM()
         vm.searchText = "tutor"
-        XCTAssertEqual(vm.searchHits.count, 3)
         XCTAssertEqual(vm.searchHits.first?.id, "tutoring-core")
         XCTAssertEqual(vm.searchHits.first?.category, .personal)
-        XCTAssertTrue(vm.searchHits.allSatisfy { $0.label.lowercased().contains("tutor") })
+        XCTAssertTrue(vm.searchHits.allSatisfy { hit in
+            hit.label.lowercased().contains("tutor") || hit.keywords.contains { $0.contains("tutor") }
+        })
+        vm.searchText = "a"
+        XCTAssertEqual(vm.searchHits.count, CreateBusinessCategoryCatalog.maxResults)
     }
 
     func testEmptySearchYieldsNoHits() {
@@ -67,6 +70,7 @@ final class CreateBusinessWizardViewModelTests: XCTestCase {
         }
         vm.selectSearchHit(hit)
         XCTAssertEqual(vm.selectedCategoryId, hit.category)
+        XCTAssertEqual(vm.categoryName, "Tutoring")
         XCTAssertEqual(vm.searchText, "")
         XCTAssertFalse(vm.isSearchActive)
     }
@@ -124,24 +128,27 @@ final class CreateBusinessWizardViewModelTests: XCTestCase {
         XCTAssertEqual(vm.pendingEvent, .dismiss)
     }
 
-    func testCustomCategorySubmitStaysOnPickCategoryWithBackendError() {
+    func testCustomCategoryFromSearchBecomesTheCategory() {
         let vm = makeVM()
         vm.searchText = "alpaca grooming"
-        vm.submitCustomCategory()
-        XCTAssertEqual(vm.selectedCategoryId, .home)
-        XCTAssertEqual(vm.currentStep, .pickCategory)
-        XCTAssertEqual(vm.searchText, "alpaca grooming")
-        XCTAssertEqual(
-            vm.submitError,
-            "Custom categories aren't available yet. Pick a listed category instead."
-        )
-        XCTAssertFalse(vm.isSubmittingCustom)
+        XCTAssertFalse(vm.chrome.primaryCTAEnabled, "Continue waits for a pick while searching.")
+        XCTAssertTrue(vm.offersCustomCategory)
+        vm.useSearchTextAsCustomCategory()
+        XCTAssertEqual(vm.selectedCategoryId, .other)
+        XCTAssertEqual(vm.customCategory, "Alpaca grooming")
+        XCTAssertEqual(vm.categoryName, "Alpaca grooming")
+        XCTAssertEqual(vm.searchText, "")
+        XCTAssertNil(vm.submitError)
+        XCTAssertTrue(vm.chrome.primaryCTAEnabled)
+        vm.primaryTapped()
+        XCTAssertEqual(vm.currentStep, .legalInfo)
     }
 
     func testCustomCategorySubmitNoopOnEmptyQuery() {
         let vm = makeVM()
         vm.searchText = "   "
-        vm.submitCustomCategory()
+        vm.useSearchTextAsCustomCategory()
+        XCTAssertEqual(vm.selectedCategoryId, .home)
         XCTAssertEqual(vm.currentStep, .pickCategory)
     }
 
