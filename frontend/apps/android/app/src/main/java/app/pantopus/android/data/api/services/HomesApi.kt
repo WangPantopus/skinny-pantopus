@@ -74,6 +74,7 @@ import app.pantopus.android.data.api.models.homes.UpdatePackageRequest
 import app.pantopus.android.data.api.models.homes.UpdatePollRequest
 import app.pantopus.android.data.api.models.homes.UploadEvidenceRequest
 import app.pantopus.android.data.api.models.homes.UploadEvidenceResponse
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
@@ -90,6 +91,7 @@ import retrofit2.http.Part
 import retrofit2.http.PartMap
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Tag
 
 /** Home routes from `backend/routes/home.js`. */
 @Suppress("TooManyFunctions")
@@ -566,6 +568,7 @@ interface HomesApi {
     suspend fun createHomeAccessSecret(
         @Path("id") homeId: String,
         @Body body: CreateAccessSecretRequest,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): HomeAccessSecretResponse
 
     /** `PUT /api/homes/:id/access/:secretId` — route `backend/routes/home.js:5586`. */
@@ -574,6 +577,7 @@ interface HomesApi {
         @Path("id") homeId: String,
         @Path("secretId") secretId: String,
         @Body body: UpdateAccessSecretRequest,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     ): HomeAccessSecretResponse
 
     /** `DELETE /api/homes/:id/access/:secretId` — route `backend/routes/home.js:5624`. */
@@ -581,6 +585,7 @@ interface HomesApi {
     suspend fun deleteHomeAccessSecret(
         @Path("id") homeId: String,
         @Path("secretId") secretId: String,
+        @Tag dispatchGuard: AuthenticatedDispatchGuard? = null,
     )
 
     // ─── Maintenance (T6.3b / P10) ─────────────────────────────

@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-// Moves one county between off, shadow and live for one environment, or withholds some of its facts, with one change:
-// its line in that environment's switch file, which that environment's servers follow within about a minute
+// Moves counties between off, shadow and live for one environment, or withholds some of their facts, with one change:
+// their lines in that environment's switch file, which that environment's servers follow within about a minute
 // (backend/services/propertyRecords/router.js). No release and no restart. Run by hand through
 // .github/workflows/property-index.yml, which holds the storage key; a local rig passes --root.
 //
 //   node scripts/property-index/switch-county.cjs --county 53011 --mode live --target production --bucket <name> [--prefix index]
+//   node scripts/property-index/switch-county.cjs --county 53011,48113,12086 --mode live --target production --bucket <name>
 //   node scripts/property-index/switch-county.cjs --county 53011 --mode off --target local --root <dir>
 //     --withhold sale_price,sale_date   these facts stay off its screens (stored copies keep them); `none` brings them all back
 //   Leave out --mode to keep its mode.
+//
+// A list changes every county in it or none: one refused county refuses the whole run, and the file is written once.
 'use strict';
 
 const fs = require('node:fs');
@@ -22,15 +25,14 @@ const { log } = require('./lib/log.cjs');
 const opt = (name) => { const i = process.argv.indexOf(name); return (i > 0 && process.argv[i + 1]) || ''; };
 const refuse = (why) => { console.error(why); process.exit(2); };
 
-const county = opt('--county').trim();
+const counties = [...new Set(opt('--county').split(',').map((code) => code.trim()).filter(Boolean))];
 const mode = opt('--mode').trim();
 const target = opt('--target').trim();
 const withhold = opt('--withhold').trim();
 const root = opt('--root');
 const remote = `s3://${opt('--bucket')}/${opt('--prefix') || 'index'}`;
 
-if (!/^\d{5}$/.test(county)) refuse('A county is its five-digit FIPS code');
-if (!stateOfCounty(county)) refuse('No state has that county code');
+if (!counties.length) refuse('A county is its five-digit FIPS code');
 if (mode && !['off', 'shadow', 'live'].includes(mode)) refuse('A county is off, shadow or live');
 if (!/^[a-z]+$/.test(target)) refuse('Name the environment: production or staging');
 if (!mode && !withhold) refuse('Nothing to change: pass --mode, --withhold or both');
@@ -58,28 +60,53 @@ function write(name, text) {
 const withheld = withhold === 'none' ? [] : withhold ? withhold.split(',').map((name) => name.trim()).filter(Boolean) : null;
 for (const name of withheld || []) if (!FACTS[name]) refuse(`No fact is called ${name}`);
 
+const problems = [];
+const known = counties.filter((county) => {
+  if (!/^\d{5}$/.test(county)) problems.push(`${county} isn't a five-digit FIPS code`);
+  else if (!stateOfCounty(county)) problems.push(`No state has county code ${county}`);
+  else return true;
+  return false;
+});
+
 // A wrong code would quietly do nothing, so a county with no release can't be turned on.
+const releases = new Map();
 if (mode === 'shadow' || mode === 'live') {
-  const state = stateOfCounty(county);
-  const stateText = read(statePath(state));
-  const entry = stateText && JSON.parse(stateText).jurisdictions?.[county];
-  if (!entry) refuse(`${county} has no release in ${state}'s file`);
-  if (entry.status === 'withdrawn') refuse(`${county}'s source was withdrawn`);
-  log(`${county} serves release ${entry.release}, as of ${entry.as_of}`);
+  const stateFiles = new Map();
+  for (const county of known) {
+    const state = stateOfCounty(county);
+    if (!stateFiles.has(state)) stateFiles.set(state, JSON.parse(read(statePath(state)) || '{}'));
+    const entry = stateFiles.get(state).jurisdictions?.[county];
+    if (!entry) problems.push(`${county} has no release in ${state}'s file`);
+    else if (entry.status === 'withdrawn') problems.push(`${county}'s source was withdrawn`);
+    else releases.set(county, entry);
+  }
 }
 
 const name = switchesPath(target);
 const text = read(name);
 const file = text ? JSON.parse(text) : { v: 1, counties: {} };
 if (file.v !== 1 || !file.counties) refuse('A switch file this tool can\'t read');
-const before = file.counties[county] || { mode: 'off (not named)' };
-const next = { ...before, ...(mode ? { mode } : {}), ...(withheld ? { withheld } : {}) };
-if (!['off', 'shadow', 'live'].includes(next.mode)) refuse('A county named for the first time needs --mode');
-if (!next.withheld?.length) delete next.withheld;
-file.counties[county] = next;
+
+const changes = known.map((county) => {
+  const before = file.counties[county] || { mode: 'off (not named)' };
+  const next = { ...before, ...(mode ? { mode } : {}), ...(withheld ? { withheld } : {}) };
+  if (!['off', 'shadow', 'live'].includes(next.mode)) problems.push(`${county} is named for the first time, so it needs --mode`);
+  if (!next.withheld?.length) delete next.withheld;
+  return { county, before, next };
+});
+
+if (problems.length) {
+  for (const problem of problems) console.error(problem);
+  refuse(`Nothing changed: ${problems.length} of ${counties.length} refused`);
+}
+
+for (const { county, next } of changes) file.counties[county] = next;
 file.updated_at = new Date().toISOString();
 write(name, `${JSON.stringify(file, null, 1)}\n`);
 
 const count = (wanted) => Object.values(file.counties).filter((entry) => entry.mode === wanted).length;
-log(`${target}: ${county} ${before.mode} -> ${next.mode}; withheld: ${(next.withheld || []).join(', ') || 'none'}`);
+for (const { county, before, next } of changes) {
+  const release = releases.get(county);
+  log(`${target}: ${county} ${before.mode} -> ${next.mode}${release ? `, release ${release.release} as of ${release.as_of}` : ''}; withheld: ${(next.withheld || []).join(', ') || 'none'}`);
+}
 log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off; servers follow within about a minute`);

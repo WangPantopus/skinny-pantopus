@@ -128,9 +128,16 @@ enum SecureStoreKey {
     /// A mismatch on launch re-registers (contract: "after app-update").
     static let registeredAppVersion = "registeredAppVersion"
 
-    /// Per-user app-lock preference (moved out of `UserDefaults` so it
-    /// survives a reinstall — a locked account must come back locked).
-    static func appLockEnabled(_ userId: String) -> String {
+    /// Per-user whole-app lock preference, the "Lock Pantopus when I leave the
+    /// app" switch (in the Keychain so it survives a reinstall — a locked
+    /// account must come back locked).
+    static func appLockOnLeave(_ userId: String) -> String {
+        "appLockOnLeave.\(userId)"
+    }
+
+    /// The preference of the old "sensitive actions" switch, which locked the
+    /// whole app. Only ever deleted now.
+    static func retiredAppLockEnabled(_ userId: String) -> String {
         "appLockEnabled.\(userId)"
     }
 }

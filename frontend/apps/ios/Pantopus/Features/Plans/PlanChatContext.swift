@@ -27,10 +27,23 @@ private struct ChatPlanContextKey: EnvironmentKey {
     }
 }
 
+private struct PlansListBesideMapKey: EnvironmentKey {
+    static var defaultValue: Bool {
+        false
+    }
+}
+
 extension EnvironmentValues {
     var chatPlanContext: ChatPlanContext? {
         get { self[ChatPlanContextKey.self] }
         set { self[ChatPlanContextKey.self] = newValue }
+    }
+
+    /// The Plans stack is the column beside the map (`PlansTabRoot`): a chat in it isn't the whole screen, so the tab
+    /// bar stays.
+    var plansListBesideMap: Bool {
+        get { self[PlansListBesideMapKey.self] }
+        set { self[PlansListBesideMapKey.self] = newValue }
     }
 }
 

@@ -48,17 +48,20 @@ async function mailEscrowExpiry() {
         const maskedContact = maskContact(contact);
 
         // Notify the sender. Both open in their Sent, where the piece stays: it never reached a mailbox, so
-        // /app/mailbox/<id> would answer "This mail isn't in your mailbox". A Christmas card says so.
+        // /app/mailbox/<id> would answer "This mail isn't in your mailbox". A Christmas card says so, and one by
+        // link went to no address.
         await notificationService.createNotification(holidayCards.isCard(mail) ? {
           userId: mail.sender_user_id,
           type: 'holiday_card_expired',
           title: 'Your Christmas card came back',
-          body: `They didn’t open the email in 90 days. Your card to ${maskedContact} stays in Sent.`,
+          body: holidayCards.isByLink(mail)
+            ? 'Nobody opened your link in 90 days. Your card stays in Sent.'
+            : `They didn’t open the email in 90 days. Your card to ${maskedContact} stays in Sent.`,
           icon: '📭',
           link: `/app/mailbox/sent/${mail.id}`,
           metadata: {
             mail_id: mail.id,
-            escrow_contact: maskedContact,
+            ...(holidayCards.isByLink(mail) ? {} : { escrow_contact: maskedContact }),
           },
         } : {
           userId: mail.sender_user_id,
