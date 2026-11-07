@@ -55,6 +55,7 @@ on:
       - backend/services/propertyRecords/facts.js
       - backend/services/propertyRecords/format.js
       - backend/services/propertyRecords/identity.js
+      - backend/services/propertyRecords/valueModel.js
       - .github/workflows/property-index.yml
 
 permissions:
