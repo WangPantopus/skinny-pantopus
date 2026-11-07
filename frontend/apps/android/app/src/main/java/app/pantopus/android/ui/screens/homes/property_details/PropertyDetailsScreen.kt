@@ -105,6 +105,7 @@ fun PropertyDetailsScreen(
                     save = { viewModel.saveFacts(it) },
                     edit = { editing = it },
                     report = { reporting = it },
+                    answerLayout = viewModel::answerFloorPlan,
                 ),
         )
     }
@@ -213,11 +214,20 @@ private fun LoadedBody(
                 // so everyone else sees just the Property card.
                 content.recordSections.forEach { section ->
                     val group = content.household?.groupForSection(section.id)
+                    val layout = content.household?.layoutForSection(section.id)
                     PropertySection(
                         title = section.title,
                         rows = section.rows,
                         note = section.note,
-                        footer = group?.let { { HouseholdGroupFooter(group = it, section = section, actions = householdActions) } },
+                        footer =
+                            if (group != null || layout != null) {
+                                {
+                                    layout?.let { FloorPlanLayoutFooter(layout = it, actions = householdActions) }
+                                    group?.let { HouseholdGroupFooter(group = it, section = section, actions = householdActions) }
+                                }
+                            } else {
+                                null
+                            },
                     )
                 }
                 content.recordFooter?.let { footer ->

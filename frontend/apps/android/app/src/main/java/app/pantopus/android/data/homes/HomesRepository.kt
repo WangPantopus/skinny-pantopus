@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.DeleteEmergencyResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
 import app.pantopus.android.data.api.models.homes.FileUploadResponse
+import app.pantopus.android.data.api.models.homes.FloorPlanAnswerRequest
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeDocumentsResponse
@@ -179,6 +180,12 @@ open class HomesRepository
             id: String,
             request: RecordProblemRequest,
         ) = safeApiCall { api.reportRecordProblem(id, request) }
+
+        /** `POST /api/homes/:id/floor-plan-answer`: "yes", "no" or "undo". */
+        open suspend fun answerFloorPlan(
+            id: String,
+            answer: String,
+        ) = safeApiCall { api.answerFloorPlan(id, FloorPlanAnswerRequest(answer)) }
 
         /** `POST /api/homes/property-suggestions`; `lookup` as in [HomesApi.propertySuggestions]. */
         open suspend fun propertySuggestions(
