@@ -71,6 +71,15 @@ public final class EditBusinessPageViewModel {
     public private(set) var canEditHours = false
     public private(set) var accessError: String?
     public private(set) var isCheckingAccess = false
+    public private(set) var isLoadingHours = false
+    public private(set) var isLoadingServices = false
+    public private(set) var hoursError: String?
+    public private(set) var servicesError: String?
+    public private(set) var hasLoadedHours = false
+    public private(set) var hasLoadedServices = false
+    private var hoursGeneration = 0
+    private var servicesGeneration = 0
+    private var originalHours: EditBusinessPageHoursState?
     private var isCheckingCatalog = false
     private var accessGeneration = 0
     private var loadGeneration = 0
@@ -109,6 +118,11 @@ public final class EditBusinessPageViewModel {
         return EditBusinessPageMapper.unsavedCount(in: content) > 0
     }
 
+    /// Without a location there is nothing to read until one is added.
+    public var canRetryHours: Bool {
+        primaryLocationId != nil
+    }
+
     public var hasInFlightOperation: Bool {
         isSaving || isPublishing || uploadingMedia != nil || isClosing
     }
@@ -130,6 +144,9 @@ public final class EditBusinessPageViewModel {
             canEditProfile = true
             canEditLocation = true
             canEditHours = true
+            hasLoadedHours = true
+            hasLoadedServices = true
+            originalHours = preview.hours.cleaned
         } else {
             state = .loading
         }
@@ -152,6 +169,11 @@ public final class EditBusinessPageViewModel {
     }
 
     private func fetch(showLoading: Bool) async {
+        if await fetchProfile(showLoading: showLoading) { await loadSections() }
+    }
+
+    /// Detail and current authority only. Returns whether the profile loaded.
+    private func fetchProfile(showLoading: Bool) async -> Bool {
         loadGeneration &+= 1
         let generation = loadGeneration
         if showLoading { state = .loading }
@@ -161,7 +183,7 @@ public final class EditBusinessPageViewModel {
                 BusinessesEndpoints.business(businessId: businessId)
             )
             _ = try await access
-            guard isCurrentLoad(generation) else { return }
+            guard isCurrentLoad(generation) else { return false }
             let location = detail.profile?.primaryLocation
                 ?? detail.locations.first { $0.isPrimary == true }
                 ?? detail.locations.first
@@ -172,45 +194,23 @@ public final class EditBusinessPageViewModel {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .hasPrefix(countryCodePrefix)
 
-            var hours: [BusinessHoursDTO] = []
-            if let locationId = location?.id,
-               let hoursResponse: BusinessLocationHoursResponse = try? await api.request(
-                   BusinessesEndpoints.locationHours(businessId: businessId, locationId: locationId)
-               ) {
-                hours = hoursResponse.hours
-            }
-
-            // Owner-scoped catalog first. `/public/:username` 404s until the
-            // profile is published, so deriving Services from it alone left
-            // the setup checklist permanently short one item and made publish
-            // unreachable for every unpublished business.
-            var catalog: [BusinessCatalogItemDTO]?
-            if let itemsResponse: BusinessCatalogItemsResponse = try? await api.request(
-                BusinessesEndpoints.catalogItems(businessId: businessId, status: "active")
-            ) {
-                catalog = itemsResponse.items
-            }
-
-            if let username = detail.business.username, !username.isEmpty {
-                if let publicPayload: BusinessPublicResponse = try? await api.request(
-                    BusinessesEndpoints.publicBusiness(username: username)
-                ) {
-                    if catalog == nil { catalog = publicPayload.catalog }
-                    if hours.isEmpty { hours = publicPayload.hours }
-                }
-            }
-
-            guard isCurrentLoad(generation) else { return }
+            // Profile fields can be used as soon as detail and authority are
+            // ready. Optional sections load independently and merge only their
+            // own values, so a slow catalog cannot hold up typing a name.
+            hasLoadedHours = false
+            hasLoadedServices = false
+            originalHours = nil
             state = .loaded(
                 EditBusinessPageMapper.content(
                     from: detail,
-                    hours: hours,
-                    catalog: catalog ?? []
+                    hours: [],
+                    catalog: []
                 )
             )
             hasLoadedOnce = true
+            return true
         } catch {
-            guard isCurrentLoad(generation) else { return }
+            guard isCurrentLoad(generation) else { return false }
             if isNotFound(error) {
                 state = .empty
             } else {
@@ -220,11 +220,24 @@ public final class EditBusinessPageViewModel {
                 )
             }
             hasLoadedOnce = false
+            return false
         }
     }
 
     private func isCurrentLoad(_ generation: Int) -> Bool {
         generation == loadGeneration && sessionScope.isCurrent && !Task.isCancelled
+    }
+
+    private func loadSections() async {
+        async let hours: Void = refreshUneditedHours()
+        async let services: Void = refreshServices()
+        _ = await (hours, services)
+    }
+
+    private func refreshUneditedHours() async {
+        guard case let .loaded(content) = state,
+              EditBusinessPageMapper.hoursPayload(from: content.hours) == nil else { return }
+        await refreshHours()
     }
 
     // MARK: - Current edit authority
@@ -233,13 +246,19 @@ public final class EditBusinessPageViewModel {
         guard !localPreviewPersistenceEnabled else { return }
         loadGeneration &+= 1
         accessGeneration &+= 1
+        hoursGeneration &+= 1
+        servicesGeneration &+= 1
         clearAccess()
         isCheckingAccess = false
+        isLoadingHours = false
+        isLoadingServices = false
     }
 
     public func refreshAccess() async {
         guard !localPreviewPersistenceEnabled else { return }
         _ = try? await confirmAccess()
+        // A read interrupted while access was unavailable still has to finish.
+        if canEditProfile { await loadSections() }
     }
 
     private func clearAccess() {
@@ -310,16 +329,97 @@ public final class EditBusinessPageViewModel {
     }
 
     public func refreshServices() async {
+        guard canEditProfile else { return }
+        servicesGeneration &+= 1
+        let generation = servicesGeneration
+        let load = loadGeneration
+        isLoadingServices = true
+        servicesError = nil
+        defer { if generation == servicesGeneration { isLoadingServices = false } }
         do {
             let response: BusinessCatalogItemsResponse = try await api.request(
                 BusinessesEndpoints.catalogItems(businessId: businessId, status: "active")
             )
-            guard case let .loaded(content) = state else { return }
+            guard generation == servicesGeneration, isCurrentLoad(load),
+                  case let .loaded(content) = state else { return }
+            hasLoadedServices = true
             state = .loaded(EditBusinessPageMapper.withRecomputedMode(
                 EditBusinessPageMapper.copy(content, services: EditBusinessPageMapper.mapServices(response.items))
             ))
         } catch {
-            toastMessage = "Couldn't refresh services. Your other edits are kept."
+            guard generation == servicesGeneration, isCurrentLoad(load) else { return }
+            servicesError = "Couldn't load services. Your other edits are kept."
+        }
+    }
+
+    // MARK: - Hours
+
+    public func refreshHours() async {
+        guard canEditProfile else { return }
+        guard let locationId = primaryLocationId else {
+            hoursError = "Add a business location before setting hours."
+            return
+        }
+        hoursGeneration &+= 1
+        let generation = hoursGeneration
+        let load = loadGeneration
+        isLoadingHours = true
+        hoursError = nil
+        defer { if generation == hoursGeneration { isLoadingHours = false } }
+        do {
+            let response: BusinessLocationHoursResponse = try await api.request(
+                BusinessesEndpoints.locationHours(businessId: businessId, locationId: locationId)
+            )
+            guard generation == hoursGeneration, isCurrentLoad(load),
+                  case let .loaded(content) = state,
+                  EditBusinessPageMapper.hoursPayload(from: content.hours) == nil else { return }
+            let hours = EditBusinessPageMapper.mapHours(response.hours)
+            originalHours = hours
+            hasLoadedHours = true
+            state = .loaded(EditBusinessPageMapper.withRecomputedMode(
+                EditBusinessPageMapper.copy(content, hours: hours)
+            ))
+        } catch {
+            guard generation == hoursGeneration, isCurrentLoad(load) else { return }
+            hoursError = "Couldn't load hours. Retry before editing the week."
+        }
+    }
+
+    public func updateHours(dayId: String, to value: EditBusinessPageHoursRow.State) {
+        guard canEditProfile, canEditHours, hasLoadedHours, !hasInFlightOperation,
+              case let .loaded(content) = state,
+              let selected = content.hours.rows.first(where: { $0.id == dayId }) else { return }
+        let replacesDay = value == .closed || value == .allDay
+        let removesIntervals = replacesDay && content.hours.rows.filter { $0.dayLabel == selected.dayLabel }.count > 1
+        let hasRemovedIntervals = content.hours.rows.filter { $0.dayLabel == selected.dayLabel }.count
+            != originalHours?.rows.filter { $0.dayLabel == selected.dayLabel }.count
+        let rows = content.hours.rows.compactMap { row -> EditBusinessPageHoursRow? in
+            if removesIntervals, row.dayLabel == selected.dayLabel, row.id != dayId { return nil }
+            guard row.id == dayId else { return row }
+            let original = originalHours?.rows.first { $0.id == dayId }
+            let isDirty = value != original?.state || removesIntervals || hasRemovedIntervals
+            return EditBusinessPageHoursRow(
+                id: row.id,
+                dayLabel: row.dayLabel,
+                state: value,
+                isDirty: isDirty,
+                notes: row.notes,
+                source: isDirty ? nil : original?.source
+            )
+        }
+        state = .loaded(EditBusinessPageMapper.withRecomputedMode(
+            EditBusinessPageMapper.copy(content, hours: .rows(rows: rows, footerHint: nil))
+        ))
+    }
+
+    public func applyWeekdayHours() {
+        guard case let .loaded(content) = state else { return }
+        for row in content.hours.rows {
+            updateHours(
+                dayId: row.id,
+                to: ["Sun", "Sat"].contains(row.dayLabel)
+                    ? .closed : .open(openLabel: "9:00 AM", closeLabel: "5:00 PM")
+            )
         }
     }
 
@@ -487,7 +587,9 @@ public final class EditBusinessPageViewModel {
             _ = try await api.request(BusinessesEndpoints.publishBusiness(businessId: businessId))
             try requireSession()
             toastMessage = "Published"
-            await fetch(showLoading: false)
+            let refreshed = await fetchProfile(showLoading: false)
+            isPublishing = false
+            if refreshed { await loadSections() }
         } catch {
             toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't publish."
         }
@@ -616,6 +718,7 @@ public final class EditBusinessPageViewModel {
         _ content: EditBusinessPageContent,
         successToast: String?
     ) -> Bool {
+        originalHours = content.hours.cleaned
         state = .loaded(promoteCurrentToOriginal(content))
         if let successToast { toastMessage = successToast }
         return true
@@ -665,7 +768,16 @@ public final class EditBusinessPageViewModel {
             try await pushLocation(content)
             try await pushHours(content)
             try requireSession()
-            state = .loaded(EditBusinessPageMapper.withRecomputedMode(savedContent(content)))
+            var saved = savedContent(content)
+            if case let .loaded(current) = state {
+                saved = EditBusinessPageMapper.copy(
+                    saved,
+                    hours: EditBusinessPageMapper.hoursPayload(from: content.hours) == nil ? current.hours : saved.hours,
+                    services: current.services
+                )
+            }
+            if hasLoadedHours { originalHours = saved.hours.cleaned }
+            state = .loaded(EditBusinessPageMapper.withRecomputedMode(saved))
             if let successToast { toastMessage = successToast }
             return true
         } catch let failure as SaveFailure {
@@ -873,7 +985,7 @@ public final class EditBusinessPageViewModel {
             categoryRequired: content.categoryRequired,
             price: content.price.reverted,
             description: content.description.reverted,
-            hours: content.hours.reverted,
+            hours: originalHours ?? content.hours.reverted,
             services: content.services.reverted,
             gallery: content.gallery.reverted,
             phone: content.phone.reverted,
@@ -938,11 +1050,23 @@ private extension EditBusinessPageDescriptionState {
 }
 
 private extension EditBusinessPageHoursState {
+    var rows: [EditBusinessPageHoursRow] {
+        switch self {
+        case let .rows(rows, _), let .quickApply(rows): rows
+        }
+    }
+
     var cleaned: EditBusinessPageHoursState {
         switch self {
         case let .rows(rows, hint):
             .rows(rows: rows.map {
-                EditBusinessPageHoursRow(id: $0.id, dayLabel: $0.dayLabel, state: $0.state, isDirty: false)
+                EditBusinessPageHoursRow(
+                    id: $0.id,
+                    dayLabel: $0.dayLabel,
+                    state: $0.state,
+                    notes: $0.notes,
+                    source: $0.isDirty ? nil : $0.source
+                )
             }, footerHint: hint)
         case .quickApply: self
         }

@@ -100,12 +100,37 @@ public struct EditBusinessPageHoursRow: Sendable, Hashable, Identifiable {
     public let dayLabel: String
     public let state: State
     public let isDirty: Bool
+    public let notes: String?
+    /// Untouched intervals retain the server's full time precision and notes.
+    public let source: BusinessHoursDTO?
 
-    public init(id: String, dayLabel: String, state: State, isDirty: Bool = false) {
+    public init(
+        id: String,
+        dayLabel: String,
+        state: State,
+        isDirty: Bool = false,
+        notes: String? = nil,
+        source: BusinessHoursDTO? = nil
+    ) {
         self.id = id
         self.dayLabel = dayLabel
         self.state = state
         self.isDirty = isDirty
+        self.notes = notes
+        self.source = source
+    }
+}
+
+public extension EditBusinessPageHoursRow.State {
+    /// Saved as 00:00–23:59, which store builds, the web and Android all read
+    /// correctly. They read a `24:00` close as noon, and Android's editor would
+    /// save it back that way.
+    static let allDay = Self.open(openLabel: "12:00 AM", closeLabel: "11:59 PM")
+
+    /// A `24:00` close saved elsewhere also means the whole day.
+    var isAllDay: Bool {
+        guard case let .open(open, close) = self else { return false }
+        return open == "12:00 AM" && ["11:59 PM", "24:00"].contains(close)
     }
 }
 
