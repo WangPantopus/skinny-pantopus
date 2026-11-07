@@ -89,6 +89,8 @@ const said = (text) => {
   return value && !/^(unknown|other|none|n\/a|no|na|\.)$/i.test(value) ? value : null;
 };
 const number = (text) => positive(String(text ?? '').replace(/,/g, ''));
+// Some towns write the house number as a decimal, "12.0" (Darien, Hartland): the house is 12.
+const wholeHouse = (text) => String(text ?? '').trim().replace(/^(\d+)\.0+(?=\s|$)/, '$1');
 
 function townOf(row) {
   const byNumber = TOWNS_BY_NUMBER[Number(row.town_id) - 1];
@@ -101,7 +103,7 @@ function fromRow(row, fips, county, town) {
   const [kind, homeType] = useOf(row);
   const facts = { parcel_number: word(row.pid), county, fips, municipality: town.toLowerCase().replace(/(^|\s)\S/g, (first) => first.toUpperCase()) };
   const unit = realUnit(row.unit);
-  const parsed = parse(row.location, unit) || parse(`${String(row.address_number ?? '').trim()} ${String(row.street_name ?? '').trim()}`, unit);
+  const parsed = parse(wholeHouse(row.location), unit) || parse(`${wholeHouse(row.address_number)} ${String(row.street_name ?? '').trim()}`, unit);
   if (!parsed || !facts.parcel_number) return null;
   const on = kind === 'property' || kind === 'unit' || kind === 'building';
   const home = kind === 'property' || kind === 'unit';

@@ -38,6 +38,7 @@ import kotlin.math.max
 fun EditBusinessServiceChipsEditor(
     chips: List<EditBusinessPageServiceChip>,
     modifier: Modifier = Modifier,
+    canManage: Boolean = true,
 ) {
     Box(
         modifier =
@@ -50,14 +51,17 @@ fun EditBusinessServiceChipsEditor(
                 .testTag("editBusinessPage.services"),
     ) {
         ChipFlow {
-            chips.forEach { chip -> ServiceChip(chip = chip) }
-            AddServiceChip()
+            chips.forEach { chip -> ServiceChip(chip = chip, canManage = canManage) }
+            if (canManage) AddServiceChip()
         }
     }
 }
 
 @Composable
-private fun ServiceChip(chip: EditBusinessPageServiceChip) {
+private fun ServiceChip(
+    chip: EditBusinessPageServiceChip,
+    canManage: Boolean,
+) {
     val fg = if (chip.isFresh) PantopusColors.warmAmber else PantopusColors.businessDark
     val bg = if (chip.isFresh) PantopusColors.warmAmberBg else PantopusColors.businessBg
     val border =
@@ -88,13 +92,15 @@ private fun ServiceChip(chip: EditBusinessPageServiceChip) {
             style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
             color = fg,
         )
-        PantopusIconImage(
-            icon = PantopusIcon.ChevronRight,
-            contentDescription = null,
-            size = 11.dp,
-            tint = fg,
-            strokeWidth = 2.5f,
-        )
+        if (canManage) {
+            PantopusIconImage(
+                icon = PantopusIcon.ChevronRight,
+                contentDescription = null,
+                size = 11.dp,
+                tint = fg,
+                strokeWidth = 2.5f,
+            )
+        }
     }
 }
 

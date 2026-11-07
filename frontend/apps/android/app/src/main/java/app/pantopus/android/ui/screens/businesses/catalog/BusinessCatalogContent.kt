@@ -188,6 +188,19 @@ data class BusinessCatalogItemDraft(
     }
 }
 
+/**
+ * What this person may change in the catalog, from `GET /:businessId/me`. Items need `catalog.edit`; archiving and
+ * categories need `catalog.manage`. While [isChecking], the last answer is only still drawn: every write waits for the
+ * new one.
+ */
+data class BusinessCatalogAccess(
+    val canEditItems: Boolean = false,
+    val canManage: Boolean = false,
+    val isChecking: Boolean = false,
+    /** Why editing is off, with Retry access. A draft stays either way. */
+    val notice: String? = null,
+)
+
 /** Loaded catalog payload — items in `sort_order` plus the categories. */
 data class BusinessCatalogContent(
     val items: List<BusinessCatalogItemRow>,

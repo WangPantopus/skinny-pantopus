@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.screens.businesses.page_editor.EditBusinessFieldMode
 import app.pantopus.android.ui.screens.businesses.page_editor.EditBusinessPageHoursRow
 import app.pantopus.android.ui.screens.businesses.page_editor.EditBusinessPageHoursState
 import app.pantopus.android.ui.theme.PantopusColors
@@ -65,7 +66,9 @@ fun EditBusinessHoursEditor(
     onDayChange: (String, EditBusinessPageHoursRow.State) -> Unit = { _, _ -> },
     onApplyWeekdays: () -> Unit = {},
     modifier: Modifier = Modifier,
+    mode: EditBusinessFieldMode = EditBusinessFieldMode.Editable,
 ) {
+    val readOnly = mode == EditBusinessFieldMode.ReadOnly
     var editingDay by remember { mutableStateOf<EditBusinessPageHoursRow?>(null) }
     val rows: List<EditBusinessPageHoursRow> =
         when (state) {
@@ -76,20 +79,27 @@ fun EditBusinessHoursEditor(
         modifier = modifier.testTag("editBusinessPage.hours"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        HoursCard(rows = rows, onEditDay = { editingDay = it })
-        when (state) {
-            is EditBusinessPageHoursState.Rows -> state.footerHint?.let { hint -> HintRow(hint = hint) }
-            is EditBusinessPageHoursState.QuickApply -> QuickApplyRow(onApplyWeekdays)
+        HoursCard(rows = rows, readOnly = readOnly, onEditDay = { editingDay = it })
+        if (!readOnly) {
+            when (state) {
+                is EditBusinessPageHoursState.Rows -> state.footerHint?.let { hint -> HintRow(hint = hint) }
+                is EditBusinessPageHoursState.QuickApply -> QuickApplyRow(onApplyWeekdays)
+            }
         }
     }
-    editingDay?.let { day ->
+    editingDay?.takeUnless { readOnly }?.let { day ->
         BusinessHoursDayDialog(
             day = day,
+            canApply = mode == EditBusinessFieldMode.Editable,
             onDismiss = { editingDay = null },
             onApply = { value ->
                 onDayChange(day.id, value)
                 editingDay = null
             },
+            takenOpenings =
+                rows
+                    .filter { it.dayLabel == day.dayLabel && it.id != day.id }
+                    .mapNotNull { (it.state as? EditBusinessPageHoursRow.State.Open)?.openLabel },
         )
     }
 }
@@ -97,6 +107,7 @@ fun EditBusinessHoursEditor(
 @Composable
 private fun HoursCard(
     rows: List<EditBusinessPageHoursRow>,
+    readOnly: Boolean,
     onEditDay: (EditBusinessPageHoursRow) -> Unit,
 ) {
     Column(
@@ -112,7 +123,7 @@ private fun HoursCard(
                 ),
     ) {
         rows.forEachIndexed { idx, row ->
-            HoursRowView(row = row, onClick = { onEditDay(row) })
+            HoursRowView(row = row, readOnly = readOnly, onClick = { onEditDay(row) })
             if (idx != rows.size - 1) {
                 HorizontalDivider(
                     color = PantopusColors.appBorderSubtle,
@@ -127,6 +138,7 @@ private fun HoursCard(
 @Composable
 private fun HoursRowView(
     row: EditBusinessPageHoursRow,
+    readOnly: Boolean,
     onClick: () -> Unit,
 ) {
     val bg = if (row.isDirty) PantopusColors.warningBg else PantopusColors.appSurface
@@ -135,7 +147,7 @@ private fun HoursRowView(
             Modifier
                 .fillMaxWidth()
                 .background(bg)
-                .clickable(role = Role.Button, onClick = onClick)
+                .then(if (readOnly) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick))
                 .padding(horizontal = Spacing.s3, vertical = 11.dp)
                 .heightIn(min = 44.dp)
                 .semantics { contentDescription = a11yLabel(row) },
@@ -163,12 +175,15 @@ private fun HoursRowView(
                 )
             }
         }
-        HoursStateView(state = row.state)
+        HoursStateView(state = row.state, readOnly = readOnly)
     }
 }
 
 @Composable
-private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
+private fun HoursStateView(
+    state: EditBusinessPageHoursRow.State,
+    readOnly: Boolean,
+) {
     when (state) {
         is EditBusinessPageHoursRow.State.Open ->
             Row(
@@ -176,20 +191,26 @@ private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                TimePill(value = state.openLabel)
-                Text(
-                    text = "—",
-                    style = TextStyle(fontSize = 11.sp),
-                    color = PantopusColors.appTextMuted,
-                )
-                TimePill(value = state.closeLabel)
+                if (state.isAllDay) {
+                    TimePill(value = OPEN_ALL_DAY_LABEL)
+                } else {
+                    TimePill(value = state.openLabel)
+                    Text(
+                        text = "—",
+                        style = TextStyle(fontSize = 11.sp),
+                        color = PantopusColors.appTextMuted,
+                    )
+                    TimePill(value = closeForDisplay(state.closeLabel))
+                }
                 Spacer(modifier = Modifier.weight(1f))
-                PantopusIconImage(
-                    icon = PantopusIcon.MoreHorizontal,
-                    contentDescription = null,
-                    size = 14.dp,
-                    tint = PantopusColors.appTextSecondary,
-                )
+                if (!readOnly) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.MoreHorizontal,
+                        contentDescription = null,
+                        size = 14.dp,
+                        tint = PantopusColors.appTextSecondary,
+                    )
+                }
             }
         EditBusinessPageHoursRow.State.Closed ->
             Row(
@@ -202,11 +223,13 @@ private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
                     color = PantopusColors.appTextSecondary,
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "Set hours",
-                    style = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
-                    color = PantopusColors.business,
-                )
+                if (!readOnly) {
+                    Text(
+                        text = "Set hours",
+                        style = TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.business,
+                    )
+                }
             }
         EditBusinessPageHoursRow.State.NotSet ->
             Row(
@@ -219,23 +242,25 @@ private fun HoursStateView(state: EditBusinessPageHoursRow.State) {
                     color = PantopusColors.appTextMuted,
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Box(
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(Radii.pill))
-                            .background(PantopusColors.businessBg)
-                            .border(
-                                width = 1.dp,
-                                color = PantopusColors.business.copy(alpha = 0.25f),
-                                shape = RoundedCornerShape(Radii.pill),
-                            )
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Text(
-                        text = "Add",
-                        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
-                        color = PantopusColors.businessDark,
-                    )
+                if (!readOnly) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(Radii.pill))
+                                .background(PantopusColors.businessBg)
+                                .border(
+                                    width = 1.dp,
+                                    color = PantopusColors.business.copy(alpha = 0.25f),
+                                    shape = RoundedCornerShape(Radii.pill),
+                                )
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = "Add",
+                            style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                            color = PantopusColors.businessDark,
+                        )
+                    }
                 }
             }
     }
@@ -334,7 +359,8 @@ private fun QuickApplyButton(
 private fun a11yLabel(row: EditBusinessPageHoursRow): String {
     val state =
         when (val s = row.state) {
-            is EditBusinessPageHoursRow.State.Open -> "${s.openLabel} to ${s.closeLabel}"
+            is EditBusinessPageHoursRow.State.Open ->
+                if (s.isAllDay) OPEN_ALL_DAY_LABEL else "${s.openLabel} to ${closeForDisplay(s.closeLabel)}"
             EditBusinessPageHoursRow.State.Closed -> "Closed"
             EditBusinessPageHoursRow.State.NotSet -> "Not set"
         }
@@ -348,18 +374,25 @@ internal fun BusinessHoursDayDialog(
     day: EditBusinessPageHoursRow,
     onDismiss: () -> Unit,
     onApply: (EditBusinessPageHoursRow.State) -> Unit,
+    takenOpenings: List<String> = emptyList(),
+    canApply: Boolean = true,
 ) {
     val context = LocalContext.current
     val formatter = remember { DateTimeFormatter.ofPattern("h:mm a", Locale.US) }
     val initial = day.state as? EditBusinessPageHoursRow.State.Open
-    var open by remember(day) {
-        mutableStateOf(initial?.openLabel?.let { runCatching { LocalTime.parse(it, formatter) }.getOrNull() } ?: LocalTime.of(9, 0))
-    }
-    var close by remember(day) {
-        mutableStateOf(initial?.closeLabel?.let { runCatching { LocalTime.parse(it, formatter) }.getOrNull() } ?: LocalTime.of(17, 0))
-    }
+    val openedAt = remember(day) { openingTime(initial, formatter) }
+    val closesAt = remember(day) { closingTime(initial, formatter) }
+    var open by remember(day) { mutableStateOf(openedAt) }
+    var close by remember(day) { mutableStateOf(closesAt) }
     var closed by remember(day) { mutableStateOf(day.state == EditBusinessPageHoursRow.State.Closed) }
-    val valid = closed || close != open
+    val repeatsOpening = !closed && open.format(formatter) in takenOpenings
+    val valid = closed || (close != open && !repeatsOpening)
+    val unchanged =
+        if (closed) {
+            day.state == EditBusinessPageHoursRow.State.Closed
+        } else {
+            initial != null && open == openedAt && close == closesAt
+        }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("${day.dayLabel} hours") },
@@ -393,24 +426,44 @@ internal fun BusinessHoursDayDialog(
                         ).show()
                     }) { Text("Closes ${close.format(formatter)}") }
                     if (close.isBefore(open)) Text("Closes the next day.", color = PantopusColors.appTextSecondary)
-                    if (!valid) Text("Opening and closing times must differ.", color = PantopusColors.error)
+                    if (close == open) Text("Opening and closing times must differ.", color = PantopusColors.error)
+                    if (repeatsOpening) Text("Another ${day.dayLabel} interval already opens at this time.", color = PantopusColors.error)
                 }
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
-                onApply(
-                    if (closed) {
-                        EditBusinessPageHoursRow.State.Closed
-                    } else {
-                        EditBusinessPageHoursRow.State.Open(
-                            open.format(formatter),
-                            close.format(formatter),
-                        )
-                    },
-                )
+            TextButton(enabled = valid && canApply, onClick = {
+                when {
+                    // Nothing changed: the row stays exactly as saved, seconds and a 24:00 close included.
+                    unchanged -> onDismiss()
+                    closed -> onApply(EditBusinessPageHoursRow.State.Closed)
+                    else -> onApply(EditBusinessPageHoursRow.State.Open(open.format(formatter), close.format(formatter)))
+                }
             }) { Text("Apply") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+private const val OPEN_ALL_DAY_LABEL = "Open 24 hours"
+
+/** A saved `24:00` close is midnight at the end of the day. */
+private fun closeForDisplay(close: String): String =
+    if (close == EditBusinessPageHoursRow.END_OF_DAY_LABEL) EditBusinessPageHoursRow.MIDNIGHT_LABEL else close
+
+private fun openingTime(
+    state: EditBusinessPageHoursRow.State.Open?,
+    formatter: DateTimeFormatter,
+): LocalTime = runCatching { LocalTime.parse(state?.openLabel, formatter) }.getOrDefault(LocalTime.of(9, 0))
+
+/** A `24:00` close means the end of the day: the last minute when the whole day is open, else midnight. */
+private fun closingTime(
+    state: EditBusinessPageHoursRow.State.Open?,
+    formatter: DateTimeFormatter,
+): LocalTime =
+    when {
+        state?.closeLabel != EditBusinessPageHoursRow.END_OF_DAY_LABEL ->
+            runCatching { LocalTime.parse(state?.closeLabel, formatter) }.getOrDefault(LocalTime.of(17, 0))
+        state.isAllDay -> LocalTime.parse(EditBusinessPageHoursRow.LAST_MINUTE_LABEL, formatter)
+        else -> LocalTime.MIDNIGHT
+    }

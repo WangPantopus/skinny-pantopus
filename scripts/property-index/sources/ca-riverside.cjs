@@ -18,6 +18,7 @@ const GENERAL_COLUMNS = ['PIN', 'GEO_CD', 'CLASS_CODE', 'STREET_NAME', 'STREET_T
 const BUILDING_COLUMNS = ['PIN', 'YEAR_BUILT', 'NUMBER_OF_STORIES', 'ROOF_TYPE', 'GARAGE_TYPE', 'GARAGE_SIZE', 'CARPORT_SIZE', 'BATH_COUNT', 'CENTRAL_HEATING', 'CENTRAL_COOLING', 'DESIGN_TYPE', 'CONSTRUCTION_TYPE', 'LIVING_AREA', 'ACTUAL_AREA', 'HAS_POOL', 'BEDROOM_COUNT'];
 const TAX_COLUMNS = ['PIN', 'TAX_YEAR', 'PRIMARY_TAG', 'SECONDARY_TAG', 'LAND', 'STRUCTURES'];
 const PARCEL_COLUMNS = ['APN', 'ACREAGE', 'SUBDIVISION_NAME'];
+const RECORDED_COLUMNS = ['PIN', 'LOT', 'LOT_TYPE', 'PORTIONAL', 'RECORDER_MAP_TYPE'];
 
 const YES = /^(YES|Y|1)$/i;
 // A building row that isn't where anyone lives.
@@ -44,7 +45,7 @@ const roofWord = (text) => {
   return value && !/^(UNKNOWN|OTHER|OTHER APARTMENT UNIT)$/i.test(value) ? value : null;
 };
 
-function fromRow(row, { buildings, tax, parcel, onCondoMap }) {
+function fromRow(row, { buildings, tax, parcel, onCondoMap, lot }) {
   const unit = realUnit(word(row.UNIT_NUMBER));
   const [post, fraction] = /^[NSEW]$/i.test(word(row.STREET_NUMBER_SFX) || '') ? [word(row.STREET_NUMBER_SFX), ''] : ['', word(row.STREET_NUMBER_SFX) || ''];
   const address = streetParts({ number: row.STREET_NUMBER, numberSuffix: fraction, pre: word(row.STREET_PREDIRECTIONAL) || '', name: word(row.STREET_NAME) || '', suffix: word(row.STREET_TYPE) || '', post, unit });
@@ -56,6 +57,7 @@ function fromRow(row, { buildings, tax, parcel, onCondoMap }) {
   put(facts, 'address_on_record', onRecord([row.STREET_NUMBER, row.STREET_PREDIRECTIONAL, row.STREET_NAME, row.STREET_TYPE, row.STREET_NUMBER_SFX].map(word).filter(Boolean).join(' '), unit));
   put(facts, 'land_use', word(row.CLASS_CODE));
   put(facts, 'subdivision', word(parcel?.SUBDIVISION_NAME));
+  put(facts, 'lot_number', lot);
   if (tax) put(facts, 'tax_code_area', word(tax.PRIMARY_TAG) && word(tax.SECONDARY_TAG) ? `${word(tax.PRIMARY_TAG)}${word(tax.SECONDARY_TAG)}` : null);
   // One row per building: the largest one somebody lives in is the home.
   const lived = (buildings || []).filter((building) => positive(building.LIVING_AREA) && !NOT_A_HOME.test(building.DESIGN_TYPE || ''));
@@ -75,6 +77,8 @@ function fromRow(row, { buildings, tax, parcel, onCondoMap }) {
     put(facts, 'bedrooms', inRange(main.BEDROOM_COUNT, 15));
     put(facts, 'bathrooms', inRange(main.BATH_COUNT, 15));
     put(facts, 'garage', word(main.GARAGE_TYPE));
+    const parking = [/^Attached/.test(main.GARAGE_TYPE || '') && 'Attached garage', /^Detached/.test(main.GARAGE_TYPE || '') && 'Detached garage', positive(main.CARPORT_SIZE) && 'Carport'].filter(Boolean);
+    if (parking.length) facts.parking_type = parking.join(', ');
     put(facts, 'garage_sqft', positive(main.GARAGE_SIZE));
     put(facts, 'carport_sqft', positive(main.CARPORT_SIZE));
     if (YES.test(main.CENTRAL_HEATING || '')) facts.heating = 'Central';
@@ -108,7 +112,13 @@ async function* build({ work, today }) {
     condoMap.add(row.APN);
     if (!parcels.has(row.APN)) parcels.set(row.APN, row);
   }
-  log(`${buildings.size} accounts with buildings, ${taxes.size} with values, ${parcels.size} parcels, ${condoMap.size} on condo maps`);
+  // A whole lot on a recorded tract map: not a portion, a parcel map's parcel or a condo plan's unit.
+  const lots = new Map();
+  for await (const row of cached(path.join(dir, 'recorded.jsonl.gz'), () => layerRows(`${SERVICE}/90`, RECORDED_COLUMNS))) {
+    const lot = String(row.LOT ?? '').trim();
+    if (/^(Lot|L)$/.test(String(row.LOT_TYPE ?? '').trim()) && !word(row.PORTIONAL) && row.RECORDER_MAP_TYPE === 'MB' && /^\d+[A-Z]?$/.test(lot)) lots.set(row.PIN, lot);
+  }
+  log(`${buildings.size} accounts with buildings, ${taxes.size} with values, ${parcels.size} parcels, ${condoMap.size} on condo maps, ${lots.size} lots`);
   const records = [];
   const seen = new Set();
   let [noAddress, personal] = [0, 0];
@@ -118,7 +128,7 @@ async function* build({ work, today }) {
       personal += 1;
       continue;
     }
-    const record = fromRow(row, { buildings: buildings.get(row.PIN), tax: taxes.get(row.PIN), parcel: parcels.get(row.GEO_CD), onCondoMap: condoMap.has(row.GEO_CD) });
+    const record = fromRow(row, { buildings: buildings.get(row.PIN), tax: taxes.get(row.PIN), parcel: parcels.get(row.GEO_CD), onCondoMap: condoMap.has(row.GEO_CD), lot: lots.get(row.PIN) });
     if (!record) noAddress += 1;
     else if (!seen.has(record.id)) {
       seen.add(record.id);

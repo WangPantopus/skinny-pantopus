@@ -2,7 +2,9 @@
 // Milwaukee County, Wisconsin: the City of Milwaukee's Master Property File, updated daily, CC BY (credit the City). It covers the
 // city, not the county's other municipalities, whose lookups get no record. Year built, bedrooms, baths, area, stories, style,
 // basement and values. Bedrooms and baths on a multi-unit building aren't one home's, so they're kept for single homes. Owner,
-// mailing, exemption and owner-occupied columns are never read. Most condos in a shared building have no unit number here.
+// mailing, exemption and owner-occupied columns are never read. Most condos in a shared building have no unit number here. Codes follow the
+// file's documentation (Master Property File Documentation, on the dataset's page). It records each sale's month and transfer fee, which its
+// documentation says is the real estate value times .003 since September 1981, so the fee says the price.
 
 const path = require('node:path');
 const { getJson } = require('../lib/services.cjs');
@@ -11,14 +13,21 @@ const { csvRows } = require('../lib/csv.cjs');
 const { streetParts, year, zipCode, isoDate, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '55079';
 const COUNTY = 'Milwaukee County';
 const API = 'https://data.milwaukee.gov/api/3/action/package_show?id=mprop';
-const COLUMNS = ['TAXKEY', 'YR_ASSMT', 'HOUSE_NR_LO', 'HOUSE_NR_SFX', 'SDIR', 'STREET', 'STTYPE', 'C_A_LAND', 'C_A_IMPRV', 'C_A_TOTAL', 'BLDG_TYPE', 'NR_STORIES', 'BASEMENT', 'NR_UNITS', 'BLDG_AREA', 'YR_BUILT', 'FIREPLACE', 'AIR_CONDITIONING', 'BEDROOMS', 'BATHS', 'POWDER_ROOMS', 'LOT_AREA', 'ZONING', 'LAND_USE', 'GEO_ZIP_CODE'];
+const COLUMNS = ['TAXKEY', 'YR_ASSMT', 'HOUSE_NR_LO', 'HOUSE_NR_SFX', 'SDIR', 'STREET', 'STTYPE', 'C_A_LAND', 'C_A_IMPRV', 'C_A_TOTAL', 'BLDG_TYPE', 'NR_STORIES', 'BASEMENT', 'NR_UNITS', 'BLDG_AREA', 'YR_BUILT', 'FIREPLACE', 'AIR_CONDITIONING', 'BEDROOMS', 'BATHS', 'POWDER_ROOMS', 'LOT_AREA', 'ZONING', 'LAND_USE', 'GEO_ZIP_CODE', 'TAX_RATE_CD', 'C_A_CLASS', 'CONVEY_DATE', 'CONVEY_TYPE', 'CONVEY_FEE', 'PARKING_TYPE'];
 const STYLE = { '01': 'Ranch', '02': 'Bi-level', '03': 'Split-level', '04': 'Cape Cod', '05': 'Colonial', '06': 'Tudor', '07': 'Townhouse', '08': 'Old style', '09': 'Mansion', 10: 'Cottage', 11: 'Duplex, old style', 12: 'Duplex, new style', 13: 'Duplex cottage', 15: 'Triplex', 18: 'Milwaukee bungalow', 22: 'Bungalow, old style' };
-const BASEMENT = { F: 'Full basement', P: 'Partial basement', C: 'Crawl space' };
+const BASEMENT = { F: 'Full basement', P: 'Partial basement', C: 'Crawl space', Y: 'Basement' };
+const GARAGES = { A: 'Attached', D: 'Detached', AD: 'Attached, Detached' };
+const CLASSES = { 1: 'Residential', 2: 'Mercantile', 3: 'Manufacturing', 4: 'Special mercantile', 5: 'Condominiums', 7: 'Mercantile apartments', 9: 'Exempt' };
+// Its conveyance types that sell a home: deeds, land contracts, and the sales an estate, a trustee, a receiver or a court makes.
+const SALE_DEEDS = new Set(['WD', 'SW', 'D', 'CD', 'LC', 'LD', 'TD', 'PR', 'PD', 'AD', 'GD', 'MD', 'RD', 'SD', 'SH']);
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const FEE_RATE = 0.003;
 const USE_WORDS = { 8810: 'Single-family household', 8811: 'Condominium', 8820: 'Two-family residential', 8830: 'Multi-family residential', 8880: 'Vacant lot', 8885: 'Vacant lot with improvements', 8899: 'Mixed residential and commercial' };
 
 function useOf(code, buildingType) {
@@ -44,6 +53,8 @@ function fromRow(row, today) {
   put(facts, 'land_use', USE_WORDS[String(row.LAND_USE).trim()]);
   put(facts, 'county_use_code', word(row.LAND_USE));
   put(facts, 'zoning', word(row.ZONING));
+  put(facts, 'tax_code_area', word(row.TAX_RATE_CD));
+  put(facts, 'property_class', CLASSES[String(row.C_A_CLASS ?? '').trim()]);
   if (on) {
     const built = year(row.YR_BUILT);
     put(facts, 'year_built', built);
@@ -60,11 +71,22 @@ function fromRow(row, today) {
     if (full || half) facts.bathrooms = (full || 0) + (half || 0) * 0.5;
     if (String(row.FIREPLACE).trim() === '1') facts.fireplaces = 1;
     if (String(row.AIR_CONDITIONING).trim().startsWith('1')) facts.cooling = 'Central air';
+    const garage = GARAGES[String(row.PARKING_TYPE ?? '').trim()];
+    if (garage) {
+      facts.garage = garage;
+      facts.parking_type = garage.split(', ').map((kind) => `${kind} garage`).join(', ');
+    }
   } else if (kind === 'building') {
     put(facts, 'gross_sqft', positive(row.BLDG_AREA));
     put(facts, 'units', positive(row.NR_UNITS));
   }
   if (homeType !== 'condo') put(facts, 'lot_sqft', positive(row.LOT_AREA));
+  const conveyed = isoDate(row.CONVEY_DATE);
+  const price = positive(row.CONVEY_FEE) ? Math.round(positive(row.CONVEY_FEE) / FEE_RATE) : null;
+  if (conveyed && conveyed >= '1981-09' && SALE_DEEDS.has(String(row.CONVEY_TYPE ?? '').trim()) && isHomeSale(price)) {
+    facts.sale_price = price;
+    facts.sale_month = `${MONTHS[Number(conveyed.slice(5, 7)) - 1]} ${conveyed.slice(0, 4)}`;
+  }
   put(facts, 'value_year', positive(row.YR_ASSMT));
   put(facts, 'assessed_value', positive(row.C_A_TOTAL));
   put(facts, 'assessed_land_value', positive(row.C_A_LAND));

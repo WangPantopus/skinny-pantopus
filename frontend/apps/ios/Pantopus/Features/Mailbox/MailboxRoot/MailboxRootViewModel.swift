@@ -684,6 +684,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     func showSentIfPending() {
         guard Self.pendingShowSent else { return }
         Self.pendingShowSent = false
+        openedCardFlow = false
         if LaunchFeatures.mailbox { selectSent() }
     }
 

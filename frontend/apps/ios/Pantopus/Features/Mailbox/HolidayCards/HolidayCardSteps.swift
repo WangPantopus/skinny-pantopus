@@ -103,6 +103,32 @@ struct HolidayCardToStep: View {
             .buttonStyle(.plain)
             .padding(.top, Spacing.s2)
             .accessibilityIdentifier("sendCardByEmail")
+            if LaunchFeatures.cardTable {
+                Button {
+                    focused = false
+                    viewModel.choose(.link)
+                } label: {
+                    VStack(spacing: 2) {
+                        HStack(spacing: Spacing.s2) {
+                            Icon(.link, size: 18, color: MailPaper.wax)
+                            Text("Send it by link.")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(MailPaper.wax)
+                        }
+                        Text("Text it, or paste it anywhere. The first person to open it keeps the card.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(HolidayCardDesk.muted(scheme))
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("sendCardByLink")
+            }
         }
         .task {
             // Ready to type, as on the web.

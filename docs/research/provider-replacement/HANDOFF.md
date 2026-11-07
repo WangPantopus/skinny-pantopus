@@ -36,8 +36,10 @@ Updated November 7, 2026 (UTC). Live status is on the coordinator's board, outsi
 1. Read the coordinator's board in the shared notes folder and check PR, CI and queue state.
 2. Follow [build-plan.md](build-plan.md)'s rules and verification recipe. Wave 2 (WP5 first; then WP6-WP9) and wave 3 (WP10,
    WP11, WP12) follow; the retirements run with the founder after their gates pass.
-3. Research still open (no founder action): license terms per free source before each connector; one-home lookups on
-   county sites (terms and bot blocks by platform); a per-state inventory of statewide files.
+3. Research done November 7: one-home lookups on county sites ([lookup-sites.md](lookup-sites.md), a recommendation for
+   the founder's D2 yes or no), a per-state inventory of statewide files ([statewide-inventory.md](statewide-inventory.md))
+   and every other route ([other-routes.md](other-routes.md)). Still open: license terms per free source before each
+   connector.
 
 ## Note on personal data
 

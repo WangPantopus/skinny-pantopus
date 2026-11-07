@@ -6,11 +6,14 @@ import android.content.SharedPreferences
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.businesses.BusinessAccessDto
+import app.pantopus.android.data.api.models.businesses.BusinessCatalogItemsResponse
 import app.pantopus.android.data.api.models.businesses.BusinessDashboardResponse
 import app.pantopus.android.data.api.models.businesses.BusinessDetailResponse
 import app.pantopus.android.data.api.models.businesses.BusinessInsightsResponse
 import app.pantopus.android.data.api.models.businesses.BusinessOnboardingDto
 import app.pantopus.android.data.api.models.businesses.BusinessOwnerReviewDto
+import app.pantopus.android.data.api.models.businesses.BusinessPermission
 import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
 import app.pantopus.android.data.api.models.businessfounding.FoundingOfferStatusDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -129,6 +132,7 @@ class BusinessOwnerViewModel
             text: String,
         ) {
             val current = _state.value as? BusinessOwnerUiState.Loaded ?: return
+            if (!current.content.allows(BusinessPermission.REVIEWS_RESPOND)) return
             val trimmed = text.trim()
             if (trimmed.isEmpty()) return
             _toast.value = null
@@ -174,6 +178,7 @@ class BusinessOwnerViewModel
          */
         fun claimFoundingOffer() {
             val current = _state.value as? BusinessOwnerUiState.Loaded ?: return
+            if (!current.content.access.isOwner) return
             val offer = current.content.foundingOffer ?: return
             if (offer.isClaiming) return
             _toast.value = null
@@ -250,9 +255,10 @@ class BusinessOwnerViewModel
                     return@coroutineScope
                 }
                 val dashboard = (dash as NetworkResult.Success).data
+                val access = dashboard.access ?: BusinessAccessDto()
                 val publicData = publicRead.await()
                 val renderData =
-                    publicData ?: when (val result = ownerProfileData(payload)) {
+                    publicData ?: when (val result = ownerProfileData(payload, access)) {
                         is NetworkResult.Success -> result.data
                         is NetworkResult.Failure -> {
                             publish(request, mapDetailFailure(result.error))
@@ -262,7 +268,7 @@ class BusinessOwnerViewModel
                 if (!isCurrent(request)) return@coroutineScope
                 val profile = BusinessProfileMapper.build(payload, renderData, null).copy(hasPublicPage = publicData != null)
                 publish(request, BusinessOwnerUiState.Loaded(buildContent(profile, dashboard, null, emptyList())))
-                loadOverlays(request, payload, renderData, publicData != null, dashboard.access?.isOwner == true)
+                loadOverlays(request, payload, renderData, publicData != null, access)
             }
 
         /** Optional sections must not hold the business page behind their network latency. */
@@ -271,7 +277,7 @@ class BusinessOwnerViewModel
             detail: BusinessDetailResponse,
             renderData: BusinessPublicResponse,
             hasPublicPage: Boolean,
-            isOwner: Boolean,
+            access: BusinessAccessDto,
         ) = coroutineScope {
             launch {
                 val reviews = (profiles.publicProfile(businessId) as? NetworkResult.Success)?.data ?: return@launch
@@ -279,20 +285,24 @@ class BusinessOwnerViewModel
                     it.copy(publicProfile = BusinessProfileMapper.build(detail, renderData, reviews).copy(hasPublicPage = hasPublicPage))
                 }
             }
-            launch {
-                val insights = (businesses.insights(businessId) as? NetworkResult.Success)?.data ?: return@launch
-                updateContent(request) { it.copy(insights = insightTiles(insights)) }
+            if (access.allows(BusinessPermission.INSIGHTS_VIEW)) {
+                launch {
+                    val insights = (businesses.insights(businessId) as? NetworkResult.Success)?.data ?: return@launch
+                    updateContent(request) { it.copy(insights = insightTiles(insights)) }
+                }
             }
-            launch {
-                val reviews = (businesses.reviews(businessId) as? NetworkResult.Success)?.data?.reviews ?: return@launch
-                val mapped = reviews.map(::ownerReview)
-                val pending = mapped.count { it.reply == null }
-                updateContent(request) {
-                    it.copy(reviews = mapped, reviewsToReplyLabel = if (pending > 0) "$pending to reply" else null)
+            if (access.allows(BusinessPermission.REVIEWS_VIEW)) {
+                launch {
+                    val reviews = (businesses.reviews(businessId) as? NetworkResult.Success)?.data?.reviews ?: return@launch
+                    val mapped = reviews.map(::ownerReview)
+                    val pending = mapped.count { it.reply == null }
+                    updateContent(request) {
+                        it.copy(reviews = mapped, reviewsToReplyLabel = if (pending > 0) "$pending to reply" else null)
+                    }
                 }
             }
             // Only the owner can claim a founding slot (the claim route refuses everyone else), as on iOS and web.
-            if (isOwner) {
+            if (access.isOwner) {
                 launch {
                     val offer = loadFoundingOffer()
                     updateContent(request) { it.copy(foundingOffer = offer) }
@@ -319,7 +329,10 @@ class BusinessOwnerViewModel
         }
 
         /** Drafts have no public projection, but their saved hours and services still exist. */
-        private suspend fun ownerProfileData(payload: BusinessDetailResponse): NetworkResult<BusinessPublicResponse> =
+        private suspend fun ownerProfileData(
+            payload: BusinessDetailResponse,
+            access: BusinessAccessDto,
+        ): NetworkResult<BusinessPublicResponse> =
             coroutineScope {
                 val location =
                     payload.profile?.primaryLocation
@@ -327,7 +340,8 @@ class BusinessOwnerViewModel
                         ?: payload.locations.firstOrNull()
                 val hoursRead =
                     async {
-                        if (location == null) {
+                        // A section this person can't read is left empty; its refusal must not close the whole page.
+                        if (location == null || !access.allows(BusinessPermission.HOURS_VIEW)) {
                             NetworkResult.Success(emptyList())
                         } else {
                             when (val result = businesses.locationHours(businessId, location.id)) {
@@ -336,7 +350,14 @@ class BusinessOwnerViewModel
                             }
                         }
                     }
-                val catalogRead = async { businesses.catalogItems(businessId) }
+                val catalogRead =
+                    async {
+                        if (access.allows(BusinessPermission.CATALOG_VIEW)) {
+                            businesses.catalogItems(businessId)
+                        } else {
+                            NetworkResult.Success(BusinessCatalogItemsResponse())
+                        }
+                    }
                 val hours =
                     when (val result = hoursRead.await()) {
                         is NetworkResult.Success -> result.data
@@ -356,7 +377,7 @@ class BusinessOwnerViewModel
 
         private fun mapDashboardFailure(error: NetworkError): BusinessOwnerUiState =
             when (error) {
-                NetworkError.Forbidden -> BusinessOwnerUiState.Error("You don't have access to this business.")
+                NetworkError.Forbidden -> BusinessOwnerUiState.Error("You don't have access to this business.", refused = true)
                 NetworkError.NotFound -> BusinessOwnerUiState.NotFound
                 else -> BusinessOwnerUiState.Error("Couldn't load your business")
             }
@@ -371,6 +392,7 @@ class BusinessOwnerViewModel
             reviews: List<BusinessOwnerReviewDto>,
             foundingOffer: OwnerFoundingOffer? = null,
         ): BusinessOwnerContent {
+            val access = dashboard.access ?: BusinessAccessDto()
             val isLive = dashboard.profile?.isPublished == true
             val mappedReviews = reviews.map { ownerReview(it) }
             val pending = mappedReviews.count { it.reply == null }
@@ -379,21 +401,16 @@ class BusinessOwnerViewModel
                 isLive = isLive,
                 editedMeta = editedMeta(dashboard.profile?.updatedAt, isLive),
                 insights = insightTiles(insights),
-                profileStrength = profileStrength(dashboard.onboarding),
+                profileStrength = profileStrength(dashboard.onboarding, access),
                 reviewsToReplyLabel = if (pending > 0) "$pending to reply" else null,
                 reviews = mappedReviews,
                 publicProfile = publicProfile,
-                canPostAsBusiness = canPost(dashboard.access?.roleBase),
+                canPostAsBusiness = access.allows(BusinessPermission.PROFILE_EDIT),
                 foundingOffer = foundingOffer,
                 isVerified = MyBusinessesViewModel.isVerified(dashboard.profile?.identityVerificationTier),
+                access = access,
             )
         }
-
-        /**
-         * RN gate: `access.role_base && ['owner','admin','editor'].includes(...)`
-         * (`src/app/businesses/[id]/index.tsx:67`).
-         */
-        private fun canPost(roleBase: String?): Boolean = !roleBase.isNullOrEmpty() && roleBase in BusinessOwnerContent.POSTING_ROLES
 
         private fun insightTiles(insights: BusinessInsightsResponse?): List<OwnerInsightTile> {
             if (insights == null) return emptyList()
@@ -422,7 +439,10 @@ class BusinessOwnerViewModel
             )
         }
 
-        private fun profileStrength(onboarding: BusinessOnboardingDto?): OwnerProfileStrength {
+        private fun profileStrength(
+            onboarding: BusinessOnboardingDto?,
+            access: BusinessAccessDto,
+        ): OwnerProfileStrength {
             if (onboarding == null || onboarding.totalCount <= 0) {
                 return OwnerProfileStrength(0, "Finish setting up your page", emptyList())
             }
@@ -436,10 +456,20 @@ class BusinessOwnerViewModel
                 }
             val steps =
                 onboarding.checklist.map {
-                    OwnerStrengthStep(it.key, it.label, it.done, ctaLabel = if (it.done) null else "Add")
+                    val canAdd = !it.done && access.allows(stepPermission(it.key))
+                    OwnerStrengthStep(it.key, it.label, it.done, ctaLabel = if (canAdd) "Add" else null)
                 }
             return OwnerProfileStrength(percent, caption, steps)
         }
+
+        /** The permission the editor needs before this checklist step's Add leads anywhere. */
+        private fun stepPermission(step: String): String =
+            when (step) {
+                "location_added" -> BusinessPermission.LOCATIONS_EDIT
+                "hours_set" -> BusinessPermission.HOURS_EDIT
+                "catalog_item_added" -> BusinessPermission.CATALOG_EDIT
+                else -> BusinessPermission.PROFILE_EDIT
+            }
 
         private fun ownerReview(dto: BusinessOwnerReviewDto): OwnerReviewItem {
             val meta =

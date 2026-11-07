@@ -4,6 +4,7 @@
     "LongMethod",
     "LongParameterList",
     "TooManyFunctions",
+    "ComplexMethod",
 )
 
 package app.pantopus.android.ui.screens.businesses.catalog
@@ -50,12 +51,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.toastDurationMillis
+import app.pantopus.android.ui.screens.businesses.BusinessAccessNotice
+import app.pantopus.android.ui.screens.businesses.rememberSlowAccessCheck
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
 import app.pantopus.android.ui.theme.PantopusColors
@@ -91,6 +95,23 @@ fun BusinessCatalogScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val isMutating by viewModel.isMutating.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val access by viewModel.access.collectAsStateWithLifecycle()
+    // A check too slow to go unnoticed counts as no access: its controls go, and the notice says why.
+    val isSlowCheck = rememberSlowAccessCheck(access.isChecking)
+    val canEditItems = access.canEditItems && !isSlowCheck
+    val canManage = access.canManage && !isSlowCheck
+    val notice = access.notice ?: "Checking catalog access…".takeIf { isSlowCheck }
+    // An open editor or panel names what it lost when the rest of the catalog is still allowed.
+    val accessNotice: @Composable (String?) -> Unit = { refusal ->
+        (notice ?: refusal.takeUnless { access.isChecking })?.let {
+            BusinessAccessNotice(
+                message = it,
+                canRetry = !access.isChecking,
+                onRetry = viewModel::retryAccess,
+                testTag = "businessCatalog.accessNotice",
+            )
+        }
+    }
 
     var editorTarget by remember { mutableStateOf<CatalogEditorTarget?>(null) }
     var showsCategories by remember { mutableStateOf(false) }
@@ -110,7 +131,10 @@ fun BusinessCatalogScreen(
         }
     }
 
-    LaunchedEffect(Unit) { viewModel.load() }
+    LifecycleResumeEffect(Unit) {
+        viewModel.resume()
+        onPauseOrDispose { viewModel.pause() }
+    }
     LaunchedEffect(toast) {
         if (toast?.kind == BusinessCatalogToastKind.Success) {
             delay(toastDurationMillis(toast?.text.orEmpty(), minimumMillis = 2_000))
@@ -140,6 +164,8 @@ fun BusinessCatalogScreen(
                                 viewModel.updateItem(target.row.id, draft) { ok -> if (ok) editorTarget = null }
                         }
                     },
+                    canSave = canEditItems,
+                    accessNotice = { accessNotice("You don't have permission to edit catalog items.".takeUnless { canEditItems }) },
                 )
             showsCategories ->
                 BusinessCatalogCategoriesPanel(
@@ -150,18 +176,21 @@ fun BusinessCatalogScreen(
                     onRename = viewModel::renameCategory,
                     onDelete = { id -> viewModel.deleteCategory(id) },
                     errorMessage = toast?.takeIf { it.kind == BusinessCatalogToastKind.Error }?.text,
+                    canManage = canManage,
+                    accessNotice = { accessNotice("You don't have permission to manage categories.".takeUnless { canManage }) },
                 )
             else ->
                 CatalogListFrame(
                     state = state,
                     isMutating = isMutating,
                     onBack = onBack,
-                    onOpenCategories = { showsCategories = true },
-                    onAddItem = { editorTarget = CatalogEditorTarget.Create },
-                    onEditItem = { row -> editorTarget = CatalogEditorTarget.Edit(row) },
-                    onMove = viewModel::move,
-                    onRequestDelete = { row -> pendingDelete = row },
+                    onOpenCategories = ({ showsCategories = true }).takeIf { canManage },
+                    onAddItem = ({ editorTarget = CatalogEditorTarget.Create }).takeIf { canEditItems },
+                    onEditItem = ({ row: BusinessCatalogItemRow -> editorTarget = CatalogEditorTarget.Edit(row) }).takeIf { canEditItems },
+                    onMove = if (canEditItems) viewModel::move else null,
+                    onRequestDelete = ({ row: BusinessCatalogItemRow -> pendingDelete = row }).takeIf { canManage },
                     onRetry = viewModel::refresh,
+                    accessNotice = { accessNotice(null) },
                 )
         }
         toast?.let {
@@ -172,7 +201,7 @@ fun BusinessCatalogScreen(
         }
     }
 
-    pendingDelete?.let { row ->
+    pendingDelete?.takeIf { canManage }?.let { row ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text(text = "Archive item") },
@@ -200,12 +229,13 @@ private fun CatalogListFrame(
     state: BusinessCatalogUiState,
     isMutating: Boolean,
     onBack: () -> Unit,
-    onOpenCategories: () -> Unit,
-    onAddItem: () -> Unit,
-    onEditItem: (BusinessCatalogItemRow) -> Unit,
-    onMove: (String, BusinessCatalogMoveDirection) -> Unit,
-    onRequestDelete: (BusinessCatalogItemRow) -> Unit,
+    onOpenCategories: (() -> Unit)?,
+    onAddItem: (() -> Unit)?,
+    onEditItem: ((BusinessCatalogItemRow) -> Unit)?,
+    onMove: ((String, BusinessCatalogMoveDirection) -> Unit)?,
+    onRequestDelete: ((BusinessCatalogItemRow) -> Unit)?,
     onRetry: () -> Unit,
+    accessNotice: @Composable () -> Unit,
 ) {
     Box(
         modifier =
@@ -220,11 +250,13 @@ private fun CatalogListFrame(
                 title = "Catalog",
                 onBack = onBack,
                 action =
-                    ContentDetailTopBarAction(
-                        icon = PantopusIcon.FolderPlus,
-                        contentDescription = "Manage categories",
-                        onClick = onOpenCategories,
-                    ),
+                    onOpenCategories?.let {
+                        ContentDetailTopBarAction(
+                            icon = PantopusIcon.FolderPlus,
+                            contentDescription = "Manage categories",
+                            onClick = it,
+                        )
+                    },
             )
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when (state) {
@@ -234,9 +266,13 @@ private fun CatalogListFrame(
                             icon = PantopusIcon.Tag,
                             headline = "No catalog items yet",
                             subcopy =
-                                "Add the services or products you sell so neighbors can see " +
-                                    "what you offer and what it costs.",
-                            ctaTitle = "Add item",
+                                if (onAddItem != null) {
+                                    "Add the services or products you sell so neighbors can see " +
+                                        "what you offer and what it costs."
+                                } else {
+                                    "This business hasn't listed anything yet."
+                                },
+                            ctaTitle = "Add item".takeIf { onAddItem != null },
                             onCta = onAddItem,
                             tint = PantopusColors.businessBg,
                             accent = PantopusColors.business,
@@ -264,10 +300,10 @@ private fun CatalogListFrame(
                 }
             }
         }
-        CatalogDock(
-            onAddItem = onAddItem,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
-        )
+        Column(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
+            accessNotice()
+            onAddItem?.let { CatalogDock(onAddItem = it) }
+        }
     }
 }
 
@@ -292,9 +328,9 @@ private fun CatalogLoadingLayout() {
 private fun CatalogList(
     items: List<BusinessCatalogItemRow>,
     isMutating: Boolean,
-    onEditItem: (BusinessCatalogItemRow) -> Unit,
-    onMove: (String, BusinessCatalogMoveDirection) -> Unit,
-    onRequestDelete: (BusinessCatalogItemRow) -> Unit,
+    onEditItem: ((BusinessCatalogItemRow) -> Unit)?,
+    onMove: ((String, BusinessCatalogMoveDirection) -> Unit)?,
+    onRequestDelete: ((BusinessCatalogItemRow) -> Unit)?,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("businessCatalog.list"),
@@ -306,10 +342,10 @@ private fun CatalogList(
                 row = row,
                 canMoveUp = index > 0 && !isMutating,
                 canMoveDown = index < items.size - 1 && !isMutating,
-                onEdit = { onEditItem(row) },
-                onMoveUp = { onMove(row.id, BusinessCatalogMoveDirection.Up) },
-                onMoveDown = { onMove(row.id, BusinessCatalogMoveDirection.Down) },
-                onDelete = { onRequestDelete(row) },
+                onEdit = onEditItem?.let { edit -> { edit(row) } },
+                onMoveUp = onMove?.let { move -> { move(row.id, BusinessCatalogMoveDirection.Up) } },
+                onMoveDown = onMove?.let { move -> { move(row.id, BusinessCatalogMoveDirection.Down) } },
+                onDelete = onRequestDelete?.let { archive -> { archive(row) } },
             )
         }
     }
@@ -317,17 +353,17 @@ private fun CatalogList(
 
 /**
  * One catalog row: reorder chevrons · name + badges + meta · price ·
- * archive. Mirrors RN's `catalogCard`.
+ * archive. A null action hides its control. Mirrors RN's `catalogCard`.
  */
 @Composable
 private fun BusinessCatalogItemCard(
     row: BusinessCatalogItemRow,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
-    onEdit: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onDelete: () -> Unit,
+    onEdit: (() -> Unit)?,
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
 ) {
     Row(
         modifier =
@@ -341,24 +377,26 @@ private fun BusinessCatalogItemCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            ReorderChevron(
-                icon = PantopusIcon.ChevronUp,
-                enabled = canMoveUp,
-                description = "Move ${row.name} up",
-                testTag = "businessCatalog.moveUp.${row.id}",
-                onClick = onMoveUp,
-            )
-            ReorderChevron(
-                icon = PantopusIcon.ChevronDown,
-                enabled = canMoveDown,
-                description = "Move ${row.name} down",
-                testTag = "businessCatalog.moveDown.${row.id}",
-                onClick = onMoveDown,
-            )
+        if (onMoveUp != null && onMoveDown != null) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                ReorderChevron(
+                    icon = PantopusIcon.ChevronUp,
+                    enabled = canMoveUp,
+                    description = "Move ${row.name} up",
+                    testTag = "businessCatalog.moveUp.${row.id}",
+                    onClick = onMoveUp,
+                )
+                ReorderChevron(
+                    icon = PantopusIcon.ChevronDown,
+                    enabled = canMoveDown,
+                    description = "Move ${row.name} down",
+                    testTag = "businessCatalog.moveDown.${row.id}",
+                    onClick = onMoveDown,
+                )
+            }
         }
         Row(
-            modifier = Modifier.weight(1f).clickable(onClick = onEdit),
+            modifier = Modifier.weight(1f).then(if (onEdit != null) Modifier.clickable(onClick = onEdit) else Modifier),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
@@ -413,22 +451,24 @@ private fun BusinessCatalogItemCard(
                 )
             }
         }
-        Box(
-            modifier =
-                Modifier
-                    .size(32.dp)
-                    .clickable(onClick = onDelete)
-                    .semantics { contentDescription = "Archive ${row.name}" }
-                    .testTag("businessCatalog.delete.${row.id}"),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Trash2,
-                contentDescription = null,
-                size = 18.dp,
-                strokeWidth = 2f,
-                tint = PantopusColors.error,
-            )
+        if (onDelete != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(32.dp)
+                        .clickable(onClick = onDelete)
+                        .semantics { contentDescription = "Archive ${row.name}" }
+                        .testTag("businessCatalog.delete.${row.id}"),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Trash2,
+                    contentDescription = null,
+                    size = 18.dp,
+                    strokeWidth = 2f,
+                    tint = PantopusColors.error,
+                )
+            }
         }
     }
 }

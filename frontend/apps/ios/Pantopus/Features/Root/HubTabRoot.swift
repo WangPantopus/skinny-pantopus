@@ -440,8 +440,9 @@ public enum HubRoute: Hashable {
     /// "N items need routing" banner.
     case mailRoutingQueue
     /// Send a Christmas card, or today's card once it's sent (`holiday_cards`):
-    /// the row at the top of Me in the Mailbox.
-    case christmasCards
+    /// the row at the top of Me in the Mailbox, or a public card page's link
+    /// with that picture chosen.
+    case christmasCards(design: String? = nil)
     /// A card in Sent (`mailbox`): what they got, its trail, and Take it back.
     case mailSentCard(id: String)
     /// Family Mail Party — household co-opening (discover / join / start /
@@ -1031,7 +1032,7 @@ public struct HubTabRoot: View {
         model.onOpenInvoice = { invoiceId in push(.invoiceDetail(invoiceId: invoiceId)) }
         model.onVerifyHome = { homeId in showVerifyHome(homeId) }
         model.onOpenWelcome = { mail in push(.mailWelcome(mail)) }
-        model.onOpenChristmasCards = { push(.christmasCards) }
+        model.onOpenChristmasCards = { push(.christmasCards()) }
         model.onOpenSentCard = { id in push(.mailSentCard(id: id)) }
         return model
     }
@@ -1169,6 +1170,13 @@ public struct HubTabRoot: View {
     /// A mailbox screen opened from a link or another tab. In the Mail tab it
     /// opens over the Mailbox at the root, so Back returns there and a second
     /// Mailbox is never pushed; in the Place stack, over a pushed Mailbox.
+    /// A card's page, over the Mailbox showing Sent, which may not be open yet.
+    private func openSentCard(_ id: String) {
+        MailboxRootViewModel.pendingShowSent = true
+        NotificationCenter.default.post(name: .mailboxShowSent, object: nil)
+        openMailboxScreen(.mailSentCard(id: id))
+    }
+
     private func openMailboxScreen(_ route: HubRoute) {
         guard mode == .mailbox else {
             path.append(.mailboxRoot)
@@ -1517,9 +1525,11 @@ public struct HubTabRoot: View {
         case let .mailSentCard(id):
             // A card notice (they joined and have it, or its 90 days ended):
             // the card's page, over the Mailbox showing Sent.
-            MailboxRootViewModel.pendingShowSent = true
-            NotificationCenter.default.post(name: .mailboxShowSent, object: nil)
-            openMailboxScreen(.mailSentCard(id: id))
+            openSentCard(id)
+            _ = router.consume()
+        case let .mailCards(design):
+            // A public card page's link: the card flow with its picture chosen, over the Mailbox.
+            openMailboxScreen(.christmasCards(design: design))
             _ = router.consume()
         case let .neighborMessage(messageId):
             path.append(.neighborMessage(messageId: messageId))
@@ -1554,7 +1564,7 @@ public struct HubTabRoot: View {
              .plans, .plan, .planRequests, .planNew:
             return false
         case .vacationHold, .mailDay, .stamps, .mailTask,
-             .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem, .mailSentCard:
+             .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem, .mailSentCard, .mailCards:
             // With Mailbox off for launch, the Place stack shows the placeholder.
             return tab == (LaunchFeatures.mailbox ? .mail : .place)
         default:
@@ -3608,12 +3618,19 @@ public struct HubTabRoot: View {
             )
         case .mailRoutingQueue:
             MailRoutingQueueView { Task { @MainActor in pop() } }
-        case .christmasCards:
+        case let .christmasCards(design):
             HolidayCardFlowView(
-                viewModel: mailScreenModels.model(for: route) { HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName) },
+                viewModel: mailScreenModels.model(for: route) {
+                    HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName, designId: design)
+                },
                 onSeeInSent: { cardId in
-                    // Back to the Mailbox, which shows Sent and the card.
                     Task { @MainActor in
+                        // A link may have opened this flow, with no Mailbox opened under it.
+                        if LaunchFeatures.cardTable, mode == .mailbox {
+                            openSentCard(cardId)
+                            return
+                        }
+                        // Back to the Mailbox, which shows Sent and the card.
                         pop()
                         NotificationCenter.default.post(name: .mailboxOpenSent, object: cardId)
                     }

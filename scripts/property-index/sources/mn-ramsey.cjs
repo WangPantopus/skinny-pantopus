@@ -1,7 +1,8 @@
 'use strict';
 // Ramsey County, Minnesota: the Assessor's parcel data on the county's open data portal, public domain, with bedrooms and baths the
 // state's open parcels leave out. It holds every assessment year: only the latest is read. Taxpayer and homestead aren't in it.
-// A condo's address there has no unit number: that comes from the county's row in the state's open parcels, by parcel number.
+// A condo's address there has no unit number: that comes from the county's row in the state's open parcels, by parcel number, with the
+// rest the county sends the state for each parcel: style, garage, heat, air, ZIP+4, platted lot and plat.
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
@@ -16,7 +17,7 @@ const COUNTY = 'Ramsey County';
 const DOMAIN = 'data.ramseycountymn.gov';
 const TABLE = '4fwy-py9e';
 const STATE_PARCELS = 'https://enterprise.gisdata.mn.gov/aghost/rest/services/us_mn_state_mngeo/plan_parcels_open/FeatureServer/1';
-const COLUMNS = ['pin', 'rolltype', 'assessment_year', 'street_address_1', 'street_address_2', 'municipality', 'land_use_code', 'living_units', 'total_acres', 'land_value', 'building_value', 'total_market_value', 'sumlandsqft', 'dwelling_year_built', 'sumressqftlivingarea', 'bedrooms', 'full_baths', 'half_baths', 'combldg_year_built', 'latest_sale_date', 'sale_price'];
+const COLUMNS = ['pin', 'rolltype', 'assessment_year', 'street_address_1', 'street_address_2', 'municipality', 'land_use_code', 'living_units', 'total_acres', 'land_value', 'building_value', 'total_market_value', 'sumlandsqft', 'dwelling_year_built', 'sumressqftlivingarea', 'bedrooms', 'full_baths', 'half_baths', 'combldg_year_built', 'latest_sale_date', 'sale_price', 'primary_classification', 'dwelling_cards'];
 
 function useOf(code, hasUnit) {
   const use = String(code ?? '').toUpperCase();
@@ -31,7 +32,10 @@ function useOf(code, hasUnit) {
   return ['other', null];
 }
 
-function fromRow(row, unit) {
+const HEAT = { 'Hot Air': 'Hot air', 'Hot Water': 'Hot water', Electric: 'Electric', Unit: 'Unit heater' };
+
+function fromRow(row, state = {}) {
+  const unit = state.sub_id1;
   const address = parse(row.street_address_1, realUnit(unit));
   const parcel = word(row.pin);
   if (!address || !parcel) return null;
@@ -43,8 +47,20 @@ function fromRow(row, unit) {
   put(facts, 'land_use', String(word(row.land_use_code) || '').replace(/^\d+\s*-\s*/, '') || null);
   put(facts, 'county_use_code', /^\d+/.exec(String(row.land_use_code ?? ''))?.[0]);
   put(facts, 'municipality', String(word(row.municipality) || '').replace(/^\d+\s*-\s*/, '') || null);
-  if (home || kind === 'building') put(facts, 'year_built', year(row.dwelling_year_built) || year(row.combldg_year_built));
+  // "201 -  1A/1B/4BB RESIDENTIAL SINGLE UNIT": the county's code, the state's classes, and its words.
+  put(facts, 'property_class', word(String(row.primary_classification ?? '').replace(/^[\d\s-]+(?:[0-9A-Z]+\/)*[0-9A-Z]+\s+/, '')));
+  put(facts, 'subdivision', word(state.plat_name));
+  put(facts, 'lot_number', /^\d+[A-Z]?$/.test(String(state.lot ?? '').trim()) ? String(state.lot).trim() : null);
+  if (/^\d{4}$/.test(String(state.zip4 ?? '').trim()) && state.zip4 !== '0000' && zipCode(place?.[2])) facts.zip_plus4 = `${zipCode(place[2])}-${state.zip4}`;
+  if (home || kind === 'building') {
+    put(facts, 'year_built', year(row.dwelling_year_built) || year(row.combldg_year_built));
+    put(facts, 'style', word(state.home_style));
+    if (positive(row.dwelling_cards) > 1) facts.buildings_on_parcel = positive(row.dwelling_cards);
+  }
   if (home) {
+    put(facts, 'heating', HEAT[state.heating]);
+    if (state.cooling === 'Centw/Air') facts.cooling = 'Central air';
+    if (state.garage === 'Yes') facts.garage = 'Yes';
     put(facts, 'living_sqft', positive(row.sumressqftlivingarea));
     put(facts, 'bedrooms', positive(row.bedrooms));
     const [full, half] = [positive(row.full_baths), positive(row.half_baths)];
@@ -73,14 +89,18 @@ async function* build({ work }) {
   if (!asOf) throw new Error('The dataset no longer says when it changed');
   const [{ latest }] = await getJson(`https://${DOMAIN}/resource/${TABLE}.json?${new URLSearchParams({ $select: 'max(assessment_year) as latest' })}`, 'The latest assessment year');
   log(`assessment year ${latest}`);
-  const units = new Map();
-  for await (const row of cached(path.join(work, 'mn-ramsey', 'units.jsonl.gz'), () => layerRows(STATE_PARCELS, ['county_pin', 'sub_id1'], { where: "co_name = 'Ramsey' AND sub_id1 IS NOT NULL", oid: 'objectid' }))) units.set(word(row.county_pin), row.sub_id1);
-  log(`${units.size} unit numbers from the state's parcels`);
+  const states = new Map();
+  let units = 0;
+  for await (const row of cached(path.join(work, 'mn-ramsey', 'state.jsonl.gz'), () => layerRows(STATE_PARCELS, ['county_pin', 'sub_id1', 'zip4', 'lot', 'plat_name', 'home_style', 'garage', 'heating', 'cooling'], { where: "co_name = 'Ramsey'", oid: 'objectid' }))) {
+    states.set(word(row.county_pin), row);
+    if (row.sub_id1) units += 1;
+  }
+  log(`${states.size} parcels in the state's file, ${units} with unit numbers`);
   const records = [];
   const seen = new Set();
   let noAddress = 0;
   for await (const row of cached(path.join(work, 'mn-ramsey', `${latest}.jsonl.gz`), () => socrataRows(DOMAIN, TABLE, COLUMNS, { where: `assessment_year='${latest}' AND rolltype in('Real Property','Manufactured Home')` }))) {
-    const record = fromRow(row, units.get(word(row.pin)));
+    const record = fromRow(row, states.get(word(row.pin)));
     if (!record) noAddress += 1;
     else if (!seen.has(record.id)) {
       seen.add(record.id);

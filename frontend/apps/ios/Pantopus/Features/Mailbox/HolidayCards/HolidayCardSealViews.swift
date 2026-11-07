@@ -37,7 +37,7 @@ struct HolidayCardSealStep: View {
                 }
             }
             .padding(.top, 10)
-            Text(HolidayCardWords.sealNote(byEmail: recipient.isEmail))
+            Text(recipient.isLink ? HolidayCardWords.sealNoteByLink : HolidayCardWords.sealNote(byEmail: recipient.isEmail))
                 .font(.system(size: 13))
                 .foregroundStyle(MailPaper.cardTextSoft)
                 .lineSpacing(2)
@@ -67,7 +67,11 @@ struct HolidayCardSealStep: View {
     @ViewBuilder
     private var button: some View {
         if viewModel.lookUnavailable {
-            HolidayCardWaxButton(title: "Seal and send", isLoading: viewModel.sending, isEnabled: viewModel.arrival != nil) {
+            HolidayCardWaxButton(
+                title: viewModel.recipient?.isLink == true ? "Seal it and get the link" : "Seal and send",
+                isLoading: viewModel.sending,
+                isEnabled: viewModel.arrival != nil
+            ) {
                 Task { await viewModel.send() }
             }
         } else {
@@ -89,7 +93,7 @@ struct HolidayCardSealStep: View {
             trust: .neighbor,
             from: viewModel.fromName,
             fromLine: nil,
-            to: recipient.name,
+            to: recipient.envelopeName,
             toLine: nil,
             note: nil,
             postmarkTown: nil,
@@ -171,7 +175,8 @@ struct HolidayCardSentView: View {
                         .tracking(0.8)
                         .textCase(.uppercase)
                         .foregroundStyle(MailPaper.cardTextMuted)
-                    Text("To \(MailPieceModel.firstText(card.toName) ?? "them")")
+                    Text(card.byLink && card
+                        .status != "claimed" ? "To whoever opens your link" : "To \(MailPieceModel.firstText(card.toName) ?? "them")")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(MailPaper.cardText)
                         .lineLimit(1)
@@ -187,6 +192,10 @@ struct HolidayCardSentView: View {
             .overlay(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous).strokeBorder(MailPaper.cardRowEdge, lineWidth: 1))
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("sendCardSent")
+            if card.byLink, card.canTakeBack {
+                CardTableLinkActions(cardId: card.id, link: viewModel.sentLink, fromName: viewModel.fromName)
+                    .padding(.top, Spacing.s4)
+            }
             if let line = HolidayCardWords.takeBackLine(card) {
                 muted(line).padding(.top, Spacing.s3)
             }
@@ -232,7 +241,9 @@ struct HolidayCardSentView: View {
                 .accessibilityIdentifier("sendCardTakeBackConfirm")
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(card.byEmail
+            Text(card.byLink
+                ? "Your link will say you took it back. You can send a card again today."
+                : card.byEmail
                 ? "The link in their email will say you took it back. You can send a card again today."
                 : "It won’t go out with the morning mail. You can send a card again today.")
         }

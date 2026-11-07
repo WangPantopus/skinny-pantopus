@@ -232,6 +232,8 @@ export type {
   CountyRecordRow,
   CountyRecordSection,
   CountyPage,
+  FloorPlanLayout,
+  FloorPlanSuggestion,
   HomePropertyDetailResponse,
   HouseholdAnswer,
   HouseholdFact,

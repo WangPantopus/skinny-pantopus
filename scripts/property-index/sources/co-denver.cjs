@@ -1,6 +1,7 @@
 'use strict';
-// Denver, Colorado: the City and County's residential characteristics on its open data service, updated daily. Its use constraints
-// are disclaimers. The table carries owner columns; they're never asked for, and neither are exemption amounts. TOTAL_VALUE is the
+// Denver, Colorado: the City and County's residential characteristics on its open data service, updated daily. The catalog is CC BY
+// 3.0, crediting "City of Denver Open Data Catalog" (web's data sources page); each item's use constraints are disclaimers. The table
+// carries owner columns; they're never asked for, and neither are exemption amounts. TOTAL_VALUE is the
 // Assessor's actual value, Colorado's market value on its reappraisal date. Sale prices come from the city's own sales table.
 
 const path = require('node:path');
@@ -9,6 +10,7 @@ const { year, isoDate, realUnit, streetParts, onRecord, zipCode } = require('../
 const { positive, put, word } = require('../lib/values.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '08031';
@@ -17,7 +19,7 @@ const BASE = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services
 const HOMES = `${BASE}/ODC_real_property_residential_characteristics/FeatureServer/50`;
 const SALES = `${BASE}/ODC_real_property_sales_and_transfers/FeatureServer/51`;
 const COLUMNS = ['PARID', 'OFCARD', 'SITE_NBR', 'SITE_DIR', 'SITE_NAME', 'SITE_MODE', 'SITE_MORE', 'TAX_DIST', 'PROP_CLASS', 'ZONE10', 'D_CLASS_CN', 'LAND_SQFT', 'AREA_ABG', 'BSMT_AREA', 'FBSMT_SQFT', 'STORY', 'STYLE_CN', 'BED_RMS', 'FULL_B', 'HLF_B', 'CCYRBLT', 'UNITS', 'ASMT_APPR_LAND', 'ASMT_APPR_IMPR', 'TOTAL_VALUE', 'ASDLAND', 'ASDIMPR', 'ASSESS_VALUE', 'NBHD_1_CN', 'LEGL_DESCRIPTION'];
-const SALE_COLUMNS = ['PARID', 'RECEPTION_NUM', 'SALE_YEAR', 'SALE_MONTHDAY', 'SALE_PRICE'];
+const SALE_COLUMNS = ['PARID', 'RECEPTION_NUM', 'INSTRUMENT', 'SALE_YEAR', 'SALE_MONTHDAY', 'SALE_PRICE'];
 const PARCELS = `${BASE}/ODC_PROP_PARCELS_A/FeatureServer/245`;
 const PARCEL_COLUMNS = ['SCHEDNUM', 'SITUS_ZIP', 'SITUS_UNIT_IDENT'];
 
@@ -91,7 +93,8 @@ async function* build({ work }) {
   if (!asOf) throw new Error('The table no longer says when it changed');
   const sales = new Map();
   for await (const row of cached(path.join(dir, 'sales.jsonl.gz'), () => layerRows(SALES, SALE_COLUMNS))) {
-    if (!(positive(row.SALE_PRICE) > 100)) continue;
+    // A quit claim moves no home at a price.
+    if (!isHomeSale(positive(row.SALE_PRICE)) || String(row.INSTRUMENT ?? '').trim() === 'QC') continue;
     const was = sales.get(row.PARID);
     const when = (sale) => `${sale.SALE_YEAR}${String(sale.SALE_MONTHDAY ?? '').padStart(4, '0')}`;
     if (!was || when(row) > when(was)) sales.set(row.PARID, row);

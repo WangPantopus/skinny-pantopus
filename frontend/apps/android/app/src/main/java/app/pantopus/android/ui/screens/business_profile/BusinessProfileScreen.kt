@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -36,6 +35,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,6 +43,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -65,6 +67,8 @@ import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.InviteLinks
 import app.pantopus.android.ui.components.MapPreview
 import app.pantopus.android.ui.components.RatingDistribution
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
@@ -77,6 +81,7 @@ import app.pantopus.android.ui.screens.business_profile.components.EmptyBlock
 import app.pantopus.android.ui.screens.business_profile.components.HoursTable
 import app.pantopus.android.ui.screens.business_profile.components.ServicesList
 import app.pantopus.android.ui.screens.business_profile.components.StatStrip
+import app.pantopus.android.ui.screens.businesses.owner_dashboard.components.RepliedBox
 import app.pantopus.android.ui.screens.profile.ReportUserSheet
 import app.pantopus.android.ui.screens.saved_places.PendingSavePlace
 import app.pantopus.android.ui.screens.saved_places.SaveBookmarkButton
@@ -183,6 +188,7 @@ fun BusinessProfileScreen(
                         onCall = { telUri(current.content.phoneNumber)?.let(onOpenWebsite) },
                         namedPage = namedPage,
                         onReport = { showReportSheet = true },
+                        onRetryReviews = viewModel::retryReviews,
                     )
                 }
         }
@@ -314,7 +320,12 @@ internal fun BusinessProfileLoadedFrame(
     namedPage: BusinessProfileNamedPageState = BusinessProfileNamedPageState.None,
     // Opens the report sheet from the footer. The owner preview leaves it inert.
     onReport: () -> Unit = {},
+    // Reads the reviews again. The owner preview never offers it.
+    onRetryReviews: () -> Unit = {},
 ) {
+    // The page ends clear of the dock: 132dp as designed, more once large text makes the dock taller.
+    var dockHeightPx by remember { mutableIntStateOf(0) }
+    val pageBottom = maxOf(132.dp, with(LocalDensity.current) { dockHeightPx.toDp() } + Spacing.s5)
     Box(modifier = Modifier.fillMaxSize().testTag("businessProfile.loaded")) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -338,10 +349,10 @@ internal fun BusinessProfileLoadedFrame(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.s4)
-                        .padding(top = 14.dp, bottom = 132.dp),
+                        .padding(top = 14.dp, bottom = pageBottom),
             ) {
                 BusinessProfileNamedPageSection(state = namedPage)
-                Sections(content, onContact = onContact, onShare = onShare, onReport = onReport)
+                Sections(content, onContact = onContact, onShare = onShare, onReport = onReport, onRetryReviews = onRetryReviews)
             }
         }
 
@@ -355,12 +366,15 @@ internal fun BusinessProfileLoadedFrame(
             modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
         )
 
+        // The app's tab bar, or the strip it leaves over the system navigation area while slid away, already sits
+        // below this screen, so the dock goes right on it. Padding for the navigation area again floated it above the
+        // bar, with the page showing through the gap.
         ActionBar(
             dock = content.dock,
             onContact = onContact,
             onBook = onBook,
             onCall = onCall,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+            modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { dockHeightPx = it.height },
         )
     }
 }
@@ -380,6 +394,7 @@ private fun Sections(
     onContact: () -> Unit,
     onShare: () -> Unit,
     onReport: () -> Unit,
+    onRetryReviews: () -> Unit,
 ) {
     if (content.isNewlyClaimed) {
         JustOpenedNote(isVerified = content.header.isVerified, modifier = Modifier.padding(bottom = Spacing.s1))
@@ -489,29 +504,7 @@ private fun Sections(
     }
 
     // Reviews
-    val summary = content.reviewSummary
-    SectionHeader(title = "Reviews", seeAll = if (summary != null && summary.count > 0) "See all ${summary.count}" else null)
-    if (summary != null && summary.count > 0) {
-        RatingDistribution(
-            average = summary.average,
-            count = summary.count,
-            distribution = summary.distribution.map { it.toFloat() },
-        )
-        content.reviews.forEach { review ->
-            ReviewCard(card = review, modifier = Modifier.padding(top = Spacing.s2))
-        }
-    } else {
-        EmptyBlock(
-            icon = PantopusIcon.MessageSquarePlus,
-            title = "No reviews yet",
-            body =
-                "Be the first to hire ${content.header.displayName}. Your review helps the next " +
-                    "neighbor decide.",
-            ctaLabel = "Hire to review",
-            ctaIcon = PantopusIcon.Pencil,
-            onCta = onContact,
-        )
-    }
+    ReviewsSection(content, onContact = onContact, onRetry = onRetryReviews)
 
     // Footer
     Row(
@@ -520,6 +513,78 @@ private fun Sections(
     ) {
         FooterItem(icon = PantopusIcon.Flag, label = "Report", onClick = onReport)
         FooterItem(icon = PantopusIcon.Share, label = "Share", onClick = onShare)
+    }
+}
+
+/**
+ * The review cards come from their own read (see [BusinessReviewsRead]), so this section says where that read stands
+ * and only it retries. The summary comes from the business itself and shows whatever the read does.
+ */
+@Composable
+private fun ReviewsSection(
+    content: BusinessProfileContent,
+    onContact: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val summary = content.reviewSummary?.takeIf { it.count > 0 }
+    val read = content.reviewsRead
+    // Below a summary, a state starts where the first card would.
+    val belowSummary = Modifier.padding(top = if (summary != null) Spacing.s2 else Spacing.s0)
+    SectionHeader(title = "Reviews", seeAll = summary?.let { "See all ${it.count}" })
+    if (summary != null) {
+        RatingDistribution(
+            average = summary.average,
+            count = summary.count,
+            distribution = summary.distribution?.map { it.toFloat() },
+        )
+    }
+    if (read is BusinessReviewsRead.RefreshFailed) {
+        RefreshFailedLine(RefreshNotice(shownAt = read.shownAt, onRetry = onRetry))
+    }
+    when {
+        read == BusinessReviewsRead.Loading -> ReviewsLoading(modifier = belowSummary)
+        read is BusinessReviewsRead.Failed ->
+            EmptyBlock(
+                icon = PantopusIcon.AlertCircle,
+                title = "Couldn't load reviews",
+                body = read.message,
+                modifier = belowSummary.testTag("businessProfile.reviews.failed"),
+                ctaLabel = "Try again",
+                ctaIcon = PantopusIcon.RefreshCw,
+                onCta = onRetry,
+            )
+        summary != null ->
+            content.reviews.forEach { review ->
+                ReviewCard(card = review, businessName = content.header.displayName, modifier = Modifier.padding(top = Spacing.s2))
+            }
+        else ->
+            EmptyBlock(
+                icon = PantopusIcon.MessageSquarePlus,
+                title = "No reviews yet",
+                body =
+                    "Be the first to hire ${content.header.displayName}. Your review helps the next " +
+                        "neighbor decide.",
+                ctaLabel = "Hire to review",
+                ctaIcon = PantopusIcon.Pencil,
+                onCta = onContact,
+            )
+    }
+}
+
+/** Stands in for the review cards while their read is out. */
+@Composable
+private fun ReviewsLoading(modifier: Modifier = Modifier) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .testTag("businessProfile.reviews.loading")
+                .semantics { contentDescription = "Loading reviews" },
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        repeat(2) {
+            Shimmer(height = 92.dp, cornerRadius = Radii.lg, modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
@@ -706,6 +771,7 @@ private fun ServiceAreaCard(area: BusinessServiceArea) {
 @Composable
 private fun ReviewCard(
     card: BusinessReviewCard,
+    businessName: String,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -756,6 +822,9 @@ private fun ReviewCard(
         }
         if (card.body.isNotEmpty()) {
             Text(text = card.body, color = PantopusColors.appTextStrong, fontSize = 12.5.sp)
+        }
+        card.ownerReply?.let { reply ->
+            RepliedBox(title = "Response from $businessName", reply = reply)
         }
     }
 }

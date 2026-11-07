@@ -13,6 +13,10 @@
  * replaces the copy with a real answer: an empty answer, a timeout or an outage
  * keeps the last copy, shown with its date. The one exception is a source that was
  * withdrawn, whose facts go.
+ *
+ * A lookup holds a screen for a moment at most. Past that the screen says "looking
+ * up", the lookup finishes behind it, and a Home that was told so is tried again
+ * until storage answers: writing to the Home tells its open screens to read again.
  */
 
 const crypto = require('crypto');
@@ -29,6 +33,16 @@ const counts = require('./counts');
 
 const SCHEMA = 1;
 const REFRESH_EVERY_MS = 60 * 60 * 1000;
+// How long a lookup may hold a screen. What it read stays in memory, so the next ask answers at once.
+const SCREEN_WAIT_MS = 1000;
+// A follow-up may wait longer: a hiccup in storage passes with the person seeing only "Looking up…".
+const FOLLOW_UP_WAIT_MS = 8000;
+const FOLLOW_UP_EVERY_MS = 750;
+// A Home told "looking up" is tried again, less and less often, for this long; a later visit starts it over.
+const LATER_FIRST_GAP_MS = 2000;
+const LATER_MOST_GAP_MS = 60 * 1000;
+const LATER_FOR_MS = 30 * 60 * 1000;
+const LATER_MOST_HOMES = 500;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MATCHED = new Set(['exact', 'building_only', 'parcel_only']);
 
@@ -126,27 +140,97 @@ async function storeCopy(home, copy) {
   }
 }
 
+/** The county as the state's file held now says, with no wait. Null until this server has read that file. */
+function countyNow(home, copy) {
+  return reader.heldStateFile(stateCode(home.state))?.jurisdictions?.[copy.jurisdiction] || null;
+}
+
+/** A copy whose facts may not be shown: its county withdrew the source, or its release was taken back. */
+function setAside(home, copy) {
+  const county = countyNow(home, copy);
+  return Boolean(county && (county.status === 'withdrawn' || county.rolled_back_from === copy.release));
+}
+
 const refreshedAt = new Map();
 
-/** Brings a stored copy up to the county's current release, in the background. Nothing is lost if it can't. */
+/**
+ * Brings a stored copy up to the county's current release, in the background, as soon as this server has seen the
+ * release change. Nothing is lost if it can't. A rolled-back release's facts leave the screens at once (setAside) and
+ * go once the release in its place has answered.
+ */
 function refreshSoon(home, copy) {
-  if (!home.id || Date.now() - (refreshedAt.get(home.id) || 0) < REFRESH_EVERY_MS) return;
-  refreshedAt.set(home.id, Date.now());
+  if (!home.id) return;
+  const county = countyNow(home, copy);
+  if (!county || (county.release === copy.release && county.status !== 'withdrawn')) return;
+  // Once for each release a county moves to, so a refresh that finds nothing new doesn't run on every read.
+  const tried = `${home.id}:${county.release}:${county.status}`;
+  if (Date.now() - (refreshedAt.get(tried) || 0) < REFRESH_EVERY_MS) return;
+  refreshedAt.set(tried, Date.now());
   if (refreshedAt.size > 5000) refreshedAt.delete(refreshedAt.keys().next().value);
   (async () => {
-    const stateFile = await reader.stateFile(stateCode(home.state));
-    const county = stateFile?.jurisdictions?.[copy.jurisdiction];
-    if (!county) return;
     if (county.status === 'withdrawn') {
       await storeCopy(home, null);
       return;
     }
-    if (county.release === copy.release) return;
     const address = homeAddress(home);
     const answer = await lookup(address, { serves: (fips) => fips === copy.jurisdiction });
     const next = copyFromAnswer(answer, address);
-    if (next) await storeCopy(home, next);
+    // A rolled-back release's facts go even when the release in its place has nothing for this address.
+    if (next || county.rolled_back_from === copy.release) await storeCopy(home, next);
   })().catch((err) => logger.info('property_records.refresh_later', { error: err.name }));
+}
+
+/** A lookup that says "still reading" rather than hold a screen. The read goes on behind the answer. */
+function lookupForScreen(address) {
+  const read = lookup(address);
+  let timer;
+  const late = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new StorageUnavailable('Still reading')), SCREEN_WAIT_MS);
+  });
+  read.catch(() => {});
+  return Promise.race([read, late]).finally(() => clearTimeout(timer));
+}
+
+const later = new Map();
+let laterTimer = null;
+
+function nextLaterRun() {
+  if (laterTimer || !later.size) return;
+  const soonest = Math.min(...[...later.values()].map((entry) => entry.due));
+  laterTimer = setTimeout(runLater, Math.max(0, soonest - Date.now()));
+  laterTimer.unref();
+}
+
+async function runLater() {
+  laterTimer = null;
+  const now = Date.now();
+  await Promise.all([...later].filter(([, entry]) => entry.due <= now).map(async ([id, entry]) => {
+    const address = homeAddress(entry.home);
+    try {
+      const answer = await lookup(address);
+      later.delete(id);
+      const copy = copyFromAnswer(answer, address);
+      // Written even with nothing to keep, which changes nothing: the Home row moving is what tells an open screen to stop saying "looking up".
+      if (copy) await storeCopy(entry.home, copy);
+      else await changeNicheData(id, (stored) => stored);
+    } catch (err) {
+      if (!(err instanceof StorageUnavailable)) logger.warn('property_records.later_failed', { error: err.name });
+      entry.gap = Math.min(entry.gap * 2, LATER_MOST_GAP_MS);
+      entry.due = Date.now() + entry.gap;
+      if (entry.due > entry.until) later.delete(id);
+    }
+  }));
+  nextLaterRun();
+}
+
+/** A Home that was told "looking up" gets its answer when storage has one. */
+function finishLater(home) {
+  if (!home?.id || home.niche_data === undefined || later.has(home.id) || later.size >= LATER_MOST_HOMES) return;
+  const now = Date.now();
+  // Only what a lookup needs is held: a Home's row can carry much more.
+  const { id, address, address2, city, state, zipcode } = home;
+  later.set(id, { home: { id, address, address2, city, state, zipcode, niche_data: null }, gap: LATER_FIRST_GAP_MS, due: now + LATER_FIRST_GAP_MS, until: now + LATER_FOR_MS });
+  nextLaterRun();
 }
 
 /** Counts a lookup for the daily report: county and outcome only. */
@@ -168,7 +252,7 @@ function noteLookup(surface, address, found) {
 function liveCopy(home) {
   if (!config.enabled() || !home) return null;
   const stored = storedCopy(home);
-  return stored && router.showsCopies(stored.jurisdiction) ? router.served(stored) : null;
+  return stored && router.showsCopies(stored.jurisdiction) && !setAside(home, stored) ? router.served(stored) : null;
 }
 
 /**
@@ -193,20 +277,23 @@ async function readForHome(home) {
   // Taking a county off its live list takes its copies off the screens too; they stay on the Home for when it comes back.
   if (stored && router.showsCopies(stored.jurisdiction)) {
     refreshSoon(home, stored);
-    return { copy: router.served(stored), lookup: null };
+    if (!setAside(home, stored)) return { copy: router.served(stored), lookup: null };
+    if (countyNow(home, stored).status === 'withdrawn') return { copy: null, lookup: 'none', reason: 'withdrawn', jurisdiction: stored.jurisdiction };
+    // A release taken back: ask the release in its place, as a Home with no copy would.
   }
   if (!router.liveState(stateCode(home.state))) return null;
   try {
     const address = homeAddress(home);
-    const answer = await lookup(address);
+    const answer = await lookupForScreen(address);
     if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
     const copy = copyFromAnswer(answer, address);
-    if (!copy) return { copy: null, lookup: 'none', match: answer.match, jurisdiction: answer.jurisdiction };
+    if (!copy) return { copy: null, lookup: 'none', match: answer.match, reason: answer.reason || null, jurisdiction: answer.jurisdiction };
     await storeCopy(home, copy);
     return { copy: router.served(copy), lookup: null };
   } catch (err) {
-    if (err instanceof StorageUnavailable) return { copy: null, lookup: 'pending' };
-    throw err;
+    if (!(err instanceof StorageUnavailable)) throw err;
+    finishLater(home);
+    return { copy: null, lookup: 'pending' };
   }
 }
 
@@ -243,24 +330,31 @@ async function unitQuestion(home) {
 /**
  * What the record has for an address with no Home yet (Add Home). `copy` is what may be shown; `whole` is what a new
  * Home keeps, so a fact withheld today comes back without a new lookup.
+ * @param {object} address
+ * @param {object} [options]
+ * @param {boolean} [options.patient] A follow-up: it may wait a few seconds for storage to answer.
  * @returns {Promise<null|{ copy: object|null, whole: object|null, answer: object, lookup: 'found'|'none'|'pending' }>} null outside live counties.
  */
-async function forAddress(address) {
-  const found = await readForAddress(address);
+async function forAddress(address, options) {
+  const found = await readForAddress(address, options);
   noteLookup('add_home', address, found);
   return found;
 }
 
-async function readForAddress(address) {
+async function readForAddress(address, { patient = false } = {}) {
   if (!router.liveState(stateCode(address.state))) return null;
-  try {
-    const answer = await lookup(address);
-    if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
-    const copy = copyFromAnswer(answer, address);
-    return { copy: router.served(copy), whole: copy, answer, lookup: copy ? 'found' : 'none' };
-  } catch (err) {
-    if (err instanceof StorageUnavailable) return { copy: null, whole: null, answer: null, lookup: 'pending' };
-    throw err;
+  const until = Date.now() + (patient ? FOLLOW_UP_WAIT_MS : 0);
+  for (;;) {
+    try {
+      const answer = await lookupForScreen(address);
+      if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
+      const copy = copyFromAnswer(answer, address);
+      return { copy: router.served(copy), whole: copy, answer, lookup: copy ? 'found' : 'none' };
+    } catch (err) {
+      if (!(err instanceof StorageUnavailable)) throw err;
+      if (Date.now() + FOLLOW_UP_EVERY_MS > until) return { copy: null, whole: null, answer: null, lookup: 'pending' };
+      await new Promise((resolve) => { setTimeout(resolve, FOLLOW_UP_EVERY_MS); });
+    }
   }
 }
 
