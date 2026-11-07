@@ -1036,6 +1036,8 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
     return [serializePlaceSection('your_home', {
       access,
       status: 'ready',
+      // Its own sources, never the section's default, which names county records.
+      source: floorEstimate.footer,
       data: {
         year_built: null, sqft: null, bedrooms: null, bathrooms: null, lot_sqft: null, home_type: profile.property_type ?? null,
         estimated_value: null, value_low: null, value_high: null, assessed_value: null,

@@ -44,19 +44,20 @@ struct PlaceHomeDetailContent: View {
                     // A home with only estimates has no facts to show: the empty grid would read as a record.
                     if data.estimate == nil || Self.hasFacts(data) {
                         FactsCard(data: data)
+                        // The server names where the facts came from: county records,
+                        // or the details the household entered.
+                        if let label = env.provenance?.label {
+                            PlaceSourceNote(name: label)
+                        } else {
+                            PlaceSourceNote(
+                                name: factsSource(env),
+                                asOf: PlacePresentation.fmtMonthYear(env.asOf)
+                            )
+                        }
                     }
+                    // The estimate's own last line names where its figures came from.
                     if let estimate = data.estimate {
                         EstimateCard(estimate: estimate)
-                    }
-                    // The server names where the facts came from: county records,
-                    // or the details the household entered.
-                    if let label = env.provenance?.label {
-                        PlaceSourceNote(name: label)
-                    } else {
-                        PlaceSourceNote(
-                            name: factsSource(env),
-                            asOf: PlacePresentation.fmtMonthYear(env.asOf)
-                        )
                     }
 
                     switch intel.valueAccess {

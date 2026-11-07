@@ -401,6 +401,9 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
     && systems.data;
   const ready = home && (home.status === 'ready' || home.status === 'stale' || home.status === 'partial') && home.data;
   const data = ready ? (home!.data as PlaceYourHomeData) : null;
+  // A home with only estimates has no facts to show: the empty grid would read as a record, and the estimate's own last
+  // line names where its figures came from.
+  const estimateOnly = Boolean(data?.estimate) && !(data?.year_built || data?.sqft || data?.bedrooms != null || data?.bathrooms != null || data?.lot_sqft);
   const locked = home?.access === 'locked';
   // Set up but not verified (T1): the Home's records open once the address
   // is verified by mail.
@@ -435,8 +438,7 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
             <DetailSectionLabel>Property</DetailSectionLabel>
             {data ? (
               <div className="flex flex-col gap-2.5">
-                {/* A home with only estimates has no facts to show: the empty grid would read as a record. */}
-                {data.estimate && !(data.year_built || data.sqft || data.bedrooms != null || data.bathrooms != null || data.lot_sqft) ? null : <FactsCard data={data} />}
+                {estimateOnly ? null : <FactsCard data={data} />}
                 {data.estimate ? <EstimateCard estimate={data.estimate} /> : null}
               </div>
             ) : (
@@ -466,7 +468,7 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
               data.value_card.source ? <SourceNote name={data.value_card.source} /> : null
             ) : home?.provenance ? (
               valueAccess === 'shown' && data?.value_source ? <SourceNote name={data.value_source} /> : null
-            ) : data && home?.source ? <SourceNote name={home.source} asOf={fmtMonthYear(home.as_of) ? `as of ${fmtMonthYear(home.as_of)}` : undefined} /> : null}
+            ) : data && home?.source && !estimateOnly ? <SourceNote name={home.source} asOf={fmtMonthYear(home.as_of) ? `as of ${fmtMonthYear(home.as_of)}` : undefined} /> : null}
 
             {homeId && home?.status !== 'unavailable' ? (
               <>

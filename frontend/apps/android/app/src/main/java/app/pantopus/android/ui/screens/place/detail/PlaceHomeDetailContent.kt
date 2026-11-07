@@ -73,16 +73,19 @@ fun PlaceHomeDetailContent(
             PlaceDetailSectionLabel("Property")
             // A home with only estimates has no facts to show: the empty grid would read as a record.
             val hasFacts = listOf(data.yearBuilt, data.sqft, data.bedrooms, data.bathrooms, data.lotSqft).any { it != null }
-            if (data.estimate == null || hasFacts) FactsCard(data)
-            data.estimate?.let { EstimateCard(it) }
-            // The server names where the facts came from: county records, or
-            // the details the household entered.
-            val label = env.provenance?.label
-            if (label != null) {
-                PlaceSourceNote(label)
-            } else {
-                PlaceSourceNote(env.source?.takeIf { it.isNotBlank() } ?: "County public records · estimate model", asOf)
+            if (data.estimate == null || hasFacts) {
+                FactsCard(data)
+                // The server names where the facts came from: county records, or
+                // the details the household entered.
+                val label = env.provenance?.label
+                if (label != null) {
+                    PlaceSourceNote(label)
+                } else {
+                    PlaceSourceNote(env.source?.takeIf { it.isNotBlank() } ?: "County public records · estimate model", asOf)
+                }
             }
+            // The estimate's own last line names where its figures came from.
+            data.estimate?.let { EstimateCard(it) }
 
             ValueSection(intel.valueAccess, data, asOf)
         } else {
