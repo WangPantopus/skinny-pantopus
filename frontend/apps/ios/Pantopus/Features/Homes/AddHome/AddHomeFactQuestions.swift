@@ -8,6 +8,55 @@
 
 import SwiftUI
 
+/// What the building's own floor-plan sheet says, above the fields: this unit's plan with
+/// "Is this your layout?", or the building's plans, labeled as the building's.
+struct AddHomeFloorPlanCard: View {
+    @Bindable var viewModel: AddHomeWizardViewModel
+
+    var body: some View {
+        if !viewModel.propertyLookupPending, let plan = viewModel.propertySuggestions?.floorPlan {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                Text(plan.line)
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(plan.source)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let prompt = plan.prompt {
+                    Text(prompt)
+                        .pantopusTextStyle(.small)
+                        .foregroundStyle(Theme.Color.appText)
+                    ChipPicker(
+                        options: [
+                            ChipPicker.Option(id: "yes", label: "Yes"),
+                            ChipPicker.Option(id: "no", label: "No")
+                        ],
+                        selection: Binding(
+                            get: { viewModel.floorPlanAnswer },
+                            set: { viewModel.floorPlanAnswer = $0 }
+                        ),
+                        identifier: "addHome_floorPlan"
+                    )
+                }
+                if viewModel.floorPlanAnswer == "no" {
+                    Text("Thanks. We'll check this layout with the building. Change anything that's different below.")
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(Spacing.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.Color.appSurfaceSunken)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("addHome_floorPlanCard")
+        }
+    }
+}
+
 struct AddHomeFactQuestions: View {
     @Bindable var viewModel: AddHomeWizardViewModel
     let bedroomsFocused: FocusState<Bool>.Binding
