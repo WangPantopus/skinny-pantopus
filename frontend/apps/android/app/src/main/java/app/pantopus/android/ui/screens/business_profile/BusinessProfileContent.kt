@@ -116,8 +116,8 @@ data class BusinessGalleryItem(
 data class BusinessReviewSummary(
     val average: Double,
     val count: Int,
-    /** Five fractions in `0..1`, ordered 5★→1★. */
-    val distribution: List<Double>,
+    /** Five fractions in `0..1`, ordered 5★→1★; null when they aren't known, which shows no bars. */
+    val distribution: List<Double>?,
 )
 
 /** One review card. */

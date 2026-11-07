@@ -141,7 +141,9 @@ async function* build({ work }) {
     let noAddress = 0;
     const dwellings = dwellingsOf(work, name);
     const rows = cached(path.join(work, 'mt-cadastral', `${fips}.jsonl.gz`), () => layerRows(LAYER, COLUMNS, { where: `CountyName = '${name}'` }));
+    const joined = new Set();
     for await (const row of rows) {
+      if (dwellings.has(Number(row.PropertyID))) joined.add(Number(row.PropertyID));
       const record = fromRow(row, fips, county, dwellings);
       if (!record) noAddress += 1;
       else if (!seen.has(record.id)) {
@@ -149,10 +151,11 @@ async function* build({ work }) {
         records.push(record);
       }
     }
-    log(`${county}: ${records.length} records, ${noAddress} without a street number, ${records.filter(({ facts }) => facts.year_built).length} with building detail, ${dwellings.size} dwellings in the appraisal file`);
+    log(`${county}: ${records.length} records, ${noAddress} without a street number, ${records.filter(({ facts }) => facts.year_built).length} with building detail, ${joined.size} of ${dwellings.size} dwellings in the appraisal file on a parcel`);
     if (!records.length) continue;
-    // Which file is which county is a list kept here: a wrong one joins nothing, and that mustn't pass as a county with no detail.
-    if (dwellings.size > 50 && records.filter(({ facts }) => facts.year_built).length < dwellings.size * 0.3) throw new Error(`${county}'s appraisal file barely joins its parcels`);
+    // Which file is which county is a list kept here: a wrong one joins nothing, and that mustn't pass as a county with no
+    // detail. Counted on every parcel, with a street number or not: rural counties have many dwellings on parcels without one.
+    if (dwellings.size > 50 && joined.size < dwellings.size * 0.5) throw new Error(`${county}'s appraisal file barely joins its parcels`);
     for (const building of condoBuildings(records, { fips, county })) records.push(building);
     yield {
       fips, state: 'MT', name: county, publisher: 'Montana Department of Revenue, through the State Library', dataset: 'Cadastral Framework', method: 'state', source: 'mt-cadastral', title: 'State records', as_of: asOf, stale_after_days: 120, records,
