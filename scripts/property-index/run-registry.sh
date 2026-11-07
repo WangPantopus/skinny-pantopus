@@ -16,6 +16,9 @@ console.log([...new Set(files.map((name) => stateOfCounty(name.slice(0, 5))))].f
 all="$RUNNER_TEMP/registry-coverage"
 mkdir -p "$all"
 node scripts/property-index/registry-unit-truth.cjs --bucket "$PROPERTY_INDEX_BUCKET" --out "$work/unit-truth"
+publishing=(--bucket "$PROPERTY_INDEX_BUCKET" --prefix index/registry --bulk --min-retention 0.97)
+[ "${REPUBLISH:-false}" = "true" ] && publishing+=(--republish)
+[ -n "${ACCEPT_FALLS:-}" ] && publishing+=(--accept-falls-for "$ACCEPT_FALLS")
 status=0
 for state in $states; do
   [ -n "${STATES:-}" ] && [[ ",$STATES," != *",$state,"* ]] && continue
@@ -25,7 +28,7 @@ for state in $states; do
   node scripts/property-index/registry-t2.cjs --out "$out" --state "$state" --truth "$work/truth" --units "$work/unit-truth" --report "$all/t2-$state.json" || status=1
   if [ "$PUBLISH" = "true" ]; then
     node --max-old-space-size=12288 scripts/property-index/registry-lineage.cjs --out "$out" --state "$state" --bucket "$PROPERTY_INDEX_BUCKET"
-    node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/registry --bulk --min-retention 0.97 || status=1
+    node scripts/property-index/publish.cjs --out "$out" "${publishing[@]}" || status=1
   fi
 done
 node scripts/property-index/registry-coverage.cjs --dir "$all"
