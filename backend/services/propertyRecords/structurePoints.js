@@ -36,9 +36,10 @@ const OFFSETS_PER_METER = 2;
 const NEAR_METERS = 10;
 // Outside any footprint, the nearest has to be this much closer than the next one to be the one meant.
 const SEPARATION_METERS = 8;
-// The share of the houses around a building the registry has to mark before a mark on this one says anything: a point always
-// marks what it falls on. Short of that the geometry is all there is, and it's strict: inside a single-family footprint no
-// bigger than a house usually is (a larger one is usually a row of houses drawn as one), with the next house clear of it.
+// How much of the houses around a building the registry has to mark before a mark on this one says anything (a point always
+// marks what it falls on): all of a few, or this share of three or more. A building with no house around needs none. Short
+// of that the geometry is all there is, and it's strict: inside a single-family footprint no bigger than a house usually is
+// (a larger one is usually a row of houses drawn as one), with the next house clear of it.
 const MARKED_SHARE = 0.6;
 const MARKED_AROUND_AT_LEAST = 3;
 const LARGEST_HOUSE_SQFT = 2500;
@@ -154,7 +155,11 @@ function underPoint(lng, lat, records) {
   // Not counting itself.
   if (first.structure.claim) marked -= 1;
   houses -= 1;
-  return { ...first, nextHouse: second - Math.max(first.distance, 0), markedAround: houses >= MARKED_AROUND_AT_LEAST ? marked / houses : 0 };
+  // No other house around: there's nothing for the point to be mistaken for. A few: each has to be marked. More: most.
+  let backed = houses === 0;
+  if (houses > 0 && houses < MARKED_AROUND_AT_LEAST) backed = marked === houses;
+  else if (houses >= MARKED_AROUND_AT_LEAST) backed = marked / houses >= MARKED_SHARE;
+  return { ...first, nextHouse: second - Math.max(first.distance, 0), backed };
 }
 
 /**
@@ -168,7 +173,7 @@ function underPoint(lng, lat, records) {
 function resolve(point, records, { number, holdOut = false, ignoreClaims = false }) {
   const found = underPoint(point.lng, point.lat, records);
   if (found.why) return found;
-  const { structure, distance, nextHouse, markedAround } = found;
+  const { structure, distance, nextHouse, backed } = found;
   const claim = ignoreClaims ? null : structure.claim;
   if (claim === MANY) return { why: 'shared_building' };
   if (claim && !sameHouse(claim, number)) return { why: 'claimed_by_another' };
@@ -178,7 +183,7 @@ function resolve(point, records, { number, holdOut = false, ignoreClaims = false
   if (structure.homes > 1) return { why: 'several_homes' };
   if (distance > 0 && structure.use !== 'h') return { why: 'not_sure_enough' };
   // Where the registry marks the houses around this one, a neighbor's point would have shown up here.
-  if (markedAround < MARKED_SHARE && !(structure.use === 'h' && distance <= 0 && structure.facts.footprint_sqft <= LARGEST_HOUSE_SQFT && nextHouse >= CLEAR_METERS)) return { why: 'not_sure_enough' };
+  if (!backed && !(structure.use === 'h' && distance <= 0 && structure.facts.footprint_sqft <= LARGEST_HOUSE_SQFT && nextHouse >= CLEAR_METERS)) return { why: 'not_sure_enough' };
   return { structure, how: distance <= 0 ? 'inside' : 'near', distance, nextHouse };
 }
 
