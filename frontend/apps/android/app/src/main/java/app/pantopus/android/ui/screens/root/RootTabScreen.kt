@@ -3153,8 +3153,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                                 )
                             },
-                            neighborhood = {
+                            // Over Neighborhood the segment row slides away while the page scrolls down.
+                            neighborhood = { segmentRow ->
                                 NeighborhoodScreen(
+                                    header = segmentRow,
                                     onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                                     onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
                                     onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },

@@ -343,7 +343,7 @@ class HomeDashboardViewModel
                     "view_maintenance" to "maintenance.view", "view_issues" to "maintenance.view", "pets" to "home.view",
                     "calendar" to "calendar.view",
                     "view_docs" to "docs.view", "view_emergency" to "sensitive.view", "view_packages" to "packages.view",
-                    "view_tasks" to "tasks.view", "view_claims" to "ownership.view",
+                    "view_tasks" to "tasks.view", "view_claims" to "ownership.view", "view_property_details" to "home.view",
                 )[action]
             // Launch cut: no action into a feature hidden for the first launch.
             return isLaunchAvailableAction(action) && permission?.let(::can) == true

@@ -28,6 +28,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -55,7 +57,9 @@ const val CONTENT_DETAIL_TAG = "contentDetail"
  *
  * The shell handles the 44dp top bar (back chevron + centered title + optional
  * action) and the scroll container. No tab bar — this archetype always
- * sits on a nav stack.
+ * sits on a nav stack. The page runs under the bar, which slides away while
+ * the page scrolls down and comes back near its top (founder request
+ * 2026-11-07, as on iPhone; [ScrollAwayHeaderLayout]).
  */
 @Composable
 fun ContentDetailShell(
@@ -76,20 +80,27 @@ fun ContentDetailShell(
                 .background(PantopusColors.appBg)
                 .testTag(CONTENT_DETAIL_TAG),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            ContentDetailTopBar(
-                title = title,
-                onBack = onBack,
-                action = topBarAction,
-                secondaryAction = topBarSecondaryAction,
-                tertiaryAction = topBarTertiaryAction,
-            )
+        ScrollAwayHeaderLayout(
+            header = {
+                ContentDetailTopBar(
+                    title = title,
+                    onBack = onBack,
+                    action = topBarAction,
+                    secondaryAction = topBarSecondaryAction,
+                    tertiaryAction = topBarTertiaryAction,
+                )
+            },
+            modifier = Modifier.fillMaxSize(),
+            headerBackground = PantopusColors.appSurface,
+        ) { top ->
+            val scroll = rememberScrollState()
+            ScrollAwayHeaderPage(scroll)
             Column(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(vertical = Spacing.s4),
+                        .verticalScroll(scroll)
+                        .padding(top = top + Spacing.s4, bottom = Spacing.s4),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s4),
             ) {
                 header()

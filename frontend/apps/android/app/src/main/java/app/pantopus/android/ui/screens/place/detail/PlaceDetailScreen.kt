@@ -2,6 +2,7 @@ package app.pantopus.android.ui.screens.place.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -51,6 +52,9 @@ import app.pantopus.android.ui.screens.place.leavesOut
 import app.pantopus.android.ui.screens.place.verifiesFirst
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
+import app.pantopus.android.ui.screens.root.PullToRefreshUnderHeader
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -83,25 +87,33 @@ fun PlaceDetailScreen(
     var showVerify by remember { mutableStateOf(false) }
     val verify: (() -> Unit)? = onStartVerify?.let { { showVerify = true } }
 
-    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
-        PlaceDetailHeader(
-            title = viewModel.group.title,
-            address =
-                (state as? PlaceDetailUiState.Loaded)?.intelligence?.place?.let {
-                    if (viewModel.savedPlaceId != null) it.label else placeDetailAddress(it)
-                }.orEmpty(),
-            onBack = onBack,
-            onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
-        )
-        refreshNotice?.let { RefreshFailedLine(it, Modifier.padding(horizontal = 16.dp)) }
-        PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
+    // The section scrolls under its header, which slides away while it scrolls down and comes back near the top (founder
+    // request 2026-11-07, as on iPhone). The refresh line under the header stays.
+    ScrollAwayHeaderLayout(
+        header = {
+            PlaceDetailHeader(
+                title = viewModel.group.title,
+                address =
+                    (state as? PlaceDetailUiState.Loaded)?.intelligence?.place?.let {
+                        if (viewModel.savedPlaceId != null) it.label else placeDetailAddress(it)
+                    }.orEmpty(),
+                onBack = onBack,
+                onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
+            )
+        },
+        modifier = Modifier.fillMaxSize().background(PantopusColors.appBg),
+        pinned = refreshNotice?.let { notice -> @Composable { RefreshFailedLine(notice, Modifier.padding(horizontal = 16.dp)) } },
+    ) { top ->
+        PullToRefreshUnderHeader(isRefreshing = refreshing, onRefresh = viewModel::refresh, top = top, modifier = Modifier.fillMaxSize()) {
             when (val current = state) {
-                PlaceDetailUiState.Loading -> PlaceDetailSkeleton()
+                PlaceDetailUiState.Loading -> Box(Modifier.fillMaxSize().padding(top = top)) { PlaceDetailSkeleton() }
                 is PlaceDetailUiState.Error ->
-                    if (current.denied) {
-                        PlaceDeniedState()
-                    } else {
-                        ErrorState(message = current.message, onRetry = viewModel::refresh)
+                    Box(Modifier.fillMaxSize().padding(top = top)) {
+                        if (current.denied) {
+                            PlaceDeniedState()
+                        } else {
+                            ErrorState(message = current.message, onRetry = viewModel::refresh)
+                        }
                     }
                 is PlaceDetailUiState.Loaded ->
                     LoadedDetail(
@@ -112,6 +124,7 @@ fun PlaceDetailScreen(
                         onBack = onBack,
                         onOpenBallot = onOpenBallot,
                         onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
+                        top = top,
                     )
             }
         }
@@ -137,6 +150,7 @@ fun PlaceDetailScreen(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun LoadedDetail(
     current: PlaceDetailUiState.Loaded,
     viewModel: PlaceDetailViewModel,
@@ -146,6 +160,8 @@ private fun LoadedDetail(
     onOpenBallot: () -> Unit,
     /** Ask Pantopus about this page ("Add or correct an install year" on Your home). */
     onAsk: (() -> Unit)?,
+    /** The header drawn over the top of the page: its first card starts below it. */
+    top: Dp,
 ) {
     if (viewModel.savedPlaceId != null &&
         (!viewModel.group.supportsSavedPlace || current.intelligence.groups.none { it.groupId in viewModel.group.groups })
@@ -154,19 +170,25 @@ private fun LoadedDetail(
             icon = PantopusIcon.MapPin,
             headline = "Details aren't available for this address yet.",
             subcopy = "Return to your Place to see its available public information.",
+            modifier = Modifier.padding(top = top),
             ctaTitle = "Back to your Place",
             onCta = onBack,
         )
     } else if (current.intelligence.leavesOut(viewModel.group)) {
         // The server leaves out what doesn't apply to this viewer;
         // a link to it gets a straight answer, not empty cards.
-        PlaceNotForViewerState(group = viewModel.group, role = current.intelligence.viewer?.role, onBack = onBack)
+        Box(Modifier.fillMaxSize().padding(top = top)) {
+            PlaceNotForViewerState(group = viewModel.group, role = current.intelligence.viewer?.role, onBack = onBack)
+        }
     } else {
+        val scroll = rememberScrollState()
+        ScrollAwayHeaderPage(scroll)
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scroll)
+                    .padding(top = top)
                     .padding(horizontal = 16.dp),
         ) {
             // Guests and service providers can't verify this address: no verify action.

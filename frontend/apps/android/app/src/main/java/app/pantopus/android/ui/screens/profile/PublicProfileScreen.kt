@@ -56,6 +56,8 @@ import app.pantopus.android.ui.components.rememberShareTextWithCompletion
 import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -930,9 +932,16 @@ internal fun LocalProfileLoadedFrame(
         )
     // Work leaves when its last item goes; the strip falls back to Posts.
     val tab = selectedTab.takeIf { it in tabs } ?: LocalProfileTab.Posts
-    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("publicProfileLocalHeader")) {
-        ProfileFrameTopBar(mode = mode, onBack = onBack, onOverflow = onOverflow)
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    // A neighbor's profile scrolls under the bar, which slides away while it scrolls down and comes back near the top
+    // (founder request 2026-11-07, as on iPhone). Your own page and a preview keep theirs.
+    ScrollAwayHeaderLayout(
+        header = { ProfileFrameTopBar(mode = mode, onBack = onBack, onOverflow = onOverflow) },
+        modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("publicProfileLocalHeader"),
+        slides = mode == ProfileFrameMode.Visitor,
+    ) { top ->
+        val scroll = rememberScrollState()
+        ScrollAwayHeaderPage(scroll)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(top = top)) {
             ProfileIdentityHeader(
                 header = header,
                 bio = content.stats.bio,

@@ -186,6 +186,11 @@ object HomeDashboardProjection {
                     ),
                 )
             }
+            // With the others at the top, not a link at the bottom of the Overview (founder request 2026-11-07, as on
+            // iPhone). No count, so no badge.
+            if (allowed("home.view")) {
+                add(QuickActionTile("view_property_details", "Property details", PantopusIcon.Home, QuickActionTone.Home))
+            }
         }
     }
 

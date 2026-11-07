@@ -9,6 +9,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,7 +29,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +40,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -47,6 +49,9 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.root.PullToRefreshUnderHeader
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -91,35 +96,44 @@ fun ChatListScreen(
         onDispose { viewModel.teardown() }
     }
 
-    Column(
+    // The title, search and filters slide away while the list scrolls down, and come back near its top (founder
+    // request 2026-11-07, as on iPhone).
+    ScrollAwayHeaderLayout(
+        header = {
+            Column {
+                TopBar(onCompose = onCompose, onOpenMenu = onOpenMenu)
+                SearchBar(skeleton = state is ChatListUiState.Loading, onTap = onOpenSearch)
+                FilterTabs(
+                    active = activeFilter,
+                    unreadByFilter = unreadByFilter,
+                    skeleton = state is ChatListUiState.Loading,
+                    onSelect = viewModel::selectFilter,
+                )
+            }
+        },
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(PantopusColors.appSurface)
                 .testTag("chatList"),
-    ) {
-        TopBar(onCompose = onCompose, onOpenMenu = onOpenMenu)
-        SearchBar(skeleton = state is ChatListUiState.Loading, onTap = onOpenSearch)
-        FilterTabs(
-            active = activeFilter,
-            unreadByFilter = unreadByFilter,
-            skeleton = state is ChatListUiState.Loading,
-            onSelect = viewModel::selectFilter,
-        )
+        headerBackground = PantopusColors.appSurface,
+    ) { top ->
         when (val s = state) {
-            ChatListUiState.Loading -> LoadingFrame()
+            ChatListUiState.Loading -> LoadingFrame(top)
             ChatListUiState.Empty ->
                 EmptyFrame(
                     onCompose = onCompose,
                     aiRow = viewModel.aiRow,
                     onOpenAssistant = { onOpenConversation(viewModel.aiRow) },
+                    top = top,
                 )
             is ChatListUiState.Loaded ->
                 // Pull to re-read the list, as on iOS; it can go stale if the
                 // live connection drops.
-                PullToRefreshBox(
+                PullToRefreshUnderHeader(
                     isRefreshing = refreshing,
                     onRefresh = viewModel::refresh,
+                    top = top,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     PopulatedFrame(
@@ -131,9 +145,10 @@ fun ChatListScreen(
                         onViewAll = { viewModel.selectFilter(ChatFilter.All) },
                         paging = paging,
                         onLoadMore = viewModel::loadMore,
+                        top = top,
                     )
                 }
-            is ChatListUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh)
+            is ChatListUiState.Error -> ErrorFrame(message = s.message, onRetry = viewModel::refresh, top = top)
         }
     }
 }
@@ -317,9 +332,10 @@ private fun FilterTab(
 }
 
 @Composable
-internal fun LoadingFrame() {
+internal fun LoadingFrame(top: Dp = 0.dp) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().testTag("chatListLoading"),
+        contentPadding = PaddingValues(top = top),
     ) {
         items(6) {
             SkeletonRow()
@@ -351,8 +367,10 @@ internal fun EmptyFrame(
     onCompose: () -> Unit,
     aiRow: ConversationRowContent? = null,
     onOpenAssistant: () -> Unit = {},
+    /** The title, search and filters drawn over the top of the frame. */
+    top: Dp = 0.dp,
 ) {
-    Column(modifier = Modifier.fillMaxSize().testTag("chatListEmpty")) {
+    Column(modifier = Modifier.fillMaxSize().padding(top = top).testTag("chatListEmpty")) {
         // Pantopus AI stays reachable before the first conversation.
         if (aiRow != null) ConversationRow(content = aiRow, onTap = onOpenAssistant)
         EmptyMessage(onCompose = onCompose, modifier = Modifier.weight(1f))
@@ -466,8 +484,16 @@ internal fun PopulatedFrame(
     onViewAll: () -> Unit = {},
     paging: ChatListPaging = ChatListPaging(),
     onLoadMore: () -> Unit = {},
+    /** The title, search and filters drawn over the top of the list: its first row starts below them. */
+    top: Dp = 0.dp,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize().testTag("chatListContent")) {
+    val listState = rememberLazyListState()
+    ScrollAwayHeaderPage(listState)
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().testTag("chatListContent"),
+        contentPadding = PaddingValues(top = top),
+    ) {
         items(items = rows, key = { it.storageKey }) { row ->
             if (row.variant == ConversationRowVariant.AiAssistant) {
                 ConversationRow(content = row, onTap = { onTap(row) })
@@ -553,11 +579,13 @@ private fun FilterEmptyLine(
 private fun ErrorFrame(
     message: String,
     onRetry: () -> Unit,
+    top: Dp,
 ) {
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
+                .padding(top = top)
                 .padding(Spacing.s5)
                 .testTag("chatListError"),
         horizontalAlignment = Alignment.CenterHorizontally,

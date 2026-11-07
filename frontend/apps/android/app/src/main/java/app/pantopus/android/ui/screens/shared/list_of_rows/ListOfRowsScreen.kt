@@ -28,11 +28,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -60,6 +62,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -110,6 +113,8 @@ import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.components.VerifiedBadge
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -189,91 +194,113 @@ fun ListOfRowsScreen(
             onRefresh = onRefresh,
         )
 
+    // The strips under the bar (search, chips or tabs, a screen's own header, the refresh line) stay in view while the
+    // bar slides away, as the filter strip does on iPhone.
+    val showsRefreshNotice = refreshNotice != null && state !is ListOfRowsUiState.Loading
+    val hasPinned = searchBar != null || chipStrip != null || tabs.isNotEmpty() || customHeader != null || showsRefreshNotice
+
     Scaffold(
         modifier = Modifier.testTag(LIST_OF_ROWS_TAG),
-        topBar = {
-            CenterAlignedTopAppBar(
-                // The root tab Scaffold already pads the status bar; without this the
-                // bar sits a second inset lower (Mailbox title floating mid-screen).
-                windowInsets = WindowInsets(0.dp),
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = title,
-                            style = PantopusTextStyle.h3,
-                            color = PantopusColors.appText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (subtitle != null) {
-                            Text(
-                                text = subtitle,
-                                style = PantopusTextStyle.caption,
-                                color = PantopusColors.appTextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            PantopusIconImage(
-                                icon = PantopusIcon.ChevronLeft,
-                                contentDescription = "Back",
-                                tint = PantopusColors.appText,
-                            )
-                        }
-                    } else if (onOpenMenu != null) {
-                        NavigationMenuButton(onClick = onOpenMenu, testTag = menuTestTag)
-                    }
-                },
-                actions = {
-                    if (topBarAction != null) {
-                        TopBarActionButton(action = topBarAction)
-                    }
-                    extraTopBarAction?.invoke()
-                },
-                colors =
-                    TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = PantopusColors.appSurface,
-                    ),
-            )
-        },
         floatingActionButton = {
             if (fab != null) {
                 FabComposable(fab)
             }
         },
         containerColor = PantopusColors.appBg,
+        // The bar is drawn over the rows, not above them, so the content takes no top inset.
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (searchBar != null) {
-                SearchBarRow(searchBar)
-                HorizontalDivider(color = PantopusColors.appBorderSubtle)
-            }
-            if (chipStrip != null) {
-                ChipStripRow(chipStrip)
-                HorizontalDivider(color = PantopusColors.appBorderSubtle)
-            } else if (tabs.isNotEmpty()) {
-                TabStrip(tabs = tabs, selectedId = selectedTab, onSelect = onSelectTab)
-                HorizontalDivider(color = PantopusColors.appBorderSubtle)
-            }
-            if (customHeader != null) {
-                customHeader()
-            }
-            if (refreshNotice != null && state !is ListOfRowsUiState.Loading) {
-                RefreshFailedLine(refreshNotice, modifier = Modifier.padding(horizontal = Spacing.s4))
-            }
+        // The rows run under the bar, which slides away while they scroll down and comes back near the top (founder
+        // request 2026-11-07, as on iPhone).
+        ScrollAwayHeaderLayout(
+            header = {
+                CenterAlignedTopAppBar(
+                    // The root tab Scaffold already pads the status bar; without this the
+                    // bar sits a second inset lower (Mailbox title floating mid-screen).
+                    windowInsets = WindowInsets(0.dp),
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = title,
+                                style = PantopusTextStyle.h3,
+                                color = PantopusColors.appText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (subtitle != null) {
+                                Text(
+                                    text = subtitle,
+                                    style = PantopusTextStyle.caption,
+                                    color = PantopusColors.appTextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    },
+                    navigationIcon = {
+                        if (onBack != null) {
+                            IconButton(onClick = onBack) {
+                                PantopusIconImage(
+                                    icon = PantopusIcon.ChevronLeft,
+                                    contentDescription = "Back",
+                                    tint = PantopusColors.appText,
+                                )
+                            }
+                        } else if (onOpenMenu != null) {
+                            NavigationMenuButton(onClick = onOpenMenu, testTag = menuTestTag)
+                        }
+                    },
+                    actions = {
+                        if (topBarAction != null) {
+                            TopBarActionButton(action = topBarAction)
+                        }
+                        extraTopBarAction?.invoke()
+                    },
+                    colors =
+                        TopAppBarDefaults.centerAlignedTopAppBarColors(
+                            containerColor = PantopusColors.appSurface,
+                        ),
+                )
+            },
+            modifier = Modifier.padding(padding).fillMaxSize(),
+            headerBackground = PantopusColors.appSurface,
+            pinned =
+                if (hasPinned) {
+                    @Composable {
+                        Column {
+                            if (searchBar != null) {
+                                SearchBarRow(searchBar)
+                                HorizontalDivider(color = PantopusColors.appBorderSubtle)
+                            }
+                            if (chipStrip != null) {
+                                ChipStripRow(chipStrip)
+                                HorizontalDivider(color = PantopusColors.appBorderSubtle)
+                            } else if (tabs.isNotEmpty()) {
+                                TabStrip(tabs = tabs, selectedId = selectedTab, onSelect = onSelectTab)
+                                HorizontalDivider(color = PantopusColors.appBorderSubtle)
+                            }
+                            if (customHeader != null) {
+                                customHeader()
+                            }
+                            if (refreshNotice != null && showsRefreshNotice) {
+                                RefreshFailedLine(refreshNotice, modifier = Modifier.padding(horizontal = Spacing.s4))
+                            }
+                        }
+                    }
+                } else {
+                    null
+                },
+            pinnedBackground = PantopusColors.appBg,
+        ) { top ->
             // Under a search box, the first tap on the rows while typing only puts the keyboard away.
             Box(modifier = Modifier.fillMaxSize().firstTapClosesKeyboard().pullRefresh(pullState)) {
                 when (state) {
-                    ListOfRowsUiState.Loading -> LoadingRows()
+                    ListOfRowsUiState.Loading -> LoadingRows(top)
                     is ListOfRowsUiState.Loaded ->
-                        LoadedList(state, banner, listingContext, monoFooter, onEndReached, reservesFabSpace = fab != null)
+                        LoadedList(state, banner, listingContext, monoFooter, onEndReached, reservesFabSpace = fab != null, top = top)
                     is ListOfRowsUiState.Empty ->
-                        RefreshableFill { minHeight ->
+                        RefreshableFill(top) { minHeight ->
                             EmptyState(
                                 icon = state.icon,
                                 headline = state.headline,
@@ -286,12 +313,12 @@ fun ListOfRowsScreen(
                             )
                         }
                     is ListOfRowsUiState.Error ->
-                        RefreshableFill { ErrorBanner(state.message, onRetry = onRefresh) }
+                        RefreshableFill(top) { ErrorBanner(state.message, onRetry = onRefresh) }
                 }
                 PullRefreshIndicator(
                     refreshing = refreshing || state is ListOfRowsUiState.Loading,
                     state = pullState,
-                    modifier = Modifier.align(Alignment.TopCenter),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = top),
                     contentColor = PantopusColors.primary600,
                 )
             }
@@ -305,10 +332,14 @@ fun ListOfRowsScreen(
  * height of the viewport; [content] gets that height to keep centred layouts.
  */
 @Composable
-private fun RefreshableFill(content: @Composable (minHeight: Dp) -> Unit) {
+private fun RefreshableFill(
+    top: Dp,
+    content: @Composable (minHeight: Dp) -> Unit,
+) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val minHeight = maxHeight
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        // Below the bar and strips drawn over the top [top] of it.
+        val minHeight = (maxHeight - top).coerceAtLeast(0.dp)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = top)) {
             content(minHeight)
         }
     }
@@ -879,9 +910,9 @@ private fun ListingContextSortMenu(
 // ─── States ────────────────────────────────────────────────────
 
 @Composable
-private fun LoadingRows() {
+private fun LoadingRows(top: Dp) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(Spacing.s4),
+        modifier = Modifier.fillMaxSize().padding(start = Spacing.s4, top = top + Spacing.s4, end = Spacing.s4, bottom = Spacing.s4),
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         items(6) {
@@ -913,8 +944,11 @@ private fun LoadedList(
     monoFooter: String?,
     onEndReached: () -> Unit,
     reservesFabSpace: Boolean = false,
+    /** The bar and strips drawn over the top of the list: its first row starts below them. */
+    top: Dp = 0.dp,
 ) {
     val listState = rememberLazyListState()
+    ScrollAwayHeaderPage(listState)
     // The remembered check reads the current list: a list first shown with no more pages that later
     // gains some (a refresh or a tab change while this screen stays open) must still page.
     val currentState by rememberUpdatedState(state)
@@ -950,7 +984,7 @@ private fun LoadedList(
         contentPadding =
             PaddingValues(
                 start = Spacing.s4,
-                top = Spacing.s4,
+                top = top + Spacing.s4,
                 end = Spacing.s4,
                 bottom = if (reservesFabSpace) Spacing.s16 + Spacing.s4 else Spacing.s4,
             ),

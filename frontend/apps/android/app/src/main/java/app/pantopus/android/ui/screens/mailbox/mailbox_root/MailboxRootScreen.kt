@@ -5,7 +5,6 @@ package app.pantopus.android.ui.screens.mailbox.mailbox_root
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +21,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -41,6 +39,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -67,6 +66,9 @@ import app.pantopus.android.ui.screens.mailbox.cards.TakeBackDialog
 import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
+import app.pantopus.android.ui.screens.root.PullToRefreshUnderHeader
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
+import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -148,19 +150,25 @@ fun MailboxRootScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshIfStale() }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("mailboxRoot")) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            MailboxTopBar(
-                onBack = onBack,
-                onOpenMenu = onOpenMenu,
-                onOpenSearch = onOpenSearch,
-                onOpenVacationHold = onOpenVacationHold,
-                onOpenStamps = onOpenStamps,
-                onOpenMailParty = onOpenMailParty,
-                onOpenCommunity = onOpenCommunity,
-                onOpenRecords = onOpenRecords,
-                onOpenMailTasks = onOpenMailTasks,
-            )
-            PullToRefreshBox(
+        // The mailbox and the mail scroll under the header, which slides away while they scroll down and comes back
+        // near the top (founder request 2026-11-07, as on iPhone).
+        ScrollAwayHeaderLayout(
+            header = {
+                MailboxTopBar(
+                    onBack = onBack,
+                    onOpenMenu = onOpenMenu,
+                    onOpenSearch = onOpenSearch,
+                    onOpenVacationHold = onOpenVacationHold,
+                    onOpenStamps = onOpenStamps,
+                    onOpenMailParty = onOpenMailParty,
+                    onOpenCommunity = onOpenCommunity,
+                    onOpenRecords = onOpenRecords,
+                    onOpenMailTasks = onOpenMailTasks,
+                )
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) { top ->
+            PullToRefreshUnderHeader(
                 isRefreshing = refreshing,
                 onRefresh = {
                     viewModel.refresh()
@@ -169,6 +177,7 @@ fun MailboxRootScreen(
                         selectedTab == MailboxTab.Vault -> vault.refresh()
                     }
                 },
+                top = top,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 MailboxList(
@@ -203,6 +212,7 @@ fun MailboxRootScreen(
                             onOpen = onOpenSentCard,
                             onTakeBack = { confirmTakeBack = it },
                         ),
+                    contentTop = top,
                 )
             }
         }
@@ -296,6 +306,8 @@ private fun MailboxList(
     cards: HolidayCardsResponse?,
     onOpenCards: () -> Unit,
     sent: SentContent,
+    /** The header drawn over the top of the list: the hero starts below it. */
+    contentTop: Dp,
 ) {
     val shelf by viewModel.vaultShelf.collectAsStateWithLifecycle()
     val sentState by sent.list.state.collectAsStateWithLifecycle()
@@ -305,6 +317,7 @@ private fun MailboxList(
     val query by vault.query.collectAsStateWithLifecycle()
     val search by vault.search.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    ScrollAwayHeaderPage(listState)
     // "Your mail is here" or Mail tapped again: back up to the hero (Incoming for the morning's mail), even when the ask
     // came while another tab was showing and this list is coming back where it was left.
     val top by MailboxRepository.mailboxTop.collectAsStateWithLifecycle()
@@ -329,7 +342,11 @@ private fun MailboxList(
     // Home mail opens once the address is proven: with no Home open yet, the drawer is a closed box.
     val waiting = homes.filter { it.mailAccess == "needs_proof" }
     val closedHome = waiting.firstOrNull()?.takeIf { selectedDrawer == MailboxDrawer.Home && homes.none { it.mailAccess == "open" } }
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = Spacing.s8)) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = contentTop, bottom = Spacing.s8),
+    ) {
         // Always the first item, so the card coming in after the first frame isn't inserted above the scroll position.
         item(key = "hero") {
             if (hero != null) {
