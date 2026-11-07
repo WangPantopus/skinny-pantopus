@@ -77,10 +77,10 @@ on:
 permissions:
   contents: read
 
-# A county's switch only writes its own file, so it never waits behind a build that takes hours. A waiting run is
+# A county's switch only writes its own file, so it never waits behind a build that takes hours. The national floor writes only under its own prefix and can take hours a state, so it has its own line too. A waiting run is
 # replaced by a newer one, so several counties go in one run's list, not in a loop of runs.
 concurrency:
-  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || 'publish' }}
+  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || (inputs.action == 'estimates' && 'estimates') || 'publish' }}
   cancel-in-progress: false
 
 jobs:
