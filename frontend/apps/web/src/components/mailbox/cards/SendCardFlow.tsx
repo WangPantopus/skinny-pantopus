@@ -434,7 +434,7 @@ function WriteStep({
         showBack={showBack}
         front={<CardFront design={design.id} caption={design.caption} paper={design.paper} year={year} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]" />}
         back={(
-          <CardBack paper={design.paper} fromName={fromName} year={year} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]">
+          <CardBack number={design.number} paper={design.paper} fromName={fromName} year={year} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]">
             <label htmlFor="card-note" className="sr-only">Your note on the back of the card</label>
             <textarea
               id="card-note"

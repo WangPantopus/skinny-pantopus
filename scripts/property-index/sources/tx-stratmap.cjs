@@ -21,7 +21,7 @@ const { log } = require('../lib/log.cjs');
 
 const API = 'https://api.tnris.org/api/v1';
 // Districts read by their own connector.
-const OWN_CONNECTOR = new Set(['48113', '48201', '48439', '48491']);
+const OWN_CONNECTOR = new Set(['48029', '48085', '48113', '48121', '48157', '48201', '48215', '48339', '48439', '48453', '48491']);
 const COLUMNS = ['PROP_ID', 'OWNER_NAME', 'LEGAL_AREA', 'LGL_AREA_U', 'LEGAL_DESC', 'STAT_LAND_', 'LOC_LAND_U', 'LAND_VALUE', 'IMP_VALUE', 'MKT_VALUE', 'SITUS_ADDR', 'SITUS_NUM', 'SITUS_STRE', 'SITUS_ST_1', 'SITUS_ST_2', 'SITUS_CITY', 'SITUS_ZIP', 'DATE_ACQ', 'TAX_YEAR', 'YEAR_BUILT'];
 const PROTECTED = /CONFIDENTIAL|PROTECTED|WITHHELD|SUPPRESS|NOT DISPLAYED|25\.025/i;
 

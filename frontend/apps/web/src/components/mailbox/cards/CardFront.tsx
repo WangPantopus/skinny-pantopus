@@ -9,6 +9,8 @@
 
 import { cardPicture, paperStyle, postmarkDay, POSTMARK_RED, SERIF } from './cardArt';
 import { cardHand } from './cardFont';
+import { launchFeatures } from '@/lib/featureFlags';
+import { PaperFront } from './CardPaper';
 
 export type CardFrontProps = {
   design: string;
@@ -40,6 +42,7 @@ function Postmark({ day, year }: { day: string; year: number }) {
 }
 
 export default function CardFront({ design, caption, paper, year, mailedOn, size = 'full', className = '' }: CardFrontProps) {
+  if (launchFeatures.cardTable) return <PaperFront design={design} caption={caption} paper={paper} year={year} mailedOn={mailedOn} className={className} />;
   const text = caption || '';
   // About the size the original cards printed it; a long caption gets smaller so it stays on one line beside the
   // postmark (the hand runs up to 0.53 em a letter).

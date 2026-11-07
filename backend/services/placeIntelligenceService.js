@@ -9,9 +9,9 @@
 //                      for the home's own point)
 //   Your Block         neighborhoodProfileService (Census tract context)
 //                      + NeighborhoodPreview table (k-anon density bucket)
-//   Your Home (Band B) propertyIntelligenceService.getProfile (ATTOM) —
-//                      only when ATTOM_API_KEY is configured, else
-//                      `unavailable` (never a 500)
+//   Your Home (Band B) propertyIntelligenceService.getProfile: the county
+//                      record or a copy the Home already holds; with neither
+//                      and no household facts, `unavailable` (never a 500)
 //   Money Signals      Current household/month SQL snapshot (peer comparison)
 //
 // Every section degrades INDEPENDENTLY: a thrown/failed source yields
@@ -1003,14 +1003,9 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   }
   let result = null;
   try {
-    // Without ATTOM's key and with no county record, only what the household entered is shown, and no stored
-    // ATTOM copy is read. The gap is ours, not the area's, so the copy doesn't blame the area.
-    if (!process.env.ATTOM_API_KEY && !propertyRecordsConfig.enabled()) {
-      homeRecords.noteLookup('home', homeRecords.homeAddress(home), null);
-      result = { profile: propertyIntelligenceService.buildFallbackProfile(home), source: 'fallback', lookup: null };
-    } else {
-      result = await propertyIntelligenceService.getProfile(home.id);
-    }
+    // With no index, getProfile never reaches the record's lookup, so this visit is counted here.
+    if (!propertyRecordsConfig.enabled()) homeRecords.noteLookup('home', homeRecords.homeAddress(home), null);
+    result = await propertyIntelligenceService.getProfile(home.id);
   } catch (err) {
     logger.warn('placeIntelligence: propertyIntelligence failed', { homeId: home.id, error: err.message });
     return [serializePlaceSection('your_home', { access, status: 'error' })];

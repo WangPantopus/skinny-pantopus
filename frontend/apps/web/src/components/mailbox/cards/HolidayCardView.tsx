@@ -102,7 +102,7 @@ export function CardFromEnvelope({
         <CardFlip
           showBack={showBack}
           front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className="rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]" />}
-          back={<CardBack paper={card.paper} fromName={from} year={card.year} message={piece.content || ''} className="rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]" />}
+          back={<CardBack number={card.number} paper={card.paper} fromName={from} year={card.year} message={piece.content || ''} className="rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]" />}
         />
       </div>
       {opening ? (

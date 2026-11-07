@@ -17,9 +17,7 @@ then switch, one vendor at a time.
   response, or later a USPS license; it can't own it.
 - Printing and postage are bought per piece.
 - Supabase Free (500 MB) can't hold national address or property data; it stays in files outside the database.
-- ATTOM's free trial ended November 4, 2026, and its terms allowed internal evaluation only: no database, nothing kept
-  past 24 hours, no showing it to others ([cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)). Nothing in this
-  design depends on ATTOM copies.
+- Nothing in this design depends on ATTOM copies.
 - Google's terms: its address, USPS and confirmation results may be kept 30 days (then deleted or replaced by what the
   person confirmed), its coordinates 30 days (then deleted); place IDs indefinitely; never send made-up US or Puerto
   Rico addresses ([cost-and-rights.md](cost-and-rights.md#6-google-address-validation-retention)).
@@ -169,16 +167,17 @@ household entry never changes the record; it is shown beside it.
 | National estimates (NSI size, stories, year; ACS medians) | Only in a separate "Estimate" slot, labeled | — | The household's entry replaces the estimate in the household's view | Filling any record field or outranking anything |
 | Today house outline | County footprint and stories | FEMA USA Structures, then NSI stories (as an estimate) | Household's stories and type | — |
 
-## 8. The value card is never empty, and an estimate shows only where measured
+## 8. The value card is never empty, and an estimate shows everywhere we can
 
 The card always shows what is known, in this order, each with its label and date:
 1. **The county's values:** market value and assessed value with the tax year (in Washington, assessed at 100% of
    market).
 2. **The last recorded sale:** date and price where sales are public; "Sale prices aren't public in <state>" otherwise.
 3. **The area's price trend:** from the FHFA House Price Index for the ZIP or, with no number of its own, its county (for example "Prices in this ZIP rose <x>% in <year> (FHFA House Price Index)"). It is a price-change index: never a home's value and never a ZIP median sale price.
-4. **A Pantopus estimate:** only in markets where its error on held-out sales meets the bar
-   ([parity-and-acceptance.md](parity-and-acceptance.md#t4-values-only-if-an-estimate-ships-decision-d9)), with a range and its method. Elsewhere there is no
-   estimate, and nothing pretends to be one.
+4. **A Pantopus estimate (D9):** everywhere we can, with a range and its method, and wider ranges where we're less sure.
+   With a county value and public sale prices, the range is measured on held-out sales
+   ([parity-and-acceptance.md](parity-and-acceptance.md#t4-values-decision-d9)). Without them, it's labeled rough, or as the
+   neighborhood's and not this home's. Nothing pretends to be more than it is.
 
 Today's mapping bugs (assessed total shown as an estimate and as a ZIP median; a missing trend shown as flat; two
 confidence paths) are fixed on the way (WP12). For the apps in the stores, the value card's fields keep their names
@@ -204,10 +203,9 @@ and allowed values (section 15).
 - The property lookup never reads `Home.niche_data.attom_property_detail`, `AttomPropertyCache`, the per-address copy,
   ATTOM rows in `ExternalFeedCache` or `PropertyIntelligenceCache`.
 - No field mapping, code table, ID or evaluation answer comes from ATTOM, Smarty or Google output.
-- "Same or better than ATTOM" is measured against adjudicated truth ([parity-and-acceptance.md](parity-and-acceptance.md));
-  the trial has ended, so there are no live comparison calls.
-- As each county switches, the router stops reading ATTOM copies there; the copies are then purged as the terms require
-  (a hosted delete only the founder runs).
+- "Same or better than ATTOM" is measured against adjudicated truth ([parity-and-acceptance.md](parity-and-acceptance.md)),
+  with no live comparison calls.
+- As each county switches, the router stops reading ATTOM copies there. What happens to the copies is the founder's call.
 
 ## 11. Storage
 

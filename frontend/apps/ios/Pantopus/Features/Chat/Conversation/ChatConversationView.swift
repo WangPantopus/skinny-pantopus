@@ -763,10 +763,7 @@ public struct ChatConversationView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .alert(
-            "Delete \(selectedMessageIds.count) message\(selectedMessageIds.count == 1 ? "" : "s")?",
-            isPresented: $bulkDeleteConfirmPresented
-        ) {
+        .alert(bulkDeleteTitle, isPresented: $bulkDeleteConfirmPresented) {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
                 let ids = Array(selectedMessageIds)
@@ -821,6 +818,12 @@ public struct ChatConversationView: View {
         }
         .refreshFailureToast($viewModel.actionFailure)
         .accessibilityIdentifier("chatConversation")
+    }
+
+    /// Outside `body` because, inline in that long modifier chain, this title
+    /// makes Xcode 26.5 give up type-checking the chain and fail the build.
+    private var bulkDeleteTitle: LocalizedStringKey {
+        "Delete \(selectedMessageIds.count) message\(selectedMessageIds.count == 1 ? "" : "s")?"
     }
 
     private func exitSelection() {

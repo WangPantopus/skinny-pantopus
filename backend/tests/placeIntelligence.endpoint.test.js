@@ -552,9 +552,14 @@ describe('GET /api/homes/:id/intelligence', () => {
     expect(s.bill_benchmark.data.comparison_pct).toBe(-24);
   });
 
-  test("a missing ATTOM key shows only what the household entered, labeled (not a 500)", async () => {
+  test("a missing ATTOM key still reads what the Home holds; with nothing held, the household's entries show, labeled (not a 500)", async () => {
     seedHome();
     // ATTOM_API_KEY is deleted in beforeEach.
+    propertyIntelligenceService.getProfile.mockResolvedValue({
+      profile: propertyIntelligenceService.buildFallbackProfile({ id: HOME_ID, year_built: 1979, sq_ft: 1840, bedrooms: 3, bathrooms: 2, home_type: 'house' }),
+      source: 'fallback',
+      lookup: null,
+    });
 
     const res = await request(app).get(`/api/homes/${HOME_ID}/intelligence`).set('x-test-user-id', USER);
 
@@ -565,8 +570,7 @@ describe('GET /api/homes/:id/intelligence', () => {
     expect(s.your_home.source).toBe('Details you entered');
     expect(s.your_home.data.bedrooms).toBe(3);
     expect(s.your_home.data.estimated_value).toBeNull();
-    // We must NOT have called the ATTOM-backed service without a key.
-    expect(propertyIntelligenceService.getProfile).not.toHaveBeenCalled();
+    expect(propertyIntelligenceService.getProfile).toHaveBeenCalledWith(HOME_ID);
   });
 
   test('with an ATTOM key, Your Home composes exact property facts', async () => {

@@ -51,9 +51,9 @@ renters see rent sections, guests see neither.
 - Opens at once from the Home's stored copy (master waits up to 3.5 s and then shows "Couldn't load this").
 - Facts carry a source line ("County record, updated Oct 31, 2026"); household-filled facts say so.
 - A building-only match shows the building's facts, labeled, and "Add your unit to see your home's own details".
-- The value block is never empty when the county has any value ([architecture.md](architecture.md#8-the-value-card-is-never-empty-and-an-estimate-shows-only-where-measured)):
+- The value block is never empty when the county has any value ([architecture.md](architecture.md#8-the-value-card-is-never-empty-and-an-estimate-shows-everywhere-we-can)):
   county market and assessed values with the tax year, the last recorded sale (or "Sale prices aren't public in Texas"),
-  the area's price trend from the FHFA index, and a Pantopus estimate only where its error has been measured.
+  the area's price trend from the FHFA index, and a Pantopus estimate and range everywhere we can, with wider ranges where we're less sure (D9).
 
 ### Property details (verified owners)
 
@@ -77,11 +77,10 @@ Web `app/(site)/(app)/app/homes/[id]/property-details/page.tsx`; iOS `Features/H
 | It publishes basics only (year built, size, value, sales) | 32.5% | County basics; bedrooms and baths confirmed by the household | Behind on bedrooms and baths until residents confirm them |
 | Lookup sites only, sold files, one city only, or unconfirmed | 44.3% | Labeled estimates and household entries until county files are requested or bought (D2) | Clearly behind |
 
-Where Pantopus can beat ATTOM: accuracy at the source (in one Clark County sample home the county's file differed
-from ATTOM on baths, city and roof material, and the county is the source of record);
+Where Pantopus can beat ATTOM: accuracy at the source (the county is the source of record);
 weekly freshness where counties publish weekly; facts confirmed by verified residents; condo and apartment units from
 floor-plan sheets; no wait on a vendor; no retention limit on public records. Where it trails at first: the counties
-without free files, bedrooms and baths in basics-only places, the value estimate until measured, and the work of mapping
+without free files, bedrooms and baths in basics-only places, a value estimate's wider range, and the work of mapping
 each county's codes to plain words.
 
 ### Home value card
@@ -149,13 +148,13 @@ measured results. Methods and sample sizes: [parity-and-acceptance.md](parity-an
 
 | # | Gate | Measured as | Passes when |
 |---|---|---|---|
-| G1 | Property details stay useful | Field fill per county and property type on the record, checked against each county's own lookup page (T3). ATTOM's trial ended November 4, so there are no live comparison calls | Every field in today's Property details contract is filled where the county publishes it, or the gap is covered by G2's one-tap questions and the founder accepts it |
+| G1 | Property details stay useful | Field fill per county and property type on the record, checked against each county's own lookup page (T3), with no live comparison calls | Every field in today's Property details contract is filled where the county publishes it, or the gap is covered by G2's one-tap questions and the founder accepts it |
 | G2 | Add Home asks nothing new | For each county and type, the facts a person must enter among those Add Home prefilled from ATTOM (the fields, not ATTOM's values) | Zero new typed facts; a one-tap confirmation of a looked-up value doesn't count as typing |
 | G3 | Exact units | Precision of automatic unit links; wrong-unit rate on adjudicated invalid units | Precision ≥ 99.5% (with its interval); wrong-unit < 0.1% on about 3,000 invalid cases; no unit shows building figures |
 | G4 | Measured speed | p95 for address resolve, property read and Add Home's details step on web and real devices | Within the service objectives and never slower than today's measured p95 |
 | G5 | Dependable verification | Postal decisions against the adjudicated postal truth set | No `D`/`N1`, `S` or blank DPV reaches OK; every UNDELIVERABLE, PO_BOX, CMRA and business case in the set refused; agreement shown per category |
 | G6 | Recoverable failures | Fault drills for each row of "When something fails" on all three apps | Every failure has a next step; nothing typed is lost on reload or relaunch; the other household member's view is right |
-| G7 | The value card is never empty | Share of owner Homes with any official value whose card shows one | 100% where the county has a value; an estimate appears only in measured markets |
+| G7 | The value card is never empty | Share of owner Homes with any official value whose card shows one | 100% where the county has a value; an estimate appears everywhere we can, with its range (D9) |
 
 Each gate is checked by using the apps (web in a browser, iOS in a simulator, Android in an emulator) against a real
 local backend and database, persisting through reload and relaunch, and on the other person's view where there is one.

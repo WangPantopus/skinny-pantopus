@@ -1,6 +1,6 @@
 # Build plan
 
-November 5, 2026; updated November 6 after ATTOM's trial ended (see WP0 and [decisions.md](decisions.md)). Wave 1 is running. Each work package (WP) can be picked up by one
+November 5, 2026; updated November 7 (see [decisions.md](decisions.md)). Wave 1 is running. Each work package (WP) can be picked up by one
 builder, human or agent session, from this page and the documents it links. Founder direction governs the order:
 **build everything behind flags, prove it, replace nothing until it is proven, then switch one vendor at a time.**
 
@@ -37,7 +37,7 @@ builder, human or agent session, from this page and the documents it links. Foun
 ## Order and dependencies
 
 ```
-WP0 rights + ATTOM's end ──► key out, purge, affidavit
+WP0 rights register
 WP1 non-blocking ATTOM (done)
 WP2 app readiness ──────────────────────────────────────────────┐
 WP4 truth sets ──► WP3 postal adapter ──► WP14 retire Smarty      │
@@ -55,7 +55,7 @@ WP2, WP3 (with WP4) and WP13 touch different files and can run at the same time.
 
 | WP | Name | Replaces | Size |
 |---|---|---|---|
-| WP0 | Rights register and ATTOM trial compliance | — | S |
+| WP0 | Rights register | — | S |
 | WP1 | Non-blocking ATTOM lookups (done) | — | — |
 | WP2 | App readiness: real source labels, new vocabulary | — | M |
 | WP3 | Postal adapter: Smarty no longer needed | Smarty | M |
@@ -77,24 +77,16 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 
 ---
 
-## WP0. Rights register and ATTOM trial compliance
+## WP0. Rights register
 
-- **Goal:** know what Pantopus may keep and show from every source; stop using ATTOM now that its trial has ended; carry
-  out the purge and the affidavit by about November 18.
-- **What people see:** labeled partial results and household entries instead of ATTOM's facts, until each county goes
-  live on the record.
+- **Goal:** know what Pantopus may keep and show from every source.
+- **What people see:** nothing.
 - **Files:** [cost-and-rights.md](cost-and-rights.md) (the register); `backend/scripts/prefill-provider-cache.js` (not
   run again).
-- **Switches:** none new. Taking `ATTOM_API_KEY` out of the server's env file turns every ATTOM call off.
-- **Data:** production's copy counts are recorded in [cost-and-rights.md](cost-and-rights.md#5-attom-free-trial); the
-  purge itself is a hosted delete only the founder runs, on every hosted database and on local machines.
-- **Depends on:** the founder: the key's removal, the purge, the affidavit.
-- **Done when:** the key is out of every server; every hosted and local copy is gone and counted; the affidavit is signed.
-- **Verify:** Add Home, Place and Property details on all three apps against a local backend with no ATTOM key; the
-  counts after the purge.
-- **Roll out:** founder only.
-- **Roll back:** none: the trial is over.
-- **Size:** S, plus the founder's time.
+- **Switches:** none new.
+- **Depends on:** the founder, for anything contractual.
+- **Done when:** every source in use is in the register, with what it allows.
+- **Size:** S.
 
 ## WP1. Non-blocking ATTOM lookups (done)
 
@@ -346,18 +338,18 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 ## WP12. Values
 
 - **Goal:** the value card is never empty where the county has a value, and every number says what it is
-  ([architecture.md](architecture.md#8-the-value-card-is-never-empty-and-an-estimate-shows-only-where-measured)).
+  ([architecture.md](architecture.md#8-the-value-card-is-never-empty-and-an-estimate-shows-everywhere-we-can)).
 - **What people see:** county values with the tax year, the last sale (or why it isn't public), the area trend
-  labeled as an index; an estimate only in measured markets.
+  labeled as an index; an estimated value and range everywhere we can, with wider ranges where we're less sure (D9).
 - **Files:** the profile builder (`propertyIntelligenceService.js` 425-499: no assessed total as an estimate or a ZIP
   median, no default "flat", one confidence path); `routes/home.js` property-value (5509-5547: legacy fields and allowed
   values kept); web `PropertyValueCard.tsx`, `YourHomeDetail.tsx`; iOS and Android dashboard and Place value blocks;
   the FHFA index import (WP7's pipeline).
-- **Switches:** `VALUE_ESTIMATE_MARKETS` (empty: no estimate anywhere).
+- **Switches:** `VALUE_ESTIMATE_MARKETS` and a switch for neighborhood figures; all off until the founder turns them on.
 - **Data:** releases (sales, index); no tables.
-- **Depends on:** WP5 or WP7 for values and sales; D9 for any estimate.
+- **Depends on:** WP5 or WP7 for values and sales; D9 is decided.
 - **Done when:** G7 passes; a missing trend is sent as missing, not "flat"; the store builds' validators still accept
-  the card; T4 passes in any market where an estimate is switched on.
+  the card; each market's range holds 75-85% of held-out sales where sale prices are public.
 - **Verify:** on all three apps as owner (value shows) and renter (it doesn't); a non-disclosure state; a county with
   no value; the store build's value card.
 - **Roll out:** with each live county; estimates market by market after T4.
@@ -401,8 +393,7 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 
 ## WP15. Retire ATTOM
 
-- **Goal:** zero ATTOM calls and no ATTOM content anywhere. Its trial ended November 4, so the calls, the key and the
-  purge are WP0's and can't wait.
+- **Goal:** zero ATTOM calls and no ATTOM content anywhere, once the record has proven better, county by county.
 - **What is left here:** remove the ATTOM code paths once WP5, WP7 and WP2 have replaced what reads them; the "ATTOM ID"
   row and ATTOM copy gone (WP2); the old vocabulary served to old builds no longer needed (D11).
 - **Size:** M.
@@ -417,6 +408,6 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 
 ## What this plan can't verify on its own
 
-Hosted services and their data (key presence, stored copies, the purge), live vendor answers and billing, physical
+Hosted services and their data (key presence, stored copies), live vendor answers and billing, physical
 phones, real mail delivery, and the share of old store builds until WP2's header ships. Each package names its own
 limits.

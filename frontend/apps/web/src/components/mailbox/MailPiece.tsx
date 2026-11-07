@@ -14,7 +14,9 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { MailItemV2 } from '@/types/mailbox';
 import { PantopusMark } from '@/components/brand/PantopusMark';
-import { cardPicture } from './cards/cardArt';
+import { cardPicture, cardStampFile, TABLE_ART } from './cards/cardArt';
+import { cardPen } from './cards/cardFont';
+import { launchFeatures } from '@/lib/featureFlags';
 
 export type PieceKind = 'letter' | 'bill' | 'notice' | 'postcard' | 'booklet' | 'parcel' | 'bundle';
 
@@ -260,6 +262,44 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
           </div>
           {postDate ? <div className="absolute bottom-2 left-3"><Postmark town={town} date={postDate} size={40} lines={false} /></div> : null}
         </div>
+      </div>
+    );
+  } else if (item.card && launchFeatures.cardTable) {
+    // On the table's paper (launch key card_table): the same place for everything, on the real envelope.
+    const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
+    const [month = '', date = ''] = postDate.split(' ');
+    const year = postDate.split(' ')[2] ?? '';
+    body = (
+      <div
+        className="relative h-[150px] rounded-md"
+        style={{ backgroundColor: '#9f2f28', backgroundImage: `url(${TABLE_ART}env-front.webp)`, backgroundSize: 'cover', backgroundPosition: '50% 12%', boxShadow: SHADOW, clipPath: torn ? TORN : undefined }}
+      >
+        <div className="absolute left-4 top-3.5 max-w-[46%] text-[17px] leading-[20px] text-[#f4e2bf]" style={{ fontFamily: pen }}>
+          <div className="truncate">{from}</div>
+          {town ? <div className="truncate">{town}</div> : null}
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={cardStampFile(item.card.number, item.card.design)} alt="" className="absolute right-3 top-2.5 h-[54px] w-auto" />
+        {postDate ? (
+          <div className="absolute right-[30px] top-2 w-[108px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`${TABLE_ART}postmark-blank.webp`} alt="" className="block h-auto w-full" />
+            <svg viewBox="0 0 622 365" className="absolute inset-0 h-full w-full" aria-hidden="true">
+              <text x="165" y="161.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 165 161.6)">{month} {date}</text>
+              <text x="160.3" y="199.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 160.3 199.6)">{year}</text>
+            </svg>
+          </div>
+        ) : null}
+        <div className="absolute left-[34%] right-3 top-[70px] text-[23px] leading-[26px] text-[#fbeed2]" style={{ fontFamily: pen }}>
+          <div className="truncate">{recipientName}</div>
+          {recipientLine ? <div className="truncate text-[17px] leading-[20px]">{recipientLine}</div> : null}
+        </div>
+        {item.card.sealed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`${TABLE_ART}wax-gold.webp`} alt="" className="absolute bottom-1.5 left-2.5 h-[60px] w-auto" />
+        ) : (
+          <div className="absolute bottom-3 left-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#d8b76f]" style={{ fontFamily: SERIF }}>Christmas card</div>
+        )}
       </div>
     );
   } else if (item.card) {

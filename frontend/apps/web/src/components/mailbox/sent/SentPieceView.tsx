@@ -20,9 +20,11 @@ import useMailAddressee from '../useMailAddressee';
 import CardFront from '../cards/CardFront';
 import CardBack from '../cards/CardBack';
 import CardFlip from '../cards/CardFlip';
+import CardTable from '../cards/CardTable';
 import { askTakeBack, takeBackMessage } from '../cards/takeBack';
 import { shortDay, WAX } from '../cards/cardArt';
 import { sentEnvelope, sentFirst, sentStatusLine, trailLabel, trailWhen } from './sentWords';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const label = 'text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary';
 const shadow = 'rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]';
@@ -61,6 +63,7 @@ export default function SentPieceView({ id }: { id: string }) {
   const takeBack = useTakeBackHolidayCard();
   const [showBack, setShowBack] = useState(false);
   const [takeBackError, setTakeBackError] = useState<string | null>(null);
+  const [onTable, setOnTable] = useState(false);
   const backToSent = () => router.push('/app/mailbox/sent');
 
   if (isLoading) {
@@ -105,7 +108,7 @@ export default function SentPieceView({ id }: { id: string }) {
   const front = card.design ? (
     <CardFront design={card.design} caption={card.caption} paper={card.paper ?? '#f7eee0'} year={card.year ?? new Date(piece.sent_at).getFullYear()} mailedOn={piece.envelope.postmarked_on ?? piece.sent_at} className={shadow} />
   ) : null;
-  const back = <CardBack paper={card.paper ?? '#f7eee0'} fromName={piece.envelope.from} year={card.year ?? new Date(piece.sent_at).getFullYear()} message={piece.note} className={shadow} />;
+  const back = <CardBack number={card.number} paper={card.paper ?? '#f7eee0'} fromName={piece.envelope.from} year={card.year ?? new Date(piece.sent_at).getFullYear()} message={piece.note} className={shadow} />;
   const delivered = piece.status === 'delivered' || piece.status === 'claimed';
   const theirMailbox = delivered ? `In ${first}’s Mailbox` : (piece.by_email ? 'Once they claim it' : `Addressed to ${first}`);
 
@@ -122,6 +125,18 @@ export default function SentPieceView({ id }: { id: string }) {
 
   return (
     <div className="flex h-full flex-col md:overflow-hidden" data-testid="mailSentPiece">
+      {/* The same full-screen moment they have. Your own note is shown, so it opens as it did for them, seal or none. */}
+      {onTable && card.design ? (
+        <CardTable
+          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false }}
+          note={piece.note}
+          fromName={piece.envelope.from}
+          toName={piece.to_name || ''}
+          mailedOn={piece.envelope.postmarked_on || piece.sent_at}
+          closeLabel="Back to your card"
+          onClose={() => setOnTable(false)}
+        />
+      ) : null}
       <BackToSent onBack={backToSent} />
       <div className="flex-1 md:min-h-0 md:overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4 pb-8 pt-1 md:px-7 md:pt-6">
@@ -147,6 +162,18 @@ export default function SentPieceView({ id }: { id: string }) {
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
                 <div className="mx-auto w-full max-w-[300px] md:max-w-none">
                   {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
+                  {front && launchFeatures.cardTable ? (
+                    <div className="mt-4 flex justify-center">
+                      <button
+                        type="button"
+                        data-testid="mailSentOnTable"
+                        onClick={() => setOnTable(true)}
+                        className={`${button} border border-[#d6cbb6] bg-[#fffdf8] px-5 text-[15px] text-[#374151] hover:bg-[#f5efe3] focus-visible:ring-[#8b1d1d]`}
+                      >
+                        See it the way they did
+                      </button>
+                    </div>
+                  ) : null}
                   {front ? (
                     <div className="mt-4 flex justify-center md:hidden">
                       <button

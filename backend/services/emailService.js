@@ -14,7 +14,7 @@
 
 const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
-const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { isLaunchFeatureEnabled, areLaunchFeaturesEnabled } = require('../utils/featureFlags');
 
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 const SMTP_FROM = process.env.SMTP_FROM || 'Pantopus <hello@pantopus.com>';
@@ -313,7 +313,11 @@ If you don't know the sender, you can safely ignore this email.
  */
 function cardWaitingEmailContent({ senderName, expiresAt, sealed, timeZone = 'UTC' }) {
   const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone });
+  const web = (process.env.PUBLIC_WEB_URL || APP_URL).trim().replace(/\/+$/, '');
   return {
+    // The sealed envelope at the top (launch key card_table). It still never shows the card.
+    ...(areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_table'])
+      ? { picture: `${web}/holiday-cards/share/sealed-link.jpg` } : {}),
     subject: `${senderName} sent you a Christmas card on Pantopus`,
     heading: 'You have a Christmas card',
     lines: [
@@ -353,8 +357,10 @@ async function sendCardWaitingEmail({ toEmail, senderName, claimLink, expiresAt,
   <div style="max-width:480px; margin:40px auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
 
     <!-- Header -->
-    <div style="background:#8b1d1d; padding:32px 32px 24px; text-align:center;">
-      <div style="font-size:32px; margin-bottom:8px;">✉️</div>
+    <div style="background:#8b1d1d; padding:${words.picture ? '0 0 24px' : '32px 32px 24px'}; text-align:center;">
+      ${words.picture
+    ? `<img src="${escapeHtml(words.picture)}" alt="A sealed red envelope with a gold wax seal" width="480" style="display:block; width:100%; height:auto; margin:0 0 20px;">`
+    : '<div style="font-size:32px; margin-bottom:8px;">✉️</div>'}
       <h1 style="color:#fff7ed; font-size:20px; font-weight:600; margin:0;">${escapeHtml(words.heading)}</h1>
     </div>
 
