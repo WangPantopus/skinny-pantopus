@@ -12,7 +12,7 @@ import { BadgeProvider, useBadges } from '@/contexts/BadgeContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { useDesktopNotifications } from '@/hooks/useDesktopNotifications';
 import { NavIcons, HomeIcons, BusinessIcons } from '@/lib/icons';
-import MobileTabBar from '@/components/MobileTabBar';
+import MobileTabBar, { hidesMobileTabs } from '@/components/MobileTabBar';
 import { PantopusMark } from '@/components/brand/PantopusMark';
 import UnifiedFAB, { routeHasFab } from '@/components/UnifiedFAB';
 import dynamic from 'next/dynamic';
@@ -283,7 +283,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const bizMatch = pathname.match(/^\/app\/business(?:es)?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i);
   const businessId = bizMatch?.[1] || null;
   const isBusinessContext = !!businessId;
-  const showMobileTabs = isMobile && !isBusinessContext;
+  const showMobileTabs = isMobile && !isBusinessContext && !hidesMobileTabs(pathname);
+  // A conversation on a phone is exactly the window the browser shows: only its
+  // thread scrolls, so the page can't slide its header under the top bar.
+  const fillsWindow = isMobile && hidesMobileTabs(pathname);
 
   const currentTab = searchParams.get('tab') || 'overview';
 
@@ -465,7 +468,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   return (
     // `--fab-lift` raises every fixed bottom-anchored control (FABs, the
     // chat launcher) clear of the mobile tab bar; 0 wherever the bar is absent.
-    <div className="min-h-screen bg-app text-app" style={{ '--fab-lift': showMobileTabs ? '64px' : '0px' } as CSSProperties}>
+    <div className={`${fillsWindow ? 'min-h-dvh' : 'min-h-screen'} bg-app text-app`} style={{ '--fab-lift': showMobileTabs ? '64px' : '0px' } as CSSProperties}>
       {/* ═══════════════════════════════════════════════════════
        *  HEADER
        * ═══════════════════════════════════════════════════════ */}
@@ -694,14 +697,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           above it (its top edge 144 px up), pb-40 lets the last row scroll clear.
           z-0 makes this a stacking context, so nothing inside rises above the header, tab bar or floating
           buttons. A dialog that stays in here sets data-covers-shell, which suspends that while it's open. */}
-      <main key="content" className={`pt-14 min-h-screen${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0 has-[[data-covers-shell]]:z-auto${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
+      <main key="content" className={`pt-14 ${fillsWindow ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-screen'}${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0 has-[[data-covers-shell]]:z-auto${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
         {offlineNotice}
         {children}
       </main>
 
       {/* The tabs on phone-width web: Place · Today · Nearby · (Mail ·) Messages
           as a bottom bar (the sidebar carries them at md+). Business context
-          keeps its own navigation. */}
+          keeps its own navigation, and a conversation has the whole window. */}
       {showMobileTabs && <MobileTabBar unreadMail={mailUnread} unreadMessages={chatUnread} />}
 
       {/* ═══════════════════════════════════════════════════════

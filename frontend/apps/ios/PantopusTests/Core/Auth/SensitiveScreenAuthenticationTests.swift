@@ -83,16 +83,16 @@ final class SensitiveScreenAuthenticationTests: XCTestCase {
     }
 
     func testTransientCapabilityFailurePreservesStoredAppLock() throws {
-        try store.set("1", for: SecureStoreKey.appLockEnabled("first"))
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("first"))
         context.capabilityError = .invalidContext
         manager.configure(userID: "first")
         XCTAssertTrue(manager.preferenceEnabled)
         XCTAssertTrue(manager.isLocked)
-        XCTAssertEqual(store.get(SecureStoreKey.appLockEnabled("first")), "1")
+        XCTAssertEqual(store.get(SecureStoreKey.appLockOnLeave("first")), "1")
     }
 
     func testConfirmedCredentialRemovalKeepsExistingAppLockPolicy() throws {
-        try store.set("1", for: SecureStoreKey.appLockEnabled("first"))
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("first"))
         context.capabilityError = .passcodeNotSet
         manager.configure(userID: "first")
         XCTAssertFalse(manager.preferenceEnabled)
@@ -100,8 +100,8 @@ final class SensitiveScreenAuthenticationTests: XCTestCase {
     }
 
     func testDelayedPromptCannotUnlockAnotherAccount() async throws {
-        try store.set("1", for: SecureStoreKey.appLockEnabled("first"))
-        try store.set("1", for: SecureStoreKey.appLockEnabled("second"))
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("first"))
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("second"))
         manager.configure(userID: "first")
         let started = expectation(description: "Unlock prompt started")
         context.onPrompt = { started.fulfill() }
@@ -117,12 +117,12 @@ final class SensitiveScreenAuthenticationTests: XCTestCase {
     }
 
     func testDelayedEnableCannotChangeAnotherAccountsPreference() async throws {
-        try store.set("1", for: SecureStoreKey.appLockEnabled("second"))
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("second"))
         manager.configure(userID: "first")
         let started = expectation(description: "Enable prompt started")
         context.onPrompt = { started.fulfill() }
         context.deferReply = true
-        let operation = Task { await manager.setEnabled(true, source: .postLoginPrompt) }
+        let operation = Task { await manager.setEnabled(true) }
         await fulfillment(of: [started], timeout: 2)
         manager.configure(userID: "second")
         context.completePrompt()
@@ -130,13 +130,12 @@ final class SensitiveScreenAuthenticationTests: XCTestCase {
         XCTAssertFalse(result)
         XCTAssertTrue(manager.isLocked)
         XCTAssertTrue(manager.preferenceEnabled)
-        XCTAssertNil(store.get(SecureStoreKey.appLockEnabled("first")))
-        XCTAssertEqual(manager.setupPromptState, .enabled)
+        XCTAssertNil(store.get(SecureStoreKey.appLockOnLeave("first")))
     }
 
     func testOldPromptErrorCannotDisableAnotherAccountsLock() async throws {
-        try store.set("1", for: SecureStoreKey.appLockEnabled("first"))
-        try store.set("1", for: SecureStoreKey.appLockEnabled("second"))
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("first"))
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("second"))
         manager.configure(userID: "first")
         let started = expectation(description: "Old prompt started")
         context.onPrompt = { started.fulfill() }
@@ -148,7 +147,7 @@ final class SensitiveScreenAuthenticationTests: XCTestCase {
         await operation.value
         XCTAssertTrue(manager.isLocked)
         XCTAssertTrue(manager.preferenceEnabled)
-        XCTAssertEqual(store.get(SecureStoreKey.appLockEnabled("second")), "1")
+        XCTAssertEqual(store.get(SecureStoreKey.appLockOnLeave("second")), "1")
     }
 
     func testLogoutDiscardsPendingVerificationResult() async {

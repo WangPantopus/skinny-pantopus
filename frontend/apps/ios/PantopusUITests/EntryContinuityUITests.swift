@@ -224,8 +224,6 @@ final class EntryContinuityUITests: XCTestCase {
         enter("entry@example.com", into: "loginEmailField")
         enter("EntryTest9!", into: "loginPasswordField")
         tap("loginSubmitButton")
-        let lockOffer = app.buttons.matching(identifier: "appLockSetupPromptDismiss").firstMatch
-        if lockOffer.waitForExistence(timeout: 3) { lockOffer.tap() }
     }
 
     private func assertAddressArrival() {

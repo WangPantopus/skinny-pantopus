@@ -176,7 +176,7 @@ final class HomeDocumentJourneyUITests: XCTestCase {
             let passwordDismiss = app.buttons.matching(NSPredicate(
                 format: "label == %@ AND identifier == %@", "Not Now", ""
             )).firstMatch
-            let topmost = passwordDismiss.exists ? passwordDismiss : app.buttons["appLockSetupPromptDismiss"].firstMatch
+            let topmost = passwordDismiss
             // The password extension's remote view reports non-hittable while
             // covering the app's Face ID alert. Its last accessibility button
             // still supplies the visible button's frame; dismiss it first.

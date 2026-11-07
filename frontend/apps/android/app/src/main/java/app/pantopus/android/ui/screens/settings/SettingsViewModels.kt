@@ -473,6 +473,7 @@ class PrivacySettingsViewModel
         /** A PATCH is in flight — the radios/toggle ignore taps meanwhile,
          *  matching RN's `privacySaving` guard. */
         private var searchPrivacySaving: Boolean = false
+        private var isChangingAppLock: Boolean = false
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()
@@ -581,15 +582,19 @@ class PrivacySettingsViewModel
                         return@launch
                     }
                     configureAppLockForSignedInUser()
+                    // The switch shows what's true while the prompt is up, and after a cancel.
+                    isChangingAppLock = true
+                    rebuild()
                     val changed = appLock.setEnabled(isOn, activity)
+                    isChangingAppLock = false
                     if (changed) {
                         _toast.value =
                             ToastMessage(
                                 text =
                                     if (isOn) {
-                                        "${appLock.biometricLabel.value} protection is on."
+                                        "Pantopus will lock when you leave."
                                     } else {
-                                        "Biometric protection turned off."
+                                        "Pantopus won't lock when you leave."
                                     },
                                 kind = ToastKind.Success,
                             )
@@ -901,7 +906,6 @@ class PrivacySettingsViewModel
         }
 
         private fun biometricSecurityGroup(): GroupedListGroup {
-            val label = appLock.biometricLabel.value
             val capability = appLock.capability.value
             return GroupedListGroup(
                 id = PrivacyCatalog.BIOMETRIC_SECURITY,
@@ -910,10 +914,11 @@ class PrivacySettingsViewModel
                     listOf(
                         GroupedListRow(
                             id = "appLockToggle",
-                            label = "Require $label for sensitive actions",
-                            subtext = "Protect payments, mailbox, and account changes with biometric verification.",
+                            label = "Lock Pantopus when I leave the app",
+                            subtext = "Confirm it's you every time you come back. Wallet, Mail and access codes always ask.",
                             control = RowControl.Toggle(appLock.preferenceEnabled.value),
                             testTag = "appLockToggle",
+                            toggleEnabled = !isChangingAppLock,
                         ),
                         GroupedListRow(
                             id = "appLockCapabilityStatus",

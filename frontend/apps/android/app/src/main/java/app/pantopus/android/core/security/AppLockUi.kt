@@ -11,17 +11,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -117,8 +113,10 @@ private fun AppLockOverlayContent(
     val context = LocalContext.current
     val activity = context.findFragmentActivity()
     val scope = rememberCoroutineScope()
+    val foregroundReturn by manager.foregroundReturn.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
+    // On first showing, and each time the app comes back with the lock still up.
+    LaunchedEffect(foregroundReturn) {
         activity?.let { manager.unlockIfNeeded(it, automatic = true) }
     }
 
@@ -228,125 +226,6 @@ fun AppLockHost(
                 onSignOut = { hostScope.launch { onSignOut() } },
             )
         }
-    }
-}
-
-/**
- * The one-time post-login offer to turn on biometric app lock.
- *
- * RN raises this from `AppLockSetupPromptLayer` (`src/app/_layout.tsx:132`)
- * once per account: after an *interactive* sign-in (never a silent session
- * restore), while the device can actually authenticate and the lock is off,
- * it asks once and remembers the answer in
- * [AppLockManager.SetupPromptState] — Pending → Enabled | Declined. Native
- * had the lock itself but no offer, so unless a user went hunting in
- * Settings → Privacy & Security they never learned it existed.
- *
- * iOS mirrors this with `AppLockSetupPromptModifier`.
- *
- * It follows the first sensitive action the person verifies (wallet, payments,
- * account changes), keyed on [AppLockManager.sensitiveActionVerifiedAt], not
- * the sign-in, where it stacked on the notification permission prompt. Each
- * stamp is offered at most once, so recomposition can't re-raise the dialog.
- */
-@Suppress("LongMethod", "CyclomaticComplexMethod")
-@Composable
-fun AppLockSetupPromptDialog(
-    manager: AppLockManager,
-    isSignedIn: Boolean,
-) {
-    val verifiedAt by manager.sensitiveActionVerifiedAt.collectAsStateWithLifecycle()
-    val setupPromptState by manager.setupPromptState.collectAsStateWithLifecycle()
-    val preferenceEnabled by manager.preferenceEnabled.collectAsStateWithLifecycle()
-    val capability by manager.capability.collectAsStateWithLifecycle()
-    val biometricLabel by manager.biometricLabel.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val activity = context.findFragmentActivity()
-    val scope = rememberCoroutineScope()
-
-    var promptedVerifiedAt by remember { mutableStateOf<Long?>(null) }
-    var showOffer by remember { mutableStateOf(false) }
-    var showFailure by remember { mutableStateOf(false) }
-
-    val unlockLabel =
-        if (biometricLabel == "Biometric") "Biometric unlock" else biometricLabel
-
-    LaunchedEffect(
-        isSignedIn,
-        verifiedAt,
-        setupPromptState,
-        preferenceEnabled,
-        capability,
-    ) {
-        if (!isSignedIn ||
-            verifiedAt == null ||
-            setupPromptState != AppLockManager.SetupPromptState.Pending ||
-            preferenceEnabled ||
-            capability != AppLockManager.Capability.Available ||
-            promptedVerifiedAt == verifiedAt
-        ) {
-            return@LaunchedEffect
-        }
-        promptedVerifiedAt = verifiedAt
-        showOffer = true
-    }
-
-    if (showOffer) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("Enable $unlockLabel?") },
-            text = {
-                Text(
-                    "Use $unlockLabel to protect sensitive actions like " +
-                        "payments and account changes.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showOffer = false
-                        val host = activity ?: return@TextButton
-                        scope.launch {
-                            val enabled =
-                                manager.setEnabled(
-                                    enabled = true,
-                                    activity = host,
-                                    source = AppLockManager.EnableSource.PostLoginPrompt,
-                                )
-                            // A plain cancel is silent (RN swallows
-                            // `reason === 'cancelled'`); anything else explains
-                            // where to find the setting later.
-                            if (!enabled && manager.lastError.value != AppLockManager.CANCELLED_MESSAGE) {
-                                showFailure = true
-                            }
-                        }
-                    },
-                    modifier = Modifier.testTag("appLockSetupPromptEnable"),
-                ) { Text("Enable") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showOffer = false
-                        manager.dismissSetupPrompt()
-                    },
-                    modifier = Modifier.testTag("appLockSetupPromptDismiss"),
-                ) { Text("Not Now") }
-            },
-            modifier = Modifier.testTag("appLockSetupPrompt"),
-        )
-    }
-
-    if (showFailure) {
-        AlertDialog(
-            onDismissRequest = { showFailure = false },
-            title = { Text("Could not enable $unlockLabel") },
-            text = { Text("You can turn it on later from Privacy & Security.") },
-            confirmButton = {
-                TextButton(onClick = { showFailure = false }) { Text("OK") }
-            },
-            modifier = Modifier.testTag("appLockSetupPromptFailure"),
-        )
     }
 }
 

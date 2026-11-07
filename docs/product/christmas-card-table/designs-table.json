@@ -1,0 +1,844 @@
+{
+ "shape": "15:16",
+ "cloth": {
+  "slate": "#3b4c6e",
+  "dusk": "#2c4071",
+  "umber": "#6e4b30",
+  "wine": "#704b51"
+ },
+ "designs": [
+  {
+   "id": "christmas-2026-01",
+   "number": 1,
+   "caption": "Home for Christmas.",
+   "slug": "home-for-christmas",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    13,
+    32,
+    1109,
+    1201
+   ],
+   "cut_percent": 2.7,
+   "lum": 0.306,
+   "warm": 0.069
+  },
+  {
+   "id": "christmas-2026-02",
+   "number": 2,
+   "caption": "One more run?",
+   "slug": "one-more-run",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    17,
+    29,
+    1105,
+    1190
+   ],
+   "cut_percent": 2.6,
+   "lum": 0.563,
+   "warm": 0.015
+  },
+  {
+   "id": "christmas-2026-03",
+   "number": 3,
+   "caption": "Don’t open until Christmas.",
+   "slug": "dont-open-until-christmas",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    16,
+    21,
+    1106,
+    1184
+   ],
+   "cut_percent": 1.4,
+   "lum": 0.315,
+   "warm": 0.264
+  },
+  {
+   "id": "christmas-2026-04",
+   "number": 4,
+   "caption": "Remember making your wish list?",
+   "slug": "remember-making-your-wish-list",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    18,
+    35,
+    1104,
+    1193
+   ],
+   "cut_percent": 3.4,
+   "lum": 0.373,
+   "warm": 0.182
+  },
+  {
+   "id": "christmas-2026-05",
+   "number": 5,
+   "caption": "We saved you a window seat.",
+   "slug": "we-saved-you-a-window-seat",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    15,
+    19,
+    1106,
+    1183
+   ],
+   "cut_percent": 1.6,
+   "lum": 0.408,
+   "warm": 0.035
+  },
+  {
+   "id": "christmas-2026-06",
+   "number": 6,
+   "caption": "Shake it once for me.",
+   "slug": "shake-it-once-for-me",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    14,
+    18,
+    1108,
+    1185
+   ],
+   "cut_percent": 1.1,
+   "lum": 0.457,
+   "warm": 0.13
+  },
+  {
+   "id": "christmas-2026-07",
+   "number": 7,
+   "caption": "Remember Christmas at the mall?",
+   "slug": "remember-christmas-at-the-mall",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    15,
+    35,
+    1107,
+    1200
+   ],
+   "cut_percent": 3.3,
+   "lum": 0.444,
+   "warm": 0.162
+  },
+  {
+   "id": "christmas-2026-08",
+   "number": 8,
+   "caption": "Come finish our snowman.",
+   "slug": "come-finish-our-snowman",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    17,
+    27,
+    1105,
+    1188
+   ],
+   "cut_percent": 2.6,
+   "lum": 0.586,
+   "warm": 0.013
+  },
+  {
+   "id": "christmas-2026-09",
+   "number": 9,
+   "caption": "Look outside. It’s snowing.",
+   "slug": "look-outside-its-snowing",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    18,
+    36,
+    1106,
+    1197
+   ],
+   "cut_percent": 4.1,
+   "lum": 0.461,
+   "warm": 0.03
+  },
+  {
+   "id": "christmas-2026-10",
+   "number": 10,
+   "caption": "One more Christmas movie.",
+   "slug": "one-more-christmas-movie",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    14,
+    21,
+    1110,
+    1190
+   ],
+   "cut_percent": 1.9,
+   "lum": 0.262,
+   "warm": 0.178
+  },
+  {
+   "id": "christmas-2026-11",
+   "number": 11,
+   "caption": "We found our tree.",
+   "slug": "we-found-our-tree",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    18,
+    26,
+    1103,
+    1183
+   ],
+   "cut_percent": 0.4,
+   "lum": 0.542,
+   "warm": 0.019
+  },
+  {
+   "id": "christmas-2026-12",
+   "number": 12,
+   "caption": "Your cocoa’s getting cold.",
+   "slug": "your-cocoas-getting-cold",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    17,
+    32,
+    1107,
+    1195
+   ],
+   "cut_percent": 3.0,
+   "lum": 0.351,
+   "warm": 0.084
+  },
+  {
+   "id": "christmas-2026-13",
+   "number": 13,
+   "caption": "A little Christmas from home.",
+   "slug": "a-little-christmas-from-home",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    14,
+    36,
+    1108,
+    1203
+   ],
+   "cut_percent": 4.3,
+   "lum": 0.335,
+   "warm": 0.23
+  },
+  {
+   "id": "christmas-2026-14",
+   "number": 14,
+   "caption": "Wish you were here.",
+   "slug": "wish-you-were-here",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    12,
+    25,
+    1110,
+    1196
+   ],
+   "cut_percent": 2.4,
+   "lum": 0.418,
+   "warm": 0.213
+  },
+  {
+   "id": "christmas-2026-15",
+   "number": 15,
+   "caption": "Snowy wishes, just for you.",
+   "slug": "snowy-wishes-just-for-you",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    17,
+    32,
+    1105,
+    1193
+   ],
+   "cut_percent": 3.2,
+   "lum": 0.429,
+   "warm": -0.032
+  },
+  {
+   "id": "christmas-2026-16",
+   "number": 16,
+   "caption": "Saved you the good cookies.",
+   "slug": "saved-you-the-good-cookies",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    14,
+    24,
+    1108,
+    1191
+   ],
+   "cut_percent": 1.9,
+   "lum": 0.396,
+   "warm": 0.241
+  },
+  {
+   "id": "christmas-2026-17",
+   "number": 17,
+   "caption": "See you after Christmas.",
+   "slug": "see-you-after-christmas",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    13,
+    30,
+    1109,
+    1199
+   ],
+   "cut_percent": 3.3,
+   "lum": 0.522,
+   "warm": 0.031
+  },
+  {
+   "id": "christmas-2026-18",
+   "number": 18,
+   "caption": "Same friends. New memories.",
+   "slug": "same-friends-new-memories",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    19,
+    18,
+    1103,
+    1174
+   ],
+   "cut_percent": 0.2,
+   "lum": 0.325,
+   "warm": 0.13
+  },
+  {
+   "id": "christmas-2026-19",
+   "number": 19,
+   "caption": "No fancy plans. Just us.",
+   "slug": "no-fancy-plans-just-us",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    43,
+    21,
+    1079,
+    1126
+   ],
+   "cut_percent": 4.0,
+   "lum": 0.319,
+   "warm": 0.182
+  },
+  {
+   "id": "christmas-2026-20",
+   "number": 20,
+   "caption": "Come over. There’s always room.",
+   "slug": "come-over-theres-always-room",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    28,
+    25,
+    1094,
+    1162
+   ],
+   "cut_percent": 1.0,
+   "lum": 0.266,
+   "warm": 0.2
+  },
+  {
+   "id": "christmas-2026-21",
+   "number": 21,
+   "caption": "Let’s take the long way home.",
+   "slug": "lets-take-the-long-way-home",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    22,
+    19,
+    1100,
+    1169
+   ],
+   "cut_percent": 0.5,
+   "lum": 0.515,
+   "warm": 0.023
+  },
+  {
+   "id": "christmas-2026-22",
+   "number": 22,
+   "caption": "We saved your usual seat.",
+   "slug": "we-saved-your-usual-seat",
+   "table": "#704b51",
+   "tone": "wine",
+   "crop": [
+    37,
+    18,
+    1085,
+    1136
+   ],
+   "cut_percent": 3.3,
+   "lum": 0.395,
+   "warm": 0.088
+  },
+  {
+   "id": "christmas-2026-23",
+   "number": 23,
+   "caption": "Our little place. Our Christmas.",
+   "slug": "our-little-place-our-christmas",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    35,
+    16,
+    1088,
+    1139
+   ],
+   "cut_percent": 2.2,
+   "lum": 0.345,
+   "warm": 0.113
+  },
+  {
+   "id": "christmas-2026-24",
+   "number": 24,
+   "caption": "Another Christmas. Still you.",
+   "slug": "another-christmas-still-you",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    47,
+    15,
+    1074,
+    1110
+   ],
+   "cut_percent": 5.1,
+   "lum": 0.425,
+   "warm": 0.117
+  },
+  {
+   "id": "christmas-2026-25",
+   "number": 25,
+   "caption": "Until I can hold you again.",
+   "slug": "until-i-can-hold-you-again",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    34,
+    14,
+    1086,
+    1136
+   ],
+   "cut_percent": 3.2,
+   "lum": 0.365,
+   "warm": 0.124
+  },
+  {
+   "id": "christmas-2026-26",
+   "number": 26,
+   "caption": "One more movie, like always.",
+   "slug": "one-more-movie-like-always",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    41,
+    13,
+    1081,
+    1122
+   ],
+   "cut_percent": 4.4,
+   "lum": 0.247,
+   "warm": 0.164
+  },
+  {
+   "id": "christmas-2026-27",
+   "number": 27,
+   "caption": "Christmas starts when you get here.",
+   "slug": "christmas-starts-when-you-get-here",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    23,
+    20,
+    1098,
+    1167
+   ],
+   "cut_percent": 0.2,
+   "lum": 0.33,
+   "warm": 0.035
+  },
+  {
+   "id": "christmas-2026-28",
+   "number": 28,
+   "caption": "One more song, my love.",
+   "slug": "one-more-song-my-love",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    20,
+    17,
+    1103,
+    1172
+   ],
+   "cut_percent": 0.3,
+   "lum": 0.292,
+   "warm": 0.222
+  },
+  {
+   "id": "christmas-2026-29",
+   "number": 29,
+   "caption": "My favorite place is beside you.",
+   "slug": "my-favorite-place-is-beside-you",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    18,
+    44,
+    1098,
+    1196
+   ],
+   "cut_percent": 4.2,
+   "lum": 0.533,
+   "warm": 0.024
+  },
+  {
+   "id": "christmas-2026-30",
+   "number": 30,
+   "caption": "All I wanted was you.",
+   "slug": "all-i-wanted-was-you",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    25,
+    12,
+    1096,
+    1154
+   ],
+   "cut_percent": 1.2,
+   "lum": 0.345,
+   "warm": 0.103
+  },
+  {
+   "id": "christmas-2026-31",
+   "number": 31,
+   "caption": "Good friends. Questionable wrapping skills.",
+   "slug": "good-friends-questionable-wrapping-skills",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    47,
+    18,
+    1075,
+    1115
+   ],
+   "cut_percent": 5.1,
+   "lum": 0.368,
+   "warm": 0.125
+  },
+  {
+   "id": "christmas-2026-32",
+   "number": 32,
+   "caption": "Save me a place at home.",
+   "slug": "save-me-a-place-at-home",
+   "table": "#704b51",
+   "tone": "wine",
+   "crop": [
+    17,
+    22,
+    1105,
+    1183
+   ],
+   "cut_percent": 1.1,
+   "lum": 0.414,
+   "warm": 0.045
+  },
+  {
+   "id": "christmas-2026-33",
+   "number": 33,
+   "caption": "Our kind of Christmas Eve.",
+   "slug": "our-kind-of-christmas-eve",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    32,
+    19,
+    1089,
+    1146
+   ],
+   "cut_percent": 2.3,
+   "lum": 0.299,
+   "warm": 0.182
+  },
+  {
+   "id": "christmas-2026-34",
+   "number": 34,
+   "caption": "Books closed. Christmas starts now.",
+   "slug": "books-closed-christmas-starts-now",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    31,
+    15,
+    1092,
+    1147
+   ],
+   "cut_percent": 2.0,
+   "lum": 0.434,
+   "warm": 0.012
+  },
+  {
+   "id": "christmas-2026-35",
+   "number": 35,
+   "caption": "Small gifts. Good company.",
+   "slug": "small-gifts-good-company",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    35,
+    21,
+    1089,
+    1145
+   ],
+   "cut_percent": 2.4,
+   "lum": 0.349,
+   "warm": 0.109
+  },
+  {
+   "id": "christmas-2026-36",
+   "number": 36,
+   "caption": "We’ll make it fit.",
+   "slug": "well-make-it-fit",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    21,
+    38,
+    1102,
+    1191
+   ],
+   "cut_percent": 3.7,
+   "lum": 0.31,
+   "warm": 0.07
+  },
+  {
+   "id": "christmas-2026-37",
+   "number": 37,
+   "caption": "Different cities. Same old us.",
+   "slug": "different-cities-same-old-us",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    33,
+    18,
+    1090,
+    1145
+   ],
+   "cut_percent": 2.1,
+   "lum": 0.251,
+   "warm": 0.102
+  },
+  {
+   "id": "christmas-2026-38",
+   "number": 38,
+   "caption": "Saved you something sweet.",
+   "slug": "saved-you-something-sweet",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    21,
+    14,
+    1101,
+    1166
+   ],
+   "cut_percent": 0.6,
+   "lum": 0.52,
+   "warm": 0.173
+  },
+  {
+   "id": "christmas-2026-39",
+   "number": 39,
+   "caption": "A little Christmas, sent your way.",
+   "slug": "a-little-christmas-sent-your-way",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    17,
+    23,
+    1105,
+    1184
+   ],
+   "cut_percent": 2.3,
+   "lum": 0.381,
+   "warm": 0.27
+  },
+  {
+   "id": "christmas-2026-40",
+   "number": 40,
+   "caption": "Follow the lights home.",
+   "slug": "follow-the-lights-home",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    17,
+    28,
+    1105,
+    1189
+   ],
+   "cut_percent": 1.8,
+   "lum": 0.319,
+   "warm": -0.01
+  },
+  {
+   "id": "christmas-2026-41",
+   "number": 41,
+   "caption": "Press play. Stay awhile.",
+   "slug": "press-play-stay-awhile",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    20,
+    21,
+    1103,
+    1176
+   ],
+   "cut_percent": 1.3,
+   "lum": 0.279,
+   "warm": 0.271
+  },
+  {
+   "id": "christmas-2026-42",
+   "number": 42,
+   "caption": "Wake up. It’s Christmas.",
+   "slug": "wake-up-its-christmas",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    27,
+    11,
+    1095,
+    1150
+   ],
+   "cut_percent": 2.4,
+   "lum": 0.456,
+   "warm": 0.188
+  },
+  {
+   "id": "christmas-2026-43",
+   "number": 43,
+   "caption": "Come in. The movie’s starting.",
+   "slug": "come-in-the-movies-starting",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    22,
+    33,
+    1101,
+    1184
+   ],
+   "cut_percent": 2.7,
+   "lum": 0.215,
+   "warm": 0.191
+  },
+  {
+   "id": "christmas-2026-44",
+   "number": 44,
+   "caption": "Your turn to stir.",
+   "slug": "your-turn-to-stir",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    33,
+    16,
+    1088,
+    1141
+   ],
+   "cut_percent": 2.9,
+   "lum": 0.422,
+   "warm": 0.143
+  },
+  {
+   "id": "christmas-2026-45",
+   "number": 45,
+   "caption": "You can have one now.",
+   "slug": "you-can-have-one-now",
+   "table": "#704b51",
+   "tone": "wine",
+   "crop": [
+    35,
+    21,
+    1086,
+    1142
+   ],
+   "cut_percent": 2.6,
+   "lum": 0.378,
+   "warm": 0.092
+  },
+  {
+   "id": "christmas-2026-46",
+   "number": 46,
+   "caption": "Take this for tomorrow.",
+   "slug": "take-this-for-tomorrow",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    32,
+    16,
+    1090,
+    1145
+   ],
+   "cut_percent": 2.3,
+   "lum": 0.288,
+   "warm": 0.15
+  },
+  {
+   "id": "christmas-2026-47",
+   "number": 47,
+   "caption": "You made this one.",
+   "slug": "you-made-this-one",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    43,
+    25,
+    1079,
+    1130
+   ],
+   "cut_percent": 3.7,
+   "lum": 0.298,
+   "warm": 0.115
+  },
+  {
+   "id": "christmas-2026-48",
+   "number": 48,
+   "caption": "One more piece before bed.",
+   "slug": "one-more-piece-before-bed",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    23,
+    26,
+    1098,
+    1173
+   ],
+   "cut_percent": 1.7,
+   "lum": 0.325,
+   "warm": 0.176
+  },
+  {
+   "id": "christmas-2026-49",
+   "number": 49,
+   "caption": "Your bed’s already made.",
+   "slug": "your-beds-already-made",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    31,
+    13,
+    1093,
+    1146
+   ],
+   "cut_percent": 2.7,
+   "lum": 0.398,
+   "warm": 0.175
+  }
+ ]
+}

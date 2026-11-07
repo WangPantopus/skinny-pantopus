@@ -77,6 +77,7 @@ struct PantopusApp: App {
                         ChatOutbox.shared.enteredForeground()
                         capturePrivacy.coversAppSwitcher = false
                         appLock.appDidBecomeActive()
+                        Task { await appLock.unlockIfNeeded(automatic: true) }
                         // Proactive DPoP refresh when < 120 s of access-token
                         // life remain, so the first request after a long
                         // background never pays the 401 + replay tax
@@ -89,8 +90,9 @@ struct PantopusApp: App {
                         // app-switcher cover (it has to be up before iOS takes
                         // its snapshot) but do NOT arm the lock: that is
                         // `.background` only, mirroring Android's
-                        // `MainActivity.onStop()`.
-                        capturePrivacy.coversAppSwitcher = true
+                        // `MainActivity.onStop()`. Our own prompt's screen has
+                        // its cover already, and says what the prompt is for.
+                        capturePrivacy.coversAppSwitcher = !appLock.isPrompting
                     case .background:
                         PilotEvents.shared.enterBackground()
                         ChatOutbox.shared.enteredBackground()
@@ -181,11 +183,6 @@ struct RootView: View {
             // `Modifier.clearAndSetSemantics`).
             .allowsHitTesting(!isAppLocked)
             .accessibilityHidden(isAppLocked)
-            if capturePrivacy.coversAppSwitcher && privacyCoverEnabled {
-                AppSwitcherPrivacyOverlay()
-                    .accessibilityIdentifier("appSwitcherPrivacyOverlay")
-                    .zIndex(20)
-            }
         }
         .animation(.easeInOut(duration: 0.25), value: auth.state)
         .transition(.opacity)
@@ -200,9 +197,9 @@ struct RootView: View {
             appLock.clearTransientState()
             await auth.signOut()
         }
-        // One-time offer to turn app lock on, after the first sensitive action
-        // the person verifies (RN raised it right after sign-in).
-        .appLockSetupPrompt(manager: appLock, isSignedIn: isSignedInState)
+        .onChange(of: privacyCoverEnabled, initial: true) { _, enabled in
+            capturePrivacy.coversWholeApp = enabled
+        }
         // One-time "What should we call you?" for an account with no name.
         .namePrompt(userId: signedInUserId)
         .onAppear {
@@ -232,13 +229,6 @@ struct RootView: View {
         }
     }
 
-    /// True while the session is signed in — gates the app-lock setup offer,
-    /// which must never appear over the auth screens.
-    private var isSignedInState: Bool {
-        if case .signedIn = auth.state { return true }
-        return false
-    }
-
     /// The signed-in account's id — gates the one-time name sheet.
     private var signedInUserId: String? {
         if case let .signedIn(user) = auth.state { return user.id }
@@ -251,12 +241,13 @@ struct RootView: View {
         return appLock.isLocked
     }
 
-    /// The app-switcher cover is a privacy feature, so it is scoped to the
-    /// users who asked for one: signed in with app lock turned on. Covering
-    /// the auth screens, or a signed-in user who never opted in, hides
-    /// nothing private and blinks a full-screen panel on every Control
-    /// Centre pull. Android holds `FLAG_SECURE` under exactly this
-    /// condition — see `SecureWindowController.setPrivacyHold`.
+    /// The whole-app cover is a privacy feature, so it is scoped to the users
+    /// who asked for one: signed in with app lock turned on. Covering the auth
+    /// screens, or a signed-in user who never opted in, hides nothing private
+    /// and blinks a full-screen panel on every Control Centre pull (private
+    /// screens ask for the cover themselves: `hiddenInAppSwitcher()`). Android
+    /// holds `FLAG_SECURE` under exactly this condition — see
+    /// `SecureWindowController.setPrivacyHold`.
     private var privacyCoverEnabled: Bool {
         guard case .signedIn = auth.state else { return false }
         return appLock.preferenceEnabled
