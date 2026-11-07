@@ -9,10 +9,12 @@
  * write over a person's entries (those stay in Home's own columns and
  * `niche_data.household_facts`, services/householdFacts.js).
  *
- * A refresh runs in the background when the county has a newer release. It only
- * replaces the copy with a real answer: an empty answer, a timeout or an outage
- * keeps the last copy, shown with its date. The one exception is a source that was
- * withdrawn, whose facts go.
+ * A refresh runs in the background, from any screen that reads the copy, once the
+ * county has a newer release, and the copy becomes what the Home's address finds
+ * now: another record replaces it, and several records, none or a suppressed one
+ * take it off, since a wrong home's facts are worse than none. Only a lookup that
+ * can't say keeps the last copy, shown with its date: an outage, a timeout, a
+ * release past its date. A withdrawn source's facts go.
  *
  * A lookup holds a screen for a moment at most. Past that the screen says "looking
  * up", the lookup finishes behind it, and a Home that was told so is tried again
@@ -153,30 +155,34 @@ function setAside(home, copy) {
 
 const refreshedAt = new Map();
 
+// Answers that don't say which home an address is: the copy stays until one does. (Storage that can't be read throws.)
+const saysNothing = (answer) => answer.match === 'stale' || answer.reason === 'unreadable_address';
+
 /**
  * Brings a stored copy up to the county's current release, in the background, as soon as this server has seen the
- * release change. Nothing is lost if it can't. A rolled-back release's facts leave the screens at once (setAside) and
- * go once the release in its place has answered.
+ * release change. It asks every live county, since a fix can file a record under another county of its source, and
+ * keeps what the address finds now: never a copy the record no longer gives this address, which may be another home's.
+ * A rolled-back release's facts leave the screens at once (setAside) and go once the release in its place has answered.
+ * Only while the county is known to be live: before a server has read the switch file, copies stay as they are.
  */
 function refreshSoon(home, copy) {
-  if (!home.id) return;
+  if (!home.id || router.modeFor(copy.jurisdiction) !== 'live') return null;
   const county = countyNow(home, copy);
-  if (!county || (county.release === copy.release && county.status !== 'withdrawn')) return;
+  if (!county || (county.release === copy.release && county.status !== 'withdrawn')) return null;
   // Once for each release a county moves to, so a refresh that finds nothing new doesn't run on every read.
   const tried = `${home.id}:${county.release}:${county.status}`;
-  if (Date.now() - (refreshedAt.get(tried) || 0) < REFRESH_EVERY_MS) return;
+  if (Date.now() - (refreshedAt.get(tried) || 0) < REFRESH_EVERY_MS) return null;
   refreshedAt.set(tried, Date.now());
   if (refreshedAt.size > 5000) refreshedAt.delete(refreshedAt.keys().next().value);
-  (async () => {
+  return (async () => {
     if (county.status === 'withdrawn') {
       await storeCopy(home, null);
       return;
     }
     const address = homeAddress(home);
-    const answer = await lookup(address, { serves: (fips) => fips === copy.jurisdiction });
+    const answer = await lookup(address);
     const next = copyFromAnswer(answer, address);
-    // A rolled-back release's facts go even when the release in its place has nothing for this address.
-    if (next || county.rolled_back_from === copy.release) await storeCopy(home, next);
+    if (next || county.rolled_back_from === copy.release || !saysNothing(answer)) await storeCopy(home, next);
   })().catch((err) => logger.info('property_records.refresh_later', { error: err.name }));
 }
 
@@ -248,11 +254,13 @@ function noteLookup(surface, address, found) {
   }
 }
 
-/** The copy a live county's screens answer from, with no lookup. */
+/** The copy a live county's screens answer from, with no lookup. One behind its county's release starts its refresh. */
 function liveCopy(home) {
   if (!config.enabled() || !home) return null;
   const stored = storedCopy(home);
-  return stored && router.showsCopies(stored.jurisdiction) && !setAside(home, stored) ? router.served(stored) : null;
+  if (!stored || !router.showsCopies(stored.jurisdiction)) return null;
+  refreshSoon(home, stored);
+  return setAside(home, stored) ? null : router.served(stored);
 }
 
 /**
@@ -358,4 +366,4 @@ async function readForAddress(address, { patient = false } = {}) {
   }
 }
 
-module.exports = { copyFromAnswer, provenanceOf, storedCopy, liveCopy, storeCopy, forHome, forAddress, finishLater, unitQuestion, noteLookup, homeAddress, dateLabel };
+module.exports = { copyFromAnswer, provenanceOf, storedCopy, liveCopy, storeCopy, refreshSoon, forHome, forAddress, finishLater, unitQuestion, noteLookup, homeAddress, dateLabel };
