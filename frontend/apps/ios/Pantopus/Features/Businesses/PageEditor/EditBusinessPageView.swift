@@ -251,6 +251,7 @@ public struct EditBusinessPageView: View {
                 hoursError: viewModel.hoursError,
                 onRetryHours: { Task { await viewModel.refreshHours() } },
                 isLoadingServices: viewModel.isLoadingServices,
+                servicesLoaded: viewModel.hasLoadedServices,
                 servicesError: viewModel.servicesError,
                 onRetryServices: { Task { await viewModel.refreshServices() } },
                 canEditProfile: viewModel.canEditProfile,
@@ -333,6 +334,7 @@ public struct EditBusinessPageLoadedView: View {
     public let hoursError: String?
     public let onRetryHours: () -> Void
     public let isLoadingServices: Bool
+    public let servicesLoaded: Bool
     public let servicesError: String?
     public let onRetryServices: () -> Void
     public let canEditProfile: Bool
@@ -363,6 +365,7 @@ public struct EditBusinessPageLoadedView: View {
         hoursError: String? = nil,
         onRetryHours: @escaping () -> Void = {},
         isLoadingServices: Bool = false,
+        servicesLoaded: Bool = true,
         servicesError: String? = nil,
         onRetryServices: @escaping () -> Void = {},
         canEditProfile: Bool = true,
@@ -391,6 +394,7 @@ public struct EditBusinessPageLoadedView: View {
         self.hoursError = hoursError
         self.onRetryHours = onRetryHours
         self.isLoadingServices = isLoadingServices
+        self.servicesLoaded = servicesLoaded
         self.servicesError = servicesError
         self.onRetryServices = onRetryServices
         self.canEditProfile = canEditProfile
@@ -569,7 +573,8 @@ private extension EditBusinessPageLoadedView {
                         .frame(minHeight: 44)
                         .disabled(!canEditProfile)
                 }
-                if hoursLoaded || (!isLoadingHours && hoursError == nil) {
+                // A week that hasn't been read isn't an empty week.
+                if hoursLoaded {
                     EditBusinessHoursEditor(
                         state: content.hours,
                         onChange: onChangeHours,
@@ -598,7 +603,7 @@ private extension EditBusinessPageLoadedView {
                     EditBusinessServiceChipsEditor(chips: chips, onManage: onManageServices)
                 }
             case let .prompt(prompt):
-                if !isLoadingServices, servicesError == nil {
+                if servicesLoaded, !isLoadingServices, servicesError == nil {
                     PromptBlock(prompt: prompt, onTap: onManageServices)
                         .disabled(onManageServices == nil)
                 }

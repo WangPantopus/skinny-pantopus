@@ -76,6 +76,7 @@ public final class EditBusinessPageViewModel {
     public private(set) var hoursError: String?
     public private(set) var servicesError: String?
     public private(set) var hasLoadedHours = false
+    public private(set) var hasLoadedServices = false
     private var hoursGeneration = 0
     private var servicesGeneration = 0
     private var originalHours: EditBusinessPageHoursState?
@@ -139,6 +140,7 @@ public final class EditBusinessPageViewModel {
             canEditLocation = true
             canEditHours = true
             hasLoadedHours = true
+            hasLoadedServices = true
             originalHours = preview.hours.cleaned
         } else {
             state = .loading
@@ -151,7 +153,6 @@ public final class EditBusinessPageViewModel {
         if localPreviewPersistenceEnabled { return }
         if hasLoadedOnce, case .loaded = state {
             await refreshAccess()
-            if canEditProfile { await loadSections() }
             return
         }
         await fetch(showLoading: true)
@@ -163,6 +164,11 @@ public final class EditBusinessPageViewModel {
     }
 
     private func fetch(showLoading: Bool) async {
+        if await fetchProfile(showLoading: showLoading) { await loadSections() }
+    }
+
+    /// Detail and current authority only. Returns whether the profile loaded.
+    private func fetchProfile(showLoading: Bool) async -> Bool {
         loadGeneration &+= 1
         let generation = loadGeneration
         if showLoading { state = .loading }
@@ -172,7 +178,7 @@ public final class EditBusinessPageViewModel {
                 BusinessesEndpoints.business(businessId: businessId)
             )
             _ = try await access
-            guard isCurrentLoad(generation) else { return }
+            guard isCurrentLoad(generation) else { return false }
             let location = detail.profile?.primaryLocation
                 ?? detail.locations.first { $0.isPrimary == true }
                 ?? detail.locations.first
@@ -187,6 +193,7 @@ public final class EditBusinessPageViewModel {
             // ready. Optional sections load independently and merge only their
             // own values, so a slow catalog cannot hold up typing a name.
             hasLoadedHours = false
+            hasLoadedServices = false
             originalHours = nil
             state = .loaded(
                 EditBusinessPageMapper.content(
@@ -196,9 +203,9 @@ public final class EditBusinessPageViewModel {
                 )
             )
             hasLoadedOnce = true
-            await loadSections()
+            return true
         } catch {
-            guard isCurrentLoad(generation) else { return }
+            guard isCurrentLoad(generation) else { return false }
             if isNotFound(error) {
                 state = .empty
             } else {
@@ -208,6 +215,7 @@ public final class EditBusinessPageViewModel {
                 )
             }
             hasLoadedOnce = false
+            return false
         }
     }
 
@@ -244,6 +252,8 @@ public final class EditBusinessPageViewModel {
     public func refreshAccess() async {
         guard !localPreviewPersistenceEnabled else { return }
         _ = try? await confirmAccess()
+        // A read interrupted while access was unavailable still has to finish.
+        if canEditProfile { await loadSections() }
     }
 
     private func clearAccess() {
@@ -327,6 +337,7 @@ public final class EditBusinessPageViewModel {
             )
             guard generation == servicesGeneration, isCurrentLoad(load),
                   case let .loaded(content) = state else { return }
+            hasLoadedServices = true
             state = .loaded(EditBusinessPageMapper.withRecomputedMode(
                 EditBusinessPageMapper.copy(content, services: EditBusinessPageMapper.mapServices(response.items))
             ))
@@ -571,7 +582,9 @@ public final class EditBusinessPageViewModel {
             _ = try await api.request(BusinessesEndpoints.publishBusiness(businessId: businessId))
             try requireSession()
             toastMessage = "Published"
-            await fetch(showLoading: false)
+            let refreshed = await fetchProfile(showLoading: false)
+            isPublishing = false
+            if refreshed { await loadSections() }
         } catch {
             toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't publish."
         }
