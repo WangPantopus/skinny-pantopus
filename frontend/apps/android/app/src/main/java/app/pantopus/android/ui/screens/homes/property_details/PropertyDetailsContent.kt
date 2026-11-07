@@ -60,7 +60,8 @@ data class PropertyHouseholdContent(
     fun groupForSection(id: String): HouseholdGroupDto? = groups.firstOrNull { it.sectionId == id }
 
     /** The layout question, if it sits at the foot of this card. */
-    fun layoutForSection(id: String): FloorPlanLayoutDto? = floorPlan?.takeIf { it.sectionId == id && (it.prompt != null || it.answered != null) }
+    fun layoutForSection(id: String): FloorPlanLayoutDto? =
+        floorPlan?.takeIf { it.sectionId == id && (it.prompt != null || it.answered != null) }
 
     /** A card of its own: nothing in the record to sit under. */
     val addDetails: List<HouseholdGroupDto>

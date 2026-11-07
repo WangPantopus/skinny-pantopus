@@ -139,9 +139,11 @@ internal fun AddHomeDetailsSection(
                 Switch(checked = state.form.details.justMoved, onCheckedChange = vm::setJustMoved)
             }
             // What the building's own floor-plan sheet says: this unit's plan with "Is this your layout?", or the building's plans.
-            suggestions?.floorPlan?.takeIf { !state.propertyLookupPending }?.let { plan ->
-                AddHomeFloorPlanCard(plan = plan, answer = state.floorPlanAnswer, onAnswer = vm::answerFloorPlan)
-            }
+            AddHomeFloorPlanCard(
+                plan = suggestions?.floorPlan?.takeIf { !state.propertyLookupPending },
+                answer = state.floorPlanAnswer,
+                onAnswer = vm::answerFloorPlan,
+            )
             // One-tap answers for what the record lacks, when the server sends them. A tap fills the field below.
             suggestions?.questions?.takeIf { it.isNotEmpty() && !state.propertyLookupPending }?.let { questions ->
                 Column(
@@ -549,13 +551,14 @@ internal fun AddHomeTextField(
 /** "45000 sq ft" with the locale's digit grouping ("45,000 sq ft"). */
 private fun sqFtText(value: Number): String = "${NumberFormat.getIntegerInstance().format(value)} sq ft"
 
-/** What the building's own floor-plan sheet says, above the fields. */
+/** What the building's own floor-plan sheet says, above the fields. Nothing without a sheet's answer. */
 @Composable
 private fun AddHomeFloorPlanCard(
-    plan: FloorPlanSuggestionDto,
+    plan: FloorPlanSuggestionDto?,
     answer: String?,
     onAnswer: (String?) -> Unit,
 ) {
+    if (plan == null) return
     Column(
         modifier =
             Modifier

@@ -24,6 +24,7 @@ import app.pantopus.android.data.api.models.homes.CreatePollRequest
 import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.DeleteEmergencyResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
+import app.pantopus.android.data.api.models.homes.FloorPlanAnswerRequest
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeDocumentsResponse
@@ -47,7 +48,6 @@ import app.pantopus.android.data.api.models.homes.HomePackageResponse
 import app.pantopus.android.data.api.models.homes.HomePollResponse
 import app.pantopus.android.data.api.models.homes.HomePublicProfileResponse
 import app.pantopus.android.data.api.models.homes.HouseholdFactsRequest
-import app.pantopus.android.data.api.models.homes.FloorPlanAnswerRequest
 import app.pantopus.android.data.api.models.homes.HouseholdWriteResponse
 import app.pantopus.android.data.api.models.homes.InviteOwnerRequest
 import app.pantopus.android.data.api.models.homes.InviteOwnerResponse
