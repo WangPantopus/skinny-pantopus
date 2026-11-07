@@ -465,6 +465,26 @@ public final class PulseFeedViewModel {
         await fetchNextPage()
     }
 
+    /// The list's end may ask for the next page: there is one, nothing is
+    /// being read, and the last page didn't fail. Not while searching, which
+    /// filters the posts already read.
+    var canLoadMore: Bool {
+        hasMore && !isLoading && !isLoadingMore && loadMoreError == nil
+            && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Changes with each page's cursor, so the list's end asks again after every page.
+    var loadMoreKey: String {
+        "\(nextCursorCreatedAt ?? "")|\(nextCursorId ?? "")"
+    }
+
+    /// The list's end came on screen: the last row's own ask can be held off
+    /// by a refresh (or its page dropped by one), and nothing asks again.
+    func loadMoreAtEnd() async {
+        guard canLoadMore, case .loaded = state else { return }
+        await fetchNextPage()
+    }
+
     /// Going on an Event. Optimistically toggles the per-post
     /// `userHasReacted` flag + going count, then hits
     /// `POST /api/posts/:id/like`. Rolls back on failure.
