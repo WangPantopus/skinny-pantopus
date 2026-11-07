@@ -310,7 +310,7 @@ struct PlanKindFields: View {
             PlanNote(
                 icon: .shieldCheck,
                 text: "Playdates happen in public places, parents stay, and only ages are shared. "
-                    + "Everyone who joins has a verified address."
+                    + "You approve each family."
             )
             PlanFormField(label: "Kids' ages") {
                 PlanChoiceChips(

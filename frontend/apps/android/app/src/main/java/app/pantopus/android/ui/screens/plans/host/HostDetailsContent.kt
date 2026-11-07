@@ -123,7 +123,7 @@ private fun ColumnScope.PlaydateFields(
     vm: HostFlowViewModel,
 ) {
     val draft = ui.draft
-    PlanNote("Playdates happen in public places, parents stay, and only ages are shared. Everyone who joins has a verified address.")
+    PlanNote("Playdates happen in public places, parents stay, and only ages are shared. You approve each family.")
     PlanField(label = "Kids' ages") {
         PlanChoiceGroup(
             choices = KidsAgeBand.entries.map { PlanChoice(it.wire, it.label) },

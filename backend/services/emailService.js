@@ -434,7 +434,7 @@ function planInviteEmailContent(words, toEmail) {
     ].filter(Boolean),
     button: words.playdate ? 'See the playdate' : 'See the plan',
     footnote: words.playdate
-      ? `Pantopus is free. Sign up or sign in with this address, ${toEmail}. Playdates are for verified neighbors: with a verified address, you’ll see the time, the place and who’s going.`
+      ? `Pantopus is free. Sign up or sign in with this address, ${toEmail}, and the playdate opens for you.`
       : `Pantopus is free. Sign up or sign in with this address, ${toEmail}, and the plan opens for you.`,
     footer: `You got this because ${words.hostFirst} invited you to a plan on Pantopus.`,
   };

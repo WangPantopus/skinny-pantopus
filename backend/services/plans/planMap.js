@@ -7,8 +7,8 @@
  * Everyone sees a plan at its public area point (playdates at the neighborhood
  * point); the host and people who are in see it at the exact place. The box is
  * matched against the point the viewer is shown, never the exact place, so a
- * tight box can't find where a plan really is. Playdates only for viewers with a
- * verified address and plans_playdates on; pins go away at the end.
+ * tight box can't find where a plan really is. Playdates only for viewers with
+ * plans_playdates on; pins go away at the end.
  */
 
 const { isFeatureEnabled } = require('../featureFlagService');
@@ -50,7 +50,7 @@ async function planPins(user, box, query = {}) {
   const asked = String(query.kinds || '').split(',').map((k) => k.trim()).filter((k) => rules.KINDS.includes(k));
   let kinds = asked.length ? asked : rules.KINDS;
   if (!viewer.seesPlaydates) kinds = kinds.filter((k) => k !== 'playdate');
-  // Only kinds this viewer can't see (kinds=playdate without a verified address): no pins, not every pin.
+  // Only kinds this viewer can't see (kinds=playdate with plans_playdates off): no pins, not every pin.
   if (kinds.length === 0) return [];
   const window = rules.WINDOWS.includes(query.window) ? query.window : 'week';
 

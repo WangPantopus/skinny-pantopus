@@ -49,15 +49,9 @@ struct PlanComposerRoot: View {
                         } else {
                             PlanTypePicker(
                                 showsPlaydates: flags.playdates,
-                                verifiedAddress: model.verifiedAddress,
                                 onClose: { onFinish(nil) },
                                 onPick: { kind in
-                                    // A playdate needs a verified address: go there, not to a refusal at the end.
-                                    if kind == .playdate, !model.verifiedAddress {
-                                        onFinish(nil)
-                                        PlanVerification.open()
-                                        return
-                                    }
+                                    // Anyone on Pantopus may host a playdate (founder decision, November 7).
                                     model.choose(kind)
                                     path.append(.details)
                                 }
@@ -105,7 +99,6 @@ struct PlanComposerRoot: View {
 
 struct PlanTypePicker: View {
     let showsPlaydates: Bool
-    var verifiedAddress = true
     let onClose: () -> Void
     let onPick: (PlanKind) -> Void
 
@@ -168,7 +161,7 @@ struct PlanTypePicker: View {
                 if kind == .playdate {
                     HStack(spacing: Spacing.s2) {
                         Icon(.shieldCheck, size: 14, color: Theme.Color.appTextSecondary)
-                        Text(verifiedAddress ? "Verified neighbors only" : "Verify your address to host")
+                        Text("You approve each family")
                             .planFont(.footnote)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }

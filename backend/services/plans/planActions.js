@@ -42,7 +42,6 @@ const REASON_ERRORS = {
   removed: [403, "You can't ask to join this plan again."],
   blocked: [404, "This plan isn't available."],
   too_many_requests: [429, "You've asked as many times as you can for now."],
-  needs_verified_address: [403, 'Verify your address to ask to join this plan.'],
   needs_location: [403, 'Share your location or add your home to ask to join.'],
   too_far: [403, 'This plan is too far from where you are or live.'],
 };
@@ -280,19 +279,12 @@ function resolvePlace(viewer, kind, place, { moving = false } = {}) {
 
 /**
  * Hosting: within the existing 5 km canPostToPlace proximity (about 3 miles) of
- * where the host lives or where they are now. Playdates: a verified address,
- * with that home within 3 miles.
+ * where the host lives or where they are now. Playdates too: anyone on Pantopus
+ * may host one, without a verified address (founder decision, November 7).
  */
-function assertHostNear(viewer, kind, place) {
+function assertHostNear(viewer, place) {
   const target = { latitude: place.latitude, longitude: place.longitude };
   const homeNear = (h) => h.point && rules.distanceMeters(h.point, target) <= rules.HOST_RADIUS_METERS;
-  if (kind === 'playdate') {
-    if (!viewer.verified) fail(403, 'needs_verified_address', 'Verify your address to host a playdate.');
-    if (!viewer.homes.some((h) => h.verified && homeNear(h))) {
-      fail(403, 'not_near', 'You can host within 3 miles of where you live or where you are now.');
-    }
-    return;
-  }
   if (place.kind === 'home') return;
   if (viewer.homes.some(homeNear)) return;
   if (viewer.gps) {
@@ -340,8 +332,10 @@ async function checkedPlanInput(viewer, input) {
   const spots = Number(input.spots);
   if (!Number.isInteger(spots) || spots < 1 || spots > 30) fail(422, 'validation', 'Spots can be 1 to 30.');
   const place = resolvePlace(viewer, kind, input.place);
-  assertHostNear(viewer, kind, place);
+  assertHostNear(viewer, place);
   const autoRules = normalizeAutoRules(kind, place.kind, input.auto_rules);
+  // Since November 7 no plan asks for a verified address, whatever this says (askEligibility). A playdate keeps
+  // 'verified' because the table's plan_playdate_rules check requires it.
   const joinRequirement = kind === 'playdate' ? 'verified'
     : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
   const resolvedGame = viewer.sportsFlag && kind === 'watch_party'
@@ -524,7 +518,7 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
   let placeKind = plan.place_kind;
   if (patch.place !== undefined) {
     const place = resolvePlace(viewer, plan.kind, patch.place, { moving: true });
-    assertHostNear(viewer, plan.kind, place);
+    assertHostNear(viewer, place);
     placeKind = place.kind;
     placeChanged = place.kind !== plan.place_kind
       || String(place.home_id || '') !== String(plan.place_home_id || '')
