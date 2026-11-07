@@ -1734,6 +1734,7 @@ const sendCardSchema = Joi.object({
 });
 
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
+const cardTableOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_table']);
 const sendCardsOff = (res) => res.status(404).json({ error: 'Not found' });
 const sendCardUnavailable = (res) =>
   res.status(503).json({ error: 'Couldn’t send your card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
@@ -1969,6 +1970,22 @@ router.get('/cards', verifyToken, async (req, res) => {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });
     return res.status(503).json({ error: 'Couldn’t load the Christmas cards. Try again in a moment.', code: 'CARDS_UNAVAILABLE' });
   }
+});
+
+/**
+ * GET /api/mailbox/cards/designs
+ * Public (no sign-in; launch key card_table): the season's pictures for the public card pages (/cards, /cards/<slug>).
+ * Only what's printed on a card anyway, never anyone's card. Cached an hour.
+ */
+router.get('/cards/designs', (req, res) => {
+  if (!cardTableOn()) return sendCardsOff(res);
+  res.set('Cache-Control', 'public, max-age=3600');
+  return res.json({
+    year: holidayCards.SEASON.year,
+    collections: holidayCards.COLLECTIONS,
+    designs: holidayCards.DESIGNS.map(({ id, number, slug, caption, paper, collection, table }) =>
+      ({ id, number, slug, caption, paper, collection, table })),
+  });
 });
 
 /**
