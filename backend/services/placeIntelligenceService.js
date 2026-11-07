@@ -1020,13 +1020,17 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   // lookup that just failed) offer Try again.
   const nothingYet = profile.source === 'fallback'
     && !(profile.household_fields || []).some((field) => field !== 'property_type');
+  // No record to show, and the address has several homes: someone who can change this Home is asked which is theirs.
+  const unitQuestion = profile.source === 'fallback' && viewerAccess?.permissions?.includes('home.edit')
+    ? await homeRecords.unitQuestion(home)
+    : null;
   // The value card is the confirmed owner's, and nobody else's read waits on its area figures.
   const neighborhood = wantsRecordVocabulary && viewerAccess?.isOwner && profile.area ? await areaTrend.neighborhood(profile.area) : null;
   if (nothingYet && !process.env.ATTOM_API_KEY && result.lookup !== 'pending' && !neighborhood) {
     return [serializePlaceSection('your_home', {
       access,
       status: 'unavailable',
-      unavailableReason: "We can't read county property records yet, so exact details and value aren't shown here.",
+      unavailableReason: `${unitQuestion ? `${unitQuestion.label} ` : ''}We can't read county property records yet, so exact details and value aren't shown here.`,
     })];
   }
   if (nothingYet && result.lookup === 'pending') {
@@ -1052,6 +1056,8 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
     status: result.source === 'cache_stale' || oldValue ? 'stale' : 'ready',
     ...yourHomeProvenance(profile),
     ...(wantsRecordVocabulary && profile.provenance ? { provenance: profile.provenance } : {}),
+    // The apps draw this line in place of the source's, so it says both.
+    ...(wantsRecordVocabulary && unitQuestion ? { provenance: { ...unitQuestion, label: `${unitQuestion.label} ${yourHomeProvenance(profile).source}.` } } : {}),
     data: {
       year_built: profile.year_built ?? null,
       sqft: profile.sqft ?? null,
