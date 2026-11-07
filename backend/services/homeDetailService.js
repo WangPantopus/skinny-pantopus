@@ -264,7 +264,7 @@ async function propertyDetail(homeId, actorId) {
     if (record) {
       const county = record.copy ? serializePropertyRecord(record.copy) : null;
       return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
-        unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : 'NO_PROPERTY_FOUND'), county_record: county,
+        unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : (record.reason === 'withdrawn' ? 'SOURCE_WITHDRAWN' : 'NO_PROPERTY_FOUND')), county_record: county,
         ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}),
         // While the record is still being read, nothing asks for what it may answer.
         household: record.lookup === 'pending' ? null : await householdPart({ homeId, home, raw, access, actorId, problems, copy: county ? record.copy : null, countyRecord: county }) };

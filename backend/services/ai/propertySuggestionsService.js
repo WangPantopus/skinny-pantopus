@@ -23,6 +23,8 @@ const { usableFloorPlan } = require('../householdFacts');
 const LLM_TIMEOUT_MS = 12000;
 // Several plausible records at an address: which one isn't for us to guess, so nothing fills in and the person is told why.
 const SEVERAL_RECORDS_NOTE = 'More than one home is on record at this address, so we left the details for you. Add your unit if you have one, or tell us the basics.';
+// A county that stopped publishing its file: what it had isn't shown any more.
+const WITHDRAWN_NOTE = 'The county no longer publishes these records. Tell us the basics; you can change them anytime.';
 // A leftover PROPERTY_SUGGESTIONS_LLM_MODEL naming another provider's model is ignored.
 const LLM_MODEL = resolveModel(process.env.PROPERTY_SUGGESTIONS_LLM_MODEL, DRAFT_MODEL);
 const LLM_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
@@ -218,6 +220,8 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
       provenance = homeRecords.provenanceOf(record.copy);
     } else if (record.answer?.match === 'ambiguous') {
       lookupNote = SEVERAL_RECORDS_NOTE;
+    } else if (record.answer?.reason === 'withdrawn') {
+      lookupNote = WITHDRAWN_NOTE;
     }
   } else { // Tier 1 — ATTOM (strongest structured signal; one /property/detail call). Stored responses remain available without a live provider credential.
     try {

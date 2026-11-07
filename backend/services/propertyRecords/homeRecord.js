@@ -139,26 +139,43 @@ async function storeCopy(home, copy) {
   }
 }
 
+/** The county as the state's file held now says, with no wait. Null until this server has read that file. */
+function countyNow(home, copy) {
+  return reader.heldStateFile(stateCode(home.state))?.jurisdictions?.[copy.jurisdiction] || null;
+}
+
+/** A copy whose facts may not be shown: its county withdrew the source, or its release was taken back. */
+function setAside(home, copy) {
+  const county = countyNow(home, copy);
+  return Boolean(county && (county.status === 'withdrawn' || county.rolled_back_from === copy.release));
+}
+
 const refreshedAt = new Map();
 
-/** Brings a stored copy up to the county's current release, in the background. Nothing is lost if it can't. */
+/**
+ * Brings a stored copy up to the county's current release, in the background, as soon as this server has seen the
+ * release change. Nothing is lost if it can't. A rolled-back release's facts leave the screens at once (setAside) and
+ * go once the release in its place has answered.
+ */
 function refreshSoon(home, copy) {
-  if (!home.id || Date.now() - (refreshedAt.get(home.id) || 0) < REFRESH_EVERY_MS) return;
-  refreshedAt.set(home.id, Date.now());
+  if (!home.id) return;
+  const county = countyNow(home, copy);
+  if (!county || (county.release === copy.release && county.status !== 'withdrawn')) return;
+  // Once for each release a county moves to, so a refresh that finds nothing new doesn't run on every read.
+  const tried = `${home.id}:${county.release}:${county.status}`;
+  if (Date.now() - (refreshedAt.get(tried) || 0) < REFRESH_EVERY_MS) return;
+  refreshedAt.set(tried, Date.now());
   if (refreshedAt.size > 5000) refreshedAt.delete(refreshedAt.keys().next().value);
   (async () => {
-    const stateFile = await reader.stateFile(stateCode(home.state));
-    const county = stateFile?.jurisdictions?.[copy.jurisdiction];
-    if (!county) return;
     if (county.status === 'withdrawn') {
       await storeCopy(home, null);
       return;
     }
-    if (county.release === copy.release) return;
     const address = homeAddress(home);
     const answer = await lookup(address, { serves: (fips) => fips === copy.jurisdiction });
     const next = copyFromAnswer(answer, address);
-    if (next) await storeCopy(home, next);
+    // A rolled-back release's facts go even when the release in its place has nothing for this address.
+    if (next || county.rolled_back_from === copy.release) await storeCopy(home, next);
   })().catch((err) => logger.info('property_records.refresh_later', { error: err.name }));
 }
 
@@ -234,7 +251,7 @@ function noteLookup(surface, address, found) {
 function liveCopy(home) {
   if (!config.enabled() || !home) return null;
   const stored = storedCopy(home);
-  return stored && router.showsCopies(stored.jurisdiction) ? router.served(stored) : null;
+  return stored && router.showsCopies(stored.jurisdiction) && !setAside(home, stored) ? router.served(stored) : null;
 }
 
 /**
@@ -259,7 +276,9 @@ async function readForHome(home) {
   // Taking a county off its live list takes its copies off the screens too; they stay on the Home for when it comes back.
   if (stored && router.showsCopies(stored.jurisdiction)) {
     refreshSoon(home, stored);
-    return { copy: router.served(stored), lookup: null };
+    if (!setAside(home, stored)) return { copy: router.served(stored), lookup: null };
+    if (countyNow(home, stored).status === 'withdrawn') return { copy: null, lookup: 'none', reason: 'withdrawn', jurisdiction: stored.jurisdiction };
+    // A release taken back: ask the release in its place, as a Home with no copy would.
   }
   if (!router.liveState(stateCode(home.state))) return null;
   try {
@@ -267,7 +286,7 @@ async function readForHome(home) {
     const answer = await lookupForScreen(address);
     if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
     const copy = copyFromAnswer(answer, address);
-    if (!copy) return { copy: null, lookup: 'none', match: answer.match, jurisdiction: answer.jurisdiction };
+    if (!copy) return { copy: null, lookup: 'none', match: answer.match, reason: answer.reason || null, jurisdiction: answer.jurisdiction };
     await storeCopy(home, copy);
     return { copy: router.served(copy), lookup: null };
   } catch (err) {
