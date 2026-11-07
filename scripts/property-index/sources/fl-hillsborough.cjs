@@ -27,6 +27,8 @@ function useOf(code, hasUnit) {
   if (c === '0106') return hasUnit ? ['unit', 'condo'] : ['property', 'townhouse'];
   if (c.startsWith('02')) return ['property', 'mobile_home'];
   if (c.startsWith('04')) return hasUnit ? ['unit', 'condo'] : ['property', 'townhouse'];
+  // Its cooperatives.
+  if (c === '0500' || c === '0508') return hasUnit ? ['unit', 'condo'] : ['building', 'multi_unit'];
   if (c.startsWith('08')) return ['building', 'multi_unit'];
   if (c.startsWith('03')) return ['building', 'apartment'];
   if (c.startsWith('00')) return ['parcel', null];

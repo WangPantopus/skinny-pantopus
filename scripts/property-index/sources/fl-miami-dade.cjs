@@ -20,10 +20,12 @@ const COLUMNS = ['FOLIO', 'TRUE_SITE_ADDR', 'TRUE_SITE_UNIT', 'TRUE_SITE_CITY', 
 function useOf(row, unit) {
   const code = String(row.DOR_CODE_CUR ?? '').trim();
   const group = code.slice(0, 2);
-  if (code === '0407' || (group === '01' && unit)) return ['unit', 'condo'];
+  if (code === '0407' || group === '05' || (group === '01' && unit)) return ['unit', 'condo'];
   if (code === '0410' || code === '0470') return ['property', 'townhouse'];
-  if (group === '01') return ['property', 'house'];
-  if (group === '08') return ['building', 'multi_unit'];
+  // 5001 and 5002 are farms with one home or two on them.
+  if (group === '01' || code === '5001') return ['property', 'house'];
+  if (group === '02') return ['property', 'mobile_home'];
+  if (group === '08' || code === '5002') return ['building', 'multi_unit'];
   if (group === '03') return ['building', 'apartment'];
   if (group === '00') return ['parcel', null];
   return ['other', null];

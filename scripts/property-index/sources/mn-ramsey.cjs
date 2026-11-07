@@ -22,9 +22,9 @@ function useOf(code, hasUnit) {
   const use = String(code ?? '').toUpperCase();
   if (/GARAGE|STORAGE/.test(use)) return ['other', null];
   if (/CONDO|CO-OP/.test(use)) return hasUnit ? ['unit', 'condo'] : ['property', 'townhouse'];
-  if (/TOWNHOME/.test(use)) return hasUnit ? ['unit', 'condo'] : ['property', 'townhouse'];
+  if (/TOWNHOME|TWIN HOME/.test(use)) return hasUnit ? ['unit', 'condo'] : ['property', 'townhouse'];
   if (/MANUFACT|MOBILE/.test(use)) return ['property', 'mobile_home'];
-  if (/TWO FAMILY|THREE FAMILY|TRIPLEX|DUPLEX|DOUBLE/.test(use)) return ['building', 'multi_unit'];
+  if (/TWO FAMILY|THREE FAMILY|TRIPLEX|DUPLEX|DOUBLE|TWO RESIDENCES/.test(use)) return ['building', 'multi_unit'];
   if (/APART/.test(use)) return ['building', 'apartment'];
   if (/VACANT/.test(use)) return ['parcel', null];
   if (/SINGLE FAMILY/.test(use)) return hasUnit ? ['unit', 'condo'] : ['property', 'house'];

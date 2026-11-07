@@ -20,7 +20,8 @@ function useOf(use, propertyClass) {
   const [u, c] = [String(use ?? '').toUpperCase(), String(propertyClass ?? '').toUpperCase()];
   if (/CONDO/.test(u) || /RESIDENTIAL CONDO/.test(c)) return ['property', 'condo'];
   if (u === 'SINGLE FAMILY' || u === 'INCOME BUNGALOW') return ['property', 'house'];
-  if (u === 'TWO FAMILY' || /FLAT|DUPLEX/.test(u)) return ['building', 'multi_unit'];
+  if (u === 'ROW HOUSE') return ['property', 'townhouse'];
+  if (/^(TWO|THREE|FOUR|FIVE|SIX) FAMILY$/.test(u) || /FLAT|DUPLEX/.test(u)) return ['building', 'multi_unit'];
   if (/APART|MULTIPLE RES/.test(u)) return ['building', 'apartment'];
   if (/VACANT/.test(u) || /VACANT/.test(c)) return ['parcel', null];
   return ['other', null];

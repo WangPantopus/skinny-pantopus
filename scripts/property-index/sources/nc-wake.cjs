@@ -17,7 +17,7 @@ const COLUMNS = ['REID', 'PIN_NUM', 'STNUM', 'STPRE', 'STNAME', 'STYPE', 'STSUF'
 
 function useOf(use, style, land, hasUnit) {
   const [u, s, l] = [use, style, land].map((text) => String(text ?? '').toUpperCase());
-  if (u === 'MOBILE' || u === 'PREFAB' || /^MANUF/.test(s)) return ['property', 'mobile_home'];
+  if (u === 'MOBILE' || u === 'PREFAB' || /^MANUF/.test(s) || /^MANUFACTURED HOME/.test(l)) return ['property', 'mobile_home'];
   if (u === 'SINGLFAM' || u === 'RES CONV') {
     if (s === 'CONDO' || /CONDO/.test(l)) return ['unit', 'condo'];
     if (s === 'TOWNHOUSE') return hasUnit ? ['unit', 'condo'] : ['property', 'townhouse'];
