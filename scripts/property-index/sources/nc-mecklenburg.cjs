@@ -10,12 +10,13 @@ const { year, isoDate, realUnit, streetParts, onRecord } = require('../lib/addre
 const { positive, put, word } = require('../lib/values.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '37119';
 const COUNTY = 'Mecklenburg County';
 const LAYER = 'https://meckgis.mecklenburgcountync.gov/server/rest/services/TaxParcel_camadata/FeatureServer/0';
-const COLUMNS = ['parcelid', 'pid', 'nc_pin', 'gisacres', 'address', 'yearid', 'lusecode', 'landuse_description', 'neighbordesc', 'saleprice', 'saledate', 'streetname', 'streetnumber', 'totlandval', 'totalbldgval', 'totmarkval', 'legaldesc', 'deed_book', 'deed_page', 'heatedarea', 'extwall', 'storyheight', 'bldgtype', 'foundation', 'roofcover', 'heat', 'heatfuel', 'frame', 'yearbuilt', 'effyearblt', 'fullbath', 'halfbath', 'threequabath', 'fireplaces', 'percntac', 'resunits', 'bedrooms', 'grade', 'totgararea', 'totcrpoarea'];
+const COLUMNS = ['parcelid', 'pid', 'nc_pin', 'gisacres', 'address', 'yearid', 'lusecode', 'landuse_description', 'neighbordesc', 'saleprice', 'saledate', 'streetname', 'streetnumber', 'totlandval', 'totalbldgval', 'totmarkval', 'legaldesc', 'deed_book', 'deed_page', 'heatedarea', 'extwall', 'storyheight', 'bldgtype', 'foundation', 'roofcover', 'heat', 'heatfuel', 'frame', 'yearbuilt', 'effyearblt', 'fullbath', 'halfbath', 'threequabath', 'fireplaces', 'percntac', 'resunits', 'bedrooms', 'grade', 'totgararea', 'totcrpoarea', 'totalarea', 'basearea', 'fingarage', 'unfingarag', 'taxmundist', 'typeofdeed', 'naldesc'];
 
 function useOf(row, unit) {
   const use = String(row.landuse_description || '').toUpperCase().trim();
@@ -40,6 +41,11 @@ const said = (text) => {
   return value && !/^(NONE|UNKNOWN)$/i.test(value) ? value : null;
 };
 
+// A sale's qualification that says the price isn't this home's: several parcels, or the buildings left out of it.
+const NOT_THIS_SALE = /2 OR MORE PARCELS|IMPROVEMENTS NOT INCLUDED/;
+// The legal description's platted lot: "L12 B3 M45-678".
+const lotOf = (legal) => /^L(\d+[A-Z]?)\s+(?:B\S+\s+)?M\d/.exec(String(legal ?? '').trim())?.[1] || null;
+
 // The address column ends in the town; a condo's reads "123 MAIN ST, 4B CHARLOTTE". Only the unit is taken from it.
 const unitOf = (text) => /,\s*(\S+)\s/.exec(String(text ?? ''))?.[1] || '';
 
@@ -57,6 +63,9 @@ function fromRow(row) {
   put(facts, 'county_use_code', word(row.lusecode));
   put(facts, 'neighborhood', word(row.neighbordesc));
   put(facts, 'legal_description', word(row.legaldesc)?.slice(0, 300));
+  put(facts, 'lot_number', lotOf(row.legaldesc));
+  const town = word(row.taxmundist);
+  if (town && town !== 'na') facts.municipality = /UNINCORPORATED/.test(town) ? 'Unincorporated Mecklenburg County' : town;
   if (home || kind === 'building') {
     put(facts, 'year_built', year(row.yearbuilt));
     put(facts, 'effective_year_built', year(row.effyearblt));
@@ -84,6 +93,12 @@ function fromRow(row) {
     if (positive(row.percntac)) facts.cooling = 'Air conditioning';
     put(facts, 'garage_sqft', positive(row.totgararea));
     put(facts, 'carport_sqft', positive(row.totcrpoarea));
+    put(facts, 'gross_sqft', positive(row.totalarea));
+    if (kind === 'property') put(facts, 'ground_floor_sqft', positive(row.basearea));
+    const garages = [positive(row.fingarage) && 'Finished', positive(row.unfingarag) && 'Unfinished'].filter(Boolean);
+    if (garages.length) facts.garage = garages.join(', ');
+    const parking = [positive(row.totgararea) && 'Garage', positive(row.totcrpoarea) && 'Carport'].filter(Boolean);
+    if (parking.length) facts.parking_type = parking.join(', ');
   }
   if (kind === 'building') put(facts, 'units', positive(row.resunits));
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.gisacres));
@@ -91,7 +106,7 @@ function fromRow(row) {
   put(facts, 'market_value', positive(row.totmarkval));
   put(facts, 'market_land_value', positive(row.totlandval));
   put(facts, 'market_building_value', positive(row.totalbldgval));
-  if (positive(row.saleprice) > 100) {
+  if (isHomeSale(positive(row.saleprice), row.naldesc) && word(row.typeofdeed) !== 'QC' && !NOT_THIS_SALE.test(row.naldesc || '')) {
     facts.sale_price = positive(row.saleprice);
     put(facts, 'sale_date', isoDate(row.saledate));
     if (word(row.deed_book) && word(row.deed_page)) facts.sale_document = `${word(row.deed_book)}-${word(row.deed_page)}`;

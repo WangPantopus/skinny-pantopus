@@ -146,9 +146,9 @@ function resolve(address, records) {
     return ambiguous(parcels, requested, 'several_parcels');
   }
 
-  // No unit given. A home with its own street number needs none.
+  // No unit given. A home with its own street number needs none. One filed both with and without a unit is still one home.
   const whole = [...properties, ...units].filter((record) => !record.address.unit);
-  const withUnits = [...properties, ...units].filter((record) => record.address.unit);
+  const withUnits = [...properties, ...units].filter((record) => record.address.unit && !whole.some((home) => home.id === record.id));
   if (buildings.length === 1 && !whole.length) return buildingOnly(buildings[0], requested, 'unit_needed');
   if (buildings.length > 1 && !whole.length) return ambiguous(buildings, requested, 'several_buildings');
   // A condo with its own street number shares that number with its own building's record, and with nothing else.

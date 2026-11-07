@@ -8,6 +8,7 @@ const { layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '11001';
@@ -16,9 +17,12 @@ const BASE = 'https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Property
 const EXTRACT = `${BASE}/53`;
 const HOMES = `${BASE}/25`;
 const CONDOS = `${BASE}/24`;
-const EXTRACT_COLUMNS = ['SSL', 'PROPTYPE', 'USECODE', 'LANDAREA', 'PREMISEADD', 'NBHD', 'UNITNUMBER', 'NEWLAND', 'NEWIMPR', 'NEWTOTAL', 'LOWNUMBER', 'STREETNAME', 'QDRNTNAME', 'SALEPRICE', 'SALEDATE', 'ANNUALTAX', 'EXTRACTDAT'];
+const EXTRACT_COLUMNS = ['SSL', 'PROPTYPE', 'USECODE', 'LANDAREA', 'PREMISEADD', 'NBHD', 'UNITNUMBER', 'NEWLAND', 'NEWIMPR', 'NEWTOTAL', 'LOWNUMBER', 'STREETNAME', 'QDRNTNAME', 'SALEPRICE', 'SALEDATE', 'ACCEPTCODE', 'ANNUALTAX', 'EXTRACTDAT'];
 const HOME_COLUMNS = ['SSL', 'BLDG_NUM', 'BATHRM', 'HF_BATHRM', 'HEAT_D', 'AC', 'NUM_UNITS', 'ROOMS', 'BEDRM', 'AYB', 'EYB', 'STORIES', 'GBA', 'STYLE_D', 'STRUCT_D', 'GRADE_D', 'CNDTN_D', 'EXTWALL_D', 'ROOF_D', 'KITCHENS', 'FIREPLACES'];
 const CONDO_COLUMNS = ['SSL', 'AYB', 'EYB', 'ROOMS', 'BEDRM', 'BATHRM', 'HF_BATHRM', 'HEAT_D', 'AC', 'FIREPLACES', 'LIVING_GBA'];
+
+// The Office's acceptance code for a price that isn't this home's: several lots on one deed, a transfer to oneself, the land alone.
+const NOT_THIS_SALE = /^Multi-|^Buyer = Seller$|^Land Sale$/;
 
 function useOf(row, home) {
   const type = String(row.PROPTYPE || '').toUpperCase();
@@ -64,7 +68,8 @@ function fromRow(row, { home, condo }) {
     put(facts, 'exterior_walls', said(home.EXTWALL_D));
     put(facts, 'roof_cover', said(home.ROOF_D));
     put(facts, 'quality', said(home.GRADE_D));
-    if (positive(home.BLDG_NUM) > 1) facts.buildings_on_parcel = Math.trunc(Number(home.BLDG_NUM));
+    // BLDG_NUM numbers a building; how many rows a lot has says how many buildings.
+    if (home.buildings > 1) facts.buildings_on_parcel = home.buildings;
   }
   if (lives && either) {
     put(facts, 'living_sqft', positive(home?.GBA) || positive(condo?.LIVING_GBA));
@@ -88,7 +93,7 @@ function fromRow(row, { home, condo }) {
   put(facts, 'market_land_value', positive(row.NEWLAND));
   put(facts, 'market_building_value', positive(row.NEWIMPR));
   put(facts, 'tax_amount', positive(row.ANNUALTAX));
-  if (positive(row.SALEPRICE) > 100) {
+  if (isHomeSale(positive(row.SALEPRICE)) && !NOT_THIS_SALE.test(String(row.ACCEPTCODE ?? '').trim())) {
     facts.sale_price = positive(row.SALEPRICE);
     put(facts, 'sale_date', isoDate(row.SALEDATE));
   }
@@ -100,7 +105,9 @@ async function* build({ work }) {
   const homes = new Map();
   for await (const row of cached(path.join(dir, 'homes.jsonl.gz'), () => layerRows(HOMES, HOME_COLUMNS))) {
     const was = homes.get(row.SSL);
-    if (!was || Number(row.GBA) > Number(was.GBA)) homes.set(row.SSL, row);
+    const buildings = (was?.buildings || 0) + 1;
+    if (!was || Number(row.GBA) > Number(was.GBA)) homes.set(row.SSL, { ...row, buildings });
+    else was.buildings = buildings;
   }
   const condos = new Map();
   for await (const row of cached(path.join(dir, 'condos.jsonl.gz'), () => layerRows(CONDOS, CONDO_COLUMNS))) condos.set(row.SSL, row);

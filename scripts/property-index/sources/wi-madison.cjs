@@ -15,7 +15,7 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '55025';
 const COUNTY = 'Dane County';
 const LAYER = 'https://maps.cityofmadison.com/arcgis/rest/services/Public/OPEN_DATA2/FeatureServer/0';
-const COLUMNS = ['Parcel', 'Address', 'PropertyClass', 'PropertyUse', 'HomeStyle', 'YearBuilt', 'Bedrooms', 'FullBaths', 'HalfBaths', 'TotalLivingArea', 'Basement', 'FinishedBasement', 'ExteriorWall1', 'Fireplaces', 'CentralAir', 'CurrentLand', 'CurrentImpr', 'CurrentTotal', 'TotalTaxes', 'LotSize', 'Zoning1'];
+const COLUMNS = ['Parcel', 'Address', 'PropertyClass', 'PropertyUse', 'HomeStyle', 'YearBuilt', 'Bedrooms', 'FullBaths', 'HalfBaths', 'TotalLivingArea', 'Basement', 'FinishedBasement', 'ExteriorWall1', 'Fireplaces', 'CentralAir', 'CurrentLand', 'CurrentImpr', 'CurrentTotal', 'TotalTaxes', 'LotSize', 'Zoning1', 'FirstFloor', 'SecondFloor', 'MoreThanOneBuild', 'AreaName'];
 const WALLS = { 'Aluminum/Vinyl': 'Aluminum or vinyl', Wood: 'Wood', Brick: 'Brick', Stucco: 'Stucco', Composition: 'Composition', 'Cement/Smart': 'Cement board', 'Masonry Facing': 'Masonry facing', Stone: 'Stone', Vinyl: 'Vinyl', 'Smart Board': 'Smart board', 'Cement board': 'Cement board' };
 
 function useOf(use, style, hasUnit) {
@@ -41,6 +41,7 @@ function fromRow(row) {
   put(facts, 'land_use', word(row.PropertyUse));
   put(facts, 'property_class', word(row.PropertyClass));
   put(facts, 'zoning', word(row.Zoning1));
+  put(facts, 'neighborhood', word(row.AreaName));
   if (home || kind === 'building') {
     put(facts, 'year_built', year(row.YearBuilt));
     put(facts, 'style', word(row.HomeStyle));
@@ -48,6 +49,11 @@ function fromRow(row) {
   }
   if (home) {
     put(facts, 'living_sqft', positive(row.TotalLivingArea));
+    // A parcel with more than one building: no one building's floors say what the home is.
+    if (kind === 'property' && row.MoreThanOneBuild !== 'YES') {
+      put(facts, 'ground_floor_sqft', positive(row.FirstFloor));
+      put(facts, 'second_floor_sqft', positive(row.SecondFloor));
+    }
     put(facts, 'bedrooms', positive(row.Bedrooms));
     const [full, half] = [positive(row.FullBaths), positive(row.HalfBaths)];
     put(facts, 'full_baths', full);
