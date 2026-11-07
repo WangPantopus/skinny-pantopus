@@ -1306,6 +1306,8 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       audit: { verdict_status: addressVerdict?.status || null,
         reasons: [...(addressVerdict?.reasons || []), ...(allowCreateWithNoUnitAttestation ? ['no_unit_attestation'] : [])],
         validation_path: createHomeValidationPath, step_up_reason: stepUpPolicy?.policy || null },
+      // The county record's storage couldn't be read: the new Home gets its copy once storage answers.
+      recordPending: countyRecord?.lookup === 'pending',
     };
 }
 
@@ -1420,6 +1422,9 @@ router.post('/', verifyToken, (req, res, next) => {
       await recordCreateHomeOutcomeSafe({ ...prepared.audit, address_id: prepared.home.address_id, outcome: 'created',
         code: 'HOME_CREATED', status_code: 201,
         message: 'Home and private setup saved; verification remains required.' });
+      // Added while the county record couldn't be read: looked up again in the background, as a screen's own lookup
+      // would be, so the record reaches the Home without waiting for a verified owner to open one.
+      if (prepared.recordPending) homeRecords.finishLater({ ...prepared.home, id: result.home_id, niche_data: prepared.home.niche_data ?? null });
       // "That isn't my layout", said on the form: it reaches a person now that there's a Home to say it about.
       const niche = prepared.home.niche_data;
       if (niche?.floor_plan_answer?.answer === 'no') {
