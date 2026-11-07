@@ -493,7 +493,7 @@ function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }
 }
 
 // The facts the value card reads (services/homeValueCard.js): the confirmed owner's, like the value.
-const COUNTY_VALUE_FACTS = ['market_value', 'assessed_value', 'taxable_value', 'value_year', 'sale_price', 'sale_date', 'sale_month'];
+const COUNTY_VALUE_FACTS = ['market_value', 'assessed_value', 'taxable_value', 'value_year', 'sale_price', 'sale_date', 'sale_month', 'sale_parcels'];
 
 /**
  * What anyone but the confirmed owner reads of a profile: the Home's facts. The value is the owner's, as on Place.
