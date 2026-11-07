@@ -167,4 +167,4 @@ async function* build({ work }) {
   }
 }
 
-module.exports = { build };
+module.exports = { build, CLASSES };
