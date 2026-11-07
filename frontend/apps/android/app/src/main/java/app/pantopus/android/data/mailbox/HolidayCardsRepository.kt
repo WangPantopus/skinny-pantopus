@@ -4,6 +4,7 @@ import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
+import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SentCard
@@ -87,6 +88,16 @@ class HolidayCardsRepository
                 in HTTP_SERVER_ERRORS -> CardLook.Failed(NetworkError.Server(response.code(), error))
                 else -> CardLook.Failed(NetworkError.ClientError(response.code(), error))
             }
+        }
+
+        /** `POST /api/mailbox/cards/shared`: counts what was shared; whether it worked changes nothing for the person. */
+        suspend fun cardShared(
+            design: String,
+            kind: String,
+            format: String,
+            withNote: Boolean,
+        ) {
+            safeApiCall { api.shared(HolidayCardSharedBody(design, kind, format, withNote)) }
         }
 
         /** `POST /api/mailbox/cards`: today's card, to a person by their user id or by email. */

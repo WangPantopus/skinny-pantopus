@@ -80,11 +80,13 @@ fun CardTableDialog(
     onOpened: () -> Unit = {},
     menu: List<CardTableMenuItem> = emptyList(),
     message: String? = null,
+    /** A card this person sent: the share sheet's words talk about their own note. */
+    mine: Boolean = false,
     /** Look it over shows a card that hasn't been mailed: there's nothing to share yet. */
-    canShare: Boolean = false,
+    canShare: Boolean = true,
 ) {
     FullScreenWindow(onDismissRequest = onClose) {
-        CardTable(card, firstOpen, onClose, onOpened, menu, message, canShare)
+        CardTable(card, firstOpen, onClose, onOpened, menu, message, mine, canShare)
     }
 }
 
@@ -96,6 +98,7 @@ private fun CardTable(
     onOpened: () -> Unit,
     menu: List<CardTableMenuItem>,
     message: String?,
+    mine: Boolean,
     canShare: Boolean,
 ) {
     val reduceMotion = rememberReduceMotion()
@@ -198,6 +201,7 @@ private fun CardTable(
             onShare = { sharing = true },
         )
     }
+    if (sharing) CardShareSheet(card, mine, onClose = { sharing = false })
 }
 
 /** The screen's own actions and, once the card is on the table, "Open it again". */
