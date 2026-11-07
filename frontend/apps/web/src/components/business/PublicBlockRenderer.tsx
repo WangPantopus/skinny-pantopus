@@ -292,6 +292,20 @@ export function formatHoursInterval(open?: string | null, close?: string | null)
   return `${open ? formatTime(open) : ''} – ${close ? formatTime(close) : ''}`;
 }
 
+/** Minutes past midnight of an 'HH:MM[:SS]' opening time, or -1 for a row with none, such as a closed day. */
+function openingMinutes(time?: string | null): number {
+  const m = time ? /^(\d{1,2}):(\d{2})/.exec(time) : null;
+  return m ? Number(m[1]) * 60 + Number(m[2]) : -1;
+}
+
+/** By day, then by opening time with a closed row first: the hours reads order by day only. */
+export function compareHoursRows(
+  a: { day_of_week: number; open_time?: string | null },
+  b: { day_of_week: number; open_time?: string | null },
+): number {
+  return a.day_of_week - b.day_of_week || openingMinutes(a.open_time) - openingMinutes(b.open_time);
+}
+
 function PublicHours({ data, locations, hours }: { data: Record<string, any>; locations: Record<string, any>[]; hours: Record<string, any>[] }) {
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -313,7 +327,7 @@ function PublicHours({ data, locations, hours }: { data: Record<string, any>; lo
       )}
       <div className="space-y-4">
         {locsWithHours.map((loc) => {
-          const locHours = (locationHoursMap[loc.id as string] || []).sort((a, b) => (a.day_of_week as number) - (b.day_of_week as number));
+          const locHours = (locationHoursMap[loc.id as string] || []).sort(compareHoursRows);
           return (
             <div key={loc.id as string} className="rounded-xl border border-app-border bg-app-surface p-5">
               <h3 className="text-sm font-semibold text-app-text mb-3">{loc.label as string}</h3>

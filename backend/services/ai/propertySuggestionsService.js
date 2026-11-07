@@ -16,6 +16,9 @@ const {
 } = require('./propertyIntelligenceService');
 const propertyRecords = require('../propertyRecords');
 const homeRecords = require('../propertyRecords/homeRecord');
+const floorPlans = require('../propertyRecords/floorPlans');
+const { planFacts, PLAN_SOURCE_WORD } = require('../propertyRecords/floorPlanFormat');
+const { usableFloorPlan } = require('../householdFacts');
 
 const LLM_TIMEOUT_MS = 12000;
 // Several plausible records at an address: which one isn't for us to guess, so nothing fills in and the person is told why.
@@ -147,8 +150,9 @@ function normalizeLlmHomeType(v) {
  * @param {'wait'|'background'|'check'} [options.lookup='wait'] How a validated address's ATTOM lookup runs
  *   (propertyIntelligenceService.fetchAttomPropertyDetailBundleForAddress); the answer's `attom_lookup` says where it
  *   stands, so Add Home can show the step at once and fill the fields in when the record lands.
+ * @param {boolean} [options.floorPlans=false] A build that understands a building's floor-plan sheet is asking.
  */
-async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } = {}) {
+async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', floorPlans: wantsFloorPlans = false } = {}) {
   const {
     address,
     unit_number: unitNumber,
@@ -268,6 +272,20 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     }
   }
 
+  // The building's own floor-plan sheet: for this exact unit, it fills what the record lacks and a vendor can't say.
+  // Short of that it fills nothing, and says what plans the building has, as the building's.
+  let floorPlan = null;
+  if (wantsFloorPlans && attomLookup !== 'pending') {
+    floorPlan = usableFloorPlan(await floorPlans.forAddress(recordAddress), record?.whole);
+    const facts = planFacts(floorPlan);
+    for (const [fact, field] of [['bedrooms', 'bedrooms'], ['bathrooms', 'bathrooms'], ['living_sqft', 'sq_ft']]) {
+      if (facts[fact] === undefined || !(merged[field] == null || sources[field] === 'attom')) continue;
+      merged[field] = facts[fact];
+      sources[field] = 'floor_plan';
+      fieldTags[field] = PLAN_SOURCE_WORD;
+    }
+  }
+
   // Tier 2 — heuristics from Places / HomeAddress (fill gaps only). While the
   // county record is still being looked up they wait for it, as the model's
   // guesses do: shown first, a guessed kind of home would change when the
@@ -348,8 +366,10 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     llm_enabled: isLlmEnabled(),
     ...(homeAddressRow && attomLookup ? { attom_lookup: attomLookup } : {}),
     ...(provenance ? { provenance, field_tags: fieldTags } : {}),
+    ...(!provenance && Object.keys(fieldTags).length ? { field_tags: fieldTags } : {}),
     ...(lookupNote ? { lookup_note: lookupNote } : {}),
     ...(countyPage ? { county_page: countyPage } : {}),
+    ...(floorPlan ? { floor_plan: floorPlan } : {}),
   };
 }
 

@@ -60,9 +60,14 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.PerforatedStamp
 import app.pantopus.android.ui.components.Postmark
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardRowPostage
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardRowSeal
+import app.pantopus.android.ui.screens.mailbox.cards.table.drawCardRowPaper
+import app.pantopus.android.ui.screens.mailbox.cards.table.rememberCardRowArt
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusMark
@@ -273,6 +278,8 @@ private fun ChristmasEnvelope(
 ) {
     val shape = RoundedCornerShape(6.dp)
     val ink = handwriting.copy(color = PantopusColors.cardEnvelopeInk)
+    // With the table, the row is the same size and layout on the real red paper, with the real stamp, postmark and seal.
+    val rowArt = if (LaunchFeatures.cardTable) rememberCardRowArt() else null
     Box(
         modifier =
             Modifier
@@ -282,7 +289,11 @@ private fun ChristmasEnvelope(
                 .clip(shape)
                 .background(PantopusColors.cardEnvelope)
                 .drawBehind {
-                    with(HolidayCardArt) { paperGrain(PantopusColors.cardEnvelopeGrain, step = 6.dp.toPx(), dot = 2.dp.toPx()) }
+                    if (rowArt != null) {
+                        drawCardRowPaper(rowArt)
+                    } else if (!LaunchFeatures.cardTable) {
+                        with(HolidayCardArt) { paperGrain(PantopusColors.cardEnvelopeGrain, step = 6.dp.toPx(), dot = 2.dp.toPx()) }
+                    }
                 },
     ) {
         Column(modifier = Modifier.padding(start = 16.dp, top = 16.dp).fillMaxWidth(0.48f)) {
@@ -292,7 +303,12 @@ private fun ChristmasEnvelope(
             }
         }
         Box(modifier = Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp)) {
-            Postage(piece, stampWhenUnmarked = true, postmarked = piece.postmarkDay.isNotEmpty() || piece.postmarkTown != null)
+            val postmarked = piece.postmarkDay.isNotEmpty() || piece.postmarkTown != null
+            if (rowArt != null) {
+                CardRowPostage(rowArt, piece, postmarked)
+            } else if (!LaunchFeatures.cardTable) {
+                Postage(piece, stampWhenUnmarked = true, postmarked = postmarked)
+            }
         }
         Row(modifier = Modifier.padding(top = 72.dp, end = 12.dp)) {
             Spacer(Modifier.weight(0.38f))
@@ -306,7 +322,9 @@ private fun ChristmasEnvelope(
                 }
             }
         }
-        if (card.sealed) {
+        if (card.sealed && LaunchFeatures.cardTable) {
+            rowArt?.let { CardRowSeal(it, modifier = Modifier.align(Alignment.BottomStart)) }
+        } else if (card.sealed) {
             ChristmasSeal(modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 8.dp))
         } else {
             Text(
