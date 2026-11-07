@@ -87,7 +87,7 @@ async function planItems(ctx) {
 }
 
 async function taskItems(ctx) {
-  const { homes } = await homesOf(ctx.userId);
+  const { homes } = await ctx.homes();
   const now = Date.now();
   const soon = now + ASSIGNED_WITHIN_DAYS * 24 * 60 * 60 * 1000;
   const perHome = await Promise.all(homes.map(async (home) => {
@@ -141,7 +141,7 @@ async function inviteItems(ctx) {
 }
 
 async function householdRequestItems(ctx) {
-  const { homes } = await homesOf(ctx.userId);
+  const { homes } = await ctx.homes();
   const perHome = await Promise.all(homes.map((home) => homeInvitationService.listRequests(home.id, ctx.userId)
     // Only homes where they manage members answer; the others refuse.
     .then((requests) => requests.map((request) => ({ home, request }))).catch(() => [])));
@@ -257,7 +257,9 @@ async function needsYou(ctx) {
     ctx.timeZone || userTimeZone(ctx.userId).catch(() => undefined),
     isFeatureEnabled('plans', user).catch(() => false),
   ]);
-  const read = { userId: ctx.userId, user, timeZone };
+  // The tasks and the household requests both go by the person's homes: one read for the two.
+  let homes = null;
+  const read = { userId: ctx.userId, user, timeZone, homes: () => (homes ||= homesOf(ctx.userId)) };
   const sources = [
     ['plans', plans ? planItems : null],
     ['tasks', taskItems],
