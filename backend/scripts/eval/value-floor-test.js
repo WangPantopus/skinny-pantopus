@@ -195,6 +195,7 @@ async function main() {
   if (heldServed.length) {
     const shares = sorted(heldServed.map((row) => row.held));
     console.log(`\nserved: its own range held a median of ${pct(median(shares))}% (lowest ${pct(shares[0])}%), at least 70% in ${shares.filter((share) => share >= 70).length} of ${shares.length} counties`);
+    console.log(`  under 70%: ${heldServed.filter((row) => row.held < 70).map((row) => `${row.fips} ${pct(row.held)}%`).join(', ') || 'none'}`);
   }
   console.log('\nAcross counties (median of their numbers), and how a range set from the other counties held in each:');
   for (const way of ways) {
