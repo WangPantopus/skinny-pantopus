@@ -23,7 +23,6 @@ struct CardTableScreen: View {
     var canShare = true
     let onClose: () -> Void
 
-    @State private var isSharing = false
     @State private var wordsHeight: CGFloat = 0
     @State private var actHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -68,7 +67,7 @@ struct CardTableScreen: View {
                     closeLabel: closeLabel,
                     shareLabel: shareContent.sealed ? "Share the sealed card" : "Share this card",
                     onClose: onClose,
-                    onShare: canShare ? { isSharing = true } : nil
+                    onShare: canShare ? { model.isSharing = true } : nil
                 )
                 .frame(width: screen.width, height: screen.height, alignment: .topLeading)
             }
@@ -82,12 +81,11 @@ struct CardTableScreen: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("cardTable")
         .task { await model.prepare() }
-        .sheet(isPresented: $isSharing) {
+        .sheet(isPresented: Binding(get: { model.isSharing }, set: { model.isSharing = $0 })) {
             if let art = model.art {
                 CardTableShareSheet(content: shareContent, art: art, picture: model.picture, isSender: isSender)
             }
         }
-        .onChange(of: isSharing) { _, sharing in model.setPaused(sharing) }
         .onAppear {
             model.reduceMotion = reduceMotion
             model.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
