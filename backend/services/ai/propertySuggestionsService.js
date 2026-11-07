@@ -203,7 +203,8 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
     ? { line1: homeAddressRow.address_line1_norm, unit: homeAddressRow.address_line2_norm, city: homeAddressRow.city_norm, state: homeAddressRow.state, zip: homeAddressRow.postal_code }
     : { line1: address, unit: unitNumber, city, state, zip: zipCode };
   propertyRecords.shadow(recordAddress);
-  const record = await homeRecords.forAddress(recordAddress);
+  // Add Home's follow-up, and builds that make only one ask, can wait a few seconds for storage to answer.
+  const record = await homeRecords.forAddress(recordAddress, { patient: lookup !== 'background' });
   const fieldTags = {};
   let provenance = null;
   let lookupNote = null;
