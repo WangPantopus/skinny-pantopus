@@ -20,6 +20,7 @@ import useMailAddressee from '../useMailAddressee';
 import CardFront from '../cards/CardFront';
 import CardBack from '../cards/CardBack';
 import CardFlip from '../cards/CardFlip';
+import CardShareSheet from '../cards/CardShareSheet';
 import CardTable from '../cards/CardTable';
 import { askTakeBack, takeBackMessage } from '../cards/takeBack';
 import { shortDay, WAX } from '../cards/cardArt';
@@ -64,6 +65,7 @@ export default function SentPieceView({ id }: { id: string }) {
   const [showBack, setShowBack] = useState(false);
   const [takeBackError, setTakeBackError] = useState<string | null>(null);
   const [onTable, setOnTable] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const backToSent = () => router.push('/app/mailbox/sent');
 
   if (isLoading) {
@@ -134,7 +136,23 @@ export default function SentPieceView({ id }: { id: string }) {
           toName={piece.to_name || ''}
           mailedOn={piece.envelope.postmarked_on || piece.sent_at}
           closeLabel="Back to your card"
+          paused={sharing}
+          onShare={() => setSharing(true)}
           onClose={() => setOnTable(false)}
+        />
+      ) : null}
+      {/* A card still sealed for them shares as the sealed envelope, here too: the surprise is theirs. */}
+      {sharing && card.design ? (
+        <CardShareSheet
+          details={{
+            card: { design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: piece.sealed },
+            note: piece.note,
+            fromName: piece.envelope.from,
+            mailedOn: piece.envelope.postmarked_on || piece.sent_at,
+          }}
+          slug={card.slug}
+          mine
+          onClose={() => setSharing(false)}
         />
       ) : null}
       <BackToSent onBack={backToSent} />
@@ -163,7 +181,7 @@ export default function SentPieceView({ id }: { id: string }) {
                 <div className="mx-auto w-full max-w-[300px] md:max-w-none">
                   {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
                   {front && launchFeatures.cardTable ? (
-                    <div className="mt-4 flex justify-center">
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
                       <button
                         type="button"
                         data-testid="mailSentOnTable"
@@ -171,6 +189,14 @@ export default function SentPieceView({ id }: { id: string }) {
                         className={`${button} border border-[#d6cbb6] bg-[#fffdf8] px-5 text-[15px] text-[#374151] hover:bg-[#f5efe3] focus-visible:ring-[#8b1d1d]`}
                       >
                         See it the way they did
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="mailSentShare"
+                        onClick={() => setSharing(true)}
+                        className={`${button} border border-[#d6cbb6] bg-[#fffdf8] px-5 text-[15px] text-[#374151] hover:bg-[#f5efe3] focus-visible:ring-[#8b1d1d]`}
+                      >
+                        Share
                       </button>
                     </div>
                   ) : null}

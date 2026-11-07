@@ -33,7 +33,7 @@ export function penWords(note: string, number: number | null | undefined) {
 }
 
 /** Largest size at which `note` fits: rules first, then tighter lines for a note of many short lines. */
-function measureNote(note: string): NoteFit {
+export function measureNote(note: string): NoteFit {
   const box = document.createElement('div');
   box.style.cssText = `position:fixed;left:-9999px;top:0;visibility:hidden;width:${NOTE_WIDTH * 8}px;font-family:${PEN_STACK}`;
   for (const line of note.split('\n')) {
