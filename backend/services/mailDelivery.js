@@ -154,6 +154,18 @@ async function countPieces(build) {
   return (loose.count || 0) + new Set((bundled.data || []).map((row) => row.bundle_id)).size;
 }
 
+// The most rows a list read asks for when it may stand in for countPieces' two reads; under the API's max_rows (1000).
+const LISTED_PIECES_MAX = 200;
+
+/**
+ * countPieces, from every row the query finds (each with its bundle_id) when they've already been read: the same
+ * count, with no read of its own. Only for a list that came back whole (fewer rows than it asked for).
+ */
+function countListedPieces(rows) {
+  const loose = rows.filter((row) => row.bundle_id == null).length;
+  return loose + new Set(rows.filter((row) => row.bundle_id != null).map((row) => row.bundle_id)).size;
+}
+
 // Pieces a person can read, for the mailbox-wide numbers: their own and their readable Homes' (not Earn, which stays
 // hidden with mail_extras), delivered by `now`, neither deleted nor shredded.
 function readableDelivered(select, options, userId, homeIds, now) {
@@ -187,17 +199,25 @@ async function lastRoundAt({ userId, homeIds, now = new Date() }) {
  * @returns {Promise<{ last_at: string|null, last_count: number, last_unopened: number, next_at: string, time_zone: string }>}
  */
 async function deliverySummary({ userId, homeIds, now = new Date() }) {
+  // The latest round doesn't depend on the time zone, so the two are read together; a failure counts in the old order.
+  const lastRead = lastRoundAt({ userId, homeIds, now }).then((at) => ({ at }), (error) => ({ error }));
   const timeZone = (await personTimeZone(userId)) || FALLBACK_TIME_ZONE;
   const summary = { last_at: null, last_count: 0, last_unopened: 0, next_at: nextRound(timeZone, now).toISOString(), time_zone: timeZone };
-  const lastAt = await lastRoundAt({ userId, homeIds, now });
+  const last = await lastRead;
+  if (last.error) throw last.error;
+  const lastAt = last.at;
   if (!lastAt) return summary;
   const windowStart = new Date(lastAt.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const inWindow = (select, options) => readableDelivered(select, options, userId, homeIds, lastAt)
     .gt('delivered_at', windowStart);
-  const [lastCount, lastUnopened] = await Promise.all([
-    countPieces(inWindow),
-    countPieces((select, options) => inWindow(select, options).eq('viewed', false).is('opened_at', null)),
-  ]);
+  const unopened = (select, options) => inWindow(select, options).eq('viewed', false).is('opened_at', null);
+  // A round's pieces usually fit one list read, which then gives both counts; a bigger round is counted.
+  const { data: listed, error } = await inWindow('bundle_id, viewed, opened_at').limit(LISTED_PIECES_MAX);
+  if (error) throw new Error(error.message);
+  const rows = listed || [];
+  const [lastCount, lastUnopened] = rows.length < LISTED_PIECES_MAX
+    ? [countListedPieces(rows), countListedPieces(rows.filter((row) => row.viewed === false && row.opened_at == null))]
+    : await Promise.all([countPieces(inWindow), countPieces(unopened)]);
   return { ...summary, last_at: lastAt.toISOString(), last_count: lastCount, last_unopened: lastUnopened };
 }
 
@@ -256,5 +276,5 @@ async function announceSpecialDeliveries(pieces, { excludeUserId = null } = {}) 
 module.exports = {
   MORNING_HOUR, FALLBACK_TIME_ZONE, nextRound, localDate, isSpecialDelivery, homeTimeZone, personTimeZone,
   mailboxTimeZone, deliveryFor, withDelivery, lastRoundAt, deliverySummary, announceSpecialDeliveries, afterStored, countPieces,
-  todaySummary,
+  countListedPieces, LISTED_PIECES_MAX, todaySummary,
 };

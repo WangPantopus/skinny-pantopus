@@ -6,19 +6,20 @@ const claimConfig = require('../config/householdClaims');
 const claimPolicy = require('./homeClaimRoutingService');
 const property = require('./ai/propertyIntelligenceService');
 const valueEstimate = require('./propertyRecords/valueEstimate');
-const { serializeCountyRecord, serializePropertyRecord } = require('../serializers/countyRecordSerializer');
+const { serializeCountyRecord, serializePropertyRecord, serializeEstimate } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
+const estimates = require('./propertyRecords/estimates');
 const householdFacts = require('./householdFacts');
 const floorPlans = require('./propertyRecords/floorPlans');
 const { changeNicheData } = require('./homeNicheData');
 const addressReview = require('./addressValidation/addressReviewService');
 const countyPages = require('./countyPages');
+const countyLinks = require('../config/countyLinks');
 const logger = require('../utils/logger');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
-const { localDisplayNames } = require('../utils/identityProfiles');
-const { loadChatPeople } = require('./chatPeople');
+const { loadChatPeopleAndNames } = require('./chatPeople');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // A shared Home is not a container for every sensitive column/file reference.
@@ -33,14 +34,18 @@ const INSTRUCTION_FIELDS = ['entry_instructions', 'parking_instructions'];
 const MEMBER_FIELDS = ['id', 'home_id', 'user_id', 'role', 'role_base', 'is_active', 'verification_status',
   'verification_source', 'start_at', 'end_at', 'access_start_at', 'access_end_at', 'created_at'];
 const OWNER_FIELDS = ['id', 'home_id', 'subject_type', 'subject_id', 'owner_status', 'is_primary_owner', 'verification_tier'];
+const CLAIM_FIELDS = ['id', 'home_id', 'state', 'claim_phase_v2', 'merged_into_claim_id'];
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const pick = (row, keys) => Object.fromEntries(keys.map(key => [key, row[key] ?? null]));
+// Embedded rows come back with their keys in jsonb order; each is put back in the order a read of its own gives.
+const inOrder = (row, keys) => Object.fromEntries(keys.map(key => [key, row[key]]));
 // A read run alongside others: its value, or its error at the point the old one-by-one code threw it.
 const settledValue = result => {
   if (result.status === 'rejected') throw result.reason;
   return result.value;
 };
+const settle = read => read.then(value => ({ status: 'fulfilled', value }), reason => ({ status: 'rejected', reason }));
 function failure(code = 'HOME_DETAIL_UNAVAILABLE', statusCode = 503) {
   return Object.assign(new Error({
     HOME_MEMBER_HISTORY_DENIED: 'You do not have permission to view household history.',
@@ -57,10 +62,12 @@ async function checked(query) {
   if (!result || result.error) throw failure();
   return result.data;
 }
-async function rows(query) {
-  const data = await checked(query);
+function rowList(data) {
   if (!Array.isArray(data) || data.some(row => !object(row))) throw failure();
   return data;
+}
+async function rows(query) {
+  return rowList(await checked(query));
 }
 
 // HomeUserRef is a private legacy response shape consumed by released native
@@ -78,9 +85,12 @@ function localRef(ref, people) {
   return person ? { ...ref, username: person.handle || ref.username, profile_picture_url: person.avatarUrl || null } : ref;
 }
 
-// `early`: the Home read beside the access check, with every column this might use. Only what this access allows stays.
+const homeFields = access => [...HOME_FIELDS, ...(access.permissions.includes('access.view_codes') ? INSTRUCTION_FIELDS : [])];
+
+// `early`: the Home already read or under way (beside the access check, or with the rows detail shows), with every
+// column this might use. Only what this access allows stays.
 async function readHome(homeId, access, { provider = false, early = null } = {}) {
-  const fields = [...HOME_FIELDS, ...(access.permissions.includes('access.view_codes') ? INSTRUCTION_FIELDS : [])];
+  const fields = homeFields(access);
   const columns = [...fields, ...(provider ? ['niche_data', 'address_id'] : [])];
   const found = await (early || checked(db.from('Home').select(columns.join(', ')).eq('id', homeId).maybeSingle()));
   const raw = early && object(found) ? Object.fromEntries(columns.filter(key => Object.hasOwn(found, key)).map(key => [key, found[key]])) : found;
@@ -99,11 +109,7 @@ async function readHome(homeId, access, { provider = false, early = null } = {})
   return { home, raw };
 }
 
-async function readOwners(homeId, actorId, access) {
-  let query = db.from('HomeOwner').select(OWNER_FIELDS.join(', ')).eq('home_id', homeId).order('id');
-  // Personal status is readable without granting access to other owners.
-  if (!access.permissions.includes('ownership.view')) query = query.eq('subject_id', actorId).eq('subject_type', 'user');
-  const owners = await rows(query);
+function checkedOwners(homeId, owners) {
   if (owners.some(owner => !uuid(owner.id) || owner.home_id !== homeId || !uuid(owner.subject_id)
     || !['user', 'business', 'trust'].includes(owner.subject_type)
     || !['pending', 'verified', 'disputed', 'revoked'].includes(owner.owner_status)
@@ -116,7 +122,11 @@ async function readMembers(homeId, { history = false } = {}) {
   let query = db.from('HomeOccupancy').select(`${MEMBER_FIELDS.join(', ')}, user:user_id ( ${SAFE_CREATOR_SELECT} )`)
     .eq('home_id', homeId).order('created_at').order('id');
   if (!history) query = query.eq('is_active', true).eq('verification_status', 'verified');
-  const members = await rows(query);
+  return shownMembers(homeId, await rows(query), { history });
+}
+
+// Member rows, each with its account (`user`), as the household list shows them.
+async function shownMembers(homeId, members, { history = false } = {}) {
   if (members.some(member => !uuid(member.id) || member.home_id !== homeId || !uuid(member.user_id)
     || typeof member.is_active !== 'boolean' || typeof member.verification_status !== 'string'
     || typeof member.created_at !== 'string')) throw failure();
@@ -146,62 +156,104 @@ async function readMembers(homeId, { history = false } = {}) {
 // handle and the photo: the rest of each row keeps its shape.
 async function withDisplayNames(occupants) {
   if (occupants.length === 0) return occupants;
-  const ids = occupants.map(member => member.user_id);
-  let names;
-  const people = loadChatPeople(ids);
-  try { names = await localDisplayNames(ids); } catch (_) { throw failure(); }
-  const shown = await people;
+  // Names, handles and photos come from one read of their accounts and Local Profiles.
+  let read;
+  try { read = await loadChatPeopleAndNames(occupants.map(member => member.user_id)); } catch (_) { throw failure(); }
+  return named(occupants, read);
+}
+function named(occupants, { names, people }) {
   return occupants.map((member) => {
-    const user = localRef(member.user, shown);
+    const user = localRef(member.user, people);
     return { ...member, user, display_name: names.get(String(member.user_id)) || 'Household member',
       username: user.username, avatar_url: user.profile_picture_url };
   });
 }
+// The members' names (withDisplayNames) and the primary owner's handle and photo (localRef), from one read of their
+// accounts and Local Profiles. Members aren't shown without their names; when that read fails and no member is shown,
+// the owner goes by their account.
+async function shownPeople(occupants, ownerId) {
+  const none = { names: new Map(), people: new Map() };
+  const ids = [...occupants.map(member => member.user_id), ...(ownerId ? [ownerId] : [])];
+  if (ids.length === 0) return none;
+  try { return await loadChatPeopleAndNames(ids); } catch (error) {
+    if (occupants.length) throw failure();
+    logger.warn('chat.people_lookup_error', { error: error.message });
+    return none;
+  }
+}
 
-async function ownClaims(homeId, actorId) {
-  const claims = await rows(db.from('HomeOwnershipClaim').select('id, home_id, state, claim_phase_v2, merged_into_claim_id')
-    .eq('home_id', homeId).eq('claimant_user_id', actorId).order('created_at', { ascending: false }).order('id'));
+function checkedClaims(homeId, claims) {
   if (claims.some(claim => !uuid(claim.id) || claim.home_id !== homeId || typeof claim.state !== 'string')) throw failure();
   return claims;
 }
 const pendingClaim = claims => claims.find(claim => claimConfig.flags.v2ReadPaths
   ? claimPolicy.isClaimActiveRecord(claim) : claimPolicy.isLegacyStateActive(claim.state));
 
+// The Home with the rows its page shows embedded, one read (PostgREST resource embedding): its owners (only the
+// person's own unless they may see ownership: personal status is readable without granting access to other owners),
+// its current members with their accounts for someone who may see them, and the person's ownership claims. Each list
+// is filtered and ordered as a read of its own was. `columns`: the Home's own.
+function homeWithRows(homeId, actorId, access, columns) {
+  const seesMembers = access.permissions.includes('members.view');
+  let query = db.from('Home').select([...columns, `owners:HomeOwner(${OWNER_FIELDS.join(', ')})`,
+    ...(seesMembers ? [`members:HomeOccupancy(${MEMBER_FIELDS.join(', ')}, user:user_id(${SAFE_CREATOR_SELECT}))`] : []),
+    `claims:HomeOwnershipClaim(${CLAIM_FIELDS.join(', ')})`].join(', '))
+    .eq('id', homeId)
+    .order('id', { referencedTable: 'owners' })
+    .eq('claims.claimant_user_id', actorId)
+    .order('created_at', { referencedTable: 'claims', ascending: false }).order('id', { referencedTable: 'claims' });
+  if (!access.permissions.includes('ownership.view')) query = query.eq('owners.subject_id', actorId).eq('owners.subject_type', 'user');
+  if (seesMembers) {
+    query = query.eq('members.is_active', true).eq('members.verification_status', 'verified')
+      .order('created_at', { referencedTable: 'members' }).order('id', { referencedTable: 'members' });
+  }
+  return checked(query.maybeSingle());
+}
+
+// The owners, members and claims of a homeWithRows read, checked as their own reads were. A Home that's gone has none,
+// as those reads found none.
+async function embeddedRows(homeId, access, home) {
+  if (home === null) return { owners: [], occupants: [], claims: [] };
+  if (!object(home)) throw failure();
+  const owners = checkedOwners(homeId, rowList(home.owners).map(owner => inOrder(owner, OWNER_FIELDS)));
+  const occupants = access.permissions.includes('members.view') ? await shownMembers(homeId, rowList(home.members)) : [];
+  const claims = checkedClaims(homeId, rowList(home.claims).map(claim => inOrder(claim, CLAIM_FIELDS)));
+  return { owners, occupants, claims };
+}
+
 async function detail(homeId, actorId) {
   return authority.withCurrentAccess({ homeId, actorId }, async access => {
-    const [{ home }, owners, occupants, claims] = await Promise.all([
-      readHome(homeId, access), readOwners(homeId, actorId, access),
-      access.permissions.includes('members.view') ? readMembers(homeId) : [], ownClaims(homeId, actorId),
-    ]);
+    // Delete eligibility depends on nothing read here, so it goes out with the Home's read.
+    const deleteRead = settle(deletion.deleteEligibility(homeId, actorId));
+    const opening = homeWithRows(homeId, actorId, access, homeFields(access));
+    const { home } = await readHome(homeId, access, { early: opening });
+    const { owners, occupants, claims } = await embeddedRows(homeId, access, await opening);
     const mine = owners.find(owner => owner.subject_type === 'user' && owner.subject_id === actorId && owner.owner_status === 'verified')
       || owners.find(owner => owner.subject_type === 'user' && owner.subject_id === actorId && owner.owner_status === 'pending');
     const visibleOwners = access.permissions.includes('ownership.view')
       ? owners.filter(owner => owner.owner_status === 'verified'
         || (access.permissions.includes('ownership.manage') && ['pending', 'disputed'].includes(owner.owner_status))) : [];
     const primary = visibleOwners.find(owner => owner.is_primary_owner && owner.owner_status === 'verified' && owner.subject_type === 'user');
-    // The primary owner's account and delete eligibility are independent reads,
-    // so they run together; a failure is reported in the same order as before.
-    const [ownerRead, deleteRead, ownerPeople] = await Promise.allSettled([
-      primary ? checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()) : null,
-      deletion.deleteEligibility(homeId, actorId),
-      primary ? loadChatPeople([primary.subject_id]) : null,
-    ]);
-    const owner = primary ? localRef(userRef(settledValue(ownerRead), primary.subject_id), settledValue(ownerPeople)) : null;
-    const canDelete = settledValue(deleteRead).allowed;
+    // The primary owner's account came with the members when they're one of them; otherwise it's read on its own.
+    const memberAccount = primary && occupants.find(member => member.user_id === primary.subject_id)?.user;
     // A member or owner can change while this caller's grants remain unchanged.
     // Retire those held projections as well as rechecking caller authority.
-    // The three rereads run together and are compared in their old order; the members' display names are read
-    // alongside them (they only replace display_name, after the comparison holds).
-    const [ownersAgain, membersAgain, claimsAgain, namedOccupants] = await Promise.allSettled([
-      readOwners(homeId, actorId, access),
-      access.permissions.includes('members.view') ? readMembers(homeId) : null,
-      ownClaims(homeId, actorId),
-      withDisplayNames(occupants),
+    // The rows are read again in one read and compared in their old order. The primary owner's account and the names
+    // of the people shown are read alongside (they're used only once the comparison holds); a failure is reported in
+    // the same order as before.
+    const [ownerRead, rowsAgain, peopleRead] = await Promise.allSettled([
+      primary && !memberAccount ? checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()) : null,
+      homeWithRows(homeId, actorId, access, ['id']).then(again => embeddedRows(homeId, access, again)),
+      shownPeople(occupants, primary?.subject_id),
     ]);
-    if (JSON.stringify(settledValue(ownersAgain)) !== JSON.stringify(owners)
-      || (access.permissions.includes('members.view') && JSON.stringify(settledValue(membersAgain)) !== JSON.stringify(occupants))
-      || JSON.stringify(settledValue(claimsAgain)) !== JSON.stringify(claims)) throw failure();
-    return { home: { ...home, owner, occupants: settledValue(namedOccupants), owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
+    const ownerAccount = primary ? memberAccount || userRef(settledValue(ownerRead), primary.subject_id) : null;
+    const canDelete = settledValue(await deleteRead).allowed;
+    const again = settledValue(rowsAgain);
+    if (JSON.stringify(again.owners) !== JSON.stringify(owners) || JSON.stringify(again.occupants) !== JSON.stringify(occupants)
+      || JSON.stringify(again.claims) !== JSON.stringify(claims)) throw failure();
+    const people = settledValue(peopleRead);
+    const owner = ownerAccount ? localRef(ownerAccount, people.people) : null;
+    return { home: { ...home, owner, occupants: named(occupants, people), owners: visibleOwners.map(row => pick(row, OWNER_FIELDS)),
       isOwner: access.isOwner, isOccupant: !!access.occupancy, isPendingOwner: mine?.owner_status === 'pending',
       ownership_status: mine?.owner_status || null, residency_status: access.occupancy?.verification_status || null,
       // F3b: 'household' when the verification came only from an invitation or a manager's approval.
@@ -232,11 +284,21 @@ async function householdPart({ homeId, home, raw, access, actorId, problems, cop
     ]);
     return householdFacts.project({ home, nicheData: raw.niche_data, copy, countyRecord, canEdit, viewerId: actorId, verifiedWriters, reports, countyPage,
       // The county's record goes first for everyone, including those who don't see it.
-      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries });
+      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries, countyCheck: countyLinks.enabled() });
   } catch (error) {
     logger.warn('Home household facts unavailable', { homeId, error: error.message });
     return null;
   }
+}
+
+// No record anywhere: the labeled estimates, in the same place a record's sections go, so every build draws them. The
+// household's questions still ask for what no record answers: an estimate never stands in for a fact.
+async function estimateAnswer(home, raw, household) {
+  const county = serializeEstimate(await estimates.forHome(raw), raw);
+  if (!county) return null;
+  return { home, attom_property_detail: null, source: 'cache', unavailable_reason: null, county_record: county,
+    provenance: { publisher: county.footer, dataset: null, as_of: null, scope: 'area', method: 'estimate', label: county.footer, title: 'Estimate' },
+    household: await householdPart(household) };
 }
 
 async function propertyDetail(homeId, actorId) {
@@ -270,6 +332,11 @@ async function propertyDetail(homeId, actorId) {
     const home = { ...columns, ...householdFacts.shownColumns(raw, record?.copy) };
     if (record) {
       const county = record.copy ? serializePropertyRecord(record.copy, await valueEstimate.forCopy(record.copy, raw)) : null;
+      // A county that stopped publishing says so; the estimate is for homes no record ever covered.
+      if (!county && record.lookup !== 'pending' && record.reason !== 'withdrawn') {
+        const floor = await estimateAnswer(home, raw, { homeId, home: columns, raw, access, actorId, problems });
+        if (floor) return floor;
+      }
       return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
         unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : (record.reason === 'withdrawn' ? 'SOURCE_WITHDRAWN' : 'NO_PROPERTY_FOUND')), county_record: county,
         ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}),
@@ -284,6 +351,10 @@ async function propertyDetail(homeId, actorId) {
     // Only the property bundle is returned, never the rest of niche_data or
     // unrelated raw Home fields. Deeper vendor-content validation is separate.
     const stored = serializeCountyRecord(result.attomPayload, avm);
+    if (!stored) {
+      const floor = await estimateAnswer(home, raw, { homeId, home, raw, access, actorId, problems });
+      if (floor) return floor;
+    }
     return { home, attom_property_detail: result.attomPayload, source: result.source,
       unavailable_reason: result.unavailableReason || null, county_record: stored,
       household: await householdPart({ homeId, home, raw, access, actorId, problems, otherRecord: stored }) };
@@ -301,7 +372,8 @@ async function factChange({ homeId, actorId, asked, fields }) {
       .eq('id', homeId).maybeSingle());
     if (!object(home)) throw failure();
     const copy = homeRecords.liveCopy(home);
-    return householdFacts.plan({ home, copy, seesRecord: !access || access.isOwner, asked, fields, actorId, floorPlan: householdFacts.usableFloorPlan(floorPlans.storedCopy(home), copy) });
+    return householdFacts.plan({ home, copy, seesRecord: !access || access.isOwner, asked, fields, actorId, floorPlan: householdFacts.usableFloorPlan(floorPlans.storedCopy(home), copy),
+      check: countyLinks.enabled() });
   } catch (error) {
     // A plain edit goes on without its who and when; asking for the facts themselves has to be answered.
     if (asked) throw error;

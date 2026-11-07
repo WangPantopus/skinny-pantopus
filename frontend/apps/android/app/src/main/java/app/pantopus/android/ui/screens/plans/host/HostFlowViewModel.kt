@@ -16,7 +16,6 @@ import app.pantopus.android.data.api.models.plans.PlansSportsDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.GeoApi
-import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
@@ -29,9 +28,7 @@ import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.plans.planCode
 import app.pantopus.android.data.plans.planMessage
-import app.pantopus.android.ui.screens.place.HubVerificationTarget
 import app.pantopus.android.ui.screens.plans.PlansRoutes
-import app.pantopus.android.ui.screens.plans.plansVerificationTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -134,8 +131,8 @@ data class HostUi(
     val homePoints: List<Pair<Double, Double>> = emptyList(),
     val origin: Pair<Double, Double>? = null,
     val playdatesOn: Boolean = false,
-    /** False without a verified address: H1's playdate card leads to verification instead of the form. */
-    val canHostPlaydates: Boolean = true,
+    /** The host's address is verified (`/mine`): H7's "Verified" badge, as neighbors will see it. Unknown means no. */
+    val hostVerified: Boolean = false,
     val hostName: String = "You",
     val hostAvatar: String? = null,
     val posting: Boolean = false,
@@ -147,8 +144,8 @@ data class HostUi(
 
 /**
  * Host a plan (boards H1 to H8). The rules come from the brief: hosting needs a home or GPS within 3 miles (the
- * fix proves you're nearby and never becomes the pin); playdates meet in public places with a verified address
- * and the host approves each family; study groups meet in public places too; at home the host approves each person,
+ * fix proves you're nearby and never becomes the pin); playdates meet in public places and the host approves each
+ * family (no verified address since November 7); study groups meet in public places too; at home the host approves each person,
  * with "people I've hosted" the only rule allowed; anyone nearby is only for pickup games and walks.
  */
 @HiltViewModel
@@ -160,7 +157,6 @@ class HostFlowViewModel
         private val locations: PlanLocationResolver,
         private val viewing: ViewingLocationRepository,
         private val events: PlansEvents,
-        private val homes: HomesRepository,
         private val geo: GeoApi,
         feature: PlansFeature,
     ) : ViewModel() {
@@ -260,9 +256,8 @@ class HostFlowViewModel
             val homePoints = payload?.homes.orEmpty().mapNotNull { h -> h.latitude?.let { lat -> h.longitude?.let { lat to it } } }
             val reply = (repository.games("composer") as? NetworkResult.Success)?.data
             val games = reply?.games.orEmpty()
-            // Hosting a playdate needs a verified address (`/mine` says where the person stands; unknown means yes).
-            val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: true
-            _ui.update { it.copy(home = home, homePoints = homePoints, canHostPlaydates = verified) }
+            val verified = (repository.mineCopy() ?: repository.mine().data)?.viewer?.verifiedAddress ?: false
+            _ui.update { it.copy(home = home, homePoints = homePoints, hostVerified = verified) }
             warmPlaces(home)
             if (generation != gamesGeneration) return
             _ui.update { it.copy(games = games, sports = reply?.sports) }
@@ -273,9 +268,6 @@ class HostFlowViewModel
                 draft.kind == PlanKind.WATCH_PARTY && draft.gameId == null && !draft.titleEdited -> automaticGame()?.let(::pickGame)
             }
         }
-
-        /** "Verify your address" from H1's playdate card. */
-        suspend fun verificationTarget(): HubVerificationTarget = plansVerificationTarget(homes)
 
         private fun automaticGame(): PlanGameDto? =
             _ui.value.games.firstOrNull {
@@ -699,7 +691,6 @@ class HostFlowViewModel
                                 error =
                                     when (result.error.planCode) {
                                         "not_near" -> "You can host within 3 miles of where you live or where you are now."
-                                        "needs_verified_address" -> "Playdates are for neighbors with a verified address."
                                         else -> result.error.planMessage
                                     },
                             )
@@ -747,8 +738,9 @@ class HostFlowViewModel
                 place = place,
                 spots = draft.spots,
                 autoRules = rules,
-                // Who can ask (decision D5, as on iOS): anyone nearby, or only verified neighbors for a playdate.
-                // "Verified neighbors get in right away" is the `verified` rule above; others still ask.
+                // Who can ask (as on iOS): anyone on Pantopus nearby. Since November 7 the server reads no verified address
+                // for any kind; a playdate still sends `verified`, which its table requires. "Verified neighbors get in right
+                // away" is the `verified` rule above; others still ask.
                 joinRequirement = if (kind == PlanKind.PLAYDATE) "verified" else "located",
                 details = details(kind, draft, game),
                 guestNote = draft.note.trim().takeIf(String::isNotEmpty),

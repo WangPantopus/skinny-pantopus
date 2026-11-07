@@ -259,7 +259,7 @@ struct PlanBrowsingSection: View {
             PlanNote(
                 icon: .shieldCheck,
                 text: "Parents stay with their kids. Only ages are shared, never names, photos or schools. "
-                    + "Everyone here has a verified address."
+                    + "The host approves each family."
             )
         } else {
             if let about = card.about, !about.isEmpty {

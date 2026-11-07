@@ -556,12 +556,19 @@ private struct LoadedList: View {
                     .listRowBackground(Color.clear)
                     .accessibilityIdentifier("listOfRowsMonoFooter")
             }
+            // With a FAB, the end of the list scrolls clear of it instead of sitting under it. Room inside the
+            // list, not a view inset below it: the tab bar took a view there for the screen's own bottom bar and
+            // stayed put while the list scrolled (founder request 2026-11-07).
+            if reservesFABSpace {
+                Color.clear
+                    .frame(height: Spacing.s16 + Spacing.s5)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .accessibilityHidden(true)
+            }
         }
         .listStyle(.plain)
-        // With a FAB, the end of the list scrolls clear of it instead of sitting under it.
-        .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
-            if reservesFABSpace { Color.clear.frame(height: Spacing.s16 + Spacing.s5) }
-        }
         .refreshable { await onRefresh() }
         .scrollDismissesKeyboard(.immediately)
         .scrollContentBackground(.hidden)

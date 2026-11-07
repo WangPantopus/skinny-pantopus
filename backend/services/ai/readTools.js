@@ -31,7 +31,7 @@ const {
 /**
  * The kinds of plan the tools offer. Playdates follow the person's plans_playdates flag, as the
  * Plans tab does: the tools list them only for people who have it (agentService's `playdates`
- * capability), and the plan services decide who sees, hosts and joins one (a verified address).
+ * capability), and the plan services decide who sees, hosts and joins one.
  */
 function planKinds(playdates = false) {
   return playdates ? KINDS : KINDS.filter((kind) => kind !== 'playdate');
@@ -292,16 +292,13 @@ async function findPlans(args, ctx) {
   }
   if (!viewer.origin) return { error: 'They have no home, saved place or location yet, so nearby plans can\'t be found.' };
   const asked = Array.isArray(args.kinds) ? args.kinds.filter((kind) => KINDS.includes(kind)) : [];
-  // Playdates only for people who see them on the map (the flag and a verified address), as
-  // GET /api/plans: asking only for kinds they can't see finds nothing, not every plan.
+  // Playdates only for people who see them on the map (the plans_playdates flag), as GET /api/plans:
+  // asking only for kinds they can't see finds nothing, not every plan.
   const kinds = viewer.seesPlaydates ? asked : asked.filter((kind) => kind !== 'playdate');
-  const unseen = viewer.playdatesFlag && !viewer.seesPlaydates && (!asked.length || asked.includes('playdate'))
-    ? { playdates: 'Playdates are for verified neighbors, so none show until their address is verified.' }
-    : {};
-  if (asked.length && !kinds.length) return { note: OTHERS_WORDS, plans: [], more: false, ...unseen };
+  if (asked.length && !kinds.length) return { note: OTHERS_WORDS, plans: [], more: false };
   const result = await planService.listNearby(viewer, { point: viewer.origin, window: args.window || 'week', kinds });
   const items = (result.items || []).slice(0, 12);
-  return { note: OTHERS_WORDS, plans: items.map((card) => planForModel(card, ctx.timeZone)), more: Boolean(result.next_cursor), ...unseen };
+  return { note: OTHERS_WORDS, plans: items.map((card) => planForModel(card, ctx.timeZone)), more: Boolean(result.next_cursor) };
 }
 
 async function getPlan(args, ctx) {

@@ -116,8 +116,7 @@ public struct NeighborhoodTabRoot: View {
                     .accessibilityIdentifier("nearby.cellsMap")
             }
         } else {
-            VStack(spacing: Spacing.s0) {
-                NearbySegmentHeader(segment: $segment)
+            Group {
                 if sideBySide {
                     // Wide, with no map yet: one column, filling the model the two columns share.
                     NeighborhoodView(viewModel: neighborhood, onOpenSurface: openSurface, onClaimPlace: onAddHome)
@@ -125,6 +124,9 @@ public struct NeighborhoodTabRoot: View {
                     NeighborhoodView(onOpenSurface: openSurface, onClaimPlace: onAddHome)
                 }
             }
+            // The segments slide away while the page scrolls down and come back
+            // near its top, as the Pulse segment's header does (founder request 2026-11-07).
+            .scrollAwayHeader { NearbySegmentHeader(segment: $segment) }
             .readableColumn()
             .background(Theme.Color.appBg)
             // Above the header, where the Pulse segment's feed shows it.

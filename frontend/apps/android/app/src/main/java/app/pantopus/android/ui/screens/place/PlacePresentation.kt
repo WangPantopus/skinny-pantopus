@@ -355,7 +355,9 @@ object PlacePresentation {
                         d.sqft?.let { add("${grouped(it)} sqft") }
                         (d.valueCard?.summary ?: money(d.estimatedValue)?.let { "est. value $it" })?.let { add(it) }
                     }
-                PlaceSectionReading(value = if (parts.isEmpty()) "Property details on file" else parts.joinToString(" · "))
+                // A home with only an estimate has nothing on file: the estimate says what it is.
+                val nothingOnFile = d.estimate?.title ?: "Property details on file"
+                PlaceSectionReading(value = if (parts.isEmpty()) nothingOnFile else parts.joinToString(" · "))
             }
             PlaceSectionId.FLOOD -> {
                 val d = env.flood ?: return PlaceSectionReading()

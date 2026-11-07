@@ -200,7 +200,7 @@ internal fun ColumnScope.PlanBeforeInBody(plan: PlanDto) {
     detailsLine(plan)?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary) }
     if (plan.isPlaydate) {
         PlanNote(
-            "Parents stay with their kids. Only ages are shared, never names, photos or schools. Everyone here has a verified address.",
+            "Parents stay with their kids. Only ages are shared, never names, photos or schools. The host approves each family.",
         )
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {

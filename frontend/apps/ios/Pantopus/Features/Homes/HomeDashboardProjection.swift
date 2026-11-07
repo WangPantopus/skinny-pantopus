@@ -122,6 +122,11 @@ extension HomeDashboardProjection {
                 )
             )
         }
+        // With the others at the top, not a link at the bottom of the
+        // Overview (founder request 2026-11-07). No count, so no badge.
+        if allowed("home.view") {
+            out.append(QuickActionTile(id: "view_property_details", label: "Property details", icon: .home, tone: .home))
+        }
         return out
     }
 

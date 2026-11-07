@@ -59,7 +59,6 @@ import app.pantopus.android.data.api.models.plans.PlanInviteCandidateDto
 import app.pantopus.android.data.api.models.plans.PlanInviteCountsDto
 import app.pantopus.android.data.api.models.plans.PlanInviteRowDto
 import app.pantopus.android.data.plans.isAtHome
-import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PantopusCheckbox
 import app.pantopus.android.ui.components.PrimaryButton
@@ -224,9 +223,8 @@ private fun InviteHeader(
                 modifier = Modifier.testTag("planInviteClose"),
             )
         }
-        // A playdate still needs a verified address (founder decision, October 31), as on iOS.
-        val who = if (plan.isPlaydate) "Families with a verified address are" else "They're"
-        val start = "${plan.title}. $who in as soon as they say yes"
+        // Playdates too: no verified address is needed since November 7 (founder decision), as on iOS.
+        val start = "${plan.title}. They're in as soon as they say yes"
         Text(
             text = if (plan.isAtHome) "$start, and see your address then." else "$start.",
             style = PantopusTextStyle.small,

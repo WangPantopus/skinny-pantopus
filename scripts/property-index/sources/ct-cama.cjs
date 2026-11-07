@@ -64,8 +64,10 @@ const REGION_NAMES = {
   '09160': 'Northwest Hills', '09170': 'South Central Connecticut', '09180': 'Southeastern Connecticut', '09190': 'Western Connecticut',
 };
 const REGION_OF = new Map(Object.entries(REGIONS).flatMap(([fips, towns]) => towns.map((town) => [town.toUpperCase(), fips])));
-// The state's town numbers are the towns in alphabetical order.
-const TOWNS_BY_NUMBER = [...REGION_OF.keys()].sort();
+// The state's town codes are the towns in alphabetical order with the spaces left out: Eastford is 39, East Granby 40.
+const squeezed = (town) => town.replace(/ /g, '');
+const TOWN_CODES = [...REGION_OF.keys()].sort((a, b) => (squeezed(a) < squeezed(b) ? -1 : 1));
+const CODE_OF = new Map(TOWN_CODES.map((town, i) => [town, i + 1]));
 
 const COLUMNS = ['pid', 'town_id', 'location', 'address_number', 'street_name', 'unit', 'property_city', 'property_zip', 'assessed_total', 'assessed_building', 'assessed_land', 'appraised_total', 'appraised_building', 'appraised_land',
   'valuation_year', 'land_acres', 'zone', 'state_use', 'state_use_description', 'style_desc', 'grade_desc', 'condition_description', 'neighborhood', 'ayb', 'eyb', 'gross_area_of_primary_building', 'living_area', 'stories',
@@ -92,12 +94,21 @@ const said = (text) => {
 const number = (text) => positive(String(text ?? '').replace(/,/g, ''));
 // Some towns write the house number as a decimal, "12.0" (Darien, Hartland): the house is 12.
 const wholeHouse = (text) => String(text ?? '').trim().replace(/^(\d+)\.0+(?=\s|$)/, '$1');
+// Most towns' ZIPs reach the state's file as numbers that lost the leading zero, some as decimals: "6118.0" is 06118 and
+// "61181234" is 06118-1234.
+const zipOf = (text) => {
+  const value = String(text ?? '').trim().replace(/\.0+$/, '');
+  return zipCode(/^\d{4}(\d{4})?$/.test(value) ? `0${value}` : value);
+};
+// Below this share of a ZIP's rows, a town's rows with that ZIP are slips (build).
+const MIN_ZIP_SHARE = 0.05;
 
+// A row's town is the one it names. Its code is only the fallback: the 2026 file gives a town whose name holds another town's
+// name that town's code (Manchester and Colchester have Chester's, West Hartford Hartford's) and leaves eight towns without one.
 function townOf(row) {
-  const byNumber = TOWNS_BY_NUMBER[Number(row.town_id) - 1];
-  if (byNumber) return byNumber;
   const city = String(row.property_city ?? '').trim().toUpperCase();
-  return REGION_OF.has(city) ? city : null;
+  if (REGION_OF.has(city)) return city;
+  return TOWN_CODES[Number(row.town_id) - 1] || null;
 }
 
 function fromRow(row, fips, county, town) {
@@ -169,8 +180,9 @@ function fromRow(row, fips, county, town) {
     if (document) facts.sale_document = `Book ${document[1]}, Page ${document[2]}`;
   }
   return {
-    id: `pp:${kind}:${fips}:${TOWNS_BY_NUMBER.indexOf(town) + 1}-${facts.parcel_number}`, kind, home_type: homeType,
-    address: { ...parsed, city: town, zip: zipCode(row.property_zip) }, facts,
+    // Parcel numbers are each town's own: the town's code keeps two towns' parcels apart.
+    id: `pp:${kind}:${fips}:${CODE_OF.get(town)}-${facts.parcel_number}`, kind, home_type: homeType,
+    address: { ...parsed, city: town, zip: zipOf(row.property_zip) }, facts,
   };
 }
 
@@ -182,6 +194,8 @@ async function* build({ work }) {
 
   const byRegion = new Map(Object.keys(REGIONS).map((fips) => [fips, []]));
   const seen = new Set();
+  // Each ZIP's rows by town, over every row, so a build of a few regions judges a ZIP the same way.
+  const zipTowns = new Map();
   let noTown = 0;
   let noAddress = 0;
   const rows = cached(path.join(work, 'ct-cama', 'all.jsonl.gz'), () => socrataRows(DOMAIN, DATASET, COLUMNS));
@@ -190,6 +204,11 @@ async function* build({ work }) {
     if (!town) {
       noTown += 1;
       continue;
+    }
+    const zip = zipOf(row.property_zip);
+    if (zip) {
+      if (!zipTowns.has(zip)) zipTowns.set(zip, new Map());
+      zipTowns.get(zip).set(town, (zipTowns.get(zip).get(town) || 0) + 1);
     }
     const fips = REGION_OF.get(town);
     if (only.length && !only.includes(fips)) continue;
@@ -200,7 +219,19 @@ async function* build({ work }) {
       byRegion.get(fips).push(record);
     }
   }
-  log(`${seen.size} records, ${noTown} with no town, ${noAddress} without a street number`);
+  // A town that writes another town's ZIP on a few rows (one Stonington row has Milford's 06460) would send that ZIP's lookups
+  // to its own region, so a record keeps its ZIP only where its town has a real share of that ZIP's rows.
+  let strays = 0;
+  for (const records of byRegion.values()) {
+    for (const { address, facts } of records) {
+      const towns = zipTowns.get(address.zip);
+      if (!towns || towns.get(address.city) >= MIN_ZIP_SHARE * [...towns.values()].reduce((sum, n) => sum + n, 0)) continue;
+      address.zip = '';
+      delete facts.zip_plus4;
+      strays += 1;
+    }
+  }
+  log(`${seen.size} records, ${noTown} with no town, ${noAddress} without a street number, ${strays} with a ZIP their town barely uses left off`);
 
   for (const [fips, records] of byRegion) {
     if (only.length && !only.includes(fips)) continue;

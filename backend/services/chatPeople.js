@@ -16,6 +16,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
+const { localDisplayNamesFrom } = require('../utils/identityProfiles');
 const {
   serializeLocalProfileForViewer,
   serializeUserAsLocalIdentity,
@@ -35,47 +36,74 @@ async function loadChatPeople(userIds) {
   const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
   if (ids.length === 0) return new Map();
   try {
-    const users = [];
-    const profilesByUserId = new Map();
-    // Room membership can exceed both the HTTP URL limit and PostgREST's row
-    // cap. Keep identity reads bounded without dropping any member's profile.
-    for (let offset = 0; offset < ids.length; offset += 100) {
-      const batch = ids.slice(offset, offset + 100);
-      const [userPage, profilePage] = await Promise.all([
-        supabaseAdmin
-          .from('User')
-          .select('id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type')
-          .in('id', batch),
-        supabaseAdmin
-          .from('LocalProfile')
-          .select('user_id, handle, display_name, avatar_url')
-          .in('user_id', batch),
-      ]);
-      if (userPage.error || profilePage.error) throw userPage.error || profilePage.error;
-      users.push(...userPage.data || []);
-      for (const profile of profilePage.data || []) profilesByUserId.set(String(profile.user_id), profile);
-    }
-    const people = new Map();
-    for (const user of users) {
-      const profile = user.account_type === 'business' ? null : profilesByUserId.get(String(user.id));
-      const person = profile
-        ? serializeLocalProfileForViewer({
-          id: user.id,
-          user_id: user.id,
-          handle: profile.handle,
-          display_name: profile.display_name,
-          avatar_url: profile.avatar_url,
-          user,
-        })
-        : serializeUserAsLocalIdentity(user);
-      if (profile) localProfilePeople.add(person);
-      people.set(String(user.id), person);
-    }
-    return people;
+    const { users, profiles } = await readPeople(ids);
+    return chatPeopleFrom(users, profiles);
   } catch (error) {
     logger.warn('chat.people_lookup_error', { error: error.message });
     return new Map();
   }
+}
+
+/**
+ * loadChatPeople's people and localDisplayNames' names (utils/identityProfiles) from one read of the same accounts and
+ * Local Profiles, for a list that shows both (the household on the Home dashboard). Throws on a read error, as
+ * localDisplayNames does.
+ *
+ * @param {string[]} userIds
+ * @returns {Promise<{ people: Map<string, object>, names: Map<string, string> }>}
+ */
+async function loadChatPeopleAndNames(userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
+  if (ids.length === 0) return { people: new Map(), names: new Map() };
+  const { users, profiles } = await readPeople(ids);
+  return { people: chatPeopleFrom(users, profiles), names: localDisplayNamesFrom(users, profiles) };
+}
+
+// The accounts and Local Profiles of these people. Throws on a read error.
+async function readPeople(ids) {
+  const users = [];
+  const profiles = [];
+  // Room membership can exceed both the HTTP URL limit and PostgREST's row
+  // cap. Keep identity reads bounded without dropping any member's profile.
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const batch = ids.slice(offset, offset + 100);
+    const [userPage, profilePage] = await Promise.all([
+      supabaseAdmin
+        .from('User')
+        .select('id, username, name, first_name, middle_name, last_name, profile_picture_url, account_type')
+        .in('id', batch),
+      supabaseAdmin
+        .from('LocalProfile')
+        .select('user_id, handle, display_name, avatar_url')
+        .in('user_id', batch),
+    ]);
+    if (userPage.error || profilePage.error) throw userPage.error || profilePage.error;
+    users.push(...userPage.data || []);
+    profiles.push(...profilePage.data || []);
+  }
+  return { users, profiles };
+}
+
+function chatPeopleFrom(users, profiles) {
+  const profilesByUserId = new Map();
+  for (const profile of profiles) profilesByUserId.set(String(profile.user_id), profile);
+  const people = new Map();
+  for (const user of users) {
+    const profile = user.account_type === 'business' ? null : profilesByUserId.get(String(user.id));
+    const person = profile
+      ? serializeLocalProfileForViewer({
+        id: user.id,
+        user_id: user.id,
+        handle: profile.handle,
+        display_name: profile.display_name,
+        avatar_url: profile.avatar_url,
+        user,
+      })
+      : serializeUserAsLocalIdentity(user);
+    if (profile) localProfilePeople.add(person);
+    people.set(String(user.id), person);
+  }
+  return people;
 }
 
 /** A person as a raw row (id, username, name, profile_picture_url), named the same way. */
@@ -151,6 +179,7 @@ function listedPerson(user, { people, areas }) {
 
 module.exports = {
   loadChatPeople,
+  loadChatPeopleAndNames,
   chatPersonRow,
   reviewerRow,
   loadListedPeople,
