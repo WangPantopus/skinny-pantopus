@@ -23,6 +23,7 @@
 // builds already in the stores.
 // ============================================================
 
+const { estimateRows, estimateNote } = require('../services/homeValueCard');
 const { FACTS, SECTIONS: RECORD_SECTIONS } = require('../services/propertyRecords/facts');
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -526,6 +527,13 @@ function addAssessment(section, facts) {
   }
 }
 
+function estimateSection(estimate) {
+  const section = new Section('value', 'Value');
+  for (const row of estimateRows(estimate)) section.add(row.id, row.label, row.value, true);
+  section.note = estimateNote(estimate);
+  return section;
+}
+
 const BUILDING_NOTES = {
   unit_needed: 'These are the building\u2019s facts. Add your unit to see your home\u2019s own details.',
   unit_not_recorded: 'These are the building\u2019s facts. The county doesn\u2019t keep a record for each apartment.',
@@ -542,9 +550,11 @@ function recordFooter(copy) {
  * A verified owner's county record for Property details, from the Home's copy
  * (services/propertyRecords/homeRecord.js). Null when it holds nothing to show.
  *
+ * `estimate`: a Pantopus estimate, in a market it's on for (propertyRecords/valueEstimate.js).
+ *
  * @returns {{ sections: object[], footer: string|null, as_of: string|null }|null}
  */
-function serializePropertyRecord(copy) {
+function serializePropertyRecord(copy, estimate = null) {
   if (!copy || typeof copy !== 'object') return null;
   const facts = copy.facts || {};
   const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
@@ -585,6 +595,7 @@ function serializePropertyRecord(copy) {
     addFacts(sale, facts, ['sale']);
     sections.push(assessment, sale);
   }
+  if (estimate) sections.push(estimateSection(estimate));
 
   const shown = sections.filter((section) => section.rows.length > 0).map(({ id, title, rows, note }) => ({ id, title, rows, note }));
   if (!shown.length) return null;

@@ -1020,7 +1020,9 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   // lookup that just failed) offer Try again.
   const nothingYet = profile.source === 'fallback'
     && !(profile.household_fields || []).some((field) => field !== 'property_type');
-  if (nothingYet && !process.env.ATTOM_API_KEY && result.lookup !== 'pending') {
+  // The value card is the confirmed owner's, and nobody else's read waits on its area figures.
+  const neighborhood = wantsRecordVocabulary && viewerAccess?.isOwner && profile.area ? await areaTrend.neighborhood(profile.area) : null;
+  if (nothingYet && !process.env.ATTOM_API_KEY && result.lookup !== 'pending' && !neighborhood) {
     return [serializePlaceSection('your_home', {
       access,
       status: 'unavailable',
@@ -1038,9 +1040,8 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
   const valueAge = Date.now() - Date.parse(profile.value_as_of);
   // A county's value keeps its own date: an annual roll isn't out of date at 30 days.
   const oldValue = !profile.provenance && Boolean(viewerAccess && viewerAccess.isOwner) && profile.estimated_value != null && valueAge >= VALUE_FRESH_MS;
-  // The value card is the confirmed owner's, and nobody else's read waits on its area trend.
   const valueCard = wantsRecordVocabulary && viewerAccess?.isOwner && profile.area
-    ? homeValueCard.build(profile, { trend: await areaTrend.lookup(profile.area), lookup: result.lookup })
+    ? homeValueCard.build(profile, { trend: await areaTrend.lookup(profile.area), lookup: result.lookup, neighborhood })
     : null;
 
   return [serializePlaceSection('your_home', {

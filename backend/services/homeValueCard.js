@@ -7,8 +7,8 @@
  *      assessment is only ever called an assessment, whatever the state's share of value;
  *   2. the last recorded sale, or that prices aren't public in this state;
  *   3. the area's price change, from an index, labeled as the area's (propertyRecords/areaTrend.js);
- *   4. a Pantopus estimate joins this only for a market on VALUE_ESTIMATE_MARKETS, after
- *      T4 (backend/scripts/eval/value-t4.js) has measured it. The list is empty and no model is wired.
+ *   4. a Pantopus estimate, with its range and what was measured (propertyRecords/valueEstimate.js);
+ *   5. with no estimate, the Census Bureau's figures for the ZIP, called the neighborhood's.
  *
  * Only for the confirmed owner: callers check before they send it. An answer from
  * ATTOM's stored copy has its own fields and no card.
@@ -69,12 +69,29 @@ function countyValues(facts, state) {
   return { headline, rows, notes };
 }
 
+/** An estimate's rows, for this card and Property details. */
+function estimateRows(estimate) {
+  return [
+    { id: 'estimated_value', label: estimate.level === 1 ? 'Estimated value' : 'Rough estimate', value: money(estimate.value) },
+    { id: 'estimate_range', label: 'Estimate range', value: `${money(estimate.low)} – ${money(estimate.high)}` },
+    { id: 'estimate_date', label: 'Estimate date', value: dateLabel(estimate.as_of) },
+  ];
+}
+
+/** What was measured, in place of a confidence score. */
+function estimateNote(estimate) {
+  if (estimate.level !== 1) {
+    return `A rough estimate from the county's value and federal price and appraisal figures, not an appraisal. It couldn't be checked against local sales here. In other counties it typically missed by about ${Math.round(estimate.typical_miss)}%, so its range is wide.`;
+  }
+  return `An estimate from the county's value and recent sales, not an appraisal. Against sales held back to test it, here it typically missed by about ${Math.round(estimate.typical_miss)}%, and its range held about ${Math.round(estimate.range_held / 10)} times in 10.`;
+}
+
 /**
  * @param {object} profile  From propertyIntelligenceService.getProfile: a county record's, or the household's alone.
- * @param {{ trend: object|null, lookup?: string|null }} [context]
+ * @param {{ trend: object|null, lookup?: string|null, neighborhood?: object|null }} [context]
  * @returns {object|null} Null for an answer the card doesn't describe.
  */
-function build(profile, { trend = null, lookup = null } = {}) {
+function build(profile, { trend = null, lookup = null, neighborhood = null } = {}) {
   if (!profile || !['record', 'fallback'].includes(profile.source)) return null;
   const facts = profile.county_values || {};
   const state = stateCode(profile.area?.state);
@@ -83,6 +100,19 @@ function build(profile, { trend = null, lookup = null } = {}) {
   const sale = lastSale(facts, state);
   if (sale.row) rows.push(sale.row);
   if (sale.note) notes.push(sale.note);
+  const { estimate } = profile;
+  if (estimate) {
+    rows.push(...estimateRows(estimate));
+    notes.push(estimateNote(estimate));
+  }
+  // Any home we can't estimate: no county record, or one that has only an assessment to go on, or no value at all.
+  if (neighborhood && !estimate) {
+    rows.push(
+      { id: 'neighborhood_value', label: 'Typical home value in this ZIP', value: money(neighborhood.median) },
+      { id: 'neighborhood_range', label: 'Middle half of homes here', value: `${money(neighborhood.low)} – ${money(neighborhood.high)}` },
+    );
+    notes.push(`What owners here told the Census Bureau their homes are worth (${neighborhood.source}). These are the neighborhood's figures, not this home's.`);
+  }
   let emptyMessage = null;
   if (!headline) {
     if (lookup === 'pending') emptyMessage = EMPTY_MESSAGES.pending;
@@ -92,7 +122,7 @@ function build(profile, { trend = null, lookup = null } = {}) {
   return {
     title: headline?.title || 'Home value',
     value: headline?.value || null,
-    summary: headline?.summary || null,
+    summary: (estimate ? `${estimate.level === 1 ? 'est.' : 'rough est.'} value ${money(estimate.value)}` : headline?.summary) || null,
     empty_message: emptyMessage,
     rows,
     notes,
@@ -101,4 +131,4 @@ function build(profile, { trend = null, lookup = null } = {}) {
   };
 }
 
-module.exports = { build };
+module.exports = { build, estimateRows, estimateNote };
