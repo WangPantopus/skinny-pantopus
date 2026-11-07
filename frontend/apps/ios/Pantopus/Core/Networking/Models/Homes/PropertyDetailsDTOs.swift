@@ -262,11 +262,45 @@ public struct HouseholdPartDTO: Decodable, Sendable, Hashable {
     public let groups: [HouseholdGroupDTO]
     public let questions: [HouseholdQuestionDTO]
     public let countyPage: HouseholdCountyPageDTO?
+    /// "Is this your layout?", for a unit its building's sheet names.
+    public let floorPlan: FloorPlanLayoutDTO?
 
     private enum CodingKeys: String, CodingKey {
         case sections, groups, questions
         case canEdit = "can_edit"
         case countyPage = "county_page"
+        case floorPlan = "floor_plan"
+    }
+}
+
+/// "Is this your layout?" at the foot of the card `sectionId`, or what the household said
+/// (`backend/services/householdFacts.js`).
+public struct FloorPlanLayoutDTO: Decodable, Sendable, Hashable {
+    public let sectionId: String
+    public let prompt: String?
+    public let answered: String?
+    public let canUndo: Bool
+
+    public init(sectionId: String, prompt: String?, answered: String?, canUndo: Bool) {
+        self.sectionId = sectionId
+        self.prompt = prompt
+        self.answered = answered
+        self.canUndo = canUndo
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case prompt, answered
+        case sectionId = "section_id"
+        case canUndo = "can_undo"
+    }
+}
+
+/// Body of `POST /api/homes/:id/floor-plan-answer`: "yes", "no" or "undo".
+public struct FloorPlanAnswerRequest: Encodable, Sendable {
+    public let answer: String
+
+    public init(answer: String) {
+        self.answer = answer
     }
 }
 

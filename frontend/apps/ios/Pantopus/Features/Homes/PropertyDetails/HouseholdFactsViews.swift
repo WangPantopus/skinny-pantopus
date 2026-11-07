@@ -15,6 +15,8 @@ struct HouseholdActions {
     let save: ([HouseholdFactChange]) -> Void
     let edit: (HouseholdGroupDTO) -> Void
     let report: (PropertyRecordSection) -> Void
+    /// "Is this your layout?": yes, no or undo.
+    var answerLayout: (String) -> Void = { _ in }
 }
 
 private let otherChip = "__other"

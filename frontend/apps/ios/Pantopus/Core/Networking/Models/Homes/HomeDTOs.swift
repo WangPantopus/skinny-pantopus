@@ -427,6 +427,8 @@ public struct CreateHomeRequest: Encodable, Sendable {
     public let moveInDate: String?
     /// "My home doesn't have a unit number", said at the address step.
     public let noUnitAttestation: Bool?
+    /// "Is this your layout?", answered on the form: `yes` or `no`.
+    public let floorPlanAnswer: String?
 
     public init(
         address: String,
@@ -449,7 +451,8 @@ public struct CreateHomeRequest: Encodable, Sendable {
         role: String? = nil,
         moveInDate: String? = nil,
         noUnitAttestation: Bool? = nil,
-        addressId: String? = nil
+        addressId: String? = nil,
+        floorPlanAnswer: String? = nil
     ) {
         self.addressId = addressId
         self.address = address
@@ -472,10 +475,12 @@ public struct CreateHomeRequest: Encodable, Sendable {
         self.role = role
         self.moveInDate = moveInDate
         self.noUnitAttestation = noUnitAttestation
+        self.floorPlanAnswer = floorPlanAnswer
     }
 
     private enum CodingKeys: String, CodingKey {
         case noUnitAttestation = "no_unit_attestation"
+        case floorPlanAnswer = "floor_plan_answer"
         case addressId = "address_id"
         case address
         case unitNumber = "unit_number"
@@ -657,6 +662,22 @@ public struct PropertySuggestionsFields: Decodable, Sendable, Hashable {
 /// `POST /api/homes/property-suggestions` response envelope —
 /// `backend/services/ai/propertySuggestionsService.js:272-277`. The county
 /// record itself stays on the server; only the basics come back.
+public struct FloorPlanSuggestionDTO: Decodable, Sendable, Hashable {
+    /// `exact` this unit's plan; `building` the building's plans, labeled as the building's.
+    public let match: String
+    public let line: String
+    public let source: String
+    /// "Is this your layout?", for a unit the sheet names.
+    public let prompt: String?
+
+    public init(match: String, line: String, source: String, prompt: String?) {
+        self.match = match
+        self.line = line
+        self.source = source
+        self.prompt = prompt
+    }
+}
+
 public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
     public let suggestions: PropertySuggestionsFields?
     /// Per-field provenance (`record` or `attom` / `heuristic` / `llm`).
@@ -678,6 +699,8 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
     public let questions: [HouseholdQuestionDTO]?
     /// The county's own page, where a person can check what's missing.
     public let countyPage: HouseholdCountyPageDTO?
+    /// What the building's own floor-plan sheet says about this address.
+    public let floorPlan: FloorPlanSuggestionDTO?
 
     public init(
         suggestions: PropertySuggestionsFields? = nil,
@@ -690,7 +713,8 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         provenance: RecordProvenanceDTO? = nil,
         fieldTags: [String: String]? = nil,
         questions: [HouseholdQuestionDTO]? = nil,
-        countyPage: HouseholdCountyPageDTO? = nil
+        countyPage: HouseholdCountyPageDTO? = nil,
+        floorPlan: FloorPlanSuggestionDTO? = nil
     ) {
         self.suggestions = suggestions
         self.fieldSources = fieldSources
@@ -703,6 +727,7 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         self.fieldTags = fieldTags
         self.questions = questions
         self.countyPage = countyPage
+        self.floorPlan = floorPlan
     }
 
     public init(from decoder: any Decoder) throws {
@@ -719,11 +744,13 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         fieldTags = try? container.decodeIfPresent([String: String].self, forKey: .fieldTags)
         questions = try? container.decodeIfPresent([HouseholdQuestionDTO].self, forKey: .questions)
         countyPage = try? container.decodeIfPresent(HouseholdCountyPageDTO.self, forKey: .countyPage)
+        floorPlan = try? container.decodeIfPresent(FloorPlanSuggestionDTO.self, forKey: .floorPlan)
     }
 
     private enum CodingKeys: String, CodingKey {
         case suggestions, provenance, questions
         case countyPage = "county_page"
+        case floorPlan = "floor_plan"
         case fieldSources = "field_sources"
         case tiersUsed = "tiers_used"
         case llmEnabled = "llm_enabled"

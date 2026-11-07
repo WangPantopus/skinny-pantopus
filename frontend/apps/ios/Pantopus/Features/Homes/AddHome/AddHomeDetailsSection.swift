@@ -118,6 +118,8 @@ struct AddHomeDetailsSection: View {
 
             homeTypeChips
 
+            AddHomeFloorPlanCard(viewModel: viewModel)
+
             AddHomeFactQuestions(
                 viewModel: viewModel,
                 bedroomsFocused: $bedroomsFocused,

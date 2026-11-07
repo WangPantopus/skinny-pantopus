@@ -103,6 +103,19 @@ final class PropertyDetailsViewModel {
         return true
     }
 
+    /// "Is this your layout?": yes, no or undo, then show the server's answer.
+    func answerFloorPlan(_ answer: String) async {
+        guard !savingFacts else { return }
+        savingFacts = true
+        defer { savingFacts = false }
+        do {
+            let _: HouseholdWriteResponse = try await api.request(HomesEndpoints.answerFloorPlan(homeId: homeId, answer: answer))
+        } catch {
+            return
+        }
+        await fetch(force: true)
+    }
+
     private var endpoint: Endpoint {
         HomesEndpoints.propertyDetails(homeId: homeId)
     }
@@ -218,7 +231,8 @@ final class PropertyDetailsViewModel {
                     sections: $0.sections.compactMap(Self.recordSection),
                     groups: $0.groups,
                     questions: $0.questions,
-                    countyPage: $0.countyPage
+                    countyPage: $0.countyPage,
+                    floorPlan: $0.floorPlan
                 )
             }
         )

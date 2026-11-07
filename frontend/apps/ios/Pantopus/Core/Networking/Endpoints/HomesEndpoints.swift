@@ -56,6 +56,11 @@ public enum HomesEndpoints {
         Endpoint(method: .post, path: "/api/homes/\(homeId)/record-problem", body: request)
     }
 
+    /// `POST /api/homes/:id/floor-plan-answer`: "Is this your layout?". A no reaches review and nothing shown changes.
+    public static func answerFloorPlan(homeId: String, answer: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/homes/\(homeId)/floor-plan-answer", body: FloorPlanAnswerRequest(answer: answer))
+    }
+
     /// Asks Add Home's suggestions, Property details, the Home's value and Place
     /// for the new record words (`backend/services/recordVocabulary.js`). Older
     /// servers ignore it, so the DTOs read both vocabularies.
