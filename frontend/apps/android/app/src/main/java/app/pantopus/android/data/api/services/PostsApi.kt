@@ -54,6 +54,8 @@ interface PostsApi {
         @Query("limit") limit: Int = 20,
         @Query("cursorCreatedAt") cursorCreatedAt: String? = null,
         @Query("cursorId") cursorId: String? = null,
+        // The Sports lane's cursor also names its rank bucket (`pagination.nextCursor.rankBucket`).
+        @Query("cursorRankBucket") cursorRankBucket: Int? = null,
         // Topic lane params — validated at
         // `backend/routes/posts.js:1478-1489`. `topic` is Place-only and
         // `sportsMode` must be one of for_you|local|event|watch.

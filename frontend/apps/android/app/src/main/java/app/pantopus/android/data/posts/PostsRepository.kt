@@ -88,6 +88,7 @@ class PostsRepository
             sportsMode: String? = null,
             eventKey: String? = null,
             radiusMiles: Double? = null,
+            cursorRankBucket: Int? = null,
         ): NetworkResult<FeedResponse> =
             safeApiCall {
                 api.feed(
@@ -99,6 +100,7 @@ class PostsRepository
                     limit = limit,
                     cursorCreatedAt = cursorCreatedAt,
                     cursorId = cursorId,
+                    cursorRankBucket = cursorRankBucket,
                     topic = topic,
                     sportsMode = sportsMode,
                     eventKey = eventKey,
