@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.data.api.models.homes.FloorPlanLayoutDto
 import app.pantopus.android.data.api.models.homes.HouseholdCountyPageDto
 import app.pantopus.android.data.api.models.homes.HouseholdFactChange
 import app.pantopus.android.data.api.models.homes.HouseholdFactDto
@@ -60,6 +61,8 @@ data class HouseholdActions(
     val save: (List<HouseholdFactChange>) -> Unit = {},
     val edit: (HouseholdGroupDto) -> Unit = {},
     val report: (PropertyRecordSection) -> Unit = {},
+    /** "Is this your layout?": yes, no or undo. */
+    val answerLayout: (String) -> Unit = {},
 )
 
 /** "Bedrooms? 1 2 3 4 Other". A tap answers it; Other is the person's own number. Also on Add Home. */
@@ -214,6 +217,46 @@ internal fun HouseholdGroupFooter(
         group.reported?.let { Text(text = it, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary) }
         group.fix?.let { HouseholdAction(it, enabled, "${tag}_fix") { actions.edit(group) } }
         group.report?.let { HouseholdAction(it, true, "${tag}_report") { actions.report(section) } }
+    }
+}
+
+/** "Is this your layout?" at the foot of the card a building's floor plan fills, or what the household said. */
+@Composable
+internal fun FloorPlanLayoutFooter(
+    layout: FloorPlanLayoutDto,
+    actions: HouseholdActions,
+) {
+    val enabled = !actions.saving
+    val tag = "propertyDetails_floorPlan"
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(PantopusColors.appSurfaceSunken)
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
+                .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        val answered = layout.answered
+        if (answered != null) {
+            Text(
+                text = answered,
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            if (layout.canUndo) HouseholdAction("Undo", enabled, "${tag}_undo") { actions.answerLayout("undo") }
+        } else {
+            Text(
+                text = layout.prompt.orEmpty(),
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appText,
+                modifier = Modifier.weight(1f),
+            )
+            HouseholdAction("Yes", enabled, "${tag}_yes") { actions.answerLayout("yes") }
+            HouseholdAction("No", enabled, "${tag}_no") { actions.answerLayout("no") }
+        }
     }
 }
 

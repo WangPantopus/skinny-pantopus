@@ -351,6 +351,8 @@ data class CreateHomeRequest(
     val role: String? = null,
     /** "My home doesn't have a unit number", said at the address step. */
     @Json(name = "no_unit_attestation") val noUnitAttestation: Boolean? = null,
+    /** "Is this your layout?", answered on the form: `yes` or `no`. */
+    @Json(name = "floor_plan_answer") val floorPlanAnswer: String? = null,
     @Json(name = "address_id") val addressId: String? = null,
     @Json(name = "request_id") val requestId: String? = null,
     @Json(name = "access_secrets") val accessSecrets: List<CreateAccessSecretRequest>? = null,
@@ -430,6 +432,19 @@ data class PropertySuggestionsFields(
 )
 
 /**
+ * Add Home's words from a building's floor-plan sheet: this unit's plan, or the building's plans,
+ * labeled as the building's. [match] is `exact` or `building`.
+ */
+@JsonClass(generateAdapter = true)
+data class FloorPlanSuggestionDto(
+    val match: String,
+    val line: String,
+    val source: String,
+    /** "Is this your layout?", for a unit the sheet names. */
+    val prompt: String? = null,
+)
+
+/**
  * `POST /api/homes/property-suggestions` response envelope —
  * `backend/services/ai/propertySuggestionsService.js:272-277`. The county
  * record itself stays on the server; only the basics come back.
@@ -458,6 +473,8 @@ data class PropertySuggestionsResponse(
     val questions: List<HouseholdQuestionDto>? = null,
     /** The county's own page, where a person can check what's missing. */
     @Json(name = "county_page") val countyPage: HouseholdCountyPageDto? = null,
+    /** What the building's own floor-plan sheet says about this address. */
+    @Json(name = "floor_plan") val floorPlan: FloorPlanSuggestionDto? = null,
 ) {
     /** Where the lookup stands, under either name. */
     val lookupState: String?

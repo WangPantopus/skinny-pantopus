@@ -37,9 +37,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.api.models.homes.FloorPlanSuggestionDto
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsFields
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
 import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
+import app.pantopus.android.ui.components.ChipPicker
+import app.pantopus.android.ui.components.ChipPickerOption
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.homes.property_details.HouseholdCountyPageLink
 import app.pantopus.android.ui.screens.homes.property_details.HouseholdQuestionRow
@@ -135,6 +138,12 @@ internal fun AddHomeDetailsSection(
                 }
                 Switch(checked = state.form.details.justMoved, onCheckedChange = vm::setJustMoved)
             }
+            // What the building's own floor-plan sheet says: this unit's plan with "Is this your layout?", or the building's plans.
+            AddHomeFloorPlanCard(
+                plan = suggestions?.floorPlan?.takeIf { !state.propertyLookupPending },
+                answer = state.floorPlanAnswer,
+                onAnswer = vm::answerFloorPlan,
+            )
             // One-tap answers for what the record lacks, when the server sends them. A tap fills the field below.
             suggestions?.questions?.takeIf { it.isNotEmpty() && !state.propertyLookupPending }?.let { questions ->
                 Column(
@@ -541,3 +550,42 @@ internal fun AddHomeTextField(
 
 /** "45000 sq ft" with the locale's digit grouping ("45,000 sq ft"). */
 private fun sqFtText(value: Number): String = "${NumberFormat.getIntegerInstance().format(value)} sq ft"
+
+/** What the building's own floor-plan sheet says, above the fields. Nothing without a sheet's answer. */
+@Composable
+private fun AddHomeFloorPlanCard(
+    plan: FloorPlanSuggestionDto?,
+    answer: String?,
+    onAnswer: (String?) -> Unit,
+) {
+    if (plan == null) return
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.lg))
+                .background(PantopusColors.appSurfaceSunken)
+                .padding(Spacing.s3)
+                .testTag("addHome_floorPlanCard"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Text(text = plan.line, style = PantopusTextStyle.small, color = PantopusColors.appText)
+        Text(text = plan.source, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+        plan.prompt?.let { prompt ->
+            Text(text = prompt, style = PantopusTextStyle.small, color = PantopusColors.appText)
+            ChipPicker(
+                options = listOf(ChipPickerOption("yes", "Yes"), ChipPickerOption("no", "No")),
+                selectedId = answer,
+                onSelectionChange = onAnswer,
+                testTag = "addHome_floorPlan",
+            )
+        }
+        if (answer == "no") {
+            Text(
+                text = "Thanks. We'll check this layout with the building. Change anything that's different below.",
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+    }
+}

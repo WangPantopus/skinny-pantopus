@@ -145,6 +145,26 @@ data class HouseholdPartDto(
     val groups: List<HouseholdGroupDto> = emptyList(),
     val questions: List<HouseholdQuestionDto> = emptyList(),
     @Json(name = "county_page") val countyPage: HouseholdCountyPageDto? = null,
+    /** "Is this your layout?", for a unit its building's sheet names. */
+    @Json(name = "floor_plan") val floorPlan: FloorPlanLayoutDto? = null,
+)
+
+/**
+ * "Is this your layout?" at the foot of the card [sectionId], or what the household said
+ * (`backend/services/householdFacts.js`).
+ */
+@JsonClass(generateAdapter = true)
+data class FloorPlanLayoutDto(
+    @Json(name = "section_id") val sectionId: String,
+    val prompt: String? = null,
+    val answered: String? = null,
+    @Json(name = "can_undo") val canUndo: Boolean = false,
+)
+
+/** Body of `POST /api/homes/:id/floor-plan-answer`: "yes", "no" or "undo". */
+@JsonClass(generateAdapter = true)
+data class FloorPlanAnswerRequest(
+    val answer: String,
 )
 
 /** One change to the household's facts: a fact by `key`, or every fact of a `group` that can take it. */

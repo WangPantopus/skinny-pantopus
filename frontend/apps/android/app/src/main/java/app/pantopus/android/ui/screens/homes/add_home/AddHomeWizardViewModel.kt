@@ -105,6 +105,8 @@ data class AddHomeUiState(
      * records card and pre-fills the editable fields.
      */
     val propertySuggestions: PropertySuggestionsResponse? = null,
+    /** "Is this your layout?", answered on the form: goes with the new Home. */
+    val floorPlanAnswer: String? = null,
     /** True once the lookup has finished, success or not. */
     val propertyLookupComplete: Boolean = false,
     /** Copy under the public-records card (RN `useHomeForm.ts:641-647`). */
@@ -324,7 +326,7 @@ open class AddHomeWizardViewModel
                     validatedAddressId = null, addressCheck = null, geocodedAddress = null,
                     existingHomeId = null, isClaimingExistingHome = false,
                     showsClaimedModal = false, showsConfirmAddressSheet = false,
-                    isCheckingAddress = false, isFindingAddress = false, propertySuggestions = null,
+                    isCheckingAddress = false, isFindingAddress = false, propertySuggestions = null, floorPlanAnswer = null,
                     propertyLookupComplete = false, isLoadingPropertySuggestions = false,
                     propertyLookupPending = false, lateDetailsAdded = false,
                     addressSearchError = null, canOpenLocationSettings = false, errorMessage = null,
@@ -583,6 +585,8 @@ open class AddHomeWizardViewModel
         fun reviewAddedDetails() {
             if (_state.value.form.currentStep.ordinal0 > AddHomeStep.Confirm.ordinal0) transitionTo(AddHomeStep.Confirm)
         }
+
+        fun answerFloorPlan(answer: String?) = _state.update { it.copy(floorPlanAnswer = answer) }
 
         fun updateBedrooms(value: String) = updateDetails { it.copy(bedrooms = digitsOnly(value)) }
 
@@ -1265,6 +1269,7 @@ open class AddHomeWizardViewModel
                     isOwner = role == AddHomeRole.Owner,
                     role = role.claimedRole,
                     noUnitAttestation = if (_state.value.noUnitAttested) true else null,
+                    floorPlanAnswer = _state.value.floorPlanAnswer.takeIf { _state.value.propertySuggestions?.floorPlan?.prompt != null },
                 )
             _state.update { it.copy(showsCreationRecovery = true) }
             try {
