@@ -457,9 +457,10 @@ function normalizeEscrowContact(contact) {
  * Check escrow rate limits for non-user sends.
  * @param {string} senderId
  * @param {string} contact - email or phone
+ * @param {string[]} [earlier] - contacts before this one on the same list of Christmas cards (POST /cards/batch)
  * @returns {Promise<{ allowed: boolean, reason?: string }>}
  */
-const checkEscrowRateLimits = async (senderId, contact) => {
+const checkEscrowRateLimits = async (senderId, contact, earlier = []) => {
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const thirtyDaysAgo = new Date(Date.now() - ESCROW_MAX_SENDS_PER_CONTACT_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
@@ -483,7 +484,7 @@ const checkEscrowRateLimits = async (senderId, contact) => {
     .not('escrow_recipient_contact', 'is', null)
     .gte('created_at', oneWeekAgo);
 
-  const uniqueContacts = new Set((recentEscrows || []).map(r => r.escrow_recipient_contact));
+  const uniqueContacts = new Set([...(recentEscrows || []).map(r => r.escrow_recipient_contact), ...earlier]);
   // If this contact is already in the set, it doesn't count as a new unique contact
   if (!uniqueContacts.has(contact) && uniqueContacts.size >= ESCROW_MAX_UNIQUE_CONTACTS_PER_WEEK) {
     return { allowed: false, reason: 'You can send to at most 3 new non-Pantopus contacts per week.' };
@@ -1722,7 +1723,8 @@ router.get('/campaigns', verifyToken, async (req, res) => {
 // CHRISTMAS CARDS (launch keys holiday_cards + mailbox; services/holidayCards)
 // ============================================================
 // Anyone with a personal account sends one card a day, to one person they find by name or, by email, to someone not
-// on Pantopus yet (the escrow path above). No proven home is needed. Declared before GET /:id.
+// on Pantopus yet (the escrow path above). No proven home is needed. With digital stamps on (services/mailStamps) each
+// card costs a stamp instead, and one card can go to a list of up to 20 (POST /cards/batch). Declared before GET /:id.
 
 const CARD_ARRIVALS = [...new Set([...holidayCards.PERSON_ARRIVALS, ...holidayCards.EMAIL_ARRIVALS])];
 const sendCardSchema = Joi.object({
@@ -1740,11 +1742,32 @@ const sendCardSchema = Joi.object({
   request_id: Joi.string().uuid(),
 });
 
+// A list (POST /cards/batch and its look): the same picture, note and choice of arrival for up to 20 people or
+// addresses, each with a request ID of its own. No links: a link is one card for whoever opens it.
+const CARD_LIST_MAX = 20;
+const sameCardRecipient = (a, b) => (a.to.user_id ? a.to.user_id === b.to.user_id
+  : Boolean(b.to.email) && normalizeEscrowContact(a.to.email) === normalizeEscrowContact(b.to.email));
+const cardListSchema = Joi.object({
+  use_stamp: Joi.boolean().valid(true).required(),
+  design: Joi.string().max(64).required(),
+  message: Joi.string().allow('').max(4000).required(),
+  // One choice for the whole list; each card reads it in its own words (listArrival).
+  arrival: Joi.string().valid(...CARD_ARRIVALS).required(),
+  recipients: Joi.array().items(Joi.object({
+    // An address is checked with its own card (checkCardList), so one mistyped address doesn't refuse the list.
+    to: Joi.object({ user_id: Joi.string().uuid(), email: Joi.string().trim().max(320) }).xor('user_id', 'email').required(),
+    request_id: Joi.string().uuid().required(),
+  })).min(1).max(CARD_LIST_MAX).unique(sameCardRecipient).unique('request_id').required(),
+});
+
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
 const cardTableOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_table']);
 const sendCardsOff = (res) => res.status(404).json({ error: 'Not found' });
-const sendCardUnavailable = (res) =>
-  res.status(503).json({ error: 'Couldn’t send your card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
+// A send's answer as { status, body }, so one card's send and each card on a list answer alike; `reply` sends it.
+const reply = (res, answer) => res.status(answer.status).json(answer.body);
+const cardUnavailable = () =>
+  ({ status: 503, body: { error: 'Couldn’t send your card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' } });
+const sendCardUnavailable = (res) => reply(res, cardUnavailable());
 
 // The cards this person sent since the start of this day where they live (today unless `now` says otherwise), newest
 // first. A card taken back doesn't count: one to a person is gone or withdrawn, one by email is withdrawn.
@@ -1800,13 +1823,15 @@ const cardLinkOf = (mailId) => {
 const cardAnswer = (mail, now) => ({ card: holidayCards.sentSummary(mail, now),
   ...(holidayCards.isByLink(mail) ? { link: cardLinkOf(mail.id).link } : {}) });
 const cardRequestOf = (mail) => mail?.mail_extracted?.card?.request || null;
-const cardTakenBack = (res, mail) => res.status(409).json({
+const cardTakenBack = (mail) => ({ status: 409, body: {
   error: mail?.mail_extracted?.card?.withdrawn?.reason === 'blocked' ? 'This card wasn’t sent.' : 'You took this card back.',
-  code: 'CARD_TAKEN_BACK' });
-const cardRequestSent = (res, mail, now) => res.status(409).json({
-  error: 'You’ve already sent this card.', code: 'CARD_REQUEST_SENT', card: holidayCards.sentSummary(mail, now) });
-const cardDailyLimit = (res) =>
-  res.status(429).json({ error: 'You’ve sent today’s card. You can send another tomorrow.', code: 'CARD_DAILY_LIMIT' });
+  code: 'CARD_TAKEN_BACK' } });
+const cardRequestSent = (mail, now) => ({ status: 409, body: {
+  error: 'You’ve already sent this card.', code: 'CARD_REQUEST_SENT', card: holidayCards.sentSummary(mail, now) } });
+const cardDailyLimit = () =>
+  ({ status: 429, body: { error: 'You’ve sent today’s card. You can send another tomorrow.', code: 'CARD_DAILY_LIMIT' } });
+// With digital stamps: the database's limit (mail_stamp_card_accounting), also told on a list's look.
+const STAMP_DAILY_LIMIT_WORDS = 'You can send up to 50 cards in 24 hours. Please try again later.';
 
 // The card a send with this request ID stored, or null. Throws on a read failure.
 async function cardOfRequest(rowId, senderId) {
@@ -1864,6 +1889,15 @@ async function requestOutcome(mail) {
   return settleCard(mail, zone);
 }
 
+// What a repeat of a send answers from the card its request ID stored ({ status, body }): that card (200), or 409 once
+// it was taken back or when the content changed. Null when it lost the day's card to another draft: the send goes on.
+async function repeatAnswer(earlier, digest, now) {
+  const { outcome, mail: stored } = await requestOutcome(earlier);
+  if (outcome === 'taken_back') return cardTakenBack(stored);
+  if (outcome !== 'sent') return null;
+  return cardRequestOf(stored).digest === digest ? { status: 200, body: cardAnswer(stored, now) } : cardRequestSent(stored, now);
+}
+
 // Why a card can't go to this person, or null when it can: not to oneself, no block either way, and only someone the
 // card's search shows the sender (a connection, or a person their name search finds). { status, body } to answer with.
 async function personRefusal(senderId, toUserId) {
@@ -1884,19 +1918,28 @@ async function personRefusal(senderId, toUserId) {
   return null;
 }
 
+const refuseCard = (status, error, code) => ({ refusal: { status, body: { error, code } } });
+
 /**
  * Every check a card goes through before it's sent, in this order: the design, the note, a personal account, the season,
  * one card a day, the person (or the address) and when it can arrive by their clock, and the email limits. POST /cards
  * and its look (POST /cards/preview) both ask it, so the look never passes a card the send would refuse. Answers
  * { refusal: { status, body } }, or what the send stores: the card, the trimmed note, when it's delivered, the name it
  * carries (`senderDisplay`), the zone its day is told by (`zone`: theirs, or the sender's by email) and, by email, when
- * it stops waiting.
+ * it stops waiting. A list asks its two halves itself (checkCardList): the sender's once, then each card's.
  */
 async function checkCard(senderId, body, now) {
-  const refuse = (status, error, code) => ({ refusal: { status, body: { error, code } } });
-  const { arrival } = body;
-  const byLink = body.to.link === true;
-  if (byLink && !cardTableOn()) return refuse(400, 'Sending a card by link isn’t open yet. Send it to a name or an email.', 'CARD_LINK_OFF');
+  if (body.to.link === true && !cardTableOn()) {
+    return refuseCard(400, 'Sending a card by link isn’t open yet. Send it to a name or an email.', 'CARD_LINK_OFF');
+  }
+  const from = await checkCardSender(senderId, body, now);
+  return from.refusal ? from : checkCardRecipient(senderId, body, now, from);
+}
+
+// The checks of the card itself and of who sends it: the design, the note, a personal account, the season and one card
+// a day. Answers { refusal }, or { design, message, sender, senderZone } for checkCardRecipient.
+async function checkCardSender(senderId, body, now) {
+  const refuse = refuseCard;
   const design = holidayCards.designById(body.design);
   if (!design) return refuse(400, 'Pick one of the Christmas cards.', 'CARD_DESIGN_UNKNOWN');
   const message = cardNote(body.message);
@@ -1918,7 +1961,16 @@ async function checkCard(senderId, body, now) {
   if (!mailStamps.enabled(senderId) && (await cardsSentToday(senderId, senderZone, now)).length) {
     return refuse(429, 'You’ve sent today’s card. You can send another tomorrow.', 'CARD_DAILY_LIMIT');
   }
+  return { design, message, sender, senderZone };
+}
 
+// The checks of who it goes to: the person (or the address), when it can arrive by their clock, and the email limits,
+// counting `earlierAddresses` (those before it on the same list) as sent. `from` is what checkCardSender answered.
+async function checkCardRecipient(senderId, body, now, from, { earlierAddresses = [] } = {}) {
+  const refuse = refuseCard;
+  const { design, message, sender, senderZone } = from;
+  const { arrival } = body;
+  const byLink = body.to.link === true;
   const toUserId = body.to.user_id || null;
   const toEmail = toUserId || byLink ? null : normalizeEscrowContact(body.to.email);
   const arrivalClosed = () => refuse(400, 'That choice isn’t open any more. Choose when it arrives again.', 'CARD_ARRIVAL_CLOSED');
@@ -1950,7 +2002,7 @@ async function checkCard(senderId, body, now) {
   if (!open.includes(arrival)) return arrivalClosed();
   // A link goes to no address, so the email limits don't count it; one card a day does.
   if (!byLink) {
-    const rateCheck = await checkEscrowRateLimits(senderId, toEmail);
+    const rateCheck = await checkEscrowRateLimits(senderId, toEmail, earlierAddresses);
     if (!rateCheck.allowed) return refuse(429, rateCheck.reason, 'MAIL_SEND_LIMIT');
   }
   // Sealed by email or link: until Christmas morning where the sender is, set again where they live once they open it.
@@ -1966,7 +2018,8 @@ async function checkCard(senderId, body, now) {
  * GET /api/mailbox/cards
  * What the Send a Christmas card screens need: the season's pictures (their ids, captions, paper and heights; the
  * website serves the pictures themselves) and the collections "Pick a card" shows them in, whether sending is open, the
- * arrivals open now, and today's card once it's sent.
+ * arrivals open now, and today's card once it's sent. `max_recipients` is how many one card can go to at once: a list
+ * of 20 with digital stamps on (POST /cards/batch), else one.
  */
 router.get('/cards', verifyToken, async (req, res) => {
   if (!cardsOn()) return sendCardsOff(res);
@@ -1994,6 +2047,7 @@ router.get('/cards', verifyToken, async (req, res) => {
       today: !postage && today ? holidayCards.sentSummary(today, now) : null,
       postage_enabled: postage,
       stamps,
+      max_recipients: postage ? CARD_LIST_MAX : 1,
     });
   } catch (err) {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });
@@ -2075,6 +2129,124 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
 });
 
 /**
+ * Store a card that passed checkCard and answer as its send does ({ status, body }): 201 { card } (with { link } by
+ * link), or why it didn't go. With digital stamps on, the database takes the card's stamp as it stores it, free ones
+ * first, or refuses it (mail_stamp_card_accounting), so a card that isn't stored costs nothing. `listSize`: it went
+ * with others on one list (POST /cards/batch). Throws when it can't tell what became of the card.
+ */
+async function storeCard({ senderId, checked, requestId, rowId, digest, now, listSize = null }) {
+  const { design, message, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
+  const postage = mailStamps.enabled(senderId);
+  if (requestId) card.request = { id: requestId, digest, ...(postage ? { settled_at: now.toISOString() } : {}) };
+  if (postage) card.postage_v1 = true;
+  const byLink = Boolean(card.by_link);
+  // A link's token comes from the row's id, so the id is known before the insert.
+  const linkRowId = byLink ? (rowId || crypto.randomUUID()) : null;
+  const escrow = toEmail || byLink
+    ? { token: byLink ? cardLinkOf(linkRowId).token : crypto.randomBytes(32).toString('hex'), expiresAt: checked.escrowExpiresAt }
+    : null;
+
+  // The note lives only in the card's private stored copy, never in the Mail row (services/holidayCards).
+  let objectResult;
+  try {
+    objectResult = await createMailObject({ senderId, objectPayload: {
+      version: 'mailjson_v1', objectFormat: 'plain_text', mimeType: 'text/plain',
+      envelope: { type: 'letter', subject: holidayCards.SUBJECT, attachments: [] },
+      recipient: toUserId
+        ? { mode: 'user', userId: toUserId, deliveryTargetType: 'user', deliveryTargetId: toUserId }
+        : { mode: 'contact' },
+      body: { content: message, payload: { card } },
+      createdAt: now.toISOString(),
+    } });
+  } catch (objectErr) {
+    logger.warn('Card copy not stored', { senderId, error: objectErr.message });
+    return cardUnavailable();
+  }
+
+  const stored = {
+    ...(linkRowId || rowId ? { id: linkRowId || rowId } : {}),
+    sender_user_id: senderId, sender_entity_id: null, sender_display: checked.senderDisplay,
+    sender_trust: 'pantopus_user', sender_business_name: null, sender_address: null,
+    type: 'letter', subject: holidayCards.SUBJECT, display_title: holidayCards.SUBJECT, content: '', content_excerpt: '',
+    preview_text: null, attachments: [], payout_amount: null, category: holidayCards.CARD_TAG,
+    tags: [holidayCards.CARD_TAG, holidayCards.SEASON.tag], priority: 'normal', expires_at: null,
+    object_id: objectResult.objectId, mail_type: 'letter', primary_action: 'open', action_required: false,
+    ack_required: false, ack_status: null, mail_object_type: 'envelope', mail_extracted: { card },
+    recipient_home_id: null, address_id: null, address_home_id: null, attn_user_id: null, attn_label: null,
+    delivery_visibility: null,
+    ...(toUserId
+      ? { recipient_user_id: toUserId, delivery_target_type: 'user', delivery_target_id: toUserId, recipient_type: 'user',
+        recipient_id: toUserId, drawer: 'personal' }
+      : { recipient_user_id: null, delivery_target_type: null, delivery_target_id: null, recipient_type: null,
+        recipient_id: null, escrow_recipient_contact: toEmail, escrow_status: 'pending',
+        escrow_expires_at: escrow.expiresAt, escrow_claim_token_hash: hashClaimToken(escrow.token) }),
+  };
+  const { data: inserted, error: insertError } = await insertMailWithCompatibility(stored, { delivery });
+  let mail = insertError ? null : inserted;
+  if (!mail) {
+    // With a request ID the card may be stored all the same: by another copy of this send (the database refused this
+    // one), or by this one with only its answer lost.
+    const found = rowId ? await cardOfRequest(rowId, senderId).catch(() => null) : null;
+    if (found && found.object_id === objectResult.objectId) {
+      mail = found;
+    } else {
+      await removeCardObject(objectResult.objectId);
+      if (['STAMPS_REQUIRED', 'STAMP_DAILY_LIMIT'].includes(insertError?.message)) {
+        const needsStamp = insertError.message === 'STAMPS_REQUIRED';
+        return { status: needsStamp ? 402 : 429, body: {
+          code: insertError.message,
+          error: needsStamp ? 'You need a digital stamp to send this card.' : STAMP_DAILY_LIMIT_WORDS,
+        } };
+      }
+      if (insertError?.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+        return { status: 403, body: { error: 'This person can’t receive your card.', code: 'CARD_RECIPIENT_UNAVAILABLE' } };
+      }
+      const answered = found ? await repeatAnswer(found, digest, now) : null;
+      if (answered) return answered;
+      logger.error('Card not stored', { senderId, error: insertError?.message || null });
+      return cardUnavailable();
+    }
+  }
+
+  // One card a day: two drafts sent at once keep the first, decided before anything answers or emails.
+  let settled;
+  try {
+    settled = await settleCard(mail, senderZone);
+  } catch (settleErr) {
+    logger.warn('Card not settled', { mailId: mail.id, senderId, error: settleErr.message });
+    if (!rowId) {
+      // Nothing would find this card again, so it goes and the sender tries again.
+      const { data: removed } = await supabaseAdmin.from('Mail').delete().eq('id', mail.id).select('id');
+      if (removed?.length) await removeCardObject(objectResult.objectId);
+    }
+    return cardUnavailable();
+  }
+  if (settled.outcome === 'gone') return cardDailyLimit();
+  if (settled.outcome === 'taken_back') return cardTakenBack(settled.mail);
+  mail = settled.mail;
+
+  if (escrow && toEmail) {
+    const claimLink = escrowClaimLink(mail.id, escrow.token);
+    const senderName = checked.senderDisplay;
+    (async () => {
+      if (skipForLaunchCut(['mailbox', 'holiday_cards'], 'cardEmail')) return;
+      try {
+        const sent = await emailService.sendCardWaitingEmail({ toEmail, senderName, claimLink,
+          expiresAt: escrow.expiresAt, sealed: arrival === 'sealed_christmas', timeZone: senderZone });
+        if (!sent?.success) logger.warn('Card email not delivered', { mailId: mail.id, error: sent?.error || null });
+      } catch (emailErr) {
+        logger.warn('Card email failed (non-blocking)', { mailId: mail.id, error: emailErr.message });
+      }
+    })();
+  }
+
+  const onList = listSize ? { listSize } : {};
+  logMailEvent('holiday_card_sent', mail.id, senderId, { design: design.id, arrival, byEmail: Boolean(toEmail), ...(byLink ? { byLink } : {}), ...onList });
+  logger.info('Christmas card sent', { mailId: mail.id, senderId, arrival, byEmail: Boolean(toEmail), byLink, ...onList });
+  return { status: 201, body: cardAnswer(mail, now) };
+}
+
+/**
  * POST /api/mailbox/cards  { design, message, arrival, to: { user_id } | { email } | { link: true }, request_id? }
  * Send today's card. To a person it comes with their next 7 a.m. mail (sealed until Christmas morning or not) or on
  * Christmas morning, and the sender can take it back until the next 7 a.m. pickup. By email it waits for them (90
@@ -2100,135 +2272,52 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     const now = new Date();
     const digest = requestId ? cardRequestDigest(req.body) : null;
     // A card this send's request ID stored answers it, unless it lost the day's card to another draft (null: send).
-    const answerRepeat = async (earlier) => {
-      const { outcome, mail: stored } = await requestOutcome(earlier);
-      if (outcome === 'taken_back') return cardTakenBack(res, stored);
-      if (outcome !== 'sent') return null;
-      return cardRequestOf(stored).digest === digest
-        ? res.status(200).json(cardAnswer(stored, now))
-        : cardRequestSent(res, stored, now);
-    };
     const earlier = rowId ? await cardOfRequest(rowId, senderId) : null;
-    if (earlier) {
-      const answered = await answerRepeat(earlier);
-      if (answered) return answered;
-    }
+    const repeated = earlier ? await repeatAnswer(earlier, digest, now) : null;
+    if (repeated) return reply(res, repeated);
 
     const checked = await checkCard(senderId, req.body, now);
-    if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
-    const { design, message, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
-    if (requestId) card.request = { id: requestId, digest, ...(mailStamps.enabled(senderId) ? { settled_at: now.toISOString() } : {}) };
-    if (mailStamps.enabled(senderId)) card.postage_v1 = true;
-    const byLink = Boolean(card.by_link);
-    // A link's token comes from the row's id, so the id is known before the insert.
-    const linkRowId = byLink ? (rowId || crypto.randomUUID()) : null;
-    const escrow = toEmail || byLink
-      ? { token: byLink ? cardLinkOf(linkRowId).token : crypto.randomBytes(32).toString('hex'), expiresAt: checked.escrowExpiresAt }
-      : null;
-
-    // The note lives only in the card's private stored copy, never in the Mail row (services/holidayCards).
-    let objectResult;
-    try {
-      objectResult = await createMailObject({ senderId, objectPayload: {
-        version: 'mailjson_v1', objectFormat: 'plain_text', mimeType: 'text/plain',
-        envelope: { type: 'letter', subject: holidayCards.SUBJECT, attachments: [] },
-        recipient: toUserId
-          ? { mode: 'user', userId: toUserId, deliveryTargetType: 'user', deliveryTargetId: toUserId }
-          : { mode: 'contact' },
-        body: { content: message, payload: { card } },
-        createdAt: now.toISOString(),
-      } });
-    } catch (objectErr) {
-      logger.warn('Card copy not stored', { senderId, error: objectErr.message });
-      return sendCardUnavailable(res);
-    }
-
-    const stored = {
-      ...(linkRowId || rowId ? { id: linkRowId || rowId } : {}),
-      sender_user_id: senderId, sender_entity_id: null, sender_display: checked.senderDisplay,
-      sender_trust: 'pantopus_user', sender_business_name: null, sender_address: null,
-      type: 'letter', subject: holidayCards.SUBJECT, display_title: holidayCards.SUBJECT, content: '', content_excerpt: '',
-      preview_text: null, attachments: [], payout_amount: null, category: holidayCards.CARD_TAG,
-      tags: [holidayCards.CARD_TAG, holidayCards.SEASON.tag], priority: 'normal', expires_at: null,
-      object_id: objectResult.objectId, mail_type: 'letter', primary_action: 'open', action_required: false,
-      ack_required: false, ack_status: null, mail_object_type: 'envelope', mail_extracted: { card },
-      recipient_home_id: null, address_id: null, address_home_id: null, attn_user_id: null, attn_label: null,
-      delivery_visibility: null,
-      ...(toUserId
-        ? { recipient_user_id: toUserId, delivery_target_type: 'user', delivery_target_id: toUserId, recipient_type: 'user',
-          recipient_id: toUserId, drawer: 'personal' }
-        : { recipient_user_id: null, delivery_target_type: null, delivery_target_id: null, recipient_type: null,
-          recipient_id: null, escrow_recipient_contact: toEmail, escrow_status: 'pending',
-          escrow_expires_at: escrow.expiresAt, escrow_claim_token_hash: hashClaimToken(escrow.token) }),
-    };
-    const { data: inserted, error: insertError } = await insertMailWithCompatibility(stored, { delivery });
-    let mail = insertError ? null : inserted;
-    if (!mail) {
-      // With a request ID the card may be stored all the same: by another copy of this send (the database refused this
-      // one), or by this one with only its answer lost.
-      const found = rowId ? await cardOfRequest(rowId, senderId).catch(() => null) : null;
-      if (found && found.object_id === objectResult.objectId) {
-        mail = found;
-      } else {
-        await removeCardObject(objectResult.objectId);
-        if (['STAMPS_REQUIRED', 'STAMP_DAILY_LIMIT'].includes(insertError?.message)) {
-          const needsStamp = insertError.message === 'STAMPS_REQUIRED';
-          return res.status(needsStamp ? 402 : 429).json({
-            code: insertError.message,
-            error: needsStamp ? 'You need a digital stamp to send this card.'
-              : 'You can send up to 50 cards in 24 hours. Please try again later.',
-          });
-        }
-        if (insertError?.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
-          return res.status(403).json({ error: 'This person can’t receive your card.', code: 'CARD_RECIPIENT_UNAVAILABLE' });
-        }
-        const answered = found ? await answerRepeat(found) : null;
-        if (answered) return answered;
-        logger.error('Card not stored', { senderId, error: insertError?.message || null });
-        return sendCardUnavailable(res);
-      }
-    }
-
-    // One card a day: two drafts sent at once keep the first, decided before anything answers or emails.
-    let settled;
-    try {
-      settled = await settleCard(mail, senderZone);
-    } catch (settleErr) {
-      logger.warn('Card not settled', { mailId: mail.id, senderId, error: settleErr.message });
-      if (!rowId) {
-        // Nothing would find this card again, so it goes and the sender tries again.
-        const { data: removed } = await supabaseAdmin.from('Mail').delete().eq('id', mail.id).select('id');
-        if (removed?.length) await removeCardObject(objectResult.objectId);
-      }
-      return sendCardUnavailable(res);
-    }
-    if (settled.outcome === 'gone') return cardDailyLimit(res);
-    if (settled.outcome === 'taken_back') return cardTakenBack(res, settled.mail);
-    mail = settled.mail;
-
-    if (escrow && toEmail) {
-      const claimLink = escrowClaimLink(mail.id, escrow.token);
-      const senderName = checked.senderDisplay;
-      (async () => {
-        if (skipForLaunchCut(['mailbox', 'holiday_cards'], 'cardEmail')) return;
-        try {
-          const sent = await emailService.sendCardWaitingEmail({ toEmail, senderName, claimLink,
-            expiresAt: escrow.expiresAt, sealed: arrival === 'sealed_christmas', timeZone: senderZone });
-          if (!sent?.success) logger.warn('Card email not delivered', { mailId: mail.id, error: sent?.error || null });
-        } catch (emailErr) {
-          logger.warn('Card email failed (non-blocking)', { mailId: mail.id, error: emailErr.message });
-        }
-      })();
-    }
-
-    logMailEvent('holiday_card_sent', mail.id, senderId, { design: design.id, arrival, byEmail: Boolean(toEmail), ...(byLink ? { byLink } : {}) });
-    logger.info('Christmas card sent', { mailId: mail.id, senderId, arrival, byEmail: Boolean(toEmail), byLink });
-    return res.status(201).json(cardAnswer(mail, now));
+    if (checked.refusal) return reply(res, checked.refusal);
+    return reply(res, await storeCard({ senderId, checked, requestId, rowId, digest, now }));
   } catch (err) {
     logger.error('Card send error', { error: err.message, userId: senderId });
     return sendCardUnavailable(res);
   }
 });
+
+// What Look it over shows of a card that passed checkCard: the card as it will lie in their Mailbox, when it comes and
+// opens, and by email or link the words and page they get (POST /cards/preview; a list's look shows its first card).
+async function cardLook(senderId, checked, now) {
+  const { message, arrival, toEmail, card, zone, senderDisplay, delivery } = checked;
+  const sealed = arrival === 'sealed_christmas';
+  const arrivesOn = card.arrives_on || null;
+  const opensOn = card.sealed_until ? mailDelivery.localDate(new Date(card.sealed_until), zone) : null;
+  let linkPage = null;
+  const byLink = Boolean(card.by_link);
+  if (toEmail || byLink) {
+    const { senderName, senderVerified } = await claimPagePerson(senderId, senderDisplay);
+    linkPage = { sender_name: senderName, sender_verified: senderVerified, sealed, sent_to: byLink ? '' : maskContact(toEmail),
+      sent_on: now.toISOString(), ...(byLink ? { by_link: true } : {}) };
+  }
+  return {
+    piece: {
+      id: 'preview', kind: 'letter', type: 'letter', mail_object_type: 'envelope', sender_display: senderDisplay,
+      sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.SUBJECT, content: message,
+      created_at: now.toISOString(), delivered_at: toEmail || byLink ? null : delivery.delivered_at,
+      postmark: { town: null, date: mailDelivery.localDate(now, zone) },
+      card: holidayCards.cardView({ mail_extracted: { card } }, now),
+    },
+    arrives_on: arrivesOn,
+    opens_on: opensOn,
+    sealed_days: arrivesOn && opensOn ? holidayCards.daysBetween(arrivesOn, opensOn) : null,
+    take_back_until: card.take_back_until,
+    email: toEmail
+      ? emailService.cardWaitingEmailContent({ senderName: senderDisplay, expiresAt: checked.escrowExpiresAt, sealed,
+        timeZone: checked.senderZone })
+      : null,
+    link_page: linkPage,
+  };
+}
 
 /**
  * POST /api/mailbox/cards/preview  (the body of POST /cards)
@@ -2247,43 +2336,180 @@ router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req,
       ? await cardOfRequest(holidayCards.requestRowId(senderId, req.body.request_id), senderId) : null;
     if (earlier) {
       const { outcome, mail: stored } = await requestOutcome(earlier);
-      if (outcome === 'taken_back') return cardTakenBack(res, stored);
-      if (outcome === 'sent') return cardRequestSent(res, stored, now);
+      if (outcome === 'taken_back') return reply(res, cardTakenBack(stored));
+      if (outcome === 'sent') return reply(res, cardRequestSent(stored, now));
     }
     const checked = await checkCard(senderId, req.body, now);
-    if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
-    const { message, arrival, toEmail, card, zone, senderDisplay, delivery } = checked;
-    const sealed = arrival === 'sealed_christmas';
-    const arrivesOn = card.arrives_on || null;
-    const opensOn = card.sealed_until ? mailDelivery.localDate(new Date(card.sealed_until), zone) : null;
-    let linkPage = null;
-    const byLink = Boolean(card.by_link);
-    if (toEmail || byLink) {
-      const { senderName, senderVerified } = await claimPagePerson(senderId, senderDisplay);
-      linkPage = { sender_name: senderName, sender_verified: senderVerified, sealed, sent_to: byLink ? '' : maskContact(toEmail),
-        sent_on: now.toISOString(), ...(byLink ? { by_link: true } : {}) };
-    }
-    return res.json({
-      piece: {
-        id: 'preview', kind: 'letter', type: 'letter', mail_object_type: 'envelope', sender_display: senderDisplay,
-        sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.SUBJECT, content: message,
-        created_at: now.toISOString(), delivered_at: toEmail || byLink ? null : delivery.delivered_at,
-        postmark: { town: null, date: mailDelivery.localDate(now, zone) },
-        card: holidayCards.cardView({ mail_extracted: { card } }, now),
-      },
-      arrives_on: arrivesOn,
-      opens_on: opensOn,
-      sealed_days: arrivesOn && opensOn ? holidayCards.daysBetween(arrivesOn, opensOn) : null,
-      take_back_until: card.take_back_until,
-      email: toEmail
-        ? emailService.cardWaitingEmailContent({ senderName: senderDisplay, expiresAt: checked.escrowExpiresAt, sealed,
-          timeZone: checked.senderZone })
-        : null,
-      link_page: linkPage,
-    });
+    if (checked.refusal) return reply(res, checked.refusal);
+    return res.json(await cardLook(senderId, checked, now));
   } catch (err) {
     logger.error('Card preview error', { error: err.message, userId: senderId });
     return res.status(503).json({ error: 'Couldn’t show you the card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
+  }
+});
+
+// ---- One card to a list (digital stamps on) ----
+// Each person or address on a list gets a card of their own, checked, stored, charged and taken back exactly as if it
+// went alone, under its own request ID, so a repeat of the list never sends anyone a second card or costs a second
+// stamp. Nobody on it sees who else got one.
+
+// The list's one choice of arrival in each card's own words: an address has no morning mail (its card comes when they
+// open the email) and no Christmas morning (sealed until Christmas instead); a person has no "now" (the next morning).
+function listArrival(arrival, byEmail) {
+  if (byEmail) return { next_morning: 'now', christmas_morning: 'sealed_christmas' }[arrival] || arrival;
+  return arrival === 'now' ? 'next_morning' : arrival;
+}
+
+// A single send's check of an address (sendCardSchema), run on a list card by card.
+const cardEmailSchema = Joi.string().email().max(320);
+
+// Run `fn` over `items`, `size` at a time.
+async function inGroups(items, size, fn) {
+  for (let i = 0; i < items.length; i += size) await Promise.all(items.slice(i, i + size).map(fn));
+}
+
+/**
+ * Every check of a list (POST /cards/batch and its look): the sender's once, then each card's as if it went alone,
+ * people four at a time and addresses one by one in list order, so the email limits count the addresses before them,
+ * and last the 50 cards in 24 hours, as the database counts them, so cards past it neither go nor count for stamps.
+ * A card an earlier try of its request ID stored answers from what became of it. Answers { refusal } for the whole
+ * list, or { items } in list order, each { requestId, rowId, digest } with `checked` (ready to store) or `answer`
+ * ({ status, body }: sent before, taken back, or refused).
+ */
+async function checkCardList(senderId, body, now) {
+  const from = await checkCardSender(senderId, body, now);
+  if (from.refusal) return from;
+  const items = body.recipients.map(({ to, request_id: id }) => {
+    const single = { design: body.design, message: body.message, arrival: listArrival(body.arrival, Boolean(to.email)), to };
+    const requestId = String(id).toLowerCase();
+    return { requestId, rowId: holidayCards.requestRowId(senderId, requestId), single, digest: cardRequestDigest(single) };
+  });
+  const checkOne = async (item, earlierAddresses) => {
+    try {
+      if (item.single.to.email && cardEmailSchema.validate(item.single.to.email).error) {
+        item.answer = refuseCard(400, 'That email address doesn’t look right.', 'CARD_EMAIL_INVALID').refusal;
+        return;
+      }
+      const earlier = await cardOfRequest(item.rowId, senderId);
+      const repeated = earlier ? await repeatAnswer(earlier, item.digest, now) : null;
+      if (repeated) {
+        item.answer = repeated;
+        return;
+      }
+      const checked = await checkCardRecipient(senderId, item.single, now, from, { earlierAddresses });
+      if (checked.refusal) item.answer = checked.refusal;
+      else item.checked = checked;
+    } catch (err) {
+      logger.warn('Card on a list not checked', { senderId, error: err.message });
+      item.answer = cardUnavailable();
+    }
+  };
+  await inGroups(items.filter((item) => !item.single.to.email), 4, (item) => checkOne(item));
+  const addresses = [];
+  for (const item of items.filter((i) => i.single.to.email)) {
+    await checkOne(item, addresses);
+    if (item.checked) addresses.push(item.checked.toEmail);
+  }
+  let room = Math.max(0, mailStamps.CARDS_PER_DAY - await mailStamps.cardsInLastDay(senderId));
+  for (const item of items.filter((i) => i.checked)) {
+    if (room > 0) {
+      room -= 1;
+    } else {
+      item.answer = { status: 429, body: { error: STAMP_DAILY_LIMIT_WORDS, code: 'STAMP_DAILY_LIMIT' } };
+      delete item.checked;
+    }
+  }
+  return { items };
+}
+
+// One card's line in a list's answer: sent now, sent by an earlier try of the list, or not sent and why.
+function listLine({ requestId, answer }) {
+  const { status, body } = answer;
+  if (status === 201) return { request_id: requestId, status: 'sent', card: body.card };
+  if (status === 200 || body.code === 'CARD_REQUEST_SENT') return { request_id: requestId, status: 'already_sent', card: body.card };
+  return { request_id: requestId, status: 'not_sent', error: body.error, code: body.code };
+}
+
+/**
+ * POST /api/mailbox/cards/batch/preview  (the body of POST /cards/batch)
+ * Look it over for a list: every check its send runs, storing and sending nothing. The card as the first person who
+ * can get it will see it (the fields of POST /cards/preview; none when nobody can), and for each card, in list order,
+ * what sending would do: { request_id, status: 'ready', to_name, by_email, arrival, arrives_on, opens_on }, 'already_sent'
+ * with its `card`, or 'refused' with `error` and `code` (also those past 50 cards in 24 hours). `stamps` is the balance
+ * and `needed` the stamps the ready cards take.
+ */
+router.post('/cards/batch/preview', verifyToken, validate(cardListSchema), async (req, res) => {
+  if (!cardsOn()) return sendCardsOff(res);
+  const senderId = req.user.id;
+  // Without digital stamps it's one card a day: there's no list.
+  if (!mailStamps.enabled(senderId)) return sendCardsOff(res);
+  try {
+    const now = new Date();
+    const list = await checkCardList(senderId, req.body, now);
+    if (list.refusal) return reply(res, list.refusal);
+    const stamps = await mailStamps.balance(senderId);
+    const recipients = list.items.map((item) => {
+      if (!item.checked) {
+        const line = listLine(item);
+        return line.status === 'not_sent' ? { ...line, status: 'refused' } : line;
+      }
+      const { card, zone, toEmail } = item.checked;
+      return { request_id: item.requestId, status: 'ready', to_name: card.to_name, by_email: Boolean(toEmail), arrival: card.arrival,
+        arrives_on: card.arrives_on || null,
+        opens_on: card.sealed_until ? mailDelivery.localDate(new Date(card.sealed_until), zone) : null };
+    });
+    const first = list.items.find((item) => item.checked);
+    return res.json({
+      ...(first ? await cardLook(senderId, first.checked, now) : {}),
+      recipients,
+      stamps,
+      needed: recipients.filter((line) => line.status === 'ready').length,
+    });
+  } catch (err) {
+    logger.error('Card list preview error', { error: err.message, userId: senderId });
+    return res.status(503).json({ error: 'Couldn’t show you the card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
+  }
+});
+
+/**
+ * POST /api/mailbox/cards/batch
+ *   { design, message, arrival, use_stamp: true, recipients: [{ to: { user_id } | { email }, request_id }] }
+ * Send one card to up to 20 people or addresses at once (digital stamps on): each gets a card of its own with the same
+ * picture and note, and the list's choice of arrival in its own words (listArrival). When the cards that can go need
+ * more stamps than are left, nothing is sent: 402 STAMPS_REQUIRED with `needed` and `available`. Otherwise 200
+ * { results, stamps }: for each card, in list order, { request_id, status: 'sent' | 'already_sent', card } or
+ * { request_id, status: 'not_sent', error, code }, and the balance after. A card that didn't go used no stamp; sending
+ * the list again with the same request IDs sends only those (the others answer 'already_sent').
+ */
+router.post('/cards/batch', verifyToken, validate(cardListSchema), async (req, res) => {
+  if (!cardsOn()) return sendCardsOff(res);
+  const senderId = req.user.id;
+  if (!mailStamps.enabled(senderId)) return sendCardsOff(res);
+  try {
+    const now = new Date();
+    const list = await checkCardList(senderId, req.body, now);
+    if (list.refusal) return reply(res, list.refusal);
+    const ready = list.items.filter((item) => item.checked);
+    const stamps = await mailStamps.balance(senderId);
+    if (ready.length > stamps.available) {
+      return res.status(402).json({
+        error: `These cards need ${ready.length} ${ready.length === 1 ? 'stamp' : 'stamps'}. You have ${stamps.available}.`,
+        code: 'STAMPS_REQUIRED', needed: ready.length, available: stamps.available,
+      });
+    }
+    await inGroups(ready, 4, async (item) => {
+      try {
+        item.answer = await storeCard({ senderId, checked: item.checked, requestId: item.requestId, rowId: item.rowId,
+          digest: item.digest, now, listSize: list.items.length });
+      } catch (err) {
+        logger.warn('Card on a list not sent', { senderId, error: err.message });
+        item.answer = cardUnavailable();
+      }
+    });
+    return res.json({ results: list.items.map(listLine), stamps: await mailStamps.balance(senderId).catch(() => null) });
+  } catch (err) {
+    logger.error('Card list send error', { error: err.message, userId: senderId });
+    return sendCardUnavailable(res);
   }
 });
 

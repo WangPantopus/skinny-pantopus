@@ -8,7 +8,7 @@
 // ============================================================
 
 import { get, post, uploadFile, apiRequest, mailbox, mailCompose } from '@pantopus/api';
-import type { DeletedMail, HolidayCards, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, RecipientSearchResult } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardList, HolidayCardListPreview, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, RecipientSearchResult } from '@pantopus/api';
 
 /** PATCH helper — not barrel-exported from @pantopus/api */
 function patch<T>(url: string, data?: Record<string, any>): Promise<T> {
@@ -146,6 +146,16 @@ export async function sendHolidayCard(data: {
 /** What they will get, from the same body and checks as sending it; nothing is stored or sent. */
 export async function previewHolidayCard(data: Parameters<typeof sendHolidayCard>[0]): Promise<HolidayCardPreview> {
   return call(() => mailbox.previewHolidayCard(data));
+}
+
+/** A list's look (digital stamps on): the first card as its person will see it, and every card's line. */
+export async function previewHolidayCardList(data: HolidayCardList): Promise<HolidayCardListPreview> {
+  return call(() => mailbox.previewHolidayCardList(data));
+}
+
+/** Send one card to a list, card by card (packages/api sendHolidayCardList). */
+export async function sendHolidayCardList(data: HolidayCardList): Promise<Awaited<ReturnType<typeof mailbox.sendHolidayCardList>>> {
+  return call(() => mailbox.sendHolidayCardList(data));
 }
 
 export async function takeBackHolidayCard(cardId: string): Promise<{ taken_back: true }> {

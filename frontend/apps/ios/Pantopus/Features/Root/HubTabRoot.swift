@@ -3646,11 +3646,11 @@ public struct HubTabRoot: View {
                 onSeeInSent: { cardId in
                     Task { @MainActor in
                         // A link may have opened this flow, with no Mailbox opened under it.
-                        if LaunchFeatures.cardTable, mode == .mailbox {
+                        if let cardId, LaunchFeatures.cardTable, mode == .mailbox {
                             openSentCard(cardId)
                             return
                         }
-                        // Back to the Mailbox, which shows Sent and the card.
+                        // Back to the Mailbox, which shows Sent and the card (a list: Sent itself).
                         pop()
                         NotificationCenter.default.post(name: .mailboxOpenSent, object: cardId)
                     }

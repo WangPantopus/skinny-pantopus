@@ -690,6 +690,8 @@ export interface HolidayCards {
   time_zone: string;
   /** Today's card, once you've sent it (one a day). */
   today: SentHolidayCard | null;
+  /** How many one card can go to at once: 20 with digital stamps on (a list, sendHolidayCardList), else 1. */
+  max_recipients?: number;
 }
 
 /** GET /api/mailbox/cards */
@@ -758,6 +760,55 @@ export interface HolidayCardPreview {
 /** POST /api/mailbox/cards/preview */
 export async function previewHolidayCard(data: Parameters<typeof sendHolidayCard>[0]): Promise<HolidayCardPreview> {
   return post<HolidayCardPreview>('/api/mailbox/cards/preview', data);
+}
+
+/**
+ * One card to a list (digital stamps on): the same picture and note for up to `max_recipients` people or addresses,
+ * each its own card under its own request ID (kept for every look and retry). One choice of arrival for the list: an
+ * address reads "next_morning" as right away and "christmas_morning" as sealed until Christmas.
+ */
+export interface HolidayCardList {
+  design: string;
+  message: string;
+  arrival: HolidayCardArrival;
+  use_stamp: true;
+  recipients: { to: { user_id: string } | { email: string }; request_id: string }[];
+}
+
+/** One card on a list's look: ready to go, sent by an earlier try of the list, or refused (and why). */
+export type HolidayCardListLine =
+  | { request_id: string; status: 'ready'; to_name: string | null; by_email: boolean; arrival: HolidayCardArrival;
+    arrives_on: string | null; opens_on: string | null }
+  | { request_id: string; status: 'already_sent'; card: SentHolidayCard }
+  | { request_id: string; status: 'refused'; error: string; code: string };
+
+/** A list's look: the first card that can go as its person will see it (none when nobody can), and every card's line. */
+export type HolidayCardListPreview = Partial<HolidayCardPreview> & {
+  recipients: HolidayCardListLine[];
+  stamps: { available: number; free_remaining: number; paid_remaining: number };
+  /** The stamps the ready cards take. */
+  needed: number;
+};
+
+/** POST /api/mailbox/cards/batch/preview: every check sending the list runs; nothing is stored or sent. */
+export async function previewHolidayCardList(data: HolidayCardList): Promise<HolidayCardListPreview> {
+  return post<HolidayCardListPreview>('/api/mailbox/cards/batch/preview', data);
+}
+
+/** One card in a list's answer. A card not sent used no stamp. */
+export type HolidayCardListResult =
+  | { request_id: string; status: 'sent' | 'already_sent'; card: SentHolidayCard }
+  | { request_id: string; status: 'not_sent'; error: string; code: string };
+
+/**
+ * POST /api/mailbox/cards/batch: send the list, card by card. 402 STAMPS_REQUIRED (with `needed` and `available`)
+ * when the cards that can go need more stamps than are left; nothing is sent then.
+ */
+export async function sendHolidayCardList(data: HolidayCardList): Promise<{
+  results: HolidayCardListResult[];
+  stamps: { available: number; free_remaining: number; paid_remaining: number } | null;
+}> {
+  return post('/api/mailbox/cards/batch', data);
 }
 
 // ============ SENT (launch key mailbox) ============

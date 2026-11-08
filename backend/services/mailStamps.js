@@ -79,6 +79,20 @@ async function usedTotal(user) {
   const [sent, returned] = await Promise.all([count("send"), count("return")]);
   return Math.max(0, sent - returned);
 }
+// At most this many cards in any 24 hours, cards taken back included: the database refuses the next one
+// (mail_stamp_card_accounting). A list's look counts them the same way so it can say which cards would go.
+const CARDS_PER_DAY = 50;
+async function cardsInLastDay(user) {
+  const { count, error } = await db
+    .from("MailStampLedger")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user)
+    .eq("delta", -1)
+    .not("mail_id", "is", null)
+    .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+  if (error) throw failure();
+  return count || 0;
+}
 async function json(url, options = {}) {
   const response = await fetch(url, {
     ...options,
@@ -354,6 +368,8 @@ module.exports = {
   balance,
   history,
   usedTotal,
+  CARDS_PER_DAY,
+  cardsInLastDay,
   confirm,
   checkout,
   reconcile,

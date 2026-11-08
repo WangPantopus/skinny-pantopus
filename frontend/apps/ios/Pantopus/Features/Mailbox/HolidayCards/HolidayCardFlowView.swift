@@ -15,8 +15,8 @@ import SwiftUI
 
 struct HolidayCardFlowView: View {
     @State private var viewModel: HolidayCardFlowViewModel
-    /// "See it in Sent" on a card just sent: its id.
-    private let onSeeInSent: ((String) -> Void)?
+    /// "See it in Sent" on a card just sent: its id; "See them in Sent" on a list: nil (Sent itself).
+    private let onSeeInSent: ((String?) -> Void)?
     private let onClose: () -> Void
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var phase
@@ -27,7 +27,13 @@ struct HolidayCardFlowView: View {
         viewModel.cards?.postageEnabled == true
     }
 
-    init(viewModel: HolidayCardFlowViewModel, onSeeInSent: ((String) -> Void)? = nil, onClose: @escaping () -> Void) {
+    /// The moments the stamps can have moved: each step, a card or list sent, a card taken back.
+    private var stampsMoment: String {
+        let sent = viewModel.sent?.id ?? "\(viewModel.listResults?.count ?? 0)"
+        return "\(viewModel.step):\(sent):\(viewModel.listTakenBack.count):\(viewModel.backNote ?? "")"
+    }
+
+    init(viewModel: HolidayCardFlowViewModel, onSeeInSent: ((String?) -> Void)? = nil, onClose: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
         self.onSeeInSent = onSeeInSent
         self.onClose = onClose
@@ -40,7 +46,7 @@ struct HolidayCardFlowView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.s3) {
                         content
-                        if postageOn, viewModel.step == .sent, viewModel.sent != nil {
+                        if postageOn, viewModel.step == .sent, viewModel.sent != nil || viewModel.listResults != nil {
                             HolidayCardPaperButton(title: "Send another card", fullWidth: true) { viewModel.startOver() }
                                 .accessibilityIdentifier("sendAnotherCard")
                         }
@@ -57,9 +63,7 @@ struct HolidayCardFlowView: View {
                 .onChange(of: viewModel.step) { scroller.scrollTo(Self.top, anchor: .top) }
             }
             .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
-                if let recipient = lookRecipient {
-                    HolidayCardLookFooter(viewModel: viewModel, byEmail: recipient.isEmail)
-                }
+                footer
             }
         }
         .background(HolidayCardDesk.background(scheme).ignoresSafeArea())
@@ -71,12 +75,12 @@ struct HolidayCardFlowView: View {
             await viewModel.stamps.recover()
             await viewModel.stamps.watch()
         }
-        .task(id: "\(viewModel.step):\(viewModel.sent?.id ?? ""):\(viewModel.backNote ?? "")") {
+        .task(id: stampsMoment) {
             if postageOn { await viewModel.stamps.refresh() }
         }
         .onChange(of: phase) { if phase == .active, postageOn { Task { await viewModel.stamps.recover() } } }
         .sheet(isPresented: $viewModel.showsStampBooks) {
-            StampBooksSheet(store: viewModel.stamps)
+            StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -137,6 +141,18 @@ struct HolidayCardFlowView: View {
         return viewModel.recipient
     }
 
+    /// What's pinned under the page: Look it over's footer (a list's, or one card's), or step 1's button on with a list.
+    @ViewBuilder
+    private var footer: some View {
+        if viewModel.cards != nil, viewModel.step == .look, let entries = viewModel.recipient?.entries, let look = viewModel.listPreview {
+            HolidayCardListLookFooter(viewModel: viewModel, entries: entries, look: look)
+        } else if let recipient = lookRecipient {
+            HolidayCardLookFooter(viewModel: viewModel, byEmail: recipient.isEmail)
+        } else if viewModel.step == .to, viewModel.cards?.open == true, viewModel.maxRecipients > 1, !viewModel.listed.isEmpty {
+            HolidayCardListContinueBar(viewModel: viewModel)
+        }
+    }
+
     // MARK: Content
 
     @ViewBuilder
@@ -162,7 +178,15 @@ struct HolidayCardFlowView: View {
 
     @ViewBuilder
     private func loaded(_ cards: HolidayCardsResponse) -> some View {
-        if viewModel.step == .sent, let sent = viewModel.sent {
+        if viewModel.step == .sent, let results = viewModel.listResults {
+            HolidayCardListSentView(
+                viewModel: viewModel,
+                results: results,
+                cards: cards,
+                onDone: onClose,
+                onSeeInSent: onSeeInSent.map { open in { open(nil) } }
+            )
+        } else if viewModel.step == .sent, let sent = viewModel.sent {
             HolidayCardSentView(
                 viewModel: viewModel,
                 card: sent,
@@ -220,7 +244,9 @@ struct HolidayCardFlowView: View {
                 HolidayCardSealStep(viewModel: viewModel, cards: cards, design: design, recipient: recipient)
             }
         case .look:
-            if let design = viewModel.design, let recipient = viewModel.recipient, let preview = viewModel.preview {
+            if let design = viewModel.design, viewModel.recipient?.entries != nil, let look = viewModel.listPreview {
+                HolidayCardListLookStep(viewModel: viewModel, cards: cards, design: design, look: look)
+            } else if let design = viewModel.design, let recipient = viewModel.recipient, let preview = viewModel.preview {
                 HolidayCardLookStep(viewModel: viewModel, cards: cards, design: design, recipient: recipient, preview: preview)
             }
         case .sent:

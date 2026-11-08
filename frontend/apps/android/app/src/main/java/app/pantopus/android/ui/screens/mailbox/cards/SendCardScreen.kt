@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,15 +74,18 @@ import java.time.ZoneId
 @Composable
 fun SendCardScreen(
     onClose: () -> Unit,
-    /** "See it in Sent" on the card just sent: that card's page in Sent. */
-    onSeeInSent: (String) -> Unit = {},
+    /** "See it in Sent" on the card just sent: that card's page in Sent; "See them in Sent" on a list: null (Sent itself). */
+    onSeeInSent: (String?) -> Unit = {},
     viewModel: SendCardViewModel = hiltViewModel(),
 ) {
     val cards by viewModel.cards.collectAsStateWithLifecycle()
     val load by viewModel.load.collectAsStateWithLifecycle()
     val form by viewModel.form.collectAsStateWithLifecycle()
     val fromName by viewModel.fromName.collectAsStateWithLifecycle()
+    val stampShort by viewModel.stampShort.collectAsStateWithLifecycle()
     var confirmTakeBack by rememberSaveable { mutableStateOf(false) }
+    // A card on a sent list, asked about before it's taken back.
+    var listTakeBack by remember { mutableStateOf<SentHolidayCard?>(null) }
     val back = { if (!viewModel.back()) onClose() }
     BackHandler(onBack = back)
 
@@ -96,7 +100,7 @@ fun SendCardScreen(
     var showsStampBooks by rememberSaveable { mutableStateOf(false) }
     val getStamps = { showsStampBooks = true }
     if (stamps != null) {
-        LifecycleResumeEffect(stamps, form.step, form.sent?.id, form.tookBack) {
+        LifecycleResumeEffect(stamps, form.step, form.sent?.id, form.listResults?.size, form.listTakenBack.size, form.tookBack) {
             stamps.refresh()
             onPauseOrDispose { }
         }
@@ -107,7 +111,8 @@ fun SendCardScreen(
             }
         }
     }
-    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.cardDesk).testTag("sendCard")) {
+    // Above the keyboard: the steps and what's pinned under them (step 1's button on with a list).
+    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.cardDesk).imePadding().testTag("sendCard")) {
         StepHeader(
             title = page.title(form),
             step = form.step.takeIf { page == SendCardPage.Steps },
@@ -119,7 +124,6 @@ fun SendCardScreen(
             modifier =
                 Modifier
                     .weight(1f)
-                    .imePadding()
                     .verticalScroll(scroll)
                     .padding(bottom = Spacing.s6),
         ) {
@@ -153,11 +157,25 @@ fun SendCardScreen(
                             onSeeInSent = onSeeInSent,
                             stamps = stamps?.balance,
                             onGetStamps = getStamps,
+                            onTakeBackFromList = { listTakeBack = it },
                         )
                     }
             }
         }
-        if (page == SendCardPage.Steps && form.step == SendCardStep.Look && form.preview != null) {
+        val onSteps = page == SendCardPage.Steps
+        val listLook = form.listPreview.takeIf { onSteps && form.to is CardRecipient.Several }
+        val listGrowing = onSteps && viewModel.maxRecipients > 1 && form.listed.isNotEmpty()
+        if (form.step == SendCardStep.Look && listLook != null) {
+            ListLookFooter(
+                form = form,
+                look = listLook,
+                stamps = stamps?.balance,
+                onSend = viewModel::sendList,
+                onGetStamps = { viewModel.getStampsForList(stamps?.balance?.available ?: 0) },
+            )
+        } else if (form.step == SendCardStep.To && listGrowing) {
+            ListContinueBar(form, onContinue = viewModel::continueWithList)
+        } else if (onSteps && form.step == SendCardStep.Look && form.preview != null) {
             LookFooter(
                 byEmail = form.to is CardRecipient.Email,
                 form = form,
@@ -168,7 +186,27 @@ fun SendCardScreen(
             )
         }
     }
-    if (stamps != null && showsStampBooks) StampBooksSheet(stamps, onDismiss = { showsStampBooks = false })
+    if (stamps != null && showsStampBooks) {
+        StampBooksSheet(
+            stamps,
+            onDismiss = {
+                showsStampBooks = false
+                viewModel.clearStampShort()
+            },
+            short = stampShort,
+        )
+    }
+    listTakeBack?.let { card ->
+        TakeBackDialog(
+            byEmail = card.byEmail,
+            postage = true,
+            onTakeBack = {
+                listTakeBack = null
+                viewModel.takeBackFromList(card)
+            },
+            onKeep = { listTakeBack = null },
+        )
+    }
     if (confirmTakeBack) {
         TakeBackDialog(
             byEmail = (form.sent ?: season?.todaysCard)?.byEmail == true,
@@ -223,10 +261,12 @@ private fun Steps(
     viewModel: SendCardViewModel,
     onClose: () -> Unit,
     onTakeBack: () -> Unit,
-    onSeeInSent: (String) -> Unit,
+    onSeeInSent: (String?) -> Unit,
     /** Digital stamps left (postage on, once read), for step 4 when it seals and sends itself. */
     stamps: StampBalance?,
     onGetStamps: () -> Unit,
+    /** A card on a sent list: "Take it back" (asked first). */
+    onTakeBackFromList: (SentHolidayCard) -> Unit,
 ) {
     val backNote = form.backNote(postage = cards.postageEnabled)
     if (backNote != null && form.step == SendCardStep.To) {
@@ -236,6 +276,18 @@ private fun Steps(
         )
     }
     ToLine(form)
+    if (form.step == SendCardStep.Sent && form.listResults != null) {
+        ListSentSection(
+            cards = cards,
+            form = form,
+            onTakeBack = onTakeBackFromList,
+            onSendRest = viewModel::sendList,
+            onClose = onClose,
+            onSeeInSent = { onSeeInSent(null) },
+            onAnother = viewModel::startAnotherCard,
+        )
+        return
+    }
     val to = form.to
     val design = cards.designs.firstOrNull { it.id == form.design }
     when (form.step) {
@@ -271,7 +323,11 @@ private fun Steps(
             }
         SendCardStep.Look -> {
             val preview = form.preview
-            if (design != null && to != null && preview != null) LookStep(cards, to, design, preview)
+            val listLook = form.listPreview
+            when {
+                to is CardRecipient.Several && design != null && listLook != null -> ListLookStep(cards, form, design, listLook)
+                design != null && to != null && preview != null -> LookStep(cards, to, design, preview)
+            }
         }
         SendCardStep.Sent ->
             form.sent?.let { card ->
@@ -649,7 +705,7 @@ private fun SentCardBox(
 }
 
 /** How a sent card arrives, in a sentence: "their 7 a.m. mail", never their 7 a.m. turned into the sender's hours. */
-private fun arrivalLine(
+internal fun arrivalLine(
     card: SentHolidayCard,
     zone: ZoneId,
 ): String {

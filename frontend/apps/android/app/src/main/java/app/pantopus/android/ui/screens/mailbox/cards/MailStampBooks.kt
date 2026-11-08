@@ -152,15 +152,16 @@ internal fun StampChip(
     }
 }
 
-/** What this card costs, beside Seal and send, in the card's own stamp ([design] is its picture). */
+/** What this card costs, beside Seal and send, in the card's own stamp ([design] is its picture); [count] cards on a list. */
 @Composable
 internal fun StampPostageLine(
     balance: StampBalance?,
     design: String?,
     modifier: Modifier = Modifier,
+    count: Int = 1,
 ) {
     val have = balance ?: return
-    val out = have.available == 0
+    val out = have.available < count
     val shape = RoundedCornerShape(Radii.lg)
     Row(
         modifier =
@@ -186,7 +187,7 @@ internal fun StampPostageLine(
         PaintedStamp(cardStamp(design), width = 30.dp, height = 38.dp, modifier = Modifier.rotate(3f))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "POSTAGE",
+                if (count > 1) "POSTAGE · $count PEOPLE · ${plural(count, "STAMP", "STAMPS")}" else "POSTAGE",
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -194,7 +195,7 @@ internal fun StampPostageLine(
                 color = PantopusColors.cardFooterInk,
             )
             Text(
-                postageLine(have),
+                if (count > 1) listPostageLine(have, count) else postageLine(have),
                 fontSize = 14.sp,
                 lineHeight = 19.sp,
                 color = if (out) PantopusColors.cardWax else PantopusColors.cardTextStrong,
@@ -210,6 +211,35 @@ private fun postageLine(have: StampBalance): String =
         have.freeRemaining == 1 -> "Free: this is your last free card."
         else -> "1 stamp (${plural(have.available - 1, "stamp")} left after this)."
     }
+
+/** What [count] cards on a list cost: free cards first, then stamps; or how many they need. */
+private fun listPostageLine(
+    have: StampBalance,
+    count: Int,
+): String {
+    if (have.available < count) return "$count cards need ${plural(count, "stamp")}. You have ${haveWords(have)}."
+    val free = minOf(have.freeRemaining, count)
+    val paid = count - free
+    val left = have.available - count
+    return when {
+        free > 0 && paid > 0 ->
+            "${plural(free, "free card")} first, then ${plural(paid, "stamp")}. ${plural(left, "stamp")} left after this."
+        free > 0 -> "Free: uses $free of your free cards (${have.freeRemaining - free} left after this)."
+        else -> "${plural(paid, "stamp")} (${plural(left, "stamp")} left after this)."
+    }
+}
+
+/** What's left, in words: "1 free card and 2 stamps". */
+private fun haveWords(have: StampBalance): String {
+    val paid = maxOf(0, have.paidRemaining)
+    val free = have.freeRemaining
+    return when {
+        have.available == 0 -> "none left"
+        paid > 0 && free > 0 -> "${plural(free, "free card")} and ${plural(paid, "stamp")}"
+        paid > 0 -> plural(paid, "stamp")
+        else -> plural(free, "free card")
+    }
+}
 
 /** A fanned book of stamps; bigger books fan more stamps. */
 @Composable
@@ -255,6 +285,8 @@ private const val FINE_PRINT =
 internal fun StampBooksSheet(
     model: MailStampBooksViewModel,
     onDismiss: () -> Unit,
+    /** Opened for a list whose cards need more stamps than are left. */
+    short: StampShort? = null,
 ) {
     val activity = LocalContext.current.activity()
     val balance = model.balance
@@ -298,6 +330,16 @@ internal fun StampBooksSheet(
                         tint = PantopusColors.cardTextQuiet,
                     )
                 }
+            }
+            short?.takeIf { it.missing > 0 }?.let {
+                Text(
+                    "These ${it.cards} cards need ${plural(it.missing, "more stamp", "more stamps")}.",
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.cardWax,
+                    modifier = Modifier.testTag("stampBooksShort"),
+                )
             }
             balance?.let { have ->
                 Text(
