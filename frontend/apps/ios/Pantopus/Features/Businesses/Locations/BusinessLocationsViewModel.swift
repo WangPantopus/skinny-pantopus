@@ -108,7 +108,7 @@ public final class BusinessLocationsViewModel: ListOfRowsDataSource {
 
     private static func subtitle(for location: BusinessLocationDTO) -> String? {
         var parts: [String] = []
-        if let address = location.address?.trimmedNonEmpty { parts.append(address) }
+        if let street = location.streetLine { parts.append(street) }
         let locality = [location.city, location.state]
             .compactMap { $0?.trimmedNonEmpty }
             .joined(separator: ", ")
