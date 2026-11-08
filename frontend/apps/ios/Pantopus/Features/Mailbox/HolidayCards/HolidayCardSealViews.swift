@@ -26,6 +26,15 @@ struct HolidayCardSealStep: View {
                 .rotationEffect(.degrees(1))
                 .frame(maxWidth: .infinity)
                 .accessibilityIdentifier("sendCardEnvelopePreview")
+            if let entries = recipient.entries {
+                Text("One envelope for each of the \(entries.count) people.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(HolidayCardDesk.muted(scheme))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, Spacing.s3)
+                    .accessibilityIdentifier("sendCardEnvelopeCount")
+            }
             Text("When should it arrive?")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(HolidayCardDesk.text(scheme))
@@ -37,7 +46,7 @@ struct HolidayCardSealStep: View {
                 }
             }
             .padding(.top, 10)
-            Text(recipient.isLink ? HolidayCardWords.sealNoteByLink : HolidayCardWords.sealNote(byEmail: recipient.isEmail))
+            Text(sealNote)
                 .font(.system(size: 13))
                 .foregroundStyle(MailPaper.cardTextSoft)
                 .lineSpacing(2)
@@ -64,6 +73,12 @@ struct HolidayCardSealStep: View {
                 .padding(.top, Spacing.s5)
                 .accessibilityIdentifier("sendCardSend")
         }
+    }
+
+    /// Until when it can be taken back (each card on a list on its own).
+    private var sealNote: String {
+        if let entries = recipient.entries { return HolidayCardWords.sealNote(list: entries) }
+        return recipient.isLink ? HolidayCardWords.sealNoteByLink : HolidayCardWords.sealNote(byEmail: recipient.isEmail)
     }
 
     /// Step 5 shows exactly what they'll see, and "Seal and send" is there.

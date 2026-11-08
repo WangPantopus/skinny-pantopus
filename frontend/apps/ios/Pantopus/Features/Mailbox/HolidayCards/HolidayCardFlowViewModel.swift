@@ -48,28 +48,63 @@ enum HolidayCardRecipient: Hashable {
     case email(String)
     /// Whoever opens the link (`card_table`). It comes the way a card by email does.
     case link
+    /// Two or more people or addresses (digital stamps on): a card each
+    /// (`POST /api/mailbox/cards/batch`).
+    case list([HolidayCardRecipient])
 
     var name: String {
         switch self {
         case let .person(_, name): name
         case let .email(address): address
         case .link: "whoever opens your link"
+        case let .list(entries): HolidayCardWords.listNames(entries.map(\.name))
         }
     }
 
+    /// By email (a list of addresses only comes that way too).
     var isEmail: Bool {
-        if case .person = self { return false }
-        return true
+        switch self {
+        case .person: false
+        case .email, .link: true
+        case let .list(entries): entries.allSatisfy(\.isEmail)
+        }
     }
 
     var isLink: Bool {
         self == .link
     }
 
-    /// The name on the envelope: a card by link has none until someone opens it.
-    var envelopeName: String {
-        isLink ? "Their name" : name
+    /// The people and addresses on a list; nil for one card.
+    var entries: [HolidayCardRecipient]? {
+        guard case let .list(entries) = self else { return nil }
+        return entries
     }
+
+    /// The same person or address, however it was typed.
+    var key: String {
+        switch self {
+        case let .person(userId, _): "person:\(userId)"
+        case let .email(address): "email:\(address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+        case .link: "link"
+        case let .list(entries): entries.map(\.key).joined(separator: ",")
+        }
+    }
+
+    /// The name on the envelope: a card by link has none until someone opens
+    /// it; a list's first card shows.
+    var envelopeName: String {
+        switch self {
+        case .link: "Their name"
+        case let .list(entries): entries.first?.envelopeName ?? ""
+        default: name
+        }
+    }
+}
+
+/// The stamp books opened because a list's cards need more stamps than are left.
+struct StampShort: Equatable {
+    let cards: Int
+    let missing: Int
 }
 
 /// The name search under "Who it's for".
@@ -155,7 +190,25 @@ final class HolidayCardFlowViewModel {
     /// Digital stamps (postage on): the balance, the books and buying them.
     let stamps = MailStampStore()
     /// The stamp books sheet is up (the header's count, "Get stamps to send", or a send the server refused for a stamp).
-    var showsStampBooks = false
+    var showsStampBooks = false {
+        didSet { if !showsStampBooks { stampShort = nil } }
+    }
+
+    /// The stamp books opened for a list whose cards need more stamps than are left.
+    var stampShort: StampShort?
+
+    // A list (digital stamps on): who's on it, a request ID for each (kept
+    // for the whole card, so every look and retry of the list finds the
+    // cards it already sent), its look and what sending it did.
+    private(set) var listed: [HolidayCardRecipient] = []
+    private var listIds: [String: String] = [:]
+    private(set) var listPreview: HolidayCardListPreview?
+    private(set) var listResults: [HolidayCardListResult]?
+    /// Cards taken back from On its way: their stamps came back.
+    private(set) var listTakenBack: Set<String> = []
+    private(set) var listTakingBack: String?
+    /// Why a card on the list couldn't be taken back: its id and the sentence.
+    private(set) var listTakeBackError: (id: String, message: String)?
 
     /// Who it's for: the name typed, the search, or an email address.
     var query = "" {
@@ -315,6 +368,10 @@ final class HolidayCardFlowViewModel {
     /// look leaves "Seal and send" on step 4.
     func lookItOver() async {
         guard !previewing else { return }
+        if recipient?.entries != nil {
+            await lookOverList()
+            return
+        }
         requestId = requestId ?? UUID().uuidString.lowercased()
         guard let body = sendBody else { return }
         previewing = true
@@ -384,10 +441,12 @@ final class HolidayCardFlowViewModel {
     /// The card as it stands: what "Look it over" checks and "Seal and send" sends.
     private var sendBody: SendHolidayCardBody? {
         guard let recipient, let design, let arrival else { return nil }
-        let to: SendHolidayCardBody.Recipient = switch recipient {
-        case let .person(userId, _): .person(userId: userId)
-        case let .email(address): .email(address)
-        case .link: .link
+        let to: SendHolidayCardBody.Recipient
+        switch recipient {
+        case let .person(userId, _): to = .person(userId: userId)
+        case let .email(address): to = .email(address)
+        case .link: to = .link
+        case .list: return nil
         }
         return SendHolidayCardBody(
             design: design.id,
@@ -474,6 +533,12 @@ final class HolidayCardFlowViewModel {
     /// request ID of its own.
     func startOver() {
         requestId = nil
+        listIds = [:]
+        listed = []
+        listPreview = nil
+        listResults = nil
+        listTakenBack = []
+        listTakeBackError = nil
         sent = nil
         preview = nil
         lookUnavailable = false
@@ -518,7 +583,165 @@ final class HolidayCardFlowViewModel {
     }
 }
 
+// MARK: - A list (digital stamps on)
+
 extension HolidayCardFlowViewModel {
+    /// How many one card can go to at once; more than one: a list.
+    var maxRecipients: Int {
+        cards?.maxRecipients ?? 1
+    }
+
+    var listIsFull: Bool {
+        listed.count >= maxRecipients
+    }
+
+    func isListed(_ entry: HolidayCardRecipient) -> Bool {
+        listed.contains { $0.key == entry.key }
+    }
+
+    /// A person from the search onto the list, or off it again (also a chip's ×).
+    func toggle(_ entry: HolidayCardRecipient) {
+        if let index = listed.firstIndex(where: { $0.key == entry.key }) {
+            listed.remove(at: index)
+        } else if !listIsFull {
+            listed.append(entry)
+        }
+    }
+
+    /// The address typed onto the list, and back to the name search.
+    func addEmail() {
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isEmail(address) else { return }
+        if !isListed(.email(address)), !listIsFull { listed.append(.email(address)) }
+        email = ""
+        byEmail = false
+    }
+
+    /// Step 1 done: one on the list goes as today's single card, two or more as a list.
+    func continueWithList() {
+        guard let first = listed.first else { return }
+        choose(listed.count == 1 ? first : .list(listed))
+    }
+
+    /// The request ID of this person's or address's card on the list.
+    func listId(_ entry: HolidayCardRecipient) -> String {
+        if let id = listIds[entry.key] { return id }
+        let id = UUID().uuidString.lowercased()
+        listIds[entry.key] = id
+        return id
+    }
+
+    /// The person or address on the list whose card has this request ID (once the list was looked over or sent).
+    func listEntry(requestId: String) -> HolidayCardRecipient? {
+        recipient?.entries?.first { listIds[$0.key] == requestId }
+    }
+
+    /// The list's first card that can go: who it's for (Look it over shows it as they'll see it).
+    var listFirst: HolidayCardRecipient? {
+        guard let ready = listPreview?.recipients.first(where: { $0.status == "ready" }) else { return nil }
+        return listEntry(requestId: ready.requestId)
+    }
+
+    /// The list as it stands, every card with its own request ID.
+    private func listBody() -> SendHolidayCardListBody? {
+        guard let entries = recipient?.entries, let design, let arrival else { return nil }
+        let recipients: [SendHolidayCardListBody.Recipient] = entries.compactMap { entry in
+            switch entry {
+            case let .person(userId, _): .init(to: .person(userId: userId), requestId: listId(entry))
+            case let .email(address): .init(to: .email(address), requestId: listId(entry))
+            case .link, .list: nil
+            }
+        }
+        return SendHolidayCardListBody(
+            design: design.id,
+            message: message.trimmingCharacters(in: .whitespacesAndNewlines),
+            arrival: arrival,
+            recipients: recipients
+        )
+    }
+
+    /// "Look it over" for a list: every card's line, and the first card that
+    /// can go as its person will see it. A refusal of the whole list (the
+    /// season closed, say) stays on step 4.
+    private func lookOverList() async {
+        guard let body = listBody() else { return }
+        previewing = true
+        previewError = nil
+        defer { previewing = false }
+        do {
+            let look: HolidayCardListPreview = try await answer(HolidayCardEndpoints.previewList(body))
+            listPreview = look
+            sendError = nil
+            step = .look
+        } catch {
+            previewError = Self.refusal(error, fallback: "Couldn’t show your cards just now. Try again in a moment.")
+        }
+    }
+
+    /// "Seal and send" for a list, card by card; again ("Send the rest") with
+    /// the same request IDs, so only the cards that didn't go can go. Too few
+    /// stamps: nothing went, and the stamp books open saying how many more
+    /// these cards need.
+    func sendList() async {
+        guard !sending, let body = listBody() else { return }
+        sending = true
+        sendError = nil
+        defer { sending = false }
+        do {
+            let response: SendHolidayCardListResponse = try await answer(HolidayCardEndpoints.sendList(body))
+            listResults = response.results
+            listPreview = nil
+            tookBack = false
+            step = .sent
+        } catch {
+            guard Self.refusalCode(error) == "STAMPS_REQUIRED" else {
+                sendError = Self.refusal(error, fallback: "Couldn’t send your cards just now. Try again in a moment.")
+                return
+            }
+            let counts = Self.stampCounts(error)
+            await stamps.refresh()
+            let needed = counts.needed ?? body.recipients.count
+            stampShort = StampShort(cards: needed, missing: max(1, needed - (counts.available ?? stamps.balance?.available ?? 0)))
+            showsStampBooks = true
+        }
+    }
+
+    /// "Get stamps to send" on a list's look: the stamp books, saying how many more these cards need.
+    func getStampsForList() {
+        let needed = listPreview?.needed ?? 0
+        stampShort = StampShort(cards: needed, missing: max(1, needed - (stamps.balance?.available ?? 0)))
+        showsStampBooks = true
+    }
+
+    /// One card on a sent list taken back: its stamp comes back.
+    func takeBackFromList(_ card: SentHolidayCard) async {
+        guard listTakingBack == nil else { return }
+        listTakingBack = card.id
+        listTakeBackError = nil
+        defer { listTakingBack = nil }
+        do {
+            let _: TakeBackHolidayCardResponse = try await answer(HolidayCardEndpoints.takeBack(cardId: card.id))
+            listTakenBack.insert(card.id)
+            await stamps.refresh()
+        } catch {
+            listTakeBackError = (card.id, Self.refusal(error, fallback: "Couldn’t take your card back just now. Try again in a moment."))
+        }
+    }
+}
+
+extension HolidayCardFlowViewModel {
+    /// `needed` and `available` from a list's 402 STAMPS_REQUIRED answer.
+    static func stampCounts(_ error: any Error) -> (needed: Int?, available: Int?) {
+        let body: String? = switch error as? APIError {
+        case let .clientError(_, body): body
+        case let .server(_, body): body
+        default: nil
+        }
+        guard let data = body?.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return (nil, nil) }
+        return (json["needed"] as? Int, json["available"] as? Int)
+    }
+
     /// A card answer: the decoded body, or the server's own sentence for a
     /// card it turned down (a limit, a choice that closed, someone it can't
     /// reach), which a 403 or 404 carries too. Sent's take-back reads it too.

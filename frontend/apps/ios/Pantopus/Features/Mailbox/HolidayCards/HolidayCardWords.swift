@@ -89,6 +89,13 @@ enum HolidayCardWords {
         name.hasSuffix(".") ? String(name.dropLast()) : name
     }
 
+    /// "Maya and Theo", "Maya, Theo and 2 others".
+    static func listNames(_ names: [String]) -> String {
+        guard names.count > 2 else { return names.joined(separator: " and ") }
+        let rest = names.count - 2
+        return "\(names[0]), \(names[1]) and \(rest) \(rest == 1 ? "other" : "others")"
+    }
+
     // MARK: A sent card
 
     /// How a sent card comes, in a sentence.
@@ -177,11 +184,12 @@ enum HolidayCardWords {
         theirDay: String?,
         calendar: Calendar = .current
     ) -> (title: String, detail: String) {
+        if case let .list(entries) = recipient { return listArrivalChoice(arrival, cards: cards, entries: entries, calendar: calendar) }
         // Their mail comes at 7 a.m. where they live: never turned into this phone's time.
         let day = shortDay(theirDay ?? cards.nextRoundAt, calendar: calendar)
         let name = switch recipient {
         case let .person(_, full): firstName(full)
-        case .email, .link: "they"
+        case .email, .link, .list: "they"
         }
         switch arrival {
         case .nextMorning:
@@ -213,10 +221,80 @@ enum HolidayCardWords {
         }
     }
 
+    /// A list's one choice, as each card reads it: every person's by their
+    /// own clock (the days differ, so none is named), and an address's card
+    /// waits for them to open the email, sealed until Christmas for both
+    /// Christmas choices.
+    static func listArrivalChoice(
+        _ arrival: HolidayCardArrival,
+        cards: HolidayCardsResponse,
+        entries: [HolidayCardRecipient],
+        calendar: Calendar = .current
+    ) -> (title: String, detail: String) {
+        let people = entries.contains { !$0.isEmail }
+        let emails = entries.contains(where: \.isEmail)
+        if !people {
+            return arrival == .sealedChristmas
+                ? (
+                    "Sealed until Christmas",
+                    "They get an email now. Once they join with that address, it waits in their mailbox with a "
+                        + "“Do not open until Christmas” seal. It opens on December 25."
+                )
+                : ("Right away, by email", "They get an email now and can open it once they join with that address.")
+        }
+        let byEmail = !emails ? "" : arrival == .nextMorning
+            ? " People not on Pantopus get the email right away."
+            : " People not on Pantopus get the email now; their card opens on Christmas morning."
+        switch arrival {
+        case .sealedChristmas:
+            return (
+                "Sealed until Christmas",
+                "It comes with each person’s next 7 a.m. mail and waits in their mailbox with a “Do not open "
+                    + "until Christmas” seal. It opens on December 25.\(byEmail)"
+            )
+        case .christmasMorning:
+            return (
+                "On Christmas morning",
+                "\(shortDay(cards.christmasMorningAt, calendar: calendar)), with the 7 a.m. mail where each person lives.\(byEmail)"
+            )
+        case .nextMorning, .now:
+            return ("With the morning mail", "With each person’s next 7 a.m. mail, where they live. They can open it right away.\(byEmail)")
+        }
+    }
+
     /// The take-back note under the choices. Before it's sent their clock
     /// isn't known here; the sent card says the time on this one.
     static func sealNote(byEmail: Bool) -> String {
         byEmail ? "You can take it back until they open it." : "You can take it back until the carrier picks it up at 7 a.m. their time."
+    }
+
+    /// The take-back note for a list: each card comes back on its own.
+    static func sealNote(list entries: [HolidayCardRecipient]) -> String {
+        let people = entries.contains { !$0.isEmail }
+        let emails = entries.contains(where: \.isEmail)
+        if people, emails {
+            return "You can take each card back until the carrier picks it up at 7 a.m. their time, or by email until they open it."
+        }
+        guard people else { return "You can take each card back until they open it." }
+        return "You can take each card back until the carrier picks it up at 7 a.m. their time."
+    }
+
+    /// What will happen to one card on a list's look, in a line.
+    static func listLine(_ line: HolidayCardListLine, calendar: Calendar = .current) -> String {
+        switch line.status {
+        case "refused": return "\(line.error ?? "It can’t go.") Won’t be sent."
+        case "already_sent": return "Already sent."
+        default: break
+        }
+        if line.byEmail {
+            return line.arrival == .sealedChristmas ? "Gets an email now. The card opens on Christmas morning." : "Gets an email now."
+        }
+        let day = shortDay(line.arrivesOn, calendar: calendar)
+        switch line.arrival {
+        case .christmasMorning: return "On Christmas morning, with their 7 a.m. mail."
+        case .sealedChristmas: return "Comes with their 7 a.m. mail on \(day), sealed until Christmas."
+        default: return "With their 7 a.m. mail on \(day)."
+        }
     }
 
     static let sealNoteByLink = "You can take it back until someone opens it."

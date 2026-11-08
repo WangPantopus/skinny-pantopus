@@ -8,6 +8,8 @@
 //  collection, and write a note on the back of it.
 //
 
+// swiftlint:disable file_length
+
 import SwiftUI
 import UIKit
 
@@ -62,8 +64,16 @@ struct HolidayCardToStep: View {
         }
     }
 
+    /// One card can go to a list (digital stamps on): people and addresses are added, then "Continue".
+    private var many: Bool {
+        viewModel.maxRecipients > 1
+    }
+
     private var byName: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
+            if many {
+                HolidayCardListChips(viewModel: viewModel)
+            }
             HStack(spacing: 10) {
                 Icon(.search, size: 20, color: MailPaper.cardTextMuted)
                     .allowsHitTesting(false)
@@ -92,7 +102,7 @@ struct HolidayCardToStep: View {
             } label: {
                 HStack(spacing: Spacing.s2) {
                     Icon(.mail, size: 18, color: MailPaper.wax)
-                    Text("Not on Pantopus? Send it to their email")
+                    Text(many ? "Not on Pantopus? Add their email" : "Not on Pantopus? Send it to their email")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(MailPaper.wax)
                         .multilineTextAlignment(.center)
@@ -101,9 +111,11 @@ struct HolidayCardToStep: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(many && viewModel.listIsFull)
             .padding(.top, Spacing.s2)
             .accessibilityIdentifier("sendCardByEmail")
-            if LaunchFeatures.cardTable {
+            // A link is one card for whoever opens it: not with a list.
+            if LaunchFeatures.cardTable, viewModel.listed.isEmpty {
                 Button {
                     focused = false
                     viewModel.choose(.link)
@@ -185,9 +197,15 @@ struct HolidayCardToStep: View {
         let line = [MadeUpUsername.handle(person.username), MailPieceModel.firstText(person.homeAddress)]
             .compactMap(\.self)
             .joined(separator: " · ")
+        let entry = HolidayCardRecipient.person(userId: person.userId, name: name)
+        let listed = many && viewModel.isListed(entry)
         return Button {
-            focused = false
-            viewModel.choose(.person(userId: person.userId, name: name))
+            guard many else {
+                focused = false
+                viewModel.choose(entry)
+                return
+            }
+            viewModel.toggle(entry)
         } label: {
             HStack(spacing: Spacing.s3) {
                 Text(String(name.prefix(1)).uppercased())
@@ -208,6 +226,12 @@ struct HolidayCardToStep: View {
                 }
                 .lineLimit(1)
                 Spacer(minLength: Spacing.s0)
+                if listed {
+                    Icon(.check, size: 13, strokeWidth: 3, color: MailPaper.waxText)
+                        .frame(width: 24, height: 24)
+                        .background(MailPaper.wax, in: Circle())
+                        .accessibilityHidden(true)
+                }
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, Spacing.s2)
@@ -215,13 +239,18 @@ struct HolidayCardToStep: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(many && viewModel.listIsFull && !listed)
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(listed ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("sendCardPerson.\(person.userId)")
     }
 
     private var byEmail: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
+            if many {
+                HolidayCardListChips(viewModel: viewModel)
+                    .padding(.bottom, Spacing.s2)
+            }
             Text("Their email address")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(HolidayCardDesk.text(scheme))
@@ -250,13 +279,16 @@ struct HolidayCardToStep: View {
             .font(.system(size: 14))
             .foregroundStyle(HolidayCardDesk.muted(scheme))
             .fixedSize(horizontal: false, vertical: true)
-            HolidayCardWaxButton(title: "Continue", isEnabled: viewModel.emailIsValid) {
+            HolidayCardWaxButton(
+                title: many ? "Add to the list" : "Continue",
+                isEnabled: viewModel.emailIsValid && !(many && viewModel.listIsFull)
+            ) {
                 focused = false
-                viewModel.chooseEmail()
+                if many { viewModel.addEmail() } else { viewModel.chooseEmail() }
             }
             .padding(.top, Spacing.s3)
             .accessibilityIdentifier("sendCardEmailContinue")
-            HolidayCardPaperButton(title: "Search Pantopus instead", fullWidth: true) {
+            HolidayCardPaperButton(title: many ? "Back to search" : "Search Pantopus instead", fullWidth: true) {
                 viewModel.byEmail = false
             }
             .padding(.top, 2)
