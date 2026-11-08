@@ -48,6 +48,10 @@ struct HolidayCardSealStep: View {
                 .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
                 .padding(.top, 14)
+            if viewModel.lookUnavailable, cards.postageEnabled {
+                StampPostageLine(store: viewModel.stamps, design: design.id)
+                    .padding(.top, Spacing.s3)
+            }
             if let notice = viewModel.sealNotice {
                 Text(notice)
                     .font(.system(size: 14, weight: .medium))
@@ -66,7 +70,11 @@ struct HolidayCardSealStep: View {
     /// When the server can't show it, the card is sealed and sent from here.
     @ViewBuilder
     private var button: some View {
-        if viewModel.lookUnavailable {
+        if viewModel.lookUnavailable, cards.postageEnabled, viewModel.stamps.isOut {
+            HolidayCardWaxButton(title: "Get stamps to send", isEnabled: viewModel.arrival != nil) {
+                viewModel.showsStampBooks = true
+            }
+        } else if viewModel.lookUnavailable {
             HolidayCardWaxButton(
                 title: viewModel.recipient?.isLink == true ? "Seal it and get the link" : "Seal and send",
                 isLoading: viewModel.sending,

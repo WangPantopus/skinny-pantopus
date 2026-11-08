@@ -414,6 +414,11 @@ struct HolidayCardLookFooter: View {
     let byEmail: Bool
     @Environment(\.colorScheme) private var scheme
 
+    /// Postage on and no stamps left: the button opens the stamp books.
+    private var needsStamps: Bool {
+        viewModel.cards?.postageEnabled == true && viewModel.stamps.isOut
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(viewModel.recipient?.isLink == true ? HolidayCardWords.sealNoteByLink : HolidayCardWords.sealNote(byEmail: byEmail))
@@ -425,6 +430,9 @@ struct HolidayCardLookFooter: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
+            if viewModel.cards?.postageEnabled == true, let design = viewModel.design {
+                StampPostageLine(store: viewModel.stamps, design: design.id)
+            }
             if let error = viewModel.sendError {
                 Text(error)
                     .font(.system(size: 14, weight: .medium))
@@ -433,10 +441,11 @@ struct HolidayCardLookFooter: View {
                     .accessibilityIdentifier("sendCardError")
             }
             HolidayCardWaxButton(
-                title: viewModel.recipient?.isLink == true ? "Seal it and get the link" : "Seal and send",
+                title: needsStamps ? "Get stamps to send" : viewModel.recipient?
+                    .isLink == true ? "Seal it and get the link" : "Seal and send",
                 isLoading: viewModel.sending
             ) {
-                Task { await viewModel.send() }
+                if needsStamps { viewModel.showsStampBooks = true } else { Task { await viewModel.send() } }
             }
             .accessibilityIdentifier("sendCardLookSend")
         }

@@ -36,6 +36,7 @@ router.get(
     // Whether cards cost stamps for this person now; the Stamps wallet shows only then.
     enabled: stamps.enabled(req.user.id),
     history: req.query.history === "1" ? await stamps.history(req.user.id) : undefined,
+    used_total: req.query.history === "1" ? await stamps.usedTotal(req.user.id) : undefined,
     account_token: req.user.id,
     google_account: stamps.googleAccount(req.user.id),
   })),

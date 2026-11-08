@@ -18,11 +18,26 @@ public enum HolidayCardArrival: String, Sendable, Hashable, CaseIterable {
     case now
 }
 
+/// The digital stamps left, with `GET /api/mailbox/cards` while postage is on.
+public struct HolidayCardStamps: Decodable, Sendable, Hashable {
+    public let available: Int
+    public let freeRemaining: Int
+    public let paidRemaining: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case available
+        case freeRemaining = "free_remaining"
+        case paidRemaining = "paid_remaining"
+    }
+}
+
 /// `GET /api/mailbox/cards` — route `backend/routes/mailbox.js:1776`: whether
 /// sending is open, the pictures and their collections, the arrivals open
 /// now and today's card.
 public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     public let postageEnabled: Bool
+    /// Digital stamps left (postage on; nil when they couldn't be read).
+    public let stamps: HolidayCardStamps?
     public let open: Bool
     public let holiday: String
     public let year: Int
@@ -47,7 +62,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     public let today: SentHolidayCard?
 
     private enum CodingKeys: String, CodingKey {
-        case open, holiday, year, designs, collections, arrivals, today
+        case open, holiday, year, designs, collections, arrivals, today, stamps
         case postageEnabled = "postage_enabled"
         case closesOn = "closes_on"
         case messageLimit = "message_limit"
@@ -65,6 +80,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         open = try c.decode(Bool.self, forKey: .open)
         postageEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .postageEnabled)) ?? false
+        stamps = try? c.decodeIfPresent(HolidayCardStamps.self, forKey: .stamps)
         holiday = (try? c.decodeIfPresent(String.self, forKey: .holiday)) ?? "christmas"
         year = (try? c.decodeIfPresent(Int.self, forKey: .year)) ?? 2026
         closesOn = try? c.decodeIfPresent(String.self, forKey: .closesOn)

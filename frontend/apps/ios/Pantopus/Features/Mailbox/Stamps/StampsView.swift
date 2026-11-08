@@ -18,6 +18,9 @@ import SwiftUI
 
 public struct StampsView: View {
     @State private var viewModel: StampsViewModel
+    /// Digital stamps for Christmas cards: the real wallet, shown only while they're on for the person.
+    @State private var stamps = MailStampStore()
+    @State private var showsStampBooks = false
 
     public init(viewModel: StampsViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -40,6 +43,20 @@ public struct StampsView: View {
             await viewModel.load()
             Analytics.track(.screenStampsViewed(state: viewModel.state.analyticsTag))
         }
+        .task {
+            guard LaunchFeatures.holidayCards, LaunchFeatures.mailbox else { return }
+            await stamps.recover(history: true)
+            await stamps.watch()
+        }
+        .sheet(
+            isPresented: $showsStampBooks,
+            onDismiss: { Task { await stamps.refresh(history: true) } },
+            content: {
+                StampBooksSheet(store: stamps)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+        )
     }
 
     /// "3 of 13 collected" under the title, matching RN `stamps.tsx:104`.
@@ -58,37 +75,23 @@ public struct StampsView: View {
                 onApply: { id in Task { await viewModel.applyTheme(id: id) } },
                 onRetry: { Task { await viewModel.fetchThemes() } }
             )
-        } else if !LaunchFeatures.mailExtras {
-            // Launch cut #8 (Mail extras): the postage wallet (book, sheet, wallet
-            // rail, usage, issuer and the "Buy more stamps" dock) only serves
-            // sending letters and has no backend: every figure is sample data and
-            // "Buy" changes only local state. The first launch shows the live
-            // collection only.
-            if case let .error(message) = viewModel.collection {
-                StampsErrorBody(message: message) { Task { await viewModel.fetchCollection() } }
-            } else {
-                ScrollView {
-                    StampCollectionSection(state: viewModel.collection)
-                        .padding(.horizontal, Spacing.s4)
-                        .padding(.top, Spacing.s3)
-                        .padding(.bottom, Spacing.s4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .background(Theme.Color.appBg)
-            }
+        } else if stamps.balance?.enabled == true {
+            // Digital stamps are on: the real wallet (balance, the stamps used, their history, stamp books).
+            StampsRealWalletBody(store: stamps, collection: viewModel.collection) { showsStampBooks = true }
+        } else if case let .error(message) = viewModel.collection {
+            StampsErrorBody(message: message) { Task { await viewModel.fetchCollection() } }
         } else {
-            switch viewModel.state {
-            case .loading:
-                StampsLoadingBody()
-            case let .loaded(content):
-                StampsPopulatedBody(content: content, collection: viewModel.collection) {
-                    viewModel.buyMore()
-                }
-            case let .empty(content):
-                StampsEmptyBody(content: content) { viewModel.purchaseStarterBook() }
-            case let .error(message):
-                StampsErrorBody(message: message) { Task { await viewModel.refresh() } }
+            // The A17.11 sample postage wallet (book, sheet, wallet rail, usage, issuer and its dock) has no
+            // backend: every figure in it is made up and "Buy" changes only local state, so the screen never
+            // shows it. Without digital stamps it is the live collection.
+            ScrollView {
+                StampCollectionSection(state: viewModel.collection)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s3)
+                    .padding(.bottom, Spacing.s4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .background(Theme.Color.appBg)
         }
     }
 
@@ -108,6 +111,96 @@ public struct StampsView: View {
                     viewModel.consumeToast()
                 }
         }
+    }
+}
+
+// MARK: - The real wallet (digital stamps on)
+
+/// Digital stamps for Christmas cards, in the A17.11 wallet's own parts: the book hero (stamps left of all the
+/// person has had), the sheet of them with the used ones postmarked, the latest stamp moves, the live collection,
+/// and one dock button that opens the stamp books. Nothing made up: no other denominations, tips or issuer.
+private struct StampsRealWalletBody: View {
+    let store: MailStampStore
+    let collection: StampCollectionState?
+    let onBuy: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                if let balance = store.balance {
+                    let book = book(balance)
+                    StampBookHero(book: book)
+                    // The sheet draws every stamp; past two dozen the hero's count says it better.
+                    if book.total > 0, book.total <= 24 {
+                        StampSheet(book: book)
+                    }
+                    if let moves = balance.history, !moves.isEmpty {
+                        UsageHistoryCard(usage: moves.enumerated().map { usage($1, index: $0) }, window: "Latest")
+                    }
+                }
+                if let collection {
+                    StampCollectionSection(state: collection)
+                }
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.top, Spacing.s3)
+            .padding(.bottom, Spacing.s4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Theme.Color.appBg)
+        .safeAreaInset(edge: .bottom) {
+            Button(action: onBuy) {
+                Text(store.balance?.salesOpen == false ? "Your stamps" : "Buy a stamp book")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(MailPaper.waxText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(MailPaper.wax, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, Spacing.s3)
+            .background(Theme.Color.appBg)
+            .accessibilityIdentifier("stampsBuyBook")
+        }
+    }
+
+    private func book(_ balance: StampBalance) -> StampBook {
+        let used = balance.usedTotal ?? 0
+        return StampBook(
+            series: "Christmas stamps",
+            total: balance.available + used,
+            used: used,
+            purchasedLabel: "the season began",
+            validityLabel: "Cards until Dec 31"
+        )
+    }
+
+    private func usage(_ move: StampBalance.Move, index: Int) -> StampUsage {
+        let count = abs(move.delta)
+        let what: (String, String) = switch move.kind {
+        case "welcome": ("Your free cards", "+\(count) free")
+        case "purchase": ("Stamp book", "+\(count) stamps")
+        case "send": ("Christmas card sent", "1 stamp")
+        case "return": ("Card came back", "+1 stamp")
+        case "revoke": ("Book refunded", "−\(count) stamps")
+        default: ("Stamps", "\(move.delta)")
+        }
+        return StampUsage(
+            id: "\(index)-\(move.at)",
+            recipient: what.0,
+            kind: what.1,
+            dateLabel: Self.day(move.at),
+            stampName: move.delta > 0 ? "Added" : "Used",
+            ink: move.delta > 0 ? .local : .express
+        )
+    }
+
+    private static func day(_ iso: String) -> String {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let parsed = withFraction.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+        return parsed?.formatted(.dateTime.month(.abbreviated).day()) ?? ""
     }
 }
 

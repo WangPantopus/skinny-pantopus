@@ -1,20 +1,52 @@
+//
+//  MailStampBooksView.swift
+//  Pantopus
+//
+//  Digital stamps (server `MAIL_STAMPS_ENABLED`), mirroring the web's
+//  `StampBooks.tsx`: the stamp count in the card composer's header, the
+//  postage line by Seal and send, and the stamp books sheet that opens from
+//  either (or when a card needs a stamp and none are left). The server owns
+//  the balance; StoreKit transactions are finished only after it credits them.
+//
+
 import StoreKit
 import SwiftUI
+import UIKit
 
-private struct StampBalance: Decodable {
+/// `GET /api/mailbox/stamp-books` — route `backend/routes/mailStamps.js`.
+struct StampBalance: Decodable {
     let available: Int
+    let freeRemaining: Int
+    let paidRemaining: Int
     let accountToken: UUID
     /// False once books stop selling for the season; sending goes on until December 31.
     let salesOpen: Bool?
+    /// Whether cards cost stamps for this person now (the Stamps wallet shows only then).
+    let enabled: Bool?
     let books: [Book]
-    struct Book: Decodable { let id: String
+    /// The latest stamp moves, newest first, and the stamps used on cards that went (asked for with `history=1`).
+    let history: [Move]?
+    let usedTotal: Int?
+
+    struct Book: Decodable {
+        let id: String
         let credits: Int
     }
 
+    struct Move: Decodable, Hashable {
+        /// welcome, purchase, send, return or revoke.
+        let kind: String
+        let delta: Int
+        let at: String
+    }
+
     enum CodingKeys: String, CodingKey {
-        case available, books
+        case available, books, enabled, history
+        case freeRemaining = "free_remaining"
+        case paidRemaining = "paid_remaining"
         case accountToken = "account_token"
         case salesOpen = "sales_open"
+        case usedTotal = "used_total"
     }
 }
 
@@ -25,9 +57,9 @@ private struct StampConfirmation: Encodable {
 
 private struct StampConfirmed: Decodable { let available: Int }
 
-/// The server owns the balance; StoreKit transactions are finished only after durable crediting.
+/// The balance, the App Store's books and buying them; shared by the composer and the Stamps wallet.
 @MainActor @Observable
-private final class MailStampStore {
+final class MailStampStore {
     var balance: StampBalance?
     var products: [Product] = []
     var busy = false
@@ -35,12 +67,16 @@ private final class MailStampStore {
     private let api = APIClient.shared
     private let path = "/api/mailbox/stamp-books"
 
-    func refresh() async {
+    var isOut: Bool {
+        balance?.available == 0
+    }
+
+    func refresh(history: Bool = false) async {
         do {
-            balance = try await api.request(Endpoint(method: .get, path: path))
+            balance = try await api.request(Endpoint(method: .get, path: path, query: history ? ["history": "1"] : [:]))
             products = try await Product.products(for: balance?.books.map(\.id) ?? [])
                 .sorted { $0.price < $1.price }
-        } catch { message = "Could not load your stamps. Please try again." }
+        } catch { message = "Could not load your stamps. Try again in a moment." }
     }
 
     func finish(_ result: VerificationResult<StoreKit.Transaction>) async {
@@ -57,12 +93,12 @@ private final class MailStampStore {
             await refresh()
             message = "Your stamps are ready."
         } catch {
-            message = "Your purchase is saved. Tap Refresh to finish checking it; you do not need to pay again."
+            message = "Your purchase is saved. Tap Check for your stamps to finish; you don’t need to pay again."
         }
     }
 
-    func recover() async {
-        await refresh()
+    func recover(history: Bool = false) async {
+        await refresh(history: history)
         for await result in StoreKit.Transaction.unfinished {
             await finish(result)
         }
@@ -88,54 +124,279 @@ private final class MailStampStore {
                 } else {
                     await finish(result)
                 }
-            case .pending: message = "Your purchase is pending approval. Your stamps will arrive after approval."
+            case .pending: message = "Your purchase is waiting for approval. Your stamps arrive once it’s approved."
             case .userCancelled: break
-            @unknown default: message = "Please refresh to check your purchase."
+            @unknown default: message = "Check for your stamps in a moment."
             }
-        } catch { message = "The purchase could not finish. Please try again." }
+        } catch { message = "The purchase couldn’t finish. Please try again." }
     }
 }
 
-struct MailStampBooksView: View {
-    let refreshKey: String
-    @State private var store = MailStampStore()
-    @State private var expanded = false
-    @Environment(\.scenePhase) private var phase
+/// The painted Pantopus Post stamps the card table uses.
+enum StampArt {
+    static let names = ["stamp-fir", "stamp-peak", "stamp-river"]
+    private static let images: [String: UIImage] = Dictionary(uniqueKeysWithValues: names.compactMap { name in
+        Bundle.main.path(forResource: name, ofType: "webp", inDirectory: "HolidayCardTable")
+            .flatMap { UIImage(contentsOfFile: $0) }
+            .map { (name, $0) }
+    })
+
+    static func image(_ index: Int) -> UIImage? {
+        images[names[index % names.count]]
+    }
+
+    /// The stamp a card carries, by its picture's number: the same in every app.
+    static func image(forDesign design: String) -> UIImage? {
+        let number = Int(design.split(separator: "-").last ?? "") ?? 1
+        return image(max(number, 1) - 1)
+    }
+}
+
+private func plural(_ count: Int, _ one: String, _ many: String? = nil) -> String {
+    "\(count) \(count == 1 ? one : many ?? one + "s")"
+}
+
+/// The composer header's stamp count: opens the stamp books.
+struct StampChip: View {
+    let store: MailStampStore
+    let onOpen: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text(store.balance.map { "\($0.available) digital stamp\($0.available == 1 ? "" : "s") available" } ?? "Your digital stamps")
-                .font(.headline)
-            Text("One stamp sends one Christmas card to one recipient. Your first 3 are free. Receiving and replies are always free.")
-            if store.balance?.salesOpen == false {
-                Text("Stamp books aren’t on sale any more this year. You can use your stamps until December 31.")
-            } else {
-                DisclosureGroup("Buy a stamp book", isExpanded: $expanded) {
-                    VStack(alignment: .leading, spacing: Spacing.s2) {
-                        Text("Digital delivery only. Christmas cards can be sent until December 31; unused stamps stay in your account.")
-                        ForEach(store.products) { product in
-                            if let book = store.balance?.books.first(where: { $0.id == product.id }) {
-                                Button("\(book.credits) stamps · \(product.displayPrice)") { Task { await store.buy(product) } }
-                                    .disabled(store.busy)
-                            }
-                        }
-                        if store.products.isEmpty { Text("Stamp books are unavailable in the App Store right now.") }
-                    }.padding(.top, Spacing.s2)
+        if let balance = store.balance {
+            Button(action: onOpen) {
+                HStack(spacing: 6) {
+                    if let art = StampArt.image(0) {
+                        Image(uiImage: art)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 19, height: 24)
+                            .rotationEffect(.degrees(-6))
+                            .shadow(color: MailPaper.cardShadow.opacity(0.25), radius: 1, y: 1)
+                    }
+                    Text("\(balance.available)")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(balance.available == 0 ? MailPaper.wax : MailPaper.cardTextSoft)
+                }
+                .padding(.leading, Spacing.s2)
+                .padding(.trailing, Spacing.s3)
+                .frame(height: 34)
+                .background(MailPaper.cardField, in: Capsule())
+                .overlay(Capsule().strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(balance
+                .available == 0 ? "No stamps left. Get a stamp book" : "\(plural(balance.available, "stamp")) left. Stamp books")
+            .accessibilityIdentifier("stampChip")
+        }
+    }
+}
+
+/// What this card costs, beside Seal and send, in the card's own stamp.
+struct StampPostageLine: View {
+    let store: MailStampStore
+    let design: String
+
+    var body: some View {
+        if let balance = store.balance {
+            HStack(spacing: Spacing.s3) {
+                if let art = StampArt.image(forDesign: design) {
+                    Image(uiImage: art)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 30, height: 38)
+                        .rotationEffect(.degrees(3))
+                        .shadow(color: MailPaper.cardShadow.opacity(0.3), radius: 1.5, y: 1)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("POSTAGE")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(1.3)
+                        .foregroundStyle(MailPaper.cardFooter)
+                    Text(line(balance))
+                        .font(.system(size: 14))
+                        .foregroundStyle(balance.available == 0 ? MailPaper.wax : MailPaper.cardText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, 10)
+            .background(MailPaper.cardField, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                .strokeBorder(MailPaper.cardFieldEdge, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("postageLine")
+        }
+    }
+
+    private func line(_ balance: StampBalance) -> String {
+        if balance.available == 0 { return "No stamps left. Get a stamp book to send this card." }
+        if balance.freeRemaining > 1 { return "Free: uses 1 of your free cards (\(balance.freeRemaining - 1) left after this)." }
+        if balance.freeRemaining == 1 { return "Free: this is your last free card." }
+        return "1 stamp (\(plural(balance.available - 1, "stamp")) left after this)."
+    }
+}
+
+/// A fanned book of stamps; bigger books fan more stamps.
+private struct StampBooklet: View {
+    let credits: Int
+
+    var body: some View {
+        let shown = credits >= 50 ? 4 : credits >= 20 ? 3 : 2
+        ZStack {
+            ForEach(0..<shown, id: \.self) { index in
+                let turn = (Double(index) - Double(shown - 1) / 2) * 9
+                if let art = StampArt.image(index) {
+                    Image(uiImage: art)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 38, height: 47)
+                        .shadow(color: MailPaper.cardShadow.opacity(0.28), radius: 1.5, y: 2)
+                        .rotationEffect(.degrees(turn), anchor: .bottom)
+                        .offset(x: turn * 0.9)
                 }
             }
-            Button("Refresh balance and purchases") { Task { await store.recover() } }.disabled(store.busy)
-            if let message = store.message { Text(message).accessibilityAddTraits(.updatesFrequently) }
         }
-        .font(.subheadline)
-        .padding(Spacing.s3)
-        .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg))
-        .foregroundStyle(MailPaper.cardTextSoft)
-        .tint(MailPaper.wax)
-        .task { await store.recover()
-            await store.watch()
+        .frame(width: 60, height: 58)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The stamp books: what's left, the three books, and what a stamp does.
+struct StampBooksSheet: View {
+    let store: MailStampStore
+    @Environment(\.dismiss) private var dismiss
+
+    private static let finePrint = "Digital delivery only. Christmas cards can be sent until December 31; "
+        + "unused stamps stay in your account. Receiving cards and replying are always free."
+
+    /// What each book is for, in a sender's words.
+    private static let uses = [5: "A few close friends", 20: "Your Christmas list", 50: "The whole street"]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        Text("Stamp books")
+                            .font(.system(size: 28, design: .serif))
+                            .foregroundStyle(MailPaper.cardText)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("One stamp sends one Christmas card to one person.")
+                            .font(.system(size: 15))
+                            .foregroundStyle(MailPaper.cardTextMuted)
+                    }
+                    Spacer(minLength: Spacing.s2)
+                    Button { dismiss() } label: {
+                        Icon(.x, size: 20, color: MailPaper.cardTextMuted)
+                            .frame(width: 40, height: 40)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+                }
+                if let have = haveLine {
+                    Text(have)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(store.isOut ? MailPaper.wax : MailPaper.cardTextSoft)
+                        .padding(.horizontal, Spacing.s3)
+                        .padding(.vertical, 5)
+                        .background(MailPaper.cardAvatar, in: Capsule())
+                }
+                if store.balance?.salesOpen == false {
+                    note("Stamp books aren’t on sale any more this year. You can use your stamps until December 31.")
+                } else if store.products.isEmpty {
+                    note("Stamp books are unavailable in the App Store right now.")
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(store.products) { product in
+                            if let book = store.balance?.books.first(where: { $0.id == product.id }) {
+                                row(book, product)
+                            }
+                        }
+                    }
+                }
+                Text(Self.finePrint)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(MailPaper.cardFooter)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let message = store.message {
+                    Text(message)
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(MailPaper.cardTextSoft)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+                Button("Already paid? Check for your stamps") { Task { await store.recover() } }
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(MailPaper.wax)
+                    .disabled(store.busy)
+                    .accessibilityIdentifier("stampBooksCheck")
+            }
+            .padding(Spacing.s5)
         }
-        .task(id: refreshKey) { await store.refresh() }
-        .onChange(of: phase) { if phase == .active { Task { await store.recover() } } }
-        .onChange(of: store.balance?.available) { if store.balance?.available == 0 { expanded = true } }
+        .background(MailPaper.cardDesk.ignoresSafeArea())
+        .accessibilityIdentifier("stampBooks")
+    }
+
+    private var haveLine: String? {
+        guard let balance = store.balance else { return nil }
+        let paid = max(0, balance.paidRemaining)
+        let free = balance.freeRemaining
+        if balance.available == 0 { return "You’re out of stamps." }
+        if paid > 0, free > 0 { return "You have \(plural(paid, "stamp")) and \(plural(free, "free card"))." }
+        if paid > 0 { return "You have \(plural(paid, "stamp"))." }
+        return "You have \(plural(free, "free card")) left."
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 14))
+            .foregroundStyle(MailPaper.cardTextSoft)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(Spacing.s3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(MailPaper.cardField, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
+    }
+
+    private func row(_ book: StampBalance.Book, _ product: Product) -> some View {
+        Button { Task { await store.buy(product) } } label: {
+            HStack(spacing: Spacing.s3) {
+                StampBooklet(credits: book.credits)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(book.credits) stamps")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(MailPaper.cardText)
+                    Text([Self.uses[book.credits], perCard(product, book)].compactMap(\.self).joined(separator: " · "))
+                        .font(.system(size: 13))
+                        .foregroundStyle(MailPaper.cardTextMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(product.displayPrice)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(MailPaper.waxText)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, Spacing.s2)
+                    .background(MailPaper.wax, in: Capsule())
+            }
+            .padding(.vertical, 10)
+            .padding(.leading, Spacing.s2)
+            .padding(.trailing, Spacing.s3)
+            .background(MailPaper.cardField, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(book.credits == 20 ? MailPaper.wax.opacity(0.45) : MailPaper.cardRowLine, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(store.busy)
+        .accessibilityIdentifier("stampBook.\(book.credits)")
+    }
+
+    /// The store's price for one card, in its own currency.
+    private func perCard(_ product: Product, _ book: StampBalance.Book) -> String? {
+        guard book.credits > 0 else { return nil }
+        return (product.price / Decimal(book.credits)).formatted(product.priceFormatStyle) + " a card"
     }
 }

@@ -62,8 +62,22 @@ async function history(user, limit = 30) {
     kind: row.event_key.split(":")[0],
     bucket: row.bucket,
     delta: row.delta,
-    at: row.created_at,
+    at: new Date(row.created_at).toISOString(),
   }));
+}
+// Stamps used on cards that went (sent minus taken back or expired), for the wallet's "N used".
+async function usedTotal(user) {
+  const count = async (prefix) => {
+    const { count: n, error } = await db
+      .from("MailStampLedger")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user)
+      .like("event_key", `${prefix}:%`);
+    if (error) throw failure();
+    return n || 0;
+  };
+  const [sent, returned] = await Promise.all([count("send"), count("return")]);
+  return Math.max(0, sent - returned);
 }
 async function json(url, options = {}) {
   const response = await fetch(url, {
@@ -339,6 +353,7 @@ module.exports = {
   salesOpen,
   balance,
   history,
+  usedTotal,
   confirm,
   checkout,
   reconcile,
