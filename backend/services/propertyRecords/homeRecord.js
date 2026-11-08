@@ -84,6 +84,8 @@ function copyFromAnswer(answer, address) {
     dataset: county.dataset,
     method: county.method,
     title: county.title || 'County records',
+    // Words a publisher's terms ask to go wherever it's named as the source ("provided as is, without warranty").
+    ...(county.notice ? { notice: county.notice } : {}),
     stored_at: new Date().toISOString(),
     address_stamp: addressStamp(address),
     facts,
@@ -111,6 +113,7 @@ function agreedCopy(answer, address) {
     dataset: county.dataset,
     method: county.method,
     title: county.title || 'County records',
+    ...(county.notice ? { notice: county.notice } : {}),
     address_stamp: addressStamp(address),
     facts: answer.agreed,
   };
@@ -130,7 +133,7 @@ function dateLabel(iso) {
 
 /** Where a copy's facts come from, in the shape the apps read (services/recordVocabulary.js). */
 function provenanceOf(copy) {
-  const source = `From ${copy.publisher}'s records, updated ${dateLabel(copy.as_of)}`;
+  const source = `From ${copy.publisher}'s records, updated ${dateLabel(copy.as_of)}${copy.notice ? ` \u00b7 ${copy.notice}` : ''}`;
   let lead = '';
   if (copy.match === 'building_only') {
     lead = copy.reason === 'unit_needed'
