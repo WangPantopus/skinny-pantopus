@@ -60,12 +60,17 @@ async function lookup(address, { serves = (fips) => router.modeFor(fips) === 'li
     if (county.stale_after && Date.now() > Date.parse(county.stale_after)) return { match: 'stale', reason: 'release_past_date', ...facts };
     if (suppressions?.hashes?.includes(suppressionHash(suppressions.salt, fips, query))) return { match: 'restricted', ...facts };
     const records = await reader.recordsAt(fips, county.release, sortKey(parsed));
-    return { ...identity.resolve(query, records), ...facts };
+    return { ...identity.resolve(query, records, { sharedFacts: router.sharedFactsFor(fips) }), ...facts };
   }));
   answers.sort((a, b) => MATCH_RANK[a.match] - MATCH_RANK[b.match]);
   // A ZIP across a county line: two counties each claiming this address can't both be right.
   if (answers.length > 1 && answers[0].match === answers[1].match && ['exact', 'building_only', 'parcel_only'].includes(answers[0].match)) {
     return { match: 'ambiguous', reason: 'two_counties', jurisdiction: answers[0].jurisdiction, county: answers[0].county };
+  }
+  // What one county's records at an address agree on says nothing about another county's records there.
+  if (answers[0].agreed && answers.slice(1).some((other) => other.match !== 'unsupported')) {
+    const { agreed: _agreed, ...answer } = answers[0];
+    return answer;
   }
   return answers[0];
 }

@@ -91,6 +91,37 @@ function copyFromAnswer(answer, address) {
   };
 }
 
+/**
+ * What every record at an address with several homes agrees on (identity.js `agreed`, shared facts on for its county),
+ * in a copy's shape so screens label and draw it as the county's: year built, size, bedrooms and baths at most. Never
+ * stored on a Home, so its screens ask the record each time and the switch going off takes it away at once. Null otherwise.
+ */
+function agreedCopy(answer, address) {
+  if (answer.match !== 'ambiguous' || !answer.agreed) return null;
+  const { county } = answer;
+  return {
+    schema: SCHEMA,
+    match: 'ambiguous',
+    reason: answer.reason || null,
+    requested_subject: answer.requested_subject,
+    jurisdiction: answer.jurisdiction,
+    release: county.release,
+    as_of: county.as_of,
+    publisher: county.publisher,
+    dataset: county.dataset,
+    method: county.method,
+    title: county.title || 'County records',
+    address_stamp: addressStamp(address),
+    facts: answer.agreed,
+  };
+}
+
+/** The agreed facts as they may be served now, leaving out any its county withholds. Null when nothing is left. */
+function servedAgreed(answer, address) {
+  const shared = router.served(agreedCopy(answer, address));
+  return shared && Object.keys(shared.facts).length ? shared : null;
+}
+
 /** "Nov 3, 2026" from "2026-11-03". */
 function dateLabel(iso) {
   const [year, month, day] = String(iso || '').split('-').map(Number);
@@ -106,11 +137,13 @@ function provenanceOf(copy) {
       ? 'We found the building. Add your unit to see your home\'s own details. '
       : 'We found the building. Your unit\'s details weren\'t in the county record. ';
   }
+  if (copy.match === 'ambiguous') lead = 'More than one home is on record at this address, and all of its records agree on these details. Add your unit if you have one. ';
   return {
     publisher: copy.publisher,
     dataset: copy.dataset,
     as_of: copy.as_of,
-    scope: { exact: 'unit', building_only: 'building', parcel_only: 'parcel' }[copy.match],
+    // An address's several records: "building", which the apps read as "not your own unit's record".
+    scope: { exact: 'unit', building_only: 'building', parcel_only: 'parcel', ambiguous: 'building' }[copy.match],
     method: copy.method,
     label: `${lead}${source}`,
     title: copy.title || 'County records',
@@ -269,8 +302,9 @@ function liveCopy(home) {
  * reading), kept on the Home. Null when the record has nothing to do with this
  * Home, so the caller goes on as before.
  *
- * @returns {Promise<null|{ copy: object|null, lookup: 'pending'|'none'|null }>}
- *   `pending`: storage can't be read just now, so say "Looking up…"; `none`: no record.
+ * @returns {Promise<null|{ copy: object|null, lookup: 'pending'|'none'|null, shared?: object }>}
+ *   `pending`: storage can't be read just now, so say "Looking up…"; `none`: no record. `shared`: with no copy, what
+ *   all the records at the Home's address agree on (agreedCopy), where its county shows that.
  */
 async function forHome(home) {
   if (!home) return null;
@@ -295,7 +329,10 @@ async function readForHome(home) {
     const answer = await lookupForScreen(address);
     if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
     const copy = copyFromAnswer(answer, address);
-    if (!copy) return { copy: null, lookup: 'none', match: answer.match, reason: answer.reason || null, jurisdiction: answer.jurisdiction };
+    if (!copy) {
+      const shared = servedAgreed(answer, address);
+      return { copy: null, lookup: 'none', match: answer.match, reason: answer.reason || null, jurisdiction: answer.jurisdiction, ...(shared ? { shared } : {}) };
+    }
     await storeCopy(home, copy);
     return { copy: router.served(copy), lookup: null };
   } catch (err) {
@@ -337,11 +374,12 @@ async function unitQuestion(home) {
 
 /**
  * What the record has for an address with no Home yet (Add Home). `copy` is what may be shown; `whole` is what a new
- * Home keeps, so a fact withheld today comes back without a new lookup.
+ * Home keeps, so a fact withheld today comes back without a new lookup. `shared`: with no copy, what all the records at
+ * the address agree on (agreedCopy), where its county shows that; a new Home never keeps it.
  * @param {object} address
  * @param {object} [options]
  * @param {boolean} [options.patient] A follow-up: it may wait a few seconds for storage to answer.
- * @returns {Promise<null|{ copy: object|null, whole: object|null, answer: object, lookup: 'found'|'none'|'pending' }>} null outside live counties.
+ * @returns {Promise<null|{ copy: object|null, whole: object|null, answer: object, lookup: 'found'|'none'|'pending', shared?: object }>} null outside live counties.
  */
 async function forAddress(address, options) {
   const found = await readForAddress(address, options);
@@ -357,7 +395,8 @@ async function readForAddress(address, { patient = false } = {}) {
       const answer = await lookupForScreen(address);
       if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
       const copy = copyFromAnswer(answer, address);
-      return { copy: router.served(copy), whole: copy, answer, lookup: copy ? 'found' : 'none' };
+      const shared = copy ? null : servedAgreed(answer, address);
+      return { copy: router.served(copy), whole: copy, answer, lookup: copy ? 'found' : 'none', ...(shared ? { shared } : {}) };
     } catch (err) {
       if (!(err instanceof StorageUnavailable)) throw err;
       if (Date.now() + FOLLOW_UP_EVERY_MS > until) return { copy: null, whole: null, answer: null, lookup: 'pending' };

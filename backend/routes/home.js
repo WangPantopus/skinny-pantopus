@@ -628,7 +628,7 @@ router.post('/property-suggestions', verifyToken,
   try {
     const lookup = PROPERTY_LOOKUPS.has(req.query.lookup) ? req.query.lookup : 'wait';
     const wanted = recordVocabulary.wantsRecordVocabulary(req);
-    const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin, { lookup, floorPlans: wanted });
+    const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin, { lookup, floorPlans: wanted, sharedFacts: wanted });
     res.json(recordVocabulary.suggestions(result, wanted));
   } catch (err) {
     logger.error('property-suggestions error', { error: err.message });
@@ -1264,9 +1264,10 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
     };
     // Who and when for what the form sent, beside the record. Beside ATTOM's copy, the form's prefill can't be told from an entry.
     // A person who checked year built, size, bedrooms and baths on the county's page (link and confirm) speaks for those four even there.
+    // At an address with several homes on record, what all of them agree on is the record the form is set beside, never kept.
     const checked = countyLinks.enabled() && !countyRecord?.copy && req.body.county_checked === true;
     const addedFacts = attomPropertyDetail && !checked ? null
-      : householdFacts.fromAddHome({ values: homeData, copy: countyRecord?.copy, actorId: userId, floorPlan, checked, onlyChecked: Boolean(attomPropertyDetail) });
+      : householdFacts.fromAddHome({ values: homeData, copy: countyRecord?.copy || countyRecord?.shared, actorId: userId, floorPlan, checked, onlyChecked: Boolean(attomPropertyDetail) });
     if (addedFacts) homeData.niche_data = { ...homeData.niche_data, household_facts: addedFacts };
     if (floorPlan) homeData.niche_data = { ...homeData.niche_data, floor_plan: floorPlan };
     if (floorPlan?.match === 'exact' && req.body.floor_plan_answer) {
@@ -2107,7 +2108,8 @@ router.get('/:id', verifyToken, async (req, res) => {
 router.get('/:id/property-details', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
-  try { res.json(recordVocabulary.propertyDetail(await homeDetailService.propertyDetail(req.params.id, req.user.id), recordVocabulary.wantsRecordVocabulary(req))); }
+  const wanted = recordVocabulary.wantsRecordVocabulary(req);
+  try { res.json(recordVocabulary.propertyDetail(await homeDetailService.propertyDetail(req.params.id, req.user.id, { sharedFacts: wanted }), wanted)); }
   catch (err) { homeDetailService.sendError(res, err); }
 });
 

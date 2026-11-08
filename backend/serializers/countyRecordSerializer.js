@@ -25,6 +25,7 @@
 
 const { estimateRows, estimateNote } = require('../services/homeValueCard');
 const { FACTS, SECTIONS: RECORD_SECTIONS } = require('../services/propertyRecords/facts');
+const { AGREED_FACTS } = require('../services/propertyRecords/identity');
 
 const { coversMoreThanHome, COVERS_MORE_NOTE } = require('../services/propertyRecords/salePrice');
 
@@ -541,6 +542,7 @@ const BUILDING_NOTES = {
   unit_not_recorded: 'These are the building\u2019s facts. The county doesn\u2019t keep a record for each apartment.',
   unit_not_found: 'These are the building\u2019s facts. We couldn\u2019t find your unit in the county\u2019s list.',
 };
+const AGREED_NOTE = 'More than one home is on record at this address. These are the details all of its records agree on; anything they differ on isn\u2019t shown.';
 
 function recordFooter(copy) {
   const date = dateLabel(copy.as_of);
@@ -554,12 +556,21 @@ function recordFooter(copy) {
  *
  * `estimate`: a Pantopus estimate, in a market it's on for (propertyRecords/valueEstimate.js).
  *
+ * An address with several homes on record (`match: 'ambiguous'`, homeRecord.js agreedCopy) gets only what all of its
+ * records agree on, in one section that says so: no values, lot, parcel or sale, and no estimate.
+ *
  * @returns {{ sections: object[], footer: string|null, as_of: string|null }|null}
  */
 function serializePropertyRecord(copy, estimate = null) {
   if (!copy || typeof copy !== 'object') return null;
   const facts = copy.facts || {};
   const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
+  if (copy.match === 'ambiguous') {
+    const building = titled('building');
+    addFacts(building, Object.fromEntries(AGREED_FACTS.filter((name) => facts[name] !== undefined).map((name) => [name, facts[name]])), ['building']);
+    if (!building.rows.length) return null;
+    return { sections: [{ id: building.id, title: building.title, rows: building.rows, note: AGREED_NOTE }], footer: recordFooter(copy), as_of: copy.as_of || null };
+  }
   const sections = [];
   const house = copy.match === 'exact' && copy.subject?.kind !== 'unit';
 
