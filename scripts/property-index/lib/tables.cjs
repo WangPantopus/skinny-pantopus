@@ -104,7 +104,7 @@ function zipMembers(zip) {
   return execFileSync('unzip', ['-Z1', zip], { maxBuffer: 16 * 1024 * 1024 }).toString('utf8').split('\n').filter(Boolean);
 }
 
-/** Every row of a public map layer, page by page, holding only `fields` (and with `points`, each point as _lng and _lat). */
+/** Every row of a public map layer (or those `where` picks), page by page, holding only `fields` (and with `points`, each point as _lng and _lat). */
 /** When each of a zip's files was written, YYYY-MM-DD by name. `unzip -l` prints MM-DD-YYYY on a Mac and YYYY-MM-DD on Linux. */
 function zipDates(zip, listing = execFileSync('unzip', ['-l', zip], { encoding: 'latin1' })) {
   const dates = new Map();
@@ -115,11 +115,11 @@ function zipDates(zip, listing = execFileSync('unzip', ['-l', zip], { encoding: 
   return dates;
 }
 
-async function* mapLayer(url, fields, { points = false } = {}) {
+async function* mapLayer(url, fields, { points = false, where = '1=1' } = {}) {
   let offset = 0;
   for (;;) {
     const query = new URLSearchParams({
-      where: '1=1', outFields: fields.join(','), returnGeometry: points ? 'true' : 'false', orderByFields: 'OBJECTID',
+      where, outFields: fields.join(','), returnGeometry: points ? 'true' : 'false', orderByFields: 'OBJECTID',
       ...(points ? { outSR: '4326' } : {}),
       resultOffset: String(offset), resultRecordCount: '2000', f: 'json',
     });

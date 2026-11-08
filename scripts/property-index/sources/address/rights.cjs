@@ -80,6 +80,16 @@ const POINT_LAYERS = [
     fields: { number: 'HsNbr', pre: 'StDir', name: 'StName', suffix: 'Stype', unit: 'Apt', building: 'Building', city: 'StCity', zip: 'Zp1' },
     terms: "Clark County, Washington: public layer, disclaimers only (read for the property index, November 5); the founder's OK for the county's public data",
   },
+  {
+    // Summit County, Colorado: Colorado's statewide file and the National Address Database hold 2 of its addresses.
+    id: 'co-summit',
+    state: 'CO',
+    url: 'https://services6.arcgis.com/dmNYNuTJZDtkcRJq/arcgis/rest/services/Address_Points/FeatureServer/0',
+    where: "SitusStatusDescription = 'Current'",
+    fields: { line: 'FullAddress', zip: 'ZIP_CODE' },
+    secondary: ['PrimaryUnitTypeAbbreviation', 'PrimaryUnitIdentifier', 'SecondaryUnitTypeAbbreviation', 'SecondaryUnitIdentifier'],
+    terms: 'Summit County, Colorado: its GIS open data, which Resolution 2017-03 makes "free and open geospatial data" for the public and commercial businesses, under the county\'s disclaimer (as is, at the user\'s risk); the layer is in the county\'s open data group. Read November 8. Owner columns are never asked for',
+  },
 ];
 
 /** Whether a row Overture distributes may enter the registry. */
