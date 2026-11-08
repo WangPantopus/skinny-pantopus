@@ -1279,7 +1279,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
     // A last message that replies to a Moment brings its quote (CONTRACT "Chat": last_message_moment).
     const lastMoments = await lastMessageMoments(roomList.map((p) => ({
       key: p.room.id, roomIds: [p.room.id], lastAt: msgByRoom[p.room.id]?.created_at || null,
-    })), userId);
+    })), userId, req.user);
 
     const enrichedRooms = roomList.map((p) => {
       const roomId = p.room.id;
@@ -1399,7 +1399,7 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
     // A reply to the business's Moment (CONTRACT "Chat"); `from_me` means the business sent it.
     const lastMoments = await lastMessageMoments(roomList.map((p) => ({
       key: p.room.id, roomIds: [p.room.id], lastAt: bizMsgByRoom[p.room.id]?.created_at || null,
-    })), businessUserId);
+    })), businessUserId, req.user);
 
     const rooms = roomList.map((p) => {
       const roomId = p.room.id;
@@ -3212,7 +3212,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         key: entry.entry_key,
         roomIds: entry.room_ids || (entry.room ? [entry.room.id] : []),
         lastAt: entry.last_message ? entry.last_message_at : null,
-      })), userId),
+      })), userId, req.user),
     ]);
     const trainTitles = new Map((trains.data || []).map((train) => [train.id, train.Activity?.title]));
     const muted = new Set(preferences.data?.chat_muted_user_ids || []);

@@ -541,14 +541,15 @@ async function holdIfReported(row) {
 }
 
 /**
- * After a moderator closes a report (routes/adminReports.js): a held Moment whose reports are all closed, and that no
- * moderator removed, is live again. Anything else is left as it is.
+ * After a moderator closes a report (routes/adminReports.js): a held Moment whose reports were all dismissed (no
+ * violation), and that no moderator removed, is live again. One closed as resolved means the moderator agreed something
+ * was wrong, so the Moment stays held even without a Remove. Anything else is left as it is.
  */
 async function releaseIfReviewed(postId) {
   const { data: row, error } = await supabaseAdmin.from('Post').select(MOMENT_SELECT).eq('id', postId).maybeSingle();
   if (error || !row || !row.is_story || row.moderation_state !== 'held' || row.archive_reason === 'moderation') return false;
   const { count, error: countError } = await supabaseAdmin.from('PostReport').select('id', { count: 'exact', head: true })
-    .eq('post_id', postId).in('status', ['pending', 'reviewed']);
+    .eq('post_id', postId).neq('status', 'dismissed');
   if (countError || count > 0) return false;
   const { data, error: updateError } = await supabaseAdmin.from('Post')
     .update({ moderation_state: 'live', moderation_rule: null, moderation_note: null, moderated_at: new Date().toISOString() })

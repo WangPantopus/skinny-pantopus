@@ -103,13 +103,16 @@ async function reportFlagged(row, reasons) {
   }
 }
 
+// After this many tries that couldn't run, a Moment's check gives up ('unavailable'): it stays live, reports still
+// hold it, and the job stops trying.
 function checkRecord(row, result) {
   const before = store.meta(row).check || {};
+  const attempts = (Number(before.attempts) || 0) + 1;
   return {
-    status: result.status,
+    status: result.status === 'unchecked' && attempts > MAX_ATTEMPTS ? 'unavailable' : result.status,
     reasons: result.reasons || [],
     checked_at: new Date().toISOString(),
-    attempts: (Number(before.attempts) || 0) + 1,
+    attempts,
   };
 }
 

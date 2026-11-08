@@ -7,6 +7,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const media = require('./momentMedia');
 const { meta, hasEnded, KINDS, fail } = require('./momentStore');
+const { isFeatureEnabled } = require('../featureFlagService');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -83,16 +84,18 @@ function micros(value) {
 /**
  * `last_message_moment` for conversation rows: `rows` are { key, roomIds, lastAt } (the row's rooms and its last
  * message's time); answers key → { id, kind, thumb_url, ended, from_me } for the rows whose last message names a
- * Moment. A failed read answers none (the rows keep last_message_preview).
+ * Moment, `from_me` meaning `viewerId` sent it. A failed read answers none (the rows keep last_message_preview).
  */
 // Conversation rows read per query: their room ids and times go in the request URL.
 const ROWS_PER_READ = 40;
 
-async function lastMessageMoments(rows, viewerId) {
+async function lastMessageMoments(rows, viewerId, flagUser) {
   const wanted = (rows || []).filter((row) => row.lastAt && row.roomIds?.length);
   const answer = new Map();
   if (!wanted.length) return answer;
   try {
+    // While Moments are off for the person reading (`flagUser`, req.user), their lists don't look (the flag is cached).
+    if (!(await isFeatureEnabled('moments', flagUser))) return answer;
     const batches = [];
     for (let at = 0; at < wanted.length; at += ROWS_PER_READ) batches.push(wanted.slice(at, at + ROWS_PER_READ));
     // Only the Moment replies among the last messages come back.
