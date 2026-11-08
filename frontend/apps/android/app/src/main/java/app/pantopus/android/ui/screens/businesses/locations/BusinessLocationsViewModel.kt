@@ -122,7 +122,7 @@ class BusinessLocationsViewModel
 
         private fun subtitle(location: BusinessLocationDto): String? {
             val parts = mutableListOf<String>()
-            location.address?.trimmedNonEmpty()?.let(parts::add)
+            location.streetLine?.let(parts::add)
             val locality =
                 listOfNotNull(location.city?.trimmedNonEmpty(), location.state?.trimmedNonEmpty())
                     .joinToString(", ")
