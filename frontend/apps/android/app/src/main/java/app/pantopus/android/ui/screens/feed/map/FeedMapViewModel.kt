@@ -149,11 +149,27 @@ sealed interface FeedMapUiState {
         val pinStyles: Map<String, PulsePinStyle> = emptyMap(),
         /** Each cluster's intent mix and live state, by cluster id. */
         val clusterStyles: Map<String, PulseClusterStyle> = emptyMap(),
+        /**
+         * Connections' posts with no place (no pin), newest first: the bar under
+         * the map counts them and opens them as a list.
+         */
+        val unplacedPosts: List<ExploreEntity> = emptyList(),
+        /** The server holds more posts with no place than [unplacedPosts]. */
+        val unplacedMore: Boolean = false,
+        /** The posts with no place are shown as a list. */
+        val showsUnplaced: Boolean = false,
     ) : FeedMapUiState {
         val isEmpty: Boolean get() = entities.isEmpty()
 
         /** The listed cluster's posts, nearest first. */
         val clusterPosts: List<ExploreEntity> get() = entities.filter { it.id in clusterPostIds }
+
+        /** "3 posts with no place", "50+" when the server holds more. */
+        val unplacedLabel: String
+            get() {
+                val count = if (unplacedMore) "${unplacedPosts.size}+" else "${unplacedPosts.size}"
+                return if (unplacedPosts.size == 1 && !unplacedMore) "1 post with no place" else "$count posts with no place"
+            }
     }
 
     data class Error(val message: String) : FeedMapUiState
@@ -199,6 +215,9 @@ class FeedMapViewModel
         private var query = FeedMapQuery(FeedSurface.Pulse, null)
         private var searchText = ""
         private var allEntities: List<ExploreEntity> = emptyList()
+
+        /** Connections' posts with no place (no pin), newest first. */
+        private var allUnplaced: List<ExploreEntity> = emptyList()
         private var searchableTextById: Map<String, String> = emptyMap()
         private var userCoordinate: UserCoordinate? = null
 
@@ -268,11 +287,16 @@ class FeedMapViewModel
                     selectedId = null,
                     clusterPostIds = emptySet(),
                     clusterStyles = clusterStyles(markers, current.pinStyles),
+                    unplacedPosts = matchingUnplaced(),
+                    showsUnplaced = false,
                 )
         }
 
         private fun matchingEntities(): List<ExploreEntity> =
             allEntities.filter { searchText.isEmpty() || searchableTextById[it.id]?.contains(searchText) == true }
+
+        private fun matchingUnplaced(): List<ExploreEntity> =
+            allUnplaced.filter { searchText.isEmpty() || searchableTextById[it.id]?.contains(searchText) == true }
 
         fun refresh() {
             if (!isReady) {
@@ -442,7 +466,7 @@ class FeedMapViewModel
         /** Shows a pin's preview card, or none for null; either way a cluster's list closes. */
         fun selectEntity(id: String?) {
             val current = _state.value as? FeedMapUiState.Loaded ?: return
-            _state.value = current.copy(selectedId = id, clusterPostIds = emptySet())
+            _state.value = current.copy(selectedId = id, clusterPostIds = emptySet(), showsUnplaced = false)
         }
 
         /** Regroups the loaded pins for [camera]'s zoom, keeping the selection and the listed cluster. */
@@ -456,7 +480,14 @@ class FeedMapViewModel
         /** Lists [cluster]'s posts in the preview card's place. */
         fun showClusterPosts(cluster: ExploreCluster) {
             val current = _state.value as? FeedMapUiState.Loaded ?: return
-            _state.value = current.copy(selectedId = null, clusterPostIds = cluster.entityIds.toSet())
+            _state.value = current.copy(selectedId = null, clusterPostIds = cluster.entityIds.toSet(), showsUnplaced = false)
+        }
+
+        /** Lists Connections' posts with no place in the preview card's place. */
+        fun showUnplacedPosts() {
+            val current = _state.value as? FeedMapUiState.Loaded ?: return
+            if (current.unplacedPosts.isEmpty()) return
+            _state.value = current.copy(selectedId = null, clusterPostIds = emptySet(), showsUnplaced = true)
         }
 
         /** Fetches the markers for [target]: the bounds the screen shows there ([boundsFor]), clustered by its span. */
@@ -521,8 +552,9 @@ class FeedMapViewModel
                 ExploreMapViewModel.projectMarkers(data.markers, anchor)
                     .filter { it.kind == ExploreKind.Post }
                     .sortedBy { it.distanceMiles }
+            allUnplaced = data.unplacedPosts.map { ExploreMapViewModel.unplacedPostEntity(it) }
             searchableTextById =
-                data.markers.associate { marker ->
+                (data.markers + data.unplacedPosts).associate { marker ->
                     marker.id to
                         listOfNotNull(
                             marker.title,
@@ -532,6 +564,7 @@ class FeedMapViewModel
                             .joinToString("\n").lowercase()
                 }
             val entities = matchingEntities()
+            val unplaced = matchingUnplaced()
             val ids = entities.mapTo(HashSet()) { it.id }
             val hint =
                 data.nearestActivityCenter?.let {
@@ -552,6 +585,9 @@ class FeedMapViewModel
                     clusterPostIds = previous?.clusterPostIds.orEmpty().filterTo(HashSet()) { it in ids },
                     pinStyles = pinStyles,
                     clusterStyles = clusterStyles(markers, pinStyles),
+                    unplacedPosts = unplaced,
+                    unplacedMore = data.unplacedMore,
+                    showsUnplaced = previous?.showsUnplaced == true && unplaced.isNotEmpty(),
                 )
         }
 
@@ -560,7 +596,7 @@ class FeedMapViewModel
             data: PostsMapResponse,
             now: Instant,
         ): Map<String, PulsePinStyle> =
-            data.markers
+            (data.markers + data.unplacedPosts)
                 .filter { it.layerType == "post" }
                 .associate { marker ->
                     val createdAt = parseInstant(marker.createdAt)

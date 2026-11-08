@@ -19,15 +19,30 @@ public struct PostsMapResponse: Decodable, Sendable, Hashable {
     /// `find_nearest_activity_center` and hands back a coordinate the
     /// client can offer to jump to (`backend/routes/posts.js:1854`).
     public let nearestActivityCenter: PostsMapCenterDTO?
+    /// Connections only: the posts its list holds that show no point, so no
+    /// pin, newest first, whatever area the map shows
+    /// (`backend/services/feedService.js` getUnplacedConnectionPosts).
+    public let unplacedPosts: [PostsMapMarkerDTO]?
+    /// More posts with no place than `unplacedPosts` holds.
+    public let unplacedMore: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case markers
         case nearestActivityCenter = "nearest_activity_center"
+        case unplacedPosts = "unplaced_posts"
+        case unplacedMore = "unplaced_more"
     }
 
-    public init(markers: [PostsMapMarkerDTO], nearestActivityCenter: PostsMapCenterDTO? = nil) {
+    public init(
+        markers: [PostsMapMarkerDTO],
+        nearestActivityCenter: PostsMapCenterDTO? = nil,
+        unplacedPosts: [PostsMapMarkerDTO]? = nil,
+        unplacedMore: Bool? = nil
+    ) {
         self.markers = markers
         self.nearestActivityCenter = nearestActivityCenter
+        self.unplacedPosts = unplacedPosts
+        self.unplacedMore = unplacedMore
     }
 }
 

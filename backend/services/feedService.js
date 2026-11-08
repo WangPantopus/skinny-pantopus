@@ -898,16 +898,30 @@ async function loadConnectionIds(userId) {
   ).filter(Boolean);
 }
 
-// The reposts embed holds only reposts by these people.
-function withConnectionReposts(query, authorIds) {
-  return query
-    .eq('connection_reposts.share_type', 'repost')
-    .in('connection_reposts.user_id', authorIds);
+// Who Connections reads (list and map alike): the posts the viewer's connections wrote for Connections and the posts
+// they reposted, and the posts the viewer wrote for Connections, which their connections read (never the viewer's
+// own reposts). Connections the viewer muted or blocked are left out, reposts included.
+async function connectionsGraph(userId, filtersRead) {
+  const [connectionIds, filters] = await Promise.all([loadConnectionIds(userId), outcome(filtersRead)]);
+  const reposterIds = connectionIds.filter(id => !filters.mutedUserIds.has(id) && !filters.blockedUserIds.has(id));
+  const writerIds = [...reposterIds, userId];
+  return { reposterIds, writerIds, writerIdSet: new Set(writerIds) };
 }
 
-function connectionPostsQuery(query, authorIds) {
-  return withConnectionReposts(query, authorIds)
-    .or(`and(user_id.in.(${authorIds.join(',')}),distribution_targets.ov.{connections},or(post_as.is.null,post_as.neq.business)),connection_reposts.not.is.null`);
+// An id no account has: the reposts embed filtered by it holds nothing.
+const NO_ACCOUNT_ID = '00000000-0000-0000-0000-000000000000';
+
+// The reposts embed holds only reposts by the viewer's connections (none when they have none: an empty list would
+// leave the embed unfiltered).
+function withConnectionReposts(query, reposterIds) {
+  return query
+    .eq('connection_reposts.share_type', 'repost')
+    .in('connection_reposts.user_id', reposterIds.length ? reposterIds : [NO_ACCOUNT_ID]);
+}
+
+function connectionPostsQuery(query, { writerIds, reposterIds }) {
+  return withConnectionReposts(query, reposterIds)
+    .or(`and(user_id.in.(${writerIds.join(',')}),distribution_targets.ov.{connections},or(post_as.is.null,post_as.neq.business)),connection_reposts.not.is.null`);
 }
 
 // ---------------------------------------------------------------------------
@@ -923,10 +937,11 @@ function timestampMicros(value) {
   return millis * 1000 + Number(fraction.padEnd(6, '0').slice(0, 6));
 }
 
-// When a Connections post reached the viewer: when a connection wrote it for Connections, or the latest repost by
-// one of their connections (the embed holds no one else's), whichever is later. Null for a row that is neither.
-function reachedConnectionsAt(row, authorIdSet) {
-  const written = authorIdSet.has(row.user_id) && (row.distribution_targets || []).includes('connections')
+// When a Connections post reached the viewer: when a connection (or the viewer) wrote it for Connections, or the
+// latest repost by one of their connections (the embed holds no one else's), whichever is later. Null for a row that
+// is neither.
+function reachedConnectionsAt(row, writerIdSet) {
+  const written = writerIdSet.has(row.user_id) && (row.distribution_targets || []).includes('connections')
     && row.post_as !== 'business';
   let latest = written ? { at: row.created_at, micros: timestampMicros(row.created_at) } : null;
   for (const share of row.connection_reposts || []) {
@@ -957,12 +972,12 @@ function batchFloor(times, batch) {
 }
 
 // One round of unpinned Connections rows below `upper`, newest first by when they reached the viewer. The posts
-// connections wrote for Connections and the reposts by connections are each read newest first, a batch at a time.
+// written for Connections and the reposts by connections are each read newest first, a batch at a time.
 // A post is listed only once it is newer than both batches' floors: above them neither read can still hold a later
 // time for it, so no post is cut off or listed twice. The next round starts at `floor` (null: nothing is left).
-async function connectionRows({ posts, authorIds, authorIdSet, upper, batch }) {
-  let written = withConnectionReposts(posts(), authorIds)
-    .in('user_id', authorIds)
+async function connectionRows({ posts, graph, upper, batch }) {
+  let written = withConnectionReposts(posts(), graph.reposterIds)
+    .in('user_id', graph.writerIds)
     .overlaps('distribution_targets', ['connections'])
     .or('post_as.is.null,post_as.neq.business');
   if (upper) {
@@ -970,11 +985,13 @@ async function connectionRows({ posts, authorIds, authorIdSet, upper, batch }) {
   }
   let shares = supabaseAdmin.from('PostShare').select('post_id, created_at')
     .eq('share_type', 'repost')
-    .in('user_id', authorIds);
+    .in('user_id', graph.reposterIds);
   if (upper) shares = shares.lte('created_at', upper.at);
   const [writtenRead, sharesRead] = await Promise.all([
     written.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(batch),
-    shares.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(batch),
+    graph.reposterIds.length
+      ? shares.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(batch)
+      : { data: [] },
   ]);
   if (writtenRead.error) throw new Error(`Feed query failed: ${writtenRead.error.message}`);
   if (sharesRead.error) throw new Error(`Feed query failed: ${sharesRead.error.message}`);
@@ -989,13 +1006,13 @@ async function connectionRows({ posts, authorIds, authorIdSet, upper, batch }) {
   const repostedIds = [...new Set(shareRows.map((share) => share.post_id))].filter((id) => !listed.has(id));
   let repostedRows = [];
   if (repostedIds.length) {
-    const { data, error } = await withConnectionReposts(posts(), authorIds).in('id', repostedIds);
+    const { data, error } = await withConnectionReposts(posts(), graph.reposterIds).in('id', repostedIds);
     if (error) throw new Error(`Feed query failed: ${error.message}`);
     repostedRows = data || [];
   }
   const floorMicros = floor && timestampMicros(floor);
   const rows = [...writtenRows, ...repostedRows]
-    .map((row) => ({ row, reached: reachedConnectionsAt(row, authorIdSet) }))
+    .map((row) => ({ row, reached: reachedConnectionsAt(row, graph.writerIdSet) }))
     .filter(({ row, reached }) => reached && belowUpper(row, reached, upper)
       && (floor == null || reached.micros > floorMicros))
     .sort(byReachedDesc);
@@ -1003,11 +1020,11 @@ async function connectionRows({ posts, authorIds, authorIdSet, upper, batch }) {
 }
 
 // The pinned Connections posts below `upper`, newest first by when they reached the viewer: few, so read at once.
-async function pinnedConnectionRows({ posts, authorIds, authorIdSet, upper }) {
-  const { data, error } = await connectionPostsQuery(posts(), authorIds).limit(100);
+async function pinnedConnectionRows({ posts, graph, upper }) {
+  const { data, error } = await connectionPostsQuery(posts(), graph).limit(100);
   if (error) throw new Error(`Feed query failed: ${error.message}`);
   return (data || [])
-    .map((row) => ({ row, reached: reachedConnectionsAt(row, authorIdSet) }))
+    .map((row) => ({ row, reached: reachedConnectionsAt(row, graph.writerIdSet) }))
     .filter(({ row, reached }) => reached && belowUpper(row, reached, upper))
     .sort(byReachedDesc);
 }
@@ -1272,11 +1289,14 @@ async function getListFeed({
   const filtersRead = settle(getMuteAndHideFilters(userId));
   const cursorPinRead = ordersByPin ? settle(getCursorPinState(cursorId)) : null;
   const scopeAccess = await (scopeAccessRead || postScopeAccess(userId));
-  const globalPinsRead = isFirstPage ? settle(getGlobalPins(scopeAccess)) : null;
+  // Connections lists only what connections wrote or reposted for the viewer and the viewer's own posts for them, so
+  // the global pins (Pantopus-wide notices) lead the other surfaces only.
+  const globalPinsRead = isFirstPage && surface !== 'connections' ? settle(getGlobalPins(scopeAccess)) : null;
   const initialCursorPinned = cursorPinRead ? await outcome(cursorPinRead) : null;
 
   // 2–4. Resolve author IDs and distribution target per surface
   let authorIds = null;
+  let connectionGraph = null;
   let distributionTarget;
   let personaRankById = new Map();
 
@@ -1307,14 +1327,9 @@ async function getListFeed({
       return { posts: [], pagination: { nextCursor: null, hasMore: false }, emptyGraph: true };
     }
   } else {
-    // connections
+    // connections (connectionsGraph): someone with no connections yet still sees what they wrote for Connections
     distributionTarget = 'connections';
-    authorIds = await loadConnectionIds(userId);
-    const filters = await outcome(filtersRead);
-    authorIds = authorIds.filter(id => !filters.mutedUserIds.has(id) && !filters.blockedUserIds.has(id));
-    if (!authorIds.length) {
-      return { posts: [], pagination: { nextCursor: null, hasMore: false }, emptyGraph: true };
-    }
+    connectionGraph = await connectionsGraph(userId, filtersRead);
   }
 
   // Pre-compute the query box and center for place surface. The box is widened so it holds
@@ -1343,7 +1358,6 @@ async function getListFeed({
   // Connections lists pinned posts first, then the rest, each newest first by when the post reached the viewer
   // (connectionRows): a repost at the moment it was reposted. Its cursor carries that time; the cursor post's pin
   // state says which of the two it is in.
-  const authorIdSet = new Set(authorIds || []);
   const hasCursor = Boolean(cursorCreatedAt && cursorId);
   let connectionsPinned = !hasCursor || initialCursorPinned === true;
   let connectionsUpper = hasCursor ? { at: cursorCreatedAt, id: cursorId } : null;
@@ -1380,7 +1394,7 @@ async function getListFeed({
     if (surface === 'connections') {
       // Business posts reach a connection only through an explicit repost, not their writer (connectionRows).
       const read = {
-        posts: () => surfacePosts().eq('is_pinned', connectionsPinned), authorIds, authorIdSet, upper: connectionsUpper,
+        posts: () => surfacePosts().eq('is_pinned', connectionsPinned), graph: connectionGraph, upper: connectionsUpper,
       };
       let ordered;
       if (connectionsPinned) {
@@ -1518,10 +1532,10 @@ async function getListFeed({
     ? { createdAt: loopCursorCreatedAt, id: loopCursorId }
     : null;
 
-  // 12. Prepend global pins on the first page (no cursor = first page).
+  // 12. Prepend global pins on the first page (no cursor = first page), Connections aside (globalPinsRead).
   // These bypass the surface, location and author filters, but not the read check or the
   // viewer's own blocks, mutes and hides (contract §0 and §5).
-  if (isFirstPage) {
+  if (globalPinsRead) {
     const globalPins = await outcome(globalPinsRead);
     if (globalPins.length) {
       const readablePins = (await readablePosts(globalPins, userId)).map(r => normalizeFeedPostRow(r));
@@ -1552,6 +1566,7 @@ async function getListFeed({
         || (lastPost ? { createdAt: reachedAtById.get(lastPost.id) || lastPost.created_at, id: lastPost.id } : null),
       hasMore,
     },
+    ...(connectionGraph && !connectionGraph.reposterIds.length ? { emptyGraph: true } : {}),
   };
 }
 
@@ -1918,6 +1933,22 @@ async function getSportsFeed({
 // getMapFeed
 // ---------------------------------------------------------------------------
 
+// The rows a map read found that this viewer is shown, normalized: readable (a connection's repost never grants
+// access to its original audience), not muted, hidden or blocked, and without politics unless the viewer chose it.
+async function shownMapRows(rows, { userId, surface, filtersRead }) {
+  const [readableRows, filters] = await Promise.all([
+    surface === 'connections' ? readablePosts(rows, userId) : withoutUnreadablePrivatePosts(rows, userId),
+    outcome(filtersRead),
+  ]);
+  const posts = applyMuteHideFilters(
+    readableRows.map(row => normalizeFeedPostRow(row, new Set(), new Set())),
+    filters,
+    surface,
+    userId
+  );
+  return filters.feedPreferences?.[politicsPrefKey(surface)] ? posts : posts.filter(p => !isPoliticsPost(p));
+}
+
 /**
  * The posts this viewer may see on the map that are displayed inside the
  * bounding box, newest first, each with its displayed point, not enriched.
@@ -1935,25 +1966,15 @@ async function loadMapPosts({
   limit = 50,
 }) {
   const normalizedSurface = FEED_SURFACES.includes(surface) ? surface : 'place';
-  const scopeAccess = await postScopeAccess(userId);
   const queryLimit = Math.max(Number(limit) || 50, 1);
   // Connections also excludes muted or blocked reposters from its author graph.
   const filtersRead = settle(getMuteAndHideFilters(userId));
 
-  // 1. Resolve author IDs and distribution target
-  let authorIds = null;
-  let distributionTarget = 'place';
-
-  if (normalizedSurface === 'connections') {
-    authorIds = await loadConnectionIds(userId);
-    const filters = await outcome(filtersRead);
-    authorIds = authorIds.filter(id => !filters.mutedUserIds.has(id) && !filters.blockedUserIds.has(id));
-    distributionTarget = 'connections';
-  }
-
-  if (authorIds && authorIds.length === 0) {
-    return [];
-  }
+  // 1. Who the surface reads: Place every post for the area, Connections the list's graph (connectionsGraph)
+  const [scopeAccess, graph] = await Promise.all([
+    postScopeAccess(userId),
+    normalizedSurface === 'connections' ? connectionsGraph(userId, filtersRead) : null,
+  ]);
 
   // 2. Build query with bounding box (fall back to latitude/longitude when effective_* is NULL).
   // Stored points are searched in the box widened by the most the location rule moves
@@ -1963,7 +1984,7 @@ async function loadMapPosts({
   const queryBox = widenForDisplayedPoints(box);
   let query = withoutOthersUnplacedPosts(scopeAccess.query(onlyShownPosts(supabaseAdmin
     .from('Post')
-    .select(authorIds ? CONNECTION_POST_SELECT : FEED_POST_SELECT)
+    .select(graph ? CONNECTION_POST_SELECT : FEED_POST_SELECT)
     .is('archived_at', null)))
     .or(
       `and(effective_latitude.gte.${queryBox.south},effective_latitude.lte.${queryBox.north},effective_longitude.gte.${queryBox.west},effective_longitude.lte.${queryBox.east}),` +
@@ -1973,29 +1994,15 @@ async function loadMapPosts({
     .limit(queryLimit + 40);
 
   if (postType) query = query.eq('post_type', postType);
-  query = authorIds ? connectionPostsQuery(query, authorIds)
-    : query.overlaps('distribution_targets', [distributionTarget]);
+  query = graph ? connectionPostsQuery(query, graph) : query.overlaps('distribution_targets', ['place']);
 
   const { data, error } = await query;
   if (error) {
     throw new Error(`Failed to load map posts: ${error.message}`);
   }
 
-  // 3–4. Normalize and apply mute/hide/block
-  const filters = await outcome(filtersRead);
-  const readableRows = authorIds ? await readablePosts(data || [], userId)
-    : await withoutUnreadablePrivatePosts(data || [], userId);
-  let posts = applyMuteHideFilters(
-    readableRows.map(row => normalizeFeedPostRow(row, new Set(), new Set())),
-    filters,
-    normalizedSurface,
-    userId
-  );
-
-  // 5. Politics filtering
-  if (!filters.feedPreferences?.[politicsPrefKey(normalizedSurface)]) {
-    posts = posts.filter(p => !isPoliticsPost(p));
-  }
+  // 3–5. Readable, not muted, hidden or blocked, politics as the viewer chose
+  const posts = await shownMapRows(data || [], { userId, surface: normalizedSurface, filtersRead });
 
   // 6. Keep the posts displayed inside the box (a post without a displayed point has no pin)
   const shown = posts
@@ -2027,6 +2034,43 @@ async function getMapFeed(opts) {
   const shown = await loadMapPosts({ ...opts, ...box });
   // 8. Enrich; this applies the response privacy, which puts each pin at its displayed point
   return enrichFeedPosts(shown.map(({ post }) => post), opts.userId);
+}
+
+// The most posts with no place the Connections map lists (the newest).
+const MAX_UNPLACED_POSTS = 50;
+
+/**
+ * The Connections map's posts with no place: the posts the Connections list holds that show this
+ * viewer no point, so no pin (written without a place, or with one only its author sees). Newest
+ * first by when each reached the viewer, as the list orders them, enriched like the map's posts.
+ * Place has none to list: every Place post has a place.
+ *
+ * @returns {Promise<{ posts: object[], hasMore: boolean }>}
+ */
+async function getUnplacedConnectionPosts({ userId, postType, limit = MAX_UNPLACED_POSTS }) {
+  const filtersRead = settle(getMuteAndHideFilters(userId));
+  const [scopeAccess, graph] = await Promise.all([postScopeAccess(userId), connectionsGraph(userId, filtersRead)]);
+  const batch = limit + 40;
+  let query = connectionPostsQuery(scopeAccess.query(onlyShownPosts(supabaseAdmin
+    .from('Post')
+    .select(CONNECTION_POST_SELECT)
+    .is('archived_at', null)))
+    // The rows that can show no point: none stored, or one only its author sees (displayedPoint decides below).
+    .or(`latitude.is.null,longitude.is.null,and(location_precision.eq.none,user_id.neq.${userId})`), graph)
+    .order('created_at', { ascending: false })
+    .limit(batch);
+  if (postType) query = query.eq('post_type', postType);
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to load map posts with no place: ${error.message}`);
+  const rows = data || [];
+  const reached = new Map(rows.map((row) => [row.id, reachedConnectionsAt(row, graph.writerIdSet)]));
+  const unplaced = (await shownMapRows(rows, { userId, surface: 'connections', filtersRead }))
+    .filter((post) => reached.get(post.id) && !displayedPoint(post, userId))
+    .sort((a, b) => byReachedDesc({ row: a, reached: reached.get(a.id) }, { row: b, reached: reached.get(b.id) }));
+  return {
+    posts: await enrichFeedPosts(unplaced.slice(0, limit), userId),
+    hasMore: unplaced.length > limit || rows.length === batch,
+  };
 }
 
 // Half-sides, in degrees, of the widening boxes the empty-map hint searches:
@@ -2072,6 +2116,7 @@ async function findNearestMapPost({ userId, surface = 'place', postType, latitud
 module.exports = {
   getListFeed,
   getMapFeed,
+  getUnplacedConnectionPosts,
   findNearestMapPost,
   getSportsFeed,
   getActiveSportsEvents,
