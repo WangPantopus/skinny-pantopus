@@ -45,9 +45,11 @@ function bathFacts(total, most = 12) {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 /** "November 2026" from "2026-11-04", for a dataset line people read. */
 const monthOf = (iso) => (/^(\d{4})-(\d{2})/.test(iso || '') ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}` : 'current');
+/** "October 30, 2026" from "2026-10-30". */
+const dayOf = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || '') ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}` : 'an unknown date');
 
 /** One line for the build log: counts only. */
 const describe = (county, { homes, filled, several, facts }) => `${county}: ${filled} of ${homes} homes gained facts from the county's file`
   + ` (${Object.entries(facts).map(([fact, n]) => `${fact} ${n}`).join(', ') || 'none'}); ${several} parcels with more than one dwelling left as they were`;
 
-module.exports = { fillHomes, bathFacts, describe, monthOf };
+module.exports = { fillHomes, bathFacts, describe, monthOf, dayOf };
