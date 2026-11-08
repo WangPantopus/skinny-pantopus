@@ -82,6 +82,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -121,6 +122,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
 
 /**
  * Test tag on the list-of-rows root container — used by Compose tests.
@@ -1636,6 +1638,15 @@ private fun AvatarWithBadgeView(leading: RowLeading.AvatarWithBadge) {
                 fontWeight = FontWeight.Bold,
                 fontSize = (size.value * 0.32f).sp,
             )
+            // The person's photo over their initials, which show while it loads and when they have none.
+            if (!leading.imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = leading.imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize().clip(CircleShape),
+                )
+            }
         }
         if (leading.verified) {
             Box(

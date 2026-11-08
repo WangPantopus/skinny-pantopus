@@ -33,6 +33,8 @@ data class ChatSearchResult(
     val snippet: String,
     val matchedMessageId: String?,
     val query: String,
+    /** The other person's photo in a one-to-one conversation; initials show without one. */
+    val avatarUrl: String? = null,
 )
 
 /**

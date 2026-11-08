@@ -38,6 +38,14 @@ data class BusinessInboxRoomDto(
     @Json(name = "unread_count") val unreadCount: Int? = null,
     @Json(name = "other_participant_name") val otherParticipantName: String? = null,
     @Json(name = "other_participant_username") val otherParticipantUsername: String? = null,
+    /** The counterpart's public identity; only its photo is read. */
+    @Json(name = "other_participant_identity") val otherParticipantIdentity: BusinessInboxIdentityDto? = null,
+)
+
+/** The photo the counterpart shows neighbors. */
+@JsonClass(generateAdapter = true)
+data class BusinessInboxIdentityDto(
+    val avatarUrl: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

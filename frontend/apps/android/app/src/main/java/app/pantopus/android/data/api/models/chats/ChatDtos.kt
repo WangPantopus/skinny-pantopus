@@ -151,11 +151,17 @@ data class ChatMessageSender(
     /** Current public identity projection; legacy servers still use name/username. */
     val displayName: String? = null,
     val handle: String? = null,
+    /** The identity's photo: the one the person shows neighbors, or a business's logo. */
+    val avatarUrl: String? = null,
     /** The identity's kind: `local` for a person, `business` for a business. */
     val type: String? = null,
 ) {
     val displayLabel: String?
         get() = listOf(displayName, name, handle, username).firstOrNull { !it.isNullOrBlank() }
+
+    /** The photo beside the sender's messages; older servers send `profile_picture_url`. */
+    val photoUrl: String?
+        get() = (avatarUrl ?: profilePictureUrl)?.takeIf { it.isNotBlank() }
 }
 
 /** One row from `/messages`. */

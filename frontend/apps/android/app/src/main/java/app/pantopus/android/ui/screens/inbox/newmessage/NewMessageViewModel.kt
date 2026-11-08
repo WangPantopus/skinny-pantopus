@@ -132,6 +132,7 @@ class NewMessageViewModel
                     initials = row.initials,
                     verified = row.verified,
                     locality = row.locality,
+                    avatarUrl = row.avatarUrl,
                 )
         }
 
@@ -317,6 +318,7 @@ class NewMessageViewModel
                 // Relationship rows carry no verification, so no badge.
                 verified = false,
                 identity = NewMessageIdentityBadge.Personal,
+                avatarUrl = user?.profilePictureUrl?.takeIf { it.isNotBlank() },
             )
         }
 
@@ -349,6 +351,7 @@ class NewMessageViewModel
                 subIcon = PantopusIcon.MessageCircle,
                 verified = verified,
                 identity = identity,
+                avatarUrl = dto.otherParticipantAvatar?.takeIf { it.isNotBlank() },
             )
         }
 
@@ -370,6 +373,7 @@ class NewMessageViewModel
                 // Search results carry no verification, so no badge.
                 verified = false,
                 identity = identity,
+                avatarUrl = dto.profilePicture?.takeIf { it.isNotBlank() },
             )
         }
 

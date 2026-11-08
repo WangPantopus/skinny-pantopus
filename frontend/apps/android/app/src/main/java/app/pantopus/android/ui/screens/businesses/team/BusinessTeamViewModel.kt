@@ -42,6 +42,8 @@ data class BusinessTeamMemberRow(
     val avatarGradient: GradientPair,
     val joinedText: String?,
     val canManage: Boolean,
+    /** The member's photo, as neighbors see it; their initials show without one. */
+    val avatarUrl: String? = null,
 )
 
 /** One role group section (owner → viewer order). */
@@ -374,6 +376,7 @@ class BusinessTeamViewModel
                 avatarGradient = BusinessTeamAvatarTone.toneFor(userId).gradient,
                 joinedText = relativeText(member.joinedAt ?: member.invitedAt, now, zone)?.let { "Joined $it" },
                 canManage = canManage && role != BusinessRole.Owner && outranks(role),
+                avatarUrl = member.user?.profilePictureUrl?.takeIf { it.isNotBlank() },
             )
         }
 

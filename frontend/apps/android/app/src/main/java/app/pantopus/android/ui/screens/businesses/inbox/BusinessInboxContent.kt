@@ -35,6 +35,8 @@ data class BusinessInboxRoom(
     /** Relative timestamp ("2h ago"); empty when unknown. */
     val timeAgo: String,
     val unreadCount: Int,
+    /** The counterpart's photo; their initials show without one. */
+    val avatarUrl: String? = null,
 ) {
     val isUnread: Boolean get() = unreadCount > 0
 }
