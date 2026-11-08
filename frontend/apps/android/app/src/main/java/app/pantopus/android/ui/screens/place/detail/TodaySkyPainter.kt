@@ -62,6 +62,8 @@ class TodaySkyPainter(
     private val season: SkySeason,
     private val still: Boolean,
     private val details: SkyDetails = SkyDetails(),
+    /** A shared clip's frame, in seconds: rain and snow fall to it while the rest of a [still] scene holds (`SkyShareCard.kt`). */
+    private val falling: Double? = null,
 ) {
     private val smoke = details.smoke
     private val weather = skyWeather(condition)
@@ -267,7 +269,7 @@ class TodaySkyPainter(
             val speed = 380 + random.next() * 160
             val length = 9 + random.next() * 7
             val offset = random.next() * scene.height
-            val fall = (offset + if (still) 0.0 else scene.time * speed) % (scene.height + length)
+            val fall = (offset + fallen(scene) * speed) % (scene.height + length)
             val y = fall - length
             val x = start + (y + length) * slant
             path.moveTo(x.toFloat(), y.toFloat())
@@ -277,10 +279,13 @@ class TodaySkyPainter(
         drawPath(path, color, style = Stroke(width = 1.2f, cap = StrokeCap.Round))
     }
 
+    /** The seconds rain and snow have fallen: a clip's frame, or the scene's clock (none when still). */
+    private fun fallen(scene: SkyScene): Double = falling ?: if (still) 0.0 else scene.time
+
     private fun DrawScope.paintSnow(scene: SkyScene) {
         if (weather != SkyPalette.Weather.SNOW && condition != WeatherConditionCode.SLEET) return
         val random = SkyRandom(23)
-        val moving = if (still) 0.0 else scene.time
+        val moving = fallen(scene)
         // Flakes blow sideways as they fall, so they start further upwind.
         val slant = wind.slant * wind.toward
         val spread = scene.height * abs(slant)

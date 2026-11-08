@@ -76,15 +76,20 @@ private val PEAK_INSET = 18.dp
 /** Above this font scale the sunrise, daylight and sunset stack, so no time breaks in a third of the card. */
 private const val TIMES_STACK_SCALE = 1.3f
 
-/** [weather] is the reported weather, so the little sky matches the big one above it. */
+/**
+ * [weather] is the reported weather, so the little sky matches the big one above it. [at] draws one moment with the sun
+ * already in place, for a shared picture; null follows the clock.
+ */
 @Composable
 fun TodaySunArcCard(
     data: PlaceSunriseSunsetData,
     modifier: Modifier = Modifier,
     timeZone: ZoneId = ZoneId.systemDefault(),
     weather: WeatherConditionCode? = null,
+    at: ZonedDateTime? = null,
 ) {
-    val now = rememberMinuteClock(timeZone)
+    val clock = rememberMinuteClock(timeZone)
+    val now = at ?: clock
     val moment = SkyMoment.at(now, data.localSunrise(timeZone), data.localSunset(timeZone))
     // Another day's times (an older server's cache, a provider outage) keep their "as of" day: no countdown from them.
     val day = PlacePresentation.fmtSunDay(data, timeZone)
@@ -111,7 +116,7 @@ fun TodaySunArcCard(
         SunDial(
             moment = moment,
             sky = SkyPalette.sky(moment.phase, weather?.let(::skyWeather) ?: SkyPalette.Weather.CLEAR),
-            travelled = travelled.value,
+            travelled = if (at != null) target else travelled.value,
             up = up,
             reading = countdown ?: ("Daylight" to daylight),
         )
