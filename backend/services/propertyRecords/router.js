@@ -50,9 +50,10 @@ function apply(file) {
   const listed = [...modes];
   liveStates = new Set(listed.filter(([, mode]) => mode === 'live').map(([fips]) => stateOfCounty(fips)));
   anyShadowCounty = listed.some(([, mode]) => mode === 'shadow');
+  const named = listed.filter(([, mode]) => mode !== 'off').sort();
   const shared = [...sharedFacts].sort();
   // The shared-facts list joins the line only when it names a county, so a file without one logs as before.
-  const now = JSON.stringify(shared.length ? [listed.filter(([, mode]) => mode !== 'off').sort(), shared] : listed.filter(([, mode]) => mode !== 'off').sort());
+  const now = JSON.stringify(shared.length ? [named, shared] : named);
   if (now !== loggedAs && config.enabled()) {
     loggedAs = now;
     logger.info('property_records.switches', {

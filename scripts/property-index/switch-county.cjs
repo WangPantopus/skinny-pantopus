@@ -45,9 +45,9 @@ if (!counties.length) refuse('A county is its five-digit FIPS code');
 if (mode && !['off', 'shadow', 'live'].includes(mode)) refuse('A county is off, shadow or live');
 if (!/^[a-z]+$/.test(target)) refuse('Name the environment: production or staging');
 if (estimates && !['on', 'off'].includes(estimates)) refuse('Estimates are on or off');
-if (!mode && !withhold && !estimates) refuse('Nothing to change: pass --mode, --withhold, --estimates or several');
 if (sharedFacts && !['live', 'off'].includes(mode)) refuse('Shared facts are live or off: pass --mode live or --mode off');
 if (sharedFacts && (withhold || estimates)) refuse('Shared facts change by themselves: leave out --withhold and --estimates');
+if (!mode && !withhold && !estimates) refuse('Nothing to change: pass --mode, --withhold, --estimates or several');
 if (!root && !opt('--bucket')) refuse('Pass --bucket, or --root for a local rig');
 
 function read(name) {
