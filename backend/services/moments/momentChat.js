@@ -32,11 +32,15 @@ async function momentQuotes(messages) {
   const quotes = new Map();
   if (!named.size) return quotes;
   try {
-    const { data, error } = await supabaseAdmin.from('Post')
-      .select('id, story_expires_at, archived_at, moderation_state, post_metadata')
-      .in('id', [...named.keys()]).eq('is_story', true);
-    if (error) throw error;
-    const rows = new Map((data || []).map((row) => [row.id, row]));
+    const ids = [...named.keys()];
+    const pages = await Promise.all(Array.from({ length: Math.ceil(ids.length / 100) }, async (_, page) => {
+      const { data, error } = await supabaseAdmin.from('Post')
+        .select('id, story_expires_at, archived_at, moderation_state, post_metadata')
+        .in('id', ids.slice(page * 100, page * 100 + 100)).eq('is_story', true);
+      if (error) throw error;
+      return data || [];
+    }));
+    const rows = new Map(pages.flat().map((row) => [row.id, row]));
     // A picture only while the Moment is live: not once it ended, nor while it's held for review.
     const thumbKey = (row) => (row && !hasEnded(row) && row.moderation_state === 'live' ? meta(row).media?.thumb_key || null : null);
     const links = await media.signedLinks(undefined, [...rows.values()].map(thumbKey).filter(Boolean));

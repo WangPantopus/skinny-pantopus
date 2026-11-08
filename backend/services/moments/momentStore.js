@@ -43,6 +43,24 @@ function fail(status, code, message) {
   return Object.assign(new Error(message), { status, code });
 }
 
+// Ids per read: they go in the request URL.
+const IDS_PER_READ = 100;
+function chunks(list) {
+  const out = [];
+  for (let at = 0; at < list.length; at += IDS_PER_READ) out.push(list.slice(at, at + IDS_PER_READ));
+  return out;
+}
+
+/** The rows of one select run over `ids` in batches (`read(batch)` answers a query); throws on a failed read. */
+async function readInBatches(ids, read, what) {
+  const pages = await Promise.all(chunks(ids).map(async (batch) => {
+    const { data, error } = await read(batch);
+    if (error) throw new Error(`Failed to load ${what}: ${error.message}`);
+    return data || [];
+  }));
+  return pages.flat();
+}
+
 const meta = (row) => row?.post_metadata?.moment || {};
 
 /** Ended: its time ran out, its author deleted it (archived) or a moderator removed it. */
@@ -85,17 +103,13 @@ function ringKey(row, point) {
 async function viewerContext(viewerId, authorIds = []) {
   const filters = await feedService.getMuteAndHideFilters(viewerId);
   const others = [...new Set(authorIds.filter((id) => id && id !== viewerId))];
-  let connected = new Set();
-  if (others.length) {
-    const ids = others.join(',');
-    const { data, error } = await supabaseAdmin
-      .from('Relationship')
-      .select('requester_id, addressee_id')
-      .eq('status', 'accepted')
-      .or(`and(requester_id.eq.${viewerId},addressee_id.in.(${ids})),and(addressee_id.eq.${viewerId},requester_id.in.(${ids}))`);
-    if (error) throw new Error(`Failed to load connections: ${error.message}`);
-    connected = new Set((data || []).map((r) => (r.requester_id === viewerId ? r.addressee_id : r.requester_id)));
-  }
+  const links = await readInBatches(others, (batch) => supabaseAdmin
+    .from('Relationship')
+    .select('requester_id, addressee_id')
+    .eq('status', 'accepted')
+    .or(`and(requester_id.eq.${viewerId},addressee_id.in.(${batch.join(',')})),and(addressee_id.eq.${viewerId},requester_id.in.(${batch.join(',')}))`),
+  'connections');
+  const connected = new Set(links.map((r) => (r.requester_id === viewerId ? r.addressee_id : r.requester_id)));
   return {
     viewerId,
     blocked: filters.blockedUserIds,
@@ -123,22 +137,20 @@ function initialsOf(name) {
 async function loadAuthors(userIds) {
   const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
   if (!ids.length) return new Map();
-  const [people, accounts, residents] = await Promise.all([
+  const [people, accounts, residentSets] = await Promise.all([
     loadChatPeople(ids),
-    supabaseAdmin.from('User').select('id, account_type').in('id', ids),
-    verifiedResidentUserIds(ids),
+    readInBatches(ids, (batch) => supabaseAdmin.from('User').select('id, account_type').in('id', batch), 'authors'),
+    Promise.all(chunks(ids).map((batch) => verifiedResidentUserIds(batch))),
   ]);
-  if (accounts.error) throw new Error(`Failed to load authors: ${accounts.error.message}`);
-  const kinds = new Map((accounts.data || []).map((u) => [String(u.id),
+  const residents = new Set(residentSets.flatMap((set) => [...set]));
+  const kinds = new Map(accounts.map((u) => [String(u.id),
     u.account_type === 'curator' ? 'pantopus' : u.account_type === 'business' ? 'business' : 'person']));
   const businessIds = ids.filter((id) => kinds.get(id) === 'business');
-  let verifiedBusinesses = new Set();
-  if (businessIds.length) {
-    const { data } = await supabaseAdmin.from('BusinessProfile')
-      .select('business_user_id, verification_status').in('business_user_id', businessIds);
-    verifiedBusinesses = new Set((data || []).filter((b) => b.verification_status === 'verified')
-      .map((b) => String(b.business_user_id)));
-  }
+  // A business's check is its verification; if that can't be read, it shows none.
+  const businesses = await readInBatches(businessIds, (batch) => supabaseAdmin.from('BusinessProfile')
+    .select('business_user_id, verification_status').in('business_user_id', batch), 'businesses').catch(() => []);
+  const verifiedBusinesses = new Set(businesses.filter((b) => b.verification_status === 'verified')
+    .map((b) => String(b.business_user_id)));
   const authors = new Map();
   for (const id of ids) {
     const person = people.get(id);
@@ -169,13 +181,12 @@ async function loadMoment(id) {
 async function viewerMarks(viewerId, ids) {
   if (!ids.length) return { seen: new Set(), reactions: new Map() };
   const [views, likes] = await Promise.all([
-    supabaseAdmin.from('PostView').select('post_id').eq('user_id', viewerId).in('post_id', ids),
-    supabaseAdmin.from('PostLike').select('post_id, reaction').eq('user_id', viewerId).in('post_id', ids),
+    readInBatches(ids, (batch) => supabaseAdmin.from('PostView').select('post_id').eq('user_id', viewerId).in('post_id', batch), 'views'),
+    readInBatches(ids, (batch) => supabaseAdmin.from('PostLike').select('post_id, reaction').eq('user_id', viewerId).in('post_id', batch), 'reactions'),
   ]);
-  if (views.error || likes.error) throw new Error(`Failed to load views: ${(views.error || likes.error).message}`);
   return {
-    seen: new Set((views.data || []).map((v) => v.post_id)),
-    reactions: new Map((likes.data || []).map((l) => [l.post_id, shownReaction(l.reaction)])),
+    seen: new Set(views.map((v) => v.post_id)),
+    reactions: new Map(likes.map((l) => [l.post_id, shownReaction(l.reaction)])),
   };
 }
 
@@ -306,26 +317,25 @@ async function mapRings(viewerId, { south, west, north, east }) {
   if (error) throw new Error(`Failed to load Moments: ${error.message}`);
   const rows = (data || []).filter((row) => momentState(row) === 'live');
   const ctx = await viewerContext(viewerId, rows.map((r) => r.user_id));
-  const shown = [];
+  const groups = new Map();
   for (const row of rows) {
     if (!canSee(row, ctx)) continue;
     const point = displayedPoint(row);
     if (point.latitude < south || point.latitude > north || point.longitude < west || point.longitude > east) continue;
-    shown.push({ row, point });
-  }
-  const [authors, marks] = await Promise.all([
-    loadAuthors(shown.map(({ row }) => row.user_id)),
-    viewerMarks(viewerId, shown.map(({ row }) => row.id)),
-  ]);
-  const rings = new Map();
-  for (const { row, point } of shown) {
     const key = ringKey(row, point);
-    if (!rings.has(key)) rings.set(key, { key, rows: [] });
-    rings.get(key).rows.push({ row, point });
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ row, point });
   }
-  return [...rings.values()].map(({ key, rows: members }) => {
+  // The newest MAX_RINGS rings; only theirs are named and marked.
+  const kept = [...groups.entries()].map(([key, members]) => {
     members.sort((a, b) => Date.parse(a.row.created_at) - Date.parse(b.row.created_at));
-    const newest = members[members.length - 1];
+    return { key, members, newest: members[members.length - 1] };
+  }).sort((a, b) => Date.parse(b.newest.row.created_at) - Date.parse(a.newest.row.created_at)).slice(0, MAX_RINGS);
+  const [authors, marks] = await Promise.all([
+    loadAuthors(kept.map(({ newest }) => newest.row.user_id)),
+    viewerMarks(viewerId, kept.flatMap(({ members }) => members.map(({ row }) => row.id))),
+  ]);
+  return kept.map(({ key, members, newest }) => {
     const mine = newest.row.user_id === viewerId;
     const moments = members.map(({ row }) => briefOf(row, mine || marks.seen.has(row.id)));
     return {
@@ -339,7 +349,7 @@ async function mapRings(viewerId, { south, west, north, east }) {
       newest_at: newest.row.created_at,
       mine,
     };
-  }).sort((a, b) => Date.parse(b.newest_at) - Date.parse(a.newest_at)).slice(0, MAX_RINGS);
+  });
 }
 
 /** The caller's own Moments that haven't ended, any state, newest first. */
