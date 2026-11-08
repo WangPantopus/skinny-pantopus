@@ -17,8 +17,8 @@ const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
-const { download, zipTable, USER_AGENT } = require('../lib/tables.cjs');
-const { fillHomes, bathFacts, describe } = require('../lib/fill.cjs');
+const { download, zipTable, zipDates, USER_AGENT } = require('../lib/tables.cjs');
+const { fillHomes, bathFacts, describe, dayOf } = require('../lib/fill.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
@@ -162,8 +162,8 @@ function registryTowns(work) {
 
 async function* build({ work }) {
   const about = await getJson(`${LAYER}?f=json`, 'The layer\'s description');
-  const asOf = isoDate(about.editingInfo?.dataLastEditDate || about.editingInfo?.lastEditDate);
-  if (!asOf) throw new Error('The layer no longer says when it changed');
+  const layerAsOf = isoDate(about.editingInfo?.dataLastEditDate || about.editingInfo?.lastEditDate);
+  if (!layerAsOf) throw new Error('The layer no longer says when it changed');
   const records = [];
   const seen = new Set();
   let noAddress = 0;
@@ -204,8 +204,13 @@ async function* build({ work }) {
   }
   log(`${COUNTY}: ${named} of ${records.length} records name their town from the address registry`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
+  // The release is dated by the newest file whose facts it shows: the CAMA files (bedrooms, baths, lot), written monthly, are far
+  // newer than the layer's last edit. The layer's own date stays in the dataset line.
+  const camaAsOf = ['SC710_DWELL', 'SC709_LAND'].map((table) => zipDates(path.join(work, 'oh-summit', `${table}.zip`)).get(`${table}.CSV`)).filter(Boolean).sort().pop();
+  const asOf = [layerAsOf, camaAsOf].filter(Boolean).sort().pop();
+  log(`${COUNTY}: tax parcels last changed ${layerAsOf}, CAMA files of ${camaAsOf || 'no date'}; the release is dated ${asOf}`);
   yield {
-    fips: FIPS, state: 'OH', name: COUNTY, publisher: 'Summit County Fiscal Office', dataset: 'tax parcels and CAMA dwelling and land data', method: 'county', source: 'oh-summit', as_of: asOf, stale_after_days: 730, extra_zips: zipsByCounty(work, ['39']).get(FIPS) || [], records,
+    fips: FIPS, state: 'OH', name: COUNTY, publisher: 'Summit County Fiscal Office', dataset: `tax parcels as of ${dayOf(layerAsOf)}, with CAMA dwelling and land data of ${dayOf(camaAsOf)}`, method: 'county', source: 'oh-summit', as_of: asOf, stale_after_days: 730, extra_zips: zipsByCounty(work, ['39']).get(FIPS) || [], records,
   };
 }
 
