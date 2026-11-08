@@ -1,7 +1,7 @@
 'use client';
 
 // MobileTabBar — the app's tabs as a bottom bar on phone-width web:
-// Place · Today · Nearby · Messages, and Mail before Messages while the
+// Place · Today · Pulse · Messages, and Mail before Messages while the
 // Mailbox is on. Native gets these tabs on day one; on mobile web they used
 // to hide behind the hamburger, which made the app read as a single long
 // page. Desktop keeps the sidebar (AppShell). No Plans tab: Plans on the web
@@ -24,10 +24,12 @@ type Tab = {
 const starts = (path: string, ...prefixes: string[]) => prefixes.some((p) => path === p || path.startsWith(`${p}/`));
 
 export const MOBILE_TABS: Tab[] = [
-  { key: 'place', label: 'Place', href: '/app/place', icon: NavIcons.place, matches: (p) => starts(p, '/app/place', '/app/homes') },
+  // "Verified homes nearby" (/app/nearby) opens from Place (founder decision 2026-11-07).
+  { key: 'place', label: 'Place', href: '/app/place', icon: NavIcons.place, matches: (p) => starts(p, '/app/place', '/app/homes', '/app/nearby', '/app/neighborhood') },
   { key: 'today', label: 'Today', href: '/app/today', icon: NavIcons.today, matches: (p) => starts(p, '/app/today', '/app/hub/today') },
-  // Nearby opens on its Pulse segment; Neighborhood is /app/nearby, and Connections is in the menu (founder decision 2026-10-20).
-  { key: 'nearby', label: 'Nearby', href: '/app/feed', icon: NavIcons.nearby, matches: (p) => starts(p, '/app/nearby', '/app/neighborhood', '/app/feed', '/app/beacons', '/app/gigs', '/app/marketplace') },
+  // The Pulse tab, named Nearby until the founder's November 7 decision (its key stays): the feed under its List | Map
+  // switch. Connections is in the menu.
+  { key: 'nearby', label: 'Pulse', href: '/app/feed', icon: NavIcons.pulse, matches: (p) => starts(p, '/app/feed', '/app/beacons', '/app/gigs', '/app/marketplace') },
   // Launch cut #10 (Mailbox): Mail is its own tab beside Messages (founder,
   // 2026-10-26). It opens the Me drawer.
   ...(launchFeatures.mailbox

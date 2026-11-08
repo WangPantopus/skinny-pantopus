@@ -6,7 +6,7 @@
 //  Duo's inner screen is regular width, and a tab whose narrow layout is one
 //  stack shows its own screen on the leading side and the screens it would
 //  push beside it, in Apple's split view: Messages (`InboxSplitView`) and the
-//  Nearby tab's two segments. The column shows the tab's route stack with
+//  Pulse tab (`PulseSplitView`). The column shows the tab's route stack with
 //  its first route as the root, so folding or unfolding keeps what is open:
 //  closed, the same routes are the one stack again. Phones never come here.
 //
@@ -22,17 +22,22 @@ struct SideBySideColumnWidth {
 
     /// The chat list: a bit narrower than a phone, so the conversation gets the bigger side (the founder's pick).
     static let chatList = SideBySideColumnWidth(min: 320, ideal: 340, max: 480)
-    /// The Nearby tab's leading column: a phone's width, so the Pulse header's buttons fit as they do closed (the
-    /// founder's pick). Both segments use it, so the switch above them stays put. Never narrower, because the split
+    /// The Pulse tab's leading column: a phone's width, so the Pulse header's buttons fit as they do closed (the
+    /// founder's pick); "Verified homes nearby" uses it beside its map too. Never narrower, because the split
     /// view otherwise narrows a column it laid out before a rotation. Half folded like a book, the split view widens
     /// it to the fold, as it does the chat list, so the open post or the map has the other side to itself.
     static let nearby = SideBySideColumnWidth(min: 382, ideal: 382, max: 480)
 
-    /// Whether a screen this wide holds the column with the narrowest iPhone's width (375 pt) beside it. Upright,
-    /// the open iPhone Duo (669 pt) doesn't hold the Nearby column: a post beside it got 287 pt, and the map beside
-    /// Neighborhood's column centered its cells under the column. There the tab keeps one column, as closed.
+    /// The narrowest screen that holds the column with the narrowest iPhone's width (375 pt) beside it.
+    var screenWidthBeside: CGFloat {
+        ideal + 375
+    }
+
+    /// Whether a screen this wide holds the column with the narrowest iPhone's width beside it. Upright, the open
+    /// iPhone Duo (669 pt) doesn't hold the Nearby column: a post beside it got 287 pt, and a map beside the column
+    /// centered its cells under the column. There the screen keeps one column, as closed.
     func fitsBeside(in width: CGFloat) -> Bool {
-        width >= ideal + 375
+        width >= screenWidthBeside
     }
 
     /// The ideal width in a split this wide: the narrowest where the ideal would leave the other column the smaller
@@ -44,7 +49,7 @@ struct SideBySideColumnWidth {
         return min
     }
 
-    /// The column can narrow from its ideal to its minimum (`ideal(in:)`): the chat list. The Nearby tab's column
+    /// The column can narrow from its ideal to its minimum (`ideal(in:)`): the chat list. The Pulse tab's column
     /// and Mail's never do.
     var narrows: Bool {
         min < ideal

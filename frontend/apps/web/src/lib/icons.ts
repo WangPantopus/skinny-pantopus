@@ -4,6 +4,7 @@
 // ============================================================
 
 import {
+  Activity,
   LayoutDashboard,
   Newspaper,
   Search,
@@ -72,6 +73,8 @@ export const NavIcons = {
   hub: LayoutDashboard,
   // Four-tab IA (wedge Phase 1.5): Place · Today · Nearby · Mail.
   today: Sun,
+  /** The Pulse tab (named Nearby until the founder's November 7 decision). */
+  pulse: Activity,
   nearby: Compass,
   mail: Mail,
   /** @deprecated the door is "Nearby" now; kept for any stale reference. */

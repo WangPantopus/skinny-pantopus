@@ -2,51 +2,44 @@
 //  NeighborhoodTabRoot.swift
 //  Pantopus
 //
-//  Nearby tab (four-tab IA, renamed "Nearby" in Phase 1.5; the Swift types
-//  keep their Neighborhood names). It is on the bar only while the Pulse
-//  redesign is off (launch cut #11, `LaunchFeatures.pulseRedesign`); with it
-//  on, Pulse is a tab of its own (`PulseTabRoot`).
+//  The bar's Pulse tab while the Pulse redesign is off (launch cut #11,
+//  `LaunchFeatures.pulseRedesign`); with it on, Pulse is `PulseTabRoot` on
+//  its own. (The tab was Nearby until the founder's November 7 decision; the
+//  Swift types keep their Neighborhood names.)
 //
-//  Founder decision 2026-10-20: no door page. Nearby is two segments under
-//  one header with the side menu: Pulse, the October 13 feed (`PulseTabRoot`
+//  Founder decision 2026-11-07: the tab is the October 13 feed (`PulseTabRoot`
 //  with its own NavigationStack, so posts, the composer and profiles push as
-//  before), where the tab opens; and Neighborhood, the density window, the
-//  meter and "Invite your neighbors" (`NeighborhoodView`). Connections is in
-//  the side menu. The Pulse segment stays mounted while Neighborhood shows,
-//  so the feed keeps its place, filters and List / Map mode.
+//  before), whose header opens with the big List | Map switch and the side
+//  menu. The Pulse | Neighborhood switch is gone: the density window, the
+//  meter and "Invite your neighbors" are "Verified homes nearby", opened from
+//  Place's Verified neighbors rows (`VerifiedHomesNearbyView`). Connections
+//  is in the side menu.
 //
-//  On a wide screen (the iPhone Duo open, held sideways) both segments are
-//  two columns of the same width, so the switch and the menu stay put: Pulse
-//  is the feed beside the open post (`PulseSplitView`), and Neighborhood the
-//  map's key, the meter and the invite beside the map, which fills the other
-//  column. Until there is a map to show (loading, an error, no home yet)
-//  Neighborhood stays one column. Upright, the open Duo is too narrow for a
-//  phone-width column beside the Nearby one, so the tab is one column there.
+//  On a wide screen (the iPhone Duo open, held sideways) the feed and the
+//  open post are two columns of the same width (`PulseSplitView`). Upright,
+//  the open Duo is too narrow for a phone-width column beside the feed, so
+//  the tab is one column there.
 //
-//  Tasks / Marketplace (launch cuts #3/#4) still present as sheets, from the
-//  meter's rows or a link. Cross-tab deep links arrive via
-//  `NeighborhoodDoorStore`: a feed or post link asks for the Pulse segment
-//  (the Pulse stack then consumes it), `/nearby` for Neighborhood, and
-//  `.gig` / `.listing` stash their surface, whose sheet mounts its tab root,
-//  which then consumes `router.pending`.
+//  Tasks / Marketplace (launch cuts #3/#4) still present as sheets when a link
+//  asks for them: `.gig` / `.listing` stash their surface in
+//  `NeighborhoodDoorStore`, whose sheet mounts its tab root, which then
+//  consumes `router.pending`.
 //
 //  Nearby Plans is a tab of its own (`PlansTabRoot`, founder decision
-//  2026-10-17), so Nearby is this screen whether the `plans` flag is on or off.
+//  2026-10-17), so this screen is the same whether the `plans` flag is on or off.
 //
 
 import SwiftUI
 
 public struct NeighborhoodTabRoot: View {
     @Environment(RootTabModel.self) private var rootTabs
-    /// Regular width (the iPhone Duo open) puts the segments in two columns, where the screen is wide enough.
+    /// Regular width (the iPhone Duo open) puts the feed and the open post in two columns, where the screen is wide
+    /// enough.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var door = NeighborhoodDoorStore.shared
     @State private var presentedSurface: NeighborhoodDoorStore.Surface?
-    @State private var segment: NearbySegment = .pulse
-    /// Neighborhood's meter and map on a wide screen, read once for both columns.
-    @State private var neighborhood = NeighborhoodViewModel()
 
-    /// Starts adding a home in the Place tab (Neighborhood's "Set up a home").
+    /// Starts adding a home in the Place tab.
     private let onAddHome: @MainActor () -> Void
 
     public init(onAddHome: @escaping @MainActor () -> Void = {}) {
@@ -56,22 +49,11 @@ public struct NeighborhoodTabRoot: View {
     public var body: some View {
         // Read in layout, so the first pass already picks one column or two; always here, so a fold keeps the feed.
         GeometryReader { proxy in
-            let sideBySide = isSideBySide(width: proxy.size.width)
-            ZStack {
-                // The feed's root carries the header, so a pushed post covers it.
-                PulseTabRoot(
-                    onAddHome: onAddHome,
-                    header: AnyView(NearbySegmentHeader(segment: $segment)),
-                    sideBySide: sideBySide,
-                    isShowing: segment == .pulse
-                )
-                .opacity(segment == .pulse ? 1 : 0)
-                .allowsHitTesting(segment == .pulse)
-                .accessibilityHidden(segment != .pulse)
-                if segment == .neighborhood {
-                    neighborhoodSegment(sideBySide: sideBySide)
-                }
-            }
+            PulseTabRoot(
+                onAddHome: onAddHome,
+                mapSwitchOnTop: true,
+                sideBySide: isSideBySide(width: proxy.size.width)
+            )
         }
         .sheet(item: $presentedSurface) { surface in
             surfaceRoot(surface)
@@ -79,91 +61,31 @@ public struct NeighborhoodTabRoot: View {
         .onChange(of: door.pendingSurface) { _, pending in
             presentPendingSurfaceIfNeeded(pending)
         }
-        .onChange(of: door.pendingSegment) { _, _ in
-            showPendingSegmentIfNeeded()
-        }
         .onChange(of: rootTabs.selected) { _, selected in
             // A deep link owned by another tab (profile, notifications,
             // conversation) selects that tab underneath the presented
             // surface sheet; dismiss the sheet so the destination is
             // actually visible instead of rendering behind it.
             if selected != .nearby { presentedSurface = nil }
-            showPendingSegmentIfNeeded()
         }
         .task {
-            showPendingSegmentIfNeeded()
             presentPendingSurfaceIfNeeded(door.pendingSurface)
         }
         .onAppear {
-            showPendingSegmentIfNeeded()
             presentPendingSurfaceIfNeeded(door.pendingSurface)
         }
     }
 
-    @ViewBuilder
-    private func neighborhoodSegment(sideBySide: Bool) -> some View {
-        if sideBySide, let cells = cellsBeside {
-            SideBySideSplit(leadingWidth: .nearby) {
-                VStack(spacing: Spacing.s0) {
-                    NearbySegmentHeader(segment: $segment)
-                    NeighborhoodView(viewModel: neighborhood, mapBeside: true, onOpenSurface: openSurface, onClaimPlace: onAddHome)
-                }
-                .background(Theme.Color.appBg)
-                .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-            } detail: {
-                NearbyCellsMap(cells: cells)
-                    .toolbar(.hidden, for: .navigationBar)
-                    .accessibilityIdentifier("nearby.cellsMap")
-            }
-        } else {
-            Group {
-                if sideBySide {
-                    // Wide, with no map yet: one column, filling the model the two columns share.
-                    NeighborhoodView(viewModel: neighborhood, onOpenSurface: openSurface, onClaimPlace: onAddHome)
-                } else {
-                    NeighborhoodView(onOpenSurface: openSurface, onClaimPlace: onAddHome)
-                }
-            }
-            // The segments slide away while the page scrolls down and come back
-            // near its top, as the Pulse segment's header does (founder request 2026-11-07).
-            .scrollAwayHeader { NearbySegmentHeader(segment: $segment) }
-            .readableColumn()
-            .background(Theme.Color.appBg)
-            // Above the header, where the Pulse segment's feed shows it.
-            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        }
-    }
-
-    private func openSurface(_ surface: NeighborhoodDoorStore.Surface) {
-        presentedSurface = surface
-    }
-
-    /// Two columns for both segments: regular width, with room for the Nearby column beside a phone-width one.
+    /// Two columns: regular width, with room for the feed's column beside a phone-width one.
     private func isSideBySide(width: CGFloat) -> Bool {
         horizontalSizeClass == .regular && SideBySideColumnWidth.nearby.fitsBeside(in: width)
-    }
-
-    /// The map beside Neighborhood's column: once the meter is in and there is a home to map around.
-    private var cellsBeside: NeighborhoodCellsDTO? {
-        guard case let .loaded(meter) = neighborhood.state, meter.state != .noPlace else { return nil }
-        return neighborhood.cells
-    }
-
-    private func showPendingSegmentIfNeeded() {
-        guard let pending = door.pendingSegment, rootTabs.selected == .nearby else { return }
-        door.pendingSegment = nil
-        segment = pending
     }
 
     private func presentPendingSurfaceIfNeeded(_ pending: NeighborhoodDoorStore.Surface?) {
         guard let pending, rootTabs.selected == .nearby else { return }
         door.pendingSurface = nil
-        if pending == .pulse {
-            segment = .pulse
-            return
-        }
-        // Launch cuts #3/#4: a hidden surface never opens.
-        if pending.isAvailableAtLaunch { presentedSurface = pending }
+        // `.pulse` is this tab itself; launch cuts #3/#4: a hidden surface never opens.
+        if pending != .pulse, pending.isAvailableAtLaunch { presentedSurface = pending }
     }
 
     /// The launch-cut surfaces' own tab roots, unchanged: each brings its own
@@ -178,30 +100,5 @@ public struct NeighborhoodTabRoot: View {
         case .pulse:
             EmptyView()
         }
-    }
-}
-
-/// The Nearby tab's header: the Pulse | Neighborhood switch and the side menu
-/// (founder decision 2026-10-20), on both segments' roots.
-struct NearbySegmentHeader: View {
-    @Binding var segment: NearbySegment
-
-    var body: some View {
-        HStack(spacing: Spacing.s2) {
-            Picker("Nearby", selection: $segment) {
-                ForEach(NearbySegment.allCases, id: \.self) { item in
-                    Text(item.label)
-                        .tag(item)
-                        .accessibilityIdentifier("nearbySegment.\(item.rawValue)")
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("nearbySegments")
-            NavigationMenuButton(accessibilityIdentifier: "nearby.menu")
-        }
-        .padding(.leading, Spacing.s4)
-        .padding(.trailing, Spacing.s2)
-        .padding(.vertical, Spacing.s1)
-        .background(Theme.Color.appBg)
     }
 }

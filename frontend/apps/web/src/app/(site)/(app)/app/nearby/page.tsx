@@ -1,14 +1,13 @@
 'use client';
 
-// The Nearby tab's Neighborhood segment (founder decision 2026-10-20): the
-// density window, the meter and "Invite your neighbors", or "Set up a home"
-// before there is one. Pulse is the segment beside it (/app/feed) and
-// Connections is in the menu, so the old door's Pulse / Connections rows are
-// gone. The meter describes local participation; it does not authorize feed
-// access.
+// "Verified homes nearby" (founder decision 2026-11-07): the density window,
+// the meter and "Invite your neighbors", or "Set up a home" before there is
+// one. It was the Nearby tab's Neighborhood segment; it now opens from Place,
+// and its back goes there. The meter describes local participation; it does
+// not authorize feed access.
 
-import { useState } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -20,13 +19,14 @@ import {
   Share2,
   Check,
   Home,
+  ChevronLeft,
   ChevronRight,
   Sparkles,
 } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { NeighborhoodMeter } from '@pantopus/api';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
-import NearbyTabs from '@/components/nearby/NearbyTabs';
+import { useNeighborInvite } from '@/components/nearby/useNeighborInvite';
 import { launchFeatures } from '@/lib/featureFlags';
 
 // Leaflet touches `window` at import time; the window is client-only.
@@ -55,38 +55,9 @@ function areaLabel(meter: NeighborhoodMeter | undefined): string {
 }
 
 // ── Invite affordance — the /start funnel is the payload ─────
-// Your own invite link (/join/:code) opens that funnel under your name and credits you; the bare /start
-// stands in until it has loaded. Read ahead of the tap: Safari drops the share sheet's user gesture
-// across a slow await.
+// The person's own invite link (`useNeighborInvite`), as on Place.
 function InviteButton() {
-  const [copied, setCopied] = useState(false);
-  const inviteQuery = useQuery({
-    queryKey: ['users', 'invite-code'],
-    queryFn: () => api.getInviteCode(),
-    staleTime: 60 * 60_000,
-    retry: 1,
-  });
-  const inviteUrl = inviteQuery.data?.invite_url || 'https://pantopus.com/start';
-  const inviteText =
-    'See what’s true about your address — records, risks, and who’s verified nearby. Free, no account:';
-
-  const share = async () => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ title: 'Pantopus', text: inviteText, url: inviteUrl });
-        return;
-      }
-    } catch {
-      // fall through to clipboard
-    }
-    try {
-      await navigator.clipboard.writeText(`${inviteText} ${inviteUrl}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard unavailable — nothing else to do
-    }
-  };
+  const { share, copied } = useNeighborInvite();
 
   return (
     <button
@@ -218,10 +189,20 @@ export default function NearbyPage() {
   const cellsMap = cellsQuery.data?.state === 'ready' ? <NearbyCellsMap cells={cellsQuery.data} /> : null;
 
   return (
-    // The feed's width, so the Pulse | Neighborhood switch stays put between the two segments.
-    <div className="max-w-2xl mx-auto px-4 pt-2 pb-6">
-      <h1 className="sr-only">Nearby: Neighborhood</h1>
-      <NearbyTabs active="neighborhood" className="mb-4" />
+    <div className="max-w-2xl mx-auto px-4 pt-3 pb-6">
+      <header className="mb-4 flex items-center gap-2.5">
+        <Link
+          href="/app/place"
+          aria-label="Back to Place"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-app-surface shadow-sm hover:bg-app-hover"
+        >
+          <ChevronLeft className="h-5 w-5 text-app-text" />
+        </Link>
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-app-text -tracking-[0.02em]">Verified homes nearby</h1>
+          <p className="text-[12.5px] font-medium text-app-text-muted">Around your home</p>
+        </div>
+      </header>
 
       {meterQuery.isPending ? (
         <div className="space-y-3" aria-hidden="true">
@@ -231,7 +212,7 @@ export default function NearbyPage() {
         </div>
       ) : meterQuery.isError ? (
         <div className="text-center py-10">
-          <p className="text-sm text-app-text-secondary">We couldn&apos;t load your neighborhood meter.</p>
+          <p className="text-sm text-app-text-secondary">We couldn&apos;t load verified homes nearby.</p>
           <button
             type="button"
             onClick={() => meterQuery.refetch()}
@@ -245,11 +226,11 @@ export default function NearbyPage() {
           <span className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-app-home-bg text-app-home mb-4">
             <Home className="w-7 h-7" />
           </span>
-          <h2 className="text-lg font-bold text-app-text">Add a home for neighborhood context</h2>
+          <h2 className="text-lg font-bold text-app-text">Add a home to see verified homes nearby</h2>
           <p className="mt-2 text-sm text-app-text-secondary leading-relaxed max-w-sm mx-auto">
             {launchFeatures.beacon
-              ? 'Adding a home gives you neighborhood context and household tools. You can browse Pulse and follow Beacons before setting it up.'
-              : 'Adding a home gives you neighborhood context and household tools. You can browse Pulse before setting it up.'}
+              ? 'Adding a home shows how many homes around it are verified, and gives you household tools. You can browse Pulse and follow Beacons before setting it up.'
+              : 'Adding a home shows how many homes around it are verified, and gives you household tools. You can browse Pulse before setting it up.'}
           </p>
           <button
             type="button"

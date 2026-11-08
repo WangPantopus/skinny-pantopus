@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -30,6 +31,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.LaunchFeatures
@@ -201,6 +203,33 @@ fun PulseTopicChipRow(
     }
 }
 
+/**
+ * October 13's topic chips (the Sports chip alone) at the head of the filter chips in the Pulse tab's header (founder
+ * decision 2026-11-07), instead of a row of their own: the same chips and ids, as tall as the filter chips beside them.
+ * Tapping the chosen chip again leaves the lane. iOS: `PulseSportsTopicChip`.
+ */
+@Composable
+fun PulseLaunchTopicChips(
+    topics: List<PulseTopic>,
+    activeTopic: PulseTopic?,
+    onSelect: (PulseTopic?) -> Unit,
+) {
+    topics.forEach { topic ->
+        TopicChip(
+            label = topic.launchLabel,
+            icon = topic.icon,
+            spokenName = topic.launchLabel,
+            active = activeTopic == topic,
+            testTag = "pulseTopicChip_${topic.key}",
+            onClick = { onSelect(if (activeTopic == topic) null else topic) },
+            modifier = Modifier.height(28.dp),
+            verticalPadding = 0.dp,
+        )
+    }
+}
+
+// One chip, drawn in its own row or among the filter chips: each look stays an explicit argument.
+@Suppress("LongParameterList")
 @Composable
 private fun TopicChip(
     label: String,
@@ -209,10 +238,13 @@ private fun TopicChip(
     active: Boolean,
     testTag: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** None where the chip has a fixed height (among the filter chips). */
+    verticalPadding: Dp = 6.dp,
 ) {
     Row(
         modifier =
-            Modifier
+            modifier
                 .clip(RoundedCornerShape(Radii.pill))
                 .background(if (active) PantopusColors.primary600 else PantopusColors.appSurfaceRaised)
                 .border(
@@ -223,7 +255,7 @@ private fun TopicChip(
                 // One node per chip, read once with its state: the role and selection stay, the inner label goes.
                 .selectable(selected = active, role = Role.RadioButton, onClick = onClick)
                 .clearAndSetSemantics { contentDescription = spokenName }
-                .padding(horizontal = Spacing.s3, vertical = 6.dp),
+                .padding(horizontal = Spacing.s3, vertical = verticalPadding),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

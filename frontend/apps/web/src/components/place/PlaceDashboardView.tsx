@@ -15,7 +15,7 @@
 
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Clock, Compass, ChevronRight, ShieldCheck } from 'lucide-react';
 import type { PlaceIntelligence } from '@pantopus/types';
@@ -62,6 +62,8 @@ export interface PlaceDashboardViewProps {
   claim?: MyClaim | null;
   /** The claim's status, checklist and Withdraw (My Homes). */
   onOpenClaimStatus?: () => void;
+  /** Verified neighbors ("Verified homes nearby" and the invite), from the container, which reads the invite link. */
+  neighbors?: ReactNode;
 }
 
 export default function PlaceDashboardView({
@@ -80,6 +82,7 @@ export default function PlaceDashboardView({
   onVerifyByMail,
   claim = null,
   onOpenClaimStatus,
+  neighbors = null,
 }: PlaceDashboardViewProps) {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const openVerify = () => setVerifyOpen(true);
@@ -228,6 +231,8 @@ export default function PlaceDashboardView({
           <Group label="Locked until you verify">{renderVerifyLocked(openVerify)}</Group>
         ) : null}
         {showIdentity ? <IdentityGroup /> : null}
+        {/* "Verified homes nearby" and the invite on the person's own home, not a claim still in review. */}
+        {claim ? null : neighbors}
 
         {/*
           THE ONLY WAY INTO SCOUT ON A PHONE.

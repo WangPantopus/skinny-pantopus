@@ -704,7 +704,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* The tabs on phone-width web: Place · Today · Nearby · (Mail ·) Messages
+      {/* The tabs on phone-width web: Place · Today · Pulse · (Mail ·) Messages
           as a bottom bar (the sidebar carries them at md+). Business context
           keeps its own navigation, and a conversation has the whole window. */}
       {showMobileTabs && <MobileTabBar unreadMail={mailUnread} unreadMessages={chatUnread} />}
@@ -851,17 +851,17 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
 
   return (
     <div className="space-y-0.5">
-      {/* The tabs (wedge Phase 1.5): Place · Today · Nearby · Messages —
-          every tab alive at zero density. Today is the briefing; Nearby is
-          social discovery at /app/nearby (Pulse / Beacons / Marketplace /
-          Tasks open behind its meter); Messages is the conversation list at
-          /app/chat. Launch cut #10: while Mailbox is on, Mail is its own entry
+      {/* The tabs (wedge Phase 1.5): Place · Today · Pulse · Messages —
+          every tab alive at zero density. Today is the briefing; Pulse (named
+          Nearby until the founder's November 7 decision) is the feed at
+          /app/feed, and "Verified homes nearby" (/app/nearby) opens from
+          Place; Messages is the conversation list at /app/chat. Launch cut #10: while Mailbox is on, Mail is its own entry
           before Messages (founder, 2026-10-26). The my-x screens keep their
           routes (deep links resolve) but leave the nav; /app/hub opens Place. */}
-      <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
+      <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place') || startsWith('/app/nearby') || startsWith('/app/neighborhood')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
-      {/* Nearby opens on its Pulse segment (/app/feed); Neighborhood is /app/nearby (founder decision 2026-10-20). */}
-      <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/feed')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
+      {/* The Pulse tab, named Nearby until the founder's November 7 decision (its test id stays). */}
+      <SidebarItem icon={NavIcons.pulse} label="Pulse" active={startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/feed')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
       {launchFeatures.mailbox ? <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox')} onClick={() => go('/app/mailbox/personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={mailUnread} countLabel="unopened" testId="sidebar-mail" /> : null}
       <SidebarItem icon={NavIcons.messages} label="Messages" active={startsWith('/app/chat')} onClick={() => go('/app/chat')} onPrefetch={prefetchMessages} showLabel={showLabels} count={chatUnread} testId="sidebar-messages" />
       {/* Launch cut #5 (Public scheduling): the Scheduling entry is hidden. */}

@@ -117,6 +117,10 @@ fun PlaceDashboardScreen(
     onComposeMessage: (address: String) -> Unit,
     onOpenInbox: () -> Unit,
     modifier: Modifier = Modifier,
+    /** "Verified homes nearby": the density window, the meter and the invite (founder decision 2026-11-07). */
+    onOpenVerifiedHomes: () -> Unit = {},
+    /** "Invite your neighbors": the share sheet with the person's own invite link. */
+    onInviteNeighbors: () -> Unit = {},
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
     onOpenHomeTools: () -> Unit = {},
@@ -230,6 +234,8 @@ fun PlaceDashboardScreen(
                     onOpenPulse = onOpenPulse,
                     onComposeMessage = onComposeMessage,
                     onOpenInbox = onOpenInbox,
+                    onOpenVerifiedHomes = onOpenVerifiedHomes,
+                    onInviteNeighbors = onInviteNeighbors,
                     onRetry = viewModel::refresh,
                     refreshNotice = refreshNotice,
                     listState = listState,
@@ -318,6 +324,8 @@ internal fun PlaceDashboardContent(
     onOpenPulse: () -> Unit = {},
     onComposeMessage: (address: String) -> Unit = {},
     onOpenInbox: () -> Unit = {},
+    onOpenVerifiedHomes: () -> Unit = {},
+    onInviteNeighbors: () -> Unit = {},
     moveInDate: String? = null,
     onOpenMailDay: () -> Unit = {},
     onOpenPrivacyMirror: () -> Unit = {},
@@ -480,12 +488,18 @@ internal fun PlaceDashboardContent(
                     modifier = Modifier.padding(horizontal = 16.dp).padding(top = 28.dp),
                 )
             }
-            if (isVerified) {
+            // Messages for verified residents; "Verified homes nearby" and the invite on the person's own home, not a
+            // claim still in review.
+            if (isVerified || claim == null) {
                 item {
-                    PlaceMessagesEntry(
+                    PlaceNeighborsEntry(
                         address = intel.place.label,
+                        messages = isVerified,
+                        homesNearby = claim == null,
                         onComposeMessage = onComposeMessage,
                         onOpenInbox = onOpenInbox,
+                        onOpenVerifiedHomes = onOpenVerifiedHomes,
+                        onInviteNeighbors = onInviteNeighbors,
                         modifier = Modifier.padding(horizontal = 16.dp).padding(top = 28.dp),
                     )
                 }
@@ -554,12 +568,20 @@ private fun PrivacyMirrorRow(
     }
 }
 
-// W7 — verified-neighbor messaging entry (verified residents only): both actions on one surface.
+/**
+ * Verified neighbors: W7's private messages (verified residents only), then "Verified homes nearby" and the invite,
+ * which were the Nearby tab's Neighborhood segment (founder decision 2026-11-07). iOS: `neighborsEntry`.
+ */
 @Composable
-private fun PlaceMessagesEntry(
+@Suppress("LongParameterList")
+private fun PlaceNeighborsEntry(
     address: String,
+    messages: Boolean,
+    homesNearby: Boolean,
     onComposeMessage: (address: String) -> Unit,
     onOpenInbox: () -> Unit,
+    onOpenVerifiedHomes: () -> Unit,
+    onInviteNeighbors: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -574,19 +596,39 @@ private fun PlaceMessagesEntry(
         )
         CompositionLocalProvider(LocalPlaceFlatRows provides true) {
             Column(modifier = Modifier.fillMaxWidth().placeSurface()) {
-                PlaceMessagesActionRow(
-                    icon = PantopusIcon.MessageSquarePlus,
-                    title = "Message a neighbor",
-                    subtitle = "Send a private heads-up to a home on your block.",
-                    onTap = { onComposeMessage(address) },
-                )
-                PlaceHairline()
-                PlaceMessagesActionRow(
-                    icon = PantopusIcon.Inbox,
-                    title = "Your inbox",
-                    subtitle = "Heads-ups from verified neighbors nearby.",
-                    onTap = onOpenInbox,
-                )
+                if (messages) {
+                    PlaceMessagesActionRow(
+                        icon = PantopusIcon.MessageSquarePlus,
+                        title = "Message a neighbor",
+                        subtitle = "Send a private heads-up to a home on your block.",
+                        onTap = { onComposeMessage(address) },
+                    )
+                    PlaceHairline()
+                    PlaceMessagesActionRow(
+                        icon = PantopusIcon.Inbox,
+                        title = "Your inbox",
+                        subtitle = "Heads-ups from verified neighbors nearby.",
+                        onTap = onOpenInbox,
+                    )
+                }
+                if (homesNearby) {
+                    if (messages) PlaceHairline()
+                    PlaceMessagesActionRow(
+                        icon = PantopusIcon.Map,
+                        title = "Verified homes nearby",
+                        subtitle = "How many homes around you have verified, by area. Never who.",
+                        onTap = onOpenVerifiedHomes,
+                        modifier = Modifier.testTag("place.verifiedHomesNearby"),
+                    )
+                    PlaceHairline()
+                    PlaceMessagesActionRow(
+                        icon = PantopusIcon.Share,
+                        title = "Invite your neighbors",
+                        subtitle = "Share a link that shows them their own address first.",
+                        onTap = onInviteNeighbors,
+                        modifier = Modifier.testTag("place.inviteNeighbors"),
+                    )
+                }
             }
         }
     }

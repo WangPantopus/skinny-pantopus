@@ -13,7 +13,8 @@ describe('MobileTabBar route mapping', () => {
     ['/app/homes/abc/privacy', 'place'],
     ['/app/today', 'today'],
     ['/app/hub/today', 'today'],
-    ['/app/nearby', 'nearby'],
+    // "Verified homes nearby" opens from Place (founder decision 2026-11-07).
+    ['/app/nearby', 'place'],
     ['/app/feed', 'nearby'],
     ['/app/mailbox', 'mail'],
     ['/app/mailbox/personal/123', 'mail'],

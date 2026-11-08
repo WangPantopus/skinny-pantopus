@@ -85,6 +85,8 @@ final class PlaceDashboardViewModel {
     let onComposeMessage: (String) -> Void
     /// W7 — open the verified-neighbor inbox.
     let onOpenInbox: () -> Void
+    /// "Verified homes nearby": the density window, the meter and the invite.
+    let onOpenVerifiedHomes: () -> Void
     /// Wedge v2 §2 — the privacy mirror ("see what neighbors see").
     let onOpenPrivacyMirror: () -> Void
     /// Movers first (Wedge v2 D5): "Send back the previous resident's mail" opens Mail Day.
@@ -108,6 +110,7 @@ final class PlaceDashboardViewModel {
         onOpenVerificationStatus: @escaping () -> Void = {},
         onComposeMessage: @escaping (String) -> Void = { _ in },
         onOpenInbox: @escaping () -> Void = {},
+        onOpenVerifiedHomes: @escaping () -> Void = {},
         onOpenPrivacyMirror: @escaping () -> Void = {},
         onOpenMailDay: @escaping () -> Void = {},
         onOpenHubHome: @escaping () -> Void = {},
@@ -126,6 +129,7 @@ final class PlaceDashboardViewModel {
         self.onOpenVerificationStatus = onOpenVerificationStatus
         self.onComposeMessage = onComposeMessage
         self.onOpenInbox = onOpenInbox
+        self.onOpenVerifiedHomes = onOpenVerifiedHomes
         self.onOpenPrivacyMirror = onOpenPrivacyMirror
         self.onOpenMailDay = onOpenMailDay
         self.onOpenHubHome = onOpenHubHome

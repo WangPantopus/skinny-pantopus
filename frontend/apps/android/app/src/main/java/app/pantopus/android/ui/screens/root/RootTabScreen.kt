@@ -344,11 +344,8 @@ import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
 import app.pantopus.android.ui.screens.nearby.NEIGHBORHOOD_INVITE_MESSAGE
-import app.pantopus.android.ui.screens.nearby.NearbySegment
-import app.pantopus.android.ui.screens.nearby.NearbySegmentRequests
-import app.pantopus.android.ui.screens.nearby.NearbyTab
 import app.pantopus.android.ui.screens.nearby.NearbyViewModel
-import app.pantopus.android.ui.screens.nearby.NeighborhoodScreen
+import app.pantopus.android.ui.screens.nearby.VerifiedHomesNearbyScreen
 import app.pantopus.android.ui.screens.nearby.pulseQuietStateCard
 import app.pantopus.android.ui.screens.notifications.NotificationsScreen
 import app.pantopus.android.ui.screens.offers.OffersScreen
@@ -633,6 +630,12 @@ private object ChildRoutes {
 
     /** W7 — the verified-neighbor inbox list. */
     const val NEIGHBOR_INBOX = "place/neighbor-inbox"
+
+    /**
+     * "Verified homes nearby" (founder decision 2026-11-07): the density window, the meter and the invite, from Place's
+     * Verified neighbors rows and `/nearby` links.
+     */
+    const val VERIFIED_HOMES_NEARBY = "place/verified-homes-nearby"
 
     /** W7 D2 — a single received verified-neighbor message. */
     const val NEIGHBOR_MESSAGE = "place/neighbor-message/{$NEIGHBOR_MESSAGE_ID_KEY}"
@@ -2376,15 +2379,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // The side menu opens from every tab's top screen (founder decision 2026-10-20).
     val openMenu: () -> Unit = { navDrawerScope.launch { navDrawerState.open() } }
 
-    // Where Pulse opens: its own tab with the Pulse redesign on; with it off, the Nearby tab on its Pulse segment
-    // (founder decision 2026-10-20), or its Neighborhood segment for a `/nearby` link.
-    val openNearbySegment: (NearbySegment) -> Unit = { segment ->
-        if (LaunchFeatures.pulseRedesign) {
-            navController.navigateToRootTab(PantopusRoute.Pulse)
-        } else {
-            NearbySegmentRequests.request(segment)
-            navController.navigateToRootTab(PantopusRoute.Nearby)
-        }
+    // Where Pulse opens: its own tab with the Pulse redesign on; with it off, the bar's Pulse tab on its `root/nearby`
+    // route (named Nearby until the founder's November 7 decision).
+    val openPulseTab: () -> Unit = {
+        navController.navigateToRootTab(if (LaunchFeatures.pulseRedesign) PantopusRoute.Pulse else PantopusRoute.Nearby)
     }
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
@@ -2510,18 +2508,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Feed -> {
-                openNearbySegment(NearbySegment.Pulse)
+                openPulseTab()
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.Home -> {
                 navController.navigateToRootTab(PantopusRoute.Place)
                 DeepLinkRouter.consume()
             }
-            // Nearby is no longer a tab: its links, pushes and saved state open Pulse (Pulse build S3). With the Pulse
-            // redesign off Nearby is the tab, and a `/nearby` link (the neighborhood milestone push among them) opens
-            // its Neighborhood segment (founder decision 2026-10-20).
+            // With the Pulse redesign on, `/nearby` links, pushes and saved state open Pulse (Pulse build S3). With it off a
+            // `/nearby` link (the neighborhood milestone push among them) opens "Verified homes nearby", the density window
+            // that was the Nearby tab's Neighborhood segment (founder decision 2026-11-07).
             DeepLinkRouter.Destination.Nearby -> {
-                openNearbySegment(NearbySegment.Neighborhood)
+                if (LaunchFeatures.pulseRedesign) openPulseTab() else navController.navigate(ChildRoutes.VERIFIED_HOMES_NEARBY)
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.PlansTab -> {
@@ -2591,7 +2589,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.Post -> {
-                openNearbySegment(NearbySegment.Pulse)
+                openPulseTab()
                 navController.navigate(ChildRoutes.pulsePost(pending.id))
                 DeepLinkRouter.consume()
             }
@@ -3128,41 +3126,25 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     }
                 }
                 composable(PantopusRoute.Nearby.path) {
-                    // Nearby is no longer a tab with the Pulse redesign on; its old route (saved state, a stale entry)
-                    // opens Pulse. With it off Nearby is the tab, Plans its own tab beside it, and (founder decision
-                    // 2026-10-20) no door page: the Pulse | Neighborhood switch and the side menu over the October 13
-                    // feed and the density window. Connections is in the side menu.
+                    // With the Pulse redesign on, Nearby is no longer a tab; its old route (saved state, a stale entry)
+                    // opens Pulse. With it off this is the bar's Pulse tab (founder decision 2026-11-07): the October 13
+                    // feed under the big List | Map switch and the side menu, with Plans its own tab beside it. The
+                    // density window is "Verified homes nearby" on Place, and Connections is in the side menu.
                     if (LaunchFeatures.pulseRedesign) {
                         LaunchedEffect(Unit) { navController.navigateToRootTab(PantopusRoute.Pulse) }
                     } else {
-                        NearbyTab(
+                        FeedScreen(
                             onOpenMenu = openMenu,
-                            // The segment row is the first row of the feed's collapsible header.
-                            pulse = { segmentRow ->
-                                FeedScreen(
-                                    header = segmentRow,
-                                    scrollToTop = nearbyReselects,
-                                    onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
-                                    onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
-                                    onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
-                                    onComposeStarter = { starter ->
-                                        navController.navigate(
-                                            ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
-                                        )
-                                    },
-                                    onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                            scrollToTop = nearbyReselects,
+                            onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                            onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
+                            onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
+                            onComposeStarter = { starter ->
+                                navController.navigate(
+                                    ChildRoutes.composePost(PulseIntent.Ask.key, starter.placeholder),
                                 )
                             },
-                            // Over Neighborhood the segment row slides away while the page scrolls down.
-                            neighborhood = { segmentRow ->
-                                NeighborhoodScreen(
-                                    header = segmentRow,
-                                    onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
-                                    onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
-                                    onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
-                                    onInvite = { inviteShare.share(appContext, NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
-                                )
-                            },
+                            onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         )
                     }
                 }
@@ -3247,10 +3229,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(PantopusRoute.Pulse.path) {
                     // Nearby's other content lives here now: the neighborhood meter or "Set up a home" as one
                     // quiet-state card, and Connections (Beacons too, while that launch cut is off) in the top menu.
-                    // With the Pulse redesign off the October 13 feed is the Nearby tab's Pulse segment (founder
-                    // decision 2026-10-20): this route (saved state, a stale entry) opens it there.
+                    // With the Pulse redesign off the October 13 feed is the bar's Pulse tab on the `root/nearby` route
+                    // (founder decision 2026-11-07): this route (saved state, a stale entry) opens it there.
                     if (!LaunchFeatures.pulseRedesign) {
-                        LaunchedEffect(Unit) { openNearbySegment(NearbySegment.Pulse) }
+                        LaunchedEffect(Unit) { openPulseTab() }
                         return@composable
                     }
                     val quietMeter: NearbyViewModel = hiltViewModel()
@@ -3519,6 +3501,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     NeighborMessageInboxScreen(
                         onBack = { navController.popBackStack() },
                         onOpenMessage = { messageId -> navController.navigate(ChildRoutes.neighborMessage(messageId)) },
+                    )
+                }
+                composable(route = ChildRoutes.VERIFIED_HOMES_NEARBY) {
+                    VerifiedHomesNearbyScreen(
+                        onBack = { navController.popBackStack() },
+                        onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
+                        onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
+                        onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
+                        onInvite = { inviteShare.share(appContext, NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
                     )
                 }
                 composable(
@@ -7799,6 +7790,8 @@ private fun PlaceDashboardDestination(
     onBallotOpened: () -> Unit = {},
     onOpenTodayRadon: (() -> Unit)? = null,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val inviteShare: InviteShareViewModel = hiltViewModel()
     PlaceDashboardScreen(
         homeId = homeId,
         onOpenSection = { hid, slug -> navController.navigate(ChildRoutes.placeDetail(hid, slug)) },
@@ -7813,6 +7806,8 @@ private fun PlaceDashboardDestination(
         onOpenPulse = { navController.navigate(ChildRoutes.placePulse(homeId)) },
         onComposeMessage = { address -> navController.navigate(ChildRoutes.neighborCompose(homeId, address)) },
         onOpenInbox = { navController.navigate(ChildRoutes.NEIGHBOR_INBOX) },
+        onOpenVerifiedHomes = { navController.navigate(ChildRoutes.VERIFIED_HOMES_NEARBY) },
+        onInviteNeighbors = { inviteShare.share(context, NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
         // The just-moved card's mail step: a mailbox page, so it opens on the Mail tab.
         onOpenMailDay = { navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailDay()) },
         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },

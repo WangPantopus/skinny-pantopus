@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -61,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -86,11 +88,13 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.posts.PostReactionEmoji
+import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
@@ -103,6 +107,7 @@ import app.pantopus.android.ui.screens.feed.pulse.PulseAuthorLink
 import app.pantopus.android.ui.screens.feed.pulse.PulseFeedUiState
 import app.pantopus.android.ui.screens.feed.pulse.PulseFeedViewModel
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
+import app.pantopus.android.ui.screens.feed.pulse.PulseLaunchTopicChips
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCard
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.pulse.PulseSportsEventModule
@@ -139,10 +144,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 fun FeedScreen(
     surface: FeedSurface = FeedSurface.Pulse,
     /**
-     * Drawn first in the collapsible header, so it slides away with it: the Nearby tab's Pulse | Neighborhood row and
-     * side-menu button. Null elsewhere.
+     * Non-null in the bar's Pulse tab (founder decision 2026-11-07): the header opens with List | Map as the big switch
+     * beside the side-menu button, which calls this, with no title. Ask, search and the preferences sit at the end of the
+     * Nearby | Connections row, and the Sports chip leads the filter chips. Null elsewhere.
      */
-    header: (@Composable () -> Unit)? = null,
+    onOpenMenu: (() -> Unit)? = null,
     onOpenPost: (String) -> Unit = {},
     /** Opens a card's author (their profile or business page); null leaves authors plain. */
     onOpenAuthor: ((PulseAuthorLink) -> Unit)? = null,
@@ -312,21 +318,38 @@ fun FeedScreen(
             // Over the map the header can be flicked up out of the way (founder request 2026-10-22).
             flickEnabled = mapMode && headerCanHide,
             headerItems = {
-                header?.invoke()
-                TopBar(
-                    title = surface.title,
-                    onBack = onBack,
-                    onSearchTap = {
-                        showsSearch = !showsSearch
-                        if (!showsSearch) viewModel.setSearchText("")
-                    },
-                    onFilterTap = { showsIntentPicker = true },
-                    onPreferencesTap = { viewModel.openPreferences() },
-                    topMenu = topMenu,
-                    viewMode = viewMode.takeIf { surface.supportsMapMode },
-                    onViewModeChange = { viewMode = it },
-                    onAskTap = onAsk?.takeIf { surface == FeedSurface.Pulse }?.let { ask -> { ask(AIScreenContext.nearby()) } },
-                )
+                val onSearchTap = {
+                    showsSearch = !showsSearch
+                    if (!showsSearch) viewModel.setSearchText("")
+                }
+                val onAskTap = onAsk?.takeIf { surface == FeedSurface.Pulse }?.let { ask -> { ask(AIScreenContext.nearby()) } }
+                // Ask, search and the preferences, at the end of the Nearby | Connections row in the Pulse tab's header.
+                val headerTools: (@Composable () -> Unit)? =
+                    onOpenMenu?.let {
+                        {
+                            HeaderTools(
+                                onAskTap = onAskTap,
+                                onSearchTap = onSearchTap,
+                                onPreferencesTap = { viewModel.openPreferences() },
+                                topMenu = topMenu,
+                            )
+                        }
+                    }
+                if (onOpenMenu != null) {
+                    MapSwitchBar(active = viewMode, onSelect = { viewMode = it }, onOpenMenu = onOpenMenu)
+                } else {
+                    TopBar(
+                        title = surface.title,
+                        onBack = onBack,
+                        onSearchTap = onSearchTap,
+                        onFilterTap = { showsIntentPicker = true },
+                        onPreferencesTap = { viewModel.openPreferences() },
+                        topMenu = topMenu,
+                        viewMode = viewMode.takeIf { surface.supportsMapMode },
+                        onViewModeChange = { viewMode = it },
+                        onAskTap = onAskTap,
+                    )
+                }
                 if (surface == FeedSurface.Beacons) {
                     Row(modifier = Modifier.padding(horizontal = Spacing.s4)) {
                         onEmptyCta?.let { action ->
@@ -338,9 +361,14 @@ fun FeedScreen(
                     }
                 }
                 if (surface in FeedSurface.toggleSurfaces) {
-                    FeedSurfaceTabs(active = activeSurface) { next ->
+                    FeedSurfaceTabs(active = activeSurface, trailing = headerTools) { next ->
                         viewMode = FeedViewMode.List
                         viewModel.selectSurface(next)
+                    }
+                } else if (headerTools != null) {
+                    // No Nearby | Connections row to sit at the end of: the tools get their own.
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s3), horizontalArrangement = Arrangement.End) {
+                        headerTools()
                     }
                 }
                 if (showsSearch) {
@@ -385,21 +413,31 @@ fun FeedScreen(
                         onOpen = { contextBarViewModel.openSwitcher() },
                     )
                 }
-                PulseTopicChipRow(
-                    topics = viewModel.availableTopics,
-                    activeTopic = activeTopic,
-                    onSelect = { viewModel.selectTopic(it) },
-                )
+                // In the Pulse tab's header October 13's one topic, Sports, leads the filter chips instead of taking a
+                // row of its own, so it can leave the lane from either row.
+                val leadingTopics = viewModel.availableTopics.takeIf { onOpenMenu != null && !LaunchFeatures.pulseRedesign }.orEmpty()
+                val topicChips: (@Composable () -> Unit)? =
+                    leadingTopics.takeIf { it.isNotEmpty() }?.let { topics ->
+                        { PulseLaunchTopicChips(topics = topics, activeTopic = activeTopic, onSelect = { viewModel.selectTopic(it) }) }
+                    }
+                if (topicChips == null) {
+                    PulseTopicChipRow(
+                        topics = viewModel.availableTopics,
+                        activeTopic = activeTopic,
+                        onSelect = { viewModel.selectTopic(it) },
+                    )
+                }
                 // Inside a topic lane the post-type row is replaced by the
                 // lane's own mode chips — RN `FeedScreen.tsx:129`.
                 if (viewModel.isInSportsLane) {
                     val modeChips = viewModel.sportsModeChips()
-                    if (modeChips.isNotEmpty()) {
+                    if (modeChips.isNotEmpty() || topicChips != null) {
                         FeedChipRow(
                             chips = modeChips.map { FeedChipItem(id = it.first.key, label = it.second) },
                             activeId = sportsMode.key,
                             onSelect = { id -> viewModel.selectSportsMode(PulseSportsMode.fromKey(id)) },
                             skeleton = state is PulseFeedUiState.Loading,
+                            leading = topicChips,
                         )
                     }
                 } else {
@@ -408,6 +446,7 @@ fun FeedScreen(
                         activeId = activeIntent.key,
                         onSelect = { id -> viewModel.selectIntent(PulseIntent.fromKey(id)) },
                         skeleton = state is PulseFeedUiState.Loading,
+                        leading = topicChips,
                     )
                 }
                 if (viewModel.isInSportsLane) {
@@ -790,50 +829,65 @@ internal data class PulseFeedRowActions(
 @Composable
 private fun FeedSurfaceTabs(
     active: FeedSurface,
+    /** Drawn at the row's end: the Pulse tab's Ask, search and preferences. */
+    trailing: (@Composable () -> Unit)? = null,
     onSelect: (FeedSurface) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s3).selectableGroup()) {
-            FeedSurface.toggleSurfaces.forEach { tab ->
-                val isActive = tab == active
-                val tint = if (isActive) PantopusColors.primary600 else PantopusColors.appTextSecondary
-                Box(modifier = Modifier.weight(1f)) {
-                    Row(
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s3),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(modifier = Modifier.weight(1f).selectableGroup()) {
+                FeedSurface.toggleSurfaces.forEach { tab ->
+                    val isActive = tab == active
+                    val tint = if (isActive) PantopusColors.primary600 else PantopusColors.appTextSecondary
+                    Box(
                         modifier =
                             Modifier
-                                .fillMaxWidth()
+                                .weight(1f)
+                                // As tall as the buttons beside the tabs, so the active line sits on the row's edge.
+                                .then(if (trailing != null) Modifier.heightIn(min = 48.dp) else Modifier)
                                 .selectable(selected = isActive, role = Role.Tab) { onSelect(tab) }
-                                .padding(vertical = 10.dp)
                                 .semantics { contentDescription = tab.toggleLabel }
                                 .testTag("pulseSurfaceTab_${tab.name.lowercase()}"),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
+                        contentAlignment = Alignment.Center,
                     ) {
-                        PantopusIconImage(
-                            icon = tab.toggleIcon,
-                            contentDescription = null,
-                            size = 15.dp,
-                            tint = tint,
-                        )
-                        Spacer(modifier = Modifier.size(6.dp))
-                        Text(
-                            text = tab.toggleLabel,
-                            fontSize = 14.sp,
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                            color = tint,
-                        )
-                    }
-                    if (isActive) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .height(2.dp)
-                                    .background(PantopusColors.primary600),
-                        )
+                        Row(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            PantopusIconImage(
+                                icon = tab.toggleIcon,
+                                contentDescription = null,
+                                size = 15.dp,
+                                tint = tint,
+                            )
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text(
+                                text = tab.toggleLabel,
+                                fontSize = 14.sp,
+                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                color = tint,
+                            )
+                        }
+                        if (isActive) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .height(2.dp)
+                                        .background(PantopusColors.primary600),
+                            )
+                        }
                     }
                 }
+            }
+            trailing?.let {
+                Spacer(modifier = Modifier.size(Spacing.s2))
+                it()
             }
         }
         Box(
@@ -1116,81 +1170,12 @@ private fun TopBar(
                     ViewModeToggle(active = viewMode, onSelect = onViewModeChange)
                     Spacer(modifier = Modifier.size(Spacing.s2))
                 }
-                if (onAskTap != null) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(48.dp)
-                                .clickable(onClick = onAskTap)
-                                .testTag("pulseAskPantopus")
-                                .semantics { contentDescription = "Ask Pantopus" },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        PantopusIconImage(
-                            icon = PantopusIcon.Sparkles,
-                            contentDescription = null,
-                            size = 20.dp,
-                            tint = PantopusColors.magic,
-                        )
-                    }
-                }
-                if (onSearchTap != null) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(48.dp)
-                                .clickable(onClick = onSearchTap)
-                                .testTag("pulseSearchButton")
-                                .semantics { contentDescription = "Search posts" },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        PantopusIconImage(
-                            icon = PantopusIcon.Search,
-                            contentDescription = null,
-                            size = 20.dp,
-                            tint = PantopusColors.appText,
-                        )
-                    }
-                }
+                if (onAskTap != null) AskButton(onAskTap)
+                if (onSearchTap != null) SearchButton(onSearchTap)
                 if (onFilterTap != null) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(48.dp)
-                                .clickable(onClick = onFilterTap)
-                                .testTag("pulseFilterButton")
-                                .semantics { contentDescription = "Filter by intent" },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        PantopusIconImage(
-                            icon = PantopusIcon.Filter,
-                            contentDescription = null,
-                            size = 20.dp,
-                            tint = PantopusColors.appText,
-                        )
-                    }
+                    HeaderIconButton(PantopusIcon.Filter, "Filter by intent", "pulseFilterButton", onClick = onFilterTap)
                 }
-                if (onPreferencesTap != null && topMenu == null) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(48.dp)
-                                .clickable(onClick = onPreferencesTap)
-                                .testTag("pulsePreferencesButton")
-                                .semantics { contentDescription = "Pulse preferences" },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        PantopusIconImage(
-                            icon = PantopusIcon.SlidersHorizontal,
-                            contentDescription = null,
-                            size = 20.dp,
-                            tint = PantopusColors.appText,
-                        )
-                    }
-                }
-                if (topMenu != null) {
-                    PulseMoreMenu(menu = topMenu, onPreferences = onPreferencesTap)
-                }
+                PreferencesButton(onPreferencesTap, topMenu)
             }
             if (viewMode != null && stackToggle) {
                 ViewModeToggle(active = viewMode, onSelect = onViewModeChange)
@@ -1204,6 +1189,126 @@ private fun TopBar(
                     .height(1.dp)
                     .background(PantopusColors.appBorder),
         )
+    }
+}
+
+/** The Pulse tab's top row (founder decision 2026-11-07): List | Map as the big switch, beside the side-menu button. */
+@Composable
+private fun MapSwitchBar(
+    active: FeedViewMode,
+    onSelect: (FeedViewMode) -> Unit,
+    onOpenMenu: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(PantopusColors.appBg)
+                .padding(start = Spacing.s4, end = Spacing.s1, top = Spacing.s1, bottom = Spacing.s1),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(Radii.pill))
+                    .background(PantopusColors.appSurfaceSunken)
+                    .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                    .padding(3.dp)
+                    .testTag("pulseViewModeToggle")
+                    .selectableGroup(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            FeedViewMode.entries.forEach { mode ->
+                val selected = mode == active
+                val tint = if (selected) PantopusColors.appTextInverse else PantopusColors.appTextSecondary
+                Row(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = 40.dp)
+                            .clip(RoundedCornerShape(Radii.pill))
+                            .background(if (selected) PantopusColors.primary600 else PantopusColors.appSurfaceSunken)
+                            .selectable(selected = selected, role = Role.RadioButton) { onSelect(mode) }
+                            .testTag("pulseViewModeSegment_${mode.key}"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                ) {
+                    PantopusIconImage(
+                        icon = if (mode == FeedViewMode.List) PantopusIcon.List else PantopusIcon.Map,
+                        contentDescription = null,
+                        size = 17.dp,
+                        tint = tint,
+                    )
+                    Text(text = mode.label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = tint)
+                }
+            }
+        }
+        NavigationMenuButton(onClick = onOpenMenu, testTag = "nearby.menu")
+    }
+}
+
+/**
+ * Ask, search and the preferences: the end of the Nearby | Connections row in the Pulse tab's header. The filter button
+ * stays out: the chips below offer the same list.
+ */
+@Composable
+private fun HeaderTools(
+    onAskTap: (() -> Unit)?,
+    onSearchTap: () -> Unit,
+    onPreferencesTap: () -> Unit,
+    topMenu: FeedTopMenu?,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (onAskTap != null) AskButton(onAskTap)
+        SearchButton(onSearchTap)
+        PreferencesButton(onPreferencesTap, topMenu)
+    }
+}
+
+@Composable
+private fun AskButton(onClick: () -> Unit) {
+    HeaderIconButton(PantopusIcon.Sparkles, "Ask Pantopus", "pulseAskPantopus", tint = PantopusColors.magic, onClick = onClick)
+}
+
+@Composable
+private fun SearchButton(onClick: () -> Unit) {
+    HeaderIconButton(PantopusIcon.Search, "Search posts", "pulseSearchButton", onClick = onClick)
+}
+
+/** Pulse preferences, or the Pulse tab's "More" menu (Connections and the preferences) when there is one. */
+@Composable
+private fun PreferencesButton(
+    onPreferencesTap: (() -> Unit)?,
+    topMenu: FeedTopMenu?,
+) {
+    when {
+        topMenu != null -> PulseMoreMenu(menu = topMenu, onPreferences = onPreferencesTap)
+        onPreferencesTap != null ->
+            HeaderIconButton(PantopusIcon.SlidersHorizontal, "Pulse preferences", "pulsePreferencesButton", onClick = onPreferencesTap)
+    }
+}
+
+/** One of the Pulse header's 48 dp icon buttons. */
+@Composable
+private fun HeaderIconButton(
+    icon: PantopusIcon,
+    description: String,
+    tag: String,
+    tint: Color = PantopusColors.appText,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(48.dp)
+                .clickable(onClick = onClick)
+                .testTag(tag)
+                .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        PantopusIconImage(icon = icon, contentDescription = null, size = 20.dp, tint = tint)
     }
 }
 

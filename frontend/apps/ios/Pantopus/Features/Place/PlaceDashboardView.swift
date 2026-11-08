@@ -255,8 +255,10 @@ struct PlaceDashboardView: View {
                         .placeColumn(.leading, order: 0)
                         VStack(alignment: .leading, spacing: 0) {
                             glance(intel, claim: claim)
-                            if isVerified {
-                                messagesEntry(address: intel.place.label)
+                            // Messages for verified residents; "Verified homes nearby" and the invite on
+                            // the person's own home, not a claim still in review.
+                            if isVerified || claim == nil {
+                                neighborsEntry(address: intel.place.label, messages: isVerified, homesNearby: claim == nil)
                             }
                             // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
                             if claim == nil {
@@ -875,26 +877,54 @@ struct PlaceDashboardView: View {
         .accessibilityIdentifier("place.privacyMirror")
     }
 
-    /// W7 — verified-neighbor messaging (verified residents only): one group, two rows.
-    private func messagesEntry(address: String) -> some View {
+    /// Verified neighbors: W7's private messages (verified residents only), then
+    /// "Verified homes nearby" and the invite, which were the Nearby tab's
+    /// Neighborhood segment (founder decision 2026-11-07).
+    private func neighborsEntry(address: String, messages: Bool, homesNearby: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            PlaceSectionHeading(title: "Verified neighbors", detail: "Private messages")
+            // "Private messages" names the section only while messages are all it holds.
+            PlaceSectionHeading(title: "Verified neighbors", detail: messages && !homesNearby ? "Private messages" : nil)
             PlaceGroupSurface {
-                Button { viewModel.onComposeMessage(address) } label: {
-                    PlaceActionRowLabel(
-                        icon: .messageSquarePlus,
-                        title: "Message a neighbor",
-                        subtitle: "Send a private heads-up to a home on your block."
-                    )
+                if messages {
+                    Button { viewModel.onComposeMessage(address) } label: {
+                        PlaceActionRowLabel(
+                            icon: .messageSquarePlus,
+                            title: "Message a neighbor",
+                            subtitle: "Send a private heads-up to a home on your block."
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("place.messageNeighbor")
+                    PlaceRowDivider()
+                    Button { viewModel.onOpenInbox() } label: {
+                        PlaceActionRowLabel(icon: .inbox, title: "Your inbox", subtitle: "Heads-ups from verified neighbors nearby.")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("place.inbox")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("place.messageNeighbor")
-                PlaceRowDivider()
-                Button { viewModel.onOpenInbox() } label: {
-                    PlaceActionRowLabel(icon: .inbox, title: "Your inbox", subtitle: "Heads-ups from verified neighbors nearby.")
+                if homesNearby {
+                    if messages { PlaceRowDivider() }
+                    Button { viewModel.onOpenVerifiedHomes() } label: {
+                        PlaceActionRowLabel(
+                            icon: .map,
+                            title: "Verified homes nearby",
+                            subtitle: "How many homes around you have verified, by area. Never who."
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("place.verifiedHomesNearby")
+                    PlaceRowDivider()
+                    // The person's own link (/join/<code>), as on "Verified homes nearby".
+                    ShareLink(item: PersonalInviteLink.shared.url, message: Text(NeighborhoodView.inviteMessage)) {
+                        PlaceActionRowLabel(
+                            icon: .share2,
+                            title: "Invite your neighbors",
+                            subtitle: "Share a link that shows them their own address first."
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("place.inviteNeighbors")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("place.inbox")
             }
         }
     }

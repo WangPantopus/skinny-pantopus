@@ -12,12 +12,13 @@
 //  (`NeighborhoodDoorStore`).
 //
 //  While the Pulse redesign is off (launch cut #11) this is the October 13
-//  Pulse instead: the Nearby tab's Pulse segment (`NeighborhoodTabRoot`,
-//  founder decision 2026-10-20) showing the feed (`FeedView`) under Nearby's
-//  segment header, and Nearby presents Tasks and Marketplace itself. On a
-//  wide screen (the iPhone Duo open, held sideways) that feed and the open
-//  post sit side by side (`PulseSplitView`); the feed's models live here, so
-//  a fold or a turn keeps its posts, filters and List / Map.
+//  Pulse instead, inside the bar's Pulse tab (`NeighborhoodTabRoot`, named
+//  Nearby until the founder's November 7 decision): the feed (`FeedView`)
+//  under its List | Map switch and the side menu, and the tab root presents
+//  Tasks and Marketplace itself. On a wide screen (the iPhone Duo open, held
+//  sideways) that feed and the open post sit side by side (`PulseSplitView`);
+//  the feed's models live here, so a fold or a turn keeps its posts, filters
+//  and List / Map.
 //
 
 import SwiftUI
@@ -61,27 +62,23 @@ public struct PulseTabRoot: View {
     /// Closes the sheet this surface is presented in, when it is one; nil
     /// draws no Back.
     private let onClose: (@MainActor () -> Void)?
-    /// Nearby's segment header above the October 13 feed (the Pulse
-    /// redesign off): the Pulse | Neighborhood switch and the side menu.
-    private let header: AnyView?
-    /// Whether the Nearby tab has room for the October 13 feed and the open post side by side (the iPhone Duo
+    /// The October 13 feed is the bar's Pulse tab (the Pulse redesign off): its header opens with the big List | Map
+    /// switch and the side menu (founder decision 2026-11-07).
+    private let mapSwitchOnTop: Bool
+    /// Whether the Pulse tab has room for the October 13 feed and the open post side by side (the iPhone Duo
     /// open, held sideways).
     private let sideBySide: Bool
-    /// False while Nearby's Neighborhood segment covers this one: a chat left open under it doesn't hide the tab bar.
-    private let isShowing: Bool
 
     public init(
         onAddHome: @escaping @MainActor () -> Void = {},
         onClose: (@MainActor () -> Void)? = nil,
-        header: AnyView? = nil,
-        sideBySide: Bool = false,
-        isShowing: Bool = true
+        mapSwitchOnTop: Bool = false,
+        sideBySide: Bool = false
     ) {
         self.onAddHome = onAddHome
         self.onClose = onClose
-        self.header = header
+        self.mapSwitchOnTop = mapSwitchOnTop
         self.sideBySide = sideBySide
-        self.isShowing = isShowing
         let feed = PulseFeedViewModel()
         let feedMap = FeedMapViewModel(surface: feed.surface)
         _feed = State(initialValue: feed)
@@ -232,7 +229,7 @@ public struct PulseTabRoot: View {
                     path.append(.compose(intent: intent.rawValue))
                 },
                 onBack: onClose,
-                header: header,
+                mapSwitchOnTop: mapSwitchOnTop,
                 scrollToTop: rootTabs.pulseHomeReselected,
                 asksPantopus: true
             )
@@ -270,19 +267,16 @@ public struct PulseTabRoot: View {
     }
 
     private func consumeDeepLinkIfNeeded(pending: DeepLinkRouter.Destination?) {
-        // Nearby, while this is Nearby's Pulse segment (launch cut #11 off).
+        // The bar's Pulse tab, whichever root hosts it (launch cut #11 on or off).
         guard navigationReady, rootTabs.selected == RootTab.pulseHome, let pending, pending == router.pending else { return }
-        // This stack stays mounted behind Neighborhood. Its observer can run
-        // before RootTabView's: leave /nearby to the root dispatcher, and
-        // reveal Pulse ourselves before consuming a feed or post link.
+        // With the redesign off, /nearby opens "Verified homes nearby" in the
+        // Place stack: leave it to the root dispatcher, which can run after us.
         if pending == .pulse, !LaunchFeatures.pulseRedesign { return }
         switch pending {
         case .feed, .pulse:
-            if !LaunchFeatures.pulseRedesign { door.pendingSegment = .pulse }
             path.replaceNavigationPath(NavigationPath())
             _ = router.consume()
         case let .post(id):
-            if !LaunchFeatures.pulseRedesign { door.pendingSegment = .pulse }
             path.replaceNavigationPath(NavigationPath())
             path.append(.post(postId: id))
             _ = router.consume()
@@ -405,7 +399,7 @@ extension PulseTabRoot {
             onBack: pop
         )
         // The whole screen has no tab bar; beside the feed, the bar stays.
-        .hidesTabBar(!isSideBySide && isShowing)
+        .hidesTabBar(!isSideBySide)
     }
 }
 

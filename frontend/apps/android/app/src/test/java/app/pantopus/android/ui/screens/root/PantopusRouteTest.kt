@@ -23,11 +23,12 @@ class PantopusRouteTest {
     @Test fun launch_tabs_and_redesign_tabs() {
         // Mailbox is off for launch (contract §9): the last tab reads Messages.
         LaunchFeatures.overrideForTesting = emptySet()
-        // The Pulse redesign is off for launch: the October 13 bar with Plans before Messages, and Pulse behind Nearby.
-        assertEquals(listOf("Place", "Today", "Nearby", "Plans", "Messages"), PantopusRoute.entries.map { it.label })
+        // The Pulse redesign is off for launch: the October 13 bar with Plans before Messages, its Nearby route named
+        // Pulse since the founder's November 7 decision.
+        assertEquals(listOf("Place", "Today", "Pulse", "Plans", "Messages"), PantopusRoute.entries.map { it.label })
         assertEquals(PantopusRoute.entries, PantopusRoute.barTabs(plansOn = true))
         // While the Plans switch is off, the October 13 bar exactly.
-        assertEquals(listOf("Place", "Today", "Nearby", "Messages"), PantopusRoute.barTabs(plansOn = false).map { it.label })
+        assertEquals(listOf("Place", "Today", "Pulse", "Messages"), PantopusRoute.barTabs(plansOn = false).map { it.label })
         assertEquals(PantopusRoute.Nearby, PantopusRoute.barTabFor(PantopusRoute.Pulse))
         assertEquals(PantopusRoute.Plans, PantopusRoute.barTabFor(PantopusRoute.Plans))
         // The Messages route belongs to Mail, which is the conversation list while Mailbox is off.
@@ -43,8 +44,8 @@ class PantopusRouteTest {
         assertEquals(listOf("Place", "Today", "Pulse", "Plans", "Messages"), entries.map { it.label })
         // With Mailbox on, Messages is its own tab after Mail, with the Pulse redesign off and on.
         LaunchFeatures.overrideForTesting = setOf(LaunchFeature.MAILBOX)
-        assertEquals(listOf("Place", "Today", "Nearby", "Plans", "Mail", "Messages"), PantopusRoute.entries.map { it.label })
-        assertEquals(listOf("Place", "Today", "Nearby", "Mail", "Messages"), PantopusRoute.barTabs(plansOn = false).map { it.label })
+        assertEquals(listOf("Place", "Today", "Pulse", "Plans", "Mail", "Messages"), PantopusRoute.entries.map { it.label })
+        assertEquals(listOf("Place", "Today", "Pulse", "Mail", "Messages"), PantopusRoute.barTabs(plansOn = false).map { it.label })
         assertEquals(PantopusRoute.Messages, PantopusRoute.barTabFor(PantopusRoute.Messages))
         assertEquals(PantopusRoute.Messages, PantopusRoute.messagesTab)
         LaunchFeatures.overrideForTesting = setOf(LaunchFeature.PULSE_REDESIGN, LaunchFeature.MAILBOX)

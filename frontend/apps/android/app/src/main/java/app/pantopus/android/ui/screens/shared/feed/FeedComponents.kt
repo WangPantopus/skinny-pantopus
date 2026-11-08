@@ -145,6 +145,8 @@ fun FeedChipRow(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     skeleton: Boolean = false,
+    /** Drawn before the chips in the same scrolling row (the Pulse tab's Sports chip). */
+    leading: (@Composable () -> Unit)? = null,
 ) {
     Box(
         modifier =
@@ -161,7 +163,9 @@ fun FeedChipRow(
                     .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
                     .selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            leading?.invoke()
             if (skeleton) {
                 // A03 loading frame shimmers the chip row alongside the
                 // cards — widths echo the real chip labels (iOS parity).

@@ -84,7 +84,7 @@ struct PulseQuietCard: View {
             // is answered first, not our app pitch. /start itself until it loads.
             ShareLink(
                 item: PersonalInviteLink.shared.url,
-                message: Text("See what's true about your address — records, risks, and who's verified nearby. Free, no account.")
+                message: Text(NeighborhoodView.inviteMessage)
             ) {
                 buttonLabel("Invite your neighbors", icon: .share2)
             }

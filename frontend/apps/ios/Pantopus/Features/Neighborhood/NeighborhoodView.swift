@@ -2,14 +2,13 @@
 //  NeighborhoodView.swift
 //  Pantopus
 //
-//  The Nearby tab's Neighborhood segment (founder decision 2026-10-20): the
-//  density window (`NearbyCellsMapCard`), the meter and "Invite your
-//  neighbors", or "Set up a home" before there is one. The meter controls
-//  the local marketplace and tasks preview and preserves privacy floors.
-//  Pulse is the segment beside it and Connections is in the side menu, so
-//  the October 13 door's title and Pulse / Connections rows are gone. Shown
-//  while the Pulse redesign is off (launch cut #11); with it on, the Pulse
-//  tab's quiet card (`PulseQuietCard`) carries the meter instead.
+//  The body of "Verified homes nearby" (`VerifiedHomesNearbyView`, a Place
+//  page since the founder's November 7 decision; before that the Nearby tab's
+//  Neighborhood segment): the density window (`NearbyCellsMapCard`), the
+//  meter and "Invite your neighbors", or "Set up a home" before there is one.
+//  The meter controls the local marketplace and tasks preview and preserves
+//  privacy floors. With the Pulse redesign on (launch cut #11), the Pulse
+//  tab's quiet card (`PulseQuietCard`) carries the meter as well.
 //
 
 import SwiftUI
@@ -17,6 +16,9 @@ import SwiftUI
 /// Internal like PlaceDashboardView — the view model's APIClient dependency
 /// is internal, and the app is a single target.
 struct NeighborhoodView: View {
+    /// What the invite says beside the person's link (here, on Place's Verified neighbors rows and the Pulse quiet card).
+    static let inviteMessage = "See what's true about your address — records, risks, and who's verified nearby. Free, no account."
+
     @State private var viewModel: NeighborhoodViewModel
 
     /// Present a neighborhood surface (unlocked state) — wired by
@@ -52,9 +54,9 @@ struct NeighborhoodView: View {
                     case .noPlace:
                         EmptyState(
                             icon: .home,
-                            headline: "Add a home for neighborhood context",
+                            headline: "Add a home to see verified homes nearby",
                             // Launch cut #1 (Beacon): no Beacons to follow.
-                            subcopy: "Adding a home gives you neighborhood context and household tools. "
+                            subcopy: "Adding a home shows how many homes around it are verified, and gives you household tools. "
                                 + (LaunchFeatures.beacon
                                     ? "You can browse Pulse and follow Beacons before setting it up."
                                     : "You can browse Pulse before setting it up."),
@@ -76,7 +78,7 @@ struct NeighborhoodView: View {
         }
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("nearbyNeighborhood")
-        // The offline strip is the tab's, above the segment header (`NeighborhoodTabRoot`), as on the Pulse segment.
+        // The offline strip is the page's, above its header (`VerifiedHomesNearbyView`).
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
         // A home added, claimed or verified (`homes`) can change the meter.
@@ -188,10 +190,7 @@ struct NeighborhoodView: View {
         // The invite is the person's own link (/join/<code>): the recipient sees
         // who invited them over the /start address lookup, so their own address
         // is answered first, not our app pitch. /start itself until it loads.
-        ShareLink(
-            item: PersonalInviteLink.shared.url,
-            message: Text("See what's true about your address — records, risks, and who's verified nearby. Free, no account.")
-        ) {
+        ShareLink(item: PersonalInviteLink.shared.url, message: Text(Self.inviteMessage)) {
             HStack(spacing: Spacing.s2) {
                 Icon(.share2, size: 17, color: .white)
                 Text("Invite your neighbors")

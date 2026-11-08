@@ -3,7 +3,6 @@ import {
   screen,
   fireEvent,
   waitFor,
-  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const push = jest.fn();
@@ -32,10 +31,11 @@ beforeEach(() => {
   cells.mockResolvedValue({ state: 'no_place' });
 });
 
-// Nearby is Pulse | Neighborhood (founder decision 2026-10-20): this page is
-// the Neighborhood segment, and Connections moved to the menu.
+// "Verified homes nearby" (founder decision 2026-11-07): the Nearby tab's
+// Neighborhood segment until then, now a page opened from Place with a back
+// link there. Connections stays in the menu.
 it.each(['loading', 'error', 'no_place', 'forming', 'growing', 'unlocked'])(
-  'shows the Nearby switch on the Neighborhood segment when meter is %s',
+  'shows the Verified homes nearby header when meter is %s',
   async (state) => {
     if (state === 'loading') meter.mockReturnValue(new Promise(() => {}));
     else if (state === 'error') meter.mockRejectedValue(new Error('offline'));
@@ -50,25 +50,24 @@ it.each(['loading', 'error', 'no_place', 'forming', 'growing', 'unlocked'])(
     show();
     await waitFor(() => expect(meter).toHaveBeenCalled());
     if (state === 'error')
-      await screen.findByText(/couldn't load your neighborhood meter/);
+      await screen.findByText(/couldn't load verified homes nearby/);
     else if (state === 'no_place')
-      await screen.findByText('Add a home for neighborhood context');
+      await screen.findByText('Add a home to see verified homes nearby');
     else if (state === 'unlocked')
       await screen.findByText(/Local marketplace and tasks are open/);
     else if (state !== 'loading')
       await screen.findByRole('heading', {
         name: 'Local marketplace and tasks',
       });
-    const segments = within(
-      screen.getByRole('navigation', { name: 'Nearby' }),
-    );
-    expect(segments.getByRole('link', { name: 'Pulse' })).toHaveAttribute(
-      'href',
-      '/app/feed',
-    );
     expect(
-      segments.getByRole('link', { name: 'Neighborhood' }),
-    ).toHaveAttribute('aria-current', 'page');
+      screen.getByRole('heading', { level: 1, name: 'Verified homes nearby' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Back to Place' }),
+    ).toHaveAttribute('href', '/app/place');
+    expect(
+      screen.queryByRole('navigation', { name: 'Nearby' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('navigation', { name: 'Social discovery' }),
     ).not.toBeInTheDocument();

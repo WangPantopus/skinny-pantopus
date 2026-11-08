@@ -98,23 +98,28 @@ public struct FeedChipRow: View {
     private let chips: [FeedChipItem]
     private let activeId: String
     private let skeleton: Bool
+    /// Drawn before the chips in the same scrolling row (the Pulse tab's Sports chip).
+    private let leading: AnyView?
     private let onSelect: @MainActor (String) -> Void
 
     public init(
         chips: [FeedChipItem],
         activeId: String,
         skeleton: Bool = false,
+        leading: AnyView? = nil,
         onSelect: @escaping @MainActor (String) -> Void
     ) {
         self.chips = chips
         self.activeId = activeId
         self.skeleton = skeleton
+        self.leading = leading
         self.onSelect = onSelect
     }
 
     public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
+                if let leading { leading }
                 if skeleton {
                     // A03 loading frame shimmers the chip row alongside
                     // the cards — widths echo the real chip labels.
