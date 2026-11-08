@@ -106,19 +106,24 @@ struct PlaceChipModel: Equatable {
 
 struct PlaceChip: View {
     let model: PlaceChipModel
+    /// The icon alone, for a row with no room for the words; the row reads them
+    /// out instead.
+    var iconOnly = false
 
     var body: some View {
         HStack(spacing: 4) {
             if let icon = model.icon {
                 Icon(icon, size: 13, strokeWidth: 2.25, color: foreground)
             }
-            Text(model.text)
-                .font(.system(size: 12, weight: .semibold))
-                .lineLimit(1)
+            if !iconOnly || model.icon == nil {
+                Text(model.text)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+            }
         }
         .foregroundStyle(foreground)
         .padding(.leading, model.icon != nil ? 7 : 9)
-        .padding(.trailing, 9)
+        .padding(.trailing, iconOnly && model.icon != nil ? 7 : 9)
         .padding(.vertical, 3)
         .background(background)
         .clipShape(Capsule())

@@ -65,6 +65,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -786,6 +787,10 @@ private fun AreaPill(
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
                 maxLines = 1,
+                // With the menu and the chat button on the row (founder decision 2026-11-08) the pill can run out of
+                // room: it ends in "…", as on iPhone, rather than dropping the window's last word.
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             PantopusIconImage(icon = PantopusIcon.ChevronDown, contentDescription = null, size = 16.dp, tint = PantopusColors.appText)

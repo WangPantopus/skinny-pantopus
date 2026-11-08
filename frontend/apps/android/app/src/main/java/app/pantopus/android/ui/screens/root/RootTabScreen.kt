@@ -2438,19 +2438,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         }
     // Messages left the bar (founder decision 2026-11-08): the chat button at the top right of every tab's first
     // screen but Mail's opens it, carrying the unread count, and its Back returns to the tab it was opened from, which
-    // stays lit on the bar meanwhile.
+    // stays lit on the bar meanwhile. That's the last bar tab shown, however Messages opened (the chat button, a chat
+    // push or link, a "Message" button), as on iPhone.
     var messagesReturnPath by rememberSaveable { mutableStateOf(PantopusRoute.Place.path) }
+    LaunchedEffect(currentRoute, barTabs) { if (currentRoute in barTabs) messagesReturnPath = currentRoute.path }
     val messagesReturnTab = PantopusRoute.fromPath(messagesReturnPath)?.takeIf { it in barTabs } ?: PantopusRoute.Place
     val onMessages = currentRoute == PantopusRoute.messagesTab && currentRoute !in barTabs
     val litTab = if (onMessages) messagesReturnTab else currentRoute
-    val openMessages: () -> Unit = {
-        if (!onMessages) messagesReturnPath = currentRoute.path
-        navController.navigateToRootTab(PantopusRoute.messagesTab)
-    }
     val closeMessages: () -> Unit = { navController.navigateToRootTab(messagesReturnTab) }
-    val latestOpenMessages by rememberUpdatedState(openMessages)
     val messagesEntry =
-        remember(resolvedInboxBadgeCount) { MessagesEntry(unread = resolvedInboxBadgeCount, open = { latestOpenMessages() }) }
+        remember(resolvedInboxBadgeCount) {
+            MessagesEntry(unread = resolvedInboxBadgeCount, open = { navController.navigateToRootTab(PantopusRoute.messagesTab) })
+        }
     SideEffect { if (MessagesEntryHolder.current != messagesEntry) MessagesEntryHolder.current = messagesEntry }
     DisposableEffect(Unit) { onDispose { MessagesEntryHolder.current = null } }
     // The Place tab's root sits at the bottom of the stack for the whole session. Its host holds the session's

@@ -40,6 +40,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -661,24 +662,7 @@ internal fun PlaceDashboardHeader(
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             NavigationMenuButton(onClick = onOpenMenu, testTag = "place.menu", modifier = Modifier.offset(x = (-12).dp))
-            Row(
-                modifier = Modifier.weight(1f).offset(x = (-8).dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Your Place",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.56).sp,
-                    lineHeight = 32.sp,
-                    color = PantopusColors.appText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false).semantics { heading() },
-                )
-                status?.let { Box(modifier = Modifier.testTag("place.status")) { PlaceChip(it) } }
-            }
+            PlaceTitleAndStatus(status = status, modifier = Modifier.weight(1f).offset(x = (-8).dp))
             PlaceBellAndChat(unreadCount, onOpenNotifications, onAsk)
         }
         if (onOpenSwitcher != null) {
@@ -766,6 +750,51 @@ private fun PlaceAddressSwitcher(
             strokeWidth = 2.25f,
             tint = PantopusColors.appTextSecondary,
         )
+    }
+}
+
+/**
+ * "Your Place" and where the person stands ([status]). With the menu on the row (founder decision 2026-11-08) a phone
+ * may lack room for both whole: the chip shows its icon alone rather than cutting the title, as on iPhone.
+ */
+@Composable
+private fun PlaceTitleAndStatus(
+    status: PlaceChipModel?,
+    modifier: Modifier = Modifier,
+) {
+    Layout(
+        content = {
+            Text(
+                text = "Your Place",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.56).sp,
+                lineHeight = 32.sp,
+                color = PantopusColors.appText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() },
+            )
+            status?.let {
+                Box(modifier = Modifier.testTag("place.status")) { PlaceChip(it) }
+                Box(modifier = Modifier.testTag("place.status")) { PlaceChip(it, iconOnly = true) }
+            }
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val gap = Spacing.s2.roundToPx()
+        val loose = constraints.copy(minWidth = 0)
+        val titleWidth = measurables[0].maxIntrinsicWidth(constraints.maxHeight)
+        val full = measurables.getOrNull(1)?.measure(loose)
+        val chip = if (full == null || titleWidth + gap + full.width <= constraints.maxWidth) full else measurables[2].measure(loose)
+        val chipSpace = chip?.let { it.width + gap } ?: 0
+        val title = measurables[0].measure(loose.copy(maxWidth = (constraints.maxWidth - chipSpace).coerceAtLeast(0)))
+        val height = maxOf(title.height, chip?.height ?: 0)
+        // At least the width the row hands over, so the pair starts at its leading edge rather than centered in it.
+        layout((title.width + chipSpace).coerceAtLeast(constraints.minWidth), height) {
+            title.placeRelative(0, (height - title.height) / 2)
+            chip?.placeRelative(title.width + gap, (height - chip.height) / 2)
+        }
     }
 }
 

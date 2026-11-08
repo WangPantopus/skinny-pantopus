@@ -358,19 +358,28 @@ struct PlaceDashboardView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .center, spacing: 8) {
                 if isRoot { menuButton.padding(.leading, -Spacing.s3) }
-                Text("Your Place")
-                    .font(.system(size: 28, weight: .bold))
-                    .kerning(-0.56)
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .layoutPriority(1)
-                    .accessibilityAddTraits(.isHeader)
-                if let status = viewModel.claim == nil ? Self.status(intel) : Self.claimStatus {
-                    PlaceChip(model: status)
+                HStack(spacing: 8) {
+                    Text("Your Place")
+                        .font(.system(size: 28, weight: .bold))
+                        .kerning(-0.56)
+                        .foregroundStyle(Theme.Color.appText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .layoutPriority(1)
+                        .accessibilityAddTraits(.isHeader)
+                    if let status = viewModel.claim == nil ? Self.status(intel) : Self.claimStatus {
+                        // With ☰ on the row, a phone may have no room for the
+                        // words: the icon stands in rather than a cut word.
+                        ViewThatFits(in: .horizontal) {
+                            PlaceChip(model: status)
+                            PlaceChip(model: status, iconOnly: true)
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(status.text)
                         .accessibilityIdentifier("place.status")
+                    }
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 // Bell + chat button (or menu) sit together; the dot shows anything unread.
                 HStack(spacing: 0) {
                     PlaceBellButton(unreadCount: viewModel.unreadCount, action: viewModel.onOpenNotifications)

@@ -45,7 +45,8 @@ class RootTabTest {
         }
 
         composeRule.onNodeWithTag("landing.root/home").assertIsDisplayed()
-        for (tab in listOf("today", "nearby", "mail", "home")) {
+        // Messages (Mail while Mailbox is off) left the bar for the chat button (founder decision 2026-11-08).
+        for (tab in listOf("today", "nearby", "plans", "home")) {
             composeRule.onNodeWithTag("tab.$tab").performClick().assertIsSelected()
             composeRule.onNodeWithTag("landing.root/$tab").assertIsDisplayed()
         }

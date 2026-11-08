@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -137,42 +138,27 @@ data class PlaceChipModel(
     val icon: PantopusIcon? = null,
 )
 
-/** Bordered semantic pill — 12sp semibold, tinted bg/fg/border. */
+/**
+ * Bordered semantic pill — 12sp semibold, tinted bg/fg/border. [iconOnly] draws the icon alone, for a row with no room
+ * for the words; the pill still reads them out.
+ */
 @Composable
-fun PlaceChip(model: PlaceChipModel) {
-    val bg =
-        when (model.tone) {
-            PlaceChipTone.SUCCESS -> PantopusColors.successBg
-            PlaceChipTone.WARNING -> PantopusColors.warningBg
-            PlaceChipTone.ERROR -> PantopusColors.errorBg
-            PlaceChipTone.SKY -> PantopusColors.infoBg
-            PlaceChipTone.NEUTRAL -> PantopusColors.appSurfaceSunken
-        }
-    val fg =
-        when (model.tone) {
-            PlaceChipTone.SUCCESS -> PantopusColors.success
-            PlaceChipTone.WARNING -> PantopusColors.warning
-            PlaceChipTone.ERROR -> PantopusColors.error
-            PlaceChipTone.SKY -> PantopusColors.primary700
-            PlaceChipTone.NEUTRAL -> PantopusColors.appTextSecondary
-        }
-    val bd =
-        when (model.tone) {
-            PlaceChipTone.SUCCESS -> PantopusColors.successLight
-            PlaceChipTone.WARNING -> PantopusColors.warningLight
-            PlaceChipTone.ERROR -> PantopusColors.errorLight
-            PlaceChipTone.SKY -> PantopusColors.primary200
-            PlaceChipTone.NEUTRAL -> PantopusColors.appBorder
-        }
+fun PlaceChip(
+    model: PlaceChipModel,
+    iconOnly: Boolean = false,
+) {
+    val (bg, fg, bd) = placeChipColors(model.tone)
+    val compact = iconOnly && model.icon != null
     Row(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(999.dp))
                 .background(bg)
                 .border(1.dp, bd, RoundedCornerShape(999.dp))
+                .then(if (compact) Modifier.semantics { contentDescription = model.text } else Modifier)
                 .padding(
                     start = if (model.icon != null) 7.dp else 9.dp,
-                    end = 9.dp,
+                    end = if (compact) 7.dp else 9.dp,
                     top = 3.dp,
                     bottom = 3.dp,
                 ),
@@ -188,17 +174,29 @@ fun PlaceChip(model: PlaceChipModel) {
                 tint = fg,
             )
         }
-        Text(
-            text = model.text,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            lineHeight = 16.sp,
-            color = fg,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (!compact) {
+            Text(
+                text = model.text,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 16.sp,
+                color = fg,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
+
+/** The pill's background, text and border colors for [tone]. */
+private fun placeChipColors(tone: PlaceChipTone): Triple<Color, Color, Color> =
+    when (tone) {
+        PlaceChipTone.SUCCESS -> Triple(PantopusColors.successBg, PantopusColors.success, PantopusColors.successLight)
+        PlaceChipTone.WARNING -> Triple(PantopusColors.warningBg, PantopusColors.warning, PantopusColors.warningLight)
+        PlaceChipTone.ERROR -> Triple(PantopusColors.errorBg, PantopusColors.error, PantopusColors.errorLight)
+        PlaceChipTone.SKY -> Triple(PantopusColors.infoBg, PantopusColors.primary700, PantopusColors.primary200)
+        PlaceChipTone.NEUTRAL -> Triple(PantopusColors.appSurfaceSunken, PantopusColors.appTextSecondary, PantopusColors.appBorder)
+    }
 
 // ─── Verified avatar (`Avatar`) ──────────────────────────────
 
