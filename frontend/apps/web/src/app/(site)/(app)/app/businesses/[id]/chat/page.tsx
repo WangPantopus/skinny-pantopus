@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useBusinessChatRooms, type BusinessChatRoom } from '@/hooks/useBusinessChatRooms';
@@ -110,6 +111,8 @@ export default function BusinessChatListPage() {
               const timestamp = getRoomTimestamp(r);
               const timeStr = formatTimeAgo(timestamp || r.updated_at, 'full');
               const initials = getInitials(String(title));
+              // The photo the person shows neighbors, as on the business's Inbox tab.
+              const avatarUrl = r.other_participant_identity?.avatarUrl || null;
               return (
                 <button
                   key={r.id}
@@ -117,9 +120,13 @@ export default function BusinessChatListPage() {
                   className={`w-full text-left px-4 py-3 hover-bg-app transition-colors ${unread > 0 ? 'bg-violet-50/30' : ''}`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-violet-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-                      {initials}
-                    </div>
+                    {avatarUrl ? (
+                      <Image src={avatarUrl} alt="" width={48} height={48} sizes="48px" quality={75} className="w-12 h-12 rounded-full object-cover flex-shrink-0 bg-surface-muted" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-violet-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                        {initials}
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <div className={`truncate ${unread > 0 ? 'font-bold text-app' : 'font-semibold text-app'}`}>

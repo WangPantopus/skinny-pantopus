@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { removalLink } from '@/components/home/member-removals/removalModel';
 import { useSavedRemoval } from '@/components/home/member-removals/useSavedRemoval';
@@ -415,11 +416,16 @@ function MembersContent() {
                 <div className="space-y-1.5">
                   {roleMembers.map((member: any) => (
                     <div key={member.id || member.user_id} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: meta.color + '15' }}>
-                        <span className={`text-sm font-bold ${ACCENT_TEXT}`} style={accentStyle(meta)}>
-                          {(member.display_name || member.user?.name || chosenUsername(member.user?.username || member.username) || '?').charAt(0).toUpperCase()}
-                        </span>
-                      </div>
+                      {/* The photo the member shows neighbors, as on the phones; their initial without one. */}
+                      {member.avatar_url ? (
+                        <Image src={member.avatar_url} alt="" width={40} height={40} sizes="40px" quality={75} className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-surface-muted" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: meta.color + '15' }}>
+                          <span className={`text-sm font-bold ${ACCENT_TEXT}`} style={accentStyle(meta)}>
+                            {(member.display_name || member.user?.name || chosenUsername(member.user?.username || member.username) || '?').charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-app-text truncate">{member.display_name || member.user?.name || chosenUsername(member.user?.username || member.username) || 'Household member'}</p>
                         {usernameHandle(member.username || member.user?.username) && <p className="text-xs text-app-text-muted">{usernameHandle(member.username || member.user?.username)}</p>}
