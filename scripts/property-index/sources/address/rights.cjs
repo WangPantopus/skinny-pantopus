@@ -90,6 +90,22 @@ const POINT_LAYERS = [
     secondary: ['PrimaryUnitTypeAbbreviation', 'PrimaryUnitIdentifier', 'SecondaryUnitTypeAbbreviation', 'SecondaryUnitIdentifier'],
     terms: 'Summit County, Colorado: its GIS open data, which Resolution 2017-03 makes "free and open geospatial data" for the public and commercial businesses, under the county\'s disclaimer (as is, at the user\'s risk); the layer is in the county\'s open data group. Read November 8. Owner columns are never asked for',
   },
+  {
+    // Pima County, Arizona: the county's official points, for addresses the National Address Database lacks there.
+    id: 'az-pima',
+    state: 'AZ',
+    url: 'https://gisdata.pima.gov/arcgis1/rest/services/GISOpenData/Addresses/MapServer/4',
+    fields: { number: 'STREET_NO', pre: 'STREET_DIR', name: 'AD_STREET', suffix: 'AD_SUFFIX', post: 'SUFFIX_DIR', city: 'ZIPCITY', zip: 'ZIPCODE' },
+    terms: 'Pima County, Arizona: its GIS open data, under the county\'s disclaimer (no warranty; the open data copy is for download or a private application, not a live service inside another public one, and a monthly read into private storage is a download; A.R.S. 37-178 holds the county harmless). No limit on use stated. Read November 8',
+  },
+  {
+    // Pennington County, South Dakota (Rapid City): no other source holds it.
+    id: 'sd-pennington',
+    state: 'SD',
+    url: 'https://gis.rcgov.org/server/rest/services/OpenData/Addressing/FeatureServer/0',
+    fields: { number: 'AddressNumber', pre: 'PrefixDir', name: 'StreetName', suffix: 'StreetType', post: 'SuffixDir', unit: 'UnitNumber', building: 'Building', city: 'City', zip: 'ZIP' },
+    terms: 'Rapid City and Pennington County, South Dakota: their open data site (RCPC Open Data) under its disclaimer (as is, no warranty, the user accepts the data\'s limits); no limit on use stated; the layer is in the site\'s open data group. Read November 8',
+  },
 ];
 
 /** Whether a row Overture distributes may enter the registry. */
