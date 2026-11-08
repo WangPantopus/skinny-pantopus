@@ -62,6 +62,9 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
     /// badge (hidden when the person turns the badge off); an explicit
     /// `verified` flag wins when present. `nil` for rooms.
     public let isVerified: Bool?
+    /// The last message replied to a Moment (Moments contract "Chat"): the
+    /// row says "Replied to your Moment" or "Replied to their Moment".
+    public let lastMessageMoment: ChatMomentRefDTO?
 
     private enum RootKeys: String, CodingKey {
         case type = "_type"
@@ -75,6 +78,7 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
         case unmutedUnread = "unmuted_unread"
         case lastMessageAt = "last_message_at"
         case lastMessagePreview = "last_message_preview"
+        case lastMessageMoment = "last_message_moment"
         case topics
         case cachedTopicKinds = "cached_topic_kinds"
         // .room keys
@@ -103,6 +107,7 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
         unmutedUnread = try c.decodeIfPresent(Int.self, forKey: .unmutedUnread)
         lastMessageAt = try c.decodeIfPresent(String.self, forKey: .lastMessageAt)
         lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        lastMessageMoment = try? c.decodeIfPresent(ChatMomentRefDTO.self, forKey: .lastMessageMoment)
 
         // Topics → kinds. Each topic object has a `topic_type`.
         if let savedKinds = try c.decodeIfPresent([String].self, forKey: .cachedTopicKinds) {
@@ -160,6 +165,7 @@ public struct UnifiedConversation: Codable, Sendable, Hashable, Identifiable {
         try c.encodeIfPresent(unmutedUnread, forKey: .unmutedUnread)
         try c.encodeIfPresent(lastMessageAt, forKey: .lastMessageAt)
         try c.encodeIfPresent(lastMessagePreview, forKey: .lastMessagePreview)
+        try c.encodeIfPresent(lastMessageMoment, forKey: .lastMessageMoment)
         try c.encode(topics, forKey: .topics)
         try c.encode(topicKinds, forKey: .cachedTopicKinds)
         switch kind {
@@ -412,6 +418,8 @@ public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
     /// server names that only to the writer, so it is set on the business's
     /// messages you wrote yourself and nil everywhere else.
     public let actorUserId: String?
+    /// A reply to a Moment names it, for the quote above the text (Moments contract "Chat").
+    public let moment: ChatMomentRefDTO?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -434,6 +442,7 @@ public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
         case reactions
         case attachments
         case actorUserId = "actor_user_id"
+        case moment
     }
 
     public init(from decoder: any Decoder) throws {
@@ -461,6 +470,7 @@ public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
         reactions = try c.decodeIfPresent([ChatReactionSummary].self, forKey: .reactions) ?? []
         attachments = try c.decodeIfPresent([ChatAttachmentDTO].self, forKey: .attachments) ?? []
         actorUserId = try c.decodeIfPresent(String.self, forKey: .actorUserId)
+        moment = try? c.decodeIfPresent(ChatMomentRefDTO.self, forKey: .moment)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -483,6 +493,7 @@ public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
         try c.encode(reactions, forKey: .reactions)
         try c.encode(attachments, forKey: .attachments)
         try c.encodeIfPresent(actorUserId, forKey: .actorUserId)
+        try c.encodeIfPresent(moment, forKey: .moment)
     }
 
     /// Edit responses carry the changed text, not hydrated files or viewer reactions.
@@ -518,7 +529,8 @@ public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
             sender: sender,
             reactions: reactions,
             attachments: attachments,
-            actorUserId: actorUserId
+            actorUserId: actorUserId,
+            moment: moment
         )
     }
 
@@ -540,7 +552,8 @@ public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
         sender: ChatMessageSender?,
         reactions: [ChatReactionSummary] = [],
         attachments: [ChatAttachmentDTO] = [],
-        actorUserId: String? = nil
+        actorUserId: String? = nil,
+        moment: ChatMomentRefDTO? = nil
     ) {
         self.id = id
         self.roomId = roomId
@@ -560,6 +573,58 @@ public struct ChatMessageDTO: Codable, Sendable, Hashable, Identifiable {
         self.reactions = reactions
         self.attachments = attachments
         self.actorUserId = actorUserId
+        self.moment = moment
+    }
+}
+
+/// The Moment a chat message replies to (Moments contract "Chat"). The
+/// picture's link is signed for 15 minutes and is never written to the
+/// phone's chat cache; a quote read back from it shows the kind instead.
+public struct ChatMomentRefDTO: Codable, Sendable, Hashable {
+    public let id: String
+    /// `photo`, `video` or `text`.
+    public let kind: String
+    public let thumbURL: String?
+    public let ended: Bool
+    /// On a conversation row: the viewer sent that reply.
+    public let fromMe: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, ended
+        case thumbURL = "thumb_url"
+        case thumbURLCamel = "thumbUrl"
+        case fromMe = "from_me"
+        case fromMeCamel = "fromMe"
+    }
+
+    public init(id: String, kind: String, thumbURL: String?, ended: Bool, fromMe: Bool?) {
+        self.id = id
+        self.kind = kind
+        self.thumbURL = thumbURL
+        self.ended = ended
+        self.fromMe = fromMe
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "photo"
+        // Socket frames arrive with camel-cased keys.
+        thumbURL = try c.decodeIfPresent(String.self, forKey: .thumbURL) ?? c.decodeIfPresent(String.self, forKey: .thumbURLCamel)
+        ended = try c.decodeIfPresent(Bool.self, forKey: .ended) ?? false
+        fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? c.decodeIfPresent(Bool.self, forKey: .fromMeCamel)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(ended, forKey: .ended)
+        try c.encodeIfPresent(fromMe, forKey: .fromMe)
+    }
+
+    public var thumbnail: URL? {
+        ended ? nil : thumbURL.flatMap(URL.init(string:))
     }
 }
 

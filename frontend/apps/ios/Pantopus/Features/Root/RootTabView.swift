@@ -37,6 +37,10 @@
 //  and its Back returns there. The drawn bar is the only bar, with the
 //  Mailbox on or off, because the system bar can't host a tab it doesn't show.
 //
+//  Moments (founder, 2026-11-08) takes the tab Messages left, between Pulse
+//  and Plans, while the `moments` switch is on: Place · Today · Pulse ·
+//  Moments · Plans · Mail.
+//
 //  The drawn bar looks like the system's (founder, 2026-10-30): on iOS 26
 //  and later the floating Liquid Glass capsule. It slides away while a page
 //  scrolls down, for more room to read, and comes back on a scroll up
@@ -51,7 +55,7 @@ import SwiftUI
 /// A tab in the primary bottom bar. Encoded as an enum so call sites never
 /// reach for stringly-typed paths.
 public enum RootTab: Hashable, CaseIterable {
-    case place, today, nearby, pulse, plans, mail, messages
+    case place, today, nearby, pulse, moments, plans, mail, messages
 
     /// Human-readable label rendered under each tab icon. `.nearby` is the
     /// bar's Pulse tab while the Pulse redesign is off (named Nearby until the
@@ -62,6 +66,7 @@ public enum RootTab: Hashable, CaseIterable {
         case .today: "Today"
         case .nearby: "Pulse"
         case .pulse: "Pulse"
+        case .moments: "Moments"
         case .plans: "Plans"
         case .mail: "Mail"
         case .messages: "Messages"
@@ -75,6 +80,7 @@ public enum RootTab: Hashable, CaseIterable {
         case .today: "today"
         case .nearby: "nearby"
         case .pulse: "pulse"
+        case .moments: "moments"
         case .plans: "plans"
         case .mail: "mail"
         case .messages: "messages"
@@ -88,6 +94,7 @@ public enum RootTab: Hashable, CaseIterable {
         case .today: .sun
         case .nearby: .activity
         case .pulse: .activity
+        case .moments: .circleDashed
         case .plans: .calendar
         case .mail: .mail
         case .messages: .messageCircle
@@ -100,19 +107,20 @@ public enum RootTab: Hashable, CaseIterable {
         LaunchFeatures.pulseRedesign ? .pulse : .nearby
     }
 
-    /// The bar's tabs in order: Plans while its switch is on, Mail while the
-    /// Mailbox is on (launch cut #10). Messages isn't on the bar: the chat
-    /// button opens it (founder, 2026-11-08).
-    static func barTabs(plans: Bool) -> [RootTab] {
+    /// The bar's tabs in order: Moments and Plans while their switches are
+    /// on, Mail while the Mailbox is on (launch cut #10). Messages isn't on
+    /// the bar: the chat button opens it (founder, 2026-11-08).
+    static func barTabs(plans: Bool, moments: Bool = false) -> [RootTab] {
         var tabs: [RootTab] = [.place, .today, pulseHome]
+        if moments { tabs.append(.moments) }
         if plans { tabs.append(.plans) }
         if LaunchFeatures.mailbox { tabs.append(.mail) }
         return tabs
     }
 
     /// The tabs the container keeps: the bar's and Messages.
-    static func hostedTabs(plans: Bool) -> [RootTab] {
-        barTabs(plans: plans) + [.messages]
+    static func hostedTabs(plans: Bool, moments: Bool = false) -> [RootTab] {
+        barTabs(plans: plans, moments: moments) + [.messages]
     }
 }
 
@@ -221,6 +229,8 @@ public struct RootTabView: View {
     @Environment(\.layoutDirection) private var layoutDirection
     /// Nearby Plans' two server flags, read at launch and on foreground.
     @State private var plansFlags = PlansFlags.shared
+    /// The Moments switch, read the same way.
+    @State private var momentsFlags = MomentsFlags.shared
     /// The side menu's model, made once (a view model made in `body` can
     /// write observed state while the bar draws: the Xcode 16.4 render loop).
     @State private var drawerModel = NavigationDrawerViewModel(context: .personal(name: ""))
@@ -251,6 +261,9 @@ public struct RootTabView: View {
             }
             .task(id: signedInUserID) {
                 await plansFlags.refresh(account: signedInUserID)
+                await momentsFlags.refresh(account: signedInUserID)
+                // A Moment the app was closed in the middle of posting carries on.
+                if momentsFlags.moments { MomentsUploader.shared.resume(account: signedInUserID) }
                 // Every invite shares the person's own link; read it before anyone taps one.
                 await PersonalInviteLink.shared.load(account: signedInUserID)
             }
@@ -264,6 +277,7 @@ public struct RootTabView: View {
                 // coming back re-checks every Plans screen on view.
                 if plansFlags.plans { PlansStoreReads.changed() }
                 Task { await plansFlags.refresh(account: signedInUserID) }
+                Task { await momentsFlags.refresh(account: signedInUserID) }
                 // Mail may have come while the app was away.
                 mailBadgeStore.refresh()
             }
@@ -272,11 +286,15 @@ public struct RootTabView: View {
                 // (Nearby while the Pulse redesign is off).
                 if !isOn, model.selected == .plans { model.selected = RootTab.pulseHome }
             }
+            .onChange(of: momentsFlags.moments) { _, isOn in
+                // The Moments tab goes with its switch; a reader on it lands on Pulse.
+                if !isOn, model.selected == .moments { model.selected = RootTab.pulseHome }
+            }
             .onChange(of: model.selected) { _, selected in
-                // A tab that isn't kept (Plans switched off, Mail without the
-                // Mailbox) lands on the nearest one that is. Messages is
-                // always kept, off the bar.
-                let hosted = RootTab.hostedTabs(plans: plansFlags.plans)
+                // A tab that isn't kept (Plans or Moments switched off, Mail
+                // without the Mailbox) lands on the nearest one that is.
+                // Messages is always kept, off the bar.
+                let hosted = RootTab.hostedTabs(plans: plansFlags.plans, moments: momentsFlags.moments)
                 if !hosted.contains(selected) { model.selected = Self.nearestTab(to: selected, on: hosted) }
             }
             .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
@@ -568,8 +586,8 @@ extension RootTabView {
     /// container; the bar is drawn above it. Messages is kept but not drawn on
     /// the bar, which lights the tab it was opened from.
     private var drawnTabs: some View {
-        let onBar = RootTab.barTabs(plans: plansFlags.plans)
-        let hosted = RootTab.hostedTabs(plans: plansFlags.plans)
+        let onBar = RootTab.barTabs(plans: plansFlags.plans, moments: momentsFlags.moments)
+        let hosted = RootTab.hostedTabs(plans: plansFlags.plans, moments: momentsFlags.moments)
         let showsBar = model.barHiders.isEmpty
         return RootTabBarPlacementReader { verticalEdge in
             ZStack(alignment: verticalEdge.map { $0 == .leading ? .leading : .trailing } ?? .bottom) {
@@ -624,6 +642,8 @@ extension RootTabView {
             AnyView(NeighborhoodTabRoot(onAddHome: startAddingHome))
         case .pulse:
             AnyView(PulseTabRoot(onAddHome: startAddingHome))
+        case .moments:
+            AnyView(MomentsTabRoot())
         case .plans:
             AnyView(PlansTabRoot())
         case .mail:
@@ -660,7 +680,7 @@ extension RootTabView {
     private static func nearestTab(to tab: RootTab, on onBar: [RootTab]) -> RootTab {
         let nearest: RootTab = switch tab {
         case .mail: .messages
-        case .plans, .pulse, .nearby: RootTab.pulseHome
+        case .plans, .moments, .pulse, .nearby: RootTab.pulseHome
         default: .place
         }
         return onBar.contains(nearest) ? nearest : .place

@@ -597,6 +597,8 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     public let senderAvatarURL: URL?
     /// Link buttons under an assistant reply (`.aiReply` only).
     public let aiLinks: [ChatAILink]
+    /// A reply to a Moment: the quote above the text.
+    public let momentQuote: ChatMomentQuote?
 
     public init(
         id: String,
@@ -614,7 +616,8 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         senderUserId: String? = nil,
         senderAvatarURL: URL? = nil,
         aiLinks: [ChatAILink] = [],
-        attachments: [ChatAttachmentDTO] = []
+        attachments: [ChatAttachmentDTO] = [],
+        momentQuote: ChatMomentQuote? = nil
     ) {
         self.id = id
         self.side = side
@@ -632,6 +635,7 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         self.senderAvatarURL = senderAvatarURL
         self.aiLinks = aiLinks
         self.attachments = attachments
+        self.momentQuote = momentQuote
     }
 }
 

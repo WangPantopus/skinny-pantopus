@@ -7,6 +7,8 @@
 //  unread bolding rules baked in.
 //
 
+// swiftlint:disable file_length
+
 import SwiftUI
 import UIKit
 
@@ -118,6 +120,13 @@ public struct ConversationRow: View {
                 }
                 Spacer(minLength: Spacing.s0)
             }
+            if let reply = content.momentReply {
+                Text(reply.label)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.primaryInk)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("conversationRow.moment_\(content.id)")
+            }
             Text(content.preview)
                 .font(.system(size: 14, weight: content.unread > 0 ? .semibold : .regular))
                 .foregroundStyle(
@@ -157,6 +166,12 @@ public struct ConversationRow: View {
         if isAIRow {
             Icon(.chevronRight, size: 18, color: Theme.Color.primaryInk)
                 .accessibilityHidden(true)
+        } else if let reply = content.momentReply, !reply.ended {
+            // Board N3: the Moment's picture at the row's end, beside the time.
+            HStack(alignment: .center, spacing: Spacing.s2) {
+                trailingDefault
+                ChatMomentThumbnail(url: reply.thumbURL, kind: reply.kind, width: 40, height: 54)
+            }
         } else {
             trailingDefault
         }
@@ -191,6 +206,7 @@ public struct ConversationRow: View {
         var parts: [String] = [content.displayName]
         if let chip = content.identityChip { parts.append(chip.label) }
         if content.verified { parts.append("verified") }
+        if let reply = content.momentReply { parts.append(reply.label) }
         parts.append(content.preview)
         if content.unread > 0 { parts.append("\(content.unread) unread") }
         return parts.joined(separator: ". ")

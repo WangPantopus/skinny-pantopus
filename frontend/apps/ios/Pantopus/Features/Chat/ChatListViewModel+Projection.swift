@@ -133,7 +133,8 @@ extension ChatListViewModel {
             },
             gigId: dto.gigId,
             storageKey: storageKey,
-            isMuted: mutedKeys.contains(storageKey)
+            isMuted: mutedKeys.contains(storageKey),
+            momentReply: ConversationMomentReply(dto.lastMessageMoment)
         )
     }
 
