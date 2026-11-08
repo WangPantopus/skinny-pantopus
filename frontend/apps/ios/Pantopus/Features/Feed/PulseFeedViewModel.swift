@@ -1401,7 +1401,7 @@ public final class PulseFeedViewModel {
 
     /// The Pulse card for one row. `surface` is nil off the feed (a person's
     /// profile): no Beacon credential badge and no "Not helpful here".
-    static func card(
+    static func card( // swiftlint:disable:this function_body_length
         for post: FeedPostDTO,
         viewerId: String?,
         surface: FeedSurface?,
@@ -1444,6 +1444,7 @@ public final class PulseFeedViewModel {
             // a business isn't being verified).
             authorVerified: surface == .beacons && post.creator?.credential?.status == "verified",
             avatarTint: isBusiness ? .violet : .sky,
+            authorAvatarURL: post.creator?.profilePictureURL.flatMap(URL.init(string:)),
             meta: Self.metaString(post: post, intent: intent),
             intent: intent,
             title: post.title,

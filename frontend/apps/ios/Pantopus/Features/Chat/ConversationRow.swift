@@ -204,7 +204,9 @@ private struct DMAvatarView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
+            // The person's photo over their initials, which show while it loads and when they have none.
             initialsCircle(size: 52, color: Theme.Color.personalBg, initials: content.initials, fg: Theme.Color.primary600)
+                .overlay { AvatarPhoto(url: content.avatarURL.flatMap(URL.init(string:))) }
             if content.verified {
                 Icon(.check, size: 9, strokeWidth: 3.5, color: Theme.Color.appTextInverse)
                     .frame(width: 16, height: 16)

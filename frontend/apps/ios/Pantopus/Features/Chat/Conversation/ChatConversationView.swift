@@ -509,6 +509,7 @@ public struct ChatConversationView: View {
             ChatConversationHeader(
                 mode: mode,
                 counterparty: viewModel.headerCounterparty,
+                avatarURL: viewModel.counterpartyAvatarURL,
                 creatorContext: resolvedCreatorContext,
                 onBack: onBack,
                 onOpenDetails: { viewModel.isShowingDetails = true },
@@ -579,7 +580,10 @@ public struct ChatConversationView: View {
             }
             content
             if viewModel.isCounterpartyTyping {
-                ChatTypingIndicator(initials: incomingInitials ?? initials(of: viewModel.counterparty.displayName))
+                ChatTypingIndicator(
+                    initials: incomingInitials ?? initials(of: viewModel.counterparty.displayName),
+                    imageURL: viewModel.counterpartyAvatarURL
+                )
             }
             if !viewModel.queuedAttachments.isEmpty {
                 AttachmentStripView(attachments: viewModel.queuedAttachments) { id in
@@ -1191,7 +1195,13 @@ public struct ChatConversationView: View {
             case .ai:
                 aiWelcomeFrame
             case let .person(name, initials, locality, verified, _):
-                personEmptyFrame(name: name, initials: initials, locality: locality, verified: verified)
+                personEmptyFrame(
+                    name: name,
+                    initials: initials,
+                    locality: locality,
+                    verified: verified,
+                    imageURL: viewModel.counterpartyAvatarURL
+                )
             case let .group(name, _):
                 personEmptyFrame(name: name, initials: initials(of: name), locality: nil, verified: false)
             }
@@ -1203,10 +1213,16 @@ public struct ChatConversationView: View {
     /// The A15.2 person preview card (rating · jobs done · reply time ·
     /// mutual neighbors) is design-only for now — it needs profile-stats
     /// data the thread doesn't load today.
-    private func personEmptyFrame(name: String, initials: String, locality: String?, verified: Bool) -> some View {
+    private func personEmptyFrame(
+        name: String,
+        initials: String,
+        locality: String?,
+        verified: Bool,
+        imageURL: URL? = nil
+    ) -> some View {
         VStack(spacing: Spacing.s0) {
             Spacer()
-            ChatPersonAvatar(initials: initials, verified: verified, online: false, size: 88)
+            ChatPersonAvatar(initials: initials, verified: verified, online: false, size: 88, imageURL: imageURL)
             Text("Say hi")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(Theme.Color.appText)
@@ -2516,6 +2532,8 @@ private struct ChatConversationHeader: View {
     @Environment(\.chatConversationShowsBack) private var showsBack
     let mode: ChatConversationMode
     let counterparty: ChatCounterparty
+    /// The other person's photo in a person DM.
+    var avatarURL: URL?
     let creatorContext: ChatCreatorThreadContext
     let onBack: @MainActor () -> Void
     /// Opens the conversation-details drawer (topics + safety actions).
@@ -2614,7 +2632,8 @@ private struct ChatConversationHeader: View {
                     verified: verified,
                     online: online,
                     size: 36,
-                    ringColor: creatorTierColor(rank: creatorContext.fanTierRank)
+                    ringColor: creatorTierColor(rank: creatorContext.fanTierRank),
+                    imageURL: avatarURL
                 )
             case let .group(name, _):
                 ChatPersonAvatar(
@@ -2630,7 +2649,7 @@ private struct ChatConversationHeader: View {
         } else {
             switch counterparty {
             case let .person(_, initials, _, verified, online):
-                ChatPersonAvatar(initials: initials, verified: verified, online: online, size: 36)
+                ChatPersonAvatar(initials: initials, verified: verified, online: online, size: 36, imageURL: avatarURL)
             case let .group(name, _):
                 ChatPersonAvatar(initials: groupInitials(name), verified: false, online: false, size: 36)
             case .ai:
@@ -3145,6 +3164,8 @@ private struct ChatPersonAvatar: View {
     let online: Bool
     let size: CGFloat
     var ringColor: Color?
+    /// The person's photo, over the initials that show while it loads and when there's none.
+    var imageURL: URL?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -3153,6 +3174,7 @@ private struct ChatPersonAvatar: View {
                 Text(initials)
                     .font(.system(size: size * 0.4, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
+                AvatarPhoto(url: imageURL)
             }
             .frame(width: size, height: size)
             .overlay {
@@ -3473,12 +3495,12 @@ private struct ChatBubbleRow: View {
                 if let initials = senderInitials ?? incomingInitials, showsIncomingAvatarSlot {
                     // A tap, not a button: the row stays one VoiceOver element, with the profile as a named action.
                     if let onOpenSender, !content.isContinuation {
-                        ChatMiniAvatar(initials: initials)
+                        ChatMiniAvatar(initials: initials, imageURL: content.senderAvatarURL)
                             .hitArea(horizontal: 4, vertical: 11)
                             .onTapGesture(perform: onOpenSender)
                             .accessibilityIdentifier("chatSenderAvatar_\(content.id)")
                     } else {
-                        ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
+                        ChatMiniAvatar(initials: initials, hidden: content.isContinuation, imageURL: content.senderAvatarURL)
                     }
                 }
                 bubbleStack
@@ -4432,6 +4454,8 @@ extension ChatBubbleRow: Equatable {
 private struct ChatMiniAvatar: View {
     let initials: String
     var hidden = false
+    /// The sender's photo, over their initials.
+    var imageURL: URL?
 
     var body: some View {
         // A15 `.mini-av` — 22pt circle, 9pt/700 initials. `hidden`
@@ -4441,6 +4465,7 @@ private struct ChatMiniAvatar: View {
             Text(initials)
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(Theme.Color.appTextInverse)
+            if !hidden { AvatarPhoto(url: imageURL) }
         }
         .frame(width: 22, height: 22)
         .opacity(hidden ? 0 : 1)
@@ -4524,11 +4549,12 @@ private struct ChatAIThinkingRow: View {
 
 private struct ChatTypingIndicator: View {
     let initials: String
+    var imageURL: URL?
     @State private var isAnimating = false
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.s2) {
-            ChatMiniAvatar(initials: initials)
+            ChatMiniAvatar(initials: initials, imageURL: imageURL)
             HStack(spacing: 3) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()

@@ -127,6 +127,7 @@ private struct ChatSearchResultRow: View {
                 Text(result.initials)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
+                AvatarPhoto(url: result.avatarURL)
             }
             .frame(width: 40, height: 40)
             if result.verified {
