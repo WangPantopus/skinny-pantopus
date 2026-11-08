@@ -185,6 +185,31 @@ through `PlanDetail` (`backend/services/plans/planService.js`).
   the `plans_playdates` flag off), and show the part of the day instead of the
   time until the viewer is in.
 
+### Moments
+
+A Moment (a photo, a short video or a text card for 1–48 hours, on the Moments map; behind the `moments` flag) is
+a `Post` with `is_story = true` (`backend/services/moments/momentStore.js`). Its pin is where the phone was when
+posting (a GPS fix at most 5 minutes old) or, for a library photo or video taken in the last 24 hours, where it was
+taken. Others see only what the author chose on the Post sheet, which shows the pin and the label first.
+
+| Moment | Point everyone sees (author included) | Place label |
+|--------|---------------------------------------|-------------|
+| Exact pin (default) | the exact point | a named place, else the street's name without a number, else the town |
+| "Show the area instead" | the grid-cell point under [Approximate-area points](#approximate-area-points) | the town |
+| Posted within ~60 m of the author's own home | as chosen (the Post sheet warns first) | the town |
+
+- **No live location, no trail:** only the posted point is stored; nothing joins one Moment to the next.
+- **Rings group by what viewers see:** an exact pin's ring is its 0.005° cell, an area pin's ring its displayed
+  point, so grouping never places an area Moment more precisely than its own point.
+- **Map queries filter on displayed points:** `GET /api/moments/map` reads stored points in a box widened by
+  `MAX_DISPLAY_OFFSET_DEGREES` on whole neighborhood cells, then keeps the Moments whose displayed point is in view.
+- **Files carry no location:** photo EXIF and video location tags are removed on upload (`photoMetadata.js`,
+  `videoMetadata.js`); files sit in private storage behind 15-minute signed links and are deleted 7 days after the
+  Moment ends (sooner when its author deletes it) unless a report holds them.
+- **Kept out of the generic surfaces:** `distribution_targets` is empty, `visibility` is `private`, they're off
+  profiles, and `feedService.onlyShownPosts` and `readAccess.canReadPost` refuse `is_story` rows, so no feed, posts
+  map layer, profile list or post route shows one, its author's included.
+
 ### Saved / Viewing Places
 
 These are per-user preferences stored locally or in `SavedPlace`.

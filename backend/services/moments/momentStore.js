@@ -570,13 +570,18 @@ async function filesHeld(row) {
   return count > 0;
 }
 
-/** Deletes the Moment's files unless a review holds them; records purged_at. Returns true when they're gone. */
+/**
+ * Deletes the Moment's files unless a review holds them: the ones it recorded and anything else in its folder (an
+ * upload that stopped before recording its bytes). Records purged_at. Returns true when they're gone. A text card
+ * has none.
+ */
 async function purgeFiles(row) {
-  const stored = meta(row).media;
-  if (!stored || meta(row).purged_at) return true;
+  const m = meta(row);
+  if (m.purged_at || m.kind === 'text') return true;
   if (await filesHeld(row)) return false;
-  const removed = await media.removeKeys(stored.bucket, media.mediaKeys(stored));
-  if (!removed) return false;
+  const bucket = m.media?.bucket;
+  const keys = [...new Set([...media.mediaKeys(m.media), ...await media.folderKeys(bucket, row.user_id, row.id)])];
+  if (!(await media.removeKeys(bucket, keys))) return false;
   await updateMoment(row, { moment: { purged_at: new Date().toISOString() } });
   return true;
 }

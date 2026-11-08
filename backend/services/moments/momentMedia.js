@@ -111,6 +111,19 @@ function mediaKeys(media) {
     .filter(isMomentKey);
 }
 
+/**
+ * Every key in a Moment's folder, including bytes an upload stored without recording them (it stopped between
+ * storing and saving, or lost a race to another upload of the same Moment). Throws when storage can't list it.
+ */
+async function folderKeys(bucket, authorId, momentId) {
+  const folder = `${PREFIX}${String(authorId).toLowerCase()}/${String(momentId).toLowerCase()}`;
+  if (!isMomentKey(`${folder}/`) || ![authorId, momentId].every((id) => UUID.test(String(id)))) return [];
+  const name = await privateBucket(bucket);
+  const { data, error } = await db.storage.from(name).list(folder, { limit: 100 });
+  if (error) throw failure('Moments storage could not be listed.');
+  return (data || []).filter((entry) => entry?.name && entry.id).map((entry) => `${folder}/${entry.name}`);
+}
+
 // ─── Reading a video ─────────────────────────────────────────────────────────
 
 function unreadableVideo(detail) {
@@ -237,6 +250,6 @@ async function download(bucket, key) {
 module.exports = {
   LINK_SECONDS, STORAGE_CONTRACT, MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, MAX_STILL_BYTES, MAX_VIDEO_MS, VIDEO_MS_TOLERANCE,
   PHOTO_TYPES, VIDEO_TYPES,
-  failure, privateBucket, sha256, keyFor, isMomentKey, put, signedLinks, removeKeys, mediaKeys, download,
+  failure, privateBucket, sha256, keyFor, isMomentKey, put, signedLinks, removeKeys, mediaKeys, folderKeys, download,
   videoFacts, jpegFacts, photoFacts, thumbnail, checkImage,
 };

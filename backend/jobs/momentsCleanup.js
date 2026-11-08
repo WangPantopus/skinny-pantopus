@@ -58,10 +58,12 @@ async function recheck(nowIso) {
   return checked;
 }
 
+// Photo and video Moments that ended KEEP_FILES_MS ago and still have files: recorded ones, or bytes an upload stored
+// before it stopped (store.purgeFiles clears the whole folder).
 async function purgeEnded() {
   const endedBefore = new Date(Date.now() - KEEP_FILES_MS).toISOString();
   const ended = await rows((q) => q.lt('story_expires_at', endedBefore)
-    .not('post_metadata->moment->>media', 'is', null)
+    .neq('post_metadata->moment->>kind', 'text')
     .is('post_metadata->moment->>purged_at', null)
     .order('story_expires_at', { ascending: true }));
   let purged = 0;
