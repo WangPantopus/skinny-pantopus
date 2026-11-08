@@ -28,7 +28,7 @@ const MORNING_HOUR = 7;
 const designIdOf = (number) => `christmas-2026-${String(number).padStart(2, '0')}`;
 
 // The collections "Pick a card" shows, in this order, each with its pictures (by number) in grid order (founder,
-// 2026-10-31). A picture can move to another collection; its number stays.
+// 2026-10-31; Christmas with Santa 2026-11-07). A picture can move to another collection; its number stays.
 const COLLECTIONS = [
   ['as-a-kid', 'Christmas as a Kid', 'For families with kids, and anyone who misses being one.',
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]],
@@ -39,13 +39,16 @@ const COLLECTIONS = [
   ['memories', 'Christmas Memories', 'For anyone who misses the little things.', [38, 39, 40, 41, 42, 43]],
   ['grandmas-house', 'Christmas at Grandma’s House', 'For grandparents, and the grandkids who still come home.',
     [44, 45, 46, 47, 48, 49]],
+  ['with-santa', 'Christmas with Santa', 'For anyone who still believes, and anyone who used to.',
+    [50, 51, 52, 53, 54, 55, 56, 57, 58]],
 ].map(([id, name, line, numbers]) => ({ id, name, line, designs: numbers.map(designIdOf) }));
 const COLLECTION_OF_DESIGN = new Map(COLLECTIONS.flatMap((c) => c.designs.map((design) => [design, c.id])));
 
 // The pictures by number, with the caption printed under each, the colour of its paper, its height in px at 960 px wide
 // (an app keeps a picture's shape while it loads it), its name on the public card pages (/cards/<slug>) and the colour of
 // the cloth it lies on (launch key card_table). 1–17 are the founder's own (2026-10-30); 18–49 came in five groups on
-// 2026-10-31. A number is never reused: every app picks the card's stamp from it.
+// 2026-10-31; 50–58 are the founder's Santa pictures (2026-11-07), which have no border, so their paper is one cream.
+// A number is never reused: every app picks the card's stamp from it.
 const DESIGNS = [
   ['Home for Christmas.', '#f7eee0', 1054, 'home-for-christmas', '#2c4071'],
   ['One more run?', '#f7efe1', 1054, 'one-more-run', '#3b4c6e'],
@@ -96,6 +99,15 @@ const DESIGNS = [
   ['You made this one.', '#f6f2e9', 986, 'you-made-this-one', '#6e4b30'],
   ['One more piece before bed.', '#f4f0e6', 1034, 'one-more-piece-before-bed', '#6e4b30'],
   ['Your bed’s already made.', '#f6eddd', 994, 'your-beds-already-made', '#6e4b30'],
+  ['You made the nice list.', '#f7f0e2', 1022, 'you-made-the-nice-list', '#6e4b30'],
+  ['I put in a good word for you.', '#f7f0e2', 1022, 'i-put-in-a-good-word-for-you', '#6e4b30'],
+  ['Just making sure it works.', '#f7f0e2', 1022, 'just-making-sure-it-works', '#6e4b30'],
+  ['He got your letter.', '#f7f0e2', 1022, 'he-got-your-letter', '#6e4b30'],
+  ['Some things never get old.', '#f7f0e2', 1022, 'some-things-never-get-old', '#2c4071'],
+  ['On his way to you.', '#f7f0e2', 1022, 'on-his-way-to-you', '#3b4c6e'],
+  ['Saved the best house for last.', '#f7f0e2', 1022, 'saved-the-best-house-for-last', '#2c4071'],
+  ['Shh. He’s here.', '#f7f0e2', 1022, 'shh-hes-here', '#6e4b30'],
+  ['Put your feet up. It’s Christmas.', '#f7f0e2', 1022, 'put-your-feet-up-its-christmas', '#704b51'],
 ].map(([caption, paper, height, slug, table], index) => {
   const id = designIdOf(index + 1);
   return { id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height, slug, table };
