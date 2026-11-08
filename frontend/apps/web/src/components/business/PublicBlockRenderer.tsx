@@ -9,6 +9,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { formatTime } from '@/components/scheduling/business/weeklyHours';
+import { streetLine } from './shared/streetLine';
 
 interface BlockData {
   id?: string;
@@ -369,7 +370,9 @@ function PublicLocationsMap({ data, locations }: { data: Record<string, any>; lo
                   </span>
                 )}
               </div>
-              <div className="text-sm text-app-text-secondary mt-0.5">{loc.address as string}</div>
+              <div className="text-sm text-app-text-secondary mt-0.5">
+                {streetLine({ address: loc.address as string | null, address2: loc.address2 as string | null })}
+              </div>
               <div className="text-sm text-app-text-secondary">
                 {[loc.city, loc.state, loc.zipcode].filter(Boolean).join(', ')}
               </div>

@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import type { BusinessLocation } from '@pantopus/types';
 import { confirmStore } from '@/components/ui/confirm-store';
 import AddressField from '@/components/business/shared/AddressField';
+import { streetLine } from '@/components/business/shared/streetLine';
 
 export default function BusinessLocationsPage() {
   const params = useParams();
@@ -131,7 +132,7 @@ export default function BusinessLocationsPage() {
                     <div className="text-sm font-semibold text-app-text">{loc.label || 'Main'}</div>
                     {loc.is_primary && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">Primary</span>}
                   </div>
-                  <div className="text-sm text-app-text-strong mt-1">{loc.address}</div>
+                  <div className="text-sm text-app-text-strong mt-1">{streetLine(loc)}</div>
                   <div className="text-xs text-app-text-secondary">{[loc.city, loc.state, loc.zipcode].filter(Boolean).join(', ')}</div>
                 </div>
                 <div className="flex items-center gap-2">
