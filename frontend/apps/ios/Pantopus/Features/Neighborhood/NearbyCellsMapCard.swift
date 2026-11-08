@@ -10,15 +10,15 @@
 //  yours, is a point on this map. Parity twin of the web `NearbyCellsMap`.
 //
 //  On a wide screen (the iPhone Duo open) the map fills the column beside
-//  Neighborhood's key and invite (`NeighborhoodTabRoot`): the same map
-//  (`NearbyCellsMap`), with its key and note in that column
+//  the key and invite of "Verified homes nearby" (`VerifiedHomesNearbyView`):
+//  the same map (`NearbyCellsMap`), with its key and note in that column
 //  (`NearbyCellsKey`) instead of under it.
 //
 
 import MapKit
 import SwiftUI
 
-/// The map, its key and its note in one card: the Neighborhood segment's window, and the Pulse quiet card's.
+/// The map, its key and its note in one card: the window of "Verified homes nearby", and the Pulse quiet card's.
 struct NearbyCellsMapCard: View {
     let cells: NeighborhoodCellsDTO
 

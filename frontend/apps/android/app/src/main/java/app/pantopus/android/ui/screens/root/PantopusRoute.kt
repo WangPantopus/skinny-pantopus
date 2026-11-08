@@ -56,11 +56,12 @@ sealed class PantopusRoute(
     // on; with it off its route stays registered and belongs to Mail, which is the conversation list then.
 
     /**
-     * Nearby — the density door and its window (the cells map, the meter, what opens): the tab while the Pulse
-     * redesign is off (October 13). With it on Nearby is no longer a tab (Pulse build S3): its Pulse, Connections and
-     * neighborhood meter moved into the Pulse tab, the route stays registered, and opening it opens Pulse.
+     * The bar's Pulse tab while the Pulse redesign is off (October 13): the feed under its List | Map switch. It was
+     * named Nearby until the founder's November 7 decision, which also moved its density window to Place ("Verified
+     * homes nearby"); the path and the `tab.nearby` test tag stay, so links, saved state and UI tests keep working. With
+     * the redesign on it is no longer a tab (Pulse build S3): the route stays registered, and opening it opens Pulse.
      */
-    data object Nearby : PantopusRoute(path = "root/nearby", label = "Nearby", icon = PantopusIcon.MapPin)
+    data object Nearby : PantopusRoute(path = "root/nearby", label = "Pulse", icon = PantopusIcon.Activity)
 
     /** Neighbour gigs — browse, bid, and post tasks. */
     data object Tasks : PantopusRoute(path = "root/tasks", label = "Tasks", icon = PantopusIcon.Briefcase)

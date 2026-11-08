@@ -22,12 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,15 +51,14 @@ import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodCells
 import app.pantopus.android.data.api.models.neighborhood.NeighborhoodMeter
 import app.pantopus.android.ui.components.ErrorState
-import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.screens.place.detail.PlaceDetailHeader
 import app.pantopus.android.ui.screens.root.PullToRefreshUnderHeader
 import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
 import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
-import app.pantopus.android.ui.screens.scheduling.resources.SegmentedControl
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -73,10 +70,6 @@ import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.getAndUpdate
 
 private data class NearbySurface(val icon: PantopusIcon, val title: String, val subtitle: String, val feature: LaunchFeature)
 
@@ -87,9 +80,9 @@ private val SURFACES =
     )
 
 /**
- * "Invite your neighbors" on the Neighborhood segment, as on iOS and web. The person's own invite link follows it
- * (`InviteShareViewModel`): it opens the /start address lookup under their name, so the person invited sees their own
- * address answered, not an app pitch.
+ * "Invite your neighbors" on "Verified homes nearby" and Place's Verified neighbors rows, as on iOS and web. The person's
+ * own invite link follows it (`InviteShareViewModel`): it opens the /start address lookup under their name, so the person
+ * invited sees their own address answered, not an app pitch.
  */
 const val NEIGHBORHOOD_INVITE_MESSAGE =
     "See what's true about your address — records, risks, and who's verified nearby. Free, no account."
@@ -99,86 +92,15 @@ private val launchSurfaces: List<NearbySurface>
     get() = SURFACES.filter { LaunchFeatures.isEnabled(it.feature) }
 
 /**
- * The Nearby tab's two segments (founder decision 2026-10-20): Pulse on the left, where the tab opens, and
- * Neighborhood, the density map. iOS: `NearbySegment`.
- */
-enum class NearbySegment(val label: String, val key: String) {
-    Pulse("Pulse", "pulse"),
-    Neighborhood("Neighborhood", "neighborhood"),
-}
-
-/**
- * The segment a link asked for (a feed or post link: Pulse; a `/nearby` link: Neighborhood), set before the Nearby tab
- * opens and taken by [NearbyTab]. iOS: `NeighborhoodDoorStore.pendingSegment`.
- */
-object NearbySegmentRequests {
-    private val pendingSegment = MutableStateFlow<NearbySegment?>(null)
-    val pending: StateFlow<NearbySegment?> = pendingSegment.asStateFlow()
-
-    fun request(segment: NearbySegment) {
-        pendingSegment.value = segment
-    }
-
-    fun take(): NearbySegment? = pendingSegment.getAndUpdate { null }
-}
-
-/**
- * The Nearby tab while the Pulse redesign is off (founder decision 2026-10-20): no door page, but the Pulse |
- * Neighborhood switch and the side menu over the two segments. [pulse] is the October 13 feed, built by the nav host
- * with its routes; [neighborhood] the density window and meter ([NeighborhoodScreen]). Each segment keeps its saved
- * state (the feed's place, filters and List / Map mode) while the other shows. Connections is in the side menu.
- *
- * The Pulse segment gets the switch row as its header row (the slot [pulse] is handed): the feed draws it first in its
- * collapsible header, so it slides away with the rest of the header while the map or the posts fill the screen (founder
- * request 2026-10-22; iOS passes it the same way). Neighborhood gets it too ([neighborhood]) and slides it away while
- * its page scrolls down, bringing it back near the top (founder request 2026-11-07, as on iPhone).
+ * "Verified homes nearby" (founder decision 2026-11-07): the density window (the cells map), the meter and "Invite your
+ * neighbors", or "Set up a home" before there is one. It was the Nearby tab's Neighborhood segment; it is now a page
+ * opened from Place's Verified neighbors rows and from `/nearby` links (the neighborhood milestone push among them). Its
+ * header slides away while the page scrolls down and comes back near the top. The meter controls the local marketplace
+ * and tasks preview and preserves privacy floors. iOS: `VerifiedHomesNearbyView`.
  */
 @Composable
-fun NearbyTab(
-    onOpenMenu: () -> Unit,
-    pulse: @Composable (header: @Composable () -> Unit) -> Unit,
-    neighborhood: @Composable (header: @Composable () -> Unit) -> Unit,
-) {
-    var segment by rememberSaveable { mutableStateOf(NearbySegment.Pulse) }
-    val requested by NearbySegmentRequests.pending.collectAsStateWithLifecycle()
-    LaunchedEffect(requested) { NearbySegmentRequests.take()?.let { segment = it } }
-    val segments = rememberSaveableStateHolder()
-    val segmentRow: @Composable () -> Unit = {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = Spacing.s4, end = Spacing.s1, top = Spacing.s1, bottom = Spacing.s1),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SegmentedControl(
-                options = NearbySegment.entries,
-                selected = segment,
-                label = NearbySegment::label,
-                onSelect = { segment = it },
-                modifier = Modifier.weight(1f).testTag("nearbySegments"),
-                selectedTextColor = PantopusColors.appText,
-                fontSize = 14.sp,
-                optionTag = { "nearbySegment.${it.key}" },
-            )
-            NavigationMenuButton(onClick = onOpenMenu, testTag = "nearby.menu")
-        }
-    }
-    Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("nearbyTab")) {
-        segments.SaveableStateProvider(segment.key) {
-            when (segment) {
-                NearbySegment.Pulse -> pulse(segmentRow)
-                NearbySegment.Neighborhood -> neighborhood(segmentRow)
-            }
-        }
-    }
-}
-
-/**
- * The Neighborhood segment: the density window (the cells map), the meter and "Invite your neighbors", or "Set up a
- * home" before there is one. The meter controls the local marketplace and tasks preview and preserves privacy floors.
- */
-@Composable
-fun NeighborhoodScreen(
-    /** The Pulse | Neighborhood switch row, over the page: it slides away while the page scrolls down. */
-    header: @Composable () -> Unit,
+fun VerifiedHomesNearbyScreen(
+    onBack: () -> Unit,
     onClaim: () -> Unit,
     onOpenMarketplace: () -> Unit,
     onOpenTasks: () -> Unit,
@@ -195,8 +117,12 @@ fun NeighborhoodScreen(
     }
     RefreshOnStoreChange(viewModel::load)
     ScrollAwayHeaderLayout(
-        header = header,
-        modifier = Modifier.fillMaxSize(),
+        header = {
+            Box(modifier = Modifier.fillMaxWidth().background(PantopusColors.appBg)) {
+                PlaceDetailHeader(title = "Verified homes nearby", address = "Around your home", onBack = onBack)
+            }
+        },
+        modifier = Modifier.fillMaxSize().testTag("verifiedHomesNearby"),
         pinned = refreshNotice?.let { notice -> @Composable { RefreshFailedLine(notice) } },
     ) { top ->
         PullToRefreshUnderHeader(isRefreshing = refreshing, onRefresh = viewModel::refresh, top = top, modifier = Modifier.fillMaxSize()) {

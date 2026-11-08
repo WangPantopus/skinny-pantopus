@@ -46,12 +46,14 @@ import SwiftUI
 public enum RootTab: Hashable, CaseIterable {
     case place, today, nearby, pulse, plans, mail, messages
 
-    /// Human-readable label rendered under each tab icon.
+    /// Human-readable label rendered under each tab icon. `.nearby` is the
+    /// bar's Pulse tab while the Pulse redesign is off (named Nearby until the
+    /// founder's November 7 decision; its id stays `nearby`).
     public var label: String {
         switch self {
         case .place: "Place"
         case .today: "Today"
-        case .nearby: "Nearby"
+        case .nearby: "Pulse"
         case .pulse: "Pulse"
         case .plans: "Plans"
         case .mail: "Mail"
@@ -77,7 +79,7 @@ public enum RootTab: Hashable, CaseIterable {
         switch self {
         case .place: .home
         case .today: .sun
-        case .nearby: .compass
+        case .nearby: .activity
         case .pulse: .activity
         case .plans: .calendar
         case .mail: .mail
@@ -424,18 +426,12 @@ public struct RootTabView: View {
         }
     }
 
-    /// With the Pulse redesign off (launch cut #11): the Nearby tab (founder
-    /// decision 2026-10-20). `/nearby` (the neighborhood milestone push among
-    /// them) opens its Neighborhood segment; a feed or post link opens the
-    /// Pulse segment, whose stack then consumes it.
+    /// With the Pulse redesign off (launch cut #11): a feed or post link opens
+    /// the bar's Pulse tab, whose stack then consumes it. `/nearby` (the
+    /// neighborhood milestone push among them) opens "Verified homes nearby"
+    /// in the Place stack, which consumes it (founder decision 2026-11-07).
     private func openNearby(_ destination: DeepLinkRouter.Destination) {
-        model.selected = .nearby
-        if destination == .pulse {
-            NeighborhoodDoorStore.shared.pendingSegment = .neighborhood
-            _ = router.consume()
-        } else {
-            NeighborhoodDoorStore.shared.pendingSegment = .pulse
-        }
+        model.selected = destination == .pulse ? .place : .nearby
     }
 
     /// "Set up a home" from Today, Pulse or Nearby: the Place tab starts adding one.

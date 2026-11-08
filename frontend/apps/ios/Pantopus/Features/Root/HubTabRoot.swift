@@ -418,6 +418,10 @@ public enum HubRoute: Hashable {
     case neighborInbox
     /// W7 D2 — a single received verified-neighbor message.
     case neighborMessage(messageId: String)
+    /// "Verified homes nearby" (founder decision 2026-11-07): the density
+    /// window, the meter and the invite, from Place's Verified neighbors rows
+    /// and `/nearby` links.
+    case verifiedHomesNearby
     /// B.1 — unified Mailbox root (drawer chips × tabs). Entry point for
     /// all mailbox navigation; supersedes `.mailboxDrawers` and `.mailbox`.
     case mailboxRoot
@@ -1317,9 +1321,13 @@ public struct HubTabRoot: View {
             path.append(.gigDetail(gigId: id))
             _ = router.consume()
         case .feed, .post, .gig, .listing:
-            // Nearby owns these links. The Place stack can observe a link
-            // before RootTabView switches tabs, and must leave it pending.
+            // The Pulse tab owns these links. The Place stack can observe a
+            // link before RootTabView switches tabs, and must leave it pending.
             return
+        case .pulse:
+            // `/nearby` (the neighborhood milestone push among them).
+            path.append(.verifiedHomesNearby)
+            _ = router.consume()
         case let .homeDetail(id), let .homeDashboard(id):
             path.append(.homeDashboard(homeId: id))
             _ = router.consume()
@@ -1565,9 +1573,13 @@ public struct HubTabRoot: View {
             return tab == .place
         case .feed, .post, .gig, .listing, .hubToday, .conversation,
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home,
-             .creatorInbox, .fanInbox, .creatorAudienceMembers, .pulse,
+             .creatorInbox, .fanInbox, .creatorAudienceMembers,
              .plans, .plan, .planRequests, .planNew:
             return false
+        // `/nearby` opens "Verified homes nearby" here while the Pulse redesign
+        // is off (founder decision 2026-11-07); with it on, the Pulse tab takes it.
+        case .pulse:
+            return tab == .place && !LaunchFeatures.pulseRedesign
         case .vacationHold, .mailDay, .stamps, .mailTask,
              .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem, .mailSentCard, .mailCards:
             // With Mailbox off for launch, the Place stack shows the placeholder.
@@ -3948,6 +3960,8 @@ public struct HubTabRoot: View {
             NeighborMessageReceivedView(
                 viewModel: NeighborMessageReceivedViewModel(messageId: messageId)
             ) { pop() }
+        case .verifiedHomesNearby:
+            VerifiedHomesNearbyView(onBack: { pop() }, onAddHome: { push(.addHome) })
         case let .scheduling(route):
             SchedulingRouter.destination(for: route, owner: .personal) { push(.scheduling($0)) }
         #if DEBUG
@@ -3987,6 +4001,7 @@ public struct HubTabRoot: View {
                     path.append(.neighborCompose(homeId: homeId, address: address, recipient: nil))
                 },
                 onOpenInbox: { path.append(.neighborInbox) },
+                onOpenVerifiedHomes: { path.append(.verifiedHomesNearby) },
                 onOpenPrivacyMirror: { path.append(.privacyMirror(homeId: homeId)) },
                 onOpenMailDay: { openMailDayFromPlace() },
                 onOpenHubHome: { path.append(.homeDashboard(homeId: homeId)) },

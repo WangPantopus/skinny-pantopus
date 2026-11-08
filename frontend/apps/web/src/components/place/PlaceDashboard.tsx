@@ -23,6 +23,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import ClaimsInReview from './ClaimsInReview';
 import { placeSlugsNotForViewer } from './detail/sections';
 import PlaceDashboardView from './PlaceDashboardView';
+import VerifiedNeighborsGroup from './VerifiedNeighborsGroup';
 import PlaceDashboardSkeleton from './PlaceDashboardSkeleton';
 import PlaceShell from './PlaceShell';
 import SetupBanner from '@/components/hub/SetupBanner';
@@ -230,6 +231,7 @@ export default function PlaceDashboard() {
         }}
         onAddPlace={() => router.push('/app/homes/new')}
         onVerifyByMail={() => router.push(`/app/homes/${homeId}/verify-postcard?return=place`)}
+        neighbors={<VerifiedNeighborsGroup />}
       />
     </Shell>
   );

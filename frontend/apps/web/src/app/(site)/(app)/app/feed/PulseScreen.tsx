@@ -40,7 +40,6 @@ import {
 } from '@/constants/feedTopics';
 import { FEED_POST_CREATED_EVENT } from '@/lib/feedComposerEvents';
 import { launchFeatures } from '@/lib/featureFlags';
-import NearbyTabs from '@/components/nearby/NearbyTabs';
 import { useReducedMotion } from '@/components/scheduling/polish/a11y';
 import { usePulseQuickReturn } from './usePulseQuickReturn';
 import { useKeepPulsePlace, useKeptPulsePlace } from './usePulseKeptPlace';
@@ -101,8 +100,9 @@ function useMobileTabBarHeight(active: boolean): number | null {
   return height;
 }
 
+// Nearby | Connections, as in the apps (the place surface read "Place" here until the bar's Place tab sat under it).
 const SURFACE_TABS: { key: FeedSurface; label: string; icon: ReactNode }[] = ([
-  { key: 'place', label: 'Place', icon: <MapPin className="w-4 h-4 inline-block" /> },
+  { key: 'place', label: 'Nearby', icon: <MapPin className="w-4 h-4 inline-block" /> },
   { key: 'personas', label: 'Beacons', icon: <Radio className="w-4 h-4 inline-block" /> },
   { key: 'connections', label: 'Connections', icon: <LinkIcon className="w-4 h-4 inline-block" /> },
 // Launch cut #1 (Beacon): the Beacons (followed publishers) feed is hidden.
@@ -149,6 +149,16 @@ export default function FeedPage() {
   });
 
   const inSportsLane = feed.surface === 'place' && feed.topic === 'sports';
+  // October 13's one topic, Sports, leads the post-type chips (in its lane, the lane's own chips) instead of a row of
+  // its own (founder decision 2026-11-07, as in the apps).
+  const topicChips = feed.surface === 'place' ? (
+    <TopicChipRow
+      inline
+      topics={PLACE_TOPICS.map((t) => ({ key: t.key, label: t.label, icon: <Trophy className="w-4 h-4" /> }))}
+      activeTopic={feed.topic}
+      onTopicChange={feed.setTopic}
+    />
+  ) : null;
   const activeEvents = useActiveSportsEvents(inSportsLane);
 
   // A Place feed without coordinates means "no area set" only once the saved area has been read.
@@ -391,44 +401,37 @@ export default function FeedPage() {
     ? { bottom: tabBarHeight ?? TAB_BAR_FALLBACK }
     : undefined;
 
-  // Header: Nearby's Pulse | Neighborhood switch, then View Toggle + Surface Tabs and the area.
+  // Header (founder decision 2026-11-07): List | Map as the big switch, then Nearby | Connections with the
+  // preferences at its end, and the area. The page is the Pulse tab; the density window is "Verified homes
+  // nearby" (/app/nearby), opened from Place.
   const headerContent = (
     <div className="max-w-2xl mx-auto px-4 py-2">
-      <NearbyTabs active="pulse" className="mb-2" />
       <div className="rounded-2xl border border-app bg-surface overflow-hidden shadow-sm/80 dark:border-slate-700/80">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-app">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                viewMode === 'list'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-surface-muted text-app-muted hover-bg-app'
-              }`}
-            >
-              <ClipboardList className="w-4 h-4" /> List
-            </button>
-            <button
-              onClick={() => setViewMode('map')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                viewMode === 'map'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-surface-muted text-app-muted hover-bg-app'
-              }`}
-            >
-              <MapIcon className="w-4 h-4" /> Map
-            </button>
-          </div>
-          <button
-            onClick={() => prefs.setShowPrefs(true)}
-            className="p-2 rounded-lg hover-bg-app transition text-app-muted"
-            title="Pulse preferences"
+        <div className="px-3 py-2 border-b border-app">
+          <div
+            role="group"
+            aria-label="View"
+            data-testid="pulseViewModeToggle"
+            className="flex gap-1 rounded-full border border-app bg-surface-muted p-1"
           >
-            <Settings className="w-5 h-5" />
-          </button>
+            {([['list', 'List', ClipboardList], ['map', 'Map', MapIcon]] as const).map(([mode, label, Icon]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                aria-pressed={viewMode === mode}
+                data-testid={`pulseViewModeSegment_${mode}`}
+                className={`flex-1 h-10 rounded-full text-[15px] font-bold flex items-center justify-center gap-2 transition ${
+                  viewMode === mode ? 'bg-primary-600 text-white' : 'text-app-muted hover:text-app'
+                }`}
+              >
+                <Icon className="w-[18px] h-[18px]" /> {label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex border-b border-app">
+        <div className="flex items-center border-b border-app">
           {SURFACE_TABS.map((tab) => (
             <button
               key={tab.key}
@@ -448,6 +451,14 @@ export default function FeedPage() {
               {tab.label}
             </button>
           ))}
+          <button
+            onClick={() => prefs.setShowPrefs(true)}
+            className="mx-2 p-2 rounded-lg hover-bg-app transition text-app-muted"
+            title="Pulse preferences"
+            aria-label="Pulse preferences"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
         </div>
 
         {feed.surface === 'personas' && (
@@ -617,16 +628,9 @@ export default function FeedPage() {
               </p>
             )}
 
-            {feed.surface === 'place' && (
-              <TopicChipRow
-                topics={PLACE_TOPICS.map((t) => ({ key: t.key, label: t.label, icon: <Trophy className="w-4 h-4" /> }))}
-                activeTopic={feed.topic}
-                onTopicChange={feed.setTopic}
-              />
-            )}
-
-            {inSportsLane && sportsModeChips.length > 0 && (
+            {inSportsLane && (sportsModeChips.length > 0 || topicChips) && (
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
+                {topicChips}
                 {sportsModeChips.map((m) => {
                   const isActive = (feed.sportsMode || 'for_you') === m.key;
                   return (
@@ -671,6 +675,7 @@ export default function FeedPage() {
                 onChange={feed.setFilter}
                 surface={feed.surface}
                 onMuteTopic={feed.handleMuteTopic}
+                leading={topicChips}
               />
             )}
 

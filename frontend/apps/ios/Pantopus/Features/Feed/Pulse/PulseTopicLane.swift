@@ -239,41 +239,9 @@ struct PulseSportsLaneChipRow: View {
     let onSelect: (PulseTopic?) -> Void
 
     var body: some View {
-        let active = activeTopic == .sports
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.s2) {
-                Button {
-                    onSelect(active ? nil : .sports)
-                } label: {
-                    HStack(spacing: 6) {
-                        Icon(
-                            .activity,
-                            size: 14,
-                            strokeWidth: 2.2,
-                            color: active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong
-                        )
-                        Text("Sports")
-                            .font(.system(size: 12, weight: active ? .semibold : .regular))
-                            .foregroundStyle(
-                                active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong
-                            )
-                    }
-                    .padding(.horizontal, Spacing.s3)
-                    .padding(.vertical, 6)
-                    .background(active ? Theme.Color.primarySolid : Theme.Color.appSurfaceRaised)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(
-                            active ? Theme.Color.primary600 : Theme.Color.appBorder,
-                            lineWidth: 1
-                        )
-                    )
-                    .hitArea(vertical: 6)
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(active ? [.isSelected] : [])
-                .accessibilityLabel("Sports topic")
-                .accessibilityIdentifier("pulseTopicChip_sports")
+                PulseSportsTopicChip(activeTopic: activeTopic, onSelect: onSelect)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, 6)
@@ -283,6 +251,53 @@ struct PulseSportsLaneChipRow: View {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
         }
         .accessibilityIdentifier("pulseTopicChipRow")
+    }
+}
+
+/// The Sports topic chip: its own row above the filter chips, or leading them
+/// in the Pulse tab's header (founder decision 2026-11-07). Tapping it while
+/// active leaves the lane.
+struct PulseSportsTopicChip: View {
+    let activeTopic: PulseTopic?
+    /// The filter chips' height, where it sits among them; nil keeps its own.
+    var height: CGFloat?
+    let onSelect: (PulseTopic?) -> Void
+
+    var body: some View {
+        let active = activeTopic == .sports
+        Button {
+            onSelect(active ? nil : .sports)
+        } label: {
+            HStack(spacing: 6) {
+                Icon(
+                    .activity,
+                    size: 14,
+                    strokeWidth: 2.2,
+                    color: active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong
+                )
+                Text("Sports")
+                    .font(.system(size: 12, weight: active ? .semibold : .regular))
+                    .foregroundStyle(
+                        active ? Theme.Color.appTextInverse : Theme.Color.appTextStrong
+                    )
+            }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, height == nil ? 6 : 0)
+            .frame(height: height)
+            .background(active ? Theme.Color.primarySolid : Theme.Color.appSurfaceRaised)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(
+                    active ? Theme.Color.primary600 : Theme.Color.appBorder,
+                    lineWidth: 1
+                )
+            )
+            .hitArea(vertical: 6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? [.isSelected] : [])
+        .accessibilityLabel("Sports topic")
+        .accessibilityIdentifier("pulseTopicChip_sports")
     }
 }
 

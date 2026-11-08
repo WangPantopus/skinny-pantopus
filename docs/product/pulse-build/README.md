@@ -6,6 +6,7 @@
 > - **What stays on regardless:** crime and suspicion Heads-ups stay refused, businesses don't start feed posts, and the privacy fixes made during the build stay on.
 > - **What is paused with the build:** the October 13 "no feature flag" decision and the October 14 "all of it in the launch build" decision below.
 > - **October 20 (founder):** with the key off, Nearby has no door page: it opens on two segments, Pulse (the October 13 feed) and Neighborhood (the density map and meter), and Connections is in the side menu. The side menu is on the top screen of every tab, hosted once by `RootTabView` (iOS) and `RootTabScreen` (Android). When the build resumes, the Pulse tab's header gets the menu button too (`NavigationMenuButton` on both apps); see NEXT_STEPS "Nearby and the side menu".
+> - **November 7 (founder):** with the key off, the Nearby tab is named Pulse and has no Pulse | Neighborhood switch: it is the October 13 feed under a big List | Map switch beside the side menu, and the density map, the meter and "Invite your neighbors" are "Verified homes nearby", opened from Place. The tab keeps its `nearby` route and ids; see NEXT_STEPS "the Pulse tab".
 >
 > **To resume:**
 > 1. Read the dated "Paused" note at the top of your stream's [status file](status/) and the handoff it names.

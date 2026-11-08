@@ -109,9 +109,11 @@ public struct FeedView: View {
     private let onRefresh: (@MainActor () async -> Void)?
     /// The Nearby feed's header offers "Ask Pantopus" about what's nearby.
     private let asksPantopus: Bool
-    /// Drawn above the top bar: the Nearby tab's segment header (the Pulse |
-    /// Neighborhood switch and the side menu, founder decision 2026-10-20).
-    private let header: AnyView?
+    /// The Pulse tab's header (founder decision 2026-11-07): List | Map is the
+    /// big switch at the top, beside the side menu, with no title. Ask, search
+    /// and the preferences sit at the end of the Nearby | Connections row, and
+    /// the Sports chip leads the filter chips.
+    private let mapSwitchOnTop: Bool
     /// Changes when the feed's tab is tapped again: on this screen (not with a
     /// post open over it) the list goes back to the top, where the header is.
     private let scrollToTop: UUID?
@@ -130,7 +132,7 @@ public struct FeedView: View {
         topMenu: FeedTopMenu? = nil,
         topCard: AnyView? = nil,
         onRefresh: (@MainActor () async -> Void)? = nil,
-        header: AnyView? = nil,
+        mapSwitchOnTop: Bool = false,
         scrollToTop: UUID? = nil,
         asksPantopus: Bool = false
     ) {
@@ -156,7 +158,7 @@ public struct FeedView: View {
         self.topMenu = topMenu
         self.topCard = topCard
         self.onRefresh = onRefresh
-        self.header = header
+        self.mapSwitchOnTop = mapSwitchOnTop
         self.scrollToTop = scrollToTop
         self.asksPantopus = asksPantopus
     }
@@ -328,8 +330,11 @@ public struct FeedView: View {
     private var headerBlock: some View {
         VStack(spacing: Spacing.s0) {
             VStack(spacing: Spacing.s0) {
-                if let header { header }
-                topBar
+                if mapSwitchOnTop {
+                    mapSwitchBar
+                } else {
+                    topBar
+                }
                 if viewModel.surface == .beacons {
                     HStack(spacing: Spacing.s4) {
                         if let onEmptyCTA {
@@ -350,6 +355,14 @@ public struct FeedView: View {
                 }
                 if viewModel.showsSurfaceToggle {
                     surfaceTabs
+                } else if mapSwitchOnTop {
+                    // No Nearby | Connections row to sit at the end of: the tools get their own.
+                    HStack(spacing: Spacing.s0) {
+                        Spacer(minLength: Spacing.s0)
+                        headerTools
+                    }
+                    .padding(.horizontal, Spacing.s3)
+                    .padding(.vertical, Spacing.s1)
                 }
                 if isSearchVisible {
                     searchField
@@ -360,7 +373,7 @@ public struct FeedView: View {
             }
             .modifier(PulseHeaderFlickRows(gesture: headerFlick, isEnabled: canFlickHeader, scrollsSideways: false))
             VStack(spacing: Spacing.s0) {
-                if viewModel.showsTopics {
+                if viewModel.showsTopics, !leadsWithSports {
                     if LaunchFeatures.pulseRedesign {
                         PulseTopicChipRow(activeTopic: viewModel.activeTopic) { topic in
                             chipTapped { Task { await viewModel.selectTopic(topic) } }
@@ -540,15 +553,17 @@ public struct FeedView: View {
     }
 
     /// Filter chips. Inside a topic lane the post-type row is replaced by
-    /// the lane's own mode chips — RN `FeedScreen.tsx:129`.
+    /// the lane's own mode chips — RN `FeedScreen.tsx:129`. In the Pulse
+    /// tab's header the Sports chip leads either row, so it can leave the lane.
     @ViewBuilder private var chipRow: some View {
         if viewModel.isInSportsLane {
             let chips = viewModel.sportsModeChips
-            if !chips.isEmpty {
+            if !chips.isEmpty || leadsWithSports {
                 FeedChipRow(
                     chips: chips.map { FeedChipItem(id: $0.mode.rawValue, label: $0.label) },
                     activeId: viewModel.sportsMode.rawValue,
-                    skeleton: isInitialLoading
+                    skeleton: isInitialLoading,
+                    leading: sportsChip
                 ) { id in
                     let mode = PulseSportsMode(rawValue: id) ?? .forYou
                     chipTapped { Task { await viewModel.selectSportsMode(mode) } }
@@ -558,12 +573,27 @@ public struct FeedView: View {
             FeedChipRow(
                 chips: PulseIntent.filterCases.map { FeedChipItem(id: $0.rawValue, label: $0.label) },
                 activeId: viewModel.activeIntent.rawValue,
-                skeleton: isInitialLoading
+                skeleton: isInitialLoading,
+                leading: sportsChip
             ) { id in
                 let intent = PulseIntent(rawValue: id) ?? .all
                 chipTapped { selectIntent(intent) }
             }
         }
+    }
+
+    /// October 13's one topic, Sports, leads the filter chips in the Pulse
+    /// tab's header instead of taking a row of its own.
+    private var leadsWithSports: Bool {
+        mapSwitchOnTop && viewModel.showsTopics && !LaunchFeatures.pulseRedesign
+    }
+
+    /// The Sports chip at the head of the filter chips; nil where it has its own row.
+    private var sportsChip: AnyView? {
+        guard leadsWithSports else { return nil }
+        return AnyView(PulseSportsTopicChip(activeTopic: viewModel.activeTopic, height: 28) { topic in
+            chipTapped { Task { await viewModel.selectTopic(topic) } }
+        })
     }
 
     /// A chip "tap" that lands as a flick which started on that chip tucks
@@ -618,25 +648,8 @@ public struct FeedView: View {
             if viewModel.surface.supportsMapMode {
                 viewModeToggle.fixedSize(horizontal: true, vertical: false)
             }
-            if asksPantopus {
-                AskPantopusButton(accessibilityIdentifier: "pulseAskPantopus") {
-                    askTopic = .nearby()
-                } label: {
-                    AskPantopusGlyph(size: 19)
-                        .frame(width: 32, height: 36)
-                        .hitArea(horizontal: 4, vertical: 4)
-                }
-            }
-            Button {
-                withAnimation(.easeOut(duration: 0.15)) { toggleSearch() }
-            } label: {
-                Icon(.search, size: 19, color: Theme.Color.appText)
-                    .frame(width: 36, height: 36)
-                    .hitArea(horizontal: 4, vertical: 4)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Search posts")
-            .accessibilityIdentifier("pulseSearchButton")
+            askButton
+            searchButton
             Button {
                 showsIntentPicker = true
             } label: {
@@ -647,26 +660,113 @@ public struct FeedView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Filter posts")
             .accessibilityIdentifier("pulseFilterButton")
-            if let topMenu {
-                topMenuButton(topMenu)
-            } else {
-                Button {
-                    viewModel.showsPreferences = true
-                } label: {
-                    Icon(.slidersHorizontal, size: 18, color: Theme.Color.appText)
-                        .frame(width: 36, height: 36)
-                        .hitArea(horizontal: 4, vertical: 4)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Pulse preferences")
-                .accessibilityIdentifier("pulsePreferencesButton")
-            }
+            preferencesButton
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s2)
         .background(Theme.Color.appBg)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
+        }
+    }
+
+    /// The Pulse tab's top row (founder decision 2026-11-07): List | Map as
+    /// the big switch, beside the side menu.
+    private var mapSwitchBar: some View {
+        HStack(spacing: Spacing.s2) {
+            HStack(spacing: 2) {
+                ForEach(FeedViewMode.allCases, id: \.rawValue) { mode in
+                    let active = viewMode == mode
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) { viewMode = mode }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Icon(
+                                mode.icon,
+                                size: 17,
+                                strokeWidth: 2.2,
+                                color: active ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary
+                            )
+                            Text(mode.label)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(active ? Theme.Color.appTextInverse : Theme.Color.appTextSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                        .background(active ? Theme.Color.primarySolid : Color.clear)
+                        .clipShape(Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("pulseViewModeSegment_\(mode.rawValue)")
+                    .accessibilityLabel(mode.label)
+                    .accessibilityAddTraits(active ? [.isSelected] : [])
+                }
+            }
+            .padding(3)
+            .background(Theme.Color.appSurfaceSunken)
+            .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: 1))
+            .clipShape(Capsule())
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("pulseViewModeToggle")
+            NavigationMenuButton(accessibilityIdentifier: "nearby.menu")
+        }
+        .padding(.leading, Spacing.s4)
+        .padding(.trailing, Spacing.s2)
+        .padding(.vertical, Spacing.s1)
+        .background(Theme.Color.appBg)
+    }
+
+    /// Ask, search and the preferences: the end of the Nearby | Connections
+    /// row in the Pulse tab's header. (The filter button stays out: the chips
+    /// below offer the same list.)
+    private var headerTools: some View {
+        HStack(spacing: Spacing.s0) {
+            askButton
+            searchButton
+            preferencesButton
+        }
+    }
+
+    @ViewBuilder private var askButton: some View {
+        if asksPantopus {
+            AskPantopusButton(accessibilityIdentifier: "pulseAskPantopus") {
+                askTopic = .nearby()
+            } label: {
+                AskPantopusGlyph(size: 19)
+                    .frame(width: 32, height: 36)
+                    .hitArea(horizontal: 4, vertical: 4)
+            }
+        }
+    }
+
+    private var searchButton: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) { toggleSearch() }
+        } label: {
+            Icon(.search, size: 19, color: Theme.Color.appText)
+                .frame(width: 36, height: 36)
+                .hitArea(horizontal: 4, vertical: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Search posts")
+        .accessibilityIdentifier("pulseSearchButton")
+    }
+
+    @ViewBuilder private var preferencesButton: some View {
+        if let topMenu {
+            topMenuButton(topMenu)
+        } else {
+            Button {
+                viewModel.showsPreferences = true
+            } label: {
+                Icon(.slidersHorizontal, size: 18, color: Theme.Color.appText)
+                    .frame(width: 36, height: 36)
+                    .hitArea(horizontal: 4, vertical: 4)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Pulse preferences")
+            .accessibilityIdentifier("pulsePreferencesButton")
         }
     }
 
@@ -734,12 +834,18 @@ public struct FeedView: View {
                 .accessibilityAddTraits(active ? [.isSelected] : [])
                 .accessibilityIdentifier("pulseSurfaceTab_\(tab.rawValue)")
             }
+            if mapSwitchOnTop {
+                headerTools
+                    .padding(.leading, Spacing.s2)
+            }
         }
         .padding(.horizontal, Spacing.s3)
         .background(Theme.Color.appSurface)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
         }
+        // A container, so the tabs and the tools beside them keep their own identifiers.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pulseSurfaceTabs")
     }
 

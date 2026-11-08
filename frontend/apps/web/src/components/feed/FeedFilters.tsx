@@ -33,14 +33,17 @@ interface FeedFiltersProps {
   counts?: Partial<Record<PostType | 'all', number>>;
   surface?: FeedSurface;
   onMuteTopic?: (postType: string) => void;
+  /** Chips drawn first in the same row (the Pulse page's Sports topic chip). */
+  leading?: ReactNode;
 }
 
-export default function FeedFilters({ selected, onChange, counts, surface = 'place', onMuteTopic }: FeedFiltersProps) {
+export default function FeedFilters({ selected, onChange, counts, surface = 'place', onMuteTopic, leading }: FeedFiltersProps) {
   const filters = surface === 'place' ? PLACE_FILTERS : NETWORK_FILTERS;
   const idPrefix = useId();
 
   return (
     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
+      {leading}
       {filters.map((ch) => {
         const isActive = selected === ch.key;
         const count = counts?.[ch.key];
