@@ -34,15 +34,18 @@ const BAR = { median_error: 8, coverage_low: 75, coverage_high: 85, min_test_sal
 const TIER_CUTS = [1 / 3, 2 / 3];
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Some connectors write a sale's month in full ("January 2024", Milwaukee).
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const sorted = (values) => [...values].sort((a, b) => a - b);
 const median = (list) => (list.length ? list[Math.floor(list.length / 2)] : null);
 const quantile = (list, q) => list[Math.min(list.length - 1, Math.floor(list.length * q))];
 
-/** A sale's date, YYYY-MM-DD: the record's own, or the middle of its month. Null with no month. */
+/** A sale's date, YYYY-MM-DD: the record's own, or the middle of its month ("Jan 2024" or "January 2024"). Null with no month. */
 function saleDateOf(facts) {
   if (facts.sale_date) return facts.sale_date;
-  const month = /^([A-Z][a-z]{2}) (\d{4})$/.exec(facts.sale_month || '');
-  return month ? `${month[2]}-${String(MONTHS.indexOf(month[1]) + 1).padStart(2, '0')}-15` : null;
+  const month = /^([A-Z][a-z]+) (\d{4})$/.exec(facts.sale_month || '');
+  const index = month ? MONTHS.findIndex((short, i) => month[1] === short || month[1] === MONTH_NAMES[i]) : -1;
+  return index >= 0 ? `${month[2]}-${String(index + 1).padStart(2, '0')}-15` : null;
 }
 
 const baseOf = (facts) => facts.market_value || facts.assessed_value || null;
