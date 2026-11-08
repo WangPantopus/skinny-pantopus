@@ -79,3 +79,17 @@ Everything in `sample/a/` comes from `sample/art/`. Run from that folder, with P
 6. With `sample/` served on port 18990: `make_share.cjs` renders the share pictures.
 
 `shot.cjs` and `flow.cjs` take screenshots of the page. `drag.py` drives a finger on a simulator (`SIM_UDID` in the environment).
+
+## Pictures 50–58: Christmas with Santa (November 7, 2026)
+
+The founder's own Santa pictures, made with ChatGPT. The originals are 1214 × 1295, already 15:16, with no border or text, so nothing is trimmed: each `crop` in `designs-table.json` is the whole picture. The founder's 1500 × 1600 copies are plain enlargements of the same files, so the cards are made from the originals. From each original:
+
+| File | How |
+|---|---|
+| `card/<id>.jpg` | The original as it is, JPEG quality 85 (these paintings come out heavier than the 49 at 88) |
+| `<id>.jpg`, `<id>-thumb.jpg` (older apps) | 960 and 360 wide: the picture inside a 16-pixel border of the card's paper colour (`#f7f0e2`, the same for all nine), standing in for the baked border the 49 have, so the card is 960 × 1022 |
+| `share/<id>-link.jpg` | Rendered from the same layout as the 49's link previews |
+
+Table colours: the rule above gives umber to seven of the nine, because Santa's red reads as warm. Two are picked by hand: the toy shop (54), a snowy evening street, gets dusk, and the sleeping Santa (58), in soft morning light, gets wine.
+
+The scripts are in the launch kit, `streams/SANTA/tools`: `make_art.py` writes the card, older and thumbnail files, and `render.cjs link <number>` writes the link previews.
