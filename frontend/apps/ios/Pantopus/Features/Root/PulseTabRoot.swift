@@ -388,6 +388,7 @@ extension PulseTabRoot {
                 ChatConversationViewModel(
                     mode: dest.threadMode,
                     counterparty: dest.counterparty,
+                    counterpartyAvatarURL: dest.avatarURL.flatMap(URL.init(string:)),
                     currentUserId: currentUserId,
                     initialTopic: dest.initialTopic
                 )

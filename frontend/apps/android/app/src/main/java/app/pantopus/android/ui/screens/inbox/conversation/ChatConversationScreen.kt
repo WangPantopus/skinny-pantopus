@@ -659,7 +659,10 @@ fun ChatConversationScreen(
                 val typingInitials =
                     incomingInitialsFor(conversationMode, activeCounterparty)
                         ?: activeCounterparty.displayName.initials()
-                TypingIndicator(initials = typingInitials)
+                TypingIndicator(
+                    initials = typingInitials,
+                    imageUrl = (activeCounterparty as? ChatCounterparty.Person)?.avatarUrl,
+                )
             }
             if (queuedAttachments.isNotEmpty()) {
                 PrefetchLocalPhotos(queuedAttachments)
@@ -3343,6 +3346,7 @@ private fun BubbleRow(
             MiniAvatar(
                 initials = incomingInitials,
                 hidden = content.isContinuation,
+                imageUrl = content.senderAvatarUrl,
                 modifier =
                     if (onOpenSender != null && !content.isContinuation) {
                         Modifier
@@ -4780,6 +4784,7 @@ private fun MiniAvatar(
     initials: String,
     hidden: Boolean,
     modifier: Modifier = Modifier,
+    imageUrl: String? = null,
 ) {
     Box(
         modifier =
@@ -4796,6 +4801,15 @@ private fun MiniAvatar(
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appTextInverse,
             )
+            // The sender's photo over their initials.
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
         }
     }
 }
@@ -5408,7 +5422,10 @@ private fun ReadReceipt(timestamp: String) {
 }
 
 @Composable
-internal fun TypingIndicator(initials: String) {
+internal fun TypingIndicator(
+    initials: String,
+    imageUrl: String? = null,
+) {
     val transition = rememberInfiniteTransition(label = "typingDots")
     Row(
         modifier =
@@ -5419,7 +5436,7 @@ internal fun TypingIndicator(initials: String) {
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        MiniAvatar(initials = initials, hidden = false)
+        MiniAvatar(initials = initials, hidden = false, imageUrl = imageUrl)
         Row(
             modifier =
                 Modifier

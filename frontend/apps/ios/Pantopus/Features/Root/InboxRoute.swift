@@ -47,6 +47,8 @@ public struct InboxConversationDestination: Hashable, Sendable {
     public let kind: ChatConversationMode
     public let displayName: String
     public let initials: String
+    /// The other person's photo in a person DM, when the place it was opened from had it.
+    public let avatarURL: String?
     public let identityKind: String?
     public let verified: Bool
     public let initialTopic: ChatInitialTopic?
@@ -73,6 +75,7 @@ public struct InboxConversationDestination: Hashable, Sendable {
         kind: ChatConversationMode = .dm,
         displayName: String,
         initials: String,
+        avatarURL: String? = nil,
         identityKind: String?,
         verified: Bool,
         scrollToMessageId: String? = nil,
@@ -87,6 +90,7 @@ public struct InboxConversationDestination: Hashable, Sendable {
         self.kind = kind
         self.displayName = displayName
         self.initials = initials
+        self.avatarURL = avatarURL
         self.identityKind = identityKind
         self.verified = verified
         self.scrollToMessageId = scrollToMessageId

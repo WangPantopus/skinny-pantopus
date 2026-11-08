@@ -27,6 +27,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
     public let subIcon: PantopusIcon?
     public let verified: Bool
     public let identity: NewMessageIdentityBadge
+    /// The person's photo; their initials show without one.
+    public let avatarURL: URL?
 
     public init(
         id: String,
@@ -37,7 +39,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
         sub: String?,
         subIcon: PantopusIcon?,
         verified: Bool,
-        identity: NewMessageIdentityBadge
+        identity: NewMessageIdentityBadge,
+        avatarURL: URL? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -48,6 +51,7 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
         self.subIcon = subIcon
         self.verified = verified
         self.identity = identity
+        self.avatarURL = avatarURL
     }
 }
 
@@ -99,6 +103,8 @@ public struct NewMessageDestination: Hashable, Sendable {
     public let verified: Bool
     public let locality: String?
     public let identity: NewMessageIdentityBadge
+    /// The person's photo, for the conversation the pick opens.
+    public let avatarURL: URL?
 
     public init(
         userId: String,
@@ -106,7 +112,8 @@ public struct NewMessageDestination: Hashable, Sendable {
         initials: String,
         verified: Bool,
         locality: String?,
-        identity: NewMessageIdentityBadge = .personal
+        identity: NewMessageIdentityBadge = .personal,
+        avatarURL: URL? = nil
     ) {
         self.userId = userId
         self.displayName = displayName
@@ -114,5 +121,6 @@ public struct NewMessageDestination: Hashable, Sendable {
         self.verified = verified
         self.locality = locality
         self.identity = identity
+        self.avatarURL = avatarURL
     }
 }

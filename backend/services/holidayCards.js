@@ -28,7 +28,8 @@ const MORNING_HOUR = 7;
 const designIdOf = (number) => `christmas-2026-${String(number).padStart(2, '0')}`;
 
 // The collections "Pick a card" shows, in this order, each with its pictures (by number) in grid order (founder,
-// 2026-10-31; Christmas with Santa 2026-11-07). A picture can move to another collection; its number stays.
+// 2026-10-31; Christmas with Santa 2026-11-07; The First Christmas 2026-11-08). A picture can move to another
+// collection; its number stays.
 const COLLECTIONS = [
   ['as-a-kid', 'Christmas as a Kid', 'For families with kids, and anyone who misses being one.',
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]],
@@ -41,6 +42,8 @@ const COLLECTIONS = [
     [44, 45, 46, 47, 48, 49]],
   ['with-santa', 'Christmas with Santa', 'For anyone who still believes, and anyone who used to.',
     [50, 51, 52, 53, 54, 55, 56, 57, 58]],
+  ['first-christmas', 'The First Christmas', 'For the faithful, and anyone who loves the Christmas story.',
+    [59, 60, 61, 62, 63, 64, 65, 66, 67]],
 ].map(([id, name, line, numbers]) => ({ id, name, line, designs: numbers.map(designIdOf) }));
 const COLLECTION_OF_DESIGN = new Map(COLLECTIONS.flatMap((c) => c.designs.map((design) => [design, c.id])));
 
@@ -48,6 +51,8 @@ const COLLECTION_OF_DESIGN = new Map(COLLECTIONS.flatMap((c) => c.designs.map((d
 // (an app keeps a picture's shape while it loads it), its name on the public card pages (/cards/<slug>) and the colour of
 // the cloth it lies on (launch key card_table). 1–17 are the founder's own (2026-10-30); 18–49 came in five groups on
 // 2026-10-31; 50–58 are the founder's Santa pictures (2026-11-07), which have no border, so their paper is one cream.
+// 59–67 are the founder's nativity pictures (2026-11-08), each with its whole King James verse printed under the
+// painting, so the caption is the verse's reference (its book and numbers joined by a no-break space).
 // A number is never reused: every app picks the card's stamp from it.
 const DESIGNS = [
   ['Home for Christmas.', '#f7eee0', 1054, 'home-for-christmas', '#2c4071'],
@@ -108,6 +113,15 @@ const DESIGNS = [
   ['Saved the best house for last.', '#f7f0e2', 1022, 'saved-the-best-house-for-last', '#2c4071'],
   ['Shh. He’s here.', '#f7f0e2', 1022, 'shh-hes-here', '#6e4b30'],
   ['Put your feet up. It’s Christmas.', '#f7f0e2', 1022, 'put-your-feet-up-its-christmas', '#704b51'],
+  ['Isaiah\u00a09:6 (KJV)', '#f7f0e2', 1022, 'isaiah-9-6', '#6e4b30'],
+  ['Luke\u00a02:7 (KJV)', '#f7f0e2', 1022, 'luke-2-7', '#6e4b30'],
+  ['John\u00a03:16 (KJV)', '#f7f0e2', 1022, 'john-3-16', '#704b51'],
+  ['Luke\u00a02:10 (KJV)', '#f7f0e2', 1022, 'luke-2-10', '#2c4071'],
+  ['Luke\u00a02:14 (KJV)', '#f7f0e2', 1022, 'luke-2-14', '#6e4b30'],
+  ['Matthew\u00a02:2 (KJV)', '#f7f0e2', 1022, 'matthew-2-2', '#2c4071'],
+  ['Matthew\u00a02:11 (KJV)', '#f7f0e2', 1022, 'matthew-2-11', '#704b51'],
+  ['Matthew\u00a02:14 (KJV)', '#f7f0e2', 1022, 'matthew-2-14', '#2c4071'],
+  ['John\u00a08:12 (KJV)', '#f7f0e2', 1022, 'john-8-12', '#6e4b30'],
 ].map(([caption, paper, height, slug, table], index) => {
   const id = designIdOf(index + 1);
   return { id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height, slug, table };

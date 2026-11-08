@@ -992,6 +992,168 @@
    "cut_percent": 0.0,
    "lum": 0.496,
    "warm": 0.154
+  },
+  {
+   "id": "christmas-2026-59",
+   "number": 59,
+   "caption": "Isaiah 9:6 (KJV)",
+   "verse": "For unto us a child is born, unto us a son is given: and the government shall be upon his shoulder: and his name shall be called Wonderful, Counsellor, The mighty God, The everlasting Father, The Prince of Peace.",
+   "slug": "isaiah-9-6",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.306,
+   "warm": 0.176
+  },
+  {
+   "id": "christmas-2026-60",
+   "number": 60,
+   "caption": "Luke 2:7 (KJV)",
+   "verse": "And she brought forth her firstborn son, and wrapped him in swaddling clothes, and laid him in a manger; because there was no room for them in the inn.",
+   "slug": "luke-2-7",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.287,
+   "warm": 0.178
+  },
+  {
+   "id": "christmas-2026-61",
+   "number": 61,
+   "caption": "John 3:16 (KJV)",
+   "verse": "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.",
+   "slug": "john-3-16",
+   "table": "#704b51",
+   "tone": "wine",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.546,
+   "warm": 0.203
+  },
+  {
+   "id": "christmas-2026-62",
+   "number": 62,
+   "caption": "Luke 2:10 (KJV)",
+   "verse": "And the angel said unto them, Fear not: for, behold, I bring you good tidings of great joy, which shall be to all people.",
+   "slug": "luke-2-10",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.438,
+   "warm": 0.145
+  },
+  {
+   "id": "christmas-2026-63",
+   "number": 63,
+   "caption": "Luke 2:14 (KJV)",
+   "verse": "Glory to God in the highest, and on earth peace, good will toward men.",
+   "slug": "luke-2-14",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.328,
+   "warm": 0.19
+  },
+  {
+   "id": "christmas-2026-64",
+   "number": 64,
+   "caption": "Matthew 2:2 (KJV)",
+   "verse": "Saying, Where is he that is born King of the Jews? for we have seen his star in the east, and are come to worship him.",
+   "slug": "matthew-2-2",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.363,
+   "warm": 0.157
+  },
+  {
+   "id": "christmas-2026-65",
+   "number": 65,
+   "caption": "Matthew 2:11 (KJV)",
+   "verse": "And when they were come into the house, they saw the young child with Mary his mother, and fell down, and worshipped him: and when they had opened their treasures, they presented unto him gifts; gold, and frankincense and myrrh.",
+   "slug": "matthew-2-11",
+   "table": "#704b51",
+   "tone": "wine",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.322,
+   "warm": 0.167
+  },
+  {
+   "id": "christmas-2026-66",
+   "number": 66,
+   "caption": "Matthew 2:14 (KJV)",
+   "verse": "When he arose, he took the young child and his mother by night, and departed into Egypt.",
+   "slug": "matthew-2-14",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.306,
+   "warm": 0.059
+  },
+  {
+   "id": "christmas-2026-67",
+   "number": 67,
+   "caption": "John 8:12 (KJV)",
+   "verse": "Then spake Jesus again unto them, saying, I am the light of the world: he that followeth me shall not walk in darkness, but shall have the light of life.",
+   "slug": "john-8-12",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.335,
+   "warm": 0.202
   }
  ]
 }

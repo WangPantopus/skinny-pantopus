@@ -40,6 +40,7 @@ extension InboxConversationDestination {
             mode: .person(otherUserId: profile.id),
             displayName: profile.displayName,
             initials: initials.isEmpty ? "··" : initials,
+            avatarURL: profile.profilePictureURL ?? profile.avatarURL,
             identityKind: profile.accountType == "business" ? "business" : nil,
             verified: profile.hasVerifiedResidency
         )

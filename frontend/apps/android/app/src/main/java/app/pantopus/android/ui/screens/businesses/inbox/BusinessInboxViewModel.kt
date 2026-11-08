@@ -330,6 +330,7 @@ class BusinessInboxViewModel
                     preview = dto.lastMessagePreview.orEmpty(),
                     timeAgo = relativeTime(dto.lastMessageAt),
                     unreadCount = (dto.unreadCount ?: 0).coerceAtLeast(0),
+                    avatarUrl = dto.otherParticipantIdentity?.avatarUrl?.takeIf { it.isNotBlank() },
                 )
             }
 

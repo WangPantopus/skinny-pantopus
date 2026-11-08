@@ -368,13 +368,20 @@ public struct ChatMessageSender: Codable, Sendable, Hashable, Identifiable {
     /// `username` instead.
     public let displayName: String?
     public let handle: String?
+    /// The identity's photo: the one the person shows neighbors, or a business's logo.
+    public let avatarUrl: String?
     /// The identity's kind (`type`): `local` for a person, `business` for a business.
     public let identityType: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, username, name, displayName, handle
+        case id, username, name, displayName, handle, avatarUrl
         case profilePictureURL = "profile_picture_url"
         case identityType = "type"
+    }
+
+    /// The photo beside the sender's messages; older servers send `profile_picture_url`.
+    public var photoURL: URL? {
+        (avatarUrl ?? profilePictureURL).flatMap(URL.init(string:))
     }
 }
 
@@ -677,10 +684,12 @@ public struct ChatSearchRoomContext: Decodable, Sendable {
         public let identityKind: String?
         public let verified: Bool?
         public let badges: [String]?
+        /// The person's photo, as the chat list shows it.
+        public let avatarUrl: String?
 
         private enum CodingKeys: String, CodingKey {
             case identityKind = "identity_kind"
-            case verified, badges
+            case verified, badges, avatarUrl
         }
     }
 }

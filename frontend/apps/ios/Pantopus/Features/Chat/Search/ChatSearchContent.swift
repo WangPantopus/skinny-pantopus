@@ -28,6 +28,8 @@ public struct ChatSearchResult: Identifiable, Hashable, Sendable {
     public let kind: Kind
     public let displayName: String
     public let initials: String
+    /// The other person's photo in a one-to-one conversation; initials show without one.
+    public let avatarURL: URL?
     public let identityChip: ConversationIdentityChip?
     public let verified: Bool
     /// The snippet to render under the name. For a body match this is a
@@ -51,6 +53,7 @@ public struct ChatSearchResult: Identifiable, Hashable, Sendable {
         kind: Kind,
         displayName: String,
         initials: String,
+        avatarURL: URL? = nil,
         identityChip: ConversationIdentityChip?,
         verified: Bool,
         snippet: String,
@@ -61,6 +64,7 @@ public struct ChatSearchResult: Identifiable, Hashable, Sendable {
         self.kind = kind
         self.displayName = displayName
         self.initials = initials
+        self.avatarURL = avatarURL
         self.identityChip = identityChip
         self.verified = verified
         self.snippet = snippet

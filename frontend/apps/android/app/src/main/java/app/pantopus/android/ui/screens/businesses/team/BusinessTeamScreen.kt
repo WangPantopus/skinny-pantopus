@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -67,6 +68,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
 /** Test tag on the Business Team list root container. */
@@ -414,7 +416,7 @@ private fun MemberRowCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
             verticalAlignment = Alignment.Top,
         ) {
-            TeamAvatar(name = row.name, gradient = row.avatarGradient)
+            TeamAvatar(name = row.name, gradient = row.avatarGradient, imageUrl = row.avatarUrl)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 NameWithRole(name = row.name, role = row.role)
                 row.email?.takeIf { it.isNotEmpty() }?.let { MetaLine(text = it, icon = PantopusIcon.Mail) }
@@ -602,6 +604,7 @@ private fun TeamAvatar(
     name: String,
     gradient: GradientPair,
     icon: PantopusIcon? = null,
+    imageUrl: String? = null,
 ) {
     Box(
         modifier = Modifier.size(40.dp).clip(CircleShape).background(Brush.linearGradient(listOf(gradient.start, gradient.end))),
@@ -611,6 +614,15 @@ private fun TeamAvatar(
             PantopusIconImage(icon = icon, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextInverse)
         } else {
             Text(text = initials(name), color = PantopusColors.appTextInverse, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+        // The member's photo over their initials.
+        if (!imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
         }
     }
 }

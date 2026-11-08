@@ -129,7 +129,8 @@ public final class NewMessageViewModel {
             initials: row.initials,
             verified: row.verified,
             locality: row.locality,
-            identity: row.identity
+            identity: row.identity,
+            avatarURL: row.avatarURL
         )
         onSelect(destination)
     }
@@ -321,7 +322,8 @@ public final class NewMessageViewModel {
             subIcon: Self.connectionSubIcon(for: rel),
             // Relationship rows carry no verification, so no badge.
             verified: false,
-            identity: .personal
+            identity: .personal,
+            avatarURL: ConnectionsViewModel.avatarURL(user)
         )
     }
 
@@ -339,7 +341,8 @@ public final class NewMessageViewModel {
             sub: Self.recentSub(for: dto),
             subIcon: .messageCircle,
             verified: verified,
-            identity: identity
+            identity: identity,
+            avatarURL: dto.avatarURL.flatMap(URL.init(string:))
         )
     }
 
@@ -359,7 +362,8 @@ public final class NewMessageViewModel {
             subIcon: nil,
             // Search results carry no verification, so no badge.
             verified: false,
-            identity: identity
+            identity: identity,
+            avatarURL: dto.profilePicture.flatMap(URL.init(string:))
         )
     }
 

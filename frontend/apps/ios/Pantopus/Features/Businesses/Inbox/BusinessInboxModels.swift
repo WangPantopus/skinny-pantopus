@@ -51,13 +51,17 @@ public struct BusinessInboxRoom: Sendable, Hashable, Identifiable {
         unreadCount > 0
     }
 
+    /// The counterpart's photo; their initials show without one.
+    public let avatarURL: URL?
+
     public init(
         id: String,
         title: String,
         handle: String,
         preview: String,
         timeAgo: String,
-        unreadCount: Int
+        unreadCount: Int,
+        avatarURL: URL? = nil
     ) {
         self.id = id
         self.title = title
@@ -65,6 +69,7 @@ public struct BusinessInboxRoom: Sendable, Hashable, Identifiable {
         self.preview = preview
         self.timeAgo = timeAgo
         self.unreadCount = unreadCount
+        self.avatarURL = avatarURL
     }
 }
 

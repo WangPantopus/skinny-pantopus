@@ -235,6 +235,8 @@ struct BusinessInboxRoomCard: View {
                     Text(initials)
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(Theme.Color.business)
+                    AvatarPhoto(url: room.avatarURL)
+                        .frame(width: 44, height: 44)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: Spacing.s2) {

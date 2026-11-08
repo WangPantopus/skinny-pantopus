@@ -343,7 +343,7 @@ private struct MemberRowCard: View {
 
     private var identity: some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
-            TeamAvatar(name: row.name, gradient: row.avatarGradient)
+            TeamAvatar(name: row.name, gradient: row.avatarGradient, imageURL: row.avatarURL)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: Spacing.s1) {
                     Text(row.name)
@@ -452,6 +452,8 @@ private struct TeamAvatar: View {
     let name: String
     let gradient: GradientPair
     var icon: PantopusIcon?
+    /// The member's photo, over their initials.
+    var imageURL: URL?
 
     var body: some View {
         ZStack {
@@ -469,6 +471,7 @@ private struct TeamAvatar: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
             }
+            AvatarPhoto(url: imageURL)
         }
         .frame(width: 40, height: 40)
     }

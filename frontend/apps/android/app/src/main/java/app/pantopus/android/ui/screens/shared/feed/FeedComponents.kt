@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -50,6 +51,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
 
 /**
  * Solid-fill tint for a [FeedAvatar]. Each case resolves to an on-scale
@@ -85,7 +87,7 @@ enum class FeedAvatarTint {
 }
 
 /**
- * Feed author avatar: a solid identity-tinted disc with white initials and
+ * Feed author avatar: the author's photo ([imageUrl]), or a solid identity-tinted disc with white initials, and
  * an optional sky verified check badge pinned bottom-end. Unlike
  * [app.pantopus.android.ui.components.AvatarWithIdentityRing] (a
  * profile-completion ring), the A03 feed card design shows a flat colored
@@ -98,6 +100,7 @@ fun FeedAvatar(
     tint: FeedAvatarTint = FeedAvatarTint.Sky,
     verified: Boolean = false,
     size: Dp = 32.dp,
+    imageUrl: String? = null,
 ) {
     // The initials keep their size in the disc at any text size, as on iOS: the disc doesn't grow with the text,
     // and at font scale 2.0 two letters overflowed it. The author's name beside the avatar grows freely.
@@ -117,6 +120,14 @@ fun FeedAvatar(
                     fontSize = if (size >= 32.dp) 13.sp else 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appTextInverse,
+                )
+            }
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize().clip(CircleShape),
                 )
             }
         }

@@ -5,6 +5,8 @@ import Foundation
 import Observation
 import SwiftUI
 
+// swiftlint:disable file_length
+
 // MARK: - Projected view models
 
 /// One member row in a role section.
@@ -15,6 +17,8 @@ public struct BusinessTeamMemberRow: Identifiable, Sendable, Equatable {
     public let email: String?
     public let role: BusinessRole
     public let avatarGradient: GradientPair
+    /// The member's photo, as neighbors see it; their initials show without one.
+    public var avatarURL: URL?
     public let joinedText: String?
     /// True when the viewer can change/remove this member (gated on
     /// `team.manage` and never true for the owner row).
@@ -389,6 +393,7 @@ public final class BusinessTeamViewModel {
             email: user?.email,
             role: role,
             avatarGradient: BusinessTeamAvatarTone.tone(for: userId).gradient,
+            avatarURL: user?.profilePictureUrl.flatMap(URL.init(string:)),
             joinedText: joinedText(for: member),
             canManage: canManage && role != .owner && (
                 access?.isOwner == true || role.rank < BusinessRole.parse(access?.roleBase).rank
