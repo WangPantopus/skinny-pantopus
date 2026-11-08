@@ -1,23 +1,24 @@
 -- Backwards compatible: yes. Additive, server-only accounting; only cards explicitly marked postage_v1 are charged.
 -- Founder approved purchase and credit tables, November 7, 2026.
+-- Deleting an account deletes its stamp history; its purchase receipts stay, with no owner, for refunds and taxes.
 BEGIN;
 SET LOCAL lock_timeout='5s';
 CREATE TABLE public."MailStampPurchase" (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES public."User"(id),
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid REFERENCES public."User"(id) ON DELETE SET NULL,
  provider text NOT NULL CHECK(provider IN ('stripe','apple','google')), reference text NOT NULL,
  product_id text NOT NULL, credits integer NOT NULL CHECK(credits IN (5,20,50)),
  revoked boolean NOT NULL DEFAULT false, checked_at timestamptz NOT NULL DEFAULT now(),
  created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(provider,reference)
 );
 CREATE TABLE public."MailStampLedger" (
- id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, user_id uuid NOT NULL REFERENCES public."User"(id),
+ id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, user_id uuid NOT NULL REFERENCES public."User"(id) ON DELETE CASCADE,
  event_key text NOT NULL UNIQUE, bucket text NOT NULL CHECK(bucket IN ('free','paid')),
  delta integer NOT NULL CHECK(delta <> 0), mail_id uuid, purchase_id uuid REFERENCES public."MailStampPurchase"(id),
  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX ON public."MailStampLedger"(user_id,created_at);
 CREATE INDEX ON public."MailStampLedger"(mail_id) WHERE mail_id IS NOT NULL;
-CREATE INDEX ON public."MailStampPurchase"(checked_at) WHERE NOT revoked;
+CREATE INDEX ON public."MailStampPurchase"(checked_at) WHERE NOT revoked AND user_id IS NOT NULL;
 ALTER TABLE public."MailStampPurchase" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."MailStampLedger" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public."MailStampPurchase", public."MailStampLedger" FROM PUBLIC, anon, authenticated;
@@ -37,9 +38,14 @@ CREATE FUNCTION public.mail_stamp_purchase(p_user uuid,p_provider text,p_referen
 DECLARE purchase "MailStampPurchase";
 BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended('mail-stamps:'||p_user::text,0));
+ -- The account was deleted: a late refund still marks its ownerless receipt, and nothing is granted.
+ IF NOT EXISTS(SELECT FROM "User" WHERE id=p_user) THEN
+  UPDATE "MailStampPurchase" SET revoked=revoked OR p_revoked,checked_at=now() WHERE provider=p_provider AND reference=p_reference AND user_id IS NULL;
+  RETURN jsonb_build_object('free_remaining',0,'paid_remaining',0,'available',0);
+ END IF;
  INSERT INTO "MailStampPurchase"(user_id,provider,reference,product_id,credits) VALUES(p_user,p_provider,p_reference,p_product,p_credits) ON CONFLICT(provider,reference) DO NOTHING;
  SELECT * INTO STRICT purchase FROM "MailStampPurchase" WHERE provider=p_provider AND reference=p_reference FOR UPDATE;
- IF purchase.user_id<>p_user OR purchase.product_id<>p_product OR purchase.credits<>p_credits THEN RAISE EXCEPTION 'STAMP_PURCHASE_CONFLICT'; END IF;
+ IF purchase.user_id IS DISTINCT FROM p_user OR purchase.product_id<>p_product OR purchase.credits<>p_credits THEN RAISE EXCEPTION 'STAMP_PURCHASE_CONFLICT'; END IF;
  INSERT INTO "MailStampLedger"(user_id,event_key,bucket,delta,purchase_id) VALUES(p_user,'purchase:'||purchase.id,'paid',p_credits,purchase.id) ON CONFLICT(event_key) DO NOTHING;
  IF p_revoked OR purchase.revoked THEN
   INSERT INTO "MailStampLedger"(user_id,event_key,bucket,delta,purchase_id) VALUES(p_user,'revoke:'||purchase.id,'paid',-p_credits,purchase.id) ON CONFLICT(event_key) DO NOTHING;

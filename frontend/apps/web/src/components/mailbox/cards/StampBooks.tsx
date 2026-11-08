@@ -7,6 +7,8 @@ type Balance = {
   available: number;
   free_remaining: number;
   paid_remaining: number;
+  /** False once books stop selling for the season (sending goes on until December 31). */
+  sales_open?: boolean;
   books: {
     id: string;
     credits: number;
@@ -102,6 +104,12 @@ export default function StampBooks({ refreshKey }: { refreshKey: string }) {
         One stamp sends one Christmas card to one recipient. Your first 3 are
         free. Receiving and replies are always free.
       </p>
+      {balance?.sales_open === false ? (
+        <p className="mt-2">
+          Stamp books aren’t on sale any more this year. You can use your
+          stamps until December 31.
+        </p>
+      ) : (
       <details
         className="mt-2"
         open={balance?.available === 0 ? true : undefined}
@@ -110,7 +118,8 @@ export default function StampBooks({ refreshKey }: { refreshKey: string }) {
           Buy a stamp book
         </summary>
         <p className="my-2">
-          Digital delivery only. Purchased stamps never expire.
+          Digital delivery only. Christmas cards can be sent until December 31;
+          unused stamps stay in your account.
         </p>
         <div className="flex flex-wrap gap-2">
           {balance?.books.map((book) => (
@@ -129,6 +138,7 @@ export default function StampBooks({ refreshKey }: { refreshKey: string }) {
           ))}
         </div>
       </details>
+      )}
       <button
         className="mt-2 underline"
         onClick={() => {

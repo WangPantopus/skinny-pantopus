@@ -2,7 +2,10 @@
 const db = require("../config/supabaseAdmin");
 const crypto = require("node:crypto");
 const { SignJWT, importPKCS8, decodeJwt } = require("jose");
+const { DateTime } = require("luxon");
 const { areLaunchFeaturesEnabled } = require("../utils/featureFlags");
+const holidayCards = require("./holidayCards");
+const mailDelivery = require("./mailDelivery");
 const BOOKS = [
   [5, 299],
   [20, 799],
@@ -23,6 +26,16 @@ const enabled = (user) =>
     listed("MAIL_STAMPS_PREVIEW_USERS", user)) &&
   areLaunchFeaturesEnabled(["mailbox", "holiday_cards"]);
 const book = (id) => BOOKS.find((b) => b.id === id);
+// Stamps only send Christmas cards, which close when December 31 ends, so books stop selling when the last sales day
+// ends where the person lives. Receipts, balances and sending keep working after that.
+async function salesOpen(user, now = new Date()) {
+  const zone =
+    (await mailDelivery.personTimeZone(user)) ||
+    mailDelivery.FALLBACK_TIME_ZONE;
+  const lastDay = process.env.MAIL_STAMPS_SALES_LAST_DAY || "2026-12-26";
+  const end = DateTime.fromISO(lastDay, { zone }).plus({ days: 1 }).startOf("day");
+  return holidayCards.seasonOpen(zone, now) && end.isValid && now < end.toJSDate();
+}
 const failure = (
   message = "Could not verify this purchase. Please try again.",
   status = 503,
@@ -205,6 +218,8 @@ async function confirm(provider, reference, user, productId) {
 async function checkout(user, productId, requestId) {
   const b = book(productId);
   if (!b) throw failure("Unknown stamp book.", 400);
+  if (!(await salesOpen(user)))
+    throw failure("Stamp books aren’t on sale any more this year.", 410);
   if (
     !new RegExp(sandbox() ? "^(sk|rk)_test_" : "^(sk|rk)_live_").test(
       process.env.STRIPE_SECRET_KEY || "",
@@ -230,7 +245,7 @@ async function checkout(user, productId, requestId) {
             product_data: {
               name: `${b.credits} Pantopus digital stamps`,
               description:
-                "One stamp sends one Christmas card to one recipient. Digital delivery only. Stamps never expire.",
+                "One stamp sends one Christmas card to one recipient. Digital delivery only. Christmas cards can be sent until December 31, 2026; unused stamps stay in your account.",
             },
           },
         },
@@ -250,6 +265,7 @@ async function reconcile() {
     .from("MailStampPurchase")
     .select("user_id,provider,reference,product_id")
     .eq("revoked", false)
+    .not("user_id", "is", null) // A deleted account's receipts are only marked by late refund events.
     .lt("checked_at", new Date(Date.now() - 3600000).toISOString())
     .order("checked_at")
     .limit(100);
@@ -303,6 +319,7 @@ async function stripeChargeChanged(object, connectedAccount) {
 module.exports = {
   BOOKS,
   enabled,
+  salesOpen,
   balance,
   confirm,
   checkout,

@@ -31,6 +31,8 @@ router.get(
   run(async (req) => ({
     ...(await stamps.balance(req.user.id)),
     books: stamps.BOOKS,
+    // Books stay listed after sales end so the apps can still finish an interrupted purchase.
+    sales_open: await stamps.salesOpen(req.user.id),
     account_token: req.user.id,
     google_account: stamps.googleAccount(req.user.id),
   })),

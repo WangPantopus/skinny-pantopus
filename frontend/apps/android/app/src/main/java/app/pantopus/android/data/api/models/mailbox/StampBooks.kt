@@ -10,6 +10,8 @@ data class StampBalance(
     val available: Int,
     val books: List<StampBook>,
     @Json(name = "google_account") val googleAccount: String,
+    /** False once books stop selling for the season; sending goes on until December 31. */
+    @Json(name = "sales_open") val salesOpen: Boolean = true,
 )
 
 @JsonClass(generateAdapter = true)

@@ -158,7 +158,7 @@ class MailStampBooksViewModel
             activity: Activity,
             product: ProductDetails,
         ) {
-            if (busy) return
+            if (busy || balance?.salesOpen == false) return
             val account = balance?.googleAccount ?: return
             val offer = product.oneTimePurchaseOfferDetails ?: return
             val details =
@@ -206,9 +206,14 @@ fun MailStampBooks(
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         Text(model.balance?.let { "${it.available} digital stamp${if (it.available == 1) "" else "s"} available" } ?: "Your digital stamps")
         Text("One stamp sends one Christmas card to one recipient. Your first 3 are free. Receiving and replies are always free.")
-        TextButton(onClick = { expanded = !expanded }) { Text("Buy a stamp book") }
-        if (expanded) {
-            Text("Digital delivery only. Purchased stamps never expire.")
+        val salesOpen = model.balance?.salesOpen != false
+        if (!salesOpen) {
+            Text("Stamp books aren’t on sale any more this year. You can use your stamps until December 31.")
+        } else {
+            TextButton(onClick = { expanded = !expanded }) { Text("Buy a stamp book") }
+        }
+        if (salesOpen && expanded) {
+            Text("Digital delivery only. Christmas cards can be sent until December 31; unused stamps stay in your account.")
             model.products.forEach { product ->
                 val book = model.balance?.books?.firstOrNull { it.id == product.productId }
                 val price = product.oneTimePurchaseOfferDetails?.formattedPrice

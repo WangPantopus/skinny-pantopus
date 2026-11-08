@@ -8,6 +8,8 @@ Implementation proposal approved November 7, 2026. This change is **off by defau
 - One digital stamp sends one new Christmas card to one recipient, including cards by email or share link. A reply uses the existing free reply/messaging flow. Receiving and ordinary letters stay free.
 - Books: 5 stamps / US$2.99; 20 / US$7.99; 50 / US$14.99. These are one-time consumable purchases, not subscriptions. Native clients display the store's localized price; configure the US prices above in each store.
 - Purchased stamps never expire, are shared across the account's devices and web, and are not cash or transferable. This is digital delivery, not postal postage.
+- Stamps only send Christmas cards, which can be sent until December 31 ends where the sender lives. Books stop selling when `MAIL_STAMPS_SALES_LAST_DAY` (default `2026-12-26`) ends there, so a late book can still be used: checkout answers 410, `GET /api/mailbox/stamp-books` says `sales_open: false` and the apps hide the books and say so. Balances, receipt confirmation, sending and take-back keep working. Whether leftover stamps later send letters or next season's cards is a founder decision; the apps promise only that unused stamps stay in the account.
+- Deleting an account deletes its stamp history. Its purchase receipts stay with no owner (`user_id` null), so a late refund can still be recorded against them; they grant nothing to anyone, and the refund sweep skips them.
 - A successful send consumes free stamps first. Failed or retried sends do not consume an additional stamp. Taking a card back before pickup/claim or expiration of an unclaimed invitation returns the original stamp once. Deleting delivered mail does not return it.
 - At most 50 new cards per rolling 24 hours, including subsequently withdrawn cards. Existing recipient, block and escrow abuse checks still apply.
 - Refunding or disputing a book removes its entire credit grant once. If stamps were spent, a negative paid balance blocks further sending until repaid; receiving/replies remain available. Old provider events cannot reinstate a refunded grant.
@@ -88,6 +90,7 @@ No Play Real-time Developer Notifications/Pub/Sub endpoint is implemented in thi
 | `MAIL_STAMPS_PREVIEW_USERS` | optional | dedicated review/pilot Pantopus UUIDs only |
 | `MAIL_STAMPS_APPLE_SANDBOX_USERS` | unnecessary | dedicated Apple review Pantopus UUIDs only |
 | `MAIL_STAMPS_GOOGLE_PACKAGE` | `com.pantopus.app` | `com.pantopus.app` |
+| `MAIL_STAMPS_SALES_LAST_DAY` | unset (`2026-12-26`), or an earlier date to test the closed state | unset (`2026-12-26`) |
 | `FRONTEND_URL` | `https://staging.pantopus.com` | `https://pantopus.com` |
 | `LAUNCH_FEATURES` | preserve existing values; include `mailbox,holiday_cards` | same; `card_table` is additionally required for sending by link |
 

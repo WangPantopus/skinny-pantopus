@@ -4,6 +4,8 @@ import SwiftUI
 private struct StampBalance: Decodable {
     let available: Int
     let accountToken: UUID
+    /// False once books stop selling for the season; sending goes on until December 31.
+    let salesOpen: Bool?
     let books: [Book]
     struct Book: Decodable { let id: String
         let credits: Int
@@ -12,6 +14,7 @@ private struct StampBalance: Decodable {
     enum CodingKeys: String, CodingKey {
         case available, books
         case accountToken = "account_token"
+        case salesOpen = "sales_open"
     }
 }
 
@@ -73,7 +76,7 @@ private final class MailStampStore {
     }
 
     func buy(_ product: Product) async {
-        guard !busy, let account = balance?.accountToken else { return }
+        guard !busy, balance?.salesOpen != false, let account = balance?.accountToken else { return }
         busy = true
         message = nil
         defer { busy = false }
@@ -104,17 +107,21 @@ struct MailStampBooksView: View {
             Text(store.balance.map { "\($0.available) digital stamp\($0.available == 1 ? "" : "s") available" } ?? "Your digital stamps")
                 .font(.headline)
             Text("One stamp sends one Christmas card to one recipient. Your first 3 are free. Receiving and replies are always free.")
-            DisclosureGroup("Buy a stamp book", isExpanded: $expanded) {
-                VStack(alignment: .leading, spacing: Spacing.s2) {
-                    Text("Digital delivery only. Purchased stamps never expire.")
-                    ForEach(store.products) { product in
-                        if let book = store.balance?.books.first(where: { $0.id == product.id }) {
-                            Button("\(book.credits) stamps · \(product.displayPrice)") { Task { await store.buy(product) } }
-                                .disabled(store.busy)
+            if store.balance?.salesOpen == false {
+                Text("Stamp books aren’t on sale any more this year. You can use your stamps until December 31.")
+            } else {
+                DisclosureGroup("Buy a stamp book", isExpanded: $expanded) {
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text("Digital delivery only. Christmas cards can be sent until December 31; unused stamps stay in your account.")
+                        ForEach(store.products) { product in
+                            if let book = store.balance?.books.first(where: { $0.id == product.id }) {
+                                Button("\(book.credits) stamps · \(product.displayPrice)") { Task { await store.buy(product) } }
+                                    .disabled(store.busy)
+                            }
                         }
-                    }
-                    if store.products.isEmpty { Text("Stamp books are unavailable in the App Store right now.") }
-                }.padding(.top, Spacing.s2)
+                        if store.products.isEmpty { Text("Stamp books are unavailable in the App Store right now.") }
+                    }.padding(.top, Spacing.s2)
+                }
             }
             Button("Refresh balance and purchases") { Task { await store.recover() } }.disabled(store.busy)
             if let message = store.message { Text(message).accessibilityAddTraits(.updatesFrequently) }
