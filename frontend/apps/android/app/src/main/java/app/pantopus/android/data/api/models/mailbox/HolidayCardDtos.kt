@@ -35,6 +35,8 @@ data class HolidayCardsResponse(
     @Json(name = "time_zone") val timeZone: String? = null,
     /** Today's card; null until it's sent. */
     val today: SentHolidayCard? = null,
+    /** How many one card can go to at once: 20 with digital stamps on (a list, `POST /api/mailbox/cards/batch`), else 1. */
+    @Json(name = "max_recipients") val maxRecipients: Int = 1,
 )
 
 /** The digital stamps left, with `GET /api/mailbox/cards` while postage is on (the Mailbox row's line). */
@@ -152,6 +154,82 @@ data class HolidayCardRecipient(
     val email: String? = null,
     /** By a link: the first person to open it keeps the card (launch key `card_table`). */
     val link: Boolean? = null,
+)
+
+/**
+ * `POST /api/mailbox/cards/batch` (and its look) body: one card to a list of people and addresses (digital stamps on),
+ * each its own card under its own request ID, kept for every look and retry of the list. One choice of arrival: an
+ * address reads the morning mail as right away and Christmas morning as sealed until Christmas.
+ */
+@JsonClass(generateAdapter = true)
+data class SendHolidayCardListBody(
+    val design: String,
+    val message: String,
+    val arrival: String,
+    val recipients: List<HolidayCardListRecipient>,
+    @Json(name = "use_stamp") val useStamp: Boolean = true,
+)
+
+/** A person or an address on a list, and its card's request ID. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardListRecipient(
+    val to: HolidayCardRecipient,
+    @Json(name = "request_id") val requestId: String,
+)
+
+/** One card on a list's look: `ready` (and when it comes), `already_sent` (by an earlier try), or `refused` (and why). */
+@JsonClass(generateAdapter = true)
+data class HolidayCardListLine(
+    @Json(name = "request_id") val requestId: String,
+    val status: String,
+    @Json(name = "to_name") val toName: String? = null,
+    @Json(name = "by_email") val byEmail: Boolean = false,
+    val arrival: String? = null,
+    /** The day it goes into their mailbox by their clock (`YYYY-MM-DD`). */
+    @Json(name = "arrives_on") val arrivesOn: String? = null,
+    val card: SentHolidayCard? = null,
+    val error: String? = null,
+    val code: String? = null,
+)
+
+/**
+ * `POST /api/mailbox/cards/batch/preview` → 200: the first card that can go as its person will see it (the fields of
+ * [HolidayCardPreview]; none when nobody can get it), every card's line, the stamps left and the stamps the ready cards
+ * take.
+ */
+@JsonClass(generateAdapter = true)
+data class HolidayCardListPreview(
+    val piece: HolidayCardPreviewPiece? = null,
+    @Json(name = "arrives_on") val arrivesOn: String? = null,
+    @Json(name = "opens_on") val opensOn: String? = null,
+    @Json(name = "sealed_days") val sealedDays: Int? = null,
+    @Json(name = "take_back_until") val takeBackUntil: String? = null,
+    val email: HolidayCardPreviewEmail? = null,
+    @Json(name = "link_page") val linkPage: HolidayCardPreviewLinkPage? = null,
+    val recipients: List<HolidayCardListLine> = emptyList(),
+    val stamps: HolidayCardStamps? = null,
+    val needed: Int = 0,
+) {
+    /** The first card that can go, as Look it over shows one card. */
+    val look: HolidayCardPreview?
+        get() = piece?.let { HolidayCardPreview(it, arrivesOn, opensOn, sealedDays, takeBackUntil, email, linkPage) }
+}
+
+/** One card in a list's answer: `sent`, `already_sent` (an earlier try), or `not_sent` (and why; it used no stamp). */
+@JsonClass(generateAdapter = true)
+data class HolidayCardListResult(
+    @Json(name = "request_id") val requestId: String,
+    val status: String,
+    val card: SentHolidayCard? = null,
+    val error: String? = null,
+    val code: String? = null,
+)
+
+/** `POST /api/mailbox/cards/batch` → 200 (402 `STAMPS_REQUIRED` with `needed` and `available` when too few stamps). */
+@JsonClass(generateAdapter = true)
+data class SendHolidayCardListResponse(
+    val results: List<HolidayCardListResult> = emptyList(),
+    val stamps: HolidayCardStamps? = null,
 )
 
 @JsonClass(generateAdapter = true)
