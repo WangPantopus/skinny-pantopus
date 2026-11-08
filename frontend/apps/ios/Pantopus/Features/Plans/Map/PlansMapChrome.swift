@@ -28,18 +28,28 @@ struct PlansMapTopBar: View {
             if viewModel.selectedId != nil, !inColumn {
                 selectedBar
             } else if viewModel.phase == .ready {
+                // ☰ first and the chat button last (founder decision 2026-11-08).
                 HStack(spacing: Spacing.s2) {
-                    areaPill
-                    if !viewModel.isEmpty, !inColumn { PlansLocateButton(viewModel: viewModel) }
-                    if let onAsk { askButton(onAsk) }
                     menuButton
+                    areaPill
+                    if let onAsk { askButton(onAsk) }
+                    chatButton
                 }
                 if !viewModel.isEmpty { chipRow }
+                // Show my location moves under the chat button, so the area
+                // pill keeps its room.
+                if !viewModel.isEmpty, !inColumn {
+                    HStack {
+                        Spacer(minLength: 0)
+                        PlansLocateButton(viewModel: viewModel)
+                    }
+                }
             } else {
-                // Still loading, or failed: the side menu keeps its place.
+                // Still loading, or failed: the side menu and the chat button keep their places.
                 HStack {
-                    Spacer(minLength: 0)
                     menuButton
+                    Spacer(minLength: 0)
+                    chatButton
                 }
             }
         }
@@ -87,6 +97,11 @@ struct PlansMapTopBar: View {
     /// The side menu, on every tab (founder decision 2026-10-20).
     private var menuButton: some View {
         NavigationMenuButton(accessibilityIdentifier: "plans.menu", floating: true)
+    }
+
+    /// The chat button, on every tab but Mail (founder decision 2026-11-08).
+    private var chatButton: some View {
+        MessagesButton(accessibilityIdentifier: "plans.chat", floating: true)
     }
 
     private func askButton(_ action: @escaping @MainActor () -> Void) -> some View {

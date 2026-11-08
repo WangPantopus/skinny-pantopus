@@ -40,6 +40,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -63,6 +64,8 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.MessagesButton
+import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.RefreshOnStoreChange
@@ -194,10 +197,12 @@ fun PlaceDashboardScreen(
         },
         modifier = modifier.fillMaxSize().background(PantopusColors.appBg),
     ) {
-        // Before the dashboard loads there is nothing to go back to at the tab's root: the bell and menu stay reachable.
-        val headerActions: @Composable () -> Unit = { PlaceBellAndMenu(unreadCount, onOpenNotifications, onOpenMenu) }
+        // Before the dashboard loads there is nothing to go back to at the tab's root: the menu, bell and chat button
+        // stay reachable.
+        val headerActions: @Composable () -> Unit = { PlaceBellAndChat(unreadCount, onOpenNotifications) }
+        val headerLeading: @Composable () -> Unit = { NavigationMenuButton(onClick = onOpenMenu, testTag = "place.menu") }
         when (val current = state) {
-            PlaceDashboardUiState.Loading -> PlaceDashboardSkeleton(headerActions = headerActions)
+            PlaceDashboardUiState.Loading -> PlaceDashboardSkeleton(headerActions = headerActions, headerLeading = headerLeading)
             is PlaceDashboardUiState.Error ->
                 Column(modifier = Modifier.fillMaxSize()) {
                     PlaceRootBar(unreadCount, onOpenNotifications, onOpenMenu)
@@ -637,7 +642,8 @@ private fun PlaceNeighborsEntry(
 // MARK: - Header
 
 /**
- * Row one: "Your Place", where the person stands ([status]), then the bell and menu. Row two: the address. With
+ * Row one: the menu, "Your Place", where the person stands ([status]), then the bell and the chat button (founder
+ * decision 2026-11-08). Row two: the address. With
  * [onOpenSwitcher] the address is the way to the person's homes (switch, add or manage them), with the whole width to
  * itself so it truncates less; without it (a saved address) the address is a plain line.
  */
@@ -655,25 +661,9 @@ internal fun PlaceDashboardHeader(
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Your Place",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.56).sp,
-                    lineHeight = 32.sp,
-                    color = PantopusColors.appText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false).semantics { heading() },
-                )
-                status?.let { Box(modifier = Modifier.testTag("place.status")) { PlaceChip(it) } }
-            }
-            PlaceBellAndMenu(unreadCount, onOpenNotifications, onOpenMenu, onAsk)
+            NavigationMenuButton(onClick = onOpenMenu, testTag = "place.menu", modifier = Modifier.offset(x = (-12).dp))
+            PlaceTitleAndStatus(status = status, modifier = Modifier.weight(1f).offset(x = (-8).dp))
+            PlaceBellAndChat(unreadCount, onOpenNotifications, onAsk)
         }
         if (onOpenSwitcher != null) {
             PlaceAddressSwitcher(label = label, onClick = onOpenSwitcher)
@@ -763,12 +753,59 @@ private fun PlaceAddressSwitcher(
     }
 }
 
-/** The bell (with the unread dot) and the menu, as every Place-tab root shows them; on a Home, Ask Pantopus first. */
+/**
+ * "Your Place" and where the person stands ([status]). With the menu on the row (founder decision 2026-11-08) a phone
+ * may lack room for both whole: the chip shows its icon alone rather than cutting the title, as on iPhone.
+ */
 @Composable
-internal fun PlaceBellAndMenu(
+private fun PlaceTitleAndStatus(
+    status: PlaceChipModel?,
+    modifier: Modifier = Modifier,
+) {
+    Layout(
+        content = {
+            Text(
+                text = "Your Place",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.56).sp,
+                lineHeight = 32.sp,
+                color = PantopusColors.appText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() },
+            )
+            status?.let {
+                Box(modifier = Modifier.testTag("place.status")) { PlaceChip(it) }
+                Box(modifier = Modifier.testTag("place.status")) { PlaceChip(it, iconOnly = true) }
+            }
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val gap = Spacing.s2.roundToPx()
+        val loose = constraints.copy(minWidth = 0)
+        val titleWidth = measurables[0].maxIntrinsicWidth(constraints.maxHeight)
+        val full = measurables.getOrNull(1)?.measure(loose)
+        val chip = if (full == null || titleWidth + gap + full.width <= constraints.maxWidth) full else measurables[2].measure(loose)
+        val chipSpace = chip?.let { it.width + gap } ?: 0
+        val title = measurables[0].measure(loose.copy(maxWidth = (constraints.maxWidth - chipSpace).coerceAtLeast(0)))
+        val height = maxOf(title.height, chip?.height ?: 0)
+        // At least the width the row hands over, so the pair starts at its leading edge rather than centered in it.
+        layout((title.width + chipSpace).coerceAtLeast(constraints.minWidth), height) {
+            title.placeRelative(0, (height - title.height) / 2)
+            chip?.placeRelative(title.width + gap, (height - chip.height) / 2)
+        }
+    }
+}
+
+/**
+ * The bell (with the unread dot) and the chat button, as every Place-tab root shows them at the top right (founder
+ * decision 2026-11-08; the menu moved to the top left); on a Home, Ask Pantopus first.
+ */
+@Composable
+internal fun PlaceBellAndChat(
     unreadCount: Int,
     onOpenNotifications: () -> Unit,
-    onOpenMenu: () -> Unit,
     onAsk: (() -> Unit)? = null,
 ) {
     Row {
@@ -811,14 +848,7 @@ internal fun PlaceBellAndMenu(
                 }
             }
         }
-        IconButton(onClick = onOpenMenu, modifier = Modifier.size(Spacing.s12).testTag("place.menu")) {
-            PantopusIconImage(
-                icon = PantopusIcon.Menu,
-                contentDescription = "Menu",
-                size = Spacing.s5,
-                tint = PantopusColors.appText,
-            )
-        }
+        MessagesButton(testTag = "place.chat")
     }
 }
 
@@ -831,10 +861,12 @@ internal fun PlaceRootBar(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.End,
+        modifier = modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        PlaceBellAndMenu(unreadCount, onOpenNotifications, onOpenMenu)
+        NavigationMenuButton(onClick = onOpenMenu, testTag = "place.menu")
+        Spacer(modifier = Modifier.weight(1f))
+        PlaceBellAndChat(unreadCount, onOpenNotifications)
     }
 }
 
@@ -924,11 +956,18 @@ internal fun FullWidthShimmer(
     }
 }
 
-/** The dashboard's loading geometry; [headerActions] (the bell and menu) sit where the loaded header puts them. */
+/**
+ * The dashboard's loading geometry; [headerLeading] (the menu) and [headerActions] (the bell and chat button) sit where
+ * the loaded header puts them.
+ */
 @Composable
-internal fun PlaceDashboardSkeleton(headerActions: (@Composable () -> Unit)? = null) {
+internal fun PlaceDashboardSkeleton(
+    headerActions: (@Composable () -> Unit)? = null,
+    headerLeading: (@Composable () -> Unit)? = null,
+) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.Top) {
+            headerLeading?.let { leading -> Box(modifier = Modifier.padding(top = 8.dp).offset(x = (-12).dp)) { leading() } }
             Column(
                 modifier = Modifier.weight(1f).padding(horizontal = 2.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),

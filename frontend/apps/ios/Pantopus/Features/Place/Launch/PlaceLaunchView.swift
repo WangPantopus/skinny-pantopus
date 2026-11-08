@@ -165,9 +165,9 @@ struct PlaceLaunchView: View {
     private var hero: some View {
         VStack(spacing: 0) {
             if let embedded {
+                // ☰ at the top left, the bell and the chat button at the top
+                // right (founder decision 2026-11-08).
                 HStack(spacing: 0) {
-                    Spacer()
-                    PlaceBellButton(unreadCount: embedded.unreadCount, action: embedded.onOpenNotifications)
                     Button(action: embedded.onOpenMenu) {
                         Icon(.menu, size: 20, color: Theme.Color.appText)
                             .frame(width: Spacing.s12, height: Spacing.s12)
@@ -176,8 +176,11 @@ struct PlaceLaunchView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Menu")
                     .accessibilityIdentifier("place.menu")
+                    Spacer()
+                    PlaceBellButton(unreadCount: embedded.unreadCount, action: embedded.onOpenNotifications)
+                    MessagesButton(accessibilityIdentifier: "place.chat")
                 }
-                .padding(.horizontal, Spacing.s3)
+                .padding(.horizontal, Spacing.s1)
             } else {
                 HStack(spacing: 10) {
                     brandLockup

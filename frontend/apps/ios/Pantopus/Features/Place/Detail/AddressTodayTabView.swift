@@ -81,15 +81,17 @@ struct AddressTodayTabView: View {
         return true
     }
 
-    /// The title, date and address, with the side menu at the end (every tab
-    /// has it, founder decision 2026-10-20).
+    /// The side menu first, then the title, date and address, and the chat
+    /// button at the end (founder decisions 2026-10-20 and 2026-11-08).
     private var header: some View {
-        HStack(alignment: .top, spacing: Spacing.s2) {
-            titleBlock
+        HStack(alignment: .top, spacing: Spacing.s1) {
             NavigationMenuButton(accessibilityIdentifier: "today.menu")
                 .padding(.top, -Spacing.s2)
+            titleBlock
+            MessagesButton(accessibilityIdentifier: "today.chat")
+                .padding(.top, -Spacing.s2)
         }
-        .padding(.leading, 18)
+        .padding(.leading, Spacing.s1)
         .padding(.trailing, Spacing.s2)
         .padding(.vertical, 10)
     }

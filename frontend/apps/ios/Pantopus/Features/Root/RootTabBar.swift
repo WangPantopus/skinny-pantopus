@@ -440,7 +440,7 @@ private struct RootTabBarItem: View {
     }
 }
 
-private struct RootTabBadge: View {
+struct RootTabBadge: View {
     let count: Int
     /// The flat bar's ring in the bar's color; the glass bar's badges have none.
     let ring: Bool

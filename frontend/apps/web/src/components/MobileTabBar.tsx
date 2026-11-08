@@ -1,11 +1,12 @@
 'use client';
 
 // MobileTabBar — the app's tabs as a bottom bar on phone-width web:
-// Place · Today · Pulse · Messages, and Mail before Messages while the
-// Mailbox is on. Native gets these tabs on day one; on mobile web they used
-// to hide behind the hamburger, which made the app read as a single long
-// page. Desktop keeps the sidebar (AppShell). No Plans tab: Plans on the web
-// comes later (founder, 2026-10-27).
+// Place · Today · Pulse, and Mail while the Mailbox is on. Messages left the
+// bar (founder decision 2026-11-08, as on iPhone and Android): the chat button
+// at the top right of the top bar opens it, with the unread count. Native gets
+// these tabs on day one; on mobile web they used to hide behind the hamburger,
+// which made the app read as a single long page. Desktop keeps the sidebar
+// (AppShell). No Plans tab: Plans on the web comes later (founder, 2026-10-27).
 
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -14,7 +15,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { afterInboxRows } from '@/lib/shellReads';
 
 type Tab = {
-  key: 'place' | 'today' | 'nearby' | 'mail' | 'messages';
+  key: 'place' | 'today' | 'nearby' | 'mail';
   label: string;
   href: string;
   icon: typeof NavIcons.place;
@@ -30,16 +31,15 @@ export const MOBILE_TABS: Tab[] = [
   // The Pulse tab, named Nearby until the founder's November 7 decision (its key stays): the feed under its List | Map
   // switch. Connections is in the menu.
   { key: 'nearby', label: 'Pulse', href: '/app/feed', icon: NavIcons.pulse, matches: (p) => starts(p, '/app/feed', '/app/beacons', '/app/gigs', '/app/marketplace') },
-  // Launch cut #10 (Mailbox): Mail is its own tab beside Messages (founder,
-  // 2026-10-26). It opens the Me drawer.
+  // Launch cut #10 (Mailbox): Mail is its own tab (founder, 2026-10-26). It
+  // opens the Me drawer.
   ...(launchFeatures.mailbox
     ? [{ key: 'mail' as const, label: 'Mail', href: '/app/mailbox/personal', icon: NavIcons.mail, matches: (p: string) => starts(p, '/app/mailbox') }]
     : []),
-  { key: 'messages', label: 'Messages', href: '/app/chat', icon: NavIcons.messages, matches: (p) => starts(p, '/app/chat') },
 ];
 
-// With the Mailbox on, both badges are the drawings' red count (Mail tab
-// design, 2026-10-27); with it off, the bar stays exactly as it was.
+// With the Mailbox on, Mail's badge is the drawings' red count (Mail tab
+// design, 2026-10-27).
 const BADGE_CLASS = launchFeatures.mailbox
   ? 'absolute left-1/2 top-0.5 ml-1 min-w-[18px] rounded-full border-2 border-app-surface bg-red-700 px-1 text-center text-[10px] font-bold leading-[14px] text-white'
   : 'absolute right-[calc(50%-18px)] top-1 min-w-[16px] rounded-full bg-primary-600 px-1 text-center text-[10px] font-bold leading-4 text-white';
@@ -50,19 +50,20 @@ export function activeMobileTab(pathname: string): Tab['key'] | null {
 
 // A conversation has the whole window on a phone (founder, 2026-11-06), a
 // person's, a group's or the assistant's: leaving it brings the bar back on the
-// screen underneath. The Messages list keeps the bar.
+// screen underneath. The Messages list keeps the bar, with no tab lit.
 export function hidesMobileTabs(pathname: string): boolean {
   return pathname.startsWith('/app/chat/');
 }
 
-export default function MobileTabBar({ unreadMail = 0, unreadMessages = 0 }: { unreadMail?: number; unreadMessages?: number }) {
+export default function MobileTabBar({ unreadMail = 0 }: { unreadMail?: number }) {
   const pathname = usePathname() ?? '';
   const router = useRouter();
   const active = activeMobileTab(pathname);
 
   // The sidebar prefetches each tab on hover; phones have no hover, so
   // warm every tab once instead of giving the slowest connections the
-  // coldest navigation. A cold Messages inbox paints its rows first (lib/shellReads.ts).
+  // coldest navigation. A cold Messages inbox paints its rows first (lib/shellReads.ts), and AppShell
+  // prefetches Messages for the top bar's chat button.
   useEffect(() => afterInboxRows(() => {
     MOBILE_TABS.forEach((tab) => router.prefetch(tab.href));
   }), [router]);
@@ -77,9 +78,9 @@ export default function MobileTabBar({ unreadMail = 0, unreadMessages = 0 }: { u
         {MOBILE_TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = active === tab.key;
-          // Mail counts unopened mail; Messages counts unread chats.
-          const count = tab.key === 'mail' ? unreadMail : tab.key === 'messages' ? unreadMessages : 0;
-          const countLabel = count > 0 ? `${tab.label}, ${count} ${tab.key === 'mail' ? 'unopened' : 'unread'}` : undefined;
+          // Mail counts unopened mail; unread chats show on the top bar's chat button.
+          const count = tab.key === 'mail' ? unreadMail : 0;
+          const countLabel = count > 0 ? `${tab.label}, ${count} unopened` : undefined;
           return (
             <li key={tab.key} className="min-w-0">
               <button

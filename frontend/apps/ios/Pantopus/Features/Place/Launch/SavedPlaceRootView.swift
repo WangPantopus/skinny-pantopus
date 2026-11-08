@@ -130,8 +130,18 @@ struct SavedPlaceRootView: View {
 
     private static let topAnchor = "place.savedRoot.top"
 
+    /// ☰ first, then the title and address, and the bell and chat button at
+    /// the end (founder decision 2026-11-08).
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 4) {
+            Button(action: onOpenMenu) {
+                Icon(.menu, size: 20, color: Theme.Color.appText)
+                    .frame(width: Spacing.s12, height: Spacing.s12)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Menu")
+            .accessibilityIdentifier("place.menu")
             VStack(alignment: .leading, spacing: 5) {
                 Text("Your Place")
                     .font(.system(size: 28, weight: .bold))
@@ -149,14 +159,7 @@ struct SavedPlaceRootView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 0) {
                 PlaceBellButton(unreadCount: unreadCount, action: onOpenNotifications)
-                Button(action: onOpenMenu) {
-                    Icon(.menu, size: 20, color: Theme.Color.appText)
-                        .frame(width: Spacing.s12, height: Spacing.s12)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Menu")
-                .accessibilityIdentifier("place.menu")
+                MessagesButton(accessibilityIdentifier: "place.chat")
             }
         }
         .padding(.horizontal, 2)

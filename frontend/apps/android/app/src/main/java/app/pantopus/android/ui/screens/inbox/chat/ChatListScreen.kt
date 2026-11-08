@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
-import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.root.PullToRefreshUnderHeader
@@ -70,8 +69,12 @@ fun ChatListScreen(
     onOpenConversation: (ConversationRowContent) -> Unit = {},
     onCompose: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
-    /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
-    onOpenMenu: (() -> Unit)? = null,
+    /**
+     * Back to the tab Messages was opened from, by the chat button (founder decision 2026-11-08); null hides it.
+     * [backLabel] names that tab beside the arrow.
+     */
+    onBack: (() -> Unit)? = null,
+    backLabel: String = "",
     viewModel: ChatListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -101,7 +104,7 @@ fun ChatListScreen(
     ScrollAwayHeaderLayout(
         header = {
             Column {
-                TopBar(onCompose = onCompose, onOpenMenu = onOpenMenu)
+                TopBar(onCompose = onCompose, onBack = onBack, backLabel = backLabel)
                 SearchBar(skeleton = state is ChatListUiState.Loading, onTap = onOpenSearch)
                 FilterTabs(
                     active = activeFilter,
@@ -156,42 +159,67 @@ fun ChatListScreen(
 @Composable
 private fun TopBar(
     onCompose: () -> Unit,
-    onOpenMenu: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
+    backLabel: String = "",
 ) {
-    Row(
+    Box(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(PantopusColors.appSurface)
-                // The menu button's 48 dp keep the bar's height with less padding above it.
-                .padding(start = Spacing.s4, end = Spacing.s2, top = if (onOpenMenu != null) Spacing.s1 else 10.dp, bottom = Spacing.s1),
-        verticalAlignment = Alignment.CenterVertically,
+                // The Back button's 48 dp keep the bar's height with less padding above it.
+                .padding(start = Spacing.s1, end = Spacing.s3, top = if (onBack != null) Spacing.s1 else 10.dp, bottom = Spacing.s1),
     ) {
         Text(
-            // This list is the Messages tab (Mail while Mailbox is off), so it carries the tab's name.
+            // Messages opens from the chat button at the top right of every tab but Mail (founder decision 2026-11-08).
             text = "Messages",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appText,
-            modifier = Modifier.weight(1f).semantics { heading() },
+            modifier = Modifier.align(Alignment.Center).semantics { heading() },
         )
-        Box(
-            modifier =
-                Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onCompose)
-                    .testTag("chatListComposeButton"),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.fillMaxWidth().align(Alignment.Center),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Edit2,
-                contentDescription = "New message",
-                size = Radii.xl2,
-                tint = PantopusColors.appText,
-            )
+            onBack?.let { back ->
+                Row(
+                    modifier =
+                        Modifier
+                            .heightIn(min = Spacing.s12)
+                            .clip(RoundedCornerShape(Radii.md))
+                            .clickable(onClickLabel = "Back to $backLabel", onClick = back)
+                            .padding(end = Spacing.s2)
+                            .testTag("messages.back"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.ChevronLeft,
+                        contentDescription = null,
+                        size = Spacing.s6,
+                        tint = PantopusColors.primary600,
+                    )
+                    Text(text = backLabel, fontSize = 16.sp, color = PantopusColors.primary600, maxLines = 1)
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Box(
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onCompose)
+                        .testTag("chatListComposeButton"),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Edit2,
+                    contentDescription = "New message",
+                    size = Radii.xl2,
+                    tint = PantopusColors.appText,
+                )
+            }
         }
-        onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "messages.menu") }
     }
 }
 

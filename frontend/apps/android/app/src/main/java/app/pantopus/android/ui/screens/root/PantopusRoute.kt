@@ -69,20 +69,22 @@ sealed class PantopusRoute(
     /** Local marketplace — buy, sell, and rent nearby. */
     data object Marketplace : PantopusRoute(path = "root/marketplace", label = "Marketplace", icon = PantopusIcon.ShoppingBag)
 
-    /** Direct messages and group chats: its own tab after Mail while Mailbox is on. */
+    /** Direct messages and group chats: off the bar, opened by the chat button while Mailbox is on (2026-11-08). */
     data object Messages : PantopusRoute(path = "root/messages", label = "Messages", icon = PantopusIcon.MessageCircle)
 
     companion object {
         /**
          * Bottom-bar destinations in display order, with every tab the app can show: Place · Today · Pulse · Plans ·
          * Mail with the Pulse redesign on, and Place · Today · Nearby · Plans · Mail while it is off (launch cut 11;
-         * the October 13 bar with Plans added, 2026-10-17). With Mailbox on, Messages follows Mail as a sixth tab (the
-         * Mail tab, 2026-10-27). Plans shows only while its switch is on: read [barTabs] for what the bar draws.
+         * the October 13 bar with Plans added, 2026-10-17). Messages isn't on the bar (founder decision 2026-11-08):
+         * the chat button at the top right of every tab but Mail opens it. With Mailbox off, Mail is the conversation
+         * list itself, so it leaves the bar too. Plans shows only while its switch is on: read [barTabs] for what the
+         * bar draws.
          */
         val entries: List<PantopusRoute>
             get() {
                 val tabs = if (LaunchFeatures.pulseRedesign) redesignTabs else launchTabs
-                return if (LaunchFeatures.mailbox) tabs + Messages else tabs
+                return if (LaunchFeatures.mailbox) tabs else tabs - Mail
             }
 
         /*
@@ -106,8 +108,8 @@ sealed class PantopusRoute(
                 return tabs + offBar.filterNot { it in tabs }
             }
 
-        private val redesignOffBar: List<PantopusRoute> by lazy { listOf(Nearby, Tasks, Marketplace, Messages) }
-        private val launchOffBar: List<PantopusRoute> by lazy { listOf(Pulse, Tasks, Marketplace, Messages) }
+        private val redesignOffBar: List<PantopusRoute> by lazy { listOf(Nearby, Tasks, Marketplace, Messages, Mail) }
+        private val launchOffBar: List<PantopusRoute> by lazy { listOf(Pulse, Tasks, Marketplace, Messages, Mail) }
 
         /** Lookup a route by its `path`. Returns null for unknown paths. */
         fun fromPath(path: String?): PantopusRoute? = all.firstOrNull { it.path == path }

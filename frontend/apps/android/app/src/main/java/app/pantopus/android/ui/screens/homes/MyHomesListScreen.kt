@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.ui.components.MessagesButton
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalDialog
 import app.pantopus.android.ui.screens.homes.members.HomeMemberRemovalTarget
@@ -165,11 +166,9 @@ fun MyHomesListScreen(
                         }
                     }
                 }
-                onOpenMenu?.let { open ->
-                    IconButton(onClick = open, modifier = Modifier.testTag("place.menu")) {
-                        PantopusIconImage(icon = PantopusIcon.Menu, contentDescription = "Menu")
-                    }
-                }
+                // The menu sits at the top left (ListOfRows' navigation icon) and the chat button here at the end
+                // (founder decision 2026-11-08).
+                if (onOpenMenu != null) MessagesButton(testTag = "place.chat")
             },
             // One add control: with no rows, the empty state's button is the add action.
             fab =
@@ -184,6 +183,8 @@ fun MyHomesListScreen(
             banner = banner,
             refreshing = refreshing,
             refreshNotice = refreshNotice,
+            onOpenMenu = onOpenMenu,
+            menuTestTag = "place.menu",
         )
     }
 

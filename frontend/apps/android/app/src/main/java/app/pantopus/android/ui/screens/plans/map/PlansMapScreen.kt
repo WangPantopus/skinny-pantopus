@@ -65,6 +65,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -83,6 +84,8 @@ import app.pantopus.android.data.plans.PlanViewerStanding
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
 import app.pantopus.android.data.plans.standing
+import app.pantopus.android.ui.components.MessagesButton
+import app.pantopus.android.ui.components.MessagesEntryHolder
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.screens.plans.PlansGateViewModel
@@ -659,10 +662,26 @@ private fun PlansTopChrome(
     onAskPantopus: (() -> Unit)? = null,
     onOpenMenu: (() -> Unit)? = null,
 ) {
-    // The side menu keeps its place at the end of the top row in every state (founder decision 2026-10-20).
+    // The side menu keeps its place in every state (founder decision 2026-10-20): first in the top row, with the chat
+    // button last (founder decision 2026-11-08).
     val menu: @Composable () -> Unit = {
         onOpenMenu?.let {
             GlassCircleButton(icon = PantopusIcon.Menu, label = "Menu", onClick = it, modifier = Modifier.testTag("plans.menu"))
+        }
+    }
+    val chat: @Composable () -> Unit = {
+        if (onOpenMenu != null && MessagesEntryHolder.current != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .pantopusShadow(PantopusElevations.md, CircleShape)
+                        .clip(CircleShape)
+                        .background(planGlass),
+                contentAlignment = Alignment.Center,
+            ) {
+                MessagesButton(testTag = "plans.chat")
+            }
         }
     }
     Column(
@@ -696,14 +715,15 @@ private fun PlansTopChrome(
         }
         if (state.locationStatus == PlansLocationStatus.Missing) {
             Row {
-                Spacer(modifier = Modifier.weight(1f))
                 menu()
+                Spacer(modifier = Modifier.weight(1f))
+                chat()
             }
             return@Column
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            menu()
             AreaPill(state = state, onWindow = onWindow, onLocate = onLocate, onUseHome = onUseHome, modifier = Modifier.weight(1f))
-            if (!state.isEmpty) GlassCircleButton(icon = PantopusIcon.Navigation, label = "Show my location", onClick = onLocate)
             onAskPantopus?.let {
                 GlassCircleButton(
                     icon = PantopusIcon.Sparkles,
@@ -713,9 +733,16 @@ private fun PlansTopChrome(
                     iconTint = PantopusColors.magic,
                 )
             }
-            menu()
+            chat()
         }
         if (!state.isEmpty || state.kind != null) KindChips(state = state, onKind = onKind)
+        // Show my location sits under the chat button, so the area pill keeps its room.
+        if (!state.isEmpty) {
+            Row {
+                Spacer(modifier = Modifier.weight(1f))
+                GlassCircleButton(icon = PantopusIcon.Navigation, label = "Show my location", onClick = onLocate)
+            }
+        }
     }
 }
 
@@ -760,6 +787,10 @@ private fun AreaPill(
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
                 maxLines = 1,
+                // With the menu and the chat button on the row (founder decision 2026-11-08) the pill can run out of
+                // room: it ends in "…", as on iPhone, rather than dropping the window's last word.
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             PantopusIconImage(icon = PantopusIcon.ChevronDown, contentDescription = null, size = 16.dp, tint = PantopusColors.appText)
