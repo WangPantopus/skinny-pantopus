@@ -87,6 +87,7 @@ import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.HolidayCardCollection
 import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
+import app.pantopus.android.data.api.models.mailbox.StampBalance
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.mailbox.components.MailKind
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
@@ -808,9 +809,13 @@ internal fun SealStep(
     onArrival: (String) -> Unit,
     onLook: () -> Unit,
     onSend: () -> Unit,
+    /** Digital stamps left (postage on, once read): when the look can't be shown, this step says what it costs. */
+    stamps: StampBalance? = null,
+    onGetStamps: () -> Unit = {},
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
     val options = if (to is CardRecipient.Person) (form.theirs?.arrivals ?: cards.arrivals.person) else cards.arrivals.email
+    val needsStamps = form.lookUnavailable && stamps?.available == 0
     Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3)) {
         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s2).rotate(1f)) {
             MailPiece(envelopePreview(design, fromName, to, sealed = form.arrival == "sealed_christmas"))
@@ -851,15 +856,22 @@ internal fun SealStep(
             },
             modifier = Modifier.padding(top = 14.dp),
         )
+        if (form.lookUnavailable) StampPostageLine(stamps, design = design.id, modifier = Modifier.padding(top = Spacing.s3))
         CardButton(
             when {
+                needsStamps -> "Get stamps to send"
                 !form.lookUnavailable -> "Look it over"
                 to is CardRecipient.Link -> "Seal it and get the link"
                 else -> "Seal and send"
             },
-            onClick = if (form.lookUnavailable) onSend else onLook,
+            onClick =
+                when {
+                    needsStamps -> onGetStamps
+                    form.lookUnavailable -> onSend
+                    else -> onLook
+                },
             enabled = form.arrival != null,
-            busy = form.previewing || form.sending,
+            busy = !needsStamps && (form.previewing || form.sending),
             modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardSend"),
         )
     }

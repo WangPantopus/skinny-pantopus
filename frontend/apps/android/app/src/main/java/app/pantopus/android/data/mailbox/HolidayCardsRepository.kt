@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
+import app.pantopus.android.data.api.models.mailbox.HolidayCardStamps
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SentCard
@@ -223,6 +224,11 @@ class HolidayCardsRepository
 
             fun announceMovedOn(cardId: String) {
                 movedOnFlow.tryEmit(cardId)
+            }
+
+            /** The digital stamps as a balance read just found them (a card sent, taken back, or a book bought): the row's line. */
+            fun noteStamps(stamps: HolidayCardStamps) {
+                latestFlow.update { cards -> if (cards?.postageEnabled == true) cards.copy(stamps = stamps) else cards }
             }
 
             private val sentReadFlow = MutableSharedFlow<SentCard>(extraBufferCapacity = 8)

@@ -26,9 +26,16 @@ import retrofit2.http.Query
  */
 @Suppress("TooManyFunctions")
 interface HolidayCardsApi {
+    /**
+     * `GET /api/mailbox/stamp-books?history=` — route `backend/routes/mailStamps.js:29`: the digital stamps left and the
+     * books; with `history=1` also the latest stamp moves and the stamps used.
+     */
     @GET("api/mailbox/stamp-books")
-    suspend fun stampBooks(): StampBalance
+    suspend fun stampBooks(
+        @Query("history") history: String? = null,
+    ): StampBalance
 
+    /** `POST /api/mailbox/stamp-books/confirm` — route `backend/routes/mailStamps.js:68`: credits a Google Play purchase. */
     @POST("api/mailbox/stamp-books/confirm")
     suspend fun confirmStamps(
         @Body body: StampConfirmation,

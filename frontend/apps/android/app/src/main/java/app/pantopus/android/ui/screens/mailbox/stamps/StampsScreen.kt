@@ -33,6 +33,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -41,6 +44,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -51,14 +55,19 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.api.models.mailbox.StampBalance
+import app.pantopus.android.data.api.models.mailbox.StampMove
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.PerforatedStamp
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.mailbox.cards.MailStampBooksViewModel
+import app.pantopus.android.ui.screens.mailbox.cards.StampBooksSheet
 import app.pantopus.android.ui.screens.mailbox.stamps.components.StampBookHero
 import app.pantopus.android.ui.screens.mailbox.stamps.components.StampSheet
 import app.pantopus.android.ui.screens.mailbox.stamps.components.UsageHistoryCard
@@ -72,13 +81,18 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTheme
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlin.math.abs
 
 /**
- * A17.11 — Stamps (postage wallet). A standalone mailbox screen reusing
- * the A17 archetype chrome: a top nav with a teal category dot, a white
- * card stack (book hero · sheet · wallet rail · usage history · issuer),
- * the sky-gradient "Elf" AI strip, and a sticky "Buy more" dock. Mirrors
- * iOS `StampsView.swift` / `docs/designs/A17/stamps.jsx`.
+ * A17.11 — Stamps. A standalone mailbox screen reusing the A17 archetype chrome: a top nav with a teal category dot and
+ * the Stamps ⇄ Themes toggle. While digital stamps for Christmas cards are on for the person it shows the real wallet in
+ * the A17.11 wallet's parts (book hero · sheet · latest stamp moves · collection · "Buy a stamp book"); otherwise the
+ * live collection. The sample postage wallet ([StampsPopulatedFrame], [StampsEmptyFrame]) has no backend, so the screen
+ * never shows it. Mirrors iOS `StampsView.swift`.
  */
 @Composable
 fun StampsScreen(
@@ -108,6 +122,18 @@ fun StampsScreen(
             Analytics.track(AnalyticsEvent.ScreenStampsViewed(state.analyticsTag))
         }
     }
+    // Digital stamps for Christmas cards: the balance with its latest moves, read on open and on coming back (Google
+    // Play purchases are finished then).
+    val stamps: MailStampBooksViewModel? = if (LaunchFeatures.holidayCards && LaunchFeatures.mailbox) hiltViewModel() else null
+    var showsStampBooks by rememberSaveable { mutableStateOf(false) }
+    if (stamps != null) {
+        LifecycleResumeEffect(stamps) {
+            stamps.withHistory = true
+            stamps.refresh()
+            onPauseOrDispose { }
+        }
+    }
+    val wallet = stamps?.balance?.takeIf { it.enabled }
 
     Box(modifier = Modifier.fillMaxSize().testTag("stamps")) {
         Column(
@@ -134,10 +160,13 @@ fun StampsScreen(
                         onApply = { id -> viewModel.applyTheme(id) },
                         onRetry = { viewModel.fetchThemes() },
                     )
-                } else if (!LaunchFeatures.mailExtras) {
-                    // Launch cut #8 (Mail extras): the postage wallet (book, sheet, wallet rail, usage, issuer and the
-                    // "Buy more stamps" dock) only serves sending letters and has no backend: every figure is sample
-                    // data and "Buy" changes only local state. The first launch shows the live collection only.
+                } else if (wallet != null) {
+                    // Digital stamps are on: the real wallet (balance, the stamps used, their moves, stamp books).
+                    StampsRealWalletBody(balance = wallet, collection = collection, onBuy = { showsStampBooks = true })
+                } else {
+                    // The A17.11 sample postage wallet (book, sheet, wallet rail, usage, issuer and its dock) has no
+                    // backend: every figure in it is made up and "Buy" changes only local state, so the screen never
+                    // shows it. Without digital stamps it is the live collection.
                     when (val current = collection) {
                         is StampCollectionUiState.Error ->
                             StampsErrorBody(message = current.message, onRetry = { viewModel.fetchCollection() })
@@ -152,20 +181,6 @@ fun StampsScreen(
                             ) {
                                 StampCollectionSection(state = current)
                             }
-                    }
-                } else {
-                    when (val current = state) {
-                        is StampsUiState.Loading -> StampsLoadingBody()
-                        is StampsUiState.Loaded ->
-                            StampsPopulatedBody(
-                                content = current.content,
-                                collection = collection,
-                                onBuyMore = { viewModel.buyMore() },
-                            )
-                        is StampsUiState.Empty ->
-                            StampsEmptyBody(content = current.content, onBuy = { viewModel.purchaseStarterBook() })
-                        is StampsUiState.Error ->
-                            StampsErrorBody(message = current.message, onRetry = { viewModel.refresh() })
                     }
                 }
             }
@@ -187,6 +202,109 @@ fun StampsScreen(
             )
         }
     }
+    if (stamps != null && showsStampBooks) {
+        StampBooksSheet(
+            stamps,
+            onDismiss = {
+                showsStampBooks = false
+                stamps.refresh()
+            },
+        )
+    }
+}
+
+// MARK: - The real wallet (digital stamps on)
+
+/**
+ * Digital stamps for Christmas cards, in the A17.11 wallet's own parts: the book hero (stamps left of all the person has
+ * had), the sheet of them with the used ones postmarked, the latest stamp moves, the live collection, and one dock button
+ * that opens the stamp books. Nothing made up: no other denominations, tips, issuer or action chips.
+ */
+@Composable
+private fun StampsRealWalletBody(
+    balance: StampBalance,
+    collection: StampCollectionUiState,
+    onBuy: () -> Unit,
+) {
+    val used = balance.usedTotal ?: 0
+    val book =
+        StampBook(
+            series = "Christmas stamps",
+            total = balance.available + used,
+            used = used,
+            purchasedLabel = "the season began",
+            validityLabel = "Cards until Dec 31",
+        )
+    Column(modifier = Modifier.fillMaxSize().testTag("stampsWallet")) {
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Spacing.s4)
+                    .padding(top = Spacing.s3, bottom = Spacing.s4),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            StampBookHero(book = book)
+            // The sheet draws every stamp; past two dozen the hero's count says it better.
+            if (book.total in 1..24) StampSheet(book = book)
+            val moves = balance.history.orEmpty()
+            if (moves.isNotEmpty()) UsageHistoryCard(usage = moves.mapIndexed(::stampUsage), window = "Latest", onSeeAll = null)
+            StampCollectionSection(state = collection)
+        }
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(PantopusColors.appBg)
+                    .padding(horizontal = Spacing.s4, vertical = Spacing.s3),
+        ) {
+            Text(
+                text = if (balance.salesOpen) "Buy a stamp book" else "Your stamps",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = PantopusColors.cardWaxText,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Radii.lg))
+                        .background(PantopusColors.cardWax)
+                        .clickable(role = Role.Button, onClick = onBuy)
+                        .padding(vertical = 14.dp)
+                        .testTag("stampsBuyBook"),
+            )
+        }
+    }
+}
+
+/** One stamp move as a usage row: what happened, how many, and the day. Only kinds and counts; who a card went to stays in Sent. */
+private fun stampUsage(
+    index: Int,
+    move: StampMove,
+): StampUsage {
+    val count = abs(move.delta)
+    val (what, kind) =
+        when (move.kind) {
+            "welcome" -> "Your free cards" to "+$count free"
+            "purchase" -> "Stamp book" to "+$count stamps"
+            "send" -> "Christmas card sent" to "1 stamp"
+            "return" -> "Card came back" to "+1 stamp"
+            "revoke" -> "Book refunded" to "−$count stamps"
+            else -> "Stamps" to "${move.delta}"
+        }
+    val day =
+        runCatching { DateTimeFormatter.ofPattern("MMM d", Locale.US).withZone(ZoneId.systemDefault()).format(Instant.parse(move.at)) }
+            .getOrDefault("")
+    return StampUsage(
+        id = "$index-${move.at}",
+        recipient = what,
+        kind = kind,
+        dateLabel = day,
+        stampName = if (move.delta > 0) "Added" else "Used",
+        ink = if (move.delta > 0) StampInk.Local else StampInk.Express,
+    )
 }
 
 // MARK: - Mode header
@@ -775,28 +893,6 @@ private fun HowItWorks(
             Text(text = title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
             Text(text = body, fontSize = 11.5.sp, color = PantopusColors.appTextSecondary, lineHeight = 17.sp)
         }
-    }
-}
-
-// MARK: - Loading body
-
-@Composable
-private fun StampsLoadingBody() {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.s4)
-                .padding(top = Spacing.s3)
-                .testTag("stampsLoading"),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Shimmer(width = 160.dp, height = 22.dp, cornerRadius = Radii.pill)
-        Shimmer(width = 360.dp, height = 160.dp, cornerRadius = Radii.xl)
-        Shimmer(width = 360.dp, height = 120.dp, cornerRadius = Radii.xl)
-        Shimmer(width = 360.dp, height = 220.dp, cornerRadius = Radii.xl)
-        Shimmer(width = 360.dp, height = 150.dp, cornerRadius = Radii.xl)
     }
 }
 

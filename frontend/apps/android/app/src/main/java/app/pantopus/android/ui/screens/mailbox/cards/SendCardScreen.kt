@@ -48,10 +48,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
+import app.pantopus.android.data.api.models.mailbox.StampBalance
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardLinkBox
 import app.pantopus.android.ui.theme.PantopusColors
@@ -87,8 +89,32 @@ fun SendCardScreen(
     val page = SendCardPage.of(season, form)
     val scroll = rememberScrollState()
     LaunchedEffect(form.step) { scroll.scrollTo(0) }
+    // Digital stamps (postage on): the balance after each step, card and take-back, and on coming back (Google Play
+    // purchases are finished then). The stamp books open from the header's count, "Get stamps to send", or a card the
+    // server refused for a stamp.
+    val stamps: MailStampBooksViewModel? = if (season?.postageEnabled == true) hiltViewModel() else null
+    var showsStampBooks by rememberSaveable { mutableStateOf(false) }
+    val getStamps = { showsStampBooks = true }
+    if (stamps != null) {
+        LifecycleResumeEffect(stamps, form.step, form.sent?.id, form.tookBack) {
+            stamps.refresh()
+            onPauseOrDispose { }
+        }
+        LaunchedEffect(stamps) {
+            viewModel.stampsNeeded.collect {
+                showsStampBooks = true
+                stamps.refresh()
+            }
+        }
+    }
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.cardDesk).testTag("sendCard")) {
-        StepHeader(title = page.title(form), step = form.step.takeIf { page == SendCardPage.Steps }, onBack = back)
+        StepHeader(
+            title = page.title(form),
+            step = form.step.takeIf { page == SendCardPage.Steps },
+            onBack = back,
+            stamps = stamps?.balance,
+            onStamps = getStamps,
+        )
         Column(
             modifier =
                 Modifier
@@ -97,12 +123,6 @@ fun SendCardScreen(
                     .verticalScroll(scroll)
                     .padding(bottom = Spacing.s6),
         ) {
-            if (season?.postageEnabled == true) {
-                MailStampBooks(refreshKey = "${form.step}:${form.sent?.id}")
-                if (page == SendCardPage.Sent) {
-                    TextButton(onClick = viewModel::startAnotherCard) { Text("Send another card") }
-                }
-            }
             when (page) {
                 SendCardPage.Reading -> {
                     val failed = load as? SendCardLoad.Failed
@@ -131,6 +151,8 @@ fun SendCardScreen(
                             onClose = onClose,
                             onTakeBack = { confirmTakeBack = true },
                             onSeeInSent = onSeeInSent,
+                            stamps = stamps?.balance,
+                            onGetStamps = getStamps,
                         )
                     }
             }
@@ -141,9 +163,12 @@ fun SendCardScreen(
                 form = form,
                 onSend = viewModel::send,
                 byLink = form.to is CardRecipient.Link,
+                stamps = stamps?.balance,
+                onGetStamps = getStamps,
             )
         }
     }
+    if (stamps != null && showsStampBooks) StampBooksSheet(stamps, onDismiss = { showsStampBooks = false })
     if (confirmTakeBack) {
         TakeBackDialog(
             byEmail = (form.sent ?: season?.todaysCard)?.byEmail == true,
@@ -198,8 +223,11 @@ private fun Steps(
     onClose: () -> Unit,
     onTakeBack: () -> Unit,
     onSeeInSent: (String) -> Unit,
+    /** Digital stamps left (postage on, once read), for step 4 when it seals and sends itself. */
+    stamps: StampBalance?,
+    onGetStamps: () -> Unit,
 ) {
-    val backNote = form.backNote
+    val backNote = form.backNote(postage = cards.postageEnabled)
     if (backNote != null && form.step == SendCardStep.To) {
         DeskNote(
             backNote,
@@ -236,6 +264,8 @@ private fun Steps(
                     onArrival = viewModel::chooseArrival,
                     onLook = viewModel::look,
                     onSend = viewModel::send,
+                    stamps = stamps,
+                    onGetStamps = onGetStamps,
                 )
             }
         SendCardStep.Look -> {
@@ -254,6 +284,18 @@ private fun Steps(
                     onClose = onClose,
                     onSeeInSent = { onSeeInSent(card.id) },
                 )
+                // With digital stamps there's no card a day: another card starts here, under the one just sent.
+                if (cards.postageEnabled) {
+                    CardButton(
+                        "Send another card",
+                        onClick = viewModel::startAnotherCard,
+                        kind = CardButtonKind.Paper,
+                        modifier =
+                            Modifier
+                                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4)
+                                .testTag("sendAnotherCard"),
+                    )
+                }
             }
     }
 }
@@ -272,12 +314,17 @@ private fun ToLine(form: SendCardForm) {
     )
 }
 
-/** The back arrow, the title, and five dots: wax red for the steps done and the current one (longer), cream ahead. */
+/**
+ * The back arrow, the title, and five dots: wax red for the steps done and the current one (longer), cream ahead. With
+ * digital stamps on, the stamps left sit before the dots ([stamps], once read) and open the stamp books.
+ */
 @Composable
 private fun StepHeader(
     title: String,
     step: SendCardStep?,
     onBack: () -> Unit,
+    stamps: StampBalance? = null,
+    onStamps: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = Spacing.s1, end = 14.dp),
@@ -300,6 +347,11 @@ private fun StepHeader(
             modifier = Modifier.weight(1f).semantics { heading() },
         )
         val index = step?.let { SendCardStep.steps.indexOf(it) } ?: -1
+        StampChip(
+            stamps,
+            onOpen = onStamps,
+            modifier = Modifier.padding(start = Spacing.s2, end = if (index >= 0) Spacing.s2 else Spacing.s0),
+        )
         if (index >= 0) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),

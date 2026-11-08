@@ -55,6 +55,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardPreviewEmail
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreviewLinkPage
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreviewPiece
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
+import app.pantopus.android.data.api.models.mailbox.StampBalance
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailCard
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
@@ -728,14 +729,21 @@ private fun PageButton(
     }
 }
 
-/** The footer under step 5: until when it can be taken back, why sending failed, and "Seal and send". */
+/**
+ * The footer under step 5: until when it can be taken back, what it costs with digital stamps on, why sending failed,
+ * and "Seal and send" ("Get stamps to send", opening the stamp books, once none are left).
+ */
 @Composable
 internal fun LookFooter(
     byEmail: Boolean,
     form: SendCardForm,
     onSend: () -> Unit,
     byLink: Boolean = false,
+    /** Digital stamps left (postage on, once read). */
+    stamps: StampBalance? = null,
+    onGetStamps: () -> Unit = {},
 ) {
+    val needsStamps = stamps?.available == 0
     Column(modifier = Modifier.fillMaxWidth().background(PantopusColors.cardDesk)) {
         HorizontalDivider(color = PantopusColors.cardNoteEdge)
         Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3, bottom = Spacing.s4)) {
@@ -746,6 +754,7 @@ internal fun LookFooter(
                     "You can take it back until the carrier picks it up at 7 a.m. their time."
                 },
             )
+            StampPostageLine(stamps, design = form.design, modifier = Modifier.padding(top = 10.dp))
             form.sendError?.let {
                 Text(
                     it,
@@ -757,8 +766,12 @@ internal fun LookFooter(
                 )
             }
             CardButton(
-                if (byLink) "Seal it and get the link" else "Seal and send",
-                onClick = onSend,
+                when {
+                    needsStamps -> "Get stamps to send"
+                    byLink -> "Seal it and get the link"
+                    else -> "Seal and send"
+                },
+                onClick = if (needsStamps) onGetStamps else onSend,
                 busy = form.sending,
                 modifier = Modifier.padding(top = 10.dp).testTag("sendCardLookSend"),
             )

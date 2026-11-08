@@ -40,13 +40,14 @@ import app.pantopus.android.ui.theme.Spacing
 /**
  * A17.11 — "Usage history": which send consumed which stamp. A card of
  * rows (recipient · kind · date) each led by a tiny ink-matched stamp
- * chit, plus a "See all sends" footer. Mirrors iOS `UsageHistoryRow.swift`.
+ * chit, plus a "See all sends" footer (none when [onSeeAll] is null).
+ * Mirrors iOS `UsageHistoryRow.swift`.
  */
 @Composable
 fun UsageHistoryCard(
     usage: List<StampUsage>,
     window: String,
-    onSeeAll: () -> Unit = {},
+    onSeeAll: (() -> Unit)? = {},
 ) {
     StampCard(noPad = true, modifier = Modifier.testTag("stampsUsageHistory")) {
         StampSectionLabel(
@@ -69,30 +70,32 @@ fun UsageHistoryCard(
                 HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
             }
         }
-        HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSeeAll)
-                    .padding(vertical = 11.dp)
-                    .testTag("stampsUsageSeeAll"),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "See all sends",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.primary600,
-            )
-            PantopusIconImage(
-                icon = PantopusIcon.ChevronRight,
-                contentDescription = null,
-                size = 13.dp,
-                tint = PantopusColors.primary600,
-                modifier = Modifier.padding(start = Spacing.s1),
-            )
+        if (onSeeAll != null) {
+            HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onSeeAll)
+                        .padding(vertical = 11.dp)
+                        .testTag("stampsUsageSeeAll"),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "See all sends",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PantopusColors.primary600,
+                )
+                PantopusIconImage(
+                    icon = PantopusIcon.ChevronRight,
+                    contentDescription = null,
+                    size = 13.dp,
+                    tint = PantopusColors.primary600,
+                    modifier = Modifier.padding(start = Spacing.s1),
+                )
+            }
         }
     }
 }

@@ -14,6 +14,8 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class HolidayCardsResponse(
     @Json(name = "postage_enabled") val postageEnabled: Boolean = false,
+    /** Digital stamps left (postage on; null when they couldn't be read). */
+    val stamps: HolidayCardStamps? = null,
     val open: Boolean = false,
     val holiday: String? = null,
     val year: Int = 2026,
@@ -33,6 +35,14 @@ data class HolidayCardsResponse(
     @Json(name = "time_zone") val timeZone: String? = null,
     /** Today's card; null until it's sent. */
     val today: SentHolidayCard? = null,
+)
+
+/** The digital stamps left, with `GET /api/mailbox/cards` while postage is on (the Mailbox row's line). */
+@JsonClass(generateAdapter = true)
+data class HolidayCardStamps(
+    val available: Int = 0,
+    @Json(name = "free_remaining") val freeRemaining: Int = 0,
+    @Json(name = "paid_remaining") val paidRemaining: Int = 0,
 )
 
 /** One of the season's pictures: the caption printed under it, the colour of its paper and the collection it's in. */

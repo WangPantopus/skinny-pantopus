@@ -1,31 +1,20 @@
-@file:Suppress("PackageNaming", "MagicNumber", "LongMethod", "TooManyFunctions")
+@file:Suppress("PackageNaming")
 
 package app.pantopus.android.ui.screens.mailbox.cards
 
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.mailbox.HolidayCardStamps
 import app.pantopus.android.data.api.models.mailbox.StampBalance
 import app.pantopus.android.data.api.models.mailbox.StampConfirmation
 import app.pantopus.android.data.api.services.HolidayCardsApi
+import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
@@ -41,7 +30,11 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Store receipts are credited by the server before consumption; unfinished purchases are recovered on resume. */
+/**
+ * Digital stamps (server `MAIL_STAMPS_ENABLED`): the balance, Google Play's books and buying them, for the card composer
+ * and the Stamps wallet. Store receipts are credited by the server before consumption; unfinished purchases are
+ * recovered on resume.
+ */
 @HiltViewModel
 class MailStampBooksViewModel
     @Inject
@@ -53,10 +46,17 @@ class MailStampBooksViewModel
             private set
         var products by mutableStateOf<List<ProductDetails>>(emptyList())
             private set
+
+        /** Google Play answered about the books (or couldn't be reached): until then the sheet keeps their places. */
+        var storeAnswered by mutableStateOf(false)
+            private set
         var message by mutableStateOf<String?>(null)
             private set
         var busy by mutableStateOf(false)
             private set
+
+        /** The Stamps wallet reads the latest stamp moves and the stamps used with every balance. */
+        var withHistory = false
         private val processing = mutableSetOf<String>()
         private var connecting = false
         private val client =
@@ -66,22 +66,31 @@ class MailStampBooksViewModel
                     if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                         purchases.orEmpty().forEach(::process)
                     } else if (result.responseCode != BillingClient.BillingResponseCode.USER_CANCELED) {
-                        message = "The purchase could not finish. Refresh to check your purchases before trying again."
+                        message = "The purchase couldn’t finish. Tap Check for your stamps before you try again."
                     }
                 }
                 .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
                 .enableAutoServiceReconnection()
                 .build()
 
+        val isOut: Boolean get() = balance?.available == 0
+
         fun refresh() {
             viewModelScope.launch {
                 try {
-                    balance = api.stampBooks()
+                    read()
                     if (client.isReady) queryStore() else connect()
                 } catch (_: Exception) {
-                    message = "Could not load your stamps. Please try again."
+                    message = "Could not load your stamps. Try again in a moment."
                 }
             }
+        }
+
+        /** The balance from the server; the Mailbox's row says the same. */
+        private suspend fun read() {
+            val read = api.stampBooks(history = "1".takeIf { withHistory })
+            balance = read
+            HolidayCardsRepository.noteStamps(HolidayCardStamps(read.available, read.freeRemaining, read.paidRemaining))
         }
 
         private fun connect() {
@@ -94,7 +103,9 @@ class MailStampBooksViewModel
                         if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                             queryStore()
                         } else {
-                            message = "Stamp books are unavailable in Google Play right now."
+                            // The sheet says the books are unavailable in Google Play right now.
+                            products = emptyList()
+                            storeAnswered = true
                         }
                     }
 
@@ -120,6 +131,7 @@ class MailStampBooksViewModel
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                     products = details.productDetailsList.sortedBy { p -> books.firstOrNull { it.id == p.productId }?.credits }
                 }
+                storeAnswered = true
             }
             client.queryPurchasesAsync(
                 QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.INAPP).build(),
@@ -135,7 +147,7 @@ class MailStampBooksViewModel
             val product = purchase.products.singleOrNull() ?: return
             if (balance?.books?.none { it.id == product } != false) return
             if (purchase.purchaseState == Purchase.PurchaseState.PENDING) {
-                message = "Your purchase is pending approval. Your stamps will arrive after approval."
+                message = "Your purchase is waiting for approval. Your stamps arrive once it’s approved."
                 return
             }
             if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED || !processing.add(purchase.purchaseToken)) return
@@ -145,11 +157,11 @@ class MailStampBooksViewModel
                     client.consumeAsync(ConsumeParams.newBuilder().setPurchaseToken(purchase.purchaseToken).build()) { _, _ ->
                         processing.remove(purchase.purchaseToken)
                     }
-                    balance = api.stampBooks()
+                    read()
                     message = "Your stamps are ready."
                 } catch (_: Exception) {
                     processing.remove(purchase.purchaseToken)
-                    message = "Your purchase is saved. Refresh to finish checking it; you do not need to pay again."
+                    message = "Your purchase is saved. Tap Check for your stamps to finish; you don’t need to pay again."
                 }
             }
         }
@@ -183,49 +195,10 @@ class MailStampBooksViewModel
         }
     }
 
-private fun Context.activity(): Activity? =
+/** The activity a composable's context belongs to (Google Play's purchase sheet opens over it). */
+internal fun Context.activity(): Activity? =
     when (this) {
         is Activity -> this
         is ContextWrapper -> baseContext.activity()
         else -> null
     }
-
-@Composable
-fun MailStampBooks(
-    refreshKey: String,
-    model: MailStampBooksViewModel = hiltViewModel(),
-) {
-    val activity = LocalContext.current.activity()
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(model.balance?.available) { if (model.balance?.available == 0) expanded = true }
-    LaunchedEffect(refreshKey) { model.refresh() }
-    LifecycleResumeEffect(Unit) {
-        model.refresh()
-        onPauseOrDispose { }
-    }
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-        Text(model.balance?.let { "${it.available} digital stamp${if (it.available == 1) "" else "s"} available" } ?: "Your digital stamps")
-        Text("One stamp sends one Christmas card to one recipient. Your first 3 are free. Receiving and replies are always free.")
-        val salesOpen = model.balance?.salesOpen != false
-        if (!salesOpen) {
-            Text("Stamp books aren’t on sale any more this year. You can use your stamps until December 31.")
-        } else {
-            TextButton(onClick = { expanded = !expanded }) { Text("Buy a stamp book") }
-        }
-        if (salesOpen && expanded) {
-            Text("Digital delivery only. Christmas cards can be sent until December 31; unused stamps stay in your account.")
-            model.products.forEach { product ->
-                val book = model.balance?.books?.firstOrNull { it.id == product.productId }
-                val price = product.oneTimePurchaseOfferDetails?.formattedPrice
-                if (book != null && price != null) {
-                    TextButton(enabled = !model.busy && activity != null, onClick = { activity?.let { model.buy(it, product) } }) {
-                        Text("${book.credits} stamps · $price")
-                    }
-                }
-            }
-            if (model.products.isEmpty()) Text("Stamp books are unavailable in Google Play right now.")
-        }
-        TextButton(onClick = model::refresh, enabled = !model.busy) { Text("Refresh balance and purchases") }
-        model.message?.let { Text(it) }
-    }
-}
