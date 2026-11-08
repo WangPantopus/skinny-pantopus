@@ -102,6 +102,10 @@ async function split(opts) {
         counts.unreadable += 1;
         continue;
       }
+      // A source that writes the street type twice ("ROAN AVE AVE": Overture's DeSoto County FL file, nine records in ten) keeps a
+      // name nobody types, so none of its addresses would be found. The type is said once.
+      const words = address.name.split(' ');
+      if (address.suffix && words.length > 1 && words[words.length - 1] === address.suffix) address.name = words.slice(0, -1).join(' ');
       // A house a source gives unit "0" stays a house, not a one-unit building that asks which unit is yours.
       if (NOT_GIVEN.test(address.unit)) address.unit = '';
       if (NOT_GIVEN.test(address.building)) address.building = '';
