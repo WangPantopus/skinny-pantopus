@@ -48,6 +48,23 @@ async function rpc(name, args) {
 async function balance(user) {
   return rpc("mail_stamp_balance", { p_user: user });
 }
+// The latest stamp moves for the Stamps wallet, newest first: the free three, books, cards sent, stamps returned and
+// refunded books. Only kinds and counts; who a card went to stays in Sent.
+async function history(user, limit = 30) {
+  const { data, error } = await db
+    .from("MailStampLedger")
+    .select("event_key,bucket,delta,created_at")
+    .eq("user_id", user)
+    .order("id", { ascending: false })
+    .limit(limit);
+  if (error) throw failure();
+  return (data || []).map((row) => ({
+    kind: row.event_key.split(":")[0],
+    bucket: row.bucket,
+    delta: row.delta,
+    at: row.created_at,
+  }));
+}
 async function json(url, options = {}) {
   const response = await fetch(url, {
     ...options,
@@ -321,6 +338,7 @@ module.exports = {
   enabled,
   salesOpen,
   balance,
+  history,
   confirm,
   checkout,
   reconcile,

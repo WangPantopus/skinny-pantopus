@@ -1976,6 +1976,9 @@ router.get('/cards', verifyToken, async (req, res) => {
     const timeZone = (await mailDelivery.personTimeZone(senderId)) || mailDelivery.FALLBACK_TIME_ZONE;
     const [today] = await cardsSentToday(senderId, timeZone, now);
     const arrivals = (byEmail) => holidayCards.arrivalsFor({ byEmail, timeZone, now, nextRound: mailDelivery.nextRound });
+    const postage = mailStamps.enabled(senderId);
+    // The stamps left, for the Mailbox row's line; the cards still load when the balance can't be read.
+    const stamps = postage ? await mailStamps.balance(senderId).catch(() => null) : null;
     return res.json({
       open: holidayCards.seasonOpen(timeZone, now),
       holiday: holidayCards.SEASON.holiday,
@@ -1988,8 +1991,9 @@ router.get('/cards', verifyToken, async (req, res) => {
       next_round_at: mailDelivery.nextRound(timeZone, now).toISOString(),
       christmas_morning_at: holidayCards.christmasMorning(timeZone).toISOString(),
       time_zone: timeZone,
-      today: !mailStamps.enabled(senderId) && today ? holidayCards.sentSummary(today, now) : null,
-      postage_enabled: mailStamps.enabled(senderId),
+      today: !postage && today ? holidayCards.sentSummary(today, now) : null,
+      postage_enabled: postage,
+      stamps,
     });
   } catch (err) {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });

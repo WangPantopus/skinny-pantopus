@@ -9,8 +9,8 @@
 // launch key card_table it can also go as a link anyone can open.
 // ============================================================
 
-import StampBooks from './StampBooks';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
+import { PostageLine, StampChip, StampSheet, useStamps, type Stamps } from './StampBooks';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
@@ -137,7 +137,7 @@ function takeBackLine(card: SentHolidayCard): string | null {
 
 // ── Header ───────────────────────────────────────────────────
 
-function StepHeader({ step, title, onBack, headingRef }: { step: Step; title?: string; onBack: () => void; headingRef: RefObject<HTMLHeadingElement | null> }) {
+function StepHeader({ step, title, onBack, headingRef, trailing = null }: { step: Step; title?: string; onBack: () => void; headingRef: RefObject<HTMLHeadingElement | null>; trailing?: ReactNode }) {
   const index = STEPS.indexOf(step);
   return (
     <header className="flex items-center gap-1 px-1 pt-2">
@@ -150,6 +150,7 @@ function StepHeader({ step, title, onBack, headingRef }: { step: Step; title?: s
         <ChevronLeft className="h-6 w-6" aria-hidden />
       </button>
       <h1 ref={headingRef} tabIndex={-1} className="flex-1 text-[18px] font-semibold leading-6 focus:outline-none">{title ?? TITLES[step]}</h1>
+      {trailing}
       {index >= 0 ? (
         <div role="img" aria-label={`Step ${index + 1} of ${STEPS.length}`} className="flex gap-[5px] pr-3.5">
           {STEPS.map((s, i) => (
@@ -566,6 +567,8 @@ function SealStep({
   error,
   onLook,
   onSend,
+  stamps = null,
+  onGetStamps,
 }: {
   cards: HolidayCards;
   to: Recipient;
@@ -583,7 +586,11 @@ function SealStep({
   error: string | null;
   onLook: () => void;
   onSend: () => void;
+  /** Digital stamps (postage on), for when this step seals and sends itself. */
+  stamps?: Stamps | null;
+  onGetStamps?: () => void;
 }) {
+  const needsStamps = sendsHere && stamps?.balance?.available === 0;
   const preview = {
     id: `preview-${design.id}`,
     sender_display: fromName,
@@ -623,18 +630,19 @@ function SealStep({
         {/* Before it's sent we don't know their clock; the sent card says the time on this one. */}
         {takeBackBefore(to)}
       </p>
+      {sendsHere && stamps ? <div className="mx-auto mt-3 max-w-[420px]"><PostageLine stamps={stamps} design={design.id} /></div> : null}
       {error ? <p role="alert" className="mx-auto mt-3 max-w-[420px] text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
         <button
           type="button"
           data-testid="sendCardSend"
           disabled={!arrival || looking || sending}
-          onClick={sendsHere ? onSend : onLook}
+          onClick={needsStamps ? onGetStamps : sendsHere ? onSend : onLook}
           className={primary}
           style={{ backgroundColor: WAX }}
         >
           {looking || sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
-          {sendsHere ? sendWords(to) : 'Look it over'}
+          {needsStamps ? 'Get stamps to send' : sendsHere ? sendWords(to) : 'Look it over'}
         </button>
       </div>
     </div>
@@ -649,13 +657,21 @@ function LookStep({
   sending,
   error,
   onSend,
+  stamps = null,
+  design = '',
+  onGetStamps,
 }: {
   preview: HolidayCardPreview;
   to: Recipient;
   sending: boolean;
   error: string | null;
   onSend: () => void;
+  /** Digital stamps (postage on): the postage line, and with none left the button opens the stamp books. */
+  stamps?: Stamps | null;
+  design?: string;
+  onGetStamps?: () => void;
 }) {
+  const needsStamps = stamps?.balance?.available === 0;
   return (
     <div data-testid="sendCardLook">
       <LookItOver preview={preview} toName={envelopeName(to)} toFirstName={to.kind === 'person' ? firstName(to.name) : ''} byEmail={to.kind !== 'person'} byLink={to.kind === 'link'} />
@@ -663,10 +679,11 @@ function LookStep({
         <p className="rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
           {takeBackBefore(to)}
         </p>
+        {stamps ? <div className="mt-3"><PostageLine stamps={stamps} design={design} /></div> : null}
         {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
-        <button type="button" data-testid="sendCardLookSend" disabled={sending} onClick={onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
+        <button type="button" data-testid="sendCardLookSend" disabled={sending} onClick={needsStamps ? onGetStamps : onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
           {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
-          {sendWords(to)}
+          {needsStamps ? 'Get stamps to send' : sendWords(to)}
         </button>
       </div>
     </div>
@@ -786,8 +803,10 @@ export default function SendCardFlow({ chosenDesign = null }: {
   // card it stored, never a second one. A new card starts once this one is sent or taken back.
   const requestId = useRef<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const [stampSheet, setStampSheet] = useState(false);
 
   const data = cards.data;
+  const stamps = useStamps(Boolean(data?.postage_enabled), `${sent?.id ?? ''}:${tookBack}:${step}`);
   const design = useMemo(() => data?.designs.find((d) => d.id === designId) ?? null, [data, designId]);
   const today = sent ?? (data?.today && data.today.status !== 'withdrawn' ? data.today : null);
   const options = useMemo<HolidayCardArrival[]>(() => {
@@ -882,6 +901,13 @@ export default function SendCardFlow({ chosenDesign = null }: {
       onSuccess: (res) => { requestId.current = null; setSent(res.card); setSentLink(res.link ?? null); setLook(null); setStep('sent'); },
       onError: (error) => {
         if (wentEarlier(error)) return;
+        // The stamps ran out meanwhile (another tab or phone sent a card): the stamp books open; the card stays as it is.
+        if (error.serverCode === 'STAMPS_REQUIRED') {
+          send.reset();
+          void stamps.refresh();
+          setStampSheet(true);
+          return;
+        }
         if (error.serverCode !== 'CARD_ARRIVAL_CLOSED') {
           if (fromSeal) { setSealError(sendMessage(error, to?.kind === 'email')); send.reset(); }
           return;
@@ -957,12 +983,17 @@ export default function SendCardFlow({ chosenDesign = null }: {
   return (
     <div className={`${page} pb-6`}>
       <div className="mx-auto w-full max-w-[560px]">
-      <StepHeader step={step} title={step === 'sent' && sent?.by_link ? 'Your card is ready.' : undefined} onBack={back} headingRef={headingRef} />
-      {data.postage_enabled && <StampBooks refreshKey={`${sent?.id ?? ''}:${tookBack}:${step}`} />}
-      {data.postage_enabled && step === 'sent' && <div className="px-4 my-3"><button className={primary} style={{ backgroundColor: WAX }} onClick={startOver}>Send another card</button></div>}
+      <StepHeader
+        step={step}
+        title={step === 'sent' && sent?.by_link ? 'Your card is ready.' : undefined}
+        onBack={back}
+        headingRef={headingRef}
+        trailing={data.postage_enabled ? <StampChip stamps={stamps} onOpen={() => setStampSheet(true)} /> : null}
+      />
+      {data.postage_enabled ? <StampSheet open={stampSheet} onClose={() => setStampSheet(false)} stamps={stamps} /> : null}
       {(tookBack || takenBackNote) && step === 'to' ? (
         <p role="status" className="mx-4 mt-2 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[14px] text-[#374151]">
-          {takenBackNote ?? 'You took your card back. You can send a card again today.'}
+          {takenBackNote ?? (data.postage_enabled ? 'You took your card back, and its stamp is back with you.' : 'You took your card back. You can send a card again today.')}
         </p>
       ) : null}
       {step !== 'to' && step !== 'sent' && to ? (
@@ -1010,6 +1041,8 @@ export default function SendCardFlow({ chosenDesign = null }: {
           error={sealError ?? (lookUnavailable ? LOOK_UNAVAILABLE : preview.isError ? sendMessage(preview.error, to.kind === 'email') : null)}
           onLook={doLook}
           onSend={doSend}
+          stamps={data.postage_enabled ? stamps : null}
+          onGetStamps={() => setStampSheet(true)}
         />
       ) : null}
       {step === 'look' && look && to ? (
@@ -1019,10 +1052,18 @@ export default function SendCardFlow({ chosenDesign = null }: {
           sending={send.isPending}
           error={send.isError ? sendMessage(send.error, to.kind === 'email') : null}
           onSend={doSend}
+          stamps={data.postage_enabled ? stamps : null}
+          design={design?.id ?? ''}
+          onGetStamps={() => setStampSheet(true)}
         />
       ) : null}
       {step === 'sent' && sent ? (
         <SentCard postageEnabled={data.postage_enabled} card={sent} designs={data.designs} title={sent.by_link ? 'Your card' : 'On its way'} seeInSent link={sentLink} fromName={fromName} onTakeBack={() => { void doTakeBack(); }} takingBack={takeBack.isPending} takeBackError={takeBackError} />
+      ) : null}
+      {data.postage_enabled && step === 'sent' ? (
+        <div className="mx-auto max-w-[420px] px-4 pb-4">
+          <button type="button" data-testid="sendAnotherCard" className={secondary} onClick={startOver}>Send another card</button>
+        </div>
       ) : null}
       </div>
     </div>

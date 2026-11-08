@@ -33,6 +33,9 @@ router.get(
     books: stamps.BOOKS,
     // Books stay listed after sales end so the apps can still finish an interrupted purchase.
     sales_open: await stamps.salesOpen(req.user.id),
+    // Whether cards cost stamps for this person now; the Stamps wallet shows only then.
+    enabled: stamps.enabled(req.user.id),
+    history: req.query.history === "1" ? await stamps.history(req.user.id) : undefined,
     account_token: req.user.id,
     google_account: stamps.googleAccount(req.user.id),
   })),
