@@ -63,7 +63,7 @@ async function* rows({ states = null }) {
     }
     const country = fields[header.country];
     const state = country === 'US' ? fields[header.level1] : country;
-    if (states && !states.has(state)) continue;
+    if (states && state && !states.has(state)) continue;
     yield {
       source: `overture:${dataset}`,
       record: fields[header.id],

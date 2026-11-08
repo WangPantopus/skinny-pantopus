@@ -3,7 +3,8 @@
 // a renumbered house gets a new ID, linked here to the old one when both sit on the same point. Written beside each new
 // release as lineage.json.gz, before publishing. Identity is always worked out from the address asked about, so nothing
 // private follows an ID; this is the record of what became what. Prints counts only.
-//   node scripts/property-index/registry-lineage.cjs --out <dir> --state ST --bucket <name>
+//   node scripts/property-index/registry-lineage.cjs --out <dir> --state ST --bucket <name> [--republish]
+//     --republish  the run publishes counties whose sources haven't changed, too (publish.cjs's flag), so they need lineage
 'use strict';
 
 const fs = require('node:fs');
@@ -75,11 +76,18 @@ function main() {
     return;
   }
   const serving = JSON.parse(fs.readFileSync(stateFile, 'utf8')).jurisdictions;
-  const totals = { counties: 0, kept: 0, replaced: 0, retired: 0, added: 0 };
+  const republish = process.argv.includes('--republish');
+  const totals = { counties: 0, kept: 0, replaced: 0, retired: 0, added: 0, unchanged: 0 };
   for (const name of fs.readdirSync(path.join(out, 'counties'))) {
     const entry = JSON.parse(fs.readFileSync(path.join(out, 'counties', name), 'utf8'));
     const previous = serving[entry.fips];
     if (!previous) continue;
+    // publish.cjs leaves a county whose sources haven't changed as it serves, so its new build is never published: reading the
+    // release serving (a whole county from storage) would be for nothing.
+    if (!republish && previous.as_of === entry.as_of && previous.status === 'active') {
+      totals.unchanged += 1;
+      continue;
+    }
     const dir = path.join(scratch, entry.fips);
     fs.mkdirSync(dir, { recursive: true });
     copy(`${releasePath(entry.fips, previous.release)}/manifest.json.gz`, path.join(dir, 'manifest.json.gz'));

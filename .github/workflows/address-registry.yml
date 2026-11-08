@@ -2,9 +2,11 @@ name: Address Registry
 
 # Pantopus's own address registry (backend/services/propertyRecords/registry.js, scripts/property-index/build-registry.cjs),
 # published to private storage beside the property index. Monthly, for Overture's monthly release and the National Address
-# Database's quarterly one, and by hand. This repository is public, so its logs and uploaded artifacts are too: a real run
-# prints counts only and uploads nothing here, and only master can reach the storage key. A pull request builds made-up
-# addresses and publishes nothing.
+# Database's quarterly one, and by hand. A build runs as up to four jobs, one per group of states (registry-groups.cjs), so
+# each stays well under GitHub's 350-minute limit, which one job for the whole country nearly reached; a last job writes the
+# coverage report and T2's summary from the counts each group leaves. This repository is public, so its logs and uploaded
+# artifacts are too: a real run prints counts only, uploads nothing here but those counts, and only master can reach the
+# storage key. A pull request builds made-up addresses and publishes nothing.
 
 on:
   schedule:
@@ -78,10 +80,60 @@ jobs:
         run: |
           node scripts/property-index/build-registry.cjs --sources synthetic --out "$RUNNER_TEMP/registry" --work "$RUNNER_TEMP/registry-work"
           node scripts/property-index/check-registry.cjs "$RUNNER_TEMP/registry"
+          node scripts/property-index/registry-groups.cjs
 
-  run:
-    name: Build, check and publish, or roll back
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+  rollback:
+    name: Roll back one county
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'rollback' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: property-index
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.PROPERTY_INDEX_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.PROPERTY_INDEX_REGION }}
+      PROPERTY_INDEX_BUCKET: ${{ vars.PROPERTY_INDEX_BUCKET }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Roll back
+        env:
+          COUNTY: ${{ inputs.county }}
+          STATE_CODE: ${{ inputs.state }}
+        run: node scripts/property-index/publish.cjs --rollback "$COUNTY" --state "$STATE_CODE" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/registry
+
+  plan:
+    name: Group the states
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && (github.event_name != 'workflow_dispatch' || inputs.action == 'build')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      groups: ${{ steps.groups.outputs.groups }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - id: groups
+        env:
+          STATES: ${{ inputs.states }}
+        # An unknown state code stops the run here, before any job starts.
+        run: |
+          groups=$(node scripts/property-index/registry-groups.cjs --states "$STATES")
+          echo "$groups"
+          echo "groups=$groups" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build, check and publish (group ${{ matrix.group }} of ${{ matrix.of }})
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.groups) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     environment: property-index
@@ -96,32 +148,62 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
-      - name: Roll back
-        if: github.event_name == 'workflow_dispatch' && inputs.action == 'rollback'
-        env:
-          COUNTY: ${{ inputs.county }}
-          STATE_CODE: ${{ inputs.state }}
-        run: node scripts/property-index/publish.cjs --rollback "$COUNTY" --state "$STATE_CODE" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/registry
       - name: Make room
-        if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         # The runner's tools take most of its disk; the National Address Database's zip is 8.5 GB.
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           df -h / | tail -1
       - name: Install DuckDB
-        if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         # Overture's addresses are Parquet files.
         run: |
           curl -fsSL -o duckdb.zip https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-linux-amd64.zip
           echo "6e89deac1ebbc36eed0291caf8b567b030c7b86ac35998f71854e22b3c5d5e2f  duckdb.zip" | sha256sum -c -
           unzip -q duckdb.zip -d "$RUNNER_TEMP/duckdb"
           echo "DUCKDB=$RUNNER_TEMP/duckdb/duckdb" >> "$GITHUB_ENV"
-      - name: Build and publish
-        if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
+      - name: Build and publish ${{ matrix.states }}
         env:
           SOURCES: ${{ inputs.sources || 'points,nad,overture,openaddresses' }}
-          STATES: ${{ inputs.states }}
+          STATES: ${{ matrix.states }}
           PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.republish }}
           ACCEPT_FALLS: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls || '' }}
         run: bash scripts/property-index/run-registry.sh
+      # Counts only: each county's coverage and each state's T2 tallies, for the report job.
+      - name: Keep the counts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: registry-counts-${{ matrix.group }}
+          path: ${{ runner.temp }}/registry-coverage
+          retention-days: 3
+          if-no-files-found: ignore
+
+  report:
+    name: Coverage report and T2 summary
+    needs: [plan, build]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: property-index
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.PROPERTY_INDEX_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.PROPERTY_INDEX_REGION }}
+      PROPERTY_INDEX_BUCKET: ${{ vars.PROPERTY_INDEX_BUCKET }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      # A group that stopped early left fewer counts or none; its states keep their published rows.
+      - uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: registry-counts-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/registry-coverage
+      - name: Write the report
+        env:
+          PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+        run: bash scripts/property-index/run-registry.sh report
