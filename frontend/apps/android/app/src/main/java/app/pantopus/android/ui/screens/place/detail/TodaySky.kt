@@ -264,7 +264,7 @@ private fun BoxScope.BinsTarget(
 
 /** Seconds of the day, advanced at about 30 frames a second while [animating]. */
 @Composable
-private fun rememberSkyTime(animating: Boolean): androidx.compose.runtime.MutableDoubleState {
+internal fun rememberSkyTime(animating: Boolean): androidx.compose.runtime.MutableDoubleState {
     val time = remember { mutableDoubleStateOf(2.0) }
     LaunchedEffect(animating) {
         while (animating && isActive) {
@@ -276,7 +276,7 @@ private fun rememberSkyTime(animating: Boolean): androidx.compose.runtime.Mutabl
 }
 
 /** What the reading says: now with today's note, or the hour slid to. */
-private class SkyReadingModel(
+internal class SkyReadingModel(
     val weather: PlaceWeatherData,
     /** "NOW", today's note or the hour slid to ("3 PM"). */
     val kicker: String,
@@ -341,7 +341,7 @@ private class SkyReadingModel(
 }
 
 @Composable
-private fun SkyReading(
+internal fun SkyReading(
     model: SkyReadingModel,
     hours: Int,
     scrub: SkyScrubState,

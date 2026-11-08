@@ -126,6 +126,7 @@ struct PlaceTodayDetailContent: View {
                 advisories
                 sky(proxy: proxy)
                 sunCard
+                skyShare
             }
             .placeColumn(.leading, order: 1)
             VStack(alignment: .leading, spacing: 0) {
@@ -291,7 +292,7 @@ extension PlaceTodayDetailContent {
                     .padding(.top, 12)
                 TodayHourlyStrip(weather: data, sun: sunData, alerts: activeAlerts, calendar: skyCalendar)
                     .padding(.top, 8)
-                skyFooter(weather, data: data, proxy: proxy)
+                skyFooter(weather, proxy: proxy)
             } else {
                 PlaceDetailSectionLabel(text: "Weather")
                 vm.fallbackCard(weather)
@@ -299,9 +300,9 @@ extension PlaceTodayDetailContent {
         }
     }
 
-    /// "Open-Meteo · 1:21 AM", "Weather details" and Share, on one line when they fit.
-    private func skyFooter(_ weather: PlaceSectionEnvelope, data: PlaceWeatherData, proxy: ScrollViewProxy) -> some View {
-        let source = [weather.source ?? "Source unavailable", placeTime(weather.asOf)].compactMap { $0 }.joined(separator: " · ")
+    /// "Open-Meteo · 1:21 AM" and "Weather details", on one line when they fit.
+    private func skyFooter(_ weather: PlaceSectionEnvelope, proxy: ScrollViewProxy) -> some View {
+        let source = skySource(weather)
         let note = Text(source)
             .font(Theme.Font.caption)
             .foregroundStyle(Theme.Color.appTextMuted)
@@ -310,29 +311,43 @@ extension PlaceTodayDetailContent {
             HStack(spacing: 14) {
                 note.lineLimit(1)
                 Spacer(minLength: 0)
-                skyActions(data, proxy: proxy)
+                weatherDetails(proxy: proxy)
             }
             VStack(alignment: .leading, spacing: 0) {
                 note.fixedSize(horizontal: false, vertical: true).padding(.top, 8)
-                HStack(spacing: 18) { skyActions(data, proxy: proxy) }
+                weatherDetails(proxy: proxy)
             }
         }
         .padding(.top, 2)
     }
 
-    @ViewBuilder
-    private func skyActions(_ data: PlaceWeatherData, proxy: ScrollViewProxy) -> some View {
+    /// "Open-Meteo · 1:21 AM": where the weather comes from and when it was read.
+    private func skySource(_ weather: PlaceSectionEnvelope) -> String {
+        [weather.source ?? "Source unavailable", placeTime(weather.asOf)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func weatherDetails(proxy: ScrollViewProxy) -> some View {
         PlaceInlineAction(title: "Weather details", identifier: "today.weatherDetails") {
             openConditions("todayFullForecast", proxy: proxy)
         }
-        if !intel.place.city.isEmpty {
-            SkyShareLink(card: SkyShareCard(
+    }
+
+    /// Share, under the sun card: today's sky as this screen shows it, as a
+    /// picture or a clip (`SkyShareCard`).
+    @ViewBuilder
+    var skyShare: some View {
+        if let weather = vm.section(.weather, in: intel), let data = weather.weather,
+           weather.status == .ready || weather.status == .stale, !intel.place.city.isEmpty {
+            SkyShareButton(card: SkyShareCard(
                 weather: data,
                 sun: sunData,
                 air: skyAir,
                 city: intel.place.city,
-                date: .now, calendar: skyCalendar
+                state: intel.place.state,
+                source: skySource(weather),
+                calendar: skyCalendar
             ))
+            .padding(.top, 2)
         }
     }
 

@@ -32,6 +32,9 @@ struct TodaySkyPainter {
     var windMph: Double?
     var windFrom: String?
     let still: Bool
+    /// A shared clip's frame, in seconds: rain and snow fall to it while the
+    /// rest of a `still` scene holds (`SkyShareCard`).
+    var falling: Double?
 
     private var weather: SkyPalette.Weather {
         SkyPalette.Weather(condition)
@@ -260,7 +263,7 @@ struct TodaySkyPainter {
             let length = 9 + random.next() * 7
             let offset = random.next() * scene.height
             let span = scene.height + length
-            let fall = (offset + (still ? 0 : scene.time * speed)).truncatingRemainder(dividingBy: span)
+            let fall = (offset + fallen(scene) * speed).truncatingRemainder(dividingBy: span)
             let y = fall - length
             let x = start + (y + length) * slant
             path.move(to: CGPoint(x: x, y: y))
@@ -268,6 +271,12 @@ struct TodaySkyPainter {
         }
         let color = night ? SkyPalette.rainNight.color(opacity: 0.45) : SkyPalette.rainDay.color(opacity: 0.55)
         context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+    }
+
+    /// The seconds rain and snow have fallen: a clip's frame, or the scene's
+    /// clock (none when still).
+    private func fallen(_ scene: Scene) -> Double {
+        falling ?? (still ? 0 : scene.time)
     }
 
     private func paintSnow(_ context: GraphicsContext, _ scene: Scene) {
@@ -287,7 +296,7 @@ struct TodaySkyPainter {
             let frequency = 0.5 + random.next() * 0.8
             let phase = random.next() * 6.28
             let opacity = 0.65 + random.next() * 0.3
-            let moving = still ? 0 : scene.time
+            let moving = fallen(scene)
             let y = (offset + moving * speed).truncatingRemainder(dividingBy: scene.height + 8) - 4
             let x = start + (y + 4) * slant + sin(moving * frequency + phase) * amplitude
             context.fill(Self.circle(x, y, radius), with: .color(SkyPalette.white.color(opacity: opacity)))

@@ -251,7 +251,7 @@ fun PlaceTodayDetailContent(
 
     // 3. What's in effect now, before anything else.
     TodayAdvisorySummary(active, alertsEnv?.source, now, Modifier.padding(bottom = 12.dp))
-    // 4. The sky, the hours ahead, the source and Share.
+    // 4. The sky, the hours ahead, the source and Weather details.
     TodayWeatherSection(
         intel,
         shownCalendar?.upcoming.orEmpty(),
@@ -268,6 +268,8 @@ fun PlaceTodayDetailContent(
     )
     // The sun's path, sunrise, sunset and the day's length, right under the weather.
     TodaySunCard(intel)
+    // Share, under the sun card: today's sky as a picture or a clip.
+    TodaySkyShare(intel, now)
     // 5. Coming up at home, with the full calendar one tap away.
     val ballot = BallotPlacement.ballot(intel)
     val election = intel.section(PlaceSectionId.CIVIC_ELECTION)?.civicElection?.takeIf { ballot != null }?.let { it.name to it.date }
@@ -594,9 +596,6 @@ private fun TodayWeatherSection(
     val source: @Composable () -> Unit = { PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, updated) }
     val actions: @Composable () -> Unit = {
         TodayTextAction("Weather details", onClick = onDetails, modifier = Modifier.testTag("today.weatherDetails"))
-        if (intel.place.city.isNotEmpty()) {
-            SkyShareLink(SkyShareCard(data, sun, skyAir(intel), intel.place.city, ZonedDateTime.now(now.zone)))
-        }
     }
     // At large text sizes the source takes its own line and the actions follow, so neither squeezes to a letter a line.
     if (LocalDensity.current.fontScale > LARGE_TEXT_SCALE) {
@@ -610,6 +609,30 @@ private fun TodayWeatherSection(
             actions()
         }
     }
+}
+
+/** Share, under the sun card: today's sky as this screen shows it, as a picture or a clip (`SkyShareCard.kt`). */
+@Composable
+private fun TodaySkyShare(
+    intel: PlaceIntelligence,
+    now: ZonedDateTime,
+) {
+    val env = intel.section(PlaceSectionId.WEATHER) ?: return
+    val data = env.weather?.takeIf { env.isLive() } ?: return
+    if (intel.place.city.isEmpty()) return
+    SkyShareButton(
+        SkyShareCard(
+            data,
+            intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
+            skyAir(intel),
+            intel.place.city,
+            state = intel.place.state,
+            source = env.source.orEmpty().ifBlank { "Source unavailable" },
+            updated = PlacePresentation.fmtTime(env.asOf, intel.homeZone)?.let { "updated $it" },
+            now = ZonedDateTime.now(now.zone),
+        ),
+        Modifier.padding(top = 2.dp),
+    )
 }
 
 /** The Sun card under the weather, its sky matching the reported weather; a place without sun times says why. */

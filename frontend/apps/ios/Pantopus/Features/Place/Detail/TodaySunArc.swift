@@ -19,18 +19,30 @@ struct TodaySunArcCard: View {
     var calendar: Calendar = .autoupdatingCurrent
     /// The reported weather, so the little sky matches the big one above it.
     var weather: WeatherConditionCode?
+    /// One moment drawn with the sun already in place, for a shared picture;
+    /// nil follows the clock.
+    var at: Date?
 
     var body: some View {
-        TimelineView(.everyClockMinute) { minute in
-            TodaySunArcContent(
-                data: data,
-                moment: SkyMoment.at(minute.date, sunrise: data.sunriseClock, sunset: data.sunsetClock, calendar: calendar),
-                now: minute.date,
-                day: PlacePresentation.fmtSunDay(data, timeZone: calendar.timeZone, now: minute.date),
-                weather: weather.map { SkyPalette.Weather($0) } ?? .clear
-            )
+        Group {
+            if let at {
+                content(at, placed: true)
+            } else {
+                TimelineView(.everyClockMinute) { minute in content(minute.date, placed: false) }
+            }
         }
         .accessibilityIdentifier("todaySunArc")
+    }
+
+    private func content(_ now: Date, placed: Bool) -> some View {
+        TodaySunArcContent(
+            data: data,
+            moment: SkyMoment.at(now, sunrise: data.sunriseClock, sunset: data.sunsetClock, calendar: calendar),
+            now: now,
+            day: PlacePresentation.fmtSunDay(data, timeZone: calendar.timeZone, now: now),
+            weather: weather.map { SkyPalette.Weather($0) } ?? .clear,
+            placed: placed
+        )
     }
 }
 
@@ -41,9 +53,16 @@ private struct TodaySunArcContent: View {
     /// "today", or "as of Nov 1" for another day's times.
     let day: String?
     let weather: SkyPalette.Weather
+    /// Drawn once with the sun where it is, rather than travelling there.
+    let placed: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var travelled = 0.0
+
+    /// How far along its path the sun is drawn.
+    private var shown: Double {
+        placed ? target : travelled
+    }
 
     /// The times are today's at the place: only then does a countdown make sense.
     private var isToday: Bool {
@@ -129,7 +148,7 @@ private struct TodaySunArcContent: View {
             if moment.phase == .night { SunDomeStars() }
             SunArcPath(progress: 1)
                 .stroke(SkyPalette.white.color(opacity: 0.55), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 5]))
-            SunArcPath(progress: travelled)
+            SunArcPath(progress: shown)
                 .stroke(
                     LinearGradient(colors: [SkyPalette.sunLow.color, SkyPalette.sunHigh.color], startPoint: .leading, endPoint: .trailing),
                     style: StrokeStyle(lineWidth: 3.5, lineCap: .round)
@@ -177,7 +196,7 @@ private struct TodaySunArcContent: View {
                 .overlay(Circle().strokeBorder(SkyPalette.white.color(opacity: 0.9), lineWidth: 1.5))
                 .opacity(up ? 1 : 0.85)
         }
-        .modifier(SunArcPosition(fraction: travelled))
+        .modifier(SunArcPosition(fraction: shown))
         .mask { SunVisibleArea(clipsAtHorizon: !up) }
     }
 
