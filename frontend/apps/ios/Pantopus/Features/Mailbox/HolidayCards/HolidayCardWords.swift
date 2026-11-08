@@ -12,6 +12,14 @@
 import Foundation
 
 enum HolidayCardWords {
+    /// Whether cards cost digital stamps for this person, as the cards were
+    /// last read (the Mailbox row or the card flow): Sent's "Take your card
+    /// back?" then says the card's stamp comes back.
+    @MainActor static var postageOn = false
+
+    /// "Take your card back?" with digital stamps on.
+    static let stampComesBack = "Its stamp comes back to you."
+
     // MARK: Days and times
 
     /// "Sat, Dec 19".

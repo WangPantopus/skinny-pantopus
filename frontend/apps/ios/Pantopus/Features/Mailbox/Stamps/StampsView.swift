@@ -135,7 +135,7 @@ private struct StampsRealWalletBody: View {
                         StampSheet(book: book)
                     }
                     if let moves = balance.history, !moves.isEmpty {
-                        UsageHistoryCard(usage: moves.enumerated().map { usage($1, index: $0) }, window: "Latest")
+                        UsageHistoryCard(usage: moves.enumerated().map { usage($1, index: $0) }, window: "Latest", onSeeAll: nil)
                     }
                 }
                 if let collection {
@@ -248,9 +248,13 @@ private struct StampsModeHeader: View {
 
 // MARK: - Top nav
 
-/// Bespoke A17 nav — back-to-Mailbox + centered teal dot eyebrow + the
-/// gift / overflow action cluster. Mirrors `StampsNav` in `stamps.jsx`.
+/// Bespoke A17 nav — back-to-Mailbox + centered teal dot eyebrow, and in
+/// the sample frames the design's gift / overflow action cluster. Mirrors
+/// `StampsNav` in `stamps.jsx`.
 private struct StampsNav: View {
+    /// The A17.11 sample's gift / overflow icons: nothing is behind them, so
+    /// only the sample frames draw them.
+    var showsSampleActions = false
     let onBack: () -> Void
 
     var body: some View {
@@ -285,9 +289,9 @@ private struct StampsNav: View {
 
                 Spacer()
 
-                // Launch cut #8 (Mail extras): gifting belongs to the postage
-                // wallet, which is hidden for the first launch.
-                if LaunchFeatures.mailExtras {
+                // Launch cut #8 (Mail extras): gifting belongs to the sample
+                // postage wallet, which the screen never shows.
+                if showsSampleActions, LaunchFeatures.mailExtras {
                     HStack(spacing: 2) {
                         navIcon(.gift, label: "Gift a stamp", id: "stampsNavGift")
                         navIcon(.moreHorizontal, label: "More actions", id: "stampsNavMore")
@@ -1127,7 +1131,7 @@ struct StampsPopulatedFrame: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            StampsNav {}
+            StampsNav(showsSampleActions: true) {}
             StampsPopulatedBody(content: content) {}
         }
         .background(Theme.Color.appBg)
@@ -1140,7 +1144,7 @@ struct StampsEmptyFrame: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            StampsNav {}
+            StampsNav(showsSampleActions: true) {}
             StampsEmptyBody(content: content) {}
         }
         .background(Theme.Color.appBg)

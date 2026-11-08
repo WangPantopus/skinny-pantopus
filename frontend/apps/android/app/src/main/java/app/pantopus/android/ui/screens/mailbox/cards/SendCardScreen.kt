@@ -173,6 +173,7 @@ fun SendCardScreen(
         TakeBackDialog(
             byEmail = (form.sent ?: season?.todaysCard)?.byEmail == true,
             byLink = (form.sent ?: season?.todaysCard)?.byLink == true,
+            postage = season?.postageEnabled == true,
             onTakeBack = {
                 confirmTakeBack = false
                 viewModel.takeBack()
@@ -463,8 +464,9 @@ private fun DoneForTheYear(onClose: () -> Unit) {
 }
 
 /**
- * "Take your card back?" (the card screens and Sent). Taking back a card sent today frees the day ([freesToday]); one
- * sent before doesn't, so the dialog doesn't say so then.
+ * "Take your card back?" (the card screens and Sent). With digital stamps on ([postage]) the card's stamp comes back.
+ * Otherwise taking back a card sent today frees the day ([freesToday]); one sent before doesn't, so the dialog doesn't
+ * say so then.
  */
 @Composable
 internal fun TakeBackDialog(
@@ -473,6 +475,7 @@ internal fun TakeBackDialog(
     onKeep: () -> Unit,
     freesToday: Boolean = true,
     byLink: Boolean = false,
+    postage: Boolean = false,
 ) {
     val first =
         when {
@@ -483,7 +486,15 @@ internal fun TakeBackDialog(
     AlertDialog(
         onDismissRequest = onKeep,
         title = { Text("Take your card back?") },
-        text = { Text(if (freesToday) "$first You can send a card again today." else first) },
+        text = {
+            Text(
+                when {
+                    postage -> "$first Its stamp comes back to you."
+                    freesToday -> "$first You can send a card again today."
+                    else -> first
+                },
+            )
+        },
         confirmButton = {
             TextButton(onClick = onTakeBack, modifier = Modifier.testTag("sendCardTakeBackConfirm")) {
                 Text("Take it back", color = PantopusColors.cardWax, fontWeight = FontWeight.SemiBold)

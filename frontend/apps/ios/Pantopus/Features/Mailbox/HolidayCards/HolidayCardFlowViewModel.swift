@@ -258,6 +258,7 @@ final class HolidayCardFlowViewModel {
             // A link can name a picture that isn't one of this year's: nothing is chosen then.
             if let designId, !response.designs.contains(where: { $0.id == designId }) { self.designId = nil }
             state = .loaded(response)
+            HolidayCardWords.postageOn = response.postageEnabled
         } catch {
             state = .error(message: Self.loadFailure(error))
         }

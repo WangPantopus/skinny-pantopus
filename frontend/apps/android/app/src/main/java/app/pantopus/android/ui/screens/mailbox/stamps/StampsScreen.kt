@@ -356,8 +356,13 @@ private fun StampsModeHeader(
 
 // MARK: - Top nav
 
+/** The back link and the STAMPS eyebrow; the sample frames also draw the A17.11 design's gift and overflow icons. */
 @Composable
-private fun StampsNav(onBack: () -> Unit) {
+private fun StampsNav(
+    onBack: () -> Unit,
+    /** The sample's gift / overflow icons: nothing is behind them, so only the sample frames draw them. */
+    sampleActions: Boolean = false,
+) {
     Box(
         modifier =
             Modifier
@@ -401,8 +406,8 @@ private fun StampsNav(onBack: () -> Unit) {
                 )
                 Text(text = "Mailbox", fontSize = 15.sp, color = PantopusColors.primary600)
             }
-            // Launch cut #8 (Mail extras): gifting belongs to the postage wallet, which is hidden for the first launch.
-            if (LaunchFeatures.mailExtras) {
+            // Launch cut #8 (Mail extras): gifting belongs to the sample postage wallet, which the screen never shows.
+            if (sampleActions && LaunchFeatures.mailExtras) {
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     NavIcon(icon = PantopusIcon.Gift, label = "Gift a stamp", tag = "stampsNavGift")
                     NavIcon(icon = PantopusIcon.MoreHorizontal, label = "More actions", tag = "stampsNavMore")
@@ -1335,7 +1340,7 @@ internal fun StampSectionLabel(
 @Composable
 internal fun StampsPopulatedFrame(content: StampsContent) {
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
-        StampsNav(onBack = {})
+        StampsNav(onBack = {}, sampleActions = true)
         StampsPopulatedBody(content = content, onBuyMore = {})
     }
 }
@@ -1344,7 +1349,7 @@ internal fun StampsPopulatedFrame(content: StampsContent) {
 @Composable
 internal fun StampsEmptyFrame(content: StampsEmptyContent) {
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
-        StampsNav(onBack = {})
+        StampsNav(onBack = {}, sampleActions = true)
         StampsEmptyBody(content = content, onBuy = {})
     }
 }

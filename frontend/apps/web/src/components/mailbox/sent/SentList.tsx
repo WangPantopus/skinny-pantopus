@@ -9,7 +9,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SentPiece } from '@pantopus/api';
-import { useSentCards, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
+import { useHolidayCards, useSentCards, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
+import { launchFeatures } from '@/lib/featureFlags';
 import ErrorState from '@/components/ui/ErrorState';
 import { toast } from '@/components/ui/toast-store';
 import MailboxIllustration from '../MailboxIllustration';
@@ -26,6 +27,8 @@ export default function SentList({ selectedId }: { selectedId?: string }) {
   const { timeZone } = useMailAddressee();
   const sent = useSentCards();
   const takeBack = useTakeBackHolidayCard();
+  // With digital stamps on, taking a card back gives its stamp back.
+  const { data: holidayCards } = useHolidayCards({ enabled: launchFeatures.holidayCards && launchFeatures.mailbox });
   const [takingId, setTakingId] = useState<string | null>(null);
 
   const items = useMemo(() => sent.data?.pages.flatMap((page) => page.items) ?? [], [sent.data]);
@@ -57,7 +60,12 @@ export default function SentList({ selectedId }: { selectedId?: string }) {
 
   const onTakeBack = async (piece: SentPiece) => {
     const today = calendarDay(new Date(), timeZone);
-    const yes = await askTakeBack({ byEmail: piece.by_email, byLink: piece.by_link, sentToday: calendarDay(new Date(piece.sent_at), timeZone) === today });
+    const yes = await askTakeBack({
+      byEmail: piece.by_email,
+      byLink: piece.by_link,
+      sentToday: calendarDay(new Date(piece.sent_at), timeZone) === today,
+      postage: Boolean(holidayCards?.postage_enabled),
+    });
     if (!yes) return;
     setTakingId(piece.id);
     takeBack.mutate(piece.id, {

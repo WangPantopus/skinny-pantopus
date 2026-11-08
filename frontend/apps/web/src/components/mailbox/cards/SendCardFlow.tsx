@@ -926,7 +926,7 @@ export default function SendCardFlow({ chosenDesign = null }: {
   const doTakeBack = async () => {
     if (!today) return;
     // Today's card: taking it back frees the day.
-    const yes = await askTakeBack({ byEmail: today.by_email, byLink: today.by_link, sentToday: true });
+    const yes = await askTakeBack({ byEmail: today.by_email, byLink: today.by_link, sentToday: true, postage: Boolean(data?.postage_enabled) });
     if (!yes) return;
     setTakeBackError(null);
     takeBack.mutate(today.id, {

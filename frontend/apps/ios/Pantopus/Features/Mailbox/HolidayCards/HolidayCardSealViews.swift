@@ -255,11 +255,16 @@ struct HolidayCardSentView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(card.byLink
-                ? "Your link will say you took it back. You can send a card again today."
+                ? "Your link will say you took it back. \(afterTakeBack)"
                 : card.byEmail
-                ? "The link in their email will say you took it back. You can send a card again today."
-                : "It won’t go out with the morning mail. You can send a card again today.")
+                ? "The link in their email will say you took it back. \(afterTakeBack)"
+                : "It won’t go out with the morning mail. \(afterTakeBack)")
         }
+    }
+
+    /// What taking it back gives back: the card's stamp with digital stamps on, else today's card.
+    private var afterTakeBack: String {
+        cards.postageEnabled ? HolidayCardWords.stampComesBack : "You can send a card again today."
     }
 
     private func muted(_ text: String) -> some View {

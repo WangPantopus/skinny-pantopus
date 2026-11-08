@@ -79,14 +79,21 @@ enum MailSentWords {
         return "It waits for the carrier until \(when) (your clock)."
     }
 
-    /// The confirm's words: the card's own, and the day freed again only
-    /// for a card sent today.
-    static func takeBackConfirm(_ piece: MailSentPiece, now: Date = Date(), calendar: Calendar = .current) -> String {
+    /// The confirm's words: the card's own, then its stamp coming back with
+    /// digital stamps on (`postage`), else the day freed again only for a
+    /// card sent today.
+    static func takeBackConfirm(
+        _ piece: MailSentPiece,
+        postage: Bool = false,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
         let first = piece.byLink
             ? "Your link will say you took it back."
             : piece.byEmail
             ? "The link in their email will say you took it back."
             : "It won’t go out with the morning mail."
+        if postage { return "\(first) \(HolidayCardWords.stampComesBack)" }
         let sentToday = MailDates.parse(piece.sentAt).map { calendar.isDate($0, inSameDayAs: now) } ?? false
         return sentToday ? "\(first) You can send a card again today." : first
     }

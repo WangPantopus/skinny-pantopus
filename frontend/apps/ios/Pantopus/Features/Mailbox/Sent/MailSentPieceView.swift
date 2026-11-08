@@ -315,7 +315,7 @@ struct MailSentPieceView: View {
                         .accessibilityIdentifier("mailSentTakeBackConfirm")
                     Button("Cancel", role: .cancel) {}
                 } message: {
-                    Text(MailSentWords.takeBackConfirm(piece))
+                    Text(MailSentWords.takeBackConfirm(piece, postage: HolidayCardWords.postageOn))
                 }
             }
             if let error = viewModel.takeBackError {

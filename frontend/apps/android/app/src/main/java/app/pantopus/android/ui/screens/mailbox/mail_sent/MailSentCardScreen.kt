@@ -135,6 +135,7 @@ fun MailSentCardScreen(
             },
             onKeep = { confirmTakeBack = false },
             freesToday = MailSentWords.sentToday(card, zone),
+            postage = HolidayCardsRepository.latest.value?.postageEnabled == true,
         )
     }
 }
