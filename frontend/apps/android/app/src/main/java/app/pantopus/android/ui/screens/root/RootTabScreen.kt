@@ -5573,7 +5573,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.CHAT_SEARCH) {
                     ChatSearchScreen(
                         onOpenResult = { result ->
-                            navController.navigate(ChildRoutes.chatSearchConversation(result))
+                            navController.navigate(ChildRoutes.withAvatar(ChildRoutes.chatSearchConversation(result), result.avatarUrl))
                         },
                         onCancel = { navController.popBackStack() },
                     )
@@ -5587,12 +5587,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             // the picker (mirrors iOS InboxTabRoot).
                             navController.popBackStack()
                             navController.navigate(
-                                ChildRoutes.chatConversationFromPicker(
-                                    userId = destination.userId,
-                                    displayName = destination.displayName,
-                                    initials = destination.initials,
-                                    verified = destination.verified,
-                                    locality = destination.locality,
+                                ChildRoutes.withAvatar(
+                                    ChildRoutes.chatConversationFromPicker(
+                                        userId = destination.userId,
+                                        displayName = destination.displayName,
+                                        initials = destination.initials,
+                                        verified = destination.verified,
+                                        locality = destination.locality,
+                                    ),
+                                    destination.avatarUrl,
                                 ),
                             )
                         },

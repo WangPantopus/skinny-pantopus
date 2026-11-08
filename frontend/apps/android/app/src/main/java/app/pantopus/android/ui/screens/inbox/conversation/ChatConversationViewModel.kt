@@ -4212,6 +4212,15 @@ class ChatConversationViewModel
                     ),
                 )
             }
+            // The other person's photo for the header, the empty thread and the typing dots, as their latest
+            // message names it (none when they have none).
+            (mode as? ChatThreadMode.Person)?.let { thread ->
+                val latest = messages.lastOrNull { it.userId == thread.otherUserId && it.sender != null }
+                val person = _counterparty.value as? ChatCounterparty.Person
+                if (latest != null && person != null && person.avatarUrl != latest.sender?.photoUrl) {
+                    _counterparty.value = person.copy(avatarUrl = latest.sender?.photoUrl)
+                }
+            }
             val queuedClientIds =
                 outbox?.entries?.value.orEmpty()
                     .filter { it.error != null && !it.terminal }.mapTo(mutableSetOf()) { it.clientId }
@@ -4320,6 +4329,7 @@ class ChatConversationViewModel
                                     mode is ChatThreadMode.Room && side == ChatMessageSide.Incoming && it.isNotEmpty() &&
                                         (message.sender?.type ?: "local") == "local"
                                 },
+                            senderAvatarUrl = message.sender?.photoUrl?.takeIf { side == ChatMessageSide.Incoming },
                             attachments = message.attachments,
                         ),
                     ),

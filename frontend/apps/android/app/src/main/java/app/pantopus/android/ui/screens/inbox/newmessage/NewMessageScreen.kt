@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -57,6 +58,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
 
 /**
  * Contact picker for the New Message flow (T6.6b P25). Modal-style
@@ -732,6 +734,14 @@ private fun AvatarWithBadge(row: NewMessageContactRow) {
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appTextInverse,
             )
+            if (!row.avatarUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = row.avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
         }
         if (row.verified) {
             Box(

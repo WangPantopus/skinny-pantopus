@@ -137,6 +137,10 @@ data class FeedPostCreator(
             ?: MadeUpUsername.handle(handle)
             ?: "Pantopus user"
     }
+
+    /** The author's photo: the identity's `avatarUrl`, else a legacy row's `profile_picture_url`. */
+    val photoUrl: String?
+        get() = avatarUrl ?: profilePictureUrl
 }
 
 /** Paging envelope returned by `GET /api/posts/feed`. */

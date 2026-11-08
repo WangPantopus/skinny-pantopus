@@ -135,6 +135,8 @@ data class PulsePostCardContent(
     val authorInitials: String,
     val authorVerified: Boolean,
     val avatarTint: FeedAvatarTint = FeedAvatarTint.Sky,
+    /** The author's photo (a business's logo), drawn over the initials. */
+    val authorAvatarUrl: String? = null,
     val meta: String,
     val intent: PulseIntent,
     val title: String?,
@@ -339,6 +341,7 @@ private fun CardHeader(
                     tint = content.avatarTint,
                     verified = content.authorVerified,
                     size = 32.dp,
+                    imageUrl = content.authorAvatarUrl,
                 )
                 Column(modifier = Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(

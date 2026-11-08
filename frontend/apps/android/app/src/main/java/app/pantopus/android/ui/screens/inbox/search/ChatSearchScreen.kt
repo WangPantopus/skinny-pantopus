@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -42,6 +43,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import coil.compose.AsyncImage
 
 /**
  * Chat Search screen — the Inbox `onOpenSearch` destination. Searches
@@ -135,7 +137,7 @@ internal fun ChatSearchResultRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
-            ResultAvatar(initials = result.initials, verified = result.verified)
+            ResultAvatar(initials = result.initials, verified = result.verified, imageUrl = result.avatarUrl)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -177,6 +179,7 @@ private fun description(result: ChatSearchResult): String =
 private fun ResultAvatar(
     initials: String,
     verified: Boolean,
+    imageUrl: String? = null,
 ) {
     Box(modifier = Modifier.size(42.dp), contentAlignment = Alignment.BottomEnd) {
         Box(
@@ -193,6 +196,14 @@ private fun ResultAvatar(
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appTextInverse,
             )
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
         }
         if (verified) {
             Box(
