@@ -68,6 +68,7 @@ import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -114,7 +115,13 @@ internal fun ToStep(
     if (form.byEmail) return EmailForm(form, viewModel)
     val query by viewModel.query.collectAsStateWithLifecycle()
     val search by viewModel.search.collectAsStateWithLifecycle()
+    // One card can go to a list (digital stamps on): people and addresses are added, then "Continue".
+    val many = viewModel.maxRecipients > 1
+    val full = form.listed.size >= viewModel.maxRecipients
     Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3)) {
+        if (many) {
+            ListChips(form, max = viewModel.maxRecipients, onRemove = viewModel::toggle, modifier = Modifier.padding(bottom = Spacing.s3))
+        }
         DeskField(
             value = query,
             onValueChange = viewModel::onQueryChange,
@@ -137,18 +144,25 @@ internal fun ToStep(
                     if (found.people.isEmpty()) {
                         Hint("No one by that name. Check the spelling, or send it to their email.")
                     } else {
-                        People(found.people, onChoose = viewModel::choose)
+                        People(
+                            found.people,
+                            listed = form.listed.map { it.key }.toSet().takeIf { many },
+                            full = full,
+                            onChoose = if (many) viewModel::toggle else viewModel::choose,
+                        )
                     }
             }
         }
         CardButton(
-            "Not on Pantopus? Send it to their email",
+            if (many) "Not on Pantopus? Add their email" else "Not on Pantopus? Send it to their email",
             onClick = { viewModel.showEmail(true) },
             kind = CardButtonKind.Words,
             icon = PantopusIcon.Mail,
+            enabled = !(many && full),
             modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardByEmail"),
         )
-        if (LaunchFeatures.cardTable) {
+        // A link is one card for whoever opens it: not with a list.
+        if (LaunchFeatures.cardTable && form.listed.isEmpty()) {
             CardButton(
                 "Send it by link",
                 onClick = viewModel::chooseLink,
@@ -168,11 +182,16 @@ internal fun ToStep(
     }
 }
 
-/** The people the search found: their initial, their name, their handle and town. */
+/**
+ * The people the search found: their initial, their name, their handle and town. With a list ([listed], the keys of
+ * those on it), a tap puts them on it or takes them off, a check shows who's on it, and nobody more joins once it's [full].
+ */
 @Composable
 private fun People(
     people: List<MailRecipientDto>,
     onChoose: (CardRecipient) -> Unit,
+    listed: Set<String>? = null,
+    full: Boolean = false,
 ) {
     val shape = RoundedCornerShape(Radii.lg)
     Column(
@@ -188,12 +207,15 @@ private fun People(
             if (index > 0) HorizontalDivider(color = PantopusColors.cardNoteEdge)
             val name = person.name?.takeIf { it.isNotBlank() } ?: person.username ?: "Someone"
             val line = listOfNotNull(person.username?.takeIf { it.isNotBlank() }?.let { "@$it" }, person.homeAddress).joinToString(" · ")
+            val entry = CardRecipient.Person(person.userId, name)
+            val on = listed?.contains(entry.key) == true
             Row(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .heightIn(min = 56.dp)
-                        .clickable(role = Role.Button) { onChoose(CardRecipient.Person(person.userId, name)) }
+                        .clickable(role = Role.Button, enabled = on || !full || listed == null) { onChoose(entry) }
+                        .semantics { if (listed != null) selected = on }
                         .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
                         .semantics(mergeDescendants = true) {}
                         .testTag("sendCardPerson.${person.userId}"),
@@ -233,6 +255,19 @@ private fun People(
                         )
                     }
                 }
+                if (on) {
+                    Box(
+                        modifier = Modifier.size(24.dp).clip(CircleShape).background(PantopusColors.cardWax),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Check,
+                            contentDescription = null,
+                            size = 14.dp,
+                            tint = PantopusColors.cardWaxText,
+                        )
+                    }
+                }
             }
         }
     }
@@ -245,7 +280,12 @@ private fun EmailForm(
     viewModel: SendCardViewModel,
 ) {
     val valid = SendCardViewModel.EMAIL.matches(form.email.trim())
+    val many = viewModel.maxRecipients > 1
+    val full = form.listed.size >= viewModel.maxRecipients
     Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4)) {
+        if (many) {
+            ListChips(form, max = viewModel.maxRecipients, onRemove = viewModel::toggle, modifier = Modifier.padding(bottom = Spacing.s4))
+        }
         Text(
             "Their email address",
             fontSize = 14.sp,
@@ -260,7 +300,7 @@ private fun EmailForm(
             label = "Their email address",
             keyboardType = KeyboardType.Email,
             imeAction = ImeAction.Done,
-            onDone = viewModel::chooseEmail,
+            onDone = if (many) viewModel::addEmail else viewModel::chooseEmail,
             tag = "sendCardEmail",
             modifier = Modifier.padding(top = Spacing.s2),
         )
@@ -273,13 +313,13 @@ private fun EmailForm(
             modifier = Modifier.padding(top = Spacing.s2),
         )
         CardButton(
-            "Continue",
-            onClick = viewModel::chooseEmail,
-            enabled = valid,
+            if (many) "Add to the list" else "Continue",
+            onClick = if (many) viewModel::addEmail else viewModel::chooseEmail,
+            enabled = valid && !(many && full),
             modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardEmailContinue"),
         )
         CardButton(
-            "Search Pantopus instead",
+            if (many) "Back to search" else "Search Pantopus instead",
             onClick = { viewModel.showEmail(false) },
             kind = CardButtonKind.Paper,
             modifier = Modifier.padding(top = 10.dp).testTag("sendCardSearchInstead"),
@@ -814,11 +854,21 @@ internal fun SealStep(
     onGetStamps: () -> Unit = {},
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
-    val options = if (to is CardRecipient.Person) (form.theirs?.arrivals ?: cards.arrivals.person) else cards.arrivals.email
+    val options = arrivalOptions(cards, to, form)
     val needsStamps = form.lookUnavailable && stamps?.available == 0
     Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3)) {
         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s2).rotate(1f)) {
             MailPiece(envelopePreview(design, fromName, to, sealed = form.arrival == "sealed_christmas"))
+        }
+        if (to is CardRecipient.Several) {
+            Text(
+                "One envelope for each of the ${to.entries.size} people.",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = PantopusColors.cardTextQuiet,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s3).testTag("sendCardEnvelopeCount"),
+            )
         }
         Text(
             "When should it arrive?",
@@ -848,14 +898,7 @@ internal fun SealStep(
             )
         }
         // Before it's sent there's no knowing their clock; the sent card says the time on this one.
-        DeskNote(
-            if (to is CardRecipient.Person) {
-                "You can take it back until the carrier picks it up at 7 a.m. their time."
-            } else {
-                "You can take it back until they open it."
-            },
-            modifier = Modifier.padding(top = 14.dp),
-        )
+        DeskNote(sealNote(to), modifier = Modifier.padding(top = 14.dp))
         if (form.lookUnavailable) StampPostageLine(stamps, design = design.id, modifier = Modifier.padding(top = Spacing.s3))
         CardButton(
             when {
@@ -876,6 +919,27 @@ internal fun SealStep(
         )
     }
 }
+
+/** The arrivals open for who it's for: a person's by their clock once read, an address's or a link's by the sender's. */
+private fun arrivalOptions(
+    cards: HolidayCardsResponse,
+    to: CardRecipient,
+    form: SendCardForm,
+): List<String> =
+    when (to) {
+        is CardRecipient.Person -> form.theirs?.arrivals ?: cards.arrivals.person
+        // A list's one choice, by the sender's clock; each card is checked by its own person's on Look it over.
+        is CardRecipient.Several -> if (to.entries.any { it is CardRecipient.Person }) cards.arrivals.person else cards.arrivals.email
+        else -> cards.arrivals.email
+    }
+
+/** Until when it can be taken back. Before it's sent there's no knowing their clock; the sent card says the time. */
+private fun sealNote(to: CardRecipient): String =
+    when (to) {
+        is CardRecipient.Several -> listSealNote(to.entries)
+        is CardRecipient.Person -> "You can take it back until the carrier picks it up at 7 a.m. their time."
+        else -> "You can take it back until they open it."
+    }
 
 /** One way it can arrive, as a radio choice on card stock. */
 @Composable
@@ -924,6 +988,7 @@ private fun arrivalChoice(
     theirDay: String?,
     zone: ZoneId,
 ): Pair<String, String> {
+    if (to is CardRecipient.Several) return listChoice(arrival, cards, to.entries, zone)
     val day = HolidayCardTimes.shortDay(theirDay ?: cards.nextRoundAt, zone)
     val name = (to as? CardRecipient.Person)?.firstName ?: "they"
     if (to is CardRecipient.Link) return linkChoice(arrival)
@@ -941,6 +1006,57 @@ private fun arrivalChoice(
         "christmas_morning" ->
             "On Christmas morning" to "${HolidayCardTimes.shortDay(cards.christmasMorningAt, zone)}, with the 7 a.m. mail."
         else -> "Right away, by email" to "They get an email now and can open it once they join with that address."
+    }
+}
+
+/**
+ * A list's one choice, as each card reads it: every person's by their own clock (the days differ, so none is named), and
+ * an address's card waits for them to open the email, sealed until Christmas for both Christmas choices.
+ */
+private fun listChoice(
+    arrival: String,
+    cards: HolidayCardsResponse,
+    entries: List<CardRecipient>,
+    zone: ZoneId,
+): Pair<String, String> {
+    val people = entries.any { it is CardRecipient.Person }
+    val emails = entries.any { it is CardRecipient.Email }
+    if (!people) {
+        return if (arrival == "sealed_christmas") {
+            "Sealed until Christmas" to
+                "They get an email now. Once they join with that address, it waits in their mailbox with a “Do not open " +
+                "until Christmas” seal. It opens on December 25."
+        } else {
+            "Right away, by email" to "They get an email now and can open it once they join with that address."
+        }
+    }
+    val byEmail =
+        when {
+            !emails -> ""
+            arrival == "next_morning" -> " People not on Pantopus get the email right away."
+            else -> " People not on Pantopus get the email now; their card opens on Christmas morning."
+        }
+    return when (arrival) {
+        "sealed_christmas" ->
+            "Sealed until Christmas" to
+                "It comes with each person’s next 7 a.m. mail and waits in their mailbox with a “Do not open until " +
+                "Christmas” seal. It opens on December 25.$byEmail"
+        "christmas_morning" ->
+            "On Christmas morning" to
+                "${HolidayCardTimes.shortDay(cards.christmasMorningAt, zone)}, with the 7 a.m. mail where each person lives.$byEmail"
+        else -> "With the morning mail" to "With each person’s next 7 a.m. mail, where they live. They can open it right away.$byEmail"
+    }
+}
+
+/** The take-back note for a list: each card comes back on its own. */
+internal fun listSealNote(entries: List<CardRecipient>): String {
+    val people = entries.any { it is CardRecipient.Person }
+    val emails = entries.any { it is CardRecipient.Email }
+    return when {
+        people && emails ->
+            "You can take each card back until the carrier picks it up at 7 a.m. their time, or by email until they open it."
+        people -> "You can take each card back until the carrier picks it up at 7 a.m. their time."
+        else -> "You can take each card back until they open it."
     }
 }
 
@@ -966,7 +1082,7 @@ private fun envelopePreview(
         kind = MailKind.Letter,
         from = fromName,
         fromLine = null,
-        to = to.label.takeIf { to !is CardRecipient.Link },
+        to = ((to as? CardRecipient.Several)?.entries?.firstOrNull() ?: to).label.takeIf { to !is CardRecipient.Link },
         toLine = null,
         sender = MailSender.Neighbor,
         opened = false,

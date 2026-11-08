@@ -134,6 +134,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     /// Replaces the tint's color: a person's profile colors their own cards
     /// with their profile color (`ProfileAvatarColor`).
     public var avatarColor: Color?
+    /// The author's photo (a business's logo), over the initials.
+    public let authorAvatarURL: URL?
     public let meta: String
     public let intent: PulseIntent
     public let title: String?
@@ -182,6 +184,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         authorInitials: String,
         authorVerified: Bool,
         avatarTint: FeedAvatarTint = .sky,
+        authorAvatarURL: URL? = nil,
         meta: String,
         intent: PulseIntent,
         title: String?,
@@ -206,6 +209,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.authorInitials = authorInitials
         self.authorVerified = authorVerified
         self.avatarTint = avatarTint
+        self.authorAvatarURL = authorAvatarURL
         self.meta = meta
         self.intent = intent
         self.title = title
@@ -328,7 +332,8 @@ public struct PulsePostCard: View {
                 tint: content.avatarTint,
                 color: content.avatarColor,
                 verified: content.authorVerified,
-                size: 32
+                size: 32,
+                imageURL: content.authorAvatarURL
             )
             VStack(alignment: .leading, spacing: 2) {
                 Text(content.authorName)

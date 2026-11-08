@@ -5124,7 +5124,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onSeeInSent = { id ->
                             navController.popBackStack()
                             HolidayCardsRepository.announceShowSent()
-                            navController.navigate(ChildRoutes.mailboxSentCard(id))
+                            // A list's "See them in Sent": Sent itself.
+                            id?.let { navController.navigate(ChildRoutes.mailboxSentCard(it)) }
                         },
                     )
                 }

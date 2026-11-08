@@ -196,6 +196,8 @@ struct StampChip: View {
 struct StampPostageLine: View {
     let store: MailStampStore
     let design: String
+    /// The cards on a list, one stamp each.
+    var count = 1
 
     var body: some View {
         if let balance = store.balance {
@@ -209,13 +211,13 @@ struct StampPostageLine: View {
                         .shadow(color: MailPaper.cardShadow.opacity(0.3), radius: 1.5, y: 1)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("POSTAGE")
+                    Text(count > 1 ? "POSTAGE · \(count) PEOPLE · \(plural(count, "STAMP", "STAMPS"))" : "POSTAGE")
                         .font(.system(size: 11, weight: .semibold))
                         .tracking(1.3)
                         .foregroundStyle(MailPaper.cardFooter)
-                    Text(line(balance))
+                    Text(count > 1 ? listLine(balance) : line(balance))
                         .font(.system(size: 14))
-                        .foregroundStyle(balance.available == 0 ? MailPaper.wax : MailPaper.cardText)
+                        .foregroundStyle(balance.available < count ? MailPaper.wax : MailPaper.cardText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -235,6 +237,28 @@ struct StampPostageLine: View {
         if balance.freeRemaining > 1 { return "Free: uses 1 of your free cards (\(balance.freeRemaining - 1) left after this)." }
         if balance.freeRemaining == 1 { return "Free: this is your last free card." }
         return "1 stamp (\(plural(balance.available - 1, "stamp")) left after this)."
+    }
+
+    /// What the list's cards cost: free cards first, then stamps; or how many they need.
+    private func listLine(_ balance: StampBalance) -> String {
+        if balance.available < count { return "\(count) cards need \(plural(count, "stamp")). You have \(have(balance))." }
+        let free = min(balance.freeRemaining, count)
+        let paid = count - free
+        let left = balance.available - count
+        if free > 0,
+           paid >
+           0 { return "\(plural(free, "free card")) first, then \(plural(paid, "stamp")). \(plural(left, "stamp")) left after this." }
+        if free > 0 { return "Free: uses \(free) of your free cards (\(balance.freeRemaining - free) left after this)." }
+        return "\(plural(paid, "stamp")) (\(plural(left, "stamp")) left after this)."
+    }
+
+    /// What's left, in words: "1 free card and 2 stamps".
+    private func have(_ balance: StampBalance) -> String {
+        let paid = max(0, balance.paidRemaining)
+        let free = balance.freeRemaining
+        if balance.available == 0 { return "none left" }
+        if paid > 0, free > 0 { return "\(plural(free, "free card")) and \(plural(paid, "stamp"))" }
+        return paid > 0 ? plural(paid, "stamp") : plural(free, "free card")
     }
 }
 
@@ -266,6 +290,8 @@ private struct StampBooklet: View {
 /// The stamp books: what's left, the three books, and what a stamp does.
 struct StampBooksSheet: View {
     let store: MailStampStore
+    /// Opened for a list whose cards need more stamps than are left.
+    var short: StampShort?
     @Environment(\.dismiss) private var dismiss
 
     private static let finePrint = "Digital delivery only. Christmas cards can be sent until December 31; "
@@ -295,6 +321,13 @@ struct StampBooksSheet: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Close")
+                }
+                if let short, short.missing > 0 {
+                    Text("These \(short.cards) cards need \(plural(short.missing, "more stamp", "more stamps")).")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(MailPaper.wax)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("stampBooksShort")
                 }
                 if let have = haveLine {
                     Text(have)

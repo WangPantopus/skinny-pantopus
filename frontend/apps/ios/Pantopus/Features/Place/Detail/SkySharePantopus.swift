@@ -155,12 +155,14 @@ final class SkyShareChatRoute {
             mode: picked.roomId.map { .room(id: $0) } ?? .person(otherUserId: picked.userId),
             displayName: picked.displayName,
             initials: picked.initials,
+            avatarURL: picked.avatarURL?.absoluteString,
             identityKind: picked.identity == .business ? "business" : nil,
             verified: picked.verified
         )
         chat = ChatConversationViewModel(
             mode: destination.threadMode,
             counterparty: destination.counterparty,
+            counterpartyAvatarURL: picked.avatarURL,
             currentUserId: user.id,
             sharedAttachments: [attachment.chatAttachment]
         )

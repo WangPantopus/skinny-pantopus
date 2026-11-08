@@ -35,6 +35,20 @@ public enum HolidayCardEndpoints {
         Endpoint(method: .post, path: "/api/mailbox/cards/preview", body: body)
     }
 
+    /// `POST /api/mailbox/cards/batch/preview` — route
+    /// `backend/routes/mailbox.js:2441`. A list's look (digital stamps on):
+    /// every check its send runs, storing and sending nothing.
+    public static func previewList(_ body: SendHolidayCardListBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/mailbox/cards/batch/preview", body: body)
+    }
+
+    /// `POST /api/mailbox/cards/batch` — route `backend/routes/mailbox.js:2484`.
+    /// One card to every person and address on the list, each its own card;
+    /// answers card by card.
+    public static func sendList(_ body: SendHolidayCardListBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/mailbox/cards/batch", body: body)
+    }
+
     /// `POST /api/mailbox/cards/shared`: counts one share of a card's picture (`card_table`). Answers 204.
     public static func shared(_ body: HolidayCardSharedBody) -> Endpoint {
         Endpoint(method: .post, path: "/api/mailbox/cards/shared", body: body)

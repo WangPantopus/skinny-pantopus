@@ -42,7 +42,11 @@ existing snapshot contract. TestFlight archives use Xcode 26.2 to meet Apple's
 current SDK upload requirement. UI tests are compiled but not executed on hosted
 simulators because the existing XCUITest injection issue is still unresolved;
 run them locally with `make test`. The pre-existing token-literal backlog is also
-not enforced yet. SwiftLint, SwiftFormat and the icon guard are enforced.
+not enforced yet. SwiftLint, SwiftFormat and the icon guard are enforced. Their
+pinned SwiftLint and SwiftFormat binaries are cached from `master` the same way;
+the lint job downloads them only when no copy is saved, through GitHub's releases
+API first and then the github.com download link, retrying both, since that link
+sometimes answers 504 for half an hour at a time.
 
 ## Deployment sequence
 

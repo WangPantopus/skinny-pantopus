@@ -123,6 +123,8 @@ internal fun LookStep(
             is CardRecipient.Person -> PersonLook(to, preview, card, from, sealed)
             is CardRecipient.Email -> EmailLook(to, preview, card, from, sealed, zone)
             CardRecipient.Link -> LinkLook(preview, card, from, sealed, zone)
+            // A list's look shows its first card, to that one person or address (ListLookStep).
+            is CardRecipient.Several -> Unit
         }
     }
 }

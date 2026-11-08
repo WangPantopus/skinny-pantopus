@@ -26,7 +26,7 @@ import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
 import { businesses as businessesApi, mailboxV2P2 as mailboxV2P2Api } from '@pantopus/api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
-import type { DeletedMail, HolidayCards, HolidayCardArrivalsFor, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, RecipientSearchResult } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrivalsFor, HolidayCardList, HolidayCardListPreview, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, RecipientSearchResult } from '@pantopus/api';
 
 import type {
   DrawerMeta,
@@ -224,6 +224,21 @@ export function useSendHolidayCard() {
 export function usePreviewHolidayCard() {
   return useMutation<HolidayCardPreview, MailboxApiError, Parameters<typeof api.previewHolidayCard>[0]>({
     mutationFn: api.previewHolidayCard,
+  });
+}
+
+/** One card to a list (digital stamps on): its look, and sending it card by card. */
+export function usePreviewHolidayCardList() {
+  return useMutation<HolidayCardListPreview, MailboxApiError, HolidayCardList>({
+    mutationFn: api.previewHolidayCardList,
+  });
+}
+
+export function useSendHolidayCardList() {
+  const qc = useQueryClient();
+  return useMutation<Awaited<ReturnType<typeof api.sendHolidayCardList>>, MailboxApiError, HolidayCardList>({
+    mutationFn: api.sendHolidayCardList,
+    onSettled: () => invalidateSentCards(qc),
   });
 }
 

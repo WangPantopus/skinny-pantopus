@@ -7,6 +7,8 @@
 //  sending one and taking it back, and the card a piece of mail carries.
 //
 
+// swiftlint:disable file_length
+
 import Foundation
 
 /// When a card comes: with the next morning's mail, the next morning sealed
@@ -60,9 +62,13 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     public let timeZone: String?
     /// The card sent today, if any (one a day).
     public let today: SentHolidayCard?
+    /// How many one card can go to at once: 20 with digital stamps on (a
+    /// list, `POST /api/mailbox/cards/batch`), else 1.
+    public let maxRecipients: Int
 
     private enum CodingKeys: String, CodingKey {
         case open, holiday, year, designs, collections, arrivals, today, stamps
+        case maxRecipients = "max_recipients"
         case postageEnabled = "postage_enabled"
         case closesOn = "closes_on"
         case messageLimit = "message_limit"
@@ -94,6 +100,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         christmasMorningAt = try? c.decodeIfPresent(String.self, forKey: .christmasMorningAt)
         timeZone = try? c.decodeIfPresent(String.self, forKey: .timeZone)
         today = try? c.decodeIfPresent(SentHolidayCard.self, forKey: .today)
+        maxRecipients = max(1, (try? c.decodeIfPresent(Int.self, forKey: .maxRecipients)) ?? 1)
     }
 }
 
@@ -286,6 +293,124 @@ public struct SendHolidayCardBody: Encodable, Sendable {
         self.requestId = requestId
         self.useStamp = useStamp
     }
+}
+
+/// `POST /api/mailbox/cards/batch` (and its look) body: one card to a list
+/// of people and addresses (digital stamps on), each its own card under its
+/// own request ID, kept for every look and retry of the list. One choice of
+/// arrival: an address reads the morning mail as right away and Christmas
+/// morning as sealed until Christmas.
+public struct SendHolidayCardListBody: Encodable, Sendable {
+    public let design: String
+    public let message: String
+    public let arrival: String
+    public let useStamp = true
+    public let recipients: [Recipient]
+
+    public struct Recipient: Encodable, Sendable {
+        public let to: SendHolidayCardBody.Recipient
+        public let requestId: String
+
+        private enum CodingKeys: String, CodingKey {
+            case to
+            case requestId = "request_id"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case design, message, arrival, recipients
+        case useStamp = "use_stamp"
+    }
+
+    public init(design: String, message: String, arrival: HolidayCardArrival, recipients: [Recipient]) {
+        self.design = design
+        self.message = message
+        self.arrival = arrival.rawValue
+        self.recipients = recipients
+    }
+}
+
+/// One card on a list's look: ready to go (and when it comes), sent by an
+/// earlier try of the list, or refused (and why, in the server's words).
+public struct HolidayCardListLine: Decodable, Sendable, Hashable {
+    public let requestId: String
+    /// `ready`, `already_sent` or `refused`.
+    public let status: String
+    public let toName: String?
+    public let byEmail: Bool
+    public let arrival: HolidayCardArrival?
+    /// The day it goes into their mailbox by their clock (`YYYY-MM-DD`).
+    public let arrivesOn: String?
+    public let card: SentHolidayCard?
+    public let error: String?
+    public let code: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case status, arrival, card, error, code
+        case requestId = "request_id"
+        case toName = "to_name"
+        case byEmail = "by_email"
+        case arrivesOn = "arrives_on"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        requestId = try c.decode(String.self, forKey: .requestId)
+        status = try c.decode(String.self, forKey: .status)
+        toName = try? c.decodeIfPresent(String.self, forKey: .toName)
+        byEmail = (try? c.decodeIfPresent(Bool.self, forKey: .byEmail)) ?? false
+        arrival = (try? c.decodeIfPresent(String.self, forKey: .arrival)).flatMap(HolidayCardArrival.init(rawValue:))
+        arrivesOn = try? c.decodeIfPresent(String.self, forKey: .arrivesOn)
+        card = try? c.decodeIfPresent(SentHolidayCard.self, forKey: .card)
+        error = try? c.decodeIfPresent(String.self, forKey: .error)
+        code = try? c.decodeIfPresent(String.self, forKey: .code)
+    }
+}
+
+/// `POST /api/mailbox/cards/batch/preview` → 200: the first card that can go
+/// as its person will see it (the fields of `HolidayCardPreview`; none when
+/// nobody can get it), every card's line, the stamps left and the stamps the
+/// ready cards take.
+public struct HolidayCardListPreview: Decodable, Sendable, Hashable {
+    public let look: HolidayCardPreview?
+    public let recipients: [HolidayCardListLine]
+    public let stamps: HolidayCardStamps?
+    public let needed: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case recipients, stamps, needed
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        look = try? HolidayCardPreview(from: decoder)
+        recipients = try c.decode([HolidayCardListLine].self, forKey: .recipients)
+        stamps = try? c.decodeIfPresent(HolidayCardStamps.self, forKey: .stamps)
+        needed = (try? c.decodeIfPresent(Int.self, forKey: .needed)) ?? 0
+    }
+}
+
+/// One card in a list's answer: sent now, sent by an earlier try, or not sent
+/// and why. A card that didn't go used no stamp.
+public struct HolidayCardListResult: Decodable, Sendable, Hashable {
+    public let requestId: String
+    /// `sent`, `already_sent` or `not_sent`.
+    public let status: String
+    public let card: SentHolidayCard?
+    public let error: String?
+    public let code: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case status, card, error, code
+        case requestId = "request_id"
+    }
+}
+
+/// `POST /api/mailbox/cards/batch` → 200 (402 `STAMPS_REQUIRED` with
+/// `needed` and `available` when the cards need more stamps than are left;
+/// nothing is sent then).
+public struct SendHolidayCardListResponse: Decodable, Sendable, Hashable {
+    public let results: [HolidayCardListResult]
 }
 
 /// `POST /api/mailbox/cards` → 201.

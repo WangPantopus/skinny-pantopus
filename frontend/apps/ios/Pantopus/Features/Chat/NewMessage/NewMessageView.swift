@@ -431,6 +431,7 @@ private struct NewMessageContactRowView: View {
                 Text(row.initials)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
+                AvatarPhoto(url: row.avatarURL)
             }
             .frame(width: 38, height: 38)
             if row.verified {

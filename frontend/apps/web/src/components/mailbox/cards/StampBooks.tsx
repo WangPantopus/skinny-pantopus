@@ -112,24 +112,49 @@ export function StampChip({ stamps, onOpen }: { stamps: Stamps; onOpen: () => vo
   );
 }
 
-/** What this card costs, beside Seal and send, in the card's own stamp. */
-export function PostageLine({ stamps, design }: { stamps: Stamps; design: string }) {
+/** What's left, in words: "1 free card and 2 stamps". */
+function haveWords(b: Balance): string {
+  const paid = Math.max(0, b.paid_remaining);
+  const free = b.free_remaining;
+  if (b.available === 0) return "none left";
+  if (paid && free) return `${plural(free, "free card")} and ${plural(paid, "stamp")}`;
+  return paid ? plural(paid, "stamp") : plural(free, "free card");
+}
+
+/** What `count` cards on a list cost: free cards first, then stamps; or how many they need. */
+function listPostage(b: Balance, count: number): string {
+  if (b.available < count) return `${count} cards need ${plural(count, "stamp")}. You have ${haveWords(b)}.`;
+  const free = Math.min(b.free_remaining, count);
+  const paid = count - free;
+  const left = b.available - count;
+  if (free && paid) return `${plural(free, "free card")} first, then ${plural(paid, "stamp")}. ${plural(left, "stamp")} left after this.`;
+  if (free) return `Free: uses ${free} of your free cards (${b.free_remaining - free} left after this).`;
+  return `${plural(paid, "stamp")} (${plural(left, "stamp")} left after this).`;
+}
+
+/** What this card costs, beside Seal and send, in the card's own stamp; `count` cards on a list, one stamp each. */
+export function PostageLine({ stamps, design, count = 1 }: { stamps: Stamps; design: string; count?: number }) {
   const b = stamps.balance;
   if (!b) return null;
+  const short = b.available < count;
   const line =
-    b.available === 0
-      ? "No stamps left. Get a stamp book to send this card."
-      : b.free_remaining > 1
-        ? `Free: uses 1 of your free cards (${b.free_remaining - 1} left after this).`
-        : b.free_remaining === 1
-          ? "Free: this is your last free card."
-          : `1 stamp (${plural(b.available - 1, "stamp")} left after this).`;
+    count > 1
+      ? listPostage(b, count)
+      : b.available === 0
+        ? "No stamps left. Get a stamp book to send this card."
+        : b.free_remaining > 1
+          ? `Free: uses 1 of your free cards (${b.free_remaining - 1} left after this).`
+          : b.free_remaining === 1
+            ? "Free: this is your last free card."
+            : `1 stamp (${plural(b.available - 1, "stamp")} left after this).`;
   return (
     <div data-testid="postageLine" className="flex items-center gap-3 rounded-xl border border-dashed border-[#d6cbb6] bg-[#fffdf8] px-3 py-2.5">
       <img src={cardStampFile(null, design)} alt="" className="h-[40px] w-[32px] rotate-3 drop-shadow-[0_1px_2px_rgba(60,40,10,0.3)]" />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8a7f6c]">Postage</p>
-        <p className="text-[14px] leading-[19px] text-[#1f2937]" style={b.available === 0 ? { color: WAX } : undefined}>{line}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8a7f6c]">
+          {count > 1 ? `Postage · ${count} people · ${plural(count, "stamp")}` : "Postage"}
+        </p>
+        <p className="text-[14px] leading-[19px] text-[#1f2937]" style={short ? { color: WAX } : undefined}>{line}</p>
       </div>
     </div>
   );
@@ -156,8 +181,16 @@ function Booklet({ credits }: { credits: number }) {
   );
 }
 
-/** The stamp books: what's left, the three books, and what a stamp does. */
-export function StampSheet({ open, onClose, stamps }: { open: boolean; onClose: () => void; stamps: Stamps }) {
+/**
+ * The stamp books: what's left, the three books, and what a stamp does. `short`: opened for a list whose cards need more
+ * stamps than are left.
+ */
+export function StampSheet({ open, onClose, stamps, short = null }: {
+  open: boolean;
+  onClose: () => void;
+  stamps: Stamps;
+  short?: { cards: number; missing: number } | null;
+}) {
   const headingId = useId();
   const b = stamps.balance;
   const paid = Math.max(0, b?.paid_remaining ?? 0);
@@ -183,6 +216,11 @@ export function StampSheet({ open, onClose, stamps }: { open: boolean; onClose: 
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
+        {short && short.missing > 0 ? (
+          <p data-testid="stampSheetShort" className="mt-3 text-[15px] font-semibold leading-5" style={{ color: WAX }}>
+            These {short.cards} cards need {plural(short.missing, "more stamp", "more stamps")}.
+          </p>
+        ) : null}
         {have ? (
           <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#efe6d6] px-3 py-1 text-[13px] font-semibold text-[#374151]" style={b?.available === 0 ? { color: WAX } : undefined}>
             {have}

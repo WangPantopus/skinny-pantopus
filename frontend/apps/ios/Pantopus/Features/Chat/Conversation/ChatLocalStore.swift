@@ -9,6 +9,9 @@ final class ChatLocalStore: @unchecked Sendable {
     static let historyLimit = 5 * 1024 * 1024
     static let threadLimit = 20
     static let historyLifetime: TimeInterval = 7 * 24 * 3600
+    /// A thread's saved messages. 2: each names its sender's photo (`avatarUrl`); a thread saved before that has
+    /// none, so it is read from the server again instead of showing everyone's initials for a week.
+    static let historySchema = 2
     static let historyRetired = Notification.Name("pantopus.chatHistoryRetired")
 
     private struct SavedInbox: Codable {
@@ -89,7 +92,7 @@ final class ChatLocalStore: @unchecked Sendable {
                     )
                     let saved = try JSONDecoder().decode(SavedHistory.self, from: bytes)
                     guard try saved.epoch == historyEpoch()?.id, try saved.threadEpoch == threadEpoch(Self.threadBase(thread))?.id,
-                          saved.schema == 1, Date().timeIntervalSince(saved.savedAt) <= Self.historyLifetime else {
+                          saved.schema == Self.historySchema, Date().timeIntervalSince(saved.savedAt) <= Self.historyLifetime else {
                         try? FileManager.default.removeItem(at: url)
                         return nil
                     }
@@ -124,7 +127,11 @@ final class ChatLocalStore: @unchecked Sendable {
                     let retiredAt = max(epoch?.retiredAt ?? .distantPast, threadRetired?.retiredAt ?? .distantPast)
                     guard memory.confirmedAt.map({ $0 >= retiredAt }) == true else { return }
                     let bytes = try JSONEncoder().encode(SavedHistory(
-                        schema: 1, savedAt: memory.confirmedAt ?? Date(), thread: memory, epoch: epoch?.id, threadEpoch: threadRetired?.id
+                        schema: Self.historySchema,
+                        savedAt: memory.confirmedAt ?? Date(),
+                        thread: memory,
+                        epoch: epoch?.id,
+                        threadEpoch: threadRetired?.id
                     ))
                     guard bytes.count <= Self.historyLimit else { return }
                     let encrypted = try AES.GCM.seal(bytes, using: key, authenticating: Data("\(scope)|\(thread)".utf8))

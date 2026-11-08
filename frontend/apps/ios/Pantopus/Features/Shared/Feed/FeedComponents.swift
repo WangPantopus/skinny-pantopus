@@ -31,8 +31,9 @@ public enum FeedAvatarTint: Sendable, Hashable, CaseIterable {
     }
 }
 
-/// Feed author avatar: a solid identity-tinted disc with white initials and
-/// an optional sky verified check badge pinned bottom-trailing. Unlike
+/// Feed author avatar: the author's photo, or a solid identity-tinted disc
+/// with white initials, and an optional sky verified check badge pinned
+/// bottom-trailing. Unlike
 /// `AvatarWithIdentityRing` (profile-completion ring), the feed card design
 /// (A03) shows a flat colored disc + check disc.
 public struct FeedAvatar: View {
@@ -41,20 +42,24 @@ public struct FeedAvatar: View {
     private let color: Color?
     private let verified: Bool
     private let size: CGFloat
+    private let imageURL: URL?
 
-    /// `color`, when given, replaces the tint's color.
+    /// `color`, when given, replaces the tint's color. `imageURL` is the
+    /// author's photo, drawn over the initials.
     public init(
         initials: String,
         tint: FeedAvatarTint = .sky,
         color: Color? = nil,
         verified: Bool = false,
-        size: CGFloat = 32
+        size: CGFloat = 32,
+        imageURL: URL? = nil
     ) {
         self.initials = initials
         self.tint = tint
         self.color = color
         self.verified = verified
         self.size = size
+        self.imageURL = imageURL
     }
 
     public var body: some View {
@@ -67,6 +72,7 @@ public struct FeedAvatar: View {
                         .font(.system(size: size >= 32 ? 13 : 11, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextInverse)
                 )
+                .overlay { AvatarPhoto(url: imageURL) }
             if verified {
                 VerifiedBadge(size: size * 0.4, tint: Theme.Color.primary600)
                     .offset(x: 2, y: 2)

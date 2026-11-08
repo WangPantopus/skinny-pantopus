@@ -27,6 +27,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
     public let subIcon: PantopusIcon?
     public let verified: Bool
     public let identity: NewMessageIdentityBadge
+    /// The person's photo; their initials show without one.
+    public let avatarURL: URL?
     /// A group chat's room, for a row under Groups (whose `userId` is the room too).
     public let roomId: String?
 
@@ -40,6 +42,7 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
         subIcon: PantopusIcon?,
         verified: Bool,
         identity: NewMessageIdentityBadge,
+        avatarURL: URL? = nil,
         roomId: String? = nil
     ) {
         self.id = id
@@ -51,6 +54,7 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
         self.subIcon = subIcon
         self.verified = verified
         self.identity = identity
+        self.avatarURL = avatarURL
         self.roomId = roomId
     }
 }
@@ -105,6 +109,8 @@ public struct NewMessageDestination: Hashable, Sendable {
     public let verified: Bool
     public let locality: String?
     public let identity: NewMessageIdentityBadge
+    /// The person's photo, for the conversation the pick opens.
+    public let avatarURL: URL?
     /// Set for a group chat picked: the room the message goes to.
     public let roomId: String?
 
@@ -115,6 +121,7 @@ public struct NewMessageDestination: Hashable, Sendable {
         verified: Bool,
         locality: String?,
         identity: NewMessageIdentityBadge = .personal,
+        avatarURL: URL? = nil,
         roomId: String? = nil
     ) {
         self.userId = userId
@@ -123,6 +130,7 @@ public struct NewMessageDestination: Hashable, Sendable {
         self.verified = verified
         self.locality = locality
         self.identity = identity
+        self.avatarURL = avatarURL
         self.roomId = roomId
     }
 }

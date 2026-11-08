@@ -440,6 +440,17 @@ public final class ChatConversationViewModel {
     /// first presence event arrives. Unknown presence never displays Active now.
     public private(set) var counterpartyOnline: Bool?
 
+    /// The other person's photo in a one-to-one thread, for the header, the empty
+    /// thread and the typing dots: the one their latest message names (none when
+    /// they have none), else the one the thread was opened with.
+    public var counterpartyAvatarURL: URL? {
+        messagesNamePeer ? peerAvatarURL : openedAvatarURL
+    }
+
+    private let openedAvatarURL: URL?
+    private var peerAvatarURL: URL?
+    private var messagesNamePeer = false
+
     /// The other person's id in a person DM (for the header's profile link),
     /// nil in rooms and the AI thread.
     public var profileUserId: String? {
@@ -871,6 +882,7 @@ public final class ChatConversationViewModel {
     init(
         mode: ChatThreadMode,
         counterparty: ChatCounterparty,
+        counterpartyAvatarURL: URL? = nil,
         currentUserId: String,
         initialComposerText: String = "",
         sharedAttachments: [ChatQueuedAttachment] = [],
@@ -892,6 +904,7 @@ public final class ChatConversationViewModel {
     ) {
         self.mode = mode
         self.counterparty = counterparty
+        openedAvatarURL = counterpartyAvatarURL
         self.currentUserId = currentUserId
         if case .room = mode {
             self.asBusinessUserId = asBusinessUserId
@@ -942,6 +955,7 @@ public final class ChatConversationViewModel {
     ) {
         mode = .ai
         self.counterparty = counterparty
+        openedAvatarURL = nil
         currentUserId = "preview_me"
         asBusinessUserId = nil
         scrollToMessageId = nil
@@ -4456,6 +4470,7 @@ public final class ChatConversationViewModel {
     private func rebuildTimeline() {
         let combined = combinedMessages()
         let messagesById = Dictionary(uniqueKeysWithValues: combined.map { ($0.id, $0) })
+        notePeerPhoto(in: combined)
         if combined.isEmpty {
             state = .empty
             return
@@ -4531,12 +4546,22 @@ public final class ChatConversationViewModel {
                 sentSupportTier: Self.sentSupportTier(for: message),
                 senderName: side == .incoming ? roomSenderName(for: message) : nil,
                 senderUserId: side == .incoming ? roomSenderUserId(for: message) : nil,
+                senderAvatarURL: side == .incoming ? message.sender?.photoURL : nil,
                 aiLinks: message.messageType == "ai_reply" ? aiLinksByMessageId[message.id] ?? [] : [],
                 attachments: message.attachments
             )))
         }
         state = .loaded(rows: rows)
         resolveScrollTargetIfNeeded(rows: rows)
+    }
+
+    /// In a one-to-one thread, the other person's photo as their latest message names it.
+    private func notePeerPhoto(in messages: [ChatMessageDTO]) {
+        guard case let .person(peerId) = mode,
+              let latest = messages.last(where: { $0.userId == peerId && $0.sender != nil }) else { return }
+        let photo = latest.sender?.photoURL
+        if peerAvatarURL != photo { peerAvatarURL = photo }
+        if !messagesNamePeer { messagesNamePeer = true }
     }
 
     /// An assistant reply carries the draft cards that came with it, and a message sent to the

@@ -8,8 +8,13 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
+import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
+import app.pantopus.android.data.api.models.mailbox.HolidayCardListRecipient
+import app.pantopus.android.data.api.models.mailbox.HolidayCardListResult
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
+import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
+import app.pantopus.android.data.api.models.mailbox.SendHolidayCardListBody
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
 import app.pantopus.android.data.api.net.NetworkError
@@ -33,6 +38,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
@@ -78,7 +84,37 @@ sealed interface CardRecipient {
     data object Link : CardRecipient {
         override val label: String = "whoever opens your link"
     }
+
+    /** Two or more people or addresses (digital stamps on): a card each (`POST /api/mailbox/cards/batch`). */
+    data class Several(
+        val entries: List<CardRecipient>,
+    ) : CardRecipient {
+        override val label: String get() = listNames(entries.map { it.label })
+    }
 }
+
+/** The same person or address, however it was typed. */
+val CardRecipient.key: String
+    get() =
+        when (this) {
+            is CardRecipient.Person -> "person:$userId"
+            is CardRecipient.Email -> "email:${email.trim().lowercase()}"
+            CardRecipient.Link -> "link"
+            is CardRecipient.Several -> entries.joinToString(",") { it.key }
+        }
+
+/** "Maya and Theo", "Maya, Theo and 2 others". */
+internal fun listNames(names: List<String>): String {
+    if (names.size <= 2) return names.joinToString(" and ")
+    val rest = names.size - 2
+    return "${names[0]}, ${names[1]} and $rest ${if (rest == 1) "other" else "others"}"
+}
+
+/** The stamp books opened because a list's cards need more stamps than are left: "These 4 cards need 2 more stamps." */
+data class StampShort(
+    val cards: Int,
+    val missing: Int,
+)
 
 /** Reading the cards: the season's pictures and today's card. */
 sealed interface SendCardLoad {
@@ -149,7 +185,29 @@ data class SendCardForm(
      * starts once this one is sent or taken back.
      */
     val requestId: String? = null,
+    /** A list (digital stamps on): who's on it, in the order they were added. */
+    val listed: List<CardRecipient> = emptyList(),
+    /**
+     * One request ID per person or address on the list (by [key]), kept for the whole card and saved with the screen,
+     * so every look and retry of the list finds the cards it already sent.
+     */
+    val listIds: Map<String, String> = emptyMap(),
+    /** The list's look (step 5): every card's line, and the first card as its person will see it. */
+    val listPreview: HolidayCardListPreview? = null,
+    /** What sending the list did, card by card (On its way). */
+    val listResults: List<HolidayCardListResult>? = null,
+    /** Cards taken back from On its way: their stamps came back. */
+    val listTakenBack: Set<String> = emptySet(),
+    val listTakingBack: String? = null,
+    /** Why a card on the list couldn't be taken back: its id and the sentence. */
+    val listTakeBackError: Pair<String, String>? = null,
 ) {
+    /** The person or address on the list whose card has this request ID. */
+    fun listEntry(requestId: String): CardRecipient? {
+        val entries = (to as? CardRecipient.Several)?.entries ?: return null
+        return entries.firstOrNull { listIds[it.key] == requestId }
+    }
+
     /** What step 4 says under its choices: why the card didn't go, or that the look can't be shown. */
     val sealNotice: String? get() = sealError ?: LOOK_UNAVAILABLE.takeIf { lookUnavailable }
 
@@ -209,6 +267,19 @@ class SendCardViewModel
 
         /** The server refused a card for a stamp (they were spent on another device meanwhile): the stamp books open. */
         val stampsNeeded: SharedFlow<Unit> = _stampsNeeded.asSharedFlow()
+
+        private val _stampShort = MutableStateFlow<StampShort?>(null)
+
+        /** The stamp books opened for a list whose cards need more stamps than are left. */
+        val stampShort: StateFlow<StampShort?> = _stampShort.asStateFlow()
+
+        /** The stamp books closed: the next time they open, it's not for a list unless it says so again. */
+        fun clearStampShort() {
+            _stampShort.value = null
+        }
+
+        /** How many one card can go to at once; more than one (digital stamps on): a list. */
+        val maxRecipients: Int get() = cards.value?.maxRecipients ?: 1
 
         private val _query = MutableStateFlow("")
         val query: StateFlow<String> = _query.asStateFlow()
@@ -361,8 +432,142 @@ class SendCardViewModel
             val form = _form.value
             val index = SendCardStep.steps.indexOf(form.step)
             if (index <= 0) return false
-            _form.value = form.copy(step = SendCardStep.steps[index - 1], preview = null, sendError = null, sealError = null)
+            _form.value =
+                form.copy(step = SendCardStep.steps[index - 1], preview = null, listPreview = null, sendError = null, sealError = null)
             return true
+        }
+
+        // ---- A list (digital stamps on) ----
+
+        /** A person from the search onto the list, or off it again (also a chip's ×). */
+        fun toggle(entry: CardRecipient) {
+            _form.update {
+                when {
+                    it.listed.any { on -> on.key == entry.key } -> it.copy(listed = it.listed.filterNot { on -> on.key == entry.key })
+                    it.listed.size >= maxRecipients -> it
+                    else -> it.copy(listed = it.listed + entry, tookBack = false)
+                }
+            }
+        }
+
+        /** The address typed onto the list, and back to the name search. */
+        fun addEmail() {
+            val email = _form.value.email.trim()
+            if (!EMAIL.matches(email)) return
+            val entry = CardRecipient.Email(email)
+            _form.update {
+                val skip = it.listed.any { on -> on.key == entry.key } || it.listed.size >= maxRecipients
+                it.copy(listed = if (skip) it.listed else it.listed + entry, email = "", byEmail = false)
+            }
+        }
+
+        /** Step 1 done: one on the list goes as today's single card, two or more as a list. */
+        fun continueWithList() {
+            val listed = _form.value.listed
+            val first = listed.firstOrNull() ?: return
+            choose(if (listed.size == 1) first else CardRecipient.Several(listed))
+        }
+
+        /** The list as it stands (every card with its own request ID, made here the first time), and the form that keeps them. */
+        private fun listToSend(form: SendCardForm): Pair<SendCardForm, SendHolidayCardListBody>? {
+            val entries = (form.to as? CardRecipient.Several)?.entries ?: return null
+            val design = form.design ?: return null
+            val arrival = form.arrival ?: return null
+            val ids = form.listIds.toMutableMap()
+            val recipients =
+                entries.mapNotNull { entry ->
+                    val id = ids.getOrPut(entry.key) { UUID.randomUUID().toString() }
+                    when (entry) {
+                        is CardRecipient.Person -> HolidayCardListRecipient(HolidayCardRecipient(userId = entry.userId), id)
+                        is CardRecipient.Email -> HolidayCardListRecipient(HolidayCardRecipient(email = entry.email), id)
+                        else -> null
+                    }
+                }
+            return form.copy(listIds = ids) to SendHolidayCardListBody(design, form.message.trim(), arrival, recipients)
+        }
+
+        /**
+         * "Look it over" for a list: every card's line, and the first card that can go as its person will see it. A
+         * refusal of the whole list (the season closed, say) stays on step 4 with the server's sentence.
+         */
+        private fun lookOverList() {
+            val form = _form.value
+            if (form.previewing || form.sending || form.message.isBlank()) return
+            val (started, body) = listToSend(form) ?: return
+            _form.value = started.copy(previewing = true, sealError = null)
+            viewModelScope.launch {
+                val result = repo.previewList(body)
+                _form.update {
+                    when {
+                        it.step != SendCardStep.Seal || it.to != started.to -> it.copy(previewing = false)
+                        result is NetworkResult.Success ->
+                            it.copy(previewing = false, listPreview = result.data, step = SendCardStep.Look, sendError = null)
+                        result is NetworkResult.Failure ->
+                            it.copy(previewing = false, sealError = sendMessage(result.error, doing = "show how your cards will look"))
+                        else -> it
+                    }
+                }
+            }
+        }
+
+        /**
+         * "Seal and send" for a list, card by card; again ("Send the rest") with the same request IDs, so only the cards
+         * that didn't go can go. Too few stamps: nothing went, and the stamp books open saying how many more these cards
+         * need.
+         */
+        fun sendList() {
+            val form = _form.value
+            if (form.sending || form.previewing) return
+            val (started, body) = listToSend(form) ?: return
+            _form.value = started.copy(sending = true, sendError = null)
+            viewModelScope.launch {
+                val result = repo.sendList(body)
+                if (result is NetworkResult.Failure && result.error.serverCode() == STAMPS_REQUIRED) {
+                    val (needed, available) = result.error.stampCounts()
+                    val cards = needed ?: body.recipients.size
+                    _stampShort.value = StampShort(cards, maxOf(1, cards - (available ?: 0)))
+                    _form.update { it.copy(sending = false) }
+                    _stampsNeeded.tryEmit(Unit)
+                    return@launch
+                }
+                _form.update {
+                    when (result) {
+                        is NetworkResult.Success ->
+                            it.copy(
+                                sending = false,
+                                listResults = result.data.results,
+                                listPreview = null,
+                                step = SendCardStep.Sent,
+                                tookBack = false,
+                            )
+                        is NetworkResult.Failure ->
+                            it.copy(sending = false, sendError = sendMessage(result.error, doing = "send your cards"))
+                    }
+                }
+            }
+        }
+
+        /** "Get stamps to send" on a list's look: the stamp books, saying how many more these cards need. */
+        fun getStampsForList(available: Int) {
+            val needed = _form.value.listPreview?.needed ?: return
+            _stampShort.value = StampShort(needed, maxOf(1, needed - available))
+            _stampsNeeded.tryEmit(Unit)
+        }
+
+        /** One card on a sent list taken back (confirmed by the screen): its stamp comes back. */
+        fun takeBackFromList(card: SentHolidayCard) {
+            if (_form.value.listTakingBack != null) return
+            _form.update { it.copy(listTakingBack = card.id, listTakeBackError = null) }
+            viewModelScope.launch {
+                val result = repo.takeBack(card.id)
+                _form.update {
+                    when (result) {
+                        is NetworkResult.Success -> it.copy(listTakingBack = null, listTakenBack = it.listTakenBack + card.id)
+                        is NetworkResult.Failure ->
+                            it.copy(listTakingBack = null, listTakeBackError = card.id to takeBackMessage(result.error))
+                    }
+                }
+            }
         }
 
         /**
@@ -371,6 +576,11 @@ class SendCardViewModel
          * leaves "Seal and send" on step 4.
          */
         fun look() {
+            if (_form.value.to is CardRecipient.Several) lookOverList() else lookOverOne()
+        }
+
+        /** [look] for one card. */
+        private fun lookOverOne() {
             val form = _form.value
             val to = form.to ?: return
             val design = form.design ?: return
@@ -551,10 +761,12 @@ class SendCardViewModel
          */
         private fun restoredForm(): SendCardForm {
             val email = saved.get<String>(KEY_EMAIL).orEmpty()
+            val list = saved.get<String>(KEY_LIST)?.let(::readList)
             val to =
                 saved.get<String>(KEY_TO_USER)?.let { CardRecipient.Person(it, saved.get<String>(KEY_TO_NAME).orEmpty()) }
                     ?: saved.get<String>(KEY_TO_EMAIL)?.let { CardRecipient.Email(it) }
                     ?: CardRecipient.Link.takeIf { saved.get<Boolean>(KEY_TO_LINK) == true }
+                    ?: list?.first?.takeIf { saved.get<Boolean>(KEY_TO_LIST) == true && it.size > 1 }?.let { CardRecipient.Several(it) }
             // "Send this card to someone" on a public card page names the picture.
             val design = saved.get<String>(KEY_DESIGN) ?: saved.get<String>(SEND_CARD_DESIGN_KEY)?.takeIf { LaunchFeatures.cardTable }
             val message = saved.get<String>(KEY_MESSAGE).orEmpty()
@@ -581,7 +793,41 @@ class SendCardViewModel
                 message = message,
                 arrival = saved.get<String>(KEY_ARRIVAL),
                 requestId = saved.get<String>(KEY_REQUEST_ID),
+                listed = list?.first.orEmpty(),
+                listIds = list?.second.orEmpty(),
             )
+        }
+
+        /** The list as saved: who's on it and their cards' request IDs. */
+        private fun readList(json: String): Pair<List<CardRecipient>, Map<String, String>>? =
+            runCatching {
+                val saved = JSONObject(json)
+                val entries = saved.getJSONArray("entries")
+                val listed =
+                    (0 until entries.length()).map { at ->
+                        val entry = entries.getJSONObject(at)
+                        if (entry.has("u")) {
+                            CardRecipient.Person(entry.getString("u"), entry.optString("n"))
+                        } else {
+                            CardRecipient.Email(entry.getString("e"))
+                        }
+                    }
+                val ids = saved.getJSONObject("ids")
+                listed to ids.keys().asSequence().map { it.toString() }.associateWith { ids.getString(it) }
+            }.getOrNull()
+
+        /** The list for the screen's saved state; null when there's none. */
+        private fun listJson(form: SendCardForm): String? {
+            if (form.listed.isEmpty()) return null
+            val entries = JSONArray()
+            form.listed.forEach { entry ->
+                when (entry) {
+                    is CardRecipient.Person -> entries.put(JSONObject().put("u", entry.userId).put("n", entry.name))
+                    is CardRecipient.Email -> entries.put(JSONObject().put("e", entry.email))
+                    else -> Unit
+                }
+            }
+            return JSONObject().put("entries", entries).put("ids", JSONObject(form.listIds)).toString()
         }
 
         private fun save(form: SendCardForm) {
@@ -594,6 +840,8 @@ class SendCardViewModel
             saved[KEY_TO_NAME] = (form.to as? CardRecipient.Person)?.name
             saved[KEY_TO_EMAIL] = (form.to as? CardRecipient.Email)?.email
             saved[KEY_TO_LINK] = form.to is CardRecipient.Link
+            saved[KEY_TO_LIST] = form.to is CardRecipient.Several
+            saved[KEY_LIST] = listJson(form).takeIf { form.step != SendCardStep.Sent }
             saved[KEY_DESIGN] = form.design.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_MESSAGE] = form.message.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
@@ -639,6 +887,8 @@ class SendCardViewModel
             private const val KEY_MESSAGE = "sendCard.message"
             private const val KEY_ARRIVAL = "sendCard.arrival"
             private const val KEY_REQUEST_ID = "sendCard.requestId"
+            private const val KEY_TO_LIST = "sendCard.toList"
+            private const val KEY_LIST = "sendCard.list"
         }
     }
 
@@ -657,6 +907,13 @@ private fun NetworkError.serverCode(): String? {
             else -> null
         } ?: return null
     return runCatching { JSONObject(body).optString("code") }.getOrNull()?.takeIf { it.isNotBlank() }
+}
+
+/** `needed` and `available` from a list's 402 `STAMPS_REQUIRED` answer. */
+private fun NetworkError.stampCounts(): Pair<Int?, Int?> {
+    val body = (this as? NetworkError.ClientError)?.body ?: return null to null
+    val json = runCatching { JSONObject(body) }.getOrNull() ?: return null to null
+    return json.optInt("needed", -1).takeIf { it >= 0 } to json.optInt("available", -1).takeIf { it >= 0 }
 }
 
 /** The field a refused request names first (`{ error, details: [{ field, message }] }`), when the server sent one. */

@@ -2,12 +2,15 @@ package app.pantopus.android.data.mailbox
 
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
+import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
 import app.pantopus.android.data.api.models.mailbox.HolidayCardStamps
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
+import app.pantopus.android.data.api.models.mailbox.SendHolidayCardListBody
+import app.pantopus.android.data.api.models.mailbox.SendHolidayCardListResponse
 import app.pantopus.android.data.api.models.mailbox.SentCard
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
 import app.pantopus.android.data.api.models.mailbox.SentMailResponse
@@ -156,6 +159,21 @@ class HolidayCardsRepository
                 }
                 is NetworkResult.Failure -> result
             }
+        }
+
+        /** `POST /api/mailbox/cards/batch/preview`: a list's look; nothing is stored or sent. */
+        suspend fun previewList(body: SendHolidayCardListBody): NetworkResult<HolidayCardListPreview> =
+            safeApiCall { api.previewList(body) }
+
+        /** `POST /api/mailbox/cards/batch`: the list, card by card. Sent reads again once any card went. */
+        suspend fun sendList(body: SendHolidayCardListBody): NetworkResult<SendHolidayCardListResponse> {
+            val result = safeApiCall { api.sendList(body) }
+            if (result is NetworkResult.Success) {
+                val sent = result.data.results.firstOrNull { it.status == "sent" }?.card
+                sent?.let { cardSentFlow.tryEmit(it.id) }
+                result.data.stamps?.let { noteStamps(it) }
+            }
+            return result
         }
 
         /** `POST /api/mailbox/cards/:id/take-back`: the day's card is free again, and it leaves Sent. */

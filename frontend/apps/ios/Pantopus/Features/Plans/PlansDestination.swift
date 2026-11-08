@@ -57,6 +57,7 @@ struct PlansDestination: View {
                     viewModel: ChatConversationViewModel(
                         mode: dest.threadMode,
                         counterparty: dest.counterparty,
+                        counterpartyAvatarURL: dest.avatarURL.flatMap(URL.init(string:)),
                         currentUserId: currentUserId ?? "",
                         initialTopic: dest.initialTopic
                     ),
@@ -148,6 +149,7 @@ struct PlanChatScreen: View {
                     viewModel: ChatConversationViewModel(
                         mode: dest.threadMode,
                         counterparty: dest.counterparty,
+                        counterpartyAvatarURL: dest.avatarURL.flatMap(URL.init(string:)),
                         currentUserId: PlansStoreReads.viewerId ?? "",
                         initialTopic: dest.initialTopic
                     ),

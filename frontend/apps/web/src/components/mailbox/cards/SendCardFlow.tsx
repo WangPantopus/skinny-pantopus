@@ -6,18 +6,20 @@
 // day → look it over (exactly what they will get) and seal and send. One card
 // a day: once it's sent, this page shows today's card, which can be taken
 // back until the 7 a.m. pickup (by email or link: until they open it). With
-// launch key card_table it can also go as a link anyone can open.
+// launch key card_table it can also go as a link anyone can open. With
+// digital stamps on, one card can go to a list of people and addresses
+// (`max_recipients`), each getting a card of their own.
 // ============================================================
 
 import { PostageLine, StampChip, StampSheet, useStamps, type Stamps } from './StampBooks';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
+import type { HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
 import { ChevronLeft, Check, Link2, Loader2, Mail, Search, Send, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
-import { useCardArrivals, useCardRecipients, useHolidayCards, usePreviewHolidayCard, useSendHolidayCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
+import { useCardArrivals, useCardRecipients, useHolidayCards, usePreviewHolidayCard, usePreviewHolidayCardList, useSendHolidayCard, useSendHolidayCardList, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
 import { useMe, useOwnLocalProfile } from '@/lib/me';
 import ErrorState from '@/components/ui/ErrorState';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -32,7 +34,11 @@ import { askTakeBack } from './takeBack';
 import { cardPicture, clockTime, SERIF, shortDay, WAX } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
-type Recipient = { kind: 'person'; userId: string; name: string } | { kind: 'email'; email: string } | { kind: 'link' };
+/** Someone on a list (digital stamps on): a person found by name, or an address. */
+type ListEntry = { kind: 'person'; userId: string; name: string } | { kind: 'email'; email: string };
+type Recipient = ListEntry | { kind: 'link' }
+  /** Two or more people or addresses: a card each (POST /cards/batch). */
+  | { kind: 'list'; entries: ListEntry[] };
 
 const STEPS: Step[] = ['to', 'pick', 'write', 'seal', 'look'];
 const TITLES: Record<Step, string> = {
@@ -77,14 +83,27 @@ function firstName(name: string): string {
   return name.split(/\s+/)[0] || name;
 }
 
+const entryKey = (entry: ListEntry) => (entry.kind === 'person' ? `person:${entry.userId}` : `email:${entry.email.trim().toLowerCase()}`);
+const entryName = (entry: ListEntry) => (entry.kind === 'person' ? entry.name : entry.email);
+
+/** "Maya and Theo", "Maya, Theo and 2 others". */
+function listNames(entries: ListEntry[]): string {
+  const names = entries.map(entryName);
+  if (names.length <= 2) return names.join(' and ');
+  const rest = names.length - 2;
+  return `${names[0]}, ${names[1]} and ${rest} ${rest === 1 ? 'other' : 'others'}`;
+}
+
 function toName(to: Recipient | null): string {
   if (!to) return '';
   if (to.kind === 'link') return 'whoever opens your link';
-  return to.kind === 'person' ? to.name : to.email;
+  if (to.kind === 'list') return listNames(to.entries);
+  return entryName(to);
 }
 
-/** The name on the envelope: a card by link has none until someone opens it. */
+/** The name on the envelope: a card by link has none until someone opens it; a list's first card shows. */
 function envelopeName(to: Recipient): string {
+  if (to.kind === 'list') return entryName(to.entries[0]);
   return to.kind === 'link' ? 'Their name' : toName(to);
 }
 
@@ -117,6 +136,12 @@ function arrivalLine(card: SentHolidayCard): string {
 
 /** Before it's sent we don't know their clock; the sent card says the time on this one. */
 function takeBackBefore(to: Recipient): string {
+  if (to.kind === 'list') {
+    const people = to.entries.some((entry) => entry.kind === 'person');
+    const emails = to.entries.some((entry) => entry.kind === 'email');
+    if (people && emails) return 'You can take each card back until the carrier picks it up at 7 a.m. their time, or by email until they open it.';
+    return people ? 'You can take each card back until the carrier picks it up at 7 a.m. their time.' : 'You can take each card back until they open it.';
+  }
   if (to.kind === 'link') return 'You can take it back until someone opens it.';
   return to.kind === 'email'
     ? 'You can take it back until they open it.'
@@ -168,7 +193,22 @@ function StepHeader({ step, title, onBack, headingRef, trailing = null }: { step
 
 // ── Step 1: who it's for ─────────────────────────────────────
 
-function ToStep({ onChoose }: { onChoose: (to: Recipient) => void }) {
+function ToStep({
+  onChoose,
+  max = 1,
+  listed = [],
+  onToggle,
+  onAdd,
+  onContinue,
+}: {
+  onChoose: (to: Recipient) => void;
+  /** How many one card can go to at once; more than one (digital stamps on): people and addresses go on a list. */
+  max?: number;
+  listed?: ListEntry[];
+  onToggle?: (entry: ListEntry) => void;
+  onAdd?: (entry: ListEntry) => void;
+  onContinue?: () => void;
+}) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [byEmail, setByEmail] = useState(false);
@@ -180,12 +220,57 @@ function ToStep({ onChoose }: { onChoose: (to: Recipient) => void }) {
   const results = useCardRecipients(debounced);
   const people = results.data ?? [];
   const emailOk = EMAIL.test(email.trim());
+  const many = max > 1;
+  const chosen = new Set(listed.map(entryKey));
+  const full = listed.length >= max;
+
+  // A list: the people and addresses on it, each taken off with its ×, and the button on to the next step.
+  const list = many ? (
+    <div className="px-4">
+      {listed.length ? (
+        <ul aria-label="Who it’s for" data-testid="sendCardList" className="mt-3 flex flex-wrap gap-2">
+          {listed.map((entry) => (
+            <li key={entryKey(entry)} className="max-w-full">
+              <button
+                type="button"
+                onClick={() => onToggle?.(entry)}
+                aria-label={`Take ${entryName(entry)} off the list`}
+                className="flex h-9 max-w-full items-center gap-1.5 rounded-full border border-[#d6cbb6] bg-[#fffdf8] pl-3.5 pr-2.5 text-[14px] font-semibold text-[#374151] hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+              >
+                <span className="truncate">{entryName(entry)}</span>
+                <X className="h-4 w-4 flex-none text-[#6b7280]" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className={`mt-2.5 text-[13px] leading-[18px] ${muted}`}>
+        {full ? `That’s ${max}, the most for one send. ` : null}Each person gets their own card. No one sees who else got one.
+      </p>
+    </div>
+  ) : null;
+  const next = many && listed.length ? (
+    <div className="sticky bottom-0 mt-5 bg-[#f5f0e8] px-4 pb-4 pt-2 [@media(prefers-color-scheme:dark)]:bg-app">
+      <button type="button" data-testid="sendCardContinue" onClick={onContinue} className={primary} style={{ backgroundColor: WAX }}>
+        {listed.length === 1 ? `Continue with ${firstName(entryName(listed[0]))}` : `Continue with ${listed.length} people`}
+      </button>
+    </div>
+  ) : null;
 
   if (byEmail) {
     return (
+      <>
+      {list}
       <form
         className="mt-4 px-4"
-        onSubmit={(event) => { event.preventDefault(); if (emailOk) onChoose({ kind: 'email', email: email.trim() }); }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!emailOk) return;
+          if (!many) { onChoose({ kind: 'email', email: email.trim() }); return; }
+          onAdd?.({ kind: 'email', email: email.trim() });
+          setEmail('');
+          setByEmail(false);
+        }}
       >
         <label htmlFor="card-email" className="text-[14px] font-semibold">Their email address</label>
         <input
@@ -203,13 +288,19 @@ function ToStep({ onChoose }: { onChoose: (to: Recipient) => void }) {
           They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. The
           email doesn&rsquo;t show the card.
         </p>
-        <button type="submit" disabled={!emailOk} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>Continue</button>
-        <button type="button" onClick={() => setByEmail(false)} className={`${secondary} mt-2.5`}>Search Pantopus instead</button>
+        <button type="submit" data-testid="sendCardEmailDone" disabled={!emailOk || (many && full)} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
+          {many ? 'Add to the list' : 'Continue'}
+        </button>
+        <button type="button" onClick={() => setByEmail(false)} className={`${secondary} mt-2.5`}>{many ? 'Back to search' : 'Search Pantopus instead'}</button>
       </form>
+      {next}
+      </>
     );
   }
 
   return (
+    <>
+    {list}
     <div className="mt-3 px-4">
       <label htmlFor="card-search" className="sr-only">Search by name</label>
       <div className="relative">
@@ -236,37 +327,51 @@ function ToStep({ onChoose }: { onChoose: (to: Recipient) => void }) {
           <p className={`px-1 text-[14px] leading-5 ${muted}`}>No one by that name. Check the spelling, or send it to their email.</p>
         ) : (
           <ul className="divide-y divide-[#e7dcc6] overflow-hidden rounded-xl border border-[#e3d8c3] bg-[#fffdf8]">
-            {people.map((person) => (
-              <li key={person.userId}>
-                <button
-                  type="button"
-                  onClick={() => onChoose({ kind: 'person', userId: person.userId, name: person.name })}
-                  className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2 text-left hover:bg-[#f5efe3] focus:outline-none focus-visible:bg-[#f5efe3]"
-                >
-                  <span aria-hidden className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#ebe3d4] text-[15px] font-semibold text-[#5b4a36]">
-                    {person.name.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-[15px] font-semibold text-[#111827]">{person.name}</span>
-                    <span className="block truncate text-[13px] text-[#4e5563]">
-                      {[person.username ? `@${person.username}` : null, person.homeAddress].filter(Boolean).join(' · ')}
+            {people.map((person) => {
+              const entry: ListEntry = { kind: 'person', userId: person.userId, name: person.name };
+              const on = many && chosen.has(entryKey(entry));
+              return (
+                <li key={person.userId}>
+                  <button
+                    type="button"
+                    data-testid={`sendCardPerson.${person.userId}`}
+                    onClick={() => (many ? onToggle?.(entry) : onChoose(entry))}
+                    disabled={many && full && !on}
+                    aria-pressed={many ? on : undefined}
+                    className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2 text-left hover:bg-[#f5efe3] focus:outline-none focus-visible:bg-[#f5efe3] disabled:opacity-50"
+                  >
+                    <span aria-hidden className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#ebe3d4] text-[15px] font-semibold text-[#5b4a36]">
+                      {person.name.charAt(0).toUpperCase()}
                     </span>
-                  </span>
-                </button>
-              </li>
-            ))}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-semibold text-[#111827]">{person.name}</span>
+                      <span className="block truncate text-[13px] text-[#4e5563]">
+                        {[person.username ? `@${person.username}` : null, person.homeAddress].filter(Boolean).join(' · ')}
+                      </span>
+                    </span>
+                    {on ? (
+                      <span aria-hidden className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-[#fff7ed]" style={{ backgroundColor: WAX }}>
+                        <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
       <button
         type="button"
+        data-testid="sendCardByEmail"
         onClick={() => setByEmail(true)}
-        className="mt-5 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+        disabled={many && full}
+        className="mt-5 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] disabled:opacity-50"
       >
         <Mail className="h-[18px] w-[18px]" aria-hidden />
-        Not on Pantopus? Send it to their email
+        {many ? 'Not on Pantopus? Add their email' : 'Not on Pantopus? Send it to their email'}
       </button>
-      {launchFeatures.cardTable ? (
+      {launchFeatures.cardTable && !listed.length ? (
         <div className="mt-2.5 text-center">
           <button
             type="button"
@@ -281,6 +386,8 @@ function ToStep({ onChoose }: { onChoose: (to: Recipient) => void }) {
         </div>
       ) : null}
     </div>
+    {next}
+    </>
   );
 }
 
@@ -530,6 +637,7 @@ function arrivalChoice(
   to: Recipient,
   theirDay: string | null,
 ): { title: string; detail: string } {
+  if (to.kind === 'list') return listArrivalChoice(arrival, cards, to.entries);
   const day = shortDay(theirDay ?? cards.next_round_at);
   const name = to.kind === 'person' ? firstName(to.name) : 'they';
   switch (arrival) {
@@ -549,6 +657,29 @@ function arrivalChoice(
     default:
       if (to.kind === 'link') return { title: 'Right away', detail: 'Whoever opens your link can open the card as soon as they join.' };
       return { title: 'Right away, by email', detail: 'They get an email now and can open it once they join with that address.' };
+  }
+}
+
+// A list's one choice, as each card reads it: every person's by their own clock (the days differ, so none is named), and
+// an address's card waits for them to open the email, sealed until Christmas for both Christmas choices.
+function listArrivalChoice(arrival: HolidayCardArrival, cards: HolidayCards, entries: ListEntry[]): { title: string; detail: string } {
+  const people = entries.some((entry) => entry.kind === 'person');
+  const emails = entries.some((entry) => entry.kind === 'email');
+  if (!people) {
+    return arrival === 'sealed_christmas'
+      ? { title: 'Sealed until Christmas', detail: 'They get an email now. Once they join with that address, it waits in their mailbox with a “Do not open until Christmas” seal. It opens on December 25.' }
+      : { title: 'Right away, by email', detail: 'They get an email now and can open it once they join with that address.' };
+  }
+  const byEmail = !emails ? '' : arrival === 'next_morning'
+    ? ' People not on Pantopus get the email right away.'
+    : ' People not on Pantopus get the email now; their card opens on Christmas morning.';
+  switch (arrival) {
+    case 'sealed_christmas':
+      return { title: 'Sealed until Christmas', detail: `It comes with each person’s next 7 a.m. mail and waits in their mailbox with a “Do not open until Christmas” seal. It opens on December 25.${byEmail}` };
+    case 'christmas_morning':
+      return { title: 'On Christmas morning', detail: `${shortDay(cards.christmas_morning_at)}, with the 7 a.m. mail where each person lives.${byEmail}` };
+    default:
+      return { title: 'With the morning mail', detail: `With each person’s next 7 a.m. mail, where they live. They can open it right away.${byEmail}` };
   }
 }
 
@@ -604,6 +735,9 @@ function SealStep({
       <div className="mx-auto max-w-[380px] rotate-1">
         <MailPiece item={preview} recipientName={envelopeName(to)} opened={false} />
       </div>
+      {to.kind === 'list' ? (
+        <p className={`mx-auto mt-3 max-w-[420px] text-center text-[14px] leading-5 ${muted}`}>One envelope for each of the {to.entries.length} people.</p>
+      ) : null}
       <fieldset className="mx-auto mt-6 max-w-[420px]">
         <legend className="text-[16px] font-semibold">When should it arrive?</legend>
         <div className="mt-2.5 space-y-2.5">
@@ -687,6 +821,201 @@ function LookStep({
         </button>
       </div>
     </div>
+  );
+}
+
+// ── A list: look it over, and on its way ─────────────────────
+
+/** The small round initial the name search shows. */
+function Initial({ name }: { name: string }) {
+  return (
+    <span aria-hidden className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#ebe3d4] text-[14px] font-semibold text-[#5b4a36]">
+      {name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+/** What will happen to one card on the list, in a line. */
+function lineWords(line: HolidayCardListLine): string {
+  if (line.status === 'refused') return `${line.error} Won’t be sent.`;
+  if (line.status === 'already_sent') return 'Already sent.';
+  if (line.by_email) return line.arrival === 'sealed_christmas' ? 'Gets an email now. The card opens on Christmas morning.' : 'Gets an email now.';
+  if (line.arrival === 'christmas_morning') return 'On Christmas morning, with their 7 a.m. mail.';
+  if (line.arrival === 'sealed_christmas') return `Comes with their 7 a.m. mail on ${shortDay(line.arrives_on)}, sealed until Christmas.`;
+  return `With their 7 a.m. mail on ${shortDay(line.arrives_on)}.`;
+}
+
+function ListLookStep({
+  look,
+  entries,
+  idOf,
+  sending,
+  error,
+  onSend,
+  stamps,
+  design,
+  onGetStamps,
+}: {
+  look: HolidayCardListPreview;
+  entries: ListEntry[];
+  idOf: (entry: ListEntry) => string;
+  sending: boolean;
+  error: string | null;
+  onSend: () => void;
+  stamps: Stamps | null;
+  design: string;
+  onGetStamps: () => void;
+}) {
+  const byId = new Map(entries.map((entry) => [idOf(entry), entry]));
+  const ready = look.recipients.filter((line) => line.status === 'ready');
+  const first = ready.length ? byId.get(ready[0].request_id) ?? null : null;
+  const needsStamps = Boolean(stamps?.balance) && (stamps?.balance?.available ?? 0) < look.needed;
+  const cards = look.needed === 1 ? '1 card' : `${look.needed} cards`;
+  return (
+    <div data-testid="sendCardLook">
+      {look.piece && first ? (
+        <LookItOver preview={look as HolidayCardPreview} toName={entryName(first)} toFirstName={first.kind === 'person' ? firstName(first.name) : ''} byEmail={first.kind !== 'person'} />
+      ) : null}
+      <div className="mx-auto mt-7 max-w-[420px] px-4 pb-4">
+        <section aria-label="Who it’s going to" data-testid="sendCardListLook">
+          <h2 className="text-[16px] font-semibold">Going to {ready.length} {ready.length === 1 ? 'person' : 'people'}</h2>
+          <ul className="mt-2 divide-y divide-[#e7dcc6] overflow-hidden rounded-xl border border-[#e3d8c3] bg-[#fffdf8] text-[#111827]">
+            {look.recipients.map((line) => {
+              const entry = byId.get(line.request_id);
+              const name = entry ? entryName(entry) : line.status === 'ready' ? line.to_name ?? '' : '';
+              return (
+                <li key={line.request_id} className="flex items-start gap-3 px-3.5 py-2.5">
+                  <Initial name={name} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15px] font-semibold">{name}</span>
+                    <span className={`block text-[13px] leading-[18px] ${line.status === 'refused' ? 'text-[#a81a1a]' : 'text-[#4e5563]'}`}>{lineWords(line)}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+        <p className="mt-3 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
+          {takeBackBefore({ kind: 'list', entries })}
+        </p>
+        {stamps && look.needed ? <div className="mt-3"><PostageLine stamps={stamps} design={design} count={look.needed} /></div> : null}
+        {!look.needed ? <p className={`mt-3 text-center text-[14px] ${muted}`}>None of these cards can go now.</p> : null}
+        {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
+        <button type="button" data-testid="sendCardLookSend" disabled={sending || !look.needed} onClick={needsStamps ? onGetStamps : onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
+          {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
+          {needsStamps ? 'Get stamps to send' : sending ? `Sending ${cards}…` : `Seal and send ${cards}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// A card on a list that didn't go only because of a hiccup (or the stamps ran out meanwhile): sending again can work.
+const SEND_AGAIN = new Set(['CARD_UNAVAILABLE', 'BLOCK_CHECK_UNAVAILABLE', 'STAMPS_REQUIRED']);
+
+function SentList({
+  results,
+  entries,
+  idOf,
+  designs,
+  takenBack,
+  takingBack,
+  takeBackError,
+  onTakeBack,
+  onSendRest,
+  sendingRest,
+  restError,
+}: {
+  results: HolidayCardListResult[];
+  entries: ListEntry[];
+  idOf: (entry: ListEntry) => string;
+  designs: HolidayCardDesign[];
+  /** Cards taken back from here: their stamps came back. */
+  takenBack: Set<string>;
+  takingBack: string | null;
+  takeBackError: { id: string; message: string } | null;
+  onTakeBack: (card: SentHolidayCard) => void;
+  onSendRest: () => void;
+  sendingRest: boolean;
+  restError: string | null;
+}) {
+  const byId = new Map(entries.map((entry) => [idOf(entry), entry]));
+  const went = results.flatMap((result) => (result.status === 'not_sent' ? [] : [result.card]));
+  const stayed = results.flatMap((result) => (result.status === 'not_sent' ? [result] : []));
+  const onTheirWay = went.filter((card) => !takenBack.has(card.id)).length;
+  const again = stayed.some((result) => SEND_AGAIN.has(result.code));
+  return (
+    <section aria-label="On its way" data-testid="sendCardSentList" className="mx-auto mt-4 max-w-[420px] px-4 pb-4">
+      <p className="text-[17px] font-semibold">{onTheirWay === 1 ? '1 card is on its way.' : `${onTheirWay} cards are on their way.`}</p>
+      <ul className="mt-3 space-y-2.5">
+        {went.map((card) => {
+          const design = designs.find((d) => d.id === card.design);
+          const back = takenBack.has(card.id);
+          return (
+            <li key={card.id} className="flex items-start gap-3 rounded-2xl border border-[#e3d8c3] bg-[#fffdf8] p-3 text-[#111827]">
+              {design ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={cardPicture(design.id, 'thumb')} alt="" className="w-[48px] flex-shrink-0 -rotate-2 rounded-[2px] shadow-[0_4px_10px_rgba(60,40,10,0.22)]" />
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-semibold">To {card.to_name || 'them'}</p>
+                <p className="mt-0.5 text-[13px] leading-[18px] text-[#374151]">
+                  {back ? 'You took this card back, and its stamp is back with you.' : arrivalLine(card)}
+                </p>
+                {takeBackError?.id === card.id ? <p role="alert" className="mt-1 text-[13px] font-medium text-[#a81a1a]">{takeBackError.message}</p> : null}
+                {card.can_take_back && !back ? (
+                  <button
+                    type="button"
+                    data-testid={`sendCardTakeBack.${card.id}`}
+                    onClick={() => onTakeBack(card)}
+                    disabled={takingBack === card.id}
+                    className="mt-1.5 inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-[#d6cbb6] bg-[#fffdf8] px-3 text-[13px] font-semibold text-[#374151] hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] disabled:opacity-50"
+                  >
+                    {takingBack === card.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+                    Take it back
+                  </button>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {stayed.length ? (
+        <div className="mt-4">
+          <h2 className="text-[15px] font-semibold">Not sent</h2>
+          <ul className="mt-2 space-y-2">
+            {stayed.map((result) => {
+              const entry = byId.get(result.request_id);
+              return (
+                <li key={result.request_id} className="rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[13px] leading-[18px] text-[#374151]">
+                  <span className="font-semibold text-[#111827]">Not sent to {entry ? entryName(entry) : 'them'}:</span> {result.error}{' '}
+                  {result.code === 'CARD_TAKEN_BACK' ? 'Its stamp came back.' : 'No stamp was used.'}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+      {restError ? <p role="alert" className="mt-3 text-center text-[14px] font-medium text-[#a81a1a]">{restError}</p> : null}
+      <div className="mt-4 space-y-2.5">
+        {again ? (
+          <button type="button" data-testid="sendCardSendRest" onClick={onSendRest} disabled={sendingRest} className={primary} style={{ backgroundColor: WAX }}>
+            {sendingRest ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
+            Send the rest
+          </button>
+        ) : null}
+        <Link href="/app/mailbox/personal" className={again ? secondary : primary} style={again ? undefined : { backgroundColor: WAX }}>Back to your mail</Link>
+        <Link
+          href="/app/mailbox/sent"
+          data-testid="sendCardSeeInSent"
+          className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl text-[15px] font-semibold text-[#7c4a2d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] [@media(prefers-color-scheme:dark)]:text-[#e8b996]"
+        >
+          <Send className="h-4 w-4" aria-hidden />
+          See them in Sent
+        </Link>
+      </div>
+      <p className={`mt-3 text-center text-[13px] ${muted}`}>One digital stamp per card. Receiving and replies are free.</p>
+    </section>
   );
 }
 
@@ -804,15 +1133,47 @@ export default function SendCardFlow({ chosenDesign = null }: {
   const requestId = useRef<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [stampSheet, setStampSheet] = useState(false);
+  // A list (digital stamps on): who's on it, a request ID for each (kept for the whole card, so every look and retry
+  // of the list finds the cards it already sent), its look and what sending it did.
+  const previewList = usePreviewHolidayCardList();
+  const sendList = useSendHolidayCardList();
+  const [listed, setListed] = useState<ListEntry[]>([]);
+  const listIds = useRef(new Map<string, string>());
+  const [listLook, setListLook] = useState<HolidayCardListPreview | null>(null);
+  const [listSent, setListSent] = useState<HolidayCardListResult[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [listTakenBack, setListTakenBack] = useState<Set<string>>(() => new Set());
+  const [listTakingBack, setListTakingBack] = useState<string | null>(null);
+  const [listTakeBackError, setListTakeBackError] = useState<{ id: string; message: string } | null>(null);
+  // The stamp books opened because a list's cards need more stamps than are left.
+  const [stampShort, setStampShort] = useState<{ cards: number; missing: number } | null>(null);
 
   const data = cards.data;
-  const stamps = useStamps(Boolean(data?.postage_enabled), `${sent?.id ?? ''}:${tookBack}:${step}`);
+  const max = data?.max_recipients ?? 1;
+  const stamps = useStamps(Boolean(data?.postage_enabled), `${sent?.id ?? ''}:${listSent?.length ?? 0}:${listTakenBack.size}:${tookBack}:${step}`);
   const design = useMemo(() => data?.designs.find((d) => d.id === designId) ?? null, [data, designId]);
   const today = sent ?? (data?.today && data.today.status !== 'withdrawn' ? data.today : null);
   const options = useMemo<HolidayCardArrival[]>(() => {
     if (!data || !to) return [];
+    if (to.kind === 'list') return to.entries.some((entry) => entry.kind === 'person') ? data.arrivals.person : data.arrivals.email;
     return to.kind === 'person' ? (theirs.data?.arrivals ?? data.arrivals.person) : data.arrivals.email;
   }, [data, to, theirs.data]);
+
+  const listId = (entry: ListEntry) => {
+    const key = entryKey(entry);
+    if (!listIds.current.has(key)) listIds.current.set(key, crypto.randomUUID());
+    return listIds.current.get(key) as string;
+  };
+  const sameEntry = (a: ListEntry) => (b: ListEntry) => entryKey(a) === entryKey(b);
+  const toggleListed = (entry: ListEntry) => setListed((now) => (now.some(sameEntry(entry))
+    ? now.filter((e) => !sameEntry(entry)(e)) : now.length >= max ? now : [...now, entry]));
+  const addListed = (entry: ListEntry) => setListed((now) => (now.some(sameEntry(entry)) || now.length >= max ? now : [...now, entry]));
+  // One on the list goes as today's single card; two or more as a list.
+  const continueWithList = () => {
+    if (!listed.length) return;
+    setTo(listed.length === 1 ? listed[0] : { kind: 'list', entries: listed });
+    setStep('pick');
+  };
 
   // Each step starts at its heading, for keyboards and screen readers.
   useEffect(() => { headingRef.current?.focus(); }, [step]);
@@ -828,13 +1189,32 @@ export default function SendCardFlow({ chosenDesign = null }: {
     if (step === 'to' || step === 'sent') { router.push('/app/mailbox/personal'); return; }
     setStep(STEPS[STEPS.indexOf(step) - 1]);
     setLook(null);
+    setListLook(null);
     setSealError(null);
+    setListError(null);
     preview.reset();
     send.reset();
+    previewList.reset();
+    sendList.reset();
+  };
+
+  // The list as it stands, every card with its own request ID.
+  const listToSend = (entries: ListEntry[]): HolidayCardList | null => {
+    if (!design || !arrival) return null;
+    return {
+      design: design.id,
+      message: message.trim(),
+      arrival,
+      use_stamp: true,
+      recipients: entries.map((entry) => ({
+        to: entry.kind === 'person' ? { user_id: entry.userId } : { email: entry.email.trim() },
+        request_id: listId(entry),
+      })),
+    };
   };
 
   const cardToSend = () => {
-    if (!to || !design || !arrival) return null;
+    if (!to || to.kind === 'list' || !design || !arrival) return null;
     requestId.current ??= crypto.randomUUID();
     return {
       design: design.id,
@@ -849,9 +1229,11 @@ export default function SendCardFlow({ chosenDesign = null }: {
   // Everything written goes, and the next card starts on its first step with a request ID of its own.
   const startOver = () => {
     requestId.current = null;
+    listIds.current = new Map();
     setSent(null);
     setSentLink(null);
     setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null); setLookUnavailable(false);
+    setListed([]); setListLook(null); setListSent(null); setListError(null); setListTakenBack(new Set()); setListTakeBackError(null);
     setStep('to');
   };
 
@@ -874,6 +1256,17 @@ export default function SendCardFlow({ chosenDesign = null }: {
   };
 
   const doLook = () => {
+    if (to?.kind === 'list') {
+      const list = listToSend(to.entries);
+      if (!list) return;
+      setSealError(null);
+      previewList.mutate(list, {
+        onSuccess: (res) => { setListLook(res); setListError(null); setStep('look'); },
+        // A refusal of the whole list (the season closed, say) shows under the choices.
+        onError: (error) => setSealError(sendMessage(error)),
+      });
+      return;
+    }
     const card = cardToSend();
     if (!card) return;
     setSealError(null);
@@ -920,6 +1313,42 @@ export default function SendCardFlow({ chosenDesign = null }: {
         void cards.refetch();
         if (to?.kind === 'person') void theirs.refetch();
       },
+    });
+  };
+
+  // Send the list, card by card; again ("Send the rest") with the same request IDs, so only the cards that didn't go
+  // can go. Too few stamps: nothing went, and the stamp books open saying how many more these cards need.
+  const doSendList = () => {
+    if (to?.kind !== 'list') return;
+    const list = listToSend(to.entries);
+    if (!list) return;
+    setListError(null);
+    sendList.mutate(list, {
+      onSuccess: (res) => { setListSent(res.results); setListLook(null); setStep('sent'); },
+      onError: (error) => {
+        if (error.serverCode === 'STAMPS_REQUIRED') {
+          const needed = Number(error.data?.needed) || list.recipients.length;
+          const have = Number(error.data?.available) || 0;
+          setStampShort({ cards: needed, missing: Math.max(1, needed - have) });
+          void stamps.refresh();
+          setStampSheet(true);
+          return;
+        }
+        setListError(sendMessage(error));
+      },
+    });
+  };
+
+  // One card on a sent list taken back: its stamp comes back.
+  const doTakeBackFromList = async (card: SentHolidayCard) => {
+    const yes = await askTakeBack({ byEmail: card.by_email, sentToday: false, postage: true });
+    if (!yes) return;
+    setListTakeBackError(null);
+    setListTakingBack(card.id);
+    takeBack.mutate(card.id, {
+      onSuccess: () => setListTakenBack((now) => new Set(now).add(card.id)),
+      onError: (error) => setListTakeBackError({ id: card.id, message: sendMessage(error) }),
+      onSettled: () => setListTakingBack(null),
     });
   };
 
@@ -988,9 +1417,11 @@ export default function SendCardFlow({ chosenDesign = null }: {
         title={step === 'sent' && sent?.by_link ? 'Your card is ready.' : undefined}
         onBack={back}
         headingRef={headingRef}
-        trailing={data.postage_enabled ? <StampChip stamps={stamps} onOpen={() => setStampSheet(true)} /> : null}
+        trailing={data.postage_enabled ? <StampChip stamps={stamps} onOpen={() => { setStampShort(null); setStampSheet(true); }} /> : null}
       />
-      {data.postage_enabled ? <StampSheet open={stampSheet} onClose={() => setStampSheet(false)} stamps={stamps} /> : null}
+      {data.postage_enabled ? (
+        <StampSheet open={stampSheet} onClose={() => { setStampSheet(false); setStampShort(null); }} stamps={stamps} short={stampShort} />
+      ) : null}
       {(tookBack || takenBackNote) && step === 'to' ? (
         <p role="status" className="mx-4 mt-2 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[14px] text-[#374151]">
           {takenBackNote ?? (data.postage_enabled ? 'You took your card back, and its stamp is back with you.' : 'You took your card back. You can send a card again today.')}
@@ -1001,7 +1432,14 @@ export default function SendCardFlow({ chosenDesign = null }: {
       ) : null}
 
       {step === 'to' ? (
-        <ToStep onChoose={(next) => { setTo(next); setStep('pick'); }} />
+        <ToStep
+          onChoose={(next) => { setTo(next); setStep('pick'); }}
+          max={max}
+          listed={listed}
+          onToggle={toggleListed}
+          onAdd={addListed}
+          onContinue={continueWithList}
+        />
       ) : null}
       {step === 'pick' ? (
         <PickStep
@@ -1034,8 +1472,8 @@ export default function SendCardFlow({ chosenDesign = null }: {
           design={design}
           fromName={fromName}
           arrival={arrival}
-          onArrival={(next) => { setArrival(next); setSealError(null); preview.reset(); }}
-          looking={preview.isPending}
+          onArrival={(next) => { setArrival(next); setSealError(null); preview.reset(); previewList.reset(); }}
+          looking={preview.isPending || previewList.isPending}
           sendsHere={lookUnavailable}
           sending={send.isPending}
           error={sealError ?? (lookUnavailable ? LOOK_UNAVAILABLE : preview.isError ? sendMessage(preview.error, to.kind === 'email') : null)}
@@ -1055,6 +1493,38 @@ export default function SendCardFlow({ chosenDesign = null }: {
           stamps={data.postage_enabled ? stamps : null}
           design={design?.id ?? ''}
           onGetStamps={() => setStampSheet(true)}
+        />
+      ) : null}
+      {step === 'look' && listLook && to?.kind === 'list' ? (
+        <ListLookStep
+          look={listLook}
+          entries={to.entries}
+          idOf={listId}
+          sending={sendList.isPending}
+          error={listError}
+          onSend={doSendList}
+          stamps={data.postage_enabled ? stamps : null}
+          design={design?.id ?? ''}
+          onGetStamps={() => {
+            const have = stamps.balance?.available ?? 0;
+            setStampShort({ cards: listLook.needed, missing: Math.max(1, listLook.needed - have) });
+            setStampSheet(true);
+          }}
+        />
+      ) : null}
+      {step === 'sent' && listSent && to?.kind === 'list' ? (
+        <SentList
+          results={listSent}
+          entries={to.entries}
+          idOf={listId}
+          designs={data.designs}
+          takenBack={listTakenBack}
+          takingBack={listTakingBack}
+          takeBackError={listTakeBackError}
+          onTakeBack={(card) => { void doTakeBackFromList(card); }}
+          onSendRest={doSendList}
+          sendingRest={sendList.isPending}
+          restError={listError}
         />
       ) : null}
       {step === 'sent' && sent ? (

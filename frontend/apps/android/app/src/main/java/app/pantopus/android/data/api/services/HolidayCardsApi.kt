@@ -2,10 +2,13 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardLinkResponse
+import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
+import app.pantopus.android.data.api.models.mailbox.SendHolidayCardListBody
+import app.pantopus.android.data.api.models.mailbox.SendHolidayCardListResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardResponse
 import app.pantopus.android.data.api.models.mailbox.SentCardResponse
 import app.pantopus.android.data.api.models.mailbox.SentMailResponse
@@ -68,6 +71,24 @@ interface HolidayCardsApi {
     suspend fun cardLink(
         @Path("id") id: String,
     ): HolidayCardLinkResponse
+
+    /**
+     * `POST /api/mailbox/cards/batch/preview` — route `backend/routes/mailbox.js:2441`: a list's look (digital stamps on),
+     * every check its send runs, storing and sending nothing.
+     */
+    @POST("api/mailbox/cards/batch/preview")
+    suspend fun previewList(
+        @Body body: SendHolidayCardListBody,
+    ): HolidayCardListPreview
+
+    /**
+     * `POST /api/mailbox/cards/batch` — route `backend/routes/mailbox.js:2484`: one card to every person and address on
+     * the list, each its own card; answers card by card (402 when the cards need more stamps than are left).
+     */
+    @POST("api/mailbox/cards/batch")
+    suspend fun sendList(
+        @Body body: SendHolidayCardListBody,
+    ): SendHolidayCardListResponse
 
     /** `POST /api/mailbox/cards/shared` — counts what was shared (launch key `card_table`). Answers 204. */
     @POST("api/mailbox/cards/shared")

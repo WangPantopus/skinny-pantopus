@@ -299,7 +299,8 @@ public final class BusinessInboxViewModel {
             handle: handle,
             preview: room.lastMessagePreview ?? "",
             timeAgo: relativeTime(room.lastMessageAt),
-            unreadCount: max(0, room.unreadCount ?? 0)
+            unreadCount: max(0, room.unreadCount ?? 0),
+            avatarURL: room.otherParticipantIdentity?.avatarUrl.flatMap(URL.init(string:))
         )
     }
 
