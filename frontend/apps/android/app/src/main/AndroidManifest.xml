@@ -15,6 +15,13 @@
          system's document and photo pickers, which need no media permission; Google
          Play only allows READ_MEDIA_* for apps whose core feature is a media library. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- A Moment's video carries its sound: the in-app camera asks for the microphone when someone first holds the
+         shutter for a video. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- "Save to Photos" on your own Moment: Android 9 and older need this to add a file to the gallery. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
 

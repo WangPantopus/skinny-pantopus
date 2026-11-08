@@ -389,7 +389,8 @@ class BlockedUsersViewModel
             return RowModel(
                 id = mutedRowId(entityId),
                 title = mute.name,
-                subtitle = MadeUpUsername.handle(mute.username),
+                // A mute from the Moments viewer hides only that person's Moments.
+                subtitle = if (mute.surface == "moments") "Moments only" else MadeUpUsername.handle(mute.username),
                 template = RowTemplate.AvatarKebab,
                 leading =
                     RowLeading.AvatarWithBadge(

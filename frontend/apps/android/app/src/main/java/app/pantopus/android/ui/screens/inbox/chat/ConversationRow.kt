@@ -78,6 +78,7 @@ fun ConversationRow(
         ) {
             Avatar(content)
             Middle(content, modifier = Modifier.weight(1f))
+            content.momentReply?.takeIf { !it.ended }?.let { reply -> MomentThumb(reply) }
             Trailing(content)
         }
         Box(
@@ -88,6 +89,24 @@ fun ConversationRow(
                     .height(1.dp)
                     .background(PantopusColors.appBorderSubtle),
         )
+    }
+}
+
+/** The replied-to Moment's small picture (board N3: 40 × 54), the text card's mark when it has none. */
+@Composable
+private fun MomentThumb(reply: ConversationMomentReply) {
+    Box(
+        modifier =
+            Modifier
+                .size(width = 40.dp, height = 54.dp)
+                .clip(RoundedCornerShape(Radii.md))
+                .background(PantopusColors.momentCardTealTop),
+        contentAlignment = Alignment.Center,
+    ) {
+        PantopusIconImage(icon = PantopusIcon.CircleDashed, contentDescription = null, size = 18.dp, tint = PantopusColors.appTextInverse)
+        reply.thumbUrl?.let { url ->
+            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+        }
     }
 }
 
@@ -217,6 +236,16 @@ private fun Middle(
                 )
             }
             content.identityChip?.let { IdentityDisclosureChip(chip = it) }
+        }
+        content.momentReply?.let { reply ->
+            Text(
+                text = reply.label,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.primary600,
+                maxLines = 1,
+                modifier = Modifier.testTag("conversationRow.moment_${content.id}"),
+            )
         }
         Text(
             text = content.preview,
@@ -396,6 +425,7 @@ private fun buildA11yLabel(content: ConversationRowContent): String {
     parts.add(content.displayName)
     content.identityChip?.label?.let { parts.add(it) }
     if (content.verified) parts.add("verified")
+    content.momentReply?.let { parts.add(it.label) }
     parts.add(content.preview)
     if (content.unread > 0) parts.add("${content.unread} unread")
     return parts.joinToString(". ")

@@ -458,7 +458,15 @@ class ChatListViewModel
             val newer = messageTime(createdAt) >= messageTime(original.lastMessageAt)
             val updated =
                 if (newer) {
-                    original.copy(preview = preview, timeLabel = timeLabel, unread = unreadFor, lastMessageAt = createdAt)
+                    // The live update names no Moment: a newer message's row drops the last one's "Replied to your Moment" until
+                    // the next read brings it back if this one is a reply too.
+                    original.copy(
+                        preview = preview,
+                        timeLabel = timeLabel,
+                        unread = unreadFor,
+                        lastMessageAt = createdAt,
+                        momentReply = null,
+                    )
                 } else {
                     original.copy(unread = unreadFor)
                 }
@@ -533,6 +541,19 @@ class ChatListViewModel
                     },
                 gigId = if (isRoom) dto.gigId else null,
                 lastMessageAt = dto.lastMessageAt,
+                momentReply =
+                    dto.lastMessageMoment?.let { moment ->
+                        ConversationMomentReply(
+                            label =
+                                when {
+                                    moment.ended -> "Replied to a Moment that ended"
+                                    moment.fromMe == true -> "Replied to their Moment"
+                                    else -> "Replied to your Moment"
+                                },
+                            thumbUrl = moment.thumbUrl.takeIf { !moment.ended },
+                            ended = moment.ended,
+                        )
+                    },
             )
         }
 

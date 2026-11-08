@@ -83,15 +83,16 @@ class NavigationSmokeTest {
     fun pantopusRoute_entriesEachExposeBottomBarTestTag() {
         fun tags() = PantopusRoute.entries.map { route -> "tab.${route.path.substringAfterLast('/')}" }
         // Place keeps its legacy home path for deep-link compatibility. These builds list no launch keys, so the
-        // Pulse redesign is off: the October 13 bar with Plans (drawn while its switch is on). Messages (Mail, the
-        // conversation list, while Mailbox is off) left the bar for the chat button (founder decision 2026-11-08).
-        check(tags() == listOf("tab.home", "tab.today", "tab.nearby", "tab.plans")) {
+        // Pulse redesign is off: the October 13 bar with Moments and Plans (each drawn while its switch is on). Messages
+        // (Mail, the conversation list, while Mailbox is off) left the bar for the chat button (founder decision
+        // 2026-11-08).
+        check(tags() == listOf("tab.home", "tab.today", "tab.nearby", "tab.moments", "tab.plans")) {
             "PantopusRoute.entries derived testTags drifted: ${tags()}"
         }
         // With Mailbox on, Mail is the Mailbox tab; Messages stays off the bar.
         try {
             LaunchFeatures.overrideForTesting = setOf(LaunchFeature.MAILBOX)
-            check(tags() == listOf("tab.home", "tab.today", "tab.nearby", "tab.plans", "tab.mail")) {
+            check(tags() == listOf("tab.home", "tab.today", "tab.nearby", "tab.moments", "tab.plans", "tab.mail")) {
                 "PantopusRoute.entries derived testTags drifted with Mailbox on: ${tags()}"
             }
         } finally {

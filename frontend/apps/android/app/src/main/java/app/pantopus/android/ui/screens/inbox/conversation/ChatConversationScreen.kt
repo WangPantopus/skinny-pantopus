@@ -3381,6 +3381,7 @@ private fun BubbleRow(
                     )
                 }
             }
+            content.momentQuote?.let { quote -> MomentReplyQuote(quote = quote) }
             val canViewAttachments = content.lockedTier == null || isOut
             if (content.body !is ChatBubbleBody.Text && content.replyPreview != null && canViewAttachments) {
                 BubbleContainer(
@@ -6061,3 +6062,42 @@ private fun readChatAttachment(
             output.toByteArray().takeIf { it.isNotEmpty() }
         }
     }.getOrNull()
+
+/**
+ * The Moment a message replies to (Pantopus Moments contract "Chat"): the line ("Replied to your Moment") and a small
+ * picture of it above the bubble, or "Moment ended" with no picture once it has.
+ */
+@Composable
+private fun MomentReplyQuote(quote: ChatMomentQuote) {
+    Column(
+        modifier =
+            Modifier
+                .padding(bottom = Spacing.s1)
+                .testTag("chat.momentQuote")
+                .semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
+        Text(text = quote.label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
+        if (!quote.ended) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(width = 60.dp, height = 80.dp)
+                        .clip(RoundedCornerShape(Radii.md))
+                        .background(PantopusColors.momentCardTealTop),
+                contentAlignment = Alignment.Center,
+            ) {
+                // A text card has no picture: its mark on the teal card color.
+                PantopusIconImage(icon = PantopusIcon.CircleDashed, contentDescription = null, size = 22.dp, tint = Color.White)
+                quote.thumbUrl?.let { url ->
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
+            }
+        }
+    }
+}

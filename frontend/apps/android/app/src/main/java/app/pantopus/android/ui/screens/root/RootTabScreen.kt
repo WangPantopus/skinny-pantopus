@@ -344,6 +344,12 @@ import app.pantopus.android.ui.screens.mailbox.vacation.VacationHoldScreen
 import app.pantopus.android.ui.screens.mailbox.vault.VaultListScreen
 import app.pantopus.android.ui.screens.marketplace.MarketplaceScreen
 import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
+import app.pantopus.android.ui.screens.moments.MomentsExternalRoutes
+import app.pantopus.android.ui.screens.moments.MomentsGateViewModel
+import app.pantopus.android.ui.screens.moments.MomentsRoutes
+import app.pantopus.android.ui.screens.moments.map.MomentsMapActions
+import app.pantopus.android.ui.screens.moments.map.MomentsMapScreen
+import app.pantopus.android.ui.screens.moments.momentsRoutes
 import app.pantopus.android.ui.screens.my_bids.MyBidsScreen
 import app.pantopus.android.ui.screens.my_posts.MyPostsScreen
 import app.pantopus.android.ui.screens.my_tasks.MyTasksScreen
@@ -2366,15 +2372,15 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
 
 /**
  * Screens where the tab bar stays while their page scrolls, as on iPhone: a piece of mail keeps its own bar (the
- * letter's actions) just above it, and the Plans map has no page to scroll.
+ * letter's actions) just above it, and the Plans and Moments maps have no page to scroll.
  */
-private val TAB_BAR_STAYS_ROUTES = setOf(ChildRoutes.MAILBOX_ITEM_DETAIL, PantopusRoute.Plans.path)
+private val TAB_BAR_STAYS_ROUTES = setOf(ChildRoutes.MAILBOX_ITEM_DETAIL, PantopusRoute.Plans.path, PantopusRoute.Moments.path)
 
 /**
  * Screens with no tab bar, as on iPhone: a conversation has the whole window (founder request 2026-11-06), and its
- * Back returns to the screen underneath, where the bar is.
+ * Back returns to the screen underneath, where the bar is. So do the Moments viewer and camera (boards V1 to P4).
  */
-private val NO_TAB_BAR_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION)
+private val NO_TAB_BAR_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION) + MomentsRoutes.fullScreen
 
 /** Where the first-run notices may show: nothing else is asking there. */
 private val NOTICE_ROUTES = setOf(PantopusRoute.Place.path, PantopusRoute.Today.path)
@@ -2464,13 +2470,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val plansGate: PlansGateViewModel = hiltViewModel()
     val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
     val plansSettled by plansGate.settled.collectAsStateWithLifecycle()
-    val barTabs = remember(plansFlags.plans) { PantopusRoute.barTabs(plansFlags.plans) }
+    // Moments is a tab only while its switch is on, between Pulse and Plans (founder, 2026-11-08).
+    val momentsGate: MomentsGateViewModel = hiltViewModel()
+    val momentsOn by momentsGate.on.collectAsStateWithLifecycle()
+    val momentsSettled by momentsGate.settled.collectAsStateWithLifecycle()
+    val barTabs = remember(plansFlags.plans, momentsOn) { PantopusRoute.barTabs(plansFlags.plans, momentsOn) }
     // Standing on Plans when the switch turns off lands on Pulse (Nearby with the Pulse redesign off). It waits for
     // the person's answer, so a relaunch that restores the Plans tab isn't moved off it by the moment before the
     // answer is read.
     LaunchedEffect(plansFlags.plans, plansSettled, currentRoute) {
         if (plansSettled && !plansFlags.plans && currentRoute == PantopusRoute.Plans) {
             navController.navigateToRootTab(PantopusRoute.plansOffTab)
+        }
+    }
+    // Standing on Moments when its switch turns off lands on Pulse, once the person's answer is known.
+    LaunchedEffect(momentsOn, momentsSettled, currentRoute) {
+        if (momentsSettled && !momentsOn && currentRoute == PantopusRoute.Moments) {
+            navController.navigateToRootTab(PantopusRoute.momentsOffTab)
         }
     }
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
@@ -3056,11 +3072,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             },
             bottomBar = bottomBar@{
                 if (!showsTabBar) {
-                    // The chat's composer color runs on under the system navigation area.
+                    // The chat's composer color runs on under the system navigation area; under the Moments viewer and
+                    // camera, the stage's black does.
+                    val stage = backStackEntry?.destination?.route in MomentsRoutes.fullScreen
                     Spacer(
                         Modifier
                             .fillMaxWidth()
-                            .background(PantopusColors.appSurface)
+                            .background(if (stage) PantopusColors.momentStage else PantopusColors.appSurface)
                             .navigationBarsPadding(),
                     )
                     return@bottomBar
@@ -3164,6 +3182,25 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             ),
                     )
                 }
+
+                composable(PantopusRoute.Moments.path) {
+                    // Moments (the map of what people are posting where they are) is a tab only while the `moments` flag
+                    // is on. With it off there is nothing to show here: the switch watch above moves a person to Pulse.
+                    if (momentsOn) {
+                        MomentsMapScreen(
+                            actions =
+                                MomentsMapActions(
+                                    onWatch = { navController.navigate(MomentsRoutes.WATCH) },
+                                    onAdd = { navController.navigate(MomentsRoutes.compose()) },
+                                    onOpenMenu = openMenu,
+                                ),
+                        )
+                    }
+                }
+                momentsRoutes(
+                    nav = navController,
+                    external = MomentsExternalRoutes(openMap = { navController.navigateToRootTab(PantopusRoute.Moments) }),
+                )
 
                 composable(PantopusRoute.Plans.path) {
                     // Plans (the map and list of what's on) is a tab only while the `plans` flag is on, with the Pulse

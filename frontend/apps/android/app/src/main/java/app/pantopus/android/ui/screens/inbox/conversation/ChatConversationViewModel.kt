@@ -4325,6 +4325,19 @@ class ChatConversationViewModel
                             side = side,
                             body = body,
                             replyPreview = replyPreview,
+                            momentQuote =
+                                message.moment?.let { moment ->
+                                    ChatMomentQuote(
+                                        label =
+                                            when {
+                                                moment.ended -> "Moment ended"
+                                                side == ChatMessageSide.Outgoing -> "Replied to their Moment"
+                                                else -> "Replied to your Moment"
+                                            },
+                                        thumbUrl = moment.thumbUrl.takeIf { !moment.ended },
+                                        ended = moment.ended,
+                                    )
+                                },
                             reactions = reactions,
                             hasTail = hasTail,
                             stamp = stamp,

@@ -84,6 +84,7 @@ import app.pantopus.android.data.api.services.MailboxV2Api
 import app.pantopus.android.data.api.services.MailboxVaultApi
 import app.pantopus.android.data.api.services.MatchedBusinessesApi
 import app.pantopus.android.data.api.services.MembershipApi
+import app.pantopus.android.data.api.services.MomentsApi
 import app.pantopus.android.data.api.services.NeighborMessagesApi
 import app.pantopus.android.data.api.services.NeighborhoodApi
 import app.pantopus.android.data.api.services.NotificationPreferencesApi
@@ -787,6 +788,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun providePlansApi(retrofit: Retrofit): PlansApi = retrofit.create(PlansApi::class.java)
+
+    /** Pantopus Moments: `/api/moments` and the `moments` flag. */
+    @Provides
+    @Singleton
+    fun provideMomentsApi(retrofit: Retrofit): MomentsApi = retrofit.create(MomentsApi::class.java)
 
     /** Pulse's own routes (`/api/pulse/…`): the asker's keep-open and close (S7). */
     @Provides

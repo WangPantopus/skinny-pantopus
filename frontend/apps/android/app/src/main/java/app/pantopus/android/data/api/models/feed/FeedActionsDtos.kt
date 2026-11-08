@@ -26,6 +26,8 @@ data class MutedEntityDto(
     val name: String,
     val username: String? = null,
     @Json(name = "avatar_url") val avatarUrl: String? = null,
+    /** `moments` for a person muted in Moments only ("Mute this person's Moments"); null for a mute of everything. */
+    val surface: String? = null,
 )
 
 /** One Pulse topic the viewer muted (`GET /api/posts/mute` → `topic_mutes`, contract section 2.9). */
