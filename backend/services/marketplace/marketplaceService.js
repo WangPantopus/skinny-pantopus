@@ -221,7 +221,7 @@ async function getMuteAndBlockFilters(userId) {
     { data: userBlocks, error: userBlocksError },
     hidesResult,
   ] = await Promise.all([
-    supabaseAdmin.from('PostMute').select('muted_entity_id, muted_entity_type').eq('user_id', userId),
+    supabaseAdmin.from('PostMute').select('muted_entity_id, muted_entity_type, surface').eq('user_id', userId),
     supabaseAdmin.from('Relationship')
       .select('requester_id, addressee_id')
       .eq('status', 'blocked')
@@ -252,8 +252,9 @@ async function getMuteAndBlockFilters(userId) {
   }
 
   const result = {
+    // A Moments-only mute ("Mute this person's Moments") leaves their listings alone.
     mutedUserIds: new Set(
-      (mutes || []).filter(m => m.muted_entity_type === 'user').map(m => m.muted_entity_id)
+      (mutes || []).filter(m => m.muted_entity_type === 'user' && m.surface !== 'moments').map(m => m.muted_entity_id)
     ),
     blockedUserIds,
     hiddenListingIds: new Set((hides || []).map(h => h.listing_id)),

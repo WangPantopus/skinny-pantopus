@@ -42,6 +42,8 @@ const {
   isRoomClosedForWrites,
 } = require('../services/chatGigRoomAccess');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
+// A reply to a Moment carries the Moment's quote (services/moments/momentChat.js).
+const { momentQuotes, momentField, lastMessageMoments } = require('../services/moments/momentChat');
 const { markChatRead, applyDirectReadReceipts, timestampMicros } = require('../services/chatReadState');
 const { parseSyncCursor, chatSyncSnapshot, chatChanges, chatReadReceipts, readChatRoomBatches, readChatParticipants, buildReactionSummary } = require('../services/chatSync');
 const chatRealtime = require('../services/chatRealtime');
@@ -664,12 +666,13 @@ async function emitCommittedChatChange(io, change, prepared) {
     return version;
   }
   // The insert's own snapshot has no reactions yet; skip that read on the recipient's path.
-  const [people, summaries] = await Promise.all([
+  const [people, summaries, moments] = await Promise.all([
     prepared?.people || loadMessageSenders([message]),
     change.insert && prepared?.message ? new Map() : buildReactionSummary([message.id]),
+    momentQuotes([message]),
   ]);
   const reactions = summaries.get(message.id) || [];
-  const safe = { ...serializeChatMessageForViewer(message, { people }), reactions };
+  const safe = { ...serializeChatMessageForViewer(message, { people, moments }), reactions };
   if (change.insert) await emitNewMessage(io, {
     room, message: safe, actorUserId: message.actor_user_id || message.user_id, identityUserId: message.user_id,
   });
@@ -895,7 +898,8 @@ function sendChatReadError(res, error, fallback) {
   return res.status(500).json({ error: fallback });
 }
 
-// `options.people` (loadChatPeople) names the sender as the chat list does.
+// `options.people` (loadChatPeople) names the sender as the chat list does. `options.moments` (momentQuotes) gives a
+// reply to a Moment its current quote; without it the quote comes from the message alone.
 function serializeChatMessageForViewer(message, options = {}) {
   if (!message) return null;
   // Who wrote for a business stays internal, but the person who wrote it sees their own id (options.viewerId): their
@@ -907,6 +911,7 @@ function serializeChatMessageForViewer(message, options = {}) {
   const bodyText = safe.message_text ?? safe.message ?? null;
   const bodyType = safe.message_type ?? safe.type ?? 'text';
   const senderId = sender?.id || safe.user_id;
+  const moment = momentField(safe.metadata, options.moments);
   return {
     ...safe,
     // Emit both canonical DB columns and legacy aliases so all clients decode reliably.
@@ -915,6 +920,7 @@ function serializeChatMessageForViewer(message, options = {}) {
     type: safe.type ?? bodyType,
     message_type: bodyType,
     sender: (senderId && options.people?.get(String(senderId))) || serializeUserIdentityForViewer(sender),
+    ...(moment ? { moment } : {}),
   };
 }
 
@@ -983,11 +989,12 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId, snapsho
   const visible = changes.messages.filter((message) => !message.deleted);
   // Read boundaries come with the rooms that changed since the cursor. A read alone moves no room revision:
   // the apps recover reads of their own unconfirmed messages through readMessageIds (messageReadReceipts).
-  const [reactions, people, readReceipts] = await Promise.all([
+  const [reactions, people, readReceipts, , moments] = await Promise.all([
     buildReactionSummary(visible.map((message) => message.id), req.user.id),
     loadMessageSenders(visible),
     chatReadReceipts(changedRoomIds),
     applyDirectReadReceipts(visible, req.user.id, { identityUserId }),
+    momentQuotes(visible),
   ]);
   const messageReadReceipts = [];
   const authorizedRooms = new Set(roomIds.map(String));
@@ -1005,7 +1012,7 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId, snapsho
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ...changes, readReceipts, ...(receiptIds ? { messageReadReceipts } : {}), messages: changes.messages.map((message) => message.deleted
     ? { id: message.id, room_id: message.room_id, deleted: true, sync_version: message.sync_version }
-    : { ...serializeChatMessageForViewer(message, { people, viewerId: req.user.id }),
+    : { ...serializeChatMessageForViewer(message, { people, viewerId: req.user.id, moments }),
       reactions: reactions.get(message.id) || [] }) });
 }
 
@@ -1078,11 +1085,12 @@ async function chatSearchRoomContexts(messages, identityUserId) {
 }
 
 async function serializeChatHistory(messages, viewerId, identityUserId = viewerId) {
-  const [reactions, people] = await Promise.all([
+  const [reactions, people, , moments] = await Promise.all([
     buildReactionSummary(messages.map((message) => message.id), viewerId),
     loadMessageSenders(messages), applyDirectReadReceipts(messages, viewerId, { identityUserId }),
+    momentQuotes(messages),
   ]);
-  return messages.map((message) => ({ ...serializeChatMessageForViewer(message, { people, viewerId }),
+  return messages.map((message) => ({ ...serializeChatMessageForViewer(message, { people, viewerId, moments }),
     reactions: reactions.get(message.id) || [] }));
 }
 
@@ -1268,6 +1276,10 @@ router.get('/rooms', verifyToken, async (req, res) => {
     const identityByUserId = await loadLocalIdentityMapForUsers(Object.values(partByRoom));
     // Index previews by room_id (RPC returns exactly one row per room)
     const msgByRoom = await resolveRoomPreviewMap(roomPreviews, req.requestId, 'chat_rooms');
+    // A last message that replies to a Moment brings its quote (CONTRACT "Chat": last_message_moment).
+    const lastMoments = await lastMessageMoments(roomList.map((p) => ({
+      key: p.room.id, roomIds: [p.room.id], lastAt: msgByRoom[p.room.id]?.created_at || null,
+    })), userId);
 
     const enrichedRooms = roomList.map((p) => {
       const roomId = p.room.id;
@@ -1297,6 +1309,7 @@ router.get('/rooms', verifyToken, async (req, res) => {
         updated_at: p.room.updated_at,
         last_message_at: lastMessageAt || p.room.updated_at,
         last_message_preview: lastMessagePreview,
+        last_message_moment: lastMoments.get(roomId) || null,
         unread_count: p.unread_count || 0,
         last_read_at: p.last_read_at,
         notifications_enabled: p.notifications_enabled !== false,
@@ -1383,6 +1396,10 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
     );
     // Index previews by room_id (RPC returns exactly one row per room)
     const bizMsgByRoom = await resolveRoomPreviewMap(bizRoomPreviews, req.requestId, 'business_chat_rooms');
+    // A reply to the business's Moment (CONTRACT "Chat"); `from_me` means the business sent it.
+    const lastMoments = await lastMessageMoments(roomList.map((p) => ({
+      key: p.room.id, roomIds: [p.room.id], lastAt: bizMsgByRoom[p.room.id]?.created_at || null,
+    })), businessUserId);
 
     const rooms = roomList.map((p) => {
       const roomId = p.room.id;
@@ -1414,6 +1431,7 @@ router.get('/business/:businessUserId/rooms', verifyToken, async (req, res) => {
         updated_at: p.room.updated_at,
         last_message_at: lastMessageAt || p.room.updated_at,
         last_message_preview: lastMessagePreview,
+        last_message_moment: lastMoments.get(roomId) || null,
         unread_count: p.unread_count || 0,
         last_read_at: p.last_read_at,
         notifications_enabled: p.notifications_enabled !== false,
@@ -2020,7 +2038,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
     const visibleMessages = (messages || []).slice(0, lim).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
-    const [reactionMap, people, sendRefusal] = await Promise.all([
+    const [reactionMap, people, sendRefusal, , moments] = await Promise.all([
       buildReactionSummary(messageIds, userId),
       loadMessageSenders(visibleMessages),
       // The thread sends into the pair's direct room, which takes nothing to or from a draft or closed business:
@@ -2030,9 +2048,10 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
         return null; // sends are still checked when they arrive
       }),
       applyDirectReadReceipts(visibleMessages, userId, { identityUserId: asBusinessUserId || userId }),
+      momentQuotes(visibleMessages),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
-      ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
+      ...serializeChatMessageForViewer(m, { people, viewerId: userId, moments }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
@@ -2188,14 +2207,15 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     // Batch-fetch reactions and senders for all visible messages to avoid N+1 queries
     const visibleMessages = (messages || []).slice(0, lim).reverse();
     const messageIds = visibleMessages.map((m) => m.id).filter(Boolean);
-    const [reactionMap, people, sendRefusal] = await Promise.all([
+    const [reactionMap, people, sendRefusal, , moments] = await Promise.all([
       buildReactionSummary(messageIds, userId),
       loadMessageSenders(visibleMessages),
       sendRefusalRead,
       applyDirectReadReceipts(visibleMessages, userId, { identityUserId: participant.user_id }),
+      momentQuotes(visibleMessages),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
-      ...serializeChatMessageForViewer(m, { people, viewerId: userId }),
+      ...serializeChatMessageForViewer(m, { people, viewerId: userId, moments }),
       reactions: reactionMap.get(m.id) || [],
     }));
 
@@ -2522,7 +2542,10 @@ router.post('/messages', verifyToken, messageSendLimiter, messageBurstLimiter, v
       messageData.actor_user_id = userId;
     }
     if (metadata && typeof metadata === 'object') {
-      messageData.metadata = metadata;
+      // Only a reply sent through POST /api/moments/:id/reply names a Moment; a client can't attach a Moment's quote
+      // (and with it a link to its picture) to a message of its own.
+      const { moment: _quotedMoment, ...clientMetadata } = metadata;
+      messageData.metadata = clientMetadata;
     }
     if (replyToId) {
       messageData.reply_to_id = replyToId;
@@ -2702,7 +2725,7 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
 
     incCounter('chat.message.edited');
     // The edited row names its sender as the room's messages do, so the edit doesn't blank the bubble's name.
-    const people = await loadMessageSenders([updated]);
+    const [people, moments] = await Promise.all([loadMessageSenders([updated]), momentQuotes([updated])]);
     // Broadcast via socket
     const io = req.app.get('io');
     if (io && message.room_id) {
@@ -2710,7 +2733,7 @@ router.put('/messages/:messageId', verifyToken, messageEditLimiter, async (req, 
         { message: updated, people });
     }
 
-    res.json({ message: serializeChatMessageForViewer(updated, { people, viewerId: userId }) });
+    res.json({ message: serializeChatMessageForViewer(updated, { people, viewerId: userId, moments }) });
     
   } catch (err) {
     if (err.code === 'CHAT_UNAVAILABLE') return res.status(503).json({ error: err.message, code: err.code });
@@ -3182,7 +3205,15 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
       trainIds.length ? supabaseAdmin.from('SupportTrain').select('id, Activity(title)').in('id', trainIds) : { data: [] },
     ]);
     if (users.error || trains.error) throw users.error || trains.error;
-    const identities = await loadLocalIdentityMapForUsers(users.data || []);
+    const [identities, lastMoments] = await Promise.all([
+      loadLocalIdentityMapForUsers(users.data || []),
+      // A last message that replies to a Moment brings its quote (CONTRACT "Chat": last_message_moment).
+      lastMessageMoments(page.entries.map((entry) => ({
+        key: entry.entry_key,
+        roomIds: entry.room_ids || (entry.room ? [entry.room.id] : []),
+        lastAt: entry.last_message ? entry.last_message_at : null,
+      })), userId),
+    ]);
     const trainTitles = new Map((trains.data || []).map((train) => [train.id, train.Activity?.title]));
     const muted = new Set(preferences.data?.chat_muted_user_ids || []);
     const conversations = page.entries.map((entry) => {
@@ -3192,6 +3223,7 @@ router.get('/unified-conversations', verifyToken, async (req, res) => {
         notifications_enabled: entry.notifications_enabled && !muted.has(entry.other_id),
         last_message_at: entry.last_message_at,
         last_message_preview: getVisibleMessagePreview(entry.last_message),
+        last_message_moment: lastMoments.get(entry.entry_key) || null,
         topics: entry.topics || [],
       };
       if (entry.other_id) {

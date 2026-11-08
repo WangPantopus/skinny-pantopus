@@ -18,6 +18,7 @@ const {
   DAY_MS, askIdsWithReplies, windowDays, endsAt,
 } = require('../services/pulse/lifecycle');
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
+const { confirmAdult } = require('../services/adultAttestation');
 
 const router = express.Router();
 
@@ -187,53 +188,20 @@ router.get('/areas/search', verifyToken, async (req, res) => {
   }
 });
 
-/** Whole years from a date of birth to today; NaN for a date that can't be read. A date of birth
- * ('2008-10-14') reads as UTC midnight, so both sides are compared as UTC calendar dates. */
-function ageFrom(dateOfBirth) {
-  const born = new Date(dateOfBirth);
-  if (Number.isNaN(born.getTime())) return NaN;
-  const today = new Date();
-  const hadBirthday = today.getUTCMonth() > born.getUTCMonth()
-    || (today.getUTCMonth() === born.getUTCMonth() && today.getUTCDate() >= born.getUTCDate());
-  return today.getUTCFullYear() - born.getUTCFullYear() - (hadBirthday ? 0 : 1);
-}
-
 /**
  * POST /api/pulse/adult-attestation — the person confirms they're 18 or older, once (contract §2.10):
  * → { attested_at }. Confirming again returns the first time. A date of birth on file that says
- * they're younger wins (403 AGE_NOT_ELIGIBLE).
+ * they're younger wins (403 AGE_NOT_ELIGIBLE). Moments share the same confirmation (services/adultAttestation.js).
  */
 router.post('/adult-attestation', verifyToken, async (req, res) => {
   const userId = req.user.id;
   try {
-    const { data: user, error } = await supabaseAdmin
-      .from('User')
-      .select('adult_attested_at, date_of_birth')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) throw error;
-    if (!user) return res.status(404).json({ error: 'Account not found' });
-
-    if (user.date_of_birth && ageFrom(user.date_of_birth) < 18) {
+    const result = await confirmAdult(userId);
+    if (!result.found) return res.status(404).json({ error: 'Account not found' });
+    if (result.ineligible) {
       return res.status(403).json({ error: 'Posting in Pulse is for people 18 and older.', code: 'AGE_NOT_ELIGIBLE' });
     }
-    if (user.adult_attested_at) return res.json({ attested_at: user.adult_attested_at });
-
-    const { data: updated, error: updateError } = await supabaseAdmin
-      .from('User')
-      .update({ adult_attested_at: new Date().toISOString() })
-      .eq('id', userId)
-      .is('adult_attested_at', null)
-      .select('adult_attested_at')
-      .maybeSingle();
-    if (updateError) throw updateError;
-    if (updated) return res.json({ attested_at: updated.adult_attested_at });
-
-    // Another tap set it a moment ago; answer with the time that one kept.
-    const { data: again, error: againError } = await supabaseAdmin
-      .from('User').select('adult_attested_at').eq('id', userId).maybeSingle();
-    if (againError || !again?.adult_attested_at) throw againError || new Error('attestation not saved');
-    res.json({ attested_at: again.adult_attested_at });
+    res.json({ attested_at: result.attestedAt });
   } catch (err) {
     logger.error('pulse.adult_attestation.error', { error: err.message, userId });
     res.status(500).json({ error: "Couldn't save that. Please try again." });

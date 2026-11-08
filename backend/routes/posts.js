@@ -1053,7 +1053,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       dealExpiresAt,
       lostFoundType,
       serviceCategory, refListingId, refTaskId, radiusMiles,
-      postAs: rawPostAs, audience, identityContextId, targetPlaceId, businessId, isStory,
+      postAs: rawPostAs, audience, identityContextId, targetPlaceId, businessId,
       distributionTargets, crossPostToConnections, gpsTimestamp, gpsLatitude, gpsLongitude, mediaLocations,
       purpose, profileVisibilityScope, showOnProfile,
       geocodeProvider, geocodeAccuracy, geocodePlaceId,
@@ -1480,8 +1480,10 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       target_place_id: targetPlaceId || null,
       business_id: businessId || null,
       business_author_id: (postAs === 'business' && businessId) ? businessId : null,
-      is_story: isStory || false,
-      story_expires_at: isStory ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+      // Stories are Moments now (routes/moments.js, with their own rules and map); a post made here is never one.
+      // isStory stays accepted so an older web build that sends it still posts.
+      is_story: false,
+      story_expires_at: null,
       // Event fields
       event_date: eventDate || null,
       event_end_date: eventEndDate || null,
@@ -2540,7 +2542,7 @@ router.get('/mute', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { data: rows, error } = await supabaseAdmin
       .from('PostMute')
-      .select('muted_entity_type, muted_entity_id, area_id, created_at')
+      .select('muted_entity_type, muted_entity_id, area_id, surface, created_at')
       .eq('user_id', userId)
       .in('muted_entity_type', ['user', 'business', 'topic'])
       .order('created_at', { ascending: false });
@@ -2559,7 +2561,18 @@ router.get('/mute', verifyToken, async (req, res) => {
         topicMutes.set(key, { topic: row.muted_entity_id, area_id: areaId, muted_at: row.created_at });
       }
     }
-    const mutes = (rows || []).filter((m) => m.muted_entity_type !== 'topic');
+    // A person muted in Moments only ("Mute this person's Moments") is listed with surface 'moments', so Settings can
+    // undo it; muted everywhere as well, they're listed once, as a mute of everything (surface null).
+    const mutesByAccount = new Map();
+    for (const row of rows || []) {
+      if (row.muted_entity_type === 'topic') continue;
+      const key = `${row.muted_entity_type}:${row.muted_entity_id}`;
+      const surface = row.surface === 'moments' ? 'moments' : null;
+      const listed = mutesByAccount.get(key);
+      if (!listed) mutesByAccount.set(key, { ...row, surface });
+      else if (surface === null) listed.surface = null;
+    }
+    const mutes = [...mutesByAccount.values()];
 
     const ids = [...new Set((mutes || []).map((m) => m.muted_entity_id))];
     let accounts = new Map();
@@ -2592,6 +2605,7 @@ router.get('/mute', verifyToken, async (req, res) => {
           username: chosenUsernameOrNull(account.username),
           avatar_url: account.profile_picture_url || null,
           muted_at: m.created_at,
+          surface: m.surface,
         };
       });
     res.json({ muted, topic_mutes: [...topicMutes.values()] });
@@ -4099,9 +4113,11 @@ async function sendProfilePosts(req, res, { pinned = false } = {}) {
     // targets (for example place + followers cross-posts) to appear when the profile
     // scope allows them.
 
+    // Moments never show on a profile, their author's own included (they live on the Moments map).
     let query = supabaseAdmin.from('Post')
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .not('is_story', 'is', true);
     query = pinned
       ? query.not('profile_pinned_at', 'is', null).order('profile_pinned_at', { ascending: false })
       : query.order('created_at', { ascending: false });
