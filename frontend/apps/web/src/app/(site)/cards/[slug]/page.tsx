@@ -27,7 +27,9 @@ export async function generateMetadata({ params }: CardPageProps): Promise<Metad
   const { slug } = await params;
   const { design } = await designFor(slug);
   if (!design) return { metadataBase: new URL(APP_WEB_URL), title: 'Christmas cards on Pantopus', robots: { index: false, follow: true } };
-  const title = `${design.caption} A Christmas card on Pantopus`;
+  // A caption ends with a full stop, or a question mark; the First Christmas ones end with their verse's reference.
+  const sentence = /[.!?]$/.test(design.caption) ? design.caption : `${design.caption}.`;
+  const title = `${sentence} A Christmas card on Pantopus`;
   const description = 'A Christmas card you can send on Pantopus. It arrives with their morning mail, and they open it like real mail.';
   const url = `/cards/${design.slug}`;
   const image = { url: `/holiday-cards/share/${design.id}-link.jpg`, width: 1200, height: 630, alt: `A Christmas card: ${design.caption}` };

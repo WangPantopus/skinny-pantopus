@@ -93,3 +93,31 @@ The founder's own Santa pictures, made with ChatGPT. The originals are 1214 × 1
 Table colours: the rule above gives umber to seven of the nine, because Santa's red reads as warm. Two are picked by hand: the toy shop (54), a snowy evening street, gets dusk, and the sleeping Santa (58), in soft morning light, gets wine.
 
 The scripts are in the launch kit, `streams/SANTA/tools`: `make_art.py` writes the card, older and thumbnail files, and `render.cjs link <number>` writes the link previews.
+
+## Pictures 59–67: The First Christmas (November 8, 2026)
+
+The founder's own nativity pictures, made with ChatGPT, each with its whole Bible verse printed under the painting. The founder asked for whole verses ("full scripts"). The apps print the caption on one line that shrinks to fit, so a whole verse there would print about 3 points tall on a small phone. Instead each verse is printed inside the picture, where it can take three lines, and the caption is its reference, such as "John 3:16 (KJV)". The book and its numbers are joined by a no-break space, so a reference never splits across two lines.
+
+The verses are the King James Version, which is public domain in the US. The text is Project Gutenberg's KJV (ebook 10), word for word, except one change: Matthew 2:14 ends with a colon in the KJV because its sentence runs on into 2:15, so on the card it ends with a full stop. The founder asked for the English Standard Version. Crossway's rules (crossway.org/permissions, Artwork/Stationery) list greeting cards among the uses that need their written permission, so these use the KJV until that permission comes. ESV cards would be new numbers, so cards already sent keep their pictures.
+
+The originals are 1214 × 1295, like the Santa ones. Each picture is typeset in Chrome from the original:
+
+- **The painting** keeps the full width and gives up 200 pixels of height (15%). The share taken from the top is set picture by picture so the star, the moon and the angels stay in.
+- **The verse** goes under the painting, on the card's paper (`#f7f0e2`), in EB Garamond (SIL Open Font License) at 34 pixels, centred in balanced lines.
+- **The band** holds three lines on every card, so all nine paintings are the same size. 34 pixels is the largest size at which the longest verse (Matthew 2:11) still fits in three lines. It prints about 9.7 points on an iPhone SE.
+
+From each typeset picture:
+
+| File | How |
+|---|---|
+| `card/<id>.jpg` | The typeset picture as it is, JPEG quality 88 so the verse stays crisp |
+| `<id>.jpg`, `<id>-thumb.jpg` (older apps) | 960 and 360 wide: the picture inside a 16-pixel border of the paper, as for the Santa pictures (quality 88 and 85) |
+| `share/<id>-link.jpg` | Rendered from the same layout as the 49's link previews |
+
+Each `crop` in `designs-table.json` is the whole typeset picture. The painting's own trim is its `top` in the kit's `nativity.json`. Each row also has its `verse`.
+
+Table colours: the rule above gives umber to eight of the nine, because the paintings are warm, and dusk to the night journey (66). Four are picked by hand: dusk for the angel and the shepherds (62) and for the Magi under the star (64), and wine for Mary holding the baby (61) and for the Magi's gifts (65).
+
+Screen readers read the caption, so they say the reference, not the verse.
+
+The scripts are in the launch kit, `streams/NATIVITY/tools`. `compose.cjs` typesets the pictures (from `art/render/verse.html`), `make_art.py` writes the card, older and thumbnail files, and `render.cjs link <number>` writes the link previews. `nativity.json` has the order, verses, captions, cloths and trims.

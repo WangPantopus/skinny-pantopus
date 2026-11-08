@@ -83,6 +83,7 @@ internal fun pulseCardContent(
         // a business isn't being verified).
         authorVerified = surface == FeedSurface.Beacons && post.creator?.credential?.status == "verified",
         avatarTint = if (isBusiness) FeedAvatarTint.Violet else FeedAvatarTint.Sky,
+        authorAvatarUrl = post.creator?.photoUrl,
         meta = metaString(post, topic),
         intent = intent,
         chipLabel = intent.chipLabelFor(post.lostFoundType),

@@ -23,6 +23,8 @@ data class NewMessageContactRow(
     val subIcon: PantopusIcon?,
     val verified: Boolean,
     val identity: NewMessageIdentityBadge,
+    /** The person's photo; their initials show without one. */
+    val avatarUrl: String? = null,
     /** A group chat's room, for a row under Groups (whose [userId] is the room too). */
     val roomId: String? = null,
 )
@@ -76,6 +78,8 @@ data class NewMessageDestination(
     val initials: String,
     val verified: Boolean,
     val locality: String?,
+    /** The person's photo, for the conversation the pick opens. */
+    val avatarUrl: String? = null,
     /** Set for a group chat picked: the room the message goes to. */
     val roomId: String? = null,
 )

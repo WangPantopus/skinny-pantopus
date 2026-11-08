@@ -513,6 +513,8 @@ data class ChatBubbleContent(
     val senderName: String? = null,
     /** The person who sent an incoming message in such a room, whose profile the sender's name and photo open. */
     val senderUserId: String? = null,
+    /** The photo of whoever sent an incoming message, in any thread; null for outgoing ones and senders without one. */
+    val senderAvatarUrl: String? = null,
     val attachments: List<ChatAttachmentDto> = emptyList(),
 )
 

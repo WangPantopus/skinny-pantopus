@@ -143,6 +143,7 @@ class ChatSearchViewModel
                     snippet = ChatSearchText.snippet(message.resolvedText, query),
                     matchedMessageId = message.id,
                     query = query,
+                    avatarUrl = context.identity?.avatarUrl?.takeIf { context.kind != "room" && it.isNotBlank() },
                 )
             }
 
@@ -161,6 +162,7 @@ class ChatSearchViewModel
                 snippet = lastPreview(dto, isRoom),
                 matchedMessageId = null,
                 query = _query.value.trim(),
+                avatarUrl = dto.otherParticipantAvatar?.takeIf { !isRoom && it.isNotBlank() },
             )
         }
 
