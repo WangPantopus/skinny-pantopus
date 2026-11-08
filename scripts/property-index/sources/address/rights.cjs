@@ -106,6 +106,14 @@ const POINT_LAYERS = [
     fields: { number: 'AddressNumber', pre: 'PrefixDir', name: 'StreetName', suffix: 'StreetType', post: 'SuffixDir', unit: 'UnitNumber', building: 'Building', city: 'City', zip: 'ZIP' },
     terms: 'Rapid City and Pennington County, South Dakota: their open data site (RCPC Open Data) under its disclaimer (as is, no warranty, the user accepts the data\'s limits); no limit on use stated; the layer is in the site\'s open data group. Read November 8',
   },
+  {
+    // The City of Loveland, in Larimer County, Colorado, whose own points no source carries (Colorado's file and NAD leave Larimer out).
+    id: 'co-loveland',
+    state: 'CO',
+    url: 'https://mapserv.cityofloveland.org/arcgis/rest/services/layers/Addresses_Public/FeatureServer/0',
+    fields: { number: 'ADDRNUM', pre: 'STPRE', name: 'STNAME', suffix: 'STTYPE', post: 'STSUF', unit: 'APT', city: 'CITY', zip: 'ZIPCODE' },
+    terms: 'City of Loveland, Colorado (Development Services and IT GIS): "public address point information", for uses that include "public address lookup and reference"; no license and no limit on use stated. Read November 8',
+  },
 ];
 
 /** Whether a row Overture distributes may enter the registry. */
