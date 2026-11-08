@@ -51,7 +51,8 @@ async function* rows({ work, states = null }) {
   if (!member) throw new Error('The NAD zip no longer has its text file');
   const today = new Date().toISOString().slice(0, 10);
   for await (const row of zipTable(zip, member, COLUMNS, { encoding: 'utf8' })) {
-    if (states && !states.has(row.State)) continue;
+    // A row naming no state is placed by its point (build-registry.cjs).
+    if (states && row.State && !states.has(row.State)) continue;
     if (NOT_AN_ADDRESS.test(row.AddrClass) || NOT_CURRENT.test(row.Lifecycle)) continue;
     if (row.Expire && row.Expire.slice(0, 10) < today && /^\d{4}-/.test(row.Expire)) continue;
     const quality = PLACEMENT.find(([pattern]) => pattern.test(row.Placement));

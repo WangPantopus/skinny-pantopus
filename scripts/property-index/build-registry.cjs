@@ -114,6 +114,8 @@ async function split(opts) {
         counts.other_state += 1;
         continue;
       }
+      // A row naming no state goes where its point is: a run of some states keeps those in them, as a run of all would.
+      if (opts.states && !opts.states.has(stateOfCounty(fips))) continue;
       let index = sourceIndex.get(row.source);
       if (index === undefined) {
         index = sourceNames.length;
