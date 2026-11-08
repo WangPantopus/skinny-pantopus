@@ -13,6 +13,7 @@ import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.auth.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
+import java.io.File
 import javax.inject.Inject
 
 /**
@@ -53,6 +54,7 @@ fun ChatConversationHost(
     aiNudgeId: String? = null,
     aiConversationId: String? = null,
     aiOpening: String? = null,
+    sharedFile: File? = null,
     authViewModel: ChatConversationHostViewModel = hiltViewModel(),
 ) {
     val state by authViewModel.authState.collectAsStateWithLifecycle()
@@ -77,6 +79,7 @@ fun ChatConversationHost(
                 aiNudgeId = aiNudgeId,
                 aiConversationId = aiConversationId,
                 aiOpening = aiOpening,
+                sharedFile = sharedFile,
             ),
         chrome = chrome,
         onBack = onBack,

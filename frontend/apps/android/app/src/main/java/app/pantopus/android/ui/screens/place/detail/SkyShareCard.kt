@@ -299,6 +299,8 @@ private fun SkyShareFoot(card: SkyShareCard) {
 fun SkyShareButton(
     card: SkyShareCard,
     modifier: Modifier = Modifier,
+    /** "Or share in Pantopus": Post to Pulse and Send in a chat; null leaves them out. */
+    inPantopus: SkySharePantopus? = null,
 ) {
     var previewing by remember { mutableStateOf(false) }
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -318,14 +320,18 @@ fun SkyShareButton(
             Text("Share", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
         }
     }
-    if (previewing) SkySharePreview(card) { previewing = false }
+    if (previewing) SkySharePreview(card, inPantopus) { previewing = false }
 }
 
-/** "Share today's sky": the picture as it will go, the rain or snow falling in it, and the two ways to send it. */
+/**
+ * "Share today's sky": the picture as it will go, the rain or snow falling in it, and the ways to send it: the share
+ * sheet, or Pulse or a chat in Pantopus.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SkySharePreview(
     card: SkyShareCard,
+    inPantopus: SkySharePantopus?,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -333,13 +339,16 @@ private fun SkySharePreview(
     val reduced = rememberMotionReduced()
     val capture = rememberSkyShareCapture()
     var making by remember { mutableStateOf(false) }
+    // Post to Pulse or Send in a chat, while its picture (or clip) is drawn.
+    var makingInPantopus by remember { mutableStateOf<SkySharePantopusKind?>(null) }
+    val busy = making || makingInPantopus != null
     var failed by remember { mutableStateOf(false) }
     // What's sent is drawn when it's tapped; the preview keeps to the minute.
     val minute = rememberMinuteClock(card.now.zone)
     val shown = card.at(minute)
-    val time = rememberSkyTime(card.falls && !reduced && !making)
+    val time = rememberSkyTime(card.falls && !reduced && !busy)
     ModalBottomSheet(
-        onDismissRequest = { if (!making) onClose() },
+        onDismissRequest = { if (!busy) onClose() },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = PantopusColors.appBg,
     ) {
@@ -354,7 +363,7 @@ private fun SkySharePreview(
                 color = PantopusColors.appText,
                 modifier = Modifier.semantics { heading() },
             )
-            SkySharePicture(shown) { if (card.falls && !reduced && !making) time.doubleValue else null }
+            SkySharePicture(shown) { if (card.falls && !reduced && !busy) time.doubleValue else null }
             val sendPicture: () -> Unit = {
                 scope.launch {
                     failed = !sharePicture(context, capture, card.at(ZonedDateTime.now(card.now.zone)))
@@ -372,11 +381,25 @@ private fun SkySharePreview(
                     },
                     modifier = Modifier.testTag("todaySkyShareVideo"),
                     isLoading = making,
-                    isEnabled = !making,
+                    isEnabled = !busy,
                 )
-                GhostButton("Share photo", onClick = sendPicture, modifier = Modifier.testTag("todaySkySharePhoto"), isEnabled = !making)
+                GhostButton("Share photo", onClick = sendPicture, modifier = Modifier.testTag("todaySkySharePhoto"), isEnabled = !busy)
             } else {
-                PrimaryButton("Share photo", onClick = sendPicture, modifier = Modifier.testTag("todaySkySharePhoto"))
+                PrimaryButton("Share photo", onClick = sendPicture, modifier = Modifier.testTag("todaySkySharePhoto"), isEnabled = !busy)
+            }
+            if (inPantopus != null) {
+                SkyShareInPantopus(making = makingInPantopus, enabled = !making) { kind ->
+                    scope.launch {
+                        makingInPantopus = kind
+                        val file = runCatching { inPantopusFile(context, capture, card.at(ZonedDateTime.now(card.now.zone))) }.getOrNull()
+                        makingInPantopus = null
+                        failed = file == null
+                        if (file != null) {
+                            onClose()
+                            inPantopus.open(kind, file.name)
+                        }
+                    }
+                }
             }
             Text(
                 if (failed) "We couldn't make it this time. Try again." else "Your city shows, never your street.",
@@ -492,64 +515,81 @@ private class SkyShareCapture(
     }
 }
 
-/** The picture as a PNG in the share folder, then the share sheet. */
+/** The picture, then the share sheet. */
 private suspend fun sharePicture(
     context: Context,
     capture: SkyShareCapture,
     card: SkyShareCard,
-): Boolean =
-    runCatching {
-        val bitmap = capture.frame(card, null)
-        val file =
-            withContext(Dispatchers.IO) {
-                File(shareFolder(context), "${card.fileName}.png").also { out ->
-                    val plain = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                    out.outputStream().use { plain.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                }
-            }
-        send(context, file, "image/png")
-    }.isSuccess
+): Boolean = runCatching { send(context, pictureFile(context, capture, card), "image/png") }.isSuccess
+
+/** The clip, then the share sheet. */
+private suspend fun shareClip(
+    context: Context,
+    capture: SkyShareCapture,
+    card: SkyShareCard,
+): Boolean = runCatching { send(context, clipFile(context, capture, card), "video/mp4") }.isSuccess
+
+/** For Post to Pulse and Send in a chat: the clip when rain or snow falls (Android sends it as a short video), else the picture. */
+private suspend fun inPantopusFile(
+    context: Context,
+    capture: SkyShareCapture,
+    card: SkyShareCard,
+): File = if (card.falls) clipFile(context, capture, card) else pictureFile(context, capture, card)
+
+/** The picture as a PNG in the share folder. */
+private suspend fun pictureFile(
+    context: Context,
+    capture: SkyShareCapture,
+    card: SkyShareCard,
+): File {
+    val bitmap = capture.frame(card, null)
+    return withContext(Dispatchers.IO) {
+        File(shareFolder(context), "${card.fileName}.png").also { out ->
+            val plain = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+            out.outputStream().use { plain.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+    }
+}
 
 /**
  * The clip: four seconds at 30 frames a second, the rain or snow falling and the rest still, encoded as H.264 while
  * the next frame is drawn; snow's last two-thirds of a second fade into its first frames so it loops.
  */
-private suspend fun shareClip(
+private suspend fun clipFile(
     context: Context,
     capture: SkyShareCapture,
     card: SkyShareCard,
-): Boolean =
-    runCatching {
-        val file = File(shareFolder(context), "${card.fileName}.mp4")
-        val frames = SkyShareCard.SECONDS * SkyShareCard.FRAMES_PER_SECOND
-        val fade = if (card.snows) SkyShareCard.FRAMES_PER_SECOND * 2 / 3 else 0
-        val queue = Channel<ClipFrame>(capacity = 2)
-        coroutineScope {
-            val encoding =
-                launch(Dispatchers.Default) {
-                    SkyClipEncoder(file).use { encoder ->
-                        for (next in queue) {
-                            encoder.frame { canvas ->
-                                canvas.drawBitmap(next.now, 0f, 0f, null)
-                                next.early?.let { canvas.drawBitmap(it, 0f, 0f, Paint().apply { alpha = (next.alpha * 255).toInt() }) }
-                            }
-                            next.now.recycle()
-                            next.early?.recycle()
+): File {
+    val file = File(shareFolder(context), "${card.fileName}.mp4")
+    val frames = SkyShareCard.SECONDS * SkyShareCard.FRAMES_PER_SECOND
+    val fade = if (card.snows) SkyShareCard.FRAMES_PER_SECOND * 2 / 3 else 0
+    val queue = Channel<ClipFrame>(capacity = 2)
+    coroutineScope {
+        val encoding =
+            launch(Dispatchers.Default) {
+                SkyClipEncoder(file).use { encoder ->
+                    for (next in queue) {
+                        encoder.frame { canvas ->
+                            canvas.drawBitmap(next.now, 0f, 0f, null)
+                            next.early?.let { canvas.drawBitmap(it, 0f, 0f, Paint().apply { alpha = (next.alpha * 255).toInt() }) }
                         }
+                        next.now.recycle()
+                        next.early?.recycle()
                     }
                 }
-            for (frame in 0 until frames) {
-                // A second in, so a fade's earlier frames never reach before the start.
-                val time = 1.0 + frame.toDouble() / SkyShareCard.FRAMES_PER_SECOND
-                val now = capture.frame(card, time)
-                val early = if (frame >= frames - fade) capture.frame(card, time - SkyShareCard.SECONDS) else null
-                queue.send(ClipFrame(now, early, (frame - (frames - fade) + 1).toFloat() / fade.coerceAtLeast(1)))
             }
-            queue.close()
-            encoding.join()
+        for (frame in 0 until frames) {
+            // A second in, so a fade's earlier frames never reach before the start.
+            val time = 1.0 + frame.toDouble() / SkyShareCard.FRAMES_PER_SECOND
+            val now = capture.frame(card, time)
+            val early = if (frame >= frames - fade) capture.frame(card, time - SkyShareCard.SECONDS) else null
+            queue.send(ClipFrame(now, early, (frame - (frames - fade) + 1).toFloat() / fade.coerceAtLeast(1)))
         }
-        send(context, file, "video/mp4")
-    }.isSuccess
+        queue.close()
+        encoding.join()
+    }
+    return file
+}
 
 private class ClipFrame(
     val now: Bitmap,
@@ -641,7 +681,7 @@ private class SkyClipEncoder(
     }
 }
 
-private fun shareFolder(context: Context): File = File(context.cacheDir, "share").apply { mkdirs() }
+internal fun shareFolder(context: Context): File = File(context.cacheDir, "share").apply { mkdirs() }
 
 private fun send(
     context: Context,

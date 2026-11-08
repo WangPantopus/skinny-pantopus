@@ -124,6 +124,7 @@ import app.pantopus.android.ui.screens.compose.listing.ListingComposeStep
 import app.pantopus.android.ui.screens.compose.listing.ListingComposeWizardScreen
 import app.pantopus.android.ui.screens.compose.pulse.PulseComposeDraftFields
 import app.pantopus.android.ui.screens.compose.pulse.PulseComposeFlowScreen
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposePurpose
 import app.pantopus.android.ui.screens.compose.pulse.PulseComposeViewModel
 import app.pantopus.android.ui.screens.connections.ConnectionsChatTarget
 import app.pantopus.android.ui.screens.connections.ConnectionsScreen
@@ -368,6 +369,8 @@ import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_HOME_ID_KEY
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SAVED_ID_KEY
 import app.pantopus.android.ui.screens.place.detail.PLACE_DETAIL_SLUG_KEY
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailScreen
+import app.pantopus.android.ui.screens.place.detail.SkySharePantopus
+import app.pantopus.android.ui.screens.place.detail.skyShareFile
 import app.pantopus.android.ui.screens.place.launch.PendingPlaceScreen
 import app.pantopus.android.ui.screens.place.launch.PlaceLaunchEmbedding
 import app.pantopus.android.ui.screens.place.launch.PlaceLaunchScreen
@@ -1471,6 +1474,9 @@ private object ChildRoutes {
 
     /** A launcher shortcut's fixed key: `starter:<key>` or `compose:<key>` (AI assistant phase 3 §8.4; empty otherwise). */
     const val CHAT_AI_OPENING_KEY = "aiOpening"
+
+    /** Today's sky shared into the thread: the file's name in the share folder ([skyShareFile]). */
+    const val CHAT_SHARE_KEY = "share"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1492,11 +1498,16 @@ private object ChildRoutes {
             "&$CHAT_AI_CONTEXT_KEY={$CHAT_AI_CONTEXT_KEY}" +
             "&$CHAT_AI_NUDGE_KEY={$CHAT_AI_NUDGE_KEY}" +
             "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}" +
-            "&$CHAT_AI_OPENING_KEY={$CHAT_AI_OPENING_KEY}"
+            "&$CHAT_AI_OPENING_KEY={$CHAT_AI_OPENING_KEY}" +
+            "&$CHAT_SHARE_KEY={$CHAT_SHARE_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
     const val NEW_MESSAGE = "chat/new"
+
+    /** The same picker for Today's "Send in a chat", with recent group chats too; the picture's file name rides along. */
+    const val NEW_MESSAGE_SHARE_FILE_KEY = "file"
+    const val NEW_MESSAGE_SHARE = "chat/new/share?$NEW_MESSAGE_SHARE_FILE_KEY={$NEW_MESSAGE_SHARE_FILE_KEY}"
 
     /** P4.3 — Chat Search. Reached from the Chat list search bar. */
     const val CHAT_SEARCH = "chat/search"
@@ -1512,9 +1523,13 @@ private object ChildRoutes {
 
     /** A Pantopus AI post draft's type and other fields ([PulseComposeDraftFields.encode]; empty otherwise). */
     const val COMPOSE_DRAFT_FIELDS_KEY = PulseComposeViewModel.PREFILL_DRAFT_FIELDS_KEY
+
+    /** Today's sky, shared from under the sun card: the file's name in the share folder ([skyShareFile]). */
+    const val COMPOSE_ATTACHMENT_KEY = "attachment"
     const val COMPOSE_POST =
         "feed/compose?$COMPOSE_INTENT_KEY={$COMPOSE_INTENT_KEY}&$COMPOSE_BODY_KEY={$COMPOSE_BODY_KEY}" +
-            "&$COMPOSE_TITLE_KEY={$COMPOSE_TITLE_KEY}&$COMPOSE_DRAFT_FIELDS_KEY={$COMPOSE_DRAFT_FIELDS_KEY}"
+            "&$COMPOSE_TITLE_KEY={$COMPOSE_TITLE_KEY}&$COMPOSE_DRAFT_FIELDS_KEY={$COMPOSE_DRAFT_FIELDS_KEY}" +
+            "&$COMPOSE_ATTACHMENT_KEY={$COMPOSE_ATTACHMENT_KEY}"
 
     /** P3.5 — Edit an existing Pulse post. Re-uses the compose flow. */
     const val EDIT_POST_POST_ID_KEY = "postId"
@@ -1613,12 +1628,24 @@ private object ChildRoutes {
         prefillBody: String = "",
         prefillTitle: String = "",
         draftFields: PulseComposeDraftFields? = null,
+        attachment: String = "",
     ): String =
         "feed/compose?$COMPOSE_INTENT_KEY=${java.net.URLEncoder.encode(intent, "UTF-8").replace("+", "%20")}" +
             "&$COMPOSE_BODY_KEY=${java.net.URLEncoder.encode(prefillBody, "UTF-8").replace("+", "%20")}" +
             "&$COMPOSE_TITLE_KEY=${java.net.URLEncoder.encode(prefillTitle, "UTF-8").replace("+", "%20")}" +
             draftFields?.let { "&$COMPOSE_DRAFT_FIELDS_KEY=${java.net.URLEncoder.encode(it.encode(), "UTF-8").replace("+", "%20")}" }
-                .orEmpty()
+                .orEmpty() +
+            "&$COMPOSE_ATTACHMENT_KEY=${java.net.URLEncoder.encode(attachment, "UTF-8").replace("+", "%20")}"
+
+    /** Today's "Send in a chat": the New Message picker, with the picture's file name. */
+    fun newMessageShare(file: String): String =
+        "chat/new/share?$NEW_MESSAGE_SHARE_FILE_KEY=${java.net.URLEncoder.encode(file, "UTF-8").replace("+", "%20")}"
+
+    /** A thread opened with Today's sky waiting in its composer ([CHAT_SHARE_KEY]). */
+    fun withShare(
+        route: String,
+        file: String,
+    ): String = "$route&$CHAT_SHARE_KEY=${java.net.URLEncoder.encode(file, "UTF-8").replace("+", "%20")}"
 
     /** Build the start-a-Support-Train path with a story to start from. */
     fun startSupportTrain(story: String): String =
@@ -2381,6 +2408,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navDrawerScope = rememberCoroutineScope()
     // The side menu opens from every tab's top screen (founder decision 2026-10-20).
     val openMenu: () -> Unit = { navDrawerScope.launch { navDrawerState.open() } }
+    // Share's "Or share in Pantopus" under Today's sky: the Pulse composer as a Local Update with the picture, or the
+    // chat picker; either way Back returns to the screen it came from.
+    val skyShare =
+        remember(navController) {
+            SkySharePantopus(
+                onPostToPulse = { file ->
+                    navController.navigate(
+                        ChildRoutes.composePost(
+                            PulseIntent.fromPostType(PulseComposePurpose.LocalUpdate.postType).key,
+                            draftFields = PulseComposeDraftFields(postType = PulseComposePurpose.LocalUpdate.postType),
+                            attachment = file,
+                        ),
+                    )
+                },
+                onSendInChat = { file -> navController.navigate(ChildRoutes.newMessageShare(file)) },
+            )
+        }
 
     // Where Pulse opens: its own tab with the Pulse redesign on; with it off, the bar's Pulse tab on its `root/nearby`
     // route (named Nearby until the founder's November 7 decision).
@@ -3096,6 +3140,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onRadonShown = { radonHomeId = null },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         onOpenMenu = openMenu,
+                        skyShare = skyShare,
                         onOpenPlace = { homeId ->
                             placeLinkScope.launch {
                                 currentPlaceHost?.let {
@@ -3457,7 +3502,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             navArgument(PLACE_DETAIL_SLUG_KEY) { type = NavType.StringType },
                         ),
                 ) {
-                    PlaceDetailScreen(onBack = { navController.popBackStack() })
+                    PlaceDetailScreen(onBack = { navController.popBackStack() }, skyShare = skyShare)
                 }
                 composable(
                     route = ChildRoutes.PLACE_DETAIL,
@@ -3478,6 +3523,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onStartVerify = { method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                        skyShare = skyShare,
                     )
                 }
                 composable(
@@ -5492,6 +5538,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_SHARE_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5592,6 +5642,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         aiNudgeId = args.getString(ChildRoutes.CHAT_AI_NUDGE_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                         aiConversationId = args.getString(ChildRoutes.CHAT_AI_CONVERSATION_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                         aiOpening = args.getString(ChildRoutes.CHAT_AI_OPENING_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
+                        sharedFile = skyShareFile(appContext, args.getString(ChildRoutes.CHAT_SHARE_KEY)).takeIf { kind != "ai" },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
@@ -5624,6 +5675,47 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             )
                         },
                         onInvite = { inviteShare.share(appContext, InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
+                    )
+                }
+                composable(
+                    route = ChildRoutes.NEW_MESSAGE_SHARE,
+                    arguments =
+                        listOf(
+                            navArgument(ChildRoutes.NEW_MESSAGE_SHARE_FILE_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                        ),
+                ) { entry ->
+                    val file = entry.arguments?.getString(ChildRoutes.NEW_MESSAGE_SHARE_FILE_KEY).orEmpty()
+                    NewMessageScreen(
+                        onCancel = { navController.popBackStack() },
+                        onSelect = { destination ->
+                            // The chat replaces the picker, so Back from it returns to Today.
+                            navController.popBackStack()
+                            val chat =
+                                destination.roomId?.let { roomId ->
+                                    ChildRoutes.chatConversationRoom(
+                                        roomId = roomId,
+                                        displayName = destination.displayName,
+                                        initials = destination.initials,
+                                        verified = false,
+                                    )
+                                } ?: ChildRoutes.withAvatar(
+                                    ChildRoutes.chatConversationFromPicker(
+                                        userId = destination.userId,
+                                        displayName = destination.displayName,
+                                        initials = destination.initials,
+                                        verified = destination.verified,
+                                        locality = destination.locality,
+                                    ),
+                                    destination.avatarUrl,
+                                )
+                            navController.navigate(ChildRoutes.withShare(chat, file))
+                        },
+                        onInvite = { inviteShare.share(appContext, InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
+                        title = "Send in a chat",
+                        withGroups = true,
                     )
                 }
                 composable(ChildRoutes.PULSE_FEED) {
@@ -5973,6 +6065,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.COMPOSE_ATTACHMENT_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val raw = entry.arguments?.getString(ChildRoutes.COMPOSE_INTENT_KEY) ?: PulseIntent.All.key
@@ -5983,6 +6079,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         prefillDraft = PulseComposeDraftFields.decode(entry.arguments?.getString(ChildRoutes.COMPOSE_DRAFT_FIELDS_KEY)),
                         // "Before you ask": the post opens on top; back returns to the draft.
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                        prefillAttachment = skyShareFile(appContext, entry.arguments?.getString(ChildRoutes.COMPOSE_ATTACHMENT_KEY)),
                     )
                 }
                 composable(

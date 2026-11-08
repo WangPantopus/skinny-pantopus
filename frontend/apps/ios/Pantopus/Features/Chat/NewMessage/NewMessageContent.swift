@@ -29,6 +29,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
     public let identity: NewMessageIdentityBadge
     /// The person's photo; their initials show without one.
     public let avatarURL: URL?
+    /// A group chat's room, for a row under Groups (whose `userId` is the room too).
+    public let roomId: String?
 
     public init(
         id: String,
@@ -40,7 +42,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
         subIcon: PantopusIcon?,
         verified: Bool,
         identity: NewMessageIdentityBadge,
-        avatarURL: URL? = nil
+        avatarURL: URL? = nil,
+        roomId: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -52,6 +55,7 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
         self.verified = verified
         self.identity = identity
         self.avatarURL = avatarURL
+        self.roomId = roomId
     }
 }
 
@@ -60,6 +64,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
 public enum NewMessageSectionID: String, Sendable, Hashable {
     case connections
     case recent
+    /// Recent group and household chats, when the picker sends to them too.
+    case groups
     case allVerified
 }
 
@@ -105,6 +111,8 @@ public struct NewMessageDestination: Hashable, Sendable {
     public let identity: NewMessageIdentityBadge
     /// The person's photo, for the conversation the pick opens.
     public let avatarURL: URL?
+    /// Set for a group chat picked: the room the message goes to.
+    public let roomId: String?
 
     public init(
         userId: String,
@@ -113,7 +121,8 @@ public struct NewMessageDestination: Hashable, Sendable {
         verified: Bool,
         locality: String?,
         identity: NewMessageIdentityBadge = .personal,
-        avatarURL: URL? = nil
+        avatarURL: URL? = nil,
+        roomId: String? = nil
     ) {
         self.userId = userId
         self.displayName = displayName
@@ -122,5 +131,6 @@ public struct NewMessageDestination: Hashable, Sendable {
         self.locality = locality
         self.identity = identity
         self.avatarURL = avatarURL
+        self.roomId = roomId
     }
 }

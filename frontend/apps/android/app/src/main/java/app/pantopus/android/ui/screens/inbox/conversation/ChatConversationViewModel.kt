@@ -78,6 +78,7 @@ import org.json.JSONObject
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
+import java.net.URLConnection
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -1053,6 +1054,20 @@ class ChatConversationViewModel
                     sourceUri = sourceUri,
                 ),
             )
+        }
+
+        /**
+         * A picture another screen hands this thread to send (Today's sky; its clip goes as a video): into the composer
+         * once the thread's saved draft is back, so it joins that draft instead of being replaced by it.
+         */
+        fun attachShared(file: File) {
+            viewModelScope.launch {
+                draftLoadJob?.join()
+                val bytes = withContext(Dispatchers.IO) { runCatching { file.readBytes() }.getOrNull() } ?: return@launch
+                val mimeType = URLConnection.guessContentTypeFromName(file.name) ?: "image/png"
+                val kind = if (mimeType.startsWith("image/")) ChatQueuedAttachmentKind.Image else ChatQueuedAttachmentKind.Document
+                queueAttachment(kind, file.name, mimeType, bytes)
+            }
         }
 
         /** A picked file the assistant can't take: the reason, in the server's words, and nothing queued. */

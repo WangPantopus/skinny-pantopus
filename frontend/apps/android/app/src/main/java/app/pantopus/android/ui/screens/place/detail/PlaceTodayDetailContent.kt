@@ -190,6 +190,8 @@ data class TodayTabParts(
      * so a task shows in one place only.
      */
     val needsYou: (@Composable (agendaTaskIds: Set<String>) -> Unit)? = null,
+    /** Share's "Or share in Pantopus": the Pulse composer or a chat with today's sky; null leaves them out. */
+    val skyShare: SkySharePantopus? = null,
 )
 
 /**
@@ -269,7 +271,7 @@ fun PlaceTodayDetailContent(
     // The sun's path, sunrise, sunset and the day's length, right under the weather.
     TodaySunCard(intel)
     // Share, under the sun card: today's sky as a picture or a clip.
-    TodaySkyShare(intel, now)
+    TodaySkyShare(intel, now, tab.skyShare)
     // 5. Coming up at home, with the full calendar one tap away.
     val ballot = BallotPlacement.ballot(intel)
     val election = intel.section(PlaceSectionId.CIVIC_ELECTION)?.civicElection?.takeIf { ballot != null }?.let { it.name to it.date }
@@ -616,6 +618,7 @@ private fun TodayWeatherSection(
 private fun TodaySkyShare(
     intel: PlaceIntelligence,
     now: ZonedDateTime,
+    inPantopus: SkySharePantopus?,
 ) {
     val env = intel.section(PlaceSectionId.WEATHER) ?: return
     val data = env.weather?.takeIf { env.isLive() } ?: return
@@ -632,6 +635,7 @@ private fun TodaySkyShare(
             now = ZonedDateTime.now(now.zone),
         ),
         Modifier.padding(top = 2.dp),
+        inPantopus,
     )
 }
 

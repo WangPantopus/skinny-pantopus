@@ -78,6 +78,8 @@ fun NewMessageScreen(
     title: String = "New message",
     emptyHeadline: String? = null,
     emptyBody: String? = null,
+    // Today's "Send in a chat" lists recent group chats too.
+    withGroups: Boolean = false,
     viewModel: NewMessageViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -86,6 +88,7 @@ fun NewMessageScreen(
     val destination by viewModel.destination.collectAsStateWithLifecycle()
 
     LifecycleResumeEffect(Unit) {
+        viewModel.includesGroups = withGroups
         viewModel.load()
         onPauseOrDispose { }
     }

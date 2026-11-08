@@ -81,6 +81,8 @@ public struct PulseComposeFlowView: View {
     /// carries (event times and place, a deal's end, lost or found, the
     /// Heads Up kind) starts filled in.
     private let prefillDraft: PulseComposeDraft?
+    /// Photos the draft starts with: Today's sky, shared from under the sun card.
+    private let prefillPhotos: [PulseComposePhoto]
     private let onCancel: @MainActor () -> Void
     private let onPosted: @MainActor (String?) -> Void
 
@@ -91,6 +93,7 @@ public struct PulseComposeFlowView: View {
         prefillTitle: String? = nil,
         prefillBody: String? = nil,
         prefillDraft: PulseComposeDraft? = nil,
+        prefillPhotos: [PulseComposePhoto] = [],
         session: PulseComposeSession? = nil,
         onCancel: @escaping @MainActor () -> Void = {},
         onPosted: @escaping @MainActor (String?) -> Void = { _ in }
@@ -103,6 +106,7 @@ public struct PulseComposeFlowView: View {
         self.prefillTitle = prefillTitle
         self.prefillBody = prefillBody
         self.prefillDraft = prefillDraft
+        self.prefillPhotos = prefillPhotos
         self.onCancel = onCancel
         self.onPosted = onPosted
     }
@@ -149,7 +153,7 @@ public struct PulseComposeFlowView: View {
 
         PulseComposeView(
             viewModel: current.draftModel(for: .draft(target, purpose)) {
-                PulseComposeViewModel(
+                let model = PulseComposeViewModel(
                     intent: initialIntent,
                     identity: identity(for: target),
                     postingTarget: target,
@@ -160,6 +164,8 @@ public struct PulseComposeFlowView: View {
                     prefillBody: prefillBody,
                     prefillDraft: prefillDraft
                 )
+                model.setPhotos(prefillPhotos)
+                return model
             },
             managesDismiss: false,
             onCancel: onCancel,

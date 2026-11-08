@@ -57,6 +57,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
+import java.net.URLConnection
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -876,6 +878,23 @@ class PulseComposeViewModel
         fun appendPhoto(photo: PulseComposePhoto) {
             if (_photos.value.size >= PULSE_COMPOSE_MAX_PHOTOS) return
             _photos.value = _photos.value + photo
+        }
+
+        private var sharedAttached = false
+
+        /** Today's sky, shared from under the sun card: the picture, or the clip as a video, attached once. */
+        fun attachShared(file: File) {
+            if (sharedAttached) return
+            sharedAttached = true
+            viewModelScope.launch {
+                val bytes = withContext(Dispatchers.IO) { runCatching { file.readBytes() }.getOrNull() }
+                if (bytes == null) {
+                    attachmentReadFailed()
+                    return@launch
+                }
+                val mimeType = URLConnection.guessContentTypeFromName(file.name) ?: "image/png"
+                appendPhoto(PulseComposePhoto(id = UUID.randomUUID().toString(), data = bytes, mimeType = mimeType))
+            }
         }
 
         fun removePhoto(id: String) {

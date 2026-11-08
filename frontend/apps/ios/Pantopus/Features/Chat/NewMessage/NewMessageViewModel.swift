@@ -13,6 +13,8 @@
 //    the search query reaches the backend's 2-character minimum. With
 //    no query, this section is hidden; the Connections + Recent
 //    sections remain visible.
+//  - Groups — only for Today's "Send in a chat": recent group and
+//    household chats from the same unified-conversations read.
 //
 //  Selecting a row emits a `NewMessageDestination` to the host; the
 //  host pops the picker and pushes the chat-conversation route with a
@@ -42,6 +44,8 @@ public final class NewMessageViewModel {
     public let emptySearchHints = ["A neighbor's name", "A username", "A local business"]
 
     private let api: APIClient
+    /// Today's "Send in a chat" can send to a group chat too.
+    private let includesGroups: Bool
     private let onSelect: @MainActor (NewMessageDestination) -> Void
     private let onCancel: @MainActor () -> Void
     private let onInvite: @MainActor () -> Void
@@ -49,6 +53,7 @@ public final class NewMessageViewModel {
 
     private var accepted: [RelationshipDTO] = []
     private var recents: [UnifiedConversation] = []
+    private var groups: [UnifiedConversation] = []
     private var verifiedResults: [UserSearchResultDTO] = []
     private var loadedOnce: Bool = false
     private var searchTask: Task<Void, Never>?
@@ -61,11 +66,13 @@ public final class NewMessageViewModel {
 
     init(
         api: APIClient = .shared,
+        includesGroups: Bool = false,
         onSelect: @escaping @MainActor (NewMessageDestination) -> Void = { _ in },
         onCancel: @escaping @MainActor () -> Void = {},
         onInvite: @escaping @MainActor () -> Void = {}
     ) {
         self.api = api
+        self.includesGroups = includesGroups
         self.onSelect = onSelect
         self.onCancel = onCancel
         self.onInvite = onInvite
@@ -130,7 +137,8 @@ public final class NewMessageViewModel {
             verified: row.verified,
             locality: row.locality,
             identity: row.identity,
-            avatarURL: row.avatarURL
+            avatarURL: row.avatarURL,
+            roomId: row.roomId
         )
         onSelect(destination)
     }
@@ -176,6 +184,14 @@ public final class NewMessageViewModel {
                     .filter { $0.kind == .conversation }
                     .prefix(10)
             )
+            // Group and household chats, for a picker that sends to them.
+            groups = includesGroups
+                ? Array(
+                    response.conversations
+                        .filter { $0.kind == .room && Self.groupRooms.contains($0.roomType ?? "") }
+                        .prefix(10)
+                )
+                : []
             return true
         } catch {
             logger.warning("Recents fetch failed: \(error)")
@@ -239,6 +255,7 @@ public final class NewMessageViewModel {
     private func rebuild() {
         let connectionsSection = makeConnectionsSection()
         let recentSection = makeRecentSection(excluding: rowIds(connectionsSection))
+        let groupsSection = makeGroupsSection()
         let allVerifiedSection = makeAllVerifiedSection(
             excluding: rowIds(connectionsSection).union(rowIds(recentSection))
         )
@@ -246,6 +263,7 @@ public final class NewMessageViewModel {
         var sections: [NewMessageSection] = []
         if !connectionsSection.rows.isEmpty { sections.append(connectionsSection) }
         if !recentSection.rows.isEmpty { sections.append(recentSection) }
+        if !groupsSection.rows.isEmpty { sections.append(groupsSection) }
         if !allVerifiedSection.rows.isEmpty { sections.append(allVerifiedSection) }
 
         let queryActive = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -288,6 +306,14 @@ public final class NewMessageViewModel {
         }
         let rows: [NewMessageContactRow] = filtered.compactMap { rowForRecent($0) }
         return NewMessageSection(id: .recent, label: "Recent", rows: rows)
+    }
+
+    private func makeGroupsSection() -> NewMessageSection {
+        let needle = normalizedSearch
+        let rows = groups
+            .filter { needle.isEmpty || ($0.name ?? "").lowercased().contains(needle) }
+            .map { rowForGroup($0) }
+        return NewMessageSection(id: .groups, label: "Groups", rows: rows)
     }
 
     private func makeAllVerifiedSection(excluding: Set<String>) -> NewMessageSection {
@@ -346,6 +372,22 @@ public final class NewMessageViewModel {
         )
     }
 
+    public func rowForGroup(_ dto: UnifiedConversation) -> NewMessageContactRow {
+        let name = (dto.name?.isEmpty == false ? dto.name : nil) ?? "Group chat"
+        return NewMessageContactRow(
+            id: "group_\(dto.id)",
+            userId: dto.id,
+            name: name,
+            initials: Self.initials(from: name),
+            locality: nil,
+            sub: Self.recentSub(for: dto),
+            subIcon: .users,
+            verified: false,
+            identity: .personal,
+            roomId: dto.id
+        )
+    }
+
     public func rowForVerified(_ dto: UserSearchResultDTO) -> NewMessageContactRow {
         let displayName = (dto.name?.isEmpty == false ? dto.name : nil)
             ?? MadeUpUsername.chosen(dto.username)
@@ -368,6 +410,9 @@ public final class NewMessageViewModel {
     }
 
     // MARK: - Helpers (static, pure)
+
+    /// The chats with several people: a group's and a household's (not a plan's or a Support Train's).
+    private static let groupRooms: Set<String> = ["group", "home"]
 
     private static func connectionSub(for rel: RelationshipDTO) -> String? {
         guard let raw = rel.acceptedAt ?? rel.createdAt, !raw.isEmpty else { return nil }
