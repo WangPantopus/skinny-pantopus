@@ -9,7 +9,7 @@ import * as api from '@pantopus/api';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone, AlertTriangle,
   Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User,
-  X,
+  X, MapPinOff, ChevronRight,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, postReactionCount, type PostTypeConfig } from '@pantopus/ui-utils';
@@ -71,7 +71,7 @@ function MapPostPopupCard({
 }) {
   const config = getPostTypeConfig(pin.post_type || 'general');
   const TypeIcon = getTypeReactIcon(pin.post_type || 'general');
-  const author = pin.creator?.name || chosenUsername(pin.creator?.username) || 'Neighbor';
+  const author = pin.creator?.displayName || pin.creator?.name || chosenUsername(pin.creator?.username) || 'Neighbor';
   const snippet = (pin.content || pin.title || 'No content yet').trim();
 
   return (
@@ -272,6 +272,11 @@ export default function FeedMap({
   const [error, setError] = useState(false);
   const [selectedPin, setSelectedPin] = useState<MapMarker | null>(null);
   const [clusterPosts, setClusterPosts] = useState<MapMarker[]>([]);
+  // Connections' posts with no place have no pin: a bar counts them and opens them as a list, so the map holds every
+  // post the list does (backend feedService.getUnplacedConnectionPosts).
+  const [unplaced, setUnplaced] = useState<MapMarker[]>([]);
+  const [unplacedMore, setUnplacedMore] = useState(false);
+  const [showUnplaced, setShowUnplaced] = useState(false);
   // The map's settled view (bounds, zoom, centre, size).
   const [view, setView] = useState<PulseView | null>(null);
   const bounds = view?.bounds ?? null;
@@ -338,6 +343,10 @@ export default function FeedMap({
       setError(false);
       setPins(postPins);
       setNearestActivity(res.nearest_activity_center ?? null);
+      const noPlace = res.unplaced_posts ?? [];
+      setUnplaced(noPlace);
+      setUnplacedMore(!!res.unplaced_more);
+      if (!noPlace.length) setShowUnplaced(false);
     } catch {
       if (isCurrent()) setError(true);
     } finally {
@@ -415,6 +424,7 @@ export default function FeedMap({
     searchView();
     setSelectedPin(null);
     setClusterPosts([]);
+    setShowUnplaced(false);
   };
 
   const handleRecenter = () => {
@@ -448,10 +458,12 @@ export default function FeedMap({
       if (cp.expansionZoom != null) camera()?.flyTo(cp.latitude, cp.longitude, cp.expansionZoom, 0.5);
       setClusterPosts(cp.items);
       setSelectedPin(null);
+      setShowUnplaced(false);
       return;
     }
     setSelectedPin(cp.item || null);
     setClusterPosts([]);
+    setShowUnplaced(false);
   }, [camera]);
 
   // ─── Derived ─────────────────────────────────────────────
@@ -460,8 +472,65 @@ export default function FeedMap({
     ? pins.filter((p) => p.latitude >= bounds.south && p.latitude <= bounds.north
       && p.longitude >= bounds.west && p.longitude <= bounds.east).length
     : pins.length;
-  const authorName = (p: MapMarker) => p.creator?.name || chosenUsername(p.creator?.username) || 'Neighbor';
+  const authorName = (p: MapMarker) => p.creator?.displayName || p.creator?.name || chosenUsername(p.creator?.username) || 'Neighbor';
   const postType = (p: MapMarker) => p.post_type || 'general';
+
+  // A card listing posts, each opening its post: a tapped cluster's, or Connections' posts with no place.
+  const postListCard = (title: string, posts: MapMarker[], onClose: () => void, footnote?: string) => (
+    <div className="absolute bottom-20 left-3 right-3 z-[500] bg-app-surface/95 backdrop-blur rounded-2xl shadow-2xl border border-app overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-app">
+        <span className="text-xs font-semibold text-app">{title}</span>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="p-1 text-app-muted hover:text-app transition"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div className="flex gap-2 overflow-x-auto p-3 scrollbar-hide">
+        {posts.map((p) => {
+          const pt = postType(p);
+          return (
+            <button
+              key={p.id}
+              onClick={() => onViewPost(p.id)}
+              className="flex-shrink-0 w-48 bg-surface-muted rounded-xl p-3 text-left hover-bg-app transition border border-app"
+            >
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase ${POST_TYPE_THEMED_TEXT}`}
+                  style={{
+                    background: `${getPostTypeConfig(pt).color}15`,
+                    ...postTypeTextVars(getPostTypeConfig(pt)),
+                  }}
+                >
+                  {(() => { const Icon = getTypeReactIcon(pt); return <Icon className="w-3 h-3 inline-block" />; })()} {getPostTypeConfig(pt).label}
+                </span>
+              </div>
+              <div className="text-[11px] font-semibold text-app truncate">{authorName(p)}</div>
+              <p className="text-[10px] text-app-muted line-clamp-2 mt-0.5 leading-relaxed">
+                {p.content || p.title || 'No content'}
+              </p>
+              <div className="flex items-center gap-2 mt-1.5">
+                {p.like_count != null && (() => {
+                  const ReactionIcon = postReactionIcon(pt);
+                  return <span className="text-[9px] text-app-muted inline-flex items-center gap-0.5" aria-label={postReactionCount(pt, p.like_count)}><ReactionIcon className="w-2.5 h-2.5" aria-hidden="true" /> {p.like_count}</span>;
+                })()}
+                {p.comment_count != null && <span className="text-[9px] text-app-muted inline-flex items-center gap-0.5"><MessageCircle className="w-2.5 h-2.5" /> {p.comment_count}</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {footnote && <p className="px-4 pb-3 -mt-1 text-[10px] text-app-muted">{footnote}</p>}
+    </div>
+  );
+  const unplacedLabel = unplaced.length === 1 && !unplacedMore
+    ? '1 post with no place'
+    : `${unplaced.length}${unplacedMore ? '+' : ''} posts with no place`;
 
   // The camera's centre (a tilted map's bounds aren't centred on it).
   const viewCenter = view
@@ -690,57 +759,28 @@ export default function FeedMap({
         />
       )}
 
+      {/* ─── Overlay: posts with no place (Connections) ────── */}
+      {unplaced.length > 0 && !clusterPosts.length && !showUnplaced && (
+        <button
+          onClick={() => { setShowUnplaced(true); setSelectedPin(null); }}
+          data-testid="pulseMapNoPlaceBar"
+          className="absolute bottom-32 left-3 z-[500] bg-app-surface/95 backdrop-blur px-3 h-10 rounded-full shadow-lg border border-app flex items-center justify-center gap-1.5 hover-bg-app transition"
+        >
+          <MapPinOff className="w-4 h-4 text-primary-600 dark:text-primary-300" aria-hidden="true" />
+          <span className="text-[11px] font-semibold text-app">{unplacedLabel}</span>
+          <ChevronRight className="w-3.5 h-3.5 text-app-muted" aria-hidden="true" />
+        </button>
+      )}
+
       {/* ─── Overlay: Cluster card list ────────────────────── */}
-      {clusterPosts.length > 0 && (
-        <div className="absolute bottom-20 left-3 right-3 z-[500] bg-app-surface/95 backdrop-blur rounded-2xl shadow-2xl border border-app overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-app">
-            <span className="text-xs font-semibold text-app">{clusterPosts.length} posts in this area</span>
-            <button
-              onClick={() => setClusterPosts([])}
-              aria-label="Close"
-              className="p-1 text-app-muted hover:text-app transition"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex gap-2 overflow-x-auto p-3 scrollbar-hide">
-            {clusterPosts.map((p) => {
-              const pt = postType(p);
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => onViewPost(p.id)}
-                  className="flex-shrink-0 w-48 bg-surface-muted rounded-xl p-3 text-left hover-bg-app transition border border-app"
-                >
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <span
-                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase ${POST_TYPE_THEMED_TEXT}`}
-                      style={{
-                        background: `${getPostTypeConfig(pt).color}15`,
-                        ...postTypeTextVars(getPostTypeConfig(pt)),
-                      }}
-                    >
-                      {(() => { const Icon = getTypeReactIcon(pt); return <Icon className="w-3 h-3 inline-block" />; })()} {getPostTypeConfig(pt).label}
-                    </span>
-                  </div>
-                  <div className="text-[11px] font-semibold text-app truncate">{authorName(p)}</div>
-                  <p className="text-[10px] text-app-muted line-clamp-2 mt-0.5 leading-relaxed">
-                    {p.content || p.title || 'No content'}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    {p.like_count != null && (() => {
-                      const ReactionIcon = postReactionIcon(pt);
-                      return <span className="text-[9px] text-app-muted inline-flex items-center gap-0.5" aria-label={postReactionCount(pt, p.like_count)}><ReactionIcon className="w-2.5 h-2.5" aria-hidden="true" /> {p.like_count}</span>;
-                    })()}
-                    {p.comment_count != null && <span className="text-[9px] text-app-muted inline-flex items-center gap-0.5"><MessageCircle className="w-2.5 h-2.5" /> {p.comment_count}</span>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {clusterPosts.length > 0 && postListCard(`${clusterPosts.length} posts in this area`, clusterPosts, () => setClusterPosts([]))}
+
+      {/* ─── Overlay: posts with no place, as a list ───────── */}
+      {showUnplaced && !clusterPosts.length && postListCard(
+        unplacedLabel,
+        unplaced,
+        () => setShowUnplaced(false),
+        unplacedMore ? `The newest ${unplaced.length}. List has them all.` : undefined,
       )}
     </div>
   );

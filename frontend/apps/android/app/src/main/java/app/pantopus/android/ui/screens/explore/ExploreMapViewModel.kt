@@ -578,6 +578,28 @@ class ExploreMapViewModel
             }
 
             /**
+             * A Connections post with no place, as a row of the Pulse map's list
+             * of them: no pin, so its coordinate is never read and it says
+             * "No place" where a pin's row gives its distance.
+             */
+            fun unplacedPostEntity(marker: PostsMapMarkerDto): ExploreEntity =
+                ExploreEntity(
+                    id = marker.id,
+                    kind = ExploreKind.Post,
+                    state = ExploreEntityState.Confirmed,
+                    latitude = 0.0,
+                    longitude = 0.0,
+                    title = marker.title ?: marker.content ?: "Post",
+                    metaLead = postMetaLead(marker),
+                    distanceLabel = "No place",
+                    distanceMiles = 0.0,
+                    badge = null,
+                    sourceId = marker.id,
+                    verified = false,
+                    openNow = true,
+                )
+
+            /**
              * Post rail-card lead — "Question · 2h ago" style, falling back to
              * the post type when the timestamp is unusable.
              */
