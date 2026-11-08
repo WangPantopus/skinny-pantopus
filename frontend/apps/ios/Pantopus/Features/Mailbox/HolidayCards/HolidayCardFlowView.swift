@@ -19,7 +19,13 @@ struct HolidayCardFlowView: View {
     private let onSeeInSent: ((String) -> Void)?
     private let onClose: () -> Void
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var phase
     private static let top = "sendCardTop"
+
+    /// Cards cost digital stamps for this person.
+    private var postageOn: Bool {
+        viewModel.cards?.postageEnabled == true
+    }
 
     init(viewModel: HolidayCardFlowViewModel, onSeeInSent: ((String) -> Void)? = nil, onClose: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
@@ -32,13 +38,19 @@ struct HolidayCardFlowView: View {
             header
             ScrollViewReader { scroller in
                 ScrollView {
-                    content
-                        .frame(maxWidth: 560)
-                        .padding(.horizontal, Spacing.s4)
-                        .padding(.top, Spacing.s3)
-                        .padding(.bottom, Spacing.s8)
-                        .frame(maxWidth: .infinity)
-                        .id(Self.top)
+                    VStack(alignment: .leading, spacing: Spacing.s3) {
+                        content
+                        if postageOn, viewModel.step == .sent, viewModel.sent != nil {
+                            HolidayCardPaperButton(title: "Send another card", fullWidth: true) { viewModel.startOver() }
+                                .accessibilityIdentifier("sendAnotherCard")
+                        }
+                    }
+                    .frame(maxWidth: 560)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s3)
+                    .padding(.bottom, Spacing.s8)
+                    .frame(maxWidth: .infinity)
+                    .id(Self.top)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 // Each step starts at its top (Look it over is long).
@@ -53,6 +65,21 @@ struct HolidayCardFlowView: View {
         .background(HolidayCardDesk.background(scheme).ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.load() }
+        // Digital stamps: the balance after each step, card and take-back; StoreKit purchases finished on open and resume.
+        .task(id: postageOn) {
+            guard postageOn else { return }
+            await viewModel.stamps.recover()
+            await viewModel.stamps.watch()
+        }
+        .task(id: "\(viewModel.step):\(viewModel.sent?.id ?? ""):\(viewModel.backNote ?? "")") {
+            if postageOn { await viewModel.stamps.refresh() }
+        }
+        .onChange(of: phase) { if phase == .active, postageOn { Task { await viewModel.stamps.recover() } } }
+        .sheet(isPresented: $viewModel.showsStampBooks) {
+            StampBooksSheet(store: viewModel.stamps)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sendCard")
@@ -86,6 +113,10 @@ struct HolidayCardFlowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("sendCardTitle")
+            if postageOn {
+                StampChip(store: viewModel.stamps) { viewModel.showsStampBooks = true }
+                    .padding(.trailing, heading.dots == nil ? Spacing.s3 : Spacing.s1)
+            }
             if let step = heading.dots {
                 StepDots(current: step)
                     .padding(.trailing, 14)

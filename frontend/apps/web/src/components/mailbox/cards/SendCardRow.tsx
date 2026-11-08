@@ -8,11 +8,22 @@
 
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
+import type { HolidayCards } from '@pantopus/api';
 import { launchFeatures } from '@/lib/featureFlags';
 import { useHolidayCards } from '@/lib/mailbox-queries';
 import { cardPicture, shortDay, WAX } from './cardArt';
 
 const FAN = ['christmas-2026-01', 'christmas-2026-08', 'christmas-2026-15'];
+
+/** With digital stamps on: what's left to send with. */
+function stampsLine(stamps: HolidayCards['stamps']): string {
+  if (!stamps) return 'Pick a picture and write a note.';
+  if (stamps.available === 0) return 'You’re out of stamps. Get a stamp book to send more.';
+  if (stamps.free_remaining > 0 && stamps.paid_remaining <= 0) {
+    return `Pick a picture and write a note. ${stamps.free_remaining} free ${stamps.free_remaining === 1 ? 'card' : 'cards'} left.`;
+  }
+  return `Pick a picture and write a note. ${stamps.available} ${stamps.available === 1 ? 'stamp' : 'stamps'} left.`;
+}
 
 export default function SendCardRow() {
   const enabled = launchFeatures.holidayCards && launchFeatures.mailbox;
@@ -20,7 +31,7 @@ export default function SendCardRow() {
   if (!enabled || !data?.open) return null;
   const today = data.today && data.today.status !== 'withdrawn' ? data.today : null;
 
-  let line = 'Pick a picture and write a note. One card a day.';
+  let line = data.postage_enabled ? stampsLine(data.stamps) : 'Pick a picture and write a note. One card a day.';
   if (today) {
     if (today.by_email) line = today.status === 'claimed' ? 'They joined Pantopus and have it.' : 'Waiting for them to open the email.';
     else if (today.status === 'delivered') line = 'In their mailbox now.';

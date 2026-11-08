@@ -24,8 +24,11 @@ import com.squareup.moshi.Moshi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
@@ -136,7 +139,7 @@ data class SendCardForm(
     val sendError: String? = null,
     val takingBack: Boolean = false,
     val takeBackError: String? = null,
-    /** "You took your card back. You can send a card again today." */
+    /** "You took your card back. You can send a card again today." (with digital stamps: its stamp is back) */
     val tookBack: Boolean = false,
     /** A retry of a card that was taken back meanwhile: the server's sentence, on a new card's first step. */
     val takenBackNote: String? = null,
@@ -150,8 +153,8 @@ data class SendCardForm(
     /** What step 4 says under its choices: why the card didn't go, or that the look can't be shown. */
     val sealNotice: String? get() = sealError ?: LOOK_UNAVAILABLE.takeIf { lookUnavailable }
 
-    /** What step 1 says about a card taken back, if anything. */
-    val backNote: String? get() = takenBackNote ?: TOOK_BACK.takeIf { tookBack }
+    /** What step 1 says about a card taken back, if anything; with digital stamps on ([postage]), its stamp came back. */
+    fun backNote(postage: Boolean): String? = takenBackNote ?: (if (postage) TOOK_BACK_STAMP else TOOK_BACK).takeIf { tookBack }
 
     /** This form with its card's request ID, made now if it has none yet. */
     fun withRequestId(): SendCardForm = if (requestId != null) this else copy(requestId = UUID.randomUUID().toString())
@@ -159,6 +162,9 @@ data class SendCardForm(
 
 /** Step 1 once a card was taken back from this flow. */
 private const val TOOK_BACK = "You took your card back. You can send a card again today."
+
+/** Step 1 once a card was taken back, with digital stamps on: the stamp it used is back. */
+private const val TOOK_BACK_STAMP = "You took your card back, and its stamp is back with you."
 
 /** Step 4 when the server can't show the look; "Seal and send" is then on step 4. */
 private const val LOOK_UNAVAILABLE = "Pantopus can’t show how your card will look yet. You can still seal and send it."
@@ -192,6 +198,17 @@ class SendCardViewModel
 
         private val _form = MutableStateFlow(restoredForm())
         val form: StateFlow<SendCardForm> = _form.asStateFlow()
+
+        /** "Send another card" under a card just sent (digital stamps on): a new card from the first step. */
+        fun startAnotherCard() {
+            _query.value = ""
+            _form.value = SendCardForm()
+        }
+
+        private val _stampsNeeded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+        /** The server refused a card for a stamp (they were spent on another device meanwhile): the stamp books open. */
+        val stampsNeeded: SharedFlow<Unit> = _stampsNeeded.asSharedFlow()
 
         private val _query = MutableStateFlow("")
         val query: StateFlow<String> = _query.asStateFlow()
@@ -422,6 +439,12 @@ class SendCardViewModel
                         toLink = to is CardRecipient.Link,
                     )
                 if (result is NetworkResult.Failure && wentEarlier(result.error)) return@launch
+                // The stamps ran out meanwhile (another device sent a card): the stamp books open; the card stays as it is.
+                if ((result as? NetworkResult.Failure)?.error?.serverCode() == STAMPS_REQUIRED) {
+                    _form.update { it.copy(sending = false) }
+                    _stampsNeeded.tryEmit(Unit)
+                    return@launch
+                }
                 val closed = (result as? NetworkResult.Failure)?.error?.serverCode() == ARRIVAL_CLOSED
                 _form.update {
                     when {
@@ -601,6 +624,9 @@ class SendCardViewModel
 
             /** This draft's card was taken back meanwhile: it never sends again. */
             private const val TAKEN_BACK = "CARD_TAKEN_BACK"
+
+            /** Digital stamps on and none left (402): the card waits while the person gets a stamp book. */
+            private const val STAMPS_REQUIRED = "STAMPS_REQUIRED"
 
             private const val KEY_STEP = "sendCard.step"
             private const val KEY_BY_EMAIL = "sendCard.byEmail"

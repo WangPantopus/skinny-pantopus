@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarClock, ChevronLeft, Loader2, Lock } from 'lucide-react';
-import { useSentCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
+import { useHolidayCards, useSentCard, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
 import { toast } from '@/components/ui/toast-store';
 import MailPiece from '../MailPiece';
 import { calendarDay } from '../MailRow';
@@ -63,6 +63,8 @@ export default function SentPieceView({ id }: { id: string }) {
   const { timeZone } = useMailAddressee();
   const { data: piece, isLoading, error, refetch } = useSentCard(id);
   const takeBack = useTakeBackHolidayCard();
+  // With digital stamps on, taking a card back gives its stamp back.
+  const { data: holidayCards } = useHolidayCards({ enabled: launchFeatures.holidayCards && launchFeatures.mailbox });
   const [showBack, setShowBack] = useState(false);
   const [takeBackError, setTakeBackError] = useState<string | null>(null);
   const [onTable, setOnTable] = useState(false);
@@ -120,7 +122,7 @@ export default function SentPieceView({ id }: { id: string }) {
 
   const doTakeBack = async () => {
     const sentToday = calendarDay(new Date(piece.sent_at), timeZone) === calendarDay(new Date(), timeZone);
-    if (!(await askTakeBack({ byEmail: piece.by_email, byLink: piece.by_link, sentToday }))) return;
+    if (!(await askTakeBack({ byEmail: piece.by_email, byLink: piece.by_link, sentToday, postage: Boolean(holidayCards?.postage_enabled) }))) return;
     setTakeBackError(null);
     takeBack.mutate(piece.id, {
       onSuccess: () => { toast.success('You took your card back.'); router.push('/app/mailbox/sent'); },

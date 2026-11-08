@@ -12,6 +12,14 @@
 import Foundation
 
 enum HolidayCardWords {
+    /// Whether cards cost digital stamps for this person, as the cards were
+    /// last read (the Mailbox row or the card flow): Sent's "Take your card
+    /// back?" then says the card's stamp comes back.
+    @MainActor static var postageOn = false
+
+    /// "Take your card back?" with digital stamps on.
+    static let stampComesBack = "Its stamp comes back to you."
+
     // MARK: Days and times
 
     /// "Sat, Dec 19".
@@ -119,9 +127,26 @@ enum HolidayCardWords {
         return "You can take it back until \(until), when the carrier picks it up."
     }
 
+    /// With digital stamps on: what's left to send with.
+    static func stampsLine(_ stamps: HolidayCardStamps?) -> String {
+        guard let stamps else { return "Pick a picture and write a note." }
+        if stamps.available == 0 { return "You’re out of stamps. Get a stamp book to send more." }
+        if stamps.freeRemaining > 0, stamps.paidRemaining <= 0 {
+            return "Pick a picture and write a note. \(stamps.freeRemaining) free \(stamps.freeRemaining == 1 ? "card" : "cards") left."
+        }
+        return "Pick a picture and write a note. \(stamps.available) \(stamps.available == 1 ? "stamp" : "stamps") left."
+    }
+
     /// The Mailbox row's second line: the invitation, or how today's card comes.
-    static func rowLine(today: SentHolidayCard?, calendar: Calendar = .current) -> String {
-        guard let today else { return "Pick a picture and write a note. One card a day." }
+    static func rowLine(
+        today: SentHolidayCard?,
+        postageEnabled: Bool = false,
+        stamps: HolidayCardStamps? = nil,
+        calendar: Calendar = .current
+    ) -> String {
+        guard let today else {
+            return postageEnabled ? stampsLine(stamps) : "Pick a picture and write a note. One card a day."
+        }
         if today.byLink {
             return today.status == "claimed" ? "Someone opened your link and has it." : "Waiting for someone to open your link."
         }
@@ -136,7 +161,7 @@ enum HolidayCardWords {
 
     /// Today's card while it still counts (one taken back doesn't).
     static func today(_ cards: HolidayCardsResponse?) -> SentHolidayCard? {
-        guard let today = cards?.today, today.status != "withdrawn" else { return nil }
+        guard cards?.postageEnabled != true, let today = cards?.today, today.status != "withdrawn" else { return nil }
         return today
     }
 

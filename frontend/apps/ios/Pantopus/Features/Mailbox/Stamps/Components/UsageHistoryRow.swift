@@ -4,8 +4,8 @@
 //
 //  A17.11 — "Usage history": which send consumed which stamp. A card of
 //  rows (recipient · kind · date) each led by a tiny ink-matched stamp
-//  chit, plus a "See all sends" footer. Ports the `UsageHistory` block
-//  in `stamps.jsx`.
+//  chit, plus a "See all sends" footer (none without `onSeeAll`). Ports
+//  the `UsageHistory` block in `stamps.jsx`.
 //
 
 import SwiftUI
@@ -14,9 +14,10 @@ import SwiftUI
 public struct UsageHistoryCard: View {
     private let usage: [StampUsage]
     private let window: String
-    private let onSeeAll: () -> Void
+    private let onSeeAll: (() -> Void)?
 
-    public init(usage: [StampUsage], window: String, onSeeAll: @escaping () -> Void = {}) {
+    /// `onSeeAll` nil leaves the "See all sends" footer out.
+    public init(usage: [StampUsage], window: String, onSeeAll: (() -> Void)? = {}) {
         self.usage = usage
         self.window = window
         self.onSeeAll = onSeeAll
@@ -44,21 +45,23 @@ public struct UsageHistoryCard: View {
                 }
             }
 
-            Button(action: onSeeAll) {
-                HStack(spacing: Spacing.s1) {
-                    Text("See all sends")
-                        .font(.system(size: 12, weight: .bold))
-                    Icon(.chevronRight, size: 13, color: Theme.Color.primaryInk)
+            if let onSeeAll {
+                Button(action: onSeeAll) {
+                    HStack(spacing: Spacing.s1) {
+                        Text("See all sends")
+                            .font(.system(size: 12, weight: .bold))
+                        Icon(.chevronRight, size: 13, color: Theme.Color.primaryInk)
+                    }
+                    .foregroundStyle(Theme.Color.primaryInk)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .overlay(alignment: .top) {
+                        Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
+                    }
                 }
-                .foregroundStyle(Theme.Color.primaryInk)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .overlay(alignment: .top) {
-                    Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
-                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("stampsUsageSeeAll")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("stampsUsageSeeAll")
         }
         .accessibilityIdentifier("stampsUsageHistory")
     }

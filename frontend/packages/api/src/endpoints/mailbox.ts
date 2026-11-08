@@ -669,6 +669,9 @@ export interface SentHolidayCard {
 }
 
 export interface HolidayCards {
+  postage_enabled?: boolean;
+  /** Digital stamps left (postage on; null when they couldn't be read). */
+  stamps?: { available: number; free_remaining: number; paid_remaining: number } | null;
   /** Sending is open (until December 31 ends where you are). */
   open: boolean;
   holiday: string;

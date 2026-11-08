@@ -144,8 +144,18 @@ final class HolidayCardFlowViewModel {
 
     /// What step 1 says about a card taken back, if anything.
     var backNote: String? {
-        takenBackNote ?? (tookBack ? "You took your card back. You can send a card again today." : nil)
+        guard !tookBack || takenBackNote != nil else {
+            return cards?.postageEnabled == true
+                ? "You took your card back, and its stamp is back with you."
+                : "You took your card back. You can send a card again today."
+        }
+        return takenBackNote
     }
+
+    /// Digital stamps (postage on): the balance, the books and buying them.
+    let stamps = MailStampStore()
+    /// The stamp books sheet is up (the header's count, "Get stamps to send", or a send the server refused for a stamp).
+    var showsStampBooks = false
 
     /// Who it's for: the name typed, the search, or an email address.
     var query = "" {
@@ -248,6 +258,7 @@ final class HolidayCardFlowViewModel {
             // A link can name a picture that isn't one of this year's: nothing is chosen then.
             if let designId, !response.designs.contains(where: { $0.id == designId }) { self.designId = nil }
             state = .loaded(response)
+            HolidayCardWords.postageOn = response.postageEnabled
         } catch {
             state = .error(message: Self.loadFailure(error))
         }
@@ -383,7 +394,8 @@ final class HolidayCardFlowViewModel {
             message: message.trimmingCharacters(in: .whitespacesAndNewlines),
             arrival: arrival,
             to: to,
-            requestId: requestId
+            requestId: requestId,
+            useStamp: cards?.postageEnabled == true ? true : nil
         )
     }
 
@@ -408,6 +420,12 @@ final class HolidayCardFlowViewModel {
             tookBack = false
         } catch {
             if await wentEarlier(error) { return }
+            // The stamps ran out meanwhile (another device sent a card): the stamp books open; the card stays as it is.
+            if Self.refusalCode(error) == "STAMPS_REQUIRED" {
+                showsStampBooks = true
+                await stamps.refresh()
+                return
+            }
             let sentence = Self.refusal(error, fallback: "Couldn’t send your card just now. Try again in a moment.")
             let closed = Self.refusalCode(error) == "CARD_ARRIVAL_CLOSED"
             guard closed || step == .seal else {
@@ -454,7 +472,7 @@ final class HolidayCardFlowViewModel {
 
     /// Everything written goes, and the next card starts on step 1 with a
     /// request ID of its own.
-    private func startOver() {
+    func startOver() {
         requestId = nil
         sent = nil
         preview = nil

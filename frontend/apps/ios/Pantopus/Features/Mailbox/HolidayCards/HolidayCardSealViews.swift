@@ -48,6 +48,10 @@ struct HolidayCardSealStep: View {
                 .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
                 .padding(.top, 14)
+            if viewModel.lookUnavailable, cards.postageEnabled {
+                StampPostageLine(store: viewModel.stamps, design: design.id)
+                    .padding(.top, Spacing.s3)
+            }
             if let notice = viewModel.sealNotice {
                 Text(notice)
                     .font(.system(size: 14, weight: .medium))
@@ -66,7 +70,11 @@ struct HolidayCardSealStep: View {
     /// When the server can't show it, the card is sealed and sent from here.
     @ViewBuilder
     private var button: some View {
-        if viewModel.lookUnavailable {
+        if viewModel.lookUnavailable, cards.postageEnabled, viewModel.stamps.isOut {
+            HolidayCardWaxButton(title: "Get stamps to send", isEnabled: viewModel.arrival != nil) {
+                viewModel.showsStampBooks = true
+            }
+        } else if viewModel.lookUnavailable {
             HolidayCardWaxButton(
                 title: viewModel.recipient?.isLink == true ? "Seal it and get the link" : "Seal and send",
                 isLoading: viewModel.sending,
@@ -234,7 +242,12 @@ struct HolidayCardSentView: View {
                 }
             }
             .padding(.top, Spacing.s4)
-            muted("One card a day. You can send another tomorrow.").padding(.top, Spacing.s3)
+            muted(cards
+                .postageEnabled ? "One digital stamp per card. Receiving and replies are free." :
+                "One card a day. You can send another tomorrow.").padding(
+                .top,
+                Spacing.s3
+            )
         }
         .confirmationDialog("Take your card back?", isPresented: $viewModel.confirmsTakeBack, titleVisibility: .visible) {
             Button("Take it back", role: .destructive) { Task { await viewModel.takeBack() } }
@@ -242,11 +255,16 @@ struct HolidayCardSentView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(card.byLink
-                ? "Your link will say you took it back. You can send a card again today."
+                ? "Your link will say you took it back. \(afterTakeBack)"
                 : card.byEmail
-                ? "The link in their email will say you took it back. You can send a card again today."
-                : "It won’t go out with the morning mail. You can send a card again today.")
+                ? "The link in their email will say you took it back. \(afterTakeBack)"
+                : "It won’t go out with the morning mail. \(afterTakeBack)")
         }
+    }
+
+    /// What taking it back gives back: the card's stamp with digital stamps on, else today's card.
+    private var afterTakeBack: String {
+        cards.postageEnabled ? HolidayCardWords.stampComesBack : "You can send a card again today."
     }
 
     private func muted(_ text: String) -> some View {

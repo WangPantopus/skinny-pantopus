@@ -93,6 +93,8 @@ fun MailSentCardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val takingBack by viewModel.takingBack.collectAsStateWithLifecycle()
     val takeBackError by viewModel.takeBackError.collectAsStateWithLifecycle()
+    // With digital stamps on, taking a card back gives its stamp back.
+    val cards by HolidayCardsRepository.latest.collectAsStateWithLifecycle()
     var confirmTakeBack by rememberSaveable { mutableStateOf(false) }
     // The sender's own clock (the season's zone once cards are read; the phone's until then).
     val zone = remember { HolidayCardTimes.zone(HolidayCardsRepository.latest.value?.timeZone) }
@@ -135,6 +137,7 @@ fun MailSentCardScreen(
             },
             onKeep = { confirmTakeBack = false },
             freesToday = MailSentWords.sentToday(card, zone),
+            postage = cards?.postageEnabled == true,
         )
     }
 }

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.mailbox.HolidayCardStamps
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
 import app.pantopus.android.ui.theme.PantopusColors
@@ -45,7 +46,17 @@ import java.time.ZoneId
 
 /** Today's card, unless it was taken back. */
 val HolidayCardsResponse.todaysCard: SentHolidayCard?
-    get() = today?.takeIf { it.status != "withdrawn" }
+    get() = today?.takeIf { !postageEnabled && it.status != "withdrawn" }
+
+/** With digital stamps on: what's left to send with (nothing said when the balance couldn't be read). */
+private fun stampsLine(stamps: HolidayCardStamps?): String =
+    when {
+        stamps == null -> "Pick a picture and write a note."
+        stamps.available == 0 -> "You’re out of stamps. Get a stamp book to send more."
+        stamps.freeRemaining > 0 && stamps.paidRemaining <= 0 ->
+            "Pick a picture and write a note. ${stamps.freeRemaining} free ${if (stamps.freeRemaining == 1) "card" else "cards"} left."
+        else -> "Pick a picture and write a note. ${stamps.available} ${if (stamps.available == 1) "stamp" else "stamps"} left."
+    }
 
 /**
  * The way in to Christmas cards, at the top of Me in the Mailbox: "Send a Christmas card" over a fan of three pictures,
@@ -66,7 +77,14 @@ fun HolidayCardRow(
             today.byLink && today.status != "claimed" -> "Today’s card · by link"
             else -> "Today’s card · to ${today.toName ?: "them"}"
         }
-    val line = if (today != null) todayLine(today, zone) else "Pick a picture and write a note. One card a day."
+    val line =
+        if (today != null) {
+            todayLine(today, zone)
+        } else if (cards.postageEnabled) {
+            stampsLine(cards.stamps)
+        } else {
+            "Pick a picture and write a note. One card a day."
+        }
     val shape = RoundedCornerShape(Radii.lg)
     Row(
         modifier =

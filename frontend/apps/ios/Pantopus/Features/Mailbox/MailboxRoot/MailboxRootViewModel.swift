@@ -829,6 +829,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         }
         let response: HolidayCardsResponse? = try? await api.request(HolidayCardEndpoints.cards())
         christmasCards = response?.open == true ? response : nil
+        if let response { HolidayCardWords.postageOn = response.postageEnabled }
     }
 
     /// The row's tap: the card flow, or today's card.

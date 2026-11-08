@@ -9,6 +9,9 @@ import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardResponse
 import app.pantopus.android.data.api.models.mailbox.SentCardResponse
 import app.pantopus.android.data.api.models.mailbox.SentMailResponse
+import app.pantopus.android.data.api.models.mailbox.StampBalance
+import app.pantopus.android.data.api.models.mailbox.StampConfirmation
+import app.pantopus.android.data.api.models.mailbox.StampConfirmed
 import app.pantopus.android.data.api.models.mailbox.TakeBackHolidayCardResponse
 import retrofit2.Response
 import retrofit2.http.Body
@@ -21,7 +24,23 @@ import retrofit2.http.Query
  * Christmas cards (launch keys `holiday_cards` + `mailbox`; every route answers 404 while either is off), from
  * `backend/routes/mailbox.js`. The people a card can go to come from [MailComposeApi.recipients] with `people=1`.
  */
+@Suppress("TooManyFunctions")
 interface HolidayCardsApi {
+    /**
+     * `GET /api/mailbox/stamp-books?history=` — route `backend/routes/mailStamps.js:29`: the digital stamps left and the
+     * books; with `history=1` also the latest stamp moves and the stamps used.
+     */
+    @GET("api/mailbox/stamp-books")
+    suspend fun stampBooks(
+        @Query("history") history: String? = null,
+    ): StampBalance
+
+    /** `POST /api/mailbox/stamp-books/confirm` — route `backend/routes/mailStamps.js:68`: credits a Google Play purchase. */
+    @POST("api/mailbox/stamp-books/confirm")
+    suspend fun confirmStamps(
+        @Body body: StampConfirmation,
+    ): StampConfirmed
+
     /** `GET /api/mailbox/cards` — route `backend/routes/mailbox.js:1776`: the season's pictures and today's card. */
     @GET("api/mailbox/cards")
     suspend fun cards(): HolidayCardsResponse

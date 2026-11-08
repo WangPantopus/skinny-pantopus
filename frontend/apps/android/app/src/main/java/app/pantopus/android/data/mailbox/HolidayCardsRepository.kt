@@ -5,6 +5,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
+import app.pantopus.android.data.api.models.mailbox.HolidayCardStamps
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SentCard
@@ -72,7 +73,17 @@ class HolidayCardsRepository
             toLink: Boolean = false,
         ): CardLook {
             val body =
-                SendHolidayCardBody(design, message, arrival, recipient(toUserId, toEmail, toLink), requestId)
+                SendHolidayCardBody(
+                    design,
+                    message,
+                    arrival,
+                    recipient(toUserId, toEmail, toLink),
+                    requestId,
+                    useStamp =
+                        true.takeIf {
+                            latest.value?.postageEnabled == true
+                        },
+                )
             val response =
                 when (val result = safeApiCall { api.preview(body) }) {
                     is NetworkResult.Success -> result.data
@@ -126,10 +137,20 @@ class HolidayCardsRepository
             toLink: Boolean = false,
         ): NetworkResult<SentHolidayCard> {
             val body =
-                SendHolidayCardBody(design, message, arrival, recipient(toUserId, toEmail, toLink), requestId)
+                SendHolidayCardBody(
+                    design,
+                    message,
+                    arrival,
+                    recipient(toUserId, toEmail, toLink),
+                    requestId,
+                    useStamp =
+                        true.takeIf {
+                            latest.value?.postageEnabled == true
+                        },
+                )
             return when (val result = safeApiCall { api.send(body) }) {
                 is NetworkResult.Success -> {
-                    latestFlow.update { it?.copy(today = result.data.card) }
+                    latestFlow.update { if (it?.postageEnabled == true) it else it?.copy(today = result.data.card) }
                     cardSentFlow.tryEmit(result.data.card.id)
                     NetworkResult.Success(result.data.card.copy(link = result.data.link))
                 }
@@ -203,6 +224,11 @@ class HolidayCardsRepository
 
             fun announceMovedOn(cardId: String) {
                 movedOnFlow.tryEmit(cardId)
+            }
+
+            /** The digital stamps as a balance read just found them (a card sent, taken back, or a book bought): the row's line. */
+            fun noteStamps(stamps: HolidayCardStamps) {
+                latestFlow.update { cards -> if (cards?.postageEnabled == true) cards.copy(stamps = stamps) else cards }
             }
 
             private val sentReadFlow = MutableSharedFlow<SentCard>(extraBufferCapacity = 8)

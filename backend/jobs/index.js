@@ -672,9 +672,13 @@ function startJobs(options = {}) {
   });
 
   // ─── Mail Escrow Expiry (Phase 7) ───
-  // Runs daily at 6:00 AM UTC.
-  // Expires pending escrowed mail past its expiry date and
-  // notifies senders that their letter wasn't picked up.
+  // Reconcile store refunds and finish Google consumption after interrupted purchases.
+  scheduleCron('*/10 * * * *', wrapJob('mailStampReconciliation', () => require('../services/mailStamps').reconcile()), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // Runs daily at 6:00 AM UTC. Expires unclaimed mail and notifies its sender.
   scheduleCron('0 6 * * *', wrapJob('mailEscrowExpiry', mailEscrowExpiry), {
     scheduled: true,
     timezone: 'UTC',
