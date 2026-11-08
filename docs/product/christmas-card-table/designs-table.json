@@ -839,6 +839,159 @@
    "cut_percent": 2.7,
    "lum": 0.398,
    "warm": 0.175
+  },
+  {
+   "id": "christmas-2026-50",
+   "number": 50,
+   "caption": "You made the nice list.",
+   "slug": "you-made-the-nice-list",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.342,
+   "warm": 0.304
+  },
+  {
+   "id": "christmas-2026-51",
+   "number": 51,
+   "caption": "I put in a good word for you.",
+   "slug": "i-put-in-a-good-word-for-you",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.1,
+   "lum": 0.337,
+   "warm": 0.247
+  },
+  {
+   "id": "christmas-2026-52",
+   "number": 52,
+   "caption": "Just making sure it works.",
+   "slug": "just-making-sure-it-works",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.316,
+   "warm": 0.249
+  },
+  {
+   "id": "christmas-2026-53",
+   "number": 53,
+   "caption": "He got your letter.",
+   "slug": "he-got-your-letter",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.541,
+   "warm": 0.147
+  },
+  {
+   "id": "christmas-2026-54",
+   "number": 54,
+   "caption": "Some things never get old.",
+   "slug": "some-things-never-get-old",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.314,
+   "warm": 0.178
+  },
+  {
+   "id": "christmas-2026-55",
+   "number": 55,
+   "caption": "On his way to you.",
+   "slug": "on-his-way-to-you",
+   "table": "#3b4c6e",
+   "tone": "slate",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.551,
+   "warm": -0.003
+  },
+  {
+   "id": "christmas-2026-56",
+   "number": 56,
+   "caption": "Saved the best house for last.",
+   "slug": "saved-the-best-house-for-last",
+   "table": "#2c4071",
+   "tone": "dusk",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.332,
+   "warm": 0.024
+  },
+  {
+   "id": "christmas-2026-57",
+   "number": 57,
+   "caption": "Shh. He’s here.",
+   "slug": "shh-hes-here",
+   "table": "#6e4b30",
+   "tone": "umber",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.284,
+   "warm": 0.228
+  },
+  {
+   "id": "christmas-2026-58",
+   "number": 58,
+   "caption": "Put your feet up. It’s Christmas.",
+   "slug": "put-your-feet-up-its-christmas",
+   "table": "#704b51",
+   "tone": "wine",
+   "crop": [
+    0,
+    0,
+    1214,
+    1295
+   ],
+   "cut_percent": 0.0,
+   "lum": 0.496,
+   "warm": 0.154
   }
  ]
 }
