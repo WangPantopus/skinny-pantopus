@@ -76,7 +76,7 @@ const FOOTINGS = { BASEMENT: 'Basement', 'CRAWL SPACE': 'Crawl space', FILL: 'Fi
 
 // Each parcel's largest building, in the county's own figures. How many it has goes on the record too.
 // Counties with a connector of their own, for the bedrooms and baths these parcels lack.
-const OWN_CONNECTOR = new Set(['37051', '37081', '37097', '37109', '37119', '37133', '37183']);
+const OWN_CONNECTOR = new Set(['37051', '37081', '37097', '37109', '37119', '37133', '37163', '37183']);
 
 async function buildingsOf(work, fips, lists) {
   const parcels = new Map();

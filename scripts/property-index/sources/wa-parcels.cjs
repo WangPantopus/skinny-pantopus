@@ -3,7 +3,7 @@
 // the Department of Revenue's land use code, and the assessor's land and building values (Washington assesses at 100% of
 // market value). "For informational purposes only", no use limit (read November 7, 2026). The Geoportal's file geodatabase
 // is read; it holds no owner columns. King, Snohomish and Spokane limit their own files, so their rows here wait until
-// someone asks whether the state's copy is different; Clark, Pierce, Skagit and Kitsap keep their own connectors, which have building facts.
+// someone asks whether the state's copy is different; Clark, Pierce, Skagit, Kitsap and Walla Walla keep their own connectors, which have building facts.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,8 +25,8 @@ const NAMES = {
   '041': 'Lewis', '043': 'Lincoln', '045': 'Mason', '047': 'Okanogan', '049': 'Pacific', '051': 'Pend Oreille', '053': 'Pierce', '055': 'San Juan', '057': 'Skagit', '059': 'Skamania',
   '061': 'Snohomish', '063': 'Spokane', '065': 'Stevens', '067': 'Thurston', '069': 'Wahkiakum', '071': 'Walla Walla', '073': 'Whatcom', '075': 'Whitman', '077': 'Yakima',
 };
-// Clark, Pierce, Skagit and Kitsap have their own connectors; King, Snohomish and Spokane wait for an answer about their terms.
-const SKIPPED = new Set(['53011', '53053', '53057', '53035', '53033', '53061', '53063']);
+// Clark, Pierce, Skagit, Kitsap and Walla Walla have their own connectors; King, Snohomish and Spokane wait for an answer about their terms.
+const SKIPPED = new Set(['53011', '53053', '53057', '53035', '53071', '53033', '53061', '53063']);
 
 // The Department of Revenue's land use codes: 11 single-family homes, 12 two to four units, 13 five or more, 14 condominiums,
 // 18 other residential, 19 vacation homes and cabins, 91 undeveloped land.
