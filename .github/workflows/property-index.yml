@@ -28,9 +28,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file); or models (refit each county's value model from the release it serves); or gaps (the missing-facts ledger, which follows every publish by itself: county names counties, all redoes every one, blank does releases without one)"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or shared-facts, with county and mode live or off (an address with several homes on record shows what all its records agree on); or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file); or models (refit each county's value model from the release it serves); or gaps (the missing-facts ledger, which follows every publish by itself: county names counties, all redoes every one, blank does releases without one)"
         type: choice
-        options: [build, rollback, switch, estimates, floor-points, area-trends, models, gaps]
+        options: [build, rollback, switch, shared-facts, estimates, floor-points, area-trends, models, gaps]
         default: build
       sources:
         description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates, floor-points)"
@@ -41,7 +41,7 @@ on:
         required: false
         default: ""
       county:
-        description: "County FIPS (rollback); one or a comma separated list (switch, models; all refits every county; build with accept_falls: the counties allowed to publish far fewer records, never a live one)"
+        description: "County FIPS (rollback); one or a comma separated list (switch, shared-facts, models; all refits every county; build with accept_falls: the counties allowed to publish far fewer records, never a live one)"
         required: false
         default: ""
       state:
@@ -49,12 +49,12 @@ on:
         required: false
         default: ""
       target:
-        description: "The environment that follows the change (switch)"
+        description: "The environment that follows the change (switch, shared-facts)"
         type: choice
         options: [staging, production]
         default: staging
       mode:
-        description: "off, shadow or live; blank keeps it (switch)"
+        description: "off, shadow or live; blank keeps it (switch). live or off (shared-facts)"
         required: false
         default: ""
       withhold:
@@ -85,11 +85,11 @@ on:
 permissions:
   contents: read
 
-# A county's switch only writes its own file, so it never waits behind a build that takes hours. The national floor writes only under its own prefix and can take hours a state, so it has its own line too. So does a rollback: on the publish line it would wait behind a build of up to 340 minutes, and publish.cjs keeps a rollback that lands while a state's files upload. A waiting run is
+# A county's switch only writes its own file, so it never waits behind a build that takes hours. Shared facts write the same file, so they share its line. The national floor writes only under its own prefix and can take hours a state, so it has its own line too. So does a rollback: on the publish line it would wait behind a build of up to 340 minutes, and publish.cjs keeps a rollback that lands while a state's files upload. A waiting run is
 # replaced by a newer one, so several counties go in one run's list, not in a loop of runs. The missing-facts ledger by hand only
 # reads releases and writes its own files, so it has its own line and never replaces a waiting build.
 concurrency:
-  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || (inputs.action == 'estimates' && 'estimates') || (inputs.action == 'floor-points' && 'floor-points') || (inputs.action == 'rollback' && 'rollback') || (inputs.action == 'gaps' && 'gaps') || 'publish' }}
+  group: property-index-${{ github.event_name == 'pull_request' && github.ref || ((inputs.action == 'switch' || inputs.action == 'shared-facts') && 'switch') || (inputs.action == 'estimates' && 'estimates') || (inputs.action == 'floor-points' && 'floor-points') || (inputs.action == 'rollback' && 'rollback') || (inputs.action == 'gaps' && 'gaps') || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -119,7 +119,7 @@ jobs:
 
   switch:
     name: Switch a county
-    if: github.event_name == 'workflow_dispatch' && inputs.action == 'switch' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'workflow_dispatch' && (inputs.action == 'switch' || inputs.action == 'shared-facts') && github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: property-index
@@ -141,11 +141,13 @@ jobs:
           TARGET: ${{ inputs.target }}
           WITHHOLD: ${{ inputs.withhold }}
           ESTIMATES: ${{ inputs.estimates }}
-        run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --estimates "$ESTIMATES" --bucket "$PROPERTY_INDEX_BUCKET"
+          # shared-facts changes only the file's shared_facts list, never the county's own line.
+          SHARED_FACTS: ${{ inputs.action == 'shared-facts' && '--shared-facts' || '' }}
+        run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --estimates "$ESTIMATES" --bucket "$PROPERTY_INDEX_BUCKET" $SHARED_FACTS
 
   publish:
     name: Build and publish
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && inputs.action != 'switch'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && inputs.action != 'switch' && inputs.action != 'shared-facts'
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     environment: property-index

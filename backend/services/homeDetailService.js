@@ -317,7 +317,9 @@ async function estimateAnswer(home, raw, household) {
     household: await householdPart(household) };
 }
 
-async function propertyDetail(homeId, actorId) {
+// `sharedFacts`: a build that draws a record section's note is asking, so a Home at an address with several homes on
+// record can show what all of them agree on (homeRecord.js agreedCopy). Other builds get today's answer.
+async function propertyDetail(homeId, actorId, { sharedFacts = false } = {}) {
   // Read beside the access check, a round trip a person waits through anyway, not after it. Nothing read here leaves
   // until that check has passed, and it runs once more after the last read.
   const early = checked(db.from('Home').select([...HOME_FIELDS, ...INSTRUCTION_FIELDS, 'niche_data', 'address_id'].join(', ')).eq('id', homeId).maybeSingle());
@@ -347,7 +349,8 @@ async function propertyDetail(homeId, actorId) {
     // Bedrooms, baths and size as Place shows them (householdFacts.shownColumns); the household part reads the columns.
     const home = { ...columns, ...householdFacts.shownColumns(raw, record?.copy) };
     if (record) {
-      const county = record.copy ? serializePropertyRecord(record.copy, await valueEstimate.forCopy(record.copy, raw)) : null;
+      const shared = sharedFacts && !record.copy ? record.shared || null : null;
+      const county = record.copy ? serializePropertyRecord(record.copy, await valueEstimate.forCopy(record.copy, raw)) : serializePropertyRecord(shared);
       // A county that stopped publishing says so; the estimate is for homes no record ever covered.
       if (!county && record.lookup !== 'pending' && record.reason !== 'withdrawn') {
         const floor = await estimateAnswer(home, raw, { homeId, home: columns, raw, access, actorId, problems });
@@ -355,7 +358,7 @@ async function propertyDetail(homeId, actorId) {
       }
       return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
         unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : (record.reason === 'withdrawn' ? 'SOURCE_WITHDRAWN' : 'NO_PROPERTY_FOUND')), county_record: county,
-        ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}),
+        ...(county ? { provenance: homeRecords.provenanceOf(record.copy || shared) } : {}),
         // While the record is still being read, nothing asks for what it may answer.
         household: record.lookup === 'pending' ? null : await householdPart({ homeId, home: columns, raw, access, actorId, problems, copy: county ? record.copy : null, countyRecord: county }) };
     }

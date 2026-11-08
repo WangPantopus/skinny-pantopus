@@ -11,6 +11,10 @@
 //     --withhold sale_price,sale_date   these facts stay off its screens (stored copies keep them); `none` brings them all back
 //     --estimates on|off   a live county's owners see a Pantopus estimate, or don't (backend/services/propertyRecords/valueEstimate.js)
 //   Leave out --mode to keep its mode.
+//   node scripts/property-index/switch-county.cjs --shared-facts --county 17031 --mode live --target production --bucket <name>
+//     --shared-facts with --mode live or off: an address with several homes on record in the county shows what all of
+//     them agree on (year built, size, bedrooms, baths), or doesn't. Only the file's shared_facts list changes; the
+//     county's own line stays as it is (backend/services/propertyRecords/identity.js and router.js).
 //
 // A list changes every county in it or none: one refused county refuses the whole run, and the file is written once.
 // Shadow and live take only a county whose release holds homes; off takes any county.
@@ -33,6 +37,7 @@ const mode = opt('--mode').trim();
 const target = opt('--target').trim();
 const withhold = opt('--withhold').trim();
 const estimates = opt('--estimates').trim();
+const sharedFacts = process.argv.includes('--shared-facts');
 const root = opt('--root');
 const remote = `s3://${opt('--bucket')}/${opt('--prefix') || 'index'}`;
 
@@ -40,6 +45,8 @@ if (!counties.length) refuse('A county is its five-digit FIPS code');
 if (mode && !['off', 'shadow', 'live'].includes(mode)) refuse('A county is off, shadow or live');
 if (!/^[a-z]+$/.test(target)) refuse('Name the environment: production or staging');
 if (estimates && !['on', 'off'].includes(estimates)) refuse('Estimates are on or off');
+if (sharedFacts && !['live', 'off'].includes(mode)) refuse('Shared facts are live or off: pass --mode live or --mode off');
+if (sharedFacts && (withhold || estimates)) refuse('Shared facts change by themselves: leave out --withhold and --estimates');
 if (!mode && !withhold && !estimates) refuse('Nothing to change: pass --mode, --withhold, --estimates or several');
 if (!root && !opt('--bucket')) refuse('Pass --bucket, or --root for a local rig');
 
@@ -103,7 +110,7 @@ const text = read(name);
 const file = text ? JSON.parse(text) : { v: 1, counties: {} };
 if (file.v !== 1 || !file.counties) refuse('A switch file this tool can\'t read');
 
-const changes = known.map((county) => {
+const changes = sharedFacts ? [] : known.map((county) => {
   const before = file.counties[county] || { mode: 'off (not named)' };
   const next = { ...before, ...(mode ? { mode } : {}), ...(withheld ? { withheld } : {}), ...(estimates ? { estimates: estimates === 'on' } : {}) };
   if (!['off', 'shadow', 'live'].includes(next.mode)) problems.push(`${county} is named for the first time, so it needs --mode`);
@@ -117,6 +124,17 @@ if (problems.length) {
   refuse(`Nothing changed: ${problems.length} of ${counties.length} refused`);
 }
 
+// The shared-facts list sits beside the counties' lines; a file without it has shared facts off everywhere.
+const shared = new Set(file.shared_facts || []);
+const sharedBefore = new Map(known.map((county) => [county, shared.has(county) ? 'live' : 'off']));
+if (sharedFacts) {
+  for (const county of known) {
+    if (mode === 'live') shared.add(county);
+    else shared.delete(county);
+  }
+  if (shared.size) file.shared_facts = [...shared].sort();
+  else delete file.shared_facts;
+}
 for (const { county, next } of changes) file.counties[county] = next;
 file.updated_at = new Date().toISOString();
 write(name, `${JSON.stringify(file, null, 1)}\n`);
@@ -126,4 +144,10 @@ for (const { county, before, next } of changes) {
   const release = releases.get(county);
   log(`${target}: ${county} ${before.mode} -> ${next.mode}${release ? `, release ${release.release} as of ${release.as_of}` : ''}; withheld: ${(next.withheld || []).join(', ') || 'none'}; estimates: ${next.estimates ? (next.mode === 'live' ? 'on' : 'on once live') : 'off'}`);
 }
-log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off, estimates on in ${Object.values(file.counties).filter((entry) => entry.estimates).length}; servers follow within about a minute`);
+if (sharedFacts) {
+  for (const county of known) {
+    const line = file.counties[county]?.mode || 'off (not named)';
+    log(`${target}: ${county} shared facts ${sharedBefore.get(county)} -> ${mode}; the county is ${line}${line === 'live' ? '' : ', so they show once it is live'}`);
+  }
+}
+log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off, estimates on in ${Object.values(file.counties).filter((entry) => entry.estimates).length}, shared facts in ${shared.size}; servers follow within about a minute`);

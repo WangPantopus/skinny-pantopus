@@ -17,6 +17,12 @@
  * `exact`. A wrong home's facts are worse than none. Where it asks which one, it
  * says what the choices are when they are few (`choices`): unit numbers and
  * urbanizaciones, never anything about who lives there.
+ *
+ * With shared facts on for the county (router.js), an address with several homes on
+ * record also says what every one of them agrees on (`agreed`): year built, size,
+ * bedrooms and baths, each only where every record has it and has the same. Those are
+ * the home's whichever record is its own, so they can show while the answer still
+ * asks which one. Nothing else of any record goes with it.
  */
 
 const same = (a, b) => (a || '') === (b || '');
@@ -113,11 +119,28 @@ function ambiguous(candidates, requested, reason) {
   });
 }
 
+// What an address with several homes may show when its records agree: building facts, never a value, a lot, a sale or an ID.
+const AGREED_FACTS = ['year_built', 'living_sqft', 'bedrooms', 'bathrooms'];
+
+/** The facts every one of these records has, as the same number above zero (a record's zero is nothing recorded). Null when none. */
+function agreedFacts(candidates) {
+  // A suppressed record among them says nothing, not even what it shares.
+  if (candidates.length < 2 || candidates.some((record) => record.restricted)) return null;
+  const agreed = {};
+  for (const name of AGREED_FACTS) {
+    const values = candidates.map((record) => record.facts?.[name]);
+    if (values.every((value) => typeof value === 'number' && value > 0 && value === values[0])) agreed[name] = values[0];
+  }
+  return Object.keys(agreed).length ? agreed : null;
+}
+
 /**
  * @param {object} address addressKey.parse()'s parts with `zip`
  * @param {object[]} records  What the release holds at this street name and house number
+ * @param {object} [options]
+ * @param {boolean} [options.sharedFacts] The county shows what an address's several homes all agree on (`agreed`)
  */
-function resolve(address, records) {
+function resolve(address, records, { sharedFacts = false } = {}) {
   // "BLDG A" with no unit under it: the building letter is what tells homes apart there.
   const query = !address.unit && address.building ? { ...address, unit: address.building, building: '' } : address;
   const here = inUrbanization(query, inTown(query, inZip(query, onStreet(query, records))));
@@ -164,11 +187,13 @@ function resolve(address, records) {
   const others = buildings.filter((building) => !whole.some((record) => record.parent === building.id));
   if (whole.length === 1 && !withUnits.length && !others.length) return exact(whole[0], requested, here);
   if (whole.length > 1 || (whole.length && (others.length || withUnits.length))) {
-    return ambiguous([...whole, ...others, ...withUnits], requested, 'several_homes');
+    const candidates = [...whole, ...others, ...withUnits];
+    const agreed = sharedFacts ? agreedFacts(candidates) : null;
+    return { ...ambiguous(candidates, requested, 'several_homes'), ...(agreed ? { agreed } : {}) };
   }
   if (withUnits.length) return ambiguous(withUnits, requested, 'unit_needed');
   if (parcels.length === 1) return parcelOnly(parcels[0], requested);
   return ambiguous(parcels, requested, 'several_parcels');
 }
 
-module.exports = { resolve, onStreet, inZip };
+module.exports = { resolve, onStreet, inZip, AGREED_FACTS };

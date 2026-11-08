@@ -3,6 +3,8 @@
 //
 // Identity: each record is asked for by the source's own address text, the way a person would write it, then by its unit
 // and its neighbors'. A wrong unit or a picked home is the failure; "ambiguous" is the contract working.
+// Shared facts: every ask again with them on. Only an address with several homes may gain anything, only year built,
+// size, bedrooms and baths, and only what every record there holds the same; every other answer must stay as it was.
 // Fields: each home against a second publication of the same data, where one exists. It proves the connector read,
 // joined and scaled each column right. Whether the source is right is for a person (property-hand-check-sheet.js).
 //
@@ -14,7 +16,23 @@ const path = require('path');
 const { openRelease } = require('./lib/propertyRelease');
 const { layerRows, socrataRows, cached } = require('../../../scripts/property-index/lib/services.cjs');
 const { parse, sortKey, zip5 } = require('../../services/propertyRecords/addressKey');
-const { resolve } = require('../../services/propertyRecords/identity');
+const { resolve, onStreet, inZip } = require('../../services/propertyRecords/identity');
+
+// What the founder allowed an address with several homes to show, written here apart from identity.js's own list.
+const ALLOWED_AGREED = ['year_built', 'living_sqft', 'bedrooms', 'bathrooms'];
+
+/**
+ * Whether each agreed fact is one allowed, and held with that value by every home record at the address and every
+ * building there that isn't one of those homes' own: every record the person's home could be.
+ */
+function agreedHolds(query, records, agreed) {
+  const here = inZip(query, onStreet(query, records));
+  const homes = here.filter((record) => record.kind === 'property' || record.kind === 'unit');
+  const buildings = here.filter((record) => record.kind === 'building' && !homes.some((home) => !home.address.unit && home.parent === record.id));
+  const candidates = [...homes, ...buildings];
+  if (candidates.length < 2) return false;
+  return Object.entries(agreed).every(([name, value]) => ALLOWED_AGREED.includes(name) && candidates.every((record) => record.facts?.[name] === value));
+}
 
 const opt = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
 const out = opt('--out');
@@ -28,11 +46,23 @@ const table = (title, rows) => {
 
 function identity(fips, totals) {
   const release = openRelease(out, fips);
-  const bump = (part, outcome) => {
+  const bump = (part, outcome, n = 1) => {
     totals[part] ||= {};
-    totals[part][outcome] = (totals[part][outcome] || 0) + 1;
+    totals[part][outcome] = (totals[part][outcome] || 0) + n;
   };
-  const ask = (query) => resolve(query, release.at(sortKey(query)));
+  // Each ask twice: shared facts off, as served today, and on. The answer stays the same apart from what it agrees on.
+  const ask = (query) => {
+    const records = release.at(sortKey(query));
+    const off = resolve(query, records);
+    const on = resolve(query, records, { sharedFacts: true });
+    const { agreed, ...rest } = on;
+    let outcome = 'same answer';
+    if (JSON.stringify(rest) !== JSON.stringify(off)) outcome = 'ANSWER CHANGED';
+    else if (agreed && (on.match !== 'ambiguous' || on.reason !== 'several_homes')) outcome = 'AGREED FACTS ON ANOTHER ANSWER';
+    else if (agreed) outcome = agreedHolds(query, records, agreed) ? 'same answer, agreed facts held by every record there' : 'AGREED FACT NOT HELD BY EVERY RECORD';
+    bump('Shared facts on', outcome);
+    return on;
+  };
   const label = (answer) => `${answer.match}${answer.reason ? ` (${answer.reason})` : ''}`;
   const buildings = [];
   const homesAtKey = new Map();
@@ -73,6 +103,11 @@ function identity(fips, totals) {
     if (distinct.size < 2) continue;
     const answer = ask({ ...homes[0].address, unit: '', building: '', city: '' });
     bump('Addresses with several homes', answer.match === 'exact' ? 'EXACT (PICKED ONE)' : label(answer));
+    // What shared facts would show there, by address and by the homes at it.
+    let shows = 'nothing agreed';
+    if (answer.agreed) shows = ALLOWED_AGREED.every((name) => answer.agreed[name] !== undefined) ? 'all four agreed' : `agreed: ${Object.keys(answer.agreed).join(', ')}`;
+    bump('Shared facts at addresses with several homes', shows);
+    bump('Shared facts for the homes at those addresses', shows, distinct.size);
   }
   return release;
 }

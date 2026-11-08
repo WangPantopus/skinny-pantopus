@@ -25,6 +25,8 @@ const { usableFloorPlan } = require('../householdFacts');
 const LLM_TIMEOUT_MS = 12000;
 // Several plausible records at an address: which one isn't for us to guess, so nothing fills in and the person is told why.
 const SEVERAL_RECORDS_NOTE = 'More than one home is on record at this address, so we left the details for you. Add your unit if you have one, or tell us the basics.';
+// Unless its county shows what they all agree on: only that fills in, and it still asks.
+const AGREED_RECORDS_NOTE = 'More than one home is on record at this address. We filled in only what all of its records agree on; add your unit if you have one.';
 // A county that stopped publishing its file: what it had isn't shown any more.
 const WITHDRAWN_NOTE = 'The county no longer publishes these records. Tell us the basics; you can change them anytime.';
 // A leftover PROPERTY_SUGGESTIONS_LLM_MODEL naming another provider's model is ignored.
@@ -54,24 +56,29 @@ function mapAttomPropertyTypeToCanonical(raw) {
   return null;
 }
 
-/** Add Home's fields from a county record: a unit's or a home's own facts only on an exact match. */
+/**
+ * Add Home's fields from a county record: a unit's or a home's own facts only on an exact match, or where every record
+ * at an address with several homes agrees on them (`ambiguous`, homeRecord.js agreedCopy), whichever record is its own.
+ */
 function fillFromRecord(copy, merged, sources, tags) {
   const facts = copy.facts || {};
   const building = copy.building || {};
+  const own = copy.match === 'exact' || copy.match === 'ambiguous';
   const set = (field, value, tag) => {
     if (value == null) return;
     merged[field] = value;
     sources[field] = 'record';
     tags[field] = tag;
   };
-  if (CANONICAL_HOME_TYPES.has(copy.home_type)) set('home_type', copy.home_type, copy.match === 'exact' ? 'County' : 'Building');
-  set('year_built', facts.year_built ?? building.year_built ?? null, copy.match === 'exact' ? 'County' : 'Building');
-  if (copy.match === 'exact') {
+  if (CANONICAL_HOME_TYPES.has(copy.home_type)) set('home_type', copy.home_type, own ? 'County' : 'Building');
+  set('year_built', facts.year_built ?? building.year_built ?? null, own ? 'County' : 'Building');
+  if (own) {
     set('bedrooms', facts.bedrooms ?? null, 'County');
     set('bathrooms', facts.bathrooms ?? null, 'County');
     set('sq_ft', facts.living_sqft != null ? Math.round(facts.living_sqft) : null, 'County');
   }
-  if (copy.match !== 'building_only') {
+  // Several records' lots are several parcels: none of them is this home's.
+  if (copy.match !== 'building_only' && copy.match !== 'ambiguous') {
     const lot = facts.lot_sqft ?? (facts.lot_acres ? facts.lot_acres * 43560 : null);
     if (copy.subject?.kind !== 'unit') set('lot_sq_ft', lot != null ? Math.round(lot) : null, 'County');
   }
@@ -155,8 +162,10 @@ function normalizeLlmHomeType(v) {
  *   (propertyIntelligenceService.fetchAttomPropertyDetailBundleForAddress); the answer's `attom_lookup` says where it
  *   stands, so Add Home can show the step at once and fill the fields in when the record lands.
  * @param {boolean} [options.floorPlans=false] A build that understands a building's floor-plan sheet is asking.
+ * @param {boolean} [options.sharedFacts=false] A build that draws a record's label and the server's own words is asking:
+ *   what all the records at a shared address agree on can fill in, labeled. Other builds get today's answer.
  */
-async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', floorPlans: wantsFloorPlans = false } = {}) {
+async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', floorPlans: wantsFloorPlans = false, sharedFacts: wantsSharedFacts = false } = {}) {
   const {
     address,
     unit_number: unitNumber,
@@ -220,6 +229,11 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
       tiersUsed.push('record');
       fillFromRecord(record.copy, merged, sources, fieldTags);
       provenance = homeRecords.provenanceOf(record.copy);
+    } else if (record.shared && wantsSharedFacts) {
+      tiersUsed.push('record');
+      fillFromRecord(record.shared, merged, sources, fieldTags);
+      provenance = homeRecords.provenanceOf(record.shared);
+      lookupNote = AGREED_RECORDS_NOTE;
     } else if (record.answer?.match === 'ambiguous') {
       lookupNote = SEVERAL_RECORDS_NOTE;
     } else if (record.answer?.reason === 'withdrawn') {
