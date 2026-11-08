@@ -1,5 +1,5 @@
 {
-  "updated": "November 7, 2026",
+  "updated": "November 8, 2026",
   "groups": [
     {
       "title": "National sources",
@@ -52,6 +52,15 @@
           "license": "CC BY 4.0",
           "license_url": "https://creativecommons.org/licenses/by/4.0/",
           "dataset": "Parcels, property improvements, values and sales"
+        },
+        {
+          "id": "nc-carteret",
+          "publisher": "Carteret County, North Carolina",
+          "url": "https://arcgisweb.carteretcountync.gov/arcgis/rest/services/Layers/Parceldata/FeatureServer/0",
+          "license": "Carteret County GIS Terms of Use",
+          "license_url": "https://www.carteretcountync.gov/DocumentCenter/View/4659",
+          "dataset": "Tax parcels",
+          "statement": "Carteret County provides its GIS data as is and with all faults. It does not warrant the data in any way and makes each of the disclaimers in its Terms of Use."
         },
         {
           "id": "va-charlottesville",
