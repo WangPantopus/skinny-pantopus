@@ -61,7 +61,8 @@ import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { useShellReadsReleased } from '@/lib/shellReads';
 import { hubTodayQuery } from '@/lib/hubToday';
 import type { CSSProperties } from 'react';
-import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
+import { Search, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
+import MessagesGlyph from '@/components/MessagesGlyph';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { chosenUsername } from '@pantopus/utils';
 import { chatShellNavigated, chatShellSignedIn } from '@/lib/chatShell';
@@ -530,7 +531,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             )}
           </div>
           <button onClick={() => router.push('/app/chat')} className="p-2 max-lg:p-[8px] hover-bg-app rounded-lg relative" aria-label="Messages">
-            <MessageCircle className="w-5 h-5 max-lg:w-[20px] max-lg:h-[20px] text-app-muted" />
+            <MessagesGlyph unread={chatUnread > 0} className="w-[1.375rem] h-[1.375rem] max-lg:w-[22px] max-lg:h-[22px]" />
             {chatUnread > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] leading-[18px] text-center font-bold">{chatUnread > 99 ? '99+' : chatUnread}</span>}
           </button>
           <button onClick={() => router.push('/app/profile')} className="w-8 h-8 max-lg:w-[32px] max-lg:h-[32px] rounded-full overflow-hidden bg-primary-600 text-white flex items-center justify-center font-semibold hover:bg-primary-700 text-sm max-lg:text-[14px] shrink-0" aria-label="Profile">

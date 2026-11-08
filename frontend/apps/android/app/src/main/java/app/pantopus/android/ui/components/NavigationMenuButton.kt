@@ -81,12 +81,7 @@ fun MessagesButton(
         modifier = modifier.size(Spacing.s12).testTag(testTag).semantics { contentDescription = label },
     ) {
         Box {
-            PantopusIconImage(
-                icon = PantopusIcon.MessageCircle,
-                contentDescription = null,
-                size = Spacing.s5,
-                tint = PantopusColors.appText,
-            )
+            MessagesGlyph(unread = entry.unread > 0)
             if (entry.unread > 0) {
                 Box(
                     modifier =
