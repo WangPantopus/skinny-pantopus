@@ -26,7 +26,7 @@ import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
-import app.pantopus.android.ui.screens.compose.placepicker.MediaLocationExtractor
+import app.pantopus.android.ui.screens.compose.placepicker.MediaCaptureLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -67,6 +67,8 @@ data class MomentCapture(
     val takenAt: Instant?,
     val latitude: Double?,
     val longitude: Double?,
+    /** Android hid the location from the app: it reads once `ACCESS_MEDIA_LOCATION` is allowed. */
+    val hidden: Boolean = false,
 )
 
 /** A video ready to upload: about 720p H.264, its poster and two more frames for the picture check. */
@@ -139,28 +141,25 @@ object MomentMedia {
         }.getOrDefault(0L)
 
     /**
-     * When and where a picked item was taken: the file's own GPS block and time (EXIF for photos, the location atom
-     * and creation date for videos), else the picker's "date taken". A location Android hides from the app reads as
-     * none.
+     * When and where a picked item was taken: [located] is the place read from the picked file the way the Pulse
+     * composer reads it (`readPickedPlace`), and the time is the file's own (EXIF for photos, the creation date for
+     * videos), else the picker's "date taken". A location Android hides from the app reads as none, with [hidden].
      */
     suspend fun capture(
         context: Context,
         uri: Uri,
         copy: File,
         video: Boolean,
+        located: MediaCaptureLocation?,
+        hidden: Boolean,
     ): MomentCapture =
         withContext(Dispatchers.IO) {
-            val located =
-                if (video) {
-                    MediaLocationExtractor.fromVideoUri(context, Uri.fromFile(copy))
-                } else {
-                    runCatching { MediaLocationExtractor.fromImageBytes(copy.readBytes()) }.getOrNull()
-                }
             val time = located?.capturedAt ?: if (video) videoTime(copy) else photoTime(copy)
             MomentCapture(
                 takenAt = time ?: pickerDateTaken(context, uri),
                 latitude = located?.latitude,
                 longitude = located?.longitude,
+                hidden = hidden,
             )
         }
 

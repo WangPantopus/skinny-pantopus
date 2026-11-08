@@ -18,7 +18,6 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -119,11 +118,17 @@ fun MomentsComposeScreen(
             if (results.values.any { it }) viewModel.start() else viewModel.locationRefused()
         }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    // The document picker, as the Pulse composer picks: the system photo picker hides where a photo was taken, and a
+    // library Moment pins there. The 24-hour rule is checked on the picked file.
     val library =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri?.let(viewModel::picked)
         }
-    val openLibrary = { library.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+    val openLibrary = { library.launch(arrayOf("image/*", "video/*")) }
+    val mediaLocation =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) viewModel.rereadPickedPlace()
+        }
     LaunchedEffect(Unit) {
         val allowed =
             listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION).any {
@@ -182,6 +187,32 @@ fun MomentsComposeScreen(
                     onCaption = viewModel::setCaption,
                     onPost = { viewModel.post() },
                 )
+        }
+        if (state.askMediaLocation) {
+            AlertDialog(
+                onDismissRequest = viewModel::mediaLocationAnswered,
+                title = { Text("Pin where this photo was taken?") },
+                text = {
+                    Text(
+                        "Android will ask about your photos and videos next. Pantopus still sees only the ones you pick, " +
+                            "and this lets it read where they were taken.",
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.mediaLocationAnswered()
+                            mediaLocation.launch(Manifest.permission.ACCESS_MEDIA_LOCATION)
+                        },
+                        modifier = Modifier.testTag("moments.mediaLocation.continue"),
+                    ) { Text("Continue") }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::mediaLocationAnswered, modifier = Modifier.testTag("moments.mediaLocation.notNow")) {
+                        Text("Not now")
+                    }
+                },
+            )
         }
         when (state.gate) {
             ComposeGate.NeedsLocation ->

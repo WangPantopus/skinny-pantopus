@@ -19,15 +19,19 @@ import app.pantopus.android.data.moments.MomentsPosting
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.data.plans.PlanLocationResolver
+import app.pantopus.android.ui.screens.compose.pulse.MediaLocationAccess
+import app.pantopus.android.ui.screens.compose.pulse.readPickedPlace
 import app.pantopus.android.ui.screens.moments.MomentsRoutes
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import javax.inject.Inject
 
@@ -67,6 +71,8 @@ data class MomentsComposeUiState(
     val notice: String? = null,
     /** Done: close posting (the Moment is up, or uploading in the background). */
     val done: Boolean = false,
+    /** A library photo hides where it was taken: ask once for `ACCESS_MEDIA_LOCATION`, as the Pulse composer does. */
+    val askMediaLocation: Boolean = false,
 ) {
     val kind: String
         get() =
@@ -179,10 +185,17 @@ class MomentsComposeViewModel
             }
         }
 
-        /** A photo or video from the library, taken in the last 24 hours: it pins where it was taken when the file says. */
+        /** The library item last picked, to read its place again once Android lets the app see it. */
+        private var pickedSource: Pair<Uri, String>? = null
+
+        /**
+         * A photo or video from the library (the document picker, as the Pulse composer picks: the system photo picker
+         * hides where things were taken), taken in the last 24 hours: it pins where it was taken when the file says.
+         */
         fun picked(uri: Uri) {
             viewModelScope.launch {
                 val video = MomentMedia.isVideo(context, uri)
+                val mime = context.contentResolver.getType(uri) ?: if (video) "video/mp4" else "image/jpeg"
                 val copy = MomentMedia.copyIn(context, uri, if (video) "mp4" else "jpg")
                 if (copy == null) {
                     _state.update { it.copy(notice = "Couldn't open that file.") }
@@ -194,7 +207,8 @@ class MomentsComposeViewModel
                     _state.update { it.copy(notice = "Videos can be up to 30 seconds.") }
                     return@launch
                 }
-                val capture = MomentMedia.capture(context, uri, copy, video)
+                val place = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }
+                val capture = MomentMedia.capture(context, uri, copy, video, place.captured, place.mayBeHidden)
                 val takenAt = capture.takenAt
                 if (takenAt == null || Instant.now().toEpochMilli() - takenAt.toEpochMilli() > MomentMedia.LIBRARY_WINDOW_MS) {
                     copy.delete()
@@ -222,7 +236,31 @@ class MomentsComposeViewModel
                 } else {
                     // Android hides where it was taken, or the file never said: it pins where you are, as the sheet shows.
                     captured(media)
+                    // A photo whose location Android hides can still pin where it was taken once the app may read it.
+                    if (capture.hidden && !video && MediaLocationAccess.mayAsk(context)) {
+                        pickedSource = uri to mime
+                        _state.update { it.copy(askMediaLocation = true) }
+                    }
                 }
+            }
+        }
+
+        /** The answer to "Pin where this photo was taken?" (asked once on a phone). */
+        fun mediaLocationAnswered() {
+            MediaLocationAccess.markAsked(context)
+            _state.update { it.copy(askMediaLocation = false) }
+        }
+
+        /** `ACCESS_MEDIA_LOCATION` was allowed: read the picked item's place again and pin it there. */
+        fun rereadPickedPlace() {
+            val (uri, mime) = pickedSource ?: return
+            viewModelScope.launch {
+                val located = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }.captured ?: return@launch
+                val current = _state.value
+                if (current.step != ComposeStep.Review || current.media == null) return@launch
+                val takenAt = located.capturedAt ?: current.pin?.at ?: return@launch
+                val place = (repository.placePreview(located.latitude, located.longitude) as? NetworkResult.Success)?.data
+                _state.update { it.copy(pin = ComposePin(located.latitude, located.longitude, takenAt, capture = true), place = place) }
             }
         }
 
