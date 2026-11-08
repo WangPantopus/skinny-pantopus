@@ -1687,20 +1687,24 @@ public struct HubTabRoot: View {
         return topics.contains(ScreenTopic.homes) || topics.contains(ScreenTopic.savedPlaces)
     }
 
-    /// The bell and menu for the roots that keep the navigation bar, which
-    /// slides away while the page scrolls down.
+    /// The menu, bell and chat button for the roots that keep the navigation
+    /// bar, which slides away while the page scrolls down: ☰ at the top left,
+    /// the bell and the chat button at the top right (founder decision 2026-11-08).
     private func placeRootBar(_ content: some View) -> some View {
         content
             .toolbar(.visible, for: .navigationBar)
             .navigationBarScrollsAway()
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    PlaceBellButton(unreadCount: placeUnreadCount) { path.append(.notifications) }
+                ToolbarItem(placement: .topBarLeading) {
                     Button { rootTabs.showsNavigationMenu = true } label: {
                         Icon(.menu, size: 20, color: Theme.Color.appText)
                     }
                     .accessibilityLabel("Menu")
                     .accessibilityIdentifier("place.menu")
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    PlaceBellButton(unreadCount: placeUnreadCount) { path.append(.notifications) }
+                    MessagesButton(accessibilityIdentifier: "place.chat")
                 }
             }
             .task { await refreshPlaceUnread() }

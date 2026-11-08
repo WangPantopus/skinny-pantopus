@@ -94,6 +94,7 @@ import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.posts.PostReactionEmoji
+import app.pantopus.android.ui.components.MessagesButton
 import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
@@ -1204,9 +1205,11 @@ private fun MapSwitchBar(
             Modifier
                 .fillMaxWidth()
                 .background(PantopusColors.appBg)
-                .padding(start = Spacing.s4, end = Spacing.s1, top = Spacing.s1, bottom = Spacing.s1),
+                .padding(start = Spacing.s1, end = Spacing.s1, top = Spacing.s1, bottom = Spacing.s1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // ☰ first, the chat button last (founder decision 2026-11-08).
+        NavigationMenuButton(onClick = onOpenMenu, testTag = "nearby.menu")
         Row(
             modifier =
                 Modifier
@@ -1245,7 +1248,7 @@ private fun MapSwitchBar(
                 }
             }
         }
-        NavigationMenuButton(onClick = onOpenMenu, testTag = "nearby.menu")
+        MessagesButton(testTag = "nearby.chat")
     }
 }
 

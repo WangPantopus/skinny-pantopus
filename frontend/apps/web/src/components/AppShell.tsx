@@ -707,7 +707,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* The tabs on phone-width web: Place · Today · Pulse · (Mail ·) Messages
           as a bottom bar (the sidebar carries them at md+). Business context
           keeps its own navigation, and a conversation has the whole window. */}
-      {showMobileTabs && <MobileTabBar unreadMail={mailUnread} unreadMessages={chatUnread} />}
+      {showMobileTabs && <MobileTabBar unreadMail={mailUnread} />}
 
       {/* ═══════════════════════════════════════════════════════
        *  UNIFIED FAB + COMPOSER

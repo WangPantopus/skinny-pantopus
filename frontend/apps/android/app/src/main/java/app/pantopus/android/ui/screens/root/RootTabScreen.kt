@@ -27,6 +27,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +72,8 @@ import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.ClosesKeyboardOnNavigation
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.InviteLinks
+import app.pantopus.android.ui.components.MessagesEntry
+import app.pantopus.android.ui.components.MessagesEntryHolder
 import app.pantopus.android.ui.components.NavigationDrawer
 import app.pantopus.android.ui.components.NavigationDrawerContext
 import app.pantopus.android.ui.components.NavigationDrawerDestination
@@ -2431,9 +2434,25 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // unopened mail.
     val badges: Map<PantopusRoute, Int> =
         buildMap {
-            if (resolvedInboxBadgeCount > 0) put(PantopusRoute.messagesTab, resolvedInboxBadgeCount)
             if (LaunchFeatures.mailbox && unopenedMail > 0) put(PantopusRoute.Mail, unopenedMail)
         }
+    // Messages left the bar (founder decision 2026-11-08): the chat button at the top right of every tab's first
+    // screen but Mail's opens it, carrying the unread count, and its Back returns to the tab it was opened from, which
+    // stays lit on the bar meanwhile.
+    var messagesReturnPath by rememberSaveable { mutableStateOf(PantopusRoute.Place.path) }
+    val messagesReturnTab = PantopusRoute.fromPath(messagesReturnPath)?.takeIf { it in barTabs } ?: PantopusRoute.Place
+    val onMessages = currentRoute == PantopusRoute.messagesTab && currentRoute !in barTabs
+    val litTab = if (onMessages) messagesReturnTab else currentRoute
+    val openMessages: () -> Unit = {
+        if (!onMessages) messagesReturnPath = currentRoute.path
+        navController.navigateToRootTab(PantopusRoute.messagesTab)
+    }
+    val closeMessages: () -> Unit = { navController.navigateToRootTab(messagesReturnTab) }
+    val latestOpenMessages by rememberUpdatedState(openMessages)
+    val messagesEntry =
+        remember(resolvedInboxBadgeCount) { MessagesEntry(unread = resolvedInboxBadgeCount, open = { latestOpenMessages() }) }
+    SideEffect { if (MessagesEntryHolder.current != messagesEntry) MessagesEntryHolder.current = messagesEntry }
+    DisposableEffect(Unit) { onDispose { MessagesEntryHolder.current = null } }
     // The Place tab's root sits at the bottom of the stack for the whole session. Its host holds the session's
     // current home, which the homes sheet, links and Add Home set, so they reach it from here.
     val placeRootEntry =
@@ -3004,7 +3023,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     return@bottomBar
                 }
                 PantopusBottomBar(
-                    selected = currentRoute,
+                    selected = litTab,
                     badges = badges,
                     tabs = barTabs,
                     away = tabBarSlides && tabBarScroll.isAway,
@@ -3189,11 +3208,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(PantopusRoute.Mail.path) {
                     // Mailbox is off for launch (contract §9): this tab is Messages, the conversation list itself.
                     if (!LaunchFeatures.mailbox) {
+                        // Opened by the chat button: Back returns to the tab it was opened from.
+                        androidx.activity.compose.BackHandler(onBack = closeMessages)
                         return@composable InboxScreen(
                             onOpenConversation = { row -> navController.navigate(ChildRoutes.chatConversation(row)) },
                             onCompose = { navController.navigate(ChildRoutes.NEW_MESSAGE) },
                             onOpenSearch = { navController.navigate(ChildRoutes.CHAT_SEARCH) },
-                            onOpenMenu = openMenu,
+                            onBack = closeMessages,
+                            backLabel = messagesReturnTab.label,
                         )
                     }
                     // The Mail tab (2026-10-27): the Mailbox is its top screen, with the side menu; Messages is its
@@ -3284,14 +3306,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(PantopusRoute.Messages.path) {
-                    // The Messages tab while Mailbox is on: the conversation list, with the side menu.
+                    // Messages while Mailbox is on: the conversation list, opened by the chat button (founder decision
+                    // 2026-11-08). Back returns to the tab it was opened from.
+                    androidx.activity.compose.BackHandler(onBack = closeMessages)
                     InboxScreen(
                         onOpenConversation = { row ->
                             navController.navigate(ChildRoutes.chatConversation(row))
                         },
                         onCompose = { navController.navigate(ChildRoutes.NEW_MESSAGE) },
                         onOpenSearch = { navController.navigate(ChildRoutes.CHAT_SEARCH) },
-                        onOpenMenu = openMenu,
+                        onBack = closeMessages,
+                        backLabel = messagesReturnTab.label,
                     )
                 }
                 composable(

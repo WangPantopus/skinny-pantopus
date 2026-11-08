@@ -17,12 +17,14 @@ fun InboxScreen(
     onOpenConversation: (ConversationRowContent) -> Unit = {},
     onCompose: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
-    onOpenMenu: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
+    backLabel: String = "",
 ) {
     ChatListScreen(
         onOpenConversation = onOpenConversation,
         onCompose = onCompose,
         onOpenSearch = onOpenSearch,
-        onOpenMenu = onOpenMenu,
+        onBack = onBack,
+        backLabel = backLabel,
     )
 }

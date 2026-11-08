@@ -104,15 +104,20 @@ struct PlaceDashboardView: View {
             } else {
                 HStack {
                     if isRoot {
+                        // ☰ at the top left, the bell and the chat button at the
+                        // top right (founder decision 2026-11-08).
+                        Button(action: onOpenMenu) { Label("Menu", systemImage: "line.3.horizontal") }
+                            .frame(minHeight: 44).accessibilityIdentifier("place.menu")
                         Spacer()
                         PlaceBellButton(unreadCount: viewModel.unreadCount, action: viewModel.onOpenNotifications)
+                        MessagesButton(accessibilityIdentifier: "place.chat")
                     } else {
                         Button { dismiss() } label: { Label("Back", systemImage: "chevron.left") }
                             .frame(minHeight: 44).accessibilityIdentifier("place.back")
                         Spacer()
+                        Button(action: onOpenMenu) { Label("Menu", systemImage: "line.3.horizontal") }
+                            .frame(minHeight: 44).accessibilityIdentifier("place.menu")
                     }
-                    Button(action: onOpenMenu) { Label("Menu", systemImage: "line.3.horizontal") }
-                        .frame(minHeight: 44).accessibilityIdentifier("place.menu")
                 }
                 .padding(.horizontal, Spacing.s4)
                 .background(Theme.Color.appBg.ignoresSafeArea(edges: .top))
@@ -334,11 +339,25 @@ struct PlaceDashboardView: View {
 
     // MARK: - Header
 
+    private var menuButton: some View {
+        Button(action: onOpenMenu) {
+            Icon(.menu, size: 20, color: Theme.Color.appText)
+                .frame(width: Spacing.s12, height: Spacing.s12)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Menu")
+        .accessibilityIdentifier("place.menu")
+    }
+
     /// "Your Place", where the person stands at this Home, the bell and the
-    /// menu; under them the address, which opens their homes.
+    /// menu; under them the address, which opens their homes. On the tab's
+    /// first screen ☰ comes first and the chat button last (founder decision
+    /// 2026-11-08).
     private func header(intel: PlaceIntelligence) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .center, spacing: 8) {
+                if isRoot { menuButton.padding(.leading, -Spacing.s3) }
                 Text("Your Place")
                     .font(.system(size: 28, weight: .bold))
                     .kerning(-0.56)
@@ -352,17 +371,14 @@ struct PlaceDashboardView: View {
                         .accessibilityIdentifier("place.status")
                 }
                 Spacer(minLength: 0)
-                // Bell + menu sit together; the dot shows anything unread.
+                // Bell + chat button (or menu) sit together; the dot shows anything unread.
                 HStack(spacing: 0) {
                     PlaceBellButton(unreadCount: viewModel.unreadCount, action: viewModel.onOpenNotifications)
-                    Button(action: onOpenMenu) {
-                        Icon(.menu, size: 20, color: Theme.Color.appText)
-                            .frame(width: Spacing.s12, height: Spacing.s12)
-                            .contentShape(Rectangle())
+                    if isRoot {
+                        MessagesButton(accessibilityIdentifier: "place.chat")
+                    } else {
+                        menuButton
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Menu")
-                    .accessibilityIdentifier("place.menu")
                 }
             }
             // Ask sits at the end of the address row, under the bell and menu,

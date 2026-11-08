@@ -267,29 +267,50 @@ private extension ChatListState {
 // MARK: - Top bar
 
 private struct ChatListTopBar: View {
+    @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
     let onCompose: @MainActor () -> Void
 
     var body: some View {
-        HStack {
-            // The Messages tab's title, with the Mailbox on or off (Mail is its own tab).
+        ZStack {
             Text("Messages")
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
-            Spacer()
-            Button(action: onCompose) {
-                Icon(.edit2, size: 20, color: Theme.Color.appText)
-                    .frame(width: 36, height: 36)
-                    .hitArea(horizontal: 4, vertical: 4)
+                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: Spacing.s1) {
+                // Messages opens from the chat button over the tab you were on
+                // (founder decision 2026-11-08); Back returns there.
+                if let rootTabs {
+                    Button {
+                        rootTabs.closeMessages()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Icon(.chevronLeft, size: 24, strokeWidth: 2.2, color: Theme.Color.primaryTint)
+                            Text(rootTabs.messagesReturnTab.label)
+                                .font(.system(size: 17))
+                                .foregroundStyle(Theme.Color.primaryTint)
+                                .lineLimit(1)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Back to \(rootTabs.messagesReturnTab.label)")
+                    .accessibilityIdentifier("messages.back")
+                }
+                Spacer()
+                Button(action: onCompose) {
+                    Icon(.edit2, size: 20, color: Theme.Color.appText)
+                        .frame(width: 36, height: 36)
+                        .hitArea(horizontal: 4, vertical: 4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New message")
+                .accessibilityIdentifier("chatListComposeButton")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("New message")
-            .accessibilityIdentifier("chatListComposeButton")
-            // The side menu, on every tab (founder decision 2026-10-20).
-            NavigationMenuButton(accessibilityIdentifier: "messages.menu")
         }
-        .padding(.leading, Spacing.s4)
-        .padding(.trailing, Spacing.s2)
-        // The menu button's 44 points keep the bar's height with 6 above and below.
+        .padding(.leading, Spacing.s1)
+        .padding(.trailing, Spacing.s3)
+        // The Back button's 44 points keep the bar's height with 6 above and below.
         .padding(.vertical, 6)
         .background(Theme.Color.appSurface)
     }

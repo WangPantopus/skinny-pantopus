@@ -671,9 +671,11 @@ public struct FeedView: View {
     }
 
     /// The Pulse tab's top row (founder decision 2026-11-07): List | Map as
-    /// the big switch, beside the side menu.
+    /// the big switch, between the side menu and the chat button (founder
+    /// decision 2026-11-08).
     private var mapSwitchBar: some View {
-        HStack(spacing: Spacing.s2) {
+        HStack(spacing: Spacing.s1) {
+            NavigationMenuButton(accessibilityIdentifier: "nearby.menu")
             HStack(spacing: 2) {
                 ForEach(FeedViewMode.allCases, id: \.rawValue) { mode in
                     let active = viewMode == mode
@@ -709,10 +711,9 @@ public struct FeedView: View {
             .clipShape(Capsule())
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("pulseViewModeToggle")
-            NavigationMenuButton(accessibilityIdentifier: "nearby.menu")
+            MessagesButton(accessibilityIdentifier: "nearby.chat")
         }
-        .padding(.leading, Spacing.s4)
-        .padding(.trailing, Spacing.s2)
+        .padding(.horizontal, Spacing.s2)
         .padding(.vertical, Spacing.s1)
         .background(Theme.Color.appBg)
     }

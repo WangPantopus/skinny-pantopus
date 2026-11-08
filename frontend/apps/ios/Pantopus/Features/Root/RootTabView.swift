@@ -27,8 +27,15 @@
 //  Place · Today · Nearby · Plans · Mail · Messages. Mail opens on the
 //  Mailbox and its red badge counts unopened mail. SwiftUI's TabView moves a
 //  sixth tab under "More", so these tabs live in `RootTabContainer` under a
-//  drawn bar (`RootTabBar`). With the Mailbox off the system bar stays as it
-//  was.
+//  drawn bar (`RootTabBar`).
+//
+//  Founder decision 2026-11-08 (Moments): Messages leaves the bar. ☰ sits at
+//  the top left of every tab's first screen and a chat button
+//  (`MessagesButton`) at the top right of every one but Mail's, carrying the
+//  unread count. Messages stays a tab of the container, off the bar: the
+//  chat button opens it over the tab you were on, which stays lit on the bar,
+//  and its Back returns there. The drawn bar is the only bar, with the
+//  Mailbox on or off, because the system bar can't host a tab it doesn't show.
 //
 //  The drawn bar looks like the system's (founder, 2026-10-30): on iOS 26
 //  and later the floating Liquid Glass capsule. It slides away while a page
@@ -94,13 +101,18 @@ public enum RootTab: Hashable, CaseIterable {
     }
 
     /// The bar's tabs in order: Plans while its switch is on, Mail while the
-    /// Mailbox is on (launch cut #10), Messages last.
+    /// Mailbox is on (launch cut #10). Messages isn't on the bar: the chat
+    /// button opens it (founder, 2026-11-08).
     static func barTabs(plans: Bool) -> [RootTab] {
         var tabs: [RootTab] = [.place, .today, pulseHome]
         if plans { tabs.append(.plans) }
         if LaunchFeatures.mailbox { tabs.append(.mail) }
-        tabs.append(.messages)
         return tabs
+    }
+
+    /// The tabs the container keeps: the bar's and Messages.
+    static func hostedTabs(plans: Bool) -> [RootTab] {
+        barTabs(plans: plans) + [.messages]
     }
 }
 
@@ -113,13 +125,23 @@ enum MailTabRequest: Equatable {
 }
 
 /// Observable state for the root tab view. Holds the selected tab and a
-/// cached count for the Messages badge.
+/// cached count for the chat button's badge.
 @Observable
 @MainActor
 public final class RootTabModel {
     /// Currently selected tab. Starts at `.place`.
-    public var selected: RootTab = .place
-    /// Unread Messages count rendered as the Messages tab badge.
+    public var selected: RootTab = .place {
+        didSet {
+            // Messages opens over the tab it was opened from (the chat
+            // button, a link, a "Message" button): Back returns there.
+            if selected == .messages, oldValue != .messages { messagesReturnTab = oldValue }
+        }
+    }
+
+    /// The tab Messages was opened from: it stays lit on the bar while
+    /// Messages shows, and Messages' Back returns to it.
+    public private(set) var messagesReturnTab: RootTab = .place
+    /// Unread Messages count rendered as the chat button's badge.
     public var messagesBadge: Int = 0
     /// The Place stack is on its root (kept current by `HubTabRoot`).
     public var placeAtRoot = false
@@ -161,6 +183,21 @@ public final class RootTabModel {
     /// the profile was pushed in another tab: the profile cover opens on it.
     var profileCoverDestination: ProfileOwnerDestination?
     public init() {}
+
+    /// The chat button: Messages over the tab you're on.
+    func openMessages() {
+        selected = .messages
+    }
+
+    /// Messages' Back: the tab Messages was opened from.
+    func closeMessages() {
+        selected = messagesReturnTab == .messages ? .place : messagesReturnTab
+    }
+
+    /// The tab the bar lights: while Messages shows, the one it was opened from.
+    var barSelection: RootTab {
+        selected == .messages ? messagesReturnTab : selected
+    }
 }
 
 /// Root tab container for signed-in users. Each tab hosts its own
@@ -236,10 +273,11 @@ public struct RootTabView: View {
                 if !isOn, model.selected == .plans { model.selected = RootTab.pulseHome }
             }
             .onChange(of: model.selected) { _, selected in
-                // A tab that isn't on the bar (Plans switched off, Mail without
-                // the Mailbox) lands on the nearest one that is.
-                let onBar = RootTab.barTabs(plans: plansFlags.plans)
-                if !onBar.contains(selected) { model.selected = Self.nearestTab(to: selected, on: onBar) }
+                // A tab that isn't kept (Plans switched off, Mail without the
+                // Mailbox) lands on the nearest one that is. Messages is
+                // always kept, off the bar.
+                let hosted = RootTab.hostedTabs(plans: plansFlags.plans)
+                if !hosted.contains(selected) { model.selected = Self.nearestTab(to: selected, on: hosted) }
             }
             .onChange(of: chatBadgeStore.unreadMessages) { _, unread in
                 model.messagesBadge = unread
@@ -514,99 +552,29 @@ public struct RootTabView: View {
         default: false
         }
     }
-
-    private var tabBinding: Binding<RootTab> {
-        Binding(
-            get: { model.selected },
-            set: { tab in
-                // Read before UIKit pops a deeper stack: only a tap on the root
-                // itself scrolls it back to the top.
-                if tab == .place, model.selected == .place, model.placeAtRoot {
-                    model.placeReselectedAtRoot = UUID()
-                }
-                if tab == .today, model.selected == .today { model.todayReselected = UUID() }
-                if tab == RootTab.pulseHome, model.selected == tab { model.pulseHomeReselected = UUID() }
-                model.selected = tab
-            }
-        )
-    }
-
-    private func tabLabel(_ tab: RootTab) -> some View {
-        Label {
-            Text(tab.label)
-        } icon: {
-            Icon(tab.icon)
-                .accessibilityHidden(true)
-        }
-        .accessibilityLabel(tab.label)
-        .accessibilityIdentifier("tab.\(tab.id)")
-    }
 }
 
 // MARK: - The tabs
 
 extension RootTabView {
-    /// The tabs: the system tab bar while the Mailbox is off, as it was; with
-    /// it on, the container and the drawn bar, which fit six.
-    @ViewBuilder
+    /// The tabs: the container and the drawn bar, with the Mailbox on or off.
+    /// Messages lives in the container off the bar (founder, 2026-11-08), which
+    /// SwiftUI's TabView can't do: it shows every tab it hosts.
     private var tabs: some View {
-        if LaunchFeatures.mailbox {
-            drawnTabs
-        } else {
-            systemTabs
-        }
+        drawnTabs
     }
 
-    private var systemTabs: some View {
-        TabView(selection: tabBinding) {
-            HubTabRoot(
-                onOpenProfile: { showProfile = true },
-                onOpenProfileScreen: { route in presentProfile(at: route) },
-                addHomeRequest: $addHomeRequest
-            )
-            .tabItem { tabLabel(.place) }
-            .tag(RootTab.place)
-
-            TodayTabRoot(onAddHome: startAddingHome)
-                .tabItem { tabLabel(.today) }
-                .tag(RootTab.today)
-
-            if LaunchFeatures.pulseRedesign {
-                PulseTabRoot(onAddHome: startAddingHome)
-                    .tabItem { tabLabel(.pulse) }
-                    .tag(RootTab.pulse)
-            } else {
-                // Launch cut #11 (the Pulse redesign) is off: the Nearby tab,
-                // Pulse and Neighborhood as two segments (founder, 2026-10-20).
-                NeighborhoodTabRoot(onAddHome: startAddingHome)
-                    .tabItem { tabLabel(.nearby) }
-                    .tag(RootTab.nearby)
-            }
-
-            // Only while the `plans` switch is on (`onChange` below moves a
-            // reader off it when the switch turns off).
-            if plansFlags.plans {
-                PlansTabRoot()
-                    .tabItem { tabLabel(.plans) }
-                    .tag(RootTab.plans)
-            }
-
-            InboxTabRoot()
-                .tabItem { tabLabel(.messages) }
-                .tag(RootTab.messages)
-                .badge(model.messagesBadge)
-        }
-    }
-
-    /// Six tabs: each tab's root is made once, when the tab first opens, and
-    /// kept by the container; the bar is drawn above it.
+    /// Each tab's root is made once, when the tab first opens, and kept by the
+    /// container; the bar is drawn above it. Messages is kept but not drawn on
+    /// the bar, which lights the tab it was opened from.
     private var drawnTabs: some View {
         let onBar = RootTab.barTabs(plans: plansFlags.plans)
+        let hosted = RootTab.hostedTabs(plans: plansFlags.plans)
         let showsBar = model.barHiders.isEmpty
         return RootTabBarPlacementReader { verticalEdge in
             ZStack(alignment: verticalEdge.map { $0 == .leading ? .leading : .trailing } ?? .bottom) {
                 RootTabContainer(
-                    tabs: onBar,
+                    tabs: hosted,
                     selected: model.selected,
                     barSpace: showsBar ? RootTabBar.space(verticalEdge: verticalEdge, layoutDirection: layoutDirection) : .none,
                     environment: RootTabEnvironment(auth: auth, tabs: model, scenePhase: scenePhase),
@@ -617,8 +585,8 @@ extension RootTabView {
                 if showsBar {
                     RootTabBar(
                         tabs: onBar,
-                        selected: model.selected,
-                        badges: [.mail: mailBadgeStore.unopened, .messages: model.messagesBadge],
+                        selected: model.barSelection,
+                        badges: [.mail: mailBadgeStore.unopened],
                         verticalEdge: verticalEdge,
                         onSelect: select
                     )

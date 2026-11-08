@@ -100,8 +100,8 @@ final class StoreScreenshots: XCTestCase {
         }
         app.buttons["tab.place"].firstMatch.tap()
 
-        // Messages tab → Chat list.
-        app.buttons["tab.messages"].firstMatch.tap()
+        // Place's chat button → Chat list (Messages left the bar, founder 2026-11-08).
+        app.buttons["place.chat"].firstMatch.tap()
         if app.descendants(matching: .any)
             .matching(identifier: "chatList").firstMatch
             .waitForExistence(timeout: 5) {

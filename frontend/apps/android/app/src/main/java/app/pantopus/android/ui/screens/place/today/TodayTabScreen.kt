@@ -41,6 +41,7 @@ import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.place.PlaceAddressRef
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.MessagesButton
 import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
@@ -268,8 +269,10 @@ private fun TodayHeader(
     state: TodayTabUiState,
     onOpenMenu: (() -> Unit)?,
 ) {
-    Row(modifier = Modifier.padding(start = 18.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)) {
-        Column(modifier = Modifier.weight(1f)) {
+    // ☰ first, the chat button last (founder decisions 2026-10-20 and 2026-11-08).
+    Row(modifier = Modifier.padding(start = 4.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)) {
+        onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "today.menu", modifier = Modifier.offset(y = (-10).dp)) }
+        Column(modifier = Modifier.weight(1f).padding(start = if (onOpenMenu != null) 2.dp else 14.dp)) {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Today", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp, color = PantopusColors.appText)
                 // The date beside the title (the f1-today-tab design); it turns over at midnight.
@@ -283,7 +286,7 @@ private fun TodayHeader(
             }
             (state as? TodayTabUiState.Loaded)?.intelligence?.place?.let { TodayAddressLine(it) }
         }
-        onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "today.menu", modifier = Modifier.offset(y = (-10).dp)) }
+        if (onOpenMenu != null) MessagesButton(testTag = "today.chat", modifier = Modifier.offset(y = (-10).dp))
     }
 }
 
