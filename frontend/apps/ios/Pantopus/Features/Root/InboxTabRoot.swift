@@ -105,6 +105,7 @@ public struct InboxTabRoot: View {
             kind: kind,
             displayName: row.displayName,
             initials: row.initials,
+            avatarURL: row.variant == .dm ? row.avatarURL : nil,
             identityKind: row.identityChip.map { $0 == .business ? "business" : "home" },
             verified: row.verified,
             gigId: row.gigId
@@ -120,6 +121,7 @@ public struct InboxTabRoot: View {
             mode: mode,
             displayName: result.displayName,
             initials: result.initials,
+            avatarURL: result.avatarURL?.absoluteString,
             identityKind: result.identityChip.map { $0 == .business ? "business" : "home" },
             verified: result.verified,
             scrollToMessageId: result.matchedMessageId
@@ -347,6 +349,7 @@ private extension InboxTabRoot {
                             mode: .person(otherUserId: destination.userId),
                             displayName: destination.displayName,
                             initials: destination.initials,
+                            avatarURL: destination.avatarURL?.absoluteString,
                             identityKind: destination.identity == .business ? "business" : nil,
                             verified: destination.verified
                         )))
@@ -384,6 +387,7 @@ private extension InboxTabRoot {
             ChatConversationViewModel(
                 mode: destination.threadMode,
                 counterparty: destination.counterparty,
+                counterpartyAvatarURL: destination.avatarURL.flatMap(URL.init(string:)),
                 currentUserId: currentUserId,
                 scrollToMessageId: destination.scrollToMessageId,
                 initialTopic: destination.initialTopic,

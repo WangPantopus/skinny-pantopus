@@ -42,6 +42,13 @@ public struct BusinessInboxRoomDTO: Codable, Sendable, Hashable, Identifiable {
     public let unreadCount: Int?
     public let otherParticipantName: String?
     public let otherParticipantUsername: String?
+    /// The counterpart's public identity; only its photo is read.
+    public let otherParticipantIdentity: Identity?
+
+    /// The photo the counterpart shows neighbors.
+    public struct Identity: Codable, Sendable, Hashable {
+        public let avatarUrl: String?
+    }
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -52,6 +59,7 @@ public struct BusinessInboxRoomDTO: Codable, Sendable, Hashable, Identifiable {
         case unreadCount = "unread_count"
         case otherParticipantName = "other_participant_name"
         case otherParticipantUsername = "other_participant_username"
+        case otherParticipantIdentity = "other_participant_identity"
     }
 }
 
