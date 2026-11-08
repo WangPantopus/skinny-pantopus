@@ -24,29 +24,70 @@ jobs:
   lint:
     name: Lint (SwiftLint + SwiftFormat)
     runs-on: macos-15
+    env:
+      # Keep these in sync with the versions used locally.
+      SWIFTLINT_VERSION: "0.63.3"
+      SWIFTFORMAT_VERSION: "0.61.1"
     steps:
       - uses: actions/checkout@v5
+
+      - name: Restore pinned SwiftLint & SwiftFormat
+        # GitHub's release download link can answer 504 for half an hour at a
+        # time (three lint jobs failed that way on 2026-11-08), so the job uses
+        # master's saved copy and downloads only when there is none.
+        id: lint-tools
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/pinned-tools
+          key: ios-lint-tools-${{ runner.os }}-${{ runner.arch }}-swiftlint-${{ env.SWIFTLINT_VERSION }}-swiftformat-${{ env.SWIFTFORMAT_VERSION }}
 
       - name: Install pinned SwiftLint & SwiftFormat
         # `brew install` is unpinned: the hosted runners flip between bottles
         # (e.g. 0.63.2 flags `URL(string:)!` force-unwraps while 0.63.3 does
         # not), which broke this job in BOTH directions on successive runs.
         # Pin exact versions from the GitHub release binaries for determinism.
-        # Keep these in sync with the versions used locally.
+        if: steps.lint-tools.outputs.cache-hit != 'true'
         env:
-          SWIFTLINT_VERSION: "0.63.3"
-          SWIFTFORMAT_VERSION: "0.61.1"
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Two routes to the same release file: GitHub's releases API (gh),
+          # then the github.com download link. On 2026-11-08 the link answered
+          # 504 for SwiftLint for over half an hour while the API served it.
+          # curl retries on any error because those 504s end as curl error 56,
+          # which plain --retry does not retry.
+          fetch() { # <owner/repo> <tag> <file> <output>
+            local pause
+            for pause in 0 10 30; do
+              sleep "$pause"
+              gh release download "$2" --repo "$1" --pattern "$3" --output "$4" --clobber && return 0
+              curl -fsSL --retry 3 --retry-all-errors --connect-timeout 30 --max-time 120 \
+                "https://github.com/$1/releases/download/$2/$3" -o "$4" && return 0
+              echo "::warning::Could not download $3 from $1"
+            done
+            return 1
+          }
           mkdir -p "$RUNNER_TEMP/pinned-tools"
-          curl -fsSL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" -o "$RUNNER_TEMP/swiftlint.zip"
+          fetch realm/SwiftLint "$SWIFTLINT_VERSION" portable_swiftlint.zip "$RUNNER_TEMP/swiftlint.zip"
           unzip -o -q "$RUNNER_TEMP/swiftlint.zip" -d "$RUNNER_TEMP/swiftlint-bin"
           install "$RUNNER_TEMP/swiftlint-bin/swiftlint" "$RUNNER_TEMP/pinned-tools/swiftlint"
-          curl -fsSL "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip" -o "$RUNNER_TEMP/swiftformat.zip"
+          fetch nicklockwood/SwiftFormat "$SWIFTFORMAT_VERSION" swiftformat.zip "$RUNNER_TEMP/swiftformat.zip"
           unzip -o -q "$RUNNER_TEMP/swiftformat.zip" -d "$RUNNER_TEMP/swiftformat-bin"
           install "$RUNNER_TEMP/swiftformat-bin/swiftformat" "$RUNNER_TEMP/pinned-tools/swiftformat"
-          # Put the pinned tools FIRST on PATH for the SwiftLint/SwiftFormat
-          # steps so any swiftlint preinstalled on the runner can't shadow them.
+
+      - name: Save pinned SwiftLint & SwiftFormat (master only)
+        # Like the Swift packages below: a pull request's copy would be visible
+        # only to that pull request, so pull requests restore master's.
+        if: github.ref == 'refs/heads/master' && steps.lint-tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/pinned-tools
+          key: ${{ steps.lint-tools.outputs.cache-primary-key }}
+
+      - name: Put the pinned tools first on PATH
+        # So any swiftlint preinstalled on the runner can't shadow them in the
+        # SwiftLint/SwiftFormat steps.
+        run: |
           echo "$RUNNER_TEMP/pinned-tools" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/pinned-tools/swiftlint" version
           "$RUNNER_TEMP/pinned-tools/swiftformat" --version
