@@ -24,7 +24,7 @@ const COUNTY_WORDS = { StLawrence: 'St. Lawrence' };
 const CITY_BOROUGHS = { BX: ['36005', 'Bronx'], BK: ['36047', 'Kings'], MN: ['36061', 'New York'], QN: ['36081', 'Queens'], SI: ['36085', 'Richmond'] };
 
 const COLUMNS = ['SWIS', 'PRINT_KEY', 'SWIS_PRINT_KEY_ID', 'MUNI_NAME', 'PARCEL_ADDR', 'LOC_ST_NBR', 'LOC_STREET', 'LOC_UNIT', 'LOC_ZIP', 'PROP_CLASS', 'LAND_AV', 'TOTAL_AV', 'FULL_MARKET_VAL', 'YR_BLT', 'ACRES',
-  'SCHOOL_NAME', 'SEWER_DESC', 'WATER_DESC', 'UTILITIES_DESC', 'BLDG_STYLE_DESC', 'HEAT_TYPE_DESC', 'FUEL_TYPE_DESC', 'SQFT_LIVING', 'GFA', 'NBR_KITCHENS', 'NBR_FULL_BATHS', 'NBR_BEDROOMS', 'ROLL_YR'];
+  'SCHOOL_NAME', 'SEWER_DESC', 'WATER_DESC', 'UTILITIES_DESC', 'BLDG_STYLE_DESC', 'HEAT_TYPE_DESC', 'FUEL_TYPE_DESC', 'SQFT_LIVING', 'GFA', 'NBR_KITCHENS', 'NBR_FULL_BATHS', 'NBR_BEDROOMS', 'ROLL_YR', 'CALC_ACRES'];
 
 // The Assessor's Manual's property classes that are homes or land for homes. A class's own word goes on the screen.
 const CLASSES = {
@@ -117,33 +117,56 @@ function fromPluto(row, fips, county) {
   return { id: `pp:${kind}:${fips}:${facts.parcel_number}`, kind, home_type: homeType, address: { ...parsed, unit: '', building: '', city: 'NEW YORK', zip: zipCode(row.zipcode) }, facts };
 }
 
-async function* build({ work }) {
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+/** When the state published its file, from the layer's own description: the as-of date of every county it gives. */
+async function publishedOn() {
   const description = (await getJson(`${LAYER}?f=json`, 'The layer\'s description')).description || '';
   const published = /Publication Date:\s*([A-Z][a-z]+)\s+(\d{4})/.exec(description);
   if (!published) throw new Error('The layer no longer says when it was published');
-  const asOf = new Date(`${published[1]} 1, ${published[2]} UTC`).toISOString().slice(0, 10);
+  return new Date(`${published[1]} 1, ${published[2]} UTC`).toISOString().slice(0, 10);
+}
+
+/** One county's release from the state's file. `name` is the state's county name (a key of COUNTIES). */
+async function countyRelease(work, name, asOf) {
+  const fips = COUNTIES[name];
+  const county = `${COUNTY_WORDS[name] || name} County`;
+  const records = [];
+  const seen = new Set();
+  let noAddress = 0;
+  const calculated = new Map();
+  const shapes = new Map();
+  const rows = cached(path.join(work, 'ny-parcels', `${fips}.jsonl.gz`), () => layerRows(LAYER, COLUMNS, { where: `COUNTY_NAME = '${name}'`, pageSize: 5000 }));
+  for await (const row of rows) {
+    const acres = positive(row.CALC_ACRES);
+    if (acres) shapes.set(acres, (shapes.get(acres) || 0) + 1);
+    const record = row.SWIS_PRINT_KEY_ID ? fromRoll(row, fips, county) : null;
+    if (!record) noAddress += 1;
+    else if (!seen.has(record.id)) {
+      seen.add(record.id);
+      records.push(record);
+      if (acres && record.kind !== 'unit' && !record.facts.lot_acres) calculated.set(record, acres);
+    }
+  }
+  // Where a town's roll gives no acres, the state's own measure of the parcel's shape stands in (within a few percent of the roll's acres
+  // where both are given), unless another parcel has the very same measure: those share one shape, a mobile home park's or a
+  // condominium's land, which is no one home's lot.
+  for (const [record, acres] of calculated) if (shapes.get(acres) === 1) record.facts.lot_acres = acres;
+  log(`${county}: ${records.length} records, ${noAddress} without a street number`);
+  for (const building of condoBuildings(records, { fips, county })) records.push(building);
+  return {
+    fips, state: 'NY', name: county, publisher: 'New York State', dataset: 'public tax parcels and assessment roll', method: 'state', source: 'ny-parcels', title: 'State records', as_of: asOf, stale_after_days: 730, records,
+  };
+}
+
+// Counties another connector publishes: the state's records with the bath counts the county's own file adds (ny-county-files.cjs).
+const OWN_CONNECTOR = new Set(['36029', '36057', '36083', '36107']);
+
+async function* build({ work }) {
+  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+  const asOf = await publishedOn();
 
   for (const [name, fips] of Object.entries(COUNTIES)) {
-    if (only.length && !only.includes(fips)) continue;
-    const county = `${COUNTY_WORDS[name] || name} County`;
-    const records = [];
-    const seen = new Set();
-    let noAddress = 0;
-    const rows = cached(path.join(work, 'ny-parcels', `${fips}.jsonl.gz`), () => layerRows(LAYER, COLUMNS, { where: `COUNTY_NAME = '${name}'`, pageSize: 5000 }));
-    for await (const row of rows) {
-      const record = row.SWIS_PRINT_KEY_ID ? fromRoll(row, fips, county) : null;
-      if (!record) noAddress += 1;
-      else if (!seen.has(record.id)) {
-        seen.add(record.id);
-        records.push(record);
-      }
-    }
-    log(`${county}: ${records.length} records, ${noAddress} without a street number`);
-    for (const building of condoBuildings(records, { fips, county })) records.push(building);
-    yield {
-      fips, state: 'NY', name: county, publisher: 'New York State', dataset: 'public tax parcels and assessment roll', method: 'state', source: 'ny-parcels', title: 'State records', as_of: asOf, stale_after_days: 730, records,
-    };
+    if (OWN_CONNECTOR.has(fips) || (only.length && !only.includes(fips))) continue;
+    yield await countyRelease(work, name, asOf);
   }
 
   const pluto = await getJson(`https://${PLUTO[0]}/api/views/${PLUTO[1]}.json`, 'PLUTO\'s description');
@@ -167,4 +190,4 @@ async function* build({ work }) {
   }
 }
 
-module.exports = { build, CLASSES };
+module.exports = { build, CLASSES, COUNTIES, publishedOn, countyRelease };

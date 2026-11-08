@@ -9,17 +9,27 @@ const HOMES = new Set(['property', 'unit']);
 /**
  * @param {object[]} records                  The county's records, changed in place
  * @param {Map<string, object[]>} dwellings   Each parcel's dwellings, each as the facts its building gives
- * @returns {{ homes: number, filled: number, several: number, facts: Object<string, number> }} counts for the log
+ * @param {object} [options]
+ * @param {(record: object) => string} [options.keyOf]   A record's key in `dwellings`: its parcel number, unless the file needs more
+ *   (a parcel number that repeats from town to town)
+ * @param {(facts: object, found: object) => boolean} [options.agrees]   Whether the file's dwelling is the record's home: a count both
+ *   give that differs means one of them is about another building, so neither is changed
+ * @returns {{ homes: number, filled: number, several: number, differ: number, facts: Object<string, number> }} counts for the log
  */
-function fillHomes(records, dwellings) {
-  const counts = { homes: 0, filled: 0, several: 0, facts: {} };
-  for (const { kind, facts, restricted } of records) {
+function fillHomes(records, dwellings, { keyOf = (record) => record.facts.parcel_number, agrees = () => true } = {}) {
+  const counts = { homes: 0, filled: 0, several: 0, differ: 0, facts: {} };
+  for (const record of records) {
+    const { kind, facts, restricted } = record;
     if (!HOMES.has(kind) || restricted || !facts) continue;
     counts.homes += 1;
-    const found = dwellings.get(facts.parcel_number);
+    const found = dwellings.get(keyOf(record));
     if (!found?.length) continue;
     if (found.length > 1) {
       counts.several += 1;
+      continue;
+    }
+    if (!agrees(facts, found[0])) {
+      counts.differ += 1;
       continue;
     }
     let added = 0;
@@ -49,7 +59,8 @@ const monthOf = (iso) => (/^(\d{4})-(\d{2})/.test(iso || '') ? `${MONTHS[Number(
 const dayOf = (iso) => (/^\d{4}-\d{2}-\d{2}/.test(iso || '') ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}` : 'an unknown date');
 
 /** One line for the build log: counts only. */
-const describe = (county, { homes, filled, several, facts }) => `${county}: ${filled} of ${homes} homes gained facts from the county's file`
-  + ` (${Object.entries(facts).map(([fact, n]) => `${fact} ${n}`).join(', ') || 'none'}); ${several} parcels with more than one dwelling left as they were`;
+const describe = (county, { homes, filled, several, differ = 0, facts }) => `${county}: ${filled} of ${homes} homes gained facts from the county's file`
+  + ` (${Object.entries(facts).map(([fact, n]) => `${fact} ${n}`).join(', ') || 'none'}); ${several} parcels with more than one dwelling left as they were`
+  + (differ ? `; ${differ} whose counts differ from the file's left as they were` : '');
 
 module.exports = { fillHomes, bathFacts, describe, monthOf, dayOf };
