@@ -6,6 +6,8 @@
 // - Rensselaer and Montgomery: each county's parcels as New York State's GIS office publishes them, under the state's own notice (as is,
 //   no warranty, no limit on use), the same terms as the statewide file.
 // - Tioga: the county's own parcel properties for 2025, on its ArcGIS Online, which state no license and no limit on use.
+// - Warren: the county's master parcel view on its own ArcGIS Online, which states no license or limit on use (its parcel files have long
+//   been published as is, at the user's own risk).
 // Only one-family homes and mobile homes take a count, matched by town code and print key (a print key repeats from town to town), and
 // only where every count both files give agrees: a different full bath or bedroom count means one file is about another building.
 // Owner, mailing, exemption and taxable value columns are never asked for.
@@ -68,6 +70,13 @@ const FILES = {
     words: 'baths from Rensselaer County parcels (New York State GIS)',
     read: (row) => ({ key: `${word(row.SWIS) || ''}${word(row.PRINT_KEY) || ''}`, cls: word(row.PROP_CLASS), beds: count(row.BEDROOMS, 15), full: count(row.FULL_BATHS, 12), half: count(row.HALF_BATHS, 6), stories: row.STORIES }),
   },
+  Warren: {
+    layer: 'https://services6.arcgis.com/Fg3XpDIUTR3JZZES/arcgis/rest/services/WCNY_Parcels_MASTER_new_view/FeatureServer/0',
+    oid: 'FID',
+    columns: ['SWIS', 'PRINT_KEY', 'PROP_CLASS', 'BEDROOMS', 'FULL_BATHS', 'HALF_BATHS', 'STORIES'],
+    words: 'baths from Warren County parcels',
+    read: (row) => ({ key: `${word(row.SWIS) || ''}${word(row.PRINT_KEY) || ''}`, cls: word(row.PROP_CLASS), beds: count(row.BEDROOMS, 15), full: count(row.FULL_BATHS, 12), half: count(row.HALF_BATHS, 6), stories: row.STORIES }),
+  },
   Tioga: {
     layer: 'https://services3.arcgis.com/PvkAiSMFS7cpxnJP/arcgis/rest/services/Parcel_Properties_2025/FeatureServer/4',
     columns: ['SWIS_CODE', 'CURRENT_PRINT_KEY', 'BASE_PROP_CLASS', 'NO_OF_BEDROOMS', 'NO_OF_BATHS', 'NO_OF_HALF_BATHS'],
@@ -87,7 +96,7 @@ async function* build({ work }) {
     const release = await countyRelease(work, name, asOf);
     const dwellings = new Map();
     let rows = 0;
-    for await (const row of cached(path.join(work, 'ny-county-files', `${release.fips}.jsonl.gz`), () => layerRows(file.layer, file.columns, { pageSize: 2000 }))) {
+    for await (const row of cached(path.join(work, 'ny-county-files', `${release.fips}.jsonl.gz`), () => layerRows(file.layer, file.columns, { pageSize: 2000, ...(file.oid ? { oid: file.oid } : {}) }))) {
       rows += 1;
       const home = file.read(row);
       if (!home.key || !oneFamily(home.cls)) continue;

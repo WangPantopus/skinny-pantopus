@@ -158,7 +158,7 @@ async function countyRelease(work, name, asOf) {
 }
 
 // Counties another connector publishes: the state's records with the bath counts the county's own file adds (ny-county-files.cjs).
-const OWN_CONNECTOR = new Set(['36029', '36057', '36083', '36107']);
+const OWN_CONNECTOR = new Set(['36029', '36057', '36083', '36107', '36113']);
 
 async function* build({ work }) {
   const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
