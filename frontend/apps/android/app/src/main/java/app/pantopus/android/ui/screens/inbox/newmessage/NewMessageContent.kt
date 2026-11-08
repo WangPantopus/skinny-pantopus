@@ -23,6 +23,8 @@ data class NewMessageContactRow(
     val subIcon: PantopusIcon?,
     val verified: Boolean,
     val identity: NewMessageIdentityBadge,
+    /** A group chat's room, for a row under Groups (whose [userId] is the room too). */
+    val roomId: String? = null,
 )
 
 /**
@@ -32,6 +34,9 @@ data class NewMessageContactRow(
 enum class NewMessageSectionId(val key: String) {
     Connections("connections"),
     Recent("recent"),
+
+    /** Recent group and household chats, when the picker sends to them too. */
+    Groups("groups"),
     AllVerified("allVerified"),
 }
 
@@ -71,4 +76,6 @@ data class NewMessageDestination(
     val initials: String,
     val verified: Boolean,
     val locality: String?,
+    /** Set for a group chat picked: the room the message goes to. */
+    val roomId: String? = null,
 )

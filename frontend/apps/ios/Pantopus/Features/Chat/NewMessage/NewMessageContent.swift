@@ -27,6 +27,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
     public let subIcon: PantopusIcon?
     public let verified: Bool
     public let identity: NewMessageIdentityBadge
+    /// A group chat's room, for a row under Groups (whose `userId` is the room too).
+    public let roomId: String?
 
     public init(
         id: String,
@@ -37,7 +39,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
         sub: String?,
         subIcon: PantopusIcon?,
         verified: Bool,
-        identity: NewMessageIdentityBadge
+        identity: NewMessageIdentityBadge,
+        roomId: String? = nil
     ) {
         self.id = id
         self.userId = userId
@@ -48,6 +51,7 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
         self.subIcon = subIcon
         self.verified = verified
         self.identity = identity
+        self.roomId = roomId
     }
 }
 
@@ -56,6 +60,8 @@ public struct NewMessageContactRow: Identifiable, Sendable, Hashable {
 public enum NewMessageSectionID: String, Sendable, Hashable {
     case connections
     case recent
+    /// Recent group and household chats, when the picker sends to them too.
+    case groups
     case allVerified
 }
 
@@ -99,6 +105,8 @@ public struct NewMessageDestination: Hashable, Sendable {
     public let verified: Bool
     public let locality: String?
     public let identity: NewMessageIdentityBadge
+    /// Set for a group chat picked: the room the message goes to.
+    public let roomId: String?
 
     public init(
         userId: String,
@@ -106,7 +114,8 @@ public struct NewMessageDestination: Hashable, Sendable {
         initials: String,
         verified: Bool,
         locality: String?,
-        identity: NewMessageIdentityBadge = .personal
+        identity: NewMessageIdentityBadge = .personal,
+        roomId: String? = nil
     ) {
         self.userId = userId
         self.displayName = displayName
@@ -114,5 +123,6 @@ public struct NewMessageDestination: Hashable, Sendable {
         self.verified = verified
         self.locality = locality
         self.identity = identity
+        self.roomId = roomId
     }
 }

@@ -396,6 +396,8 @@ fun ChatConversationScreen(
 
     // A launcher shortcut's opening happens once, not again after a rotation or a restored process.
     var aiOpeningDone by rememberSaveable { mutableStateOf(false) }
+    // So does a picture shared in from Today: after that it lives in the thread's draft.
+    var sharedFileDone by rememberSaveable { mutableStateOf(false) }
     var focusComposer by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         viewModel.configure(
@@ -413,6 +415,10 @@ fun ChatConversationScreen(
         if (!aiOpeningDone) {
             aiOpeningDone = true
             focusComposer = args.aiOpening?.let(viewModel::openWith) == true
+        }
+        if (!sharedFileDone) {
+            sharedFileDone = true
+            args.sharedFile?.let(viewModel::attachShared)
         }
     }
     LifecycleStartEffect(viewModel) {

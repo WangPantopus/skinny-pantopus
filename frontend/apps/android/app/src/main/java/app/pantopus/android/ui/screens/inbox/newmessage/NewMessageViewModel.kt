@@ -39,6 +39,8 @@ import javax.inject.Inject
  * - People — search-driven via `GET /api/users/search?q=…` when
  *   the search query reaches the backend's 2-character minimum. With
  *   no query the section is hidden; Connections + Recent stay visible.
+ * - Groups — only for Today's "Send in a chat" ([includesGroups]):
+ *   recent group and household chats from the same unified read.
  *
  * Tapping a row exposes the selection via [destination]; the host
  * collects it once, pops the picker, and pushes the chat-conversation
@@ -71,6 +73,10 @@ class NewMessageViewModel
 
         private var accepted: List<RelationshipDto> = emptyList()
         private var recents: List<UnifiedConversationDto> = emptyList()
+        private var groups: List<UnifiedConversationDto> = emptyList()
+
+        /** Today's "Send in a chat" can send to a group chat too; set before the first load. */
+        var includesGroups: Boolean = false
         private var verifiedResults: List<UserSearchResultDto> = emptyList()
         private var loadedOnce: Boolean = false
         private var loading = false
@@ -92,6 +98,7 @@ class NewMessageViewModel
                 if (connections != null || chats != null) {
                     accepted = connections?.relationships.orEmpty()
                     recents = chats?.conversations.orEmpty().filter { (it.type ?: "conversation") == "conversation" }.take(10)
+                    groups = groupChats(chats?.conversations.orEmpty())
                     loadedOnce = true
                     rebuild()
                 } else {
@@ -132,6 +139,7 @@ class NewMessageViewModel
                     initials = row.initials,
                     verified = row.verified,
                     locality = row.locality,
+                    roomId = row.roomId,
                 )
         }
 
@@ -167,10 +175,14 @@ class NewMessageViewModel
                             recentsRes.data.conversations
                                 .filter { (it.type ?: "conversation") == "conversation" }
                                 .take(10)
+                        groups = groupChats(recentsRes.data.conversations)
                         true
                     }
                     is NetworkResult.Failure -> {
-                        if (accessEnded(recentsRes.error)) recents = emptyList()
+                        if (accessEnded(recentsRes.error)) {
+                            recents = emptyList()
+                            groups = emptyList()
+                        }
                         Timber.w("NewMessage recents fetch failed: %s", recentsRes.error)
                         false
                     }
@@ -234,6 +246,7 @@ class NewMessageViewModel
         private fun rebuild() {
             val connectionsSection = makeConnectionsSection()
             val recentSection = makeRecentSection(excluding = connectionsSection.rows.map { it.userId }.toSet())
+            val groupsSection = makeGroupsSection()
             val allVerifiedSection =
                 makeAllVerifiedSection(
                     excluding =
@@ -246,6 +259,7 @@ class NewMessageViewModel
                 buildList {
                     if (connectionsSection.rows.isNotEmpty()) add(connectionsSection)
                     if (recentSection.rows.isNotEmpty()) add(recentSection)
+                    if (groupsSection.rows.isNotEmpty()) add(groupsSection)
                     if (allVerifiedSection.rows.isNotEmpty()) add(allVerifiedSection)
                 }
 
@@ -285,6 +299,23 @@ class NewMessageViewModel
             val rows = filtered.mapNotNull { rowForRecent(it) }
             return NewMessageSection(id = NewMessageSectionId.Recent, label = "Recent", rows = rows)
         }
+
+        private fun makeGroupsSection(): NewMessageSection {
+            val needle = normalizedSearch()
+            val rows =
+                groups
+                    .filter { needle.isEmpty() || it.roomName.orEmpty().lowercase().contains(needle) }
+                    .mapNotNull { rowForGroup(it) }
+            return NewMessageSection(id = NewMessageSectionId.Groups, label = "Groups", rows = rows)
+        }
+
+        /** The chats with several people: a group's and a household's (not a plan's or a Support Train's). */
+        private fun groupChats(conversations: List<UnifiedConversationDto>): List<UnifiedConversationDto> =
+            if (includesGroups) {
+                conversations.filter { it.type == "room" && it.roomType in setOf("group", "home") }.take(10)
+            } else {
+                emptyList()
+            }
 
         private fun makeAllVerifiedSection(excluding: Set<String>): NewMessageSection {
             if (normalizedSearch().isEmpty()) {
@@ -349,6 +380,23 @@ class NewMessageViewModel
                 subIcon = PantopusIcon.MessageCircle,
                 verified = verified,
                 identity = identity,
+            )
+        }
+
+        internal fun rowForGroup(dto: UnifiedConversationDto): NewMessageContactRow? {
+            val roomId = dto.id ?: return null
+            val name = dto.roomName?.takeIf { it.isNotEmpty() } ?: "Group chat"
+            return NewMessageContactRow(
+                id = "group_$roomId",
+                userId = roomId,
+                name = name,
+                initials = initialsFrom(name),
+                locality = null,
+                sub = formatRelative(dto.lastMessageAt)?.let { "Last chat $it" } ?: "Last chat recently",
+                subIcon = PantopusIcon.Users,
+                verified = false,
+                identity = NewMessageIdentityBadge.Personal,
+                roomId = roomId,
             )
         }
 

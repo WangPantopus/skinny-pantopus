@@ -3,6 +3,7 @@ package app.pantopus.android.ui.screens.compose.pulse
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
@@ -11,7 +12,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.hilt.navigation.compose.hiltViewModel
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
+import java.io.File
 
 private sealed interface PulseComposeFlowStep {
     data object TargetPicker : PulseComposeFlowStep
@@ -35,6 +38,8 @@ fun PulseComposeFlowScreen(
     prefillDraft: PulseComposeDraftFields? = null,
     /** "Before you ask": opens an earlier post over the composer. */
     onOpenPost: (String) -> Unit = {},
+    /** Today's sky, shared from under the sun card: the picture, or the clip as a video, in the draft. */
+    prefillAttachment: File? = null,
 ) {
     // Saved, so the draft step is still there when an opened post comes back to it.
     var step by rememberSaveable(stateSaver = FlowStepSaver) {
@@ -63,8 +68,12 @@ fun PulseComposeFlowScreen(
             is PulseComposeFlowStep.Draft -> {
                 val resolvedPurpose =
                     current.purpose ?: prefillPurpose(current.target, prefillFeedIntent, prefillDraft)
+                val composer: PulseComposeViewModel = hiltViewModel()
+                // Today's sky goes in the draft once; it stays when the person changes the audience.
+                LaunchedEffect(composer, prefillAttachment) { prefillAttachment?.let(composer::attachShared) }
                 PulseComposeScreen(
                     onBack = onBack,
+                    viewModel = composer,
                     onPosted = onPosted,
                     flowTarget = current.target,
                     flowPurpose = resolvedPurpose,

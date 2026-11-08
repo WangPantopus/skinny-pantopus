@@ -855,6 +855,9 @@ public final class ChatConversationViewModel {
     private var draftMutation = 0
     private var hasRestoredDraft = false
     private var isRestoringDraft = false
+    /// A picture another screen hands this thread to send (Today's sky): it joins the composer once the
+    /// thread's saved draft is back, so the two stay one draft.
+    private var sharedAttachments: [ChatQueuedAttachment] = []
     private var draftSaveTask: Task<Void, Never>?
     /// The screens showing this thread (`presentationDidAppear()`).
     private var presentationCount = 0
@@ -870,6 +873,7 @@ public final class ChatConversationViewModel {
         counterparty: ChatCounterparty,
         currentUserId: String,
         initialComposerText: String = "",
+        sharedAttachments: [ChatQueuedAttachment] = [],
         scrollToMessageId: String? = nil,
         initialTopic: ChatInitialTopic? = nil,
         gigId: String? = nil,
@@ -895,6 +899,7 @@ public final class ChatConversationViewModel {
             self.asBusinessUserId = nil
         }
         composerText = initialComposerText
+        self.sharedAttachments = sharedAttachments
         self.initialTopic = initialTopic
         let nudge: AIAssistantNudge? = if case .ai = mode { aiNudge } else { nil }
         self.aiNudge = nudge
@@ -980,6 +985,7 @@ public final class ChatConversationViewModel {
         ChatPerformance.signposter.emitEvent("ThreadLoad")
         observeOutbox()
         await restoreComposerDraft()
+        if !Task.isCancelled { queueSharedAttachments() }
         switch state {
         case .loaded, .empty:
             // Back on screen (a fold or a turn, a pushed screen closed, a tab
@@ -1118,6 +1124,12 @@ public final class ChatConversationViewModel {
             guard !hasRestoredDraft, ChatLocalStore.shared.sessionVersion == version else { return }
             actionFailure = "Couldn't restore this draft. Reopen the conversation to try again."
         }
+    }
+
+    private func queueSharedAttachments() {
+        let shared = sharedAttachments
+        sharedAttachments = []
+        shared.forEach(appendQueuedAttachment)
     }
 
     /// Flush the pending keystrokes before the scene leaves the foreground.

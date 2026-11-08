@@ -54,6 +54,7 @@ import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.detail.AgendaActions
 import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
+import app.pantopus.android.ui.screens.place.detail.SkySharePantopus
 import app.pantopus.android.ui.screens.place.detail.TodayAlertsCheck
 import app.pantopus.android.ui.screens.place.detail.TodayTabParts
 import app.pantopus.android.ui.screens.place.detail.placeDetailAddress
@@ -108,6 +109,8 @@ fun TodayTabScreen(
     onRadonShown: () -> Unit = {},
     /** A Needs you row's link (AI assistant phase 3), opened with the deep-link router. */
     onOpenLink: (String) -> Unit = DeepLinkRouter::handle,
+    /** Share's "Or share in Pantopus": the Pulse composer or a chat with today's sky; null leaves them out. */
+    skyShare: SkySharePantopus? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
     needsYou: NeedsYouViewModel = hiltViewModel(),
 ) {
@@ -239,6 +242,7 @@ fun TodayTabScreen(
                                 radonRequested = homeId != null && radonHomeId == homeId,
                                 onRadonShown = onRadonShown,
                                 needsYou = { agendaTaskIds -> NeedsYouCard(needsYouItems, onOpenLink, agendaTaskIds = agendaTaskIds) },
+                                skyShare = skyShare,
                             )
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::pull) {
                             PlaceTodayDetailContent(

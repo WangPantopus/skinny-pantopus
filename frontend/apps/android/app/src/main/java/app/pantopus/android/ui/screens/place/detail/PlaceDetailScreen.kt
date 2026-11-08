@@ -73,6 +73,8 @@ fun PlaceDetailScreen(
     onOpenVerificationStatus: (() -> Unit)? = null,
     // Ask Pantopus about this section (AI assistant phase 1); null hides the button.
     onAsk: ((AIScreenContext) -> Unit)? = null,
+    // Today's Share: "Or share in Pantopus" (Post to Pulse, Send in a chat); null leaves them out.
+    skyShare: SkySharePantopus? = null,
     viewModel: PlaceDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -125,6 +127,7 @@ fun PlaceDetailScreen(
                         onOpenBallot = onOpenBallot,
                         onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
                         top = top,
+                        skyShare = skyShare,
                     )
             }
         }
@@ -162,6 +165,7 @@ private fun LoadedDetail(
     onAsk: (() -> Unit)?,
     /** The header drawn over the top of the page: its first card starts below it. */
     top: Dp,
+    skyShare: SkySharePantopus?,
 ) {
     if (viewModel.savedPlaceId != null &&
         (!viewModel.group.supportsSavedPlace || current.intelligence.groups.none { it.groupId in viewModel.group.groups })
@@ -214,6 +218,7 @@ private fun LoadedDetail(
                         } else {
                             TodayAlertsCheck.CURRENT
                         },
+                    skyShare = skyShare,
                 )
             }
             Spacer(modifier = Modifier.height(40.dp))
@@ -229,6 +234,7 @@ private fun GroupContent(
     onOpenBallot: () -> Unit,
     onAsk: (() -> Unit)?,
     alertsCheck: TodayAlertsCheck,
+    skyShare: SkySharePantopus?,
 ) {
     when (group) {
         // This page opens over the Place dashboard, where the ballot card is.
@@ -238,6 +244,7 @@ private fun GroupContent(
                 viewModel.takeIf { it.savedPlaceId == null && !intel.claimView },
                 onOpenBallot = onOpenBallot,
                 alertsCheck = alertsCheck,
+                tab = TodayTabParts(skyShare = skyShare),
             )
         PlaceDetailGroup.YOUR_HOME -> PlaceHomeDetailContent(intel, onCorrectYear = onAsk)
         PlaceDetailGroup.RISK -> PlaceRiskDetailContent(intel, viewModel)

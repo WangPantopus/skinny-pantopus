@@ -164,6 +164,8 @@ data class ChatConversationRouteArgs(
      * question, `compose:start_plan` or `compose:remind_household` puts its words in the composer. Done once.
      */
     val aiOpening: String? = null,
+    /** Today's sky, shared from under the sun card: put in the composer once, to send with a note. */
+    val sharedFile: File? = null,
 )
 
 /**

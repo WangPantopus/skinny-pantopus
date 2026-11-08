@@ -139,7 +139,7 @@ struct SkyShareCard {
         return url
     }
 
-    private var fileName: String {
+    var fileName: String {
         title.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
     }
 
