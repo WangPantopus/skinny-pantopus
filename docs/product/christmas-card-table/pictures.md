@@ -94,7 +94,9 @@ Table colours: the rule above gives umber to seven of the nine, because Santa's 
 
 The scripts are in the launch kit, `streams/SANTA/tools`: `make_art.py` writes the card, older and thumbnail files, and `render.cjs link <number>` writes the link previews.
 
-## Pictures 59–67: The First Christmas (November 8, 2026)
+## Pictures 59–67: Christmas with Jesus Christ (November 8, 2026)
+
+The collection was first called The First Christmas and came last. The same day the founder renamed it Christmas with Jesus Christ and moved it to the front, before Christmas as a Kid, so "Pick a card" opens on it. Only the server's list changed (`COLLECTIONS` in `backend/services/holidayCards.js`; its id is still `first-christmas`), so the website, iPhone and Android apps show it without an update.
 
 The founder's own nativity pictures, made with ChatGPT, each with its whole Bible verse printed under the painting. The founder asked for whole verses ("full scripts"). The apps print the caption on one line that shrinks to fit, so a whole verse there would print about 3 points tall on a small phone. Instead each verse is printed inside the picture, where it can take three lines, and the caption is its reference, such as "John 3:16 (KJV)". The book and its numbers are joined by a no-break space, so a reference never splits across two lines.
 
