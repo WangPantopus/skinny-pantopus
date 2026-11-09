@@ -98,10 +98,13 @@ public final class StripePaymentSheetPresenter: PaymentSheetPresenting {
         if !customer.isEmpty, !ephemeralKey.isEmpty {
             configuration.customer = .init(id: customer, ephemeralKeySecret: ephemeralKey)
         }
-        // Apple Pay is intentionally left unconfigured until a merchant ID +
-        // entitlement are provisioned; PaymentSheet still collects cards.
-        // (Enabling it later is a one-liner here — see project.yml's
-        // StripeApplePay product, already linked.)
+        // Must match the app's Apple Pay entitlement and the processing
+        // certificate registered with Stripe. Card entry remains available
+        // when this device cannot use Apple Pay.
+        configuration.applePay = .init(
+            merchantId: "merchant.com.pantopus",
+            merchantCountryCode: "US"
+        )
         return configuration
     }
 
