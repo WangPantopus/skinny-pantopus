@@ -22,6 +22,7 @@ public enum InvoicePaymentStatus: Sendable, Equatable {
     case idle
     case paying
     case paid
+    case unconfirmed
     case canceled
     case declined(message: String)
 }
@@ -70,6 +71,7 @@ public final class InvoiceDetailViewModel {
     /// re-read from the server afterwards; the paid frame (A09.4) is whatever
     /// the backend says it is.
     public func payNow() async {
+        guard paymentStatus != .paying else { return }
         guard let invoice, Self.isPayable(invoice.status) else {
             paymentStatus = .declined(message: Self.unpayableMessage(for: invoice?.status))
             return
@@ -92,16 +94,15 @@ public final class InvoiceDetailViewModel {
         let outcome = await checkout.present(payment.sheetParams)
         switch outcome {
         case .paid:
-            // The charge succeeded — tell the server so the invoice flips to
-            // `paid`. A failure here is not a payment failure (the Stripe
-            // webhook also reconciles), so we still report success and let the
-            // re-read decide what the screen shows.
-            _ = try? await api.request(
+            // PaymentSheet completion does not prove capture or settlement.
+            // Only the server's confirmed invoice can produce a success toast.
+            let confirmation = try? await api.request(
                 BusinessInvoicesEndpoints.confirmInvoicePayment(id: invoiceId),
                 as: BusinessInvoiceResponse.self
             )
-            paymentStatus = .paid
             await fetch(showLoading: false)
+            paymentStatus = confirmation?.invoice.status == "paid" || self.invoice?.status == "paid"
+                ? .paid : .unconfirmed
         case .canceled:
             paymentStatus = .canceled
         case let .declined(message), let .failed(message):
