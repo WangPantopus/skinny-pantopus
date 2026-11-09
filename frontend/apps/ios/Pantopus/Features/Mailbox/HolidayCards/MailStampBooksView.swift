@@ -64,6 +64,8 @@ final class MailStampStore {
     var products: [Product] = []
     var busy = false
     var message: String?
+    private(set) var purchases: [StoreKit.Transaction] = []
+    private(set) var loadingPurchases = false
     private let api = APIClient.shared
     private let path = "/api/mailbox/stamp-books"
 
@@ -91,10 +93,32 @@ final class MailStampStore {
             ))
             await transaction.finish()
             await refresh()
-            message = "Your stamps are ready."
+            message = transaction.revocationDate == nil ? "Your stamps are ready." : "Your stamp balance was updated."
         } catch {
-            message = "Your purchase is saved. Tap Check for your stamps to finish; you don’t need to pay again."
+            message = transaction.revocationDate == nil
+                ? "Your purchase is saved. Tap Check for your stamps to finish; you don’t need to pay again."
+                : "Could not update your stamp balance. Tap Check for your stamps to try again."
         }
+    }
+
+    /// Finished consumables are included for purchase help only, never replayed as new credits.
+    /// An Apple Account can be shared across Pantopus logins, so keep the account binding check.
+    func loadPurchases() async {
+        guard !loadingPurchases, let account = balance?.accountToken else { return }
+        loadingPurchases = true
+        purchases = []
+        defer { loadingPurchases = false }
+        var found: [StoreKit.Transaction] = []
+        for await result in StoreKit.Transaction.all {
+            if Task.isCancelled { return }
+            guard case let .verified(transaction) = result,
+                  transaction.appAccountToken == account,
+                  balance?.books.contains(where: { $0.id == transaction.productID }) == true,
+                  transaction.revocationDate == nil else { continue }
+            found.append(transaction)
+        }
+        guard balance?.accountToken == account else { return }
+        purchases = found.sorted { $0.purchaseDate > $1.purchaseDate }
     }
 
     func recover(history: Bool = false) async {
@@ -293,6 +317,9 @@ struct StampBooksSheet: View {
     /// Opened for a list whose cards need more stamps than are left.
     var short: StampShort?
     @Environment(\.dismiss) private var dismiss
+    @State private var purchaseHelpExpanded = false
+    @State private var refundTransactionID: StoreKit.Transaction.ID = 0
+    @State private var refundPresented = false
 
     private static let finePrint = "Digital delivery only. Christmas cards can be sent until December 31; "
         + "unused stamps stay in your account. Receiving cards and replying are always free."
@@ -365,11 +392,75 @@ struct StampBooksSheet: View {
                     .foregroundStyle(MailPaper.wax)
                     .disabled(store.busy)
                     .accessibilityIdentifier("stampBooksCheck")
+                purchaseHelp
             }
             .padding(Spacing.s5)
         }
         .background(MailPaper.cardDesk.ignoresSafeArea())
         .accessibilityIdentifier("stampBooks")
+        .refundRequestSheet(for: refundTransactionID, isPresented: $refundPresented) { result in
+            switch result {
+            case .success(.success):
+                store.message = "Your refund request was sent to Apple. If approved, that book’s stamps will be removed from your balance."
+            case .success(.userCancelled): break
+            case .failure:
+                store.message = "Apple couldn’t open this refund request. Try again or use Apple purchase support below."
+            @unknown default: break
+            }
+            Task { await store.loadPurchases() }
+        }
+    }
+
+    private var purchaseHelp: some View {
+        DisclosureGroup("App Store purchase help", isExpanded: $purchaseHelpExpanded) {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("Apple handles App Store refund requests. An approved refund removes that book’s stamps from your balance.")
+                    .fixedSize(horizontal: false, vertical: true)
+                if #available(iOS 18, *) {
+                    if store.loadingPurchases {
+                        ProgressView("Loading your purchases…")
+                    } else if store.purchases.isEmpty {
+                        Text("No App Store stamp purchases for this Pantopus account were found on this device.")
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ForEach(store.purchases) { purchase in
+                            if let book = store.balance?.books.first(where: { $0.id == purchase.productID }) {
+                                Button {
+                                    refundTransactionID = purchase.id
+                                    refundPresented = true
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Request a refund for \(book.credits) stamps")
+                                            .fontWeight(.semibold)
+                                        Text(purchase.purchaseDate.formatted(date: .abbreviated, time: .shortened))
+                                            .foregroundStyle(MailPaper.cardTextMuted)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, Spacing.s2)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(store.busy)
+                            }
+                        }
+                    }
+                }
+                Link("Apple purchase support", destination: URL(string: "https://reportaproblem.apple.com")!)
+                    .fontWeight(.semibold)
+            }
+            .font(.system(size: 13.5))
+            .foregroundStyle(MailPaper.cardTextSoft)
+            .padding(.top, Spacing.s2)
+        }
+        .font(.system(size: 13.5, weight: .semibold))
+        .tint(MailPaper.wax)
+        .foregroundStyle(MailPaper.wax)
+        .accessibilityIdentifier("stampBooksPurchaseHelp")
+        .task(id: purchaseHelpExpanded) {
+            if #available(iOS 18, *), purchaseHelpExpanded {
+                await store.loadPurchases()
+            }
+        }
     }
 
     private var haveLine: String? {

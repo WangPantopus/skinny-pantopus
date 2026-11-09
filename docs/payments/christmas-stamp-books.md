@@ -126,6 +126,8 @@ store product, receipt verification, review and rollout steps below.
 
 This PR uses transaction lookup and periodic refund reconciliation. It does not expose an App Store Server Notifications endpoint; do not put the Stripe URL into Apple's notification fields.
 
+On iOS 18 and later, **Stamp books → App Store purchase help** lists verified, unrevoked stamp purchases for the current Pantopus account and opens Apple's refund-request sheet. Finished consumables are included only for this history; fulfillment continues to process `Transaction.unfinished` and use the server's unique receipt ledger. Older iOS versions retain the Apple purchase-support link. Submitting a request is not approval and must not deduct stamps locally. In Sandbox, test an approved refund and a declined request using [Apple's refund-testing instructions](https://developer.apple.com/documentation/storekit/testing-refund-requests), then check the server balance and relaunch/recovery for a single deduction.
+
 ### 4. Google Play: Android purchases
 
 If Play says the app needs the `BILLING` permission before products can be
