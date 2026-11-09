@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,7 +24,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -121,36 +121,58 @@ internal fun StampChip(
     modifier: Modifier = Modifier,
 ) {
     val have = balance ?: return
-    val out = have.available == 0
-    val shape = RoundedCornerShape(Radii.pill)
+    val shape = RoundedCornerShape(Radii.lg)
     Row(
         modifier =
-            modifier
-                .minimumInteractiveComponentSize()
-                .height(34.dp)
-                .clip(shape)
-                .background(PantopusColors.cardField)
+            modifier.fillMaxWidth().clip(shape)
+                .background(PantopusColors.cardNotePaper)
                 .border(1.dp, PantopusColors.cardNoteEdge, shape)
                 .clickable(onClick = onOpen)
-                .padding(start = Spacing.s2, end = Spacing.s3)
+                .padding(Spacing.s3)
                 .clearAndSetSemantics {
-                    contentDescription =
-                        if (out) "No stamps left. Get a stamp book" else "${plural(have.available, "stamp")} left. Stamp books"
+                    contentDescription = stampBalanceLabel(have.freeRemaining, have.paidRemaining) +
+                        if (have.salesOpen == false) ". View stamp books" else ". Buy stamp books"
                     role = Role.Button
                 }.testTag("stampChip"),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PaintedStamp(MailStamp.Fir, width = 19.dp, height = 24.dp, modifier = Modifier.rotate(-6f))
-        Text(
-            "${have.available}",
-            fontSize = 15.sp,
-            lineHeight = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (out) PantopusColors.cardWax else PantopusColors.cardTextBody,
-        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                plural(have.freeRemaining, "free card"),
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.cardTextStrong,
+            )
+            Text(
+                "${plural(have.paidRemaining.coerceAtLeast(0), "paid stamp")} · 1 stamp = 1 card",
+                fontSize = 12.5.sp,
+                lineHeight = 17.sp,
+                color = PantopusColors.cardTextQuiet,
+            )
+        }
+        Box(
+            modifier =
+                Modifier.clip(RoundedCornerShape(Radii.md)).background(PantopusColors.cardWax)
+                    .heightIn(min = 44.dp).padding(horizontal = Spacing.s3),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                if (have.salesOpen == false) "View stamps" else "Buy stamps",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = PantopusColors.cardWaxText,
+            )
+        }
     }
 }
+
+internal fun stampBalanceLabel(
+    free: Int,
+    paid: Int,
+): String = "${plural(free, "free card")} · ${plural(paid.coerceAtLeast(0), "paid stamp")}"
 
 /** What this card costs, beside Seal and send, in the card's own stamp ([design] is its picture); [count] cards on a list. */
 @Composable
@@ -269,9 +291,6 @@ private fun StampBooklet(credits: Int) {
     }
 }
 
-/** What each book is for, in a sender's words. */
-private val BOOK_USES = mapOf(5 to "A few close friends", 20 to "Your Christmas list", 50 to "The whole street")
-
 private const val FINE_PRINT =
     "Digital delivery only. Christmas cards can be sent until December 31; unused stamps stay in your account. " +
         "Receiving cards and replying are always free."
@@ -308,7 +327,7 @@ internal fun StampBooksSheet(
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
                     Text(
-                        "Stamp books",
+                        "Christmas stamp books",
                         fontFamily = FontFamily.Serif,
                         fontSize = 28.sp,
                         lineHeight = 34.sp,
@@ -316,7 +335,7 @@ internal fun StampBooksSheet(
                         modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        "One stamp sends one Christmas card to one person.",
+                        "Send a little Christmas joy to everyone on your list. One stamp sends one digital card to one person.",
                         fontSize = 15.sp,
                         lineHeight = 21.sp,
                         color = PantopusColors.cardTextQuiet,
@@ -366,7 +385,11 @@ internal fun StampBooksSheet(
                             if (book != null && price != null) {
                                 StampBookRow(
                                     credits = book.credits,
-                                    detail = listOfNotNull(BOOK_USES[book.credits], perCard(product, book.credits)).joinToString(" · "),
+                                    detail =
+                                        listOfNotNull(
+                                            "Send ${book.credits} digital cards",
+                                            perCard(product, book.credits),
+                                        ).joinToString(" · "),
                                     price = price,
                                     enabled = !model.busy && activity != null,
                                     onBuy = { activity?.let { model.buy(it, product) } },
@@ -381,6 +404,13 @@ internal fun StampBooksSheet(
                         repeat(3) { Shimmer(width = 360.dp, height = 78.dp, cornerRadius = Radii.xl, modifier = Modifier.fillMaxWidth()) }
                     }
             }
+            Text(
+                "One-time purchase · No subscription. Your free cards are used first.",
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                fontWeight = FontWeight.Medium,
+                color = PantopusColors.cardTextBody,
+            )
             Text(FINE_PRINT, fontSize = 12.5.sp, lineHeight = 18.sp, color = PantopusColors.cardFooterInk)
             model.message?.let {
                 Text(
@@ -491,7 +521,7 @@ private fun StampBookRow(
             if (detail.isNotEmpty()) Text(detail, fontSize = 13.sp, lineHeight = 18.sp, color = PantopusColors.cardTextQuiet)
         }
         Text(
-            price,
+            "Buy $price",
             fontSize = 15.sp,
             lineHeight = 20.sp,
             fontWeight = FontWeight.SemiBold,

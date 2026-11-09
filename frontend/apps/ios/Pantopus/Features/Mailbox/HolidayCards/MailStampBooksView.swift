@@ -180,42 +180,6 @@ private func plural(_ count: Int, _ one: String, _ many: String? = nil) -> Strin
     "\(count) \(count == 1 ? one : many ?? one + "s")"
 }
 
-/// The composer header's stamp count: opens the stamp books.
-struct StampChip: View {
-    let store: MailStampStore
-    let onOpen: () -> Void
-
-    var body: some View {
-        if let balance = store.balance {
-            Button(action: onOpen) {
-                HStack(spacing: 6) {
-                    if let art = StampArt.image(0) {
-                        Image(uiImage: art)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 19, height: 24)
-                            .rotationEffect(.degrees(-6))
-                            .shadow(color: MailPaper.cardShadow.opacity(0.25), radius: 1, y: 1)
-                    }
-                    Text("\(balance.available)")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(balance.available == 0 ? MailPaper.wax : MailPaper.cardTextSoft)
-                }
-                .padding(.leading, Spacing.s2)
-                .padding(.trailing, Spacing.s3)
-                .frame(height: 34)
-                .background(MailPaper.cardField, in: Capsule())
-                .overlay(Capsule().strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(balance
-                .available == 0 ? "No stamps left. Get a stamp book" : "\(plural(balance.available, "stamp")) left. Stamp books")
-            .accessibilityIdentifier("stampChip")
-        }
-    }
-}
-
 /// What this card costs, beside Seal and send, in the card's own stamp.
 struct StampPostageLine: View {
     let store: MailStampStore
@@ -321,19 +285,16 @@ struct StampBooksSheet: View {
     private static let finePrint = "Digital delivery only. Christmas cards can be sent until December 31; "
         + "unused stamps stay in your account. Receiving cards and replying are always free."
 
-    /// What each book is for, in a sender's words.
-    private static let uses = [5: "A few close friends", 20: "Your Christmas list", 50: "The whole street"]
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: Spacing.s1) {
-                        Text("Stamp books")
+                        Text("Christmas stamp books")
                             .font(.system(size: 28, design: .serif))
                             .foregroundStyle(MailPaper.cardText)
                             .accessibilityAddTraits(.isHeader)
-                        Text("One stamp sends one Christmas card to one person.")
+                        Text("Send a little Christmas joy to everyone on your list. One stamp sends one digital card to one person.")
                             .font(.system(size: 15))
                             .foregroundStyle(MailPaper.cardTextMuted)
                     }
@@ -374,6 +335,10 @@ struct StampBooksSheet: View {
                         }
                     }
                 }
+                Text("One-time purchase · No subscription. Your free cards are used first.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(MailPaper.cardTextSoft)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(Self.finePrint)
                     .font(.system(size: 12.5))
                     .foregroundStyle(MailPaper.cardFooter)
@@ -426,13 +391,14 @@ struct StampBooksSheet: View {
                     Text("\(book.credits) stamps")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(MailPaper.cardText)
-                    Text([Self.uses[book.credits], perCard(product, book)].compactMap(\.self).joined(separator: " · "))
+                    Text(["Send \(book.credits) digital cards", perCard(product, book)].compactMap(\.self)
+                        .joined(separator: " · "))
                         .font(.system(size: 13))
                         .foregroundStyle(MailPaper.cardTextMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text(product.displayPrice)
+                Text("Buy \(product.displayPrice)")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MailPaper.waxText)
                     .padding(.horizontal, 14)

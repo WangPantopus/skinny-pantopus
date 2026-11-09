@@ -81,7 +81,7 @@ struct HolidayCardFlowView: View {
         .onChange(of: phase) { if phase == .active, postageOn { Task { await viewModel.stamps.recover() } } }
         .sheet(isPresented: $viewModel.showsStampBooks) {
             StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
@@ -101,33 +101,35 @@ struct HolidayCardFlowView: View {
     }
 
     private var header: some View {
-        HStack(spacing: Spacing.s1) {
-            Button(action: back) {
-                Icon(.chevronLeft, size: 24, color: HolidayCardDesk.text(scheme))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+        VStack(spacing: Spacing.s2) {
+            HStack(spacing: Spacing.s1) {
+                Button(action: back) {
+                    Icon(.chevronLeft, size: 24, color: HolidayCardDesk.text(scheme))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+                .accessibilityIdentifier("sendCardBack")
+                Text(heading.title)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(HolidayCardDesk.text(scheme))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("sendCardTitle")
+                if let step = heading.dots {
+                    StepDots(current: step)
+                        .padding(.trailing, 14)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
-            .accessibilityIdentifier("sendCardBack")
-            Text(heading.title)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(HolidayCardDesk.text(scheme))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("sendCardTitle")
+            .padding(.horizontal, Spacing.s1)
+            .padding(.top, Spacing.s2)
             if postageOn {
                 StampChip(store: viewModel.stamps) { viewModel.showsStampBooks = true }
-                    .padding(.trailing, heading.dots == nil ? Spacing.s3 : Spacing.s1)
-            }
-            if let step = heading.dots {
-                StepDots(current: step)
-                    .padding(.trailing, 14)
+                    .padding(.horizontal, Spacing.s4)
             }
         }
-        .padding(.horizontal, Spacing.s1)
-        .padding(.top, Spacing.s2)
     }
 
     private func back() {

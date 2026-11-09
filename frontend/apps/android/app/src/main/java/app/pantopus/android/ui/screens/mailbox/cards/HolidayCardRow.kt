@@ -1,4 +1,4 @@
-@file:Suppress("PackageNaming", "MagicNumber")
+@file:Suppress("PackageNaming", "MagicNumber", "LongMethod")
 
 package app.pantopus.android.ui.screens.mailbox.cards
 
@@ -18,6 +18,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,10 +34,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.pantopus.android.data.api.models.mailbox.HolidayCardStamps
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
@@ -69,6 +78,10 @@ fun HolidayCardRow(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (cards.postageEnabled) {
+        HolidayStampPromotion(cards, onOpen, modifier)
+        return
+    }
     val today = cards.todaysCard
     val zone = HolidayCardTimes.zone(cards.timeZone)
     val title =
@@ -119,6 +132,108 @@ fun HolidayCardRow(
         }
         PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 20.dp, tint = PantopusColors.cardChevron)
     }
+}
+
+/** Christmas promotion with direct access to the existing native purchase sheet. */
+@Composable
+private fun HolidayStampPromotion(
+    cards: HolidayCardsResponse,
+    onOpen: () -> Unit,
+    modifier: Modifier,
+    stamps: MailStampBooksViewModel = hiltViewModel(),
+) {
+    var showsBooks by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(cards.stamps?.available) { stamps.refresh() }
+    LifecycleResumeEffect(stamps) {
+        stamps.refresh()
+        onPauseOrDispose { }
+    }
+    val shape = RoundedCornerShape(Radii.xl)
+    Column(
+        modifier =
+            modifier.padding(start = Spacing.s3, end = Spacing.s3, top = Spacing.s3)
+                .fillMaxWidth().clip(shape).background(PantopusColors.cardNotePaper)
+                .border(1.dp, PantopusColors.cardNoteEdge, shape).padding(Spacing.s4)
+                .testTag("christmasStampPromotion"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                Text(
+                    "CHRISTMAS CARDS",
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.4.sp,
+                    color = PantopusColors.cardWax,
+                )
+                Text(
+                    "Make their Christmas personal.",
+                    fontSize = 23.sp,
+                    lineHeight = 28.sp,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.cardTextStrong,
+                )
+            }
+            Fan(HolidayCardArt.fan, cards)
+        }
+        Text(
+            "Pick a festive design, add your words, and send a digital card they can keep.",
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = PantopusColors.cardTextBody,
+        )
+        val free = stamps.balance?.freeRemaining ?: cards.stamps?.freeRemaining
+        val paid = stamps.balance?.paidRemaining ?: cards.stamps?.paidRemaining
+        if (free != null && paid != null) {
+            Text(
+                stampBalanceLabel(free, paid),
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.cardTextStrong,
+            )
+        }
+        Text(
+            "Free cards first. Then 1 stamp per recipient.",
+            fontSize = 12.5.sp,
+            lineHeight = 18.sp,
+            color = PantopusColors.cardTextQuiet,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            CardButton(
+                if (stamps.balance?.salesOpen == false) "View stamp books" else "Buy stamp books",
+                onClick = {
+                    stamps.refresh()
+                    showsBooks = true
+                },
+                modifier = Modifier.testTag("mailBuyStampBooks"),
+            )
+            CardButton(
+                "Create a Christmas card",
+                onClick = onOpen,
+                kind = CardButtonKind.Paper,
+                modifier = Modifier.testTag("mailHolidayCardRow"),
+            )
+        }
+        val price = stamps.products.firstOrNull()?.oneTimePurchaseOfferDetails?.formattedPrice
+        val caption =
+            if (stamps.balance?.salesOpen == false) {
+                "Use your stamps until December 31."
+            } else {
+                price?.let { "Stamp books from $it · One-time purchase" } ?: "Books of 5, 20 or 50 stamps · No subscription"
+            }
+        Text(
+            caption,
+            fontSize = 12.5.sp,
+            lineHeight = 18.sp,
+            color = PantopusColors.cardTextQuiet,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    if (showsBooks) StampBooksSheet(stamps, onDismiss = { showsBooks = false })
 }
 
 /** Where today's card is, in a line. */
