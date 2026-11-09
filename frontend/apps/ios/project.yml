@@ -106,6 +106,8 @@ targets:
         PantopusPublicWebURL: $(PANTOPUS_PUBLIC_WEB_URL)
         PantopusSocketURL: $(PANTOPUS_SOCKET_URL)
         StripePublishableKey: $(STRIPE_PUBLISHABLE_KEY)
+        # Purchase help needs finished consumables; crediting still uses unfinished transactions and the server ledger.
+        SKIncludeConsumableInAppPurchaseHistory: true
         SentryDSN: $(SENTRY_DSN)
         PostHogAPIKey: $(POSTHOG_API_KEY)
         PostHogHost: $(POSTHOG_HOST)

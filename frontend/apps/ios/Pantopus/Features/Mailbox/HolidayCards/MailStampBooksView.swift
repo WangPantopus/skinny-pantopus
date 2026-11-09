@@ -64,6 +64,8 @@ final class MailStampStore {
     var products: [Product] = []
     var busy = false
     var message: String?
+    private(set) var purchases: [StoreKit.Transaction] = []
+    private(set) var loadingPurchases = false
     private let api = APIClient.shared
     private let path = "/api/mailbox/stamp-books"
 
@@ -91,10 +93,32 @@ final class MailStampStore {
             ))
             await transaction.finish()
             await refresh()
-            message = "Your stamps are ready."
+            message = transaction.revocationDate == nil ? "Your stamps are ready." : "Your stamp balance was updated."
         } catch {
-            message = "Your purchase is saved. Tap Check for your stamps to finish; you don’t need to pay again."
+            message = transaction.revocationDate == nil
+                ? "Your purchase is saved. Tap Check for your stamps to finish; you don’t need to pay again."
+                : "Could not update your stamp balance. Tap Check for your stamps to try again."
         }
+    }
+
+    /// Finished consumables are included for purchase help only, never replayed as new credits.
+    /// An Apple Account can be shared across Pantopus logins, so keep the account binding check.
+    func loadPurchases() async {
+        guard !loadingPurchases, let account = balance?.accountToken else { return }
+        loadingPurchases = true
+        purchases = []
+        defer { loadingPurchases = false }
+        var found: [StoreKit.Transaction] = []
+        for await result in StoreKit.Transaction.all {
+            if Task.isCancelled { return }
+            guard case let .verified(transaction) = result,
+                  transaction.appAccountToken == account,
+                  balance?.books.contains(where: { $0.id == transaction.productID }) == true,
+                  transaction.revocationDate == nil else { continue }
+            found.append(transaction)
+        }
+        guard balance?.accountToken == account else { return }
+        purchases = found.sorted { $0.purchaseDate > $1.purchaseDate }
     }
 
     func recover(history: Bool = false) async {
@@ -365,6 +389,7 @@ struct StampBooksSheet: View {
                     .foregroundStyle(MailPaper.wax)
                     .disabled(store.busy)
                     .accessibilityIdentifier("stampBooksCheck")
+                StampPurchaseHelp(store: store)
             }
             .padding(Spacing.s5)
         }
