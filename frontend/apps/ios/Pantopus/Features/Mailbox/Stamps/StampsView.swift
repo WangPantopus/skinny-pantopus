@@ -53,7 +53,7 @@ public struct StampsView: View {
             onDismiss: { Task { await stamps.refresh(history: true) } },
             content: {
                 StampBooksSheet(store: stamps)
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
         )
