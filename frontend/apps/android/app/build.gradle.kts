@@ -337,6 +337,8 @@ dependencies {
     // EXIF orientation read for Snap & Sell photo normalization.
     implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.browser)
+    // A Moment's upload finishes after the app is swiped away (a job with a network constraint).
+    implementation(libs.androidx.work.runtime.ktx)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
