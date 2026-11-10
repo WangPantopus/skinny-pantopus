@@ -23,8 +23,13 @@ function storedQuote(id, stored) {
     ended: !Number.isFinite(ends) || ends <= Date.now() };
 }
 
-/** The quotes of the Moments these chat messages name, by Moment id. A failed read leaves them to the stored quote. */
-async function momentQuotes(messages) {
+/**
+ * The quotes of the Moments these chat messages name, by Moment id. A failed read leaves them to the stored quote.
+ * `readerId`, on the reads made for one person (a thread, a conversation list): a Moment whose author and the reader
+ * have a block between them reads as ended, with no picture ("You won't see each other's Moments"). The socket's
+ * shared payloads pass none: a reply can't be sent across a block, so a new quote never crosses one.
+ */
+async function momentQuotes(messages, readerId = null) {
   const named = new Map();
   for (const message of messages || []) {
     const id = quotedMomentId(message?.metadata);
@@ -36,14 +41,19 @@ async function momentQuotes(messages) {
     const ids = [...named.keys()];
     const pages = await Promise.all(Array.from({ length: Math.ceil(ids.length / 100) }, async (_, page) => {
       const { data, error } = await supabaseAdmin.from('Post')
-        .select('id, story_expires_at, archived_at, moderation_state, post_metadata')
+        .select('id, user_id, story_expires_at, archived_at, moderation_state, post_metadata')
         .in('id', ids.slice(page * 100, page * 100 + 100)).eq('is_story', true);
       if (error) throw error;
       return data || [];
     }));
     const rows = new Map(pages.flat().map((row) => [row.id, row]));
-    // A picture only while the Moment is live: not once it ended, nor while it's held for review.
-    const thumbKey = (row) => (row && !hasEnded(row) && row.moderation_state === 'live' ? meta(row).media?.thumb_key || null : null);
+    // The reader's blocks, read only when a quoted Moment is someone else's. A failed read throws: no pictures then.
+    const others = readerId && [...rows.values()].some((row) => String(row.user_id) !== String(readerId));
+    const blocked = new Set(others ? [...await require('../blockService').blockedUserIds(readerId)].map(String) : []);
+    const acrossBlock = (row) => blocked.has(String(row.user_id));
+    // A picture only while the Moment is live: not once it ended, nor while it's held for review, nor across a block.
+    const thumbKey = (row) => (row && !hasEnded(row) && row.moderation_state === 'live' && !acrossBlock(row)
+      ? meta(row).media?.thumb_key || null : null);
     const links = await media.signedLinks(undefined, [...rows.values()].map(thumbKey).filter(Boolean));
     for (const [id, stored] of named) {
       const row = rows.get(id);
@@ -56,7 +66,7 @@ async function momentQuotes(messages) {
         id,
         kind: KINDS.includes(meta(row).kind) ? meta(row).kind : storedQuote(id, stored).kind,
         thumb_url: key ? links.get(key) || null : null,
-        ended: hasEnded(row),
+        ended: hasEnded(row) || acrossBlock(row),
       });
     }
   } catch (error) {
@@ -119,7 +129,7 @@ async function lastMessageMoments(rows, viewerId, flagUser) {
       if (message) last.set(row.key, message);
     }
     if (!last.size) return answer;
-    const quotes = await momentQuotes([...last.values()]);
+    const quotes = await momentQuotes([...last.values()], viewerId);
     for (const [key, message] of last) {
       answer.set(key, {
         ...momentField(message.metadata, quotes),

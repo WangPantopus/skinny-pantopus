@@ -994,7 +994,7 @@ async function respondWithChatChanges(req, res, roomIds, identityUserId, snapsho
     loadMessageSenders(visible),
     chatReadReceipts(changedRoomIds),
     applyDirectReadReceipts(visible, req.user.id, { identityUserId }),
-    momentQuotes(visible),
+    momentQuotes(visible, req.user.id),
   ]);
   const messageReadReceipts = [];
   const authorizedRooms = new Set(roomIds.map(String));
@@ -1088,7 +1088,7 @@ async function serializeChatHistory(messages, viewerId, identityUserId = viewerI
   const [reactions, people, , moments] = await Promise.all([
     buildReactionSummary(messages.map((message) => message.id), viewerId),
     loadMessageSenders(messages), applyDirectReadReceipts(messages, viewerId, { identityUserId }),
-    momentQuotes(messages),
+    momentQuotes(messages, viewerId),
   ]);
   return messages.map((message) => ({ ...serializeChatMessageForViewer(message, { people, viewerId, moments }),
     reactions: reactions.get(message.id) || [] }));
@@ -2048,7 +2048,7 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
         return null; // sends are still checked when they arrive
       }),
       applyDirectReadReceipts(visibleMessages, userId, { identityUserId: asBusinessUserId || userId }),
-      momentQuotes(visibleMessages),
+      momentQuotes(visibleMessages, userId),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
       ...serializeChatMessageForViewer(m, { people, viewerId: userId, moments }),
@@ -2212,7 +2212,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
       loadMessageSenders(visibleMessages),
       sendRefusalRead,
       applyDirectReadReceipts(visibleMessages, userId, { identityUserId: participant.user_id }),
-      momentQuotes(visibleMessages),
+      momentQuotes(visibleMessages, userId),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({
       ...serializeChatMessageForViewer(m, { people, viewerId: userId, moments }),

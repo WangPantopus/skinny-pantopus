@@ -3305,7 +3305,7 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
 
 const PROFILE_PIN_LIMIT = 3;
 const PROFILE_PIN_LIMIT_REPLY = { error: 'You can pin up to 3 posts. Unpin one first.', code: 'PROFILE_PIN_LIMIT' };
-const PROFILE_PIN_POST_SELECT = 'id, user_id, archived_at, archive_reason, moderation_state, show_on_profile, profile_visibility_scope, post_as, profile_pinned_at';
+const PROFILE_PIN_POST_SELECT = 'id, user_id, archived_at, archive_reason, moderation_state, show_on_profile, profile_visibility_scope, post_as, profile_pinned_at, is_story';
 
 // The post when it's the viewer's own, or the reply that refuses it.
 async function ownPostForProfilePin(postId, userId) {
@@ -3316,6 +3316,7 @@ async function ownPostForProfilePin(postId, userId) {
   if (post.user_id !== userId) {
     return { reply: [403, { error: 'You can only pin your own posts.', code: 'PROFILE_PIN_NOT_YOURS' }] };
   }
+  if (isMomentPost(post)) return { reply: [403, MOMENT_POST_REFUSAL] };
   return { post };
 }
 
