@@ -62,6 +62,8 @@ data class NotificationPreferencesDto(
      * (`{}` at least); an older server leaves it out.
      */
     @Json(name = "suggestions_muted") val suggestionsMuted: Map<String, Any?>? = null,
+    /** The push about a connection's new Moment (Moments contract v3): default on; an older server leaves it out. */
+    @Json(name = "moments_enabled") val momentsEnabled: Boolean? = null,
 )
 
 /**
@@ -88,6 +90,8 @@ data class NotificationPreferences(
     val suggestionsEnabled: Boolean? = null,
     /** Muted kinds and when each mute ends (ISO 8601); null on a server without Suggestions. */
     val suggestionsMuted: Map<String, String>? = null,
+    /** "Moments from your connections"; null on a server without it, which then has no such switch. */
+    val momentsEnabled: Boolean? = null,
 ) {
     /** Mirrors RN (`notification-preferences.tsx:205`). */
     val quietHoursEnabled: Boolean get() = quietHoursStartLocal != null
@@ -126,6 +130,7 @@ data class NotificationPreferences(
                 suggestionsEnabled = dto.suggestionsEnabled,
                 suggestionsMuted =
                     dto.suggestionsMuted?.entries?.mapNotNull { (kind, end) -> (end as? String)?.let { kind to it } }?.toMap(),
+                momentsEnabled = dto.momentsEnabled,
             )
 
         /** `2026-11-19T16:00:00.000Z` or with an offset; null when it isn't a time. */
@@ -163,6 +168,8 @@ data class NotificationPreferencesPatch(
     val suggestionsEnabled: Boolean? = null,
     /** True sends `suggestions_muted: {}`, which ends every "Fewer like this" mute. */
     val clearSuggestionMutes: Boolean? = null,
+    /** "Moments from your connections" on or off (sent only to a server that showed the switch). */
+    val momentsEnabled: Boolean? = null,
 ) {
     /** Last write wins per key; untouched keys survive the merge. */
     @Suppress("CyclomaticComplexMethod")
@@ -185,6 +192,7 @@ data class NotificationPreferencesPatch(
             deviceTimezone = newer.deviceTimezone ?: deviceTimezone,
             suggestionsEnabled = newer.suggestionsEnabled ?: suggestionsEnabled,
             clearSuggestionMutes = newer.clearSuggestionMutes ?: clearSuggestionMutes,
+            momentsEnabled = newer.momentsEnabled ?: momentsEnabled,
         )
 
     /** Nothing to send — Joi's `.min(1)` would 400 on an empty body. */
@@ -234,6 +242,7 @@ class NotificationPreferencesPatchJsonAdapter {
         value.deviceTimezone?.let { writer.name("device_timezone").value(it) }
         value.suggestionsEnabled?.let { writer.name("suggestions_enabled").value(it) }
         if (value.clearSuggestionMutes == true) writer.name("suggestions_muted").beginObject().endObject()
+        value.momentsEnabled?.let { writer.name("moments_enabled").value(it) }
         writer.endObject()
     }
 

@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.CreateMomentBody
 import app.pantopus.android.data.api.models.moments.MomentLocationBody
+import app.pantopus.android.data.api.models.moments.MomentPlaceChoiceDto
 import app.pantopus.android.data.api.models.moments.MomentPlacePreviewDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -73,6 +74,8 @@ data class MomentsComposeUiState(
     val done: Boolean = false,
     /** A library photo hides where it was taken: ask once for `ACCESS_MEDIA_LOCATION`, as the Pulse composer does. */
     val askMediaLocation: Boolean = false,
+    /** The place's name picked on the Post sheet (a key from [MomentPlacePreviewDto.places]); null: the automatic one. */
+    val placeKey: String? = null,
 ) {
     val kind: String
         get() =
@@ -81,6 +84,19 @@ data class MomentsComposeUiState(
                 is MomentMediaFile.Video -> "video"
                 null -> "text"
             }
+
+    /** The names that fit the pin, the automatic one first (contract v3); empty from a server without them. */
+    val placeChoices: List<MomentPlaceChoiceDto> get() = place?.places.orEmpty()
+
+    /** More than one name fits an exact pin away from home: the place row opens the list. */
+    val canPickPlace: Boolean get() = !showArea && place?.atHome != true && placeChoices.size > 1
+
+    /** The picked name, while it is still one of [placeChoices]. */
+    val pickedPlace: MomentPlaceChoiceDto? get() = placeKey?.let { key -> placeChoices.firstOrNull { it.key == key } }
+
+    /** A name picked stays only while the Moment pins at the same spot (Retake and Edit keep it, a new spot drops it). */
+    fun placeKeyFor(newPin: ComposePin?): String? =
+        placeKey?.takeIf { pin != null && newPin != null && pin.latitude == newPin.latitude && pin.longitude == newPin.longitude }
 }
 
 /**
@@ -184,6 +200,7 @@ class MomentsComposeViewModel
                     media = media,
                     pin = current.here,
                     place = current.herePlace,
+                    placeKey = it.placeKeyFor(current.here),
                     step = ComposeStep.Review,
                     caption = "",
                     notice = null,
@@ -237,7 +254,15 @@ class MomentsComposeViewModel
                     val pin = ComposePin(lat, lng, takenAt, capture = true)
                     val place = (repository.placePreview(lat, lng) as? NetworkResult.Success)?.data
                     _state.update {
-                        it.copy(media = media, pin = pin, place = place, step = ComposeStep.Review, caption = "", notice = null)
+                        it.copy(
+                            media = media,
+                            pin = pin,
+                            place = place,
+                            placeKey = it.placeKeyFor(pin),
+                            step = ComposeStep.Review,
+                            caption = "",
+                            notice = null,
+                        )
                     }
                 } else {
                     // Android hides where it was taken, or the file never said: it pins where you are, as the sheet shows.
@@ -266,7 +291,8 @@ class MomentsComposeViewModel
                 if (current.step != ComposeStep.Review || current.media == null) return@launch
                 val takenAt = located.capturedAt ?: current.pin?.at ?: return@launch
                 val place = (repository.placePreview(located.latitude, located.longitude) as? NetworkResult.Success)?.data
-                _state.update { it.copy(pin = ComposePin(located.latitude, located.longitude, takenAt, capture = true), place = place) }
+                val pin = ComposePin(located.latitude, located.longitude, takenAt, capture = true)
+                _state.update { it.copy(pin = pin, place = place, placeKey = it.placeKeyFor(pin)) }
             }
         }
 
@@ -281,7 +307,16 @@ class MomentsComposeViewModel
         /** P2's Next: the text card pins at the fresh fix. */
         fun textNext() {
             if (_state.value.text.isBlank()) return
-            _state.update { it.copy(media = null, pin = it.here, place = it.herePlace, step = ComposeStep.Review, notice = null) }
+            _state.update {
+                it.copy(
+                    media = null,
+                    pin = it.here,
+                    place = it.herePlace,
+                    placeKey = it.placeKeyFor(it.here),
+                    step = ComposeStep.Review,
+                    notice = null,
+                )
+            }
         }
 
         /** P3's Retake (a photo or video) or Edit (a text card). */
@@ -299,6 +334,12 @@ class MomentsComposeViewModel
         fun setAudience(audience: String) = _state.update { it.copy(audience = audience) }
 
         fun setShowArea(on: Boolean) = _state.update { it.copy(showArea = on) }
+
+        /** A name from the place list: the first (automatic) one goes back to no pick. */
+        fun pickPlace(key: String) =
+            _state.update { current ->
+                current.copy(placeKey = if (key == current.placeChoices.firstOrNull()?.key) null else key)
+            }
 
         fun setCaption(caption: String) = _state.update { it.copy(caption = caption.take(MAX_CAPTION)) }
 
@@ -345,6 +386,8 @@ class MomentsComposeViewModel
                                 takenAt = usable.at.toString().takeIf { usable.capture },
                             ),
                         clientRequestId = requestId,
+                        // Only a name picked for an exact pin away from home goes: the server works the list out again.
+                        placeKey = current.pickedPlace?.key?.takeIf { current.canPickPlace },
                     )
                 when (val result = repository.create(body)) {
                     is NetworkResult.Success -> {

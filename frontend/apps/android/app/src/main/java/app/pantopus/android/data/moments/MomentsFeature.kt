@@ -1,6 +1,7 @@
 package app.pantopus.android.data.moments
 
 import android.content.Context
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.MomentsApi
@@ -33,6 +34,7 @@ class MomentsFeature
         private val api: MomentsApi,
         private val auth: AuthRepository,
         private val posting: MomentsPosting,
+        private val dot: MomentsDot,
         @ApplicationContext context: Context,
     ) {
         private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -62,6 +64,8 @@ class MomentsFeature
         fun start() {
             if (started) return
             started = true
+            DeepLinkRouter.bindMomentsEnabledProvider { _on.value }
+            DeepLinkRouter.bindMomentsAnswerProvider { linkAnswer() }
             scope.launch {
                 auth.state.collect { state ->
                     val id = (state as? AuthRepository.State.SignedIn)?.user?.id
@@ -71,13 +75,39 @@ class MomentsFeature
                         reading?.cancel()
                         _on.value = false
                         _settled.value = false
+                        dot.bind(null)
                     } else {
                         _on.value = prefs.getBoolean(id, false)
                         _settled.value = true
+                        dot.bind(id.takeIf { _on.value })
                         refresh()
                     }
                 }
             }
+        }
+
+        /**
+         * A connection's new Moment can start the app by its push: FCM wakes the process with no screen, so [start]
+         * (MainActivity) hasn't run and the router still answers "Moments off", which would drop the notification.
+         * Until [start] binds the live answer, answer with the one kept on this phone for [signedInUserId], the account
+         * the saved session belongs to (as Plans does).
+         */
+        @Synchronized
+        fun bindKeptAnswerForPush(signedInUserId: String?) {
+            if (started) return
+            val kept = signedInUserId?.takeIf { it.isNotBlank() }?.let { prefs.getBoolean(it, false) } ?: false
+            DeepLinkRouter.bindMomentsEnabledProvider { kept }
+        }
+
+        /**
+         * The answer a Moment link acts on: the one kept for the signed-in person, or the server's when this phone has
+         * none for them yet (their first sign-in here). Read from the auth state, so a link that arrives before the
+         * sign-in reaches [start]'s collector still knows who is in.
+         */
+        suspend fun linkAnswer(): Boolean {
+            val id = userId ?: (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id ?: return false
+            if (prefs.contains(id)) return if (id == userId) _on.value else prefs.getBoolean(id, false)
+            return (safeApiCall { api.flag(FLAG) } as? NetworkResult.Success)?.data?.enabled ?: _on.value
         }
 
         /** The app came to the foreground: read the flag again. */
@@ -99,8 +129,14 @@ class MomentsFeature
                     if (userId != id) return@launch
                     _on.value = answer
                     prefs.edit().putBoolean(id, answer).apply()
-                    // A photo or video the app was closed on goes up now (its Moment is still waiting for it).
-                    if (answer) posting.resume(id)
+                    dot.bind(id.takeIf { answer })
+                    if (answer) {
+                        // A photo or video the app was closed on goes up now (its Moment is still waiting for it).
+                        posting.resume(id)
+                        // The tab's dot, at launch and on every foreground. The read also tells the server this app has
+                        // Moments, so a connection's new Moment may push here (contract v3.1).
+                        dot.read()
+                    }
                 }
         }
 

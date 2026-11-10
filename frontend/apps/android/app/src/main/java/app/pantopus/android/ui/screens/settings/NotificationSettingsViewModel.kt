@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
+import app.pantopus.android.data.moments.MomentsFeature
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.profile.ProfileRepository
@@ -70,6 +71,8 @@ class NotificationSettingsViewModel
         private val plans: PlansRepository? = null,
         /** The account-wide Push switch's route (none in tests, which then have no such row). */
         private val profile: ProfileRepository? = null,
+        /** Moments' flag: "Moments from your connections" shows only while it is on (none in tests). */
+        private val momentsFeature: MomentsFeature? = null,
     ) : ViewModel() {
         val title: String = "Notifications"
         private var canChooseTeams = false
@@ -208,6 +211,11 @@ class NotificationSettingsViewModel
                     applyLocally(
                         current.copy(mailSummaryEnabled = isOn),
                         NotificationPreferencesPatch(mailSummaryEnabled = isOn),
+                    )
+                RowId.MOMENTS ->
+                    applyLocally(
+                        current.copy(momentsEnabled = isOn),
+                        NotificationPreferencesPatch(momentsEnabled = isOn),
                     )
                 RowId.QUIET_HOURS -> setQuietHours(current, isOn)
                 RowId.SUGGESTIONS ->
@@ -623,6 +631,16 @@ class NotificationSettingsViewModel
                             subtext = "Daily mailbox digest",
                             control = RowControl.Toggle(prefs.mailSummaryEnabled),
                         ).takeIf { LaunchFeatures.mailbox },
+                        // Moments (contract v3): only while Moments is on for this person and the server has the switch.
+                        prefs.momentsEnabled?.takeIf { momentsFeature?.on?.value == true }?.let { on ->
+                            GroupedListRow(
+                                id = RowId.MOMENTS,
+                                label = "Moments from your connections",
+                                subtext = "When a connection adds a Moment",
+                                control = RowControl.Toggle(on),
+                                testTag = "settings.notifications.moments",
+                            )
+                        },
                     ),
             )
 
@@ -722,6 +740,7 @@ class NotificationSettingsViewModel
             const val GIG_UPDATES = "alerts.gigUpdates"
             const val BEACON_PUSH = "alerts.beaconPush"
             const val MAIL_SUMMARY = "alerts.mailSummary"
+            const val MOMENTS = "alerts.moments"
             const val QUIET_HOURS = "quietHours.enabled"
             const val QUIET_HOURS_START = "quietHours.start"
             const val QUIET_HOURS_END = "quietHours.end"

@@ -26,6 +26,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,7 +35,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -164,6 +167,9 @@ class MomentsMapViewModel
 
         /** One-line notices for the map's toast ("Your Moment is live. It shows for 24 hours."). */
         val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+        /** Notes from outside the map ("This Moment has ended." after a push for one), each shown once. */
+        val outsideNotes: Flow<String> = repository.mapNote.filterNotNull().onEach { repository.mapNoteShown() }
 
         private val _wentLive = MutableSharedFlow<Unit>(extraBufferCapacity = 2)
 

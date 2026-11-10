@@ -136,6 +136,7 @@ fun MomentsMapScreen(
     val posts by viewModel.posts.collectAsStateWithLifecycle()
     val toast = remember { ToastController() }
     LaunchedEffect(Unit) { viewModel.messages.collect { toast.info(it) } }
+    LaunchedEffect(Unit) { viewModel.outsideNotes.collect { toast.info(it) } }
     val context = LocalContext.current
     val view = LocalView.current
     // Your Moment went live: one tap you can feel, with the note.

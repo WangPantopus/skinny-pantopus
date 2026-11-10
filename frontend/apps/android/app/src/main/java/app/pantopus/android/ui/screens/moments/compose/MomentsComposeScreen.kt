@@ -192,6 +192,7 @@ fun MomentsComposeScreen(
                     onAudience = viewModel::setAudience,
                     onCaption = viewModel::setCaption,
                     onPost = { viewModel.post() },
+                    onPlace = viewModel::pickPlace,
                 )
         }
         if (state.askMediaLocation) {
@@ -598,6 +599,7 @@ private fun ReviewStep(
     onAudience: (String) -> Unit,
     onCaption: (String) -> Unit,
     onPost: () -> Unit,
+    onPlace: (String) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val media = state.media) {
@@ -665,6 +667,7 @@ private fun ReviewStep(
             onCaption = onCaption,
             onPost = onPost,
             modifier = Modifier.align(Alignment.BottomCenter),
+            onPlace = onPlace,
         )
     }
 }

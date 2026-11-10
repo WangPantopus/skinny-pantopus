@@ -2,10 +2,13 @@
 
 package app.pantopus.android.push
 
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.DeviceIdentity
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.mailbox.MailboxRepository
+import app.pantopus.android.data.moments.MomentsDot
+import app.pantopus.android.data.moments.MomentsFeature
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.plans.PlansEvents
 import app.pantopus.android.data.plans.PlansFeature
@@ -62,6 +65,10 @@ class PantopusMessagingService : FirebaseMessagingService() {
     @Inject lateinit var tokens: dagger.Lazy<TokenStorage>
 
     @Inject lateinit var screenStore: dagger.Lazy<ScreenStore>
+
+    @Inject lateinit var momentsFeature: dagger.Lazy<MomentsFeature>
+
+    @Inject lateinit var momentsDot: dagger.Lazy<MomentsDot>
 
     // FCM invokes Service callbacks on the main thread. Hop off it
     // before doing IO so the binder thread is freed quickly.
@@ -121,6 +128,11 @@ class PantopusMessagingService : FirebaseMessagingService() {
             plansRepository.get().changed()
             // That plan's page is on screen and shows the news itself: no system post for news without buttons.
             if (plansEvents.get().isShowingQuietly(type, message.data["plan_id"])) return
+        }
+        // A connection added a Moment: the same kept answer when the push starts the app, and the tab's dot looks again.
+        if (type == DeepLinkRouter.MOMENT_NEW_TYPE) {
+            momentsFeature.get().bindKeptAnswerForPush(runCatching { runBlocking { tokens.get().userId() } }.getOrNull())
+            momentsDot.get().read()
         }
         dispatcher.dispatch(message)
     }

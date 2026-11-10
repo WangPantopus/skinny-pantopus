@@ -70,10 +70,27 @@ class MomentsRepository
             _changes.tryEmit(Unit)
         }
 
+        private val _mapNote = MutableStateFlow<String?>(null)
+
+        /**
+         * A note for the map's toast from outside the map ("This Moment has ended." after a push for one), kept until the
+         * map shows it: the map may not be on screen yet when it is set.
+         */
+        val mapNote: StateFlow<String?> = _mapNote.asStateFlow()
+
+        fun noteOnMap(text: String) {
+            _mapNote.value = text
+        }
+
+        fun mapNoteShown() {
+            _mapNote.value = null
+        }
+
         /** Sign-out: the next person on this phone starts with no rings, nothing watched and nothing queued. */
         fun clearAccount() {
             _rings.value = emptyList()
             _watched.value = emptySet()
+            _mapNote.value = null
             playback = null
         }
 

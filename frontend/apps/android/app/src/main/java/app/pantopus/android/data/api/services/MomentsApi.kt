@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.moments.MomentReportBody
 import app.pantopus.android.data.api.models.moments.MomentViewersResponse
 import app.pantopus.android.data.api.models.moments.MomentsMapResponse
 import app.pantopus.android.data.api.models.moments.MomentsMineResponse
+import app.pantopus.android.data.api.models.moments.MomentsUnseenResponse
 import app.pantopus.android.data.api.models.plans.FeatureFlagResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -29,7 +30,7 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
- * Pantopus Moments: the `/api/moments` routes of the Moments contract (v2, owned by the server session;
+ * Pantopus Moments: the `/api/moments` routes of the Moments contract (v3.1, owned by the server session;
  * `backend/routes/moments.js`). Every route answers 404 `MOMENTS_UNAVAILABLE` while the `moments` flag is off for
  * the caller, so the app reads [flag] first, as Plans does.
  */
@@ -49,6 +50,20 @@ interface MomentsApi {
         @Query("east") east: Double,
         @Query("zoom") zoom: Int,
     ): MomentsMapResponse
+
+    /**
+     * `GET /api/moments/unseen` (contract v3): how many people have a live Moment in the box that the caller may see,
+     * hasn't watched and that went live after [since] (none: everything live counts). For the Moments tab's dot. Any
+     * Moments call also tells the server this app has Moments, so a connection's new Moment may push here.
+     */
+    @GET("api/moments/unseen")
+    suspend fun unseen(
+        @Query("south") south: Double,
+        @Query("west") west: Double,
+        @Query("north") north: Double,
+        @Query("east") east: Double,
+        @Query("since") since: String? = null,
+    ): MomentsUnseenResponse
 
     /** `GET /api/moments/mine`: the caller's own unexpired Moments, any state but ended. */
     @GET("api/moments/mine")
