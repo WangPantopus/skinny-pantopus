@@ -151,6 +151,10 @@ async function papersEnding({ home, tasks, access, today }) {
       name: clip(details.name, 80) || `${details.kind}`,
     });
   }
+  // A policy whose next term is already on file (a later paper of the same name) needs no notice that it ends.
+  const renewed = (paper) => paper.kind === 'policy' && papers.some((other) => other.kind === 'policy'
+    && other.name.toLowerCase() === paper.name.toLowerCase() && other.endsOn > paper.endsOn);
+  for (const paper of papers.filter(renewed)) papers.splice(papers.indexOf(paper), 1);
   if (access.permissions.includes('assets.view')) {
     const { data, error } = await supabaseAdmin.from('HomeAsset').select('id, name, brand, warranty_expires_at')
       .eq('home_id', home.id)
