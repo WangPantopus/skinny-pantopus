@@ -425,7 +425,7 @@ private fun PlaceRow(
                 modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moments.post.places"),
             ) {
                 Text(
-                    text = "The name people see",
+                    text = "Name this place",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appTextSecondary,
