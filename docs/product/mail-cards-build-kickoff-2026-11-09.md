@@ -40,6 +40,7 @@ Finish and merge a wave on all three apps before starting the next. Tell the fou
 | 2 | Part 5 card rack, Part 6 enlarge / verse / Duo upright, Part 4 opened cards show their picture | Server and web add `verse` to nine designs first. |
 | 3 | Part 7 moods, Part 8 ticks / finger signature / sounds, Part 10 letters, Part 9 send flow at the table | New art: star stamp, cream envelope set, three sounds. Show the founder one sample of each kind of new art before making the rest. The signature needs a small, additive server field in the card's existing data. |
 | 4 | The photo, then the voice greeting | The November 2 plan. Ask the founder before starting: it has storage and moderation steps only the founder can switch on. |
+| Any | Part 11 sharing and the invitation (added November 10) | Apps and web only. Small; fit it in beside the wave that is running, after that wave's open pull requests on the same files. 11.8 (D9) is not built until the founder answers. |
 
 ## Rules for every builder
 
