@@ -2788,6 +2788,8 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
 
 const SENT_SELECT = 'id, created_at, delivered_at, escrow_status, escrow_expires_at, escrow_recipient_contact, recipient_user_id, recipient_home_id, sender_display, object_id, mail_extracted, subject, display_title';
 const sentOn = () => areLaunchFeaturesEnabled(['mailbox']);
+// Sent's opt-in for cards a block withdrew (holidayCards.notDeliveredOf): ?include=not_delivered.
+const includesNotDelivered = (req) => String(req.query.include || '').split(',').map((v) => v.trim()).includes('not_delivered');
 const sentNotFound = (res) => res.status(404).json({ error: 'This mail isn’t here any more.', code: 'SENT_NOT_FOUND' });
 
 // Sent's paging cursor: the last card's sent time, exactly as stored, and its id.
@@ -2813,6 +2815,7 @@ async function sentContexts(rows, userId) {
   return rows.map((mail) => ({
     toName: (mail.escrow_status === 'claimed' && people.get(String(mail.recipient_user_id))?.displayName)
       || mail.mail_extracted?.card?.to_name
+      || mail.mail_extracted?.card?.withdrawn?.to_name
       || (mail.escrow_recipient_contact ? maskContact(mail.escrow_recipient_contact) : null)
       || people.get(String(mail.recipient_user_id))?.displayName
       || (toHousehold(mail) ? `${ownHomes.has(String(mail.recipient_home_id)) ? 'your' : 'their'} household` : 'them'),
@@ -2823,9 +2826,12 @@ async function sentContexts(rows, userId) {
 }
 
 /**
- * GET /api/mailbox/sent?before=<cursor>&limit=<1..50, default 25>
+ * GET /api/mailbox/sent?before=<cursor>&limit=<1..50, default 25>[&include=not_delivered]
  * Sent: the cards this person sent, newest first ({ items, next }; `next` is the cursor for the page after, or null).
- * Never the recipient's ids, address or time zone, nor anything they did with a card.
+ * Never the recipient's ids, address or time zone, nor anything they did with a card. With include=not_delivered
+ * (apps that know the status ask for it; older ones would read it as delivered), a card a block withdrew before it was
+ * delivered is listed too, with status 'not_delivered' ("Couldn't be delivered"), its picture and the name it went to,
+ * and nothing of when or why.
  */
 router.get('/sent', verifyToken, async (req, res) => {
   if (!sentOn()) return sendCardsOff(res);
@@ -2838,7 +2844,7 @@ router.get('/sent', verifyToken, async (req, res) => {
   }
   try {
     const now = new Date();
-    let query = holidayCards.sentCards(userId, SENT_SELECT);
+    let query = holidayCards.sentCards(userId, SENT_SELECT, undefined, { notDelivered: includesNotDelivered(req) });
     if (cursor) query = query.or(`created_at.lt."${cursor.at}",and(created_at.eq."${cursor.at}",id.lt.${cursor.id})`);
     const { data, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false })
       .limit(limit + 1);
@@ -2867,7 +2873,8 @@ router.get('/sent/:id', verifyToken, async (req, res) => {
   if (!UUID_REGEX.test(id)) return sentNotFound(res);
   try {
     const now = new Date();
-    const { data: mail, error } = await holidayCards.sentCards(userId, `${SENT_SELECT}, content`).eq('id', id).maybeSingle();
+    const { data: mail, error } = await holidayCards.sentCards(userId, `${SENT_SELECT}, content`, undefined,
+      { notDelivered: includesNotDelivered(req) }).eq('id', id).maybeSingle();
     if (error) throw new Error(error.message);
     if (!mail) return sentNotFound(res);
     // Cards keep their note only in private storage; legacy letters may use inline content.
