@@ -115,7 +115,7 @@ async function notifyClaimInfoSent({ claim, home }) {
   }
 }
 
-const REPORTED = { user: 'person', post: 'post', reply: 'reply', gig: 'task', message: 'neighbor message' };
+const REPORTED = { user: 'person', post: 'post', reply: 'reply', gig: 'task', message: 'neighbor message', card: 'Christmas card' };
 const REASONS = new Set(['spam', 'harassment', 'inappropriate', 'misinformation', 'safety', 'other']);
 
 function reportsQueueUrl() {

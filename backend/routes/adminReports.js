@@ -9,6 +9,8 @@
  *   GET  /?status=pending            — Reports of people, posts, tasks and neighbor messages, newest first
  *   POST /:kind/:reportId/resolve    — { outcome: 'resolved' | 'dismissed' }
  *   POST /post/:reportId/remove      — take the reported post down, then close its open reports
+ *   GET  /user/:reportId/card        — the one Christmas card a "Report this card" shares (logged per opening)
+ *   GET  /user/:reportId/card/media/:fileId — that card's own photo or voice
  *
  * Direct-message reports arrive as reports of the person (UserReport). A neighbor-message report is a flag on
  * the message itself (NeighborMessage.reported_at, free-text report_reason) with no review status, so it is
@@ -22,6 +24,8 @@ const verifyToken = require('../middleware/verifyToken');
 const { requireAdmin } = require('../middleware/verifyToken');
 const logger = require('../utils/logger');
 const notificationService = require('../services/notificationService');
+const cardReports = require('../services/cardReports');
+const cardMedia = require('../services/holidayCardMedia');
 
 // All routes require auth + admin role
 router.use(verifyToken, requireAdmin);
@@ -175,9 +179,11 @@ router.get('/', async (req, res) => {
         .limit(limit);
       if (error) throw Object.assign(new Error(`${table}: ${error.message}`), { kind });
       const rows = data || [];
-      const [targets, reporters] = await Promise.all([
+      const [targets, reporters, shared] = await Promise.all([
         targetsFor(kind, rows.map((r) => r[target])),
         usersById(rows.map((r) => r.reported_by)),
+        // "Report this card": the report shares one card, opened through GET /user/:reportId/card.
+        kind === 'user' ? cardReports.sharedCards(rows) : new Map(),
       ]);
       return {
         kind,
@@ -194,6 +200,7 @@ router.get('/', async (req, res) => {
           target: targets[r[target]] || null,
           reporter: reporters[r.reported_by] || null,
           closable: true,
+          ...(shared.has(r.id) ? { shared_card: shared.get(r.id) } : {}),
         })),
       };
     }));
@@ -349,6 +356,53 @@ router.post('/post/:reportId/remove', async (req, res) => {
   } catch (err) {
     logger.error('Admin post removal error', { error: err.message });
     res.status(500).json({ error: 'Failed to remove the post' });
+  }
+});
+
+// ============================================================
+// "Report this card" (memories contract section 9): the one card a report shares
+// ============================================================
+
+const cardNotShared = (res) => res.status(404).json({ error: 'This report doesn’t share a card.', code: 'REPORT_CARD_NOT_FOUND' });
+
+/**
+ * GET /user/:reportId/card — the card (or reply) this report shares, and nothing else: its picture, note, signature,
+ * photo and voice, both names and its dates ({ report, card }). Each opening is written to MailEvent
+ * (admin_opened_reported_card, with the admin's id and the report's); an opening that can't be logged doesn't happen.
+ */
+router.get('/user/:reportId/card', async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const { reportId } = req.params;
+    if (!UUID_REGEX.test(reportId)) return cardNotShared(res);
+    const found = await cardReports.reportedPiece(reportId);
+    if (!found) return cardNotShared(res);
+    await cardReports.logOpening({ adminId: req.user.id, reportId, mailId: found.mail.id });
+    logger.info('admin.reported_card_opened', { report_id: reportId, mail_id: found.mail.id, admin_id: req.user.id });
+    const { report } = found;
+    return res.json({
+      report: { id: report.id, reason: report.reason, details: report.details || null, status: report.status, created_at: report.created_at },
+      card: await cardReports.reviewPage(found.mail),
+    });
+  } catch (err) {
+    logger.error('Admin reported card error', { error: err.message });
+    return res.status(503).json({ error: 'Couldn’t open the card just now. Try again in a moment.' });
+  }
+});
+
+/** GET /user/:reportId/card/media/:fileId — the shared card's own photo or voice (bytes, private, no-store). */
+router.get('/user/:reportId/card/media/:fileId', async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const { reportId } = req.params;
+    if (!UUID_REGEX.test(reportId)) return cardNotShared(res);
+    const found = await cardReports.reportedPiece(reportId);
+    const file = found ? await cardMedia.boundFile(req.params.fileId, found.mail.id) : null;
+    return file ? await cardMedia.send(req, res, file) : cardMedia.notFound(res);
+  } catch (err) {
+    logger.error('Admin reported card media error', { error: err.message });
+    if (!res.headersSent) return res.status(503).json({ error: 'Couldn’t open it just now. Try again in a moment.' });
+    return undefined;
   }
 });
 
