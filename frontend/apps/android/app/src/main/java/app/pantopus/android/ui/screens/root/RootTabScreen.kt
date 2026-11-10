@@ -2506,6 +2506,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             navController.navigateToRootTab(PantopusRoute.momentsOffTab)
         }
     }
+    // The Moments tab's dot (something new near you since the tab was last open): it goes the moment the tab opens.
+    val momentsDot by momentsGate.dot.collectAsStateWithLifecycle()
+    val onMomentsTab = momentsOn && currentRoute == PantopusRoute.Moments
+    LaunchedEffect(onMomentsTab) { momentsGate.tabShown(onMomentsTab) }
+    val dots = if (momentsOn && momentsDot && !onMomentsTab) setOf(PantopusRoute.Moments) else emptySet()
     val resolvedInboxBadgeCount = maxOf(inboxBadgeCount, liveInboxBadgeCount)
     // Messages counts unread chats (on Mail while Mailbox is off, when Mail is the conversation list); Mail counts
     // unopened mail.
@@ -3054,6 +3059,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 openPlansLink(PlansRoutes.host())
                 DeepLinkRouter.consume()
             }
+            // Moments: a connection's new Moment (its push) plays over the Moments tab, so Back lands on the map; one that
+            // ended or can't be seen any more leaves the map saying so. While the `moments` flag is off it's dropped.
+            is DeepLinkRouter.Destination.Moment -> {
+                if (DeepLinkRouter.momentsAnswer()) {
+                    navController.navigateToRootTab(PantopusRoute.Moments)
+                    if (momentsGate.queue(pending.id)) {
+                        navController.navigate(MomentsRoutes.WATCH) { launchSingleTop = true }
+                    } else {
+                        momentsGate.ended()
+                    }
+                }
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.ResetPassword,
             is DeepLinkRouter.Destination.VerifyEmail,
             is DeepLinkRouter.Destination.Unknown,
@@ -3127,6 +3145,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 PantopusBottomBar(
                     selected = litTab,
                     badges = badges,
+                    dots = dots,
                     tabs = barTabs,
                     away = tabBarSlides && tabBarScroll.isAway,
                     onSelect = { target ->

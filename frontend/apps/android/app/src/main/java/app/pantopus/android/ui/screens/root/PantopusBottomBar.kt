@@ -1,4 +1,5 @@
 @file:Suppress("MagicNumber")
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package app.pantopus.android.ui.screens.root
 
@@ -60,6 +61,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,6 +96,7 @@ import kotlin.math.roundToInt
  * @param selected Currently selected route.
  * @param onSelect Called when the user taps a different tab.
  * @param badges Map of route → badge count. Missing entries render no badge.
+ * @param dots Tabs with something new and no count to show (Moments): a small dot where the badge would be.
  * @param tabs The tabs to draw, in order ([PantopusRoute.barTabs]).
  * @param away Scrolled out of the way ([TabBarScrollState]).
  */
@@ -101,6 +105,7 @@ fun PantopusBottomBar(
     selected: PantopusRoute,
     onSelect: (PantopusRoute) -> Unit,
     badges: Map<PantopusRoute, Int> = emptyMap(),
+    dots: Set<PantopusRoute> = emptySet(),
     tabs: List<PantopusRoute> = PantopusRoute.entries,
     modifier: Modifier = Modifier,
     away: Boolean = false,
@@ -145,7 +150,9 @@ fun PantopusBottomBar(
                     .border(1.dp, PantopusColors.appBorder)
                     .navigationBarsPadding()
                     .height(78.dp)
-                    .selectableGroup(),
+                    .selectableGroup()
+                    // The tabs' test ids (`tab.moments`, its dot's `tab.moments.badge`) reach UI Automator too.
+                    .semantics { testTagsAsResourceId = true },
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -154,6 +161,7 @@ fun PantopusBottomBar(
                     route = route,
                     isSelected = route == selected,
                     badge = badges[route] ?: 0,
+                    dot = route in dots,
                     labelFontScale = labelFontScale,
                     onClick = { onSelect(route) },
                 )
@@ -327,57 +335,115 @@ private fun RowScope.TabItem(
     route: PantopusRoute,
     isSelected: Boolean,
     badge: Int,
+    dot: Boolean,
     labelFontScale: Float,
     onClick: () -> Unit,
 ) {
     val tint = if (isSelected) PantopusColors.primary600 else PantopusColors.appTextSecondary
+    // The badge's count and the label share the labels' text scale, so neither outgrows the tab.
+    val labelDensity = Density(LocalDensity.current.density, labelFontScale)
+    val tag = "tab.${route.path.substringAfterLast('/')}"
+    Box(modifier = Modifier.weight(1f)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                    // One node for TalkBack and the UI tests: the tag, the tab role with its selected state, and one name
+                    // for the tab (the label and badge inside are replaced by it, so nothing is read twice). It sits inside
+                    // `selectable` so the role, the selected state and the click stay.
+                    .testTag(tag)
+                    .selectable(selected = isSelected, role = Role.Tab, onClick = onClick)
+                    .clearAndSetSemantics {
+                        contentDescription =
+                            when {
+                                badge > 0 -> "${route.label}, $badge unread"
+                                dot -> "${route.label}, new"
+                                else -> route.label
+                            }
+                    }.padding(horizontal = TAB_HORIZONTAL_PADDING),
+        ) {
+            Box {
+                PantopusIconImage(
+                    icon = route.icon,
+                    contentDescription = null,
+                    size = TAB_ICON_SIZE,
+                    tint = tint,
+                )
+                if (badge > 0) {
+                    CompositionLocalProvider(LocalDensity provides labelDensity) {
+                        // Over the icon's top-right corner; the offset keeps the icon and label centered.
+                        InboxBadge(count = badge, modifier = Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-4).dp))
+                    }
+                }
+            }
+            Spacer(Modifier.size(Spacing.s1))
+            CompositionLocalProvider(LocalDensity provides labelDensity) {
+                Text(
+                    text = route.label,
+                    style = tabLabelStyle,
+                    color = tint,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (dot && badge == 0) {
+            TabDot(label = route.label, tag = "$tag.badge", labelDensity = labelDensity, modifier = Modifier.matchParentSize())
+        }
+    }
+}
+
+/**
+ * Something new and no count (Moments): a dot where a badge would be, drawn like the badges. It's laid out beside the
+ * tab, over it, rather than inside it: the tab is one node for TalkBack, which says "<tab>, new", and the dot keeps its
+ * own test id ([tag]) that way. It takes no touches, so a tap on it is a tap on the tab.
+ */
+@Composable
+private fun TabDot(
+    label: String,
+    tag: String,
+    labelDensity: Density,
+    modifier: Modifier = Modifier,
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier =
-            Modifier
-                .weight(1f)
-                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                // One node for TalkBack and the UI tests: the tag, the tab role with its selected state, and one name
-                // for the tab (the label and badge inside are replaced by it, so nothing is read twice). It sits inside
-                // `selectable` so the role, the selected state and the click stay.
-                .testTag("tab.${route.path.substringAfterLast('/')}")
-                .selectable(selected = isSelected, role = Role.Tab, onClick = onClick)
-                .clearAndSetSemantics {
-                    contentDescription = if (badge > 0) "${route.label}, $badge unread" else route.label
-                }
-                .padding(horizontal = TAB_HORIZONTAL_PADDING),
+        modifier = modifier.padding(horizontal = TAB_HORIZONTAL_PADDING),
     ) {
-        // The badge's count and the label share the labels' text scale, so neither outgrows the tab.
-        val labelDensity = Density(LocalDensity.current.density, labelFontScale)
-        Box {
-            PantopusIconImage(
-                icon = route.icon,
-                contentDescription = null,
-                size = 22.dp,
-                tint = tint,
+        Box(modifier = Modifier.size(TAB_ICON_SIZE)) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 6.dp, y = (-2).dp)
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(PantopusColors.error)
+                        .border(1.5.dp, Color.White, CircleShape)
+                        .testTag(tag),
             )
-            if (badge > 0) {
-                CompositionLocalProvider(LocalDensity provides labelDensity) {
-                    // Over the icon's top-right corner; the offset keeps the icon and label centered.
-                    InboxBadge(count = badge, modifier = Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-4).dp))
-                }
-            }
         }
         Spacer(Modifier.size(Spacing.s1))
+        // The label's room, unseen and unread, so the dot lands on the icon's corner at every text size.
         CompositionLocalProvider(LocalDensity provides labelDensity) {
             Text(
-                text = route.label,
+                text = label,
                 style = tabLabelStyle,
-                color = tint,
-                textAlign = TextAlign.Center,
+                color = Color.Transparent,
                 maxLines = 1,
                 softWrap = false,
-                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clearAndSetSemantics {},
             )
         }
     }
 }
+
+private val TAB_ICON_SIZE = 22.dp
 
 @Composable
 private fun InboxBadge(

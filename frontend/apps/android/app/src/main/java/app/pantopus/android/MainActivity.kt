@@ -28,6 +28,7 @@ import app.pantopus.android.data.auth.OAuthSessionStore
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.data.chats.ChatOutbox
+import app.pantopus.android.data.moments.MomentsDot
 import app.pantopus.android.data.moments.MomentsFeature
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.plans.PlansFeature
@@ -45,6 +46,7 @@ import app.pantopus.android.ui.navigation.PantopusNavHost
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -102,6 +104,9 @@ class MainActivity : FragmentActivity() {
     /** Moments' server flag: read at sign-in and on every foreground. */
     @Inject lateinit var momentsFeature: MomentsFeature
 
+    /** The Moments tab's dot: read with the flag, and every few minutes while the app is open. */
+    @Inject lateinit var momentsDot: MomentsDot
+
     /**
      * App-wide [ToastController]. Survives configuration changes via the
      * Activity instance. Feature view-models can grab the same instance
@@ -127,6 +132,16 @@ class MainActivity : FragmentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // The value present on start is skipped: onStart already asked for a reconnect.
                 networkMonitor.isOnline.drop(1).filter { it }.collect { socketManager.reconnectNow() }
+            }
+        }
+        // The Moments tab's dot looks again every 5 minutes while the app is open (each return to the app reads it at
+        // once, with the flag).
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    delay(MOMENTS_DOT_EVERY_MS)
+                    momentsDot.read()
+                }
             }
         }
         // A recreated Activity retains its navigation/ViewModel state. Replaying the
@@ -313,5 +328,8 @@ class MainActivity : FragmentActivity() {
 
         /** Debug builds only: a stand-in for Google Play's install referrer, for checks on a fresh install. */
         private const val DEBUG_INSTALL_REFERRER = "pantopus.debug.install_referrer"
+
+        /** How often the Moments tab's dot is read while the app is open (Moments brief E2: at most every 5 minutes). */
+        private const val MOMENTS_DOT_EVERY_MS = 5 * 60 * 1000L
     }
 }

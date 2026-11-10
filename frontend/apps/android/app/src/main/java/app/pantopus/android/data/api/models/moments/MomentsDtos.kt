@@ -6,7 +6,7 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.ToJson
 
 /*
- * Pantopus Moments (contract v2, `~/pantopus-moments/coord/CONTRACT.md`, owned by the server session). Every route
+ * Pantopus Moments (contract v3.1, `~/pantopus-moments/coord/CONTRACT.md`, owned by the server session). Every route
  * answers 404 `MOMENTS_UNAVAILABLE` while the `moments` flag is off for the caller.
  */
 
@@ -102,6 +102,12 @@ data class MomentsMineResponse(
     val moments: List<MomentDto> = emptyList(),
 )
 
+/** `GET /api/moments/unseen` (contract v3): how many people near you have something new for the tab's dot. */
+@JsonClass(generateAdapter = true)
+data class MomentsUnseenResponse(
+    val count: Int = 0,
+)
+
 @JsonClass(generateAdapter = true)
 data class MomentEnvelope(
     val moment: MomentDto,
@@ -123,6 +129,18 @@ data class MomentPlacePreviewDto(
     @Json(name = "at_home") val atHome: Boolean = false,
     /** False: the one-time 18+ sheet comes before the camera. */
     @Json(name = "adult_confirmed") val adultConfirmed: Boolean = true,
+    /**
+     * The names that fit an exact pin here (contract v3, at most 6): the automatic [placeLabel] first, then other places
+     * within about 100 m, the street's name and the town. Null from a server without it; one entry: nothing to pick.
+     */
+    val places: List<MomentPlaceChoiceDto>? = null,
+)
+
+/** One name the Post sheet offers for the pin: [key] goes back as `place_key`, never the words. */
+@JsonClass(generateAdapter = true)
+data class MomentPlaceChoiceDto(
+    val key: String,
+    val label: String,
 )
 
 @JsonClass(generateAdapter = true)
@@ -155,6 +173,8 @@ data class CreateMomentBody(
     val location: MomentLocationBody,
     /** One per Post tap: a retry of the same tap gets back the Moment it made instead of a second one. */
     @Json(name = "client_request_id") val clientRequestId: String? = null,
+    /** The name picked on the Post sheet (a key from place-preview's `places`); left out for the automatic one. */
+    @Json(name = "place_key") val placeKey: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

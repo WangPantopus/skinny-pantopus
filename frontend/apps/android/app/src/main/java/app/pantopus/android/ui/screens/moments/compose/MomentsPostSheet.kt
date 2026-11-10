@@ -1,4 +1,5 @@
 @file:Suppress("MagicNumber", "LongMethod", "LongParameterList", "CyclomaticComplexMethod")
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package app.pantopus.android.ui.screens.moments.compose
 
@@ -21,18 +22,26 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,9 +56,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -95,6 +106,7 @@ fun MomentsPostSheet(
     onCaption: (String) -> Unit,
     onPost: () -> Unit,
     modifier: Modifier = Modifier,
+    onPlace: (String) -> Unit = {},
 ) {
     val atHome = state.place?.atHome == true
     val density = LocalDensity.current
@@ -126,41 +138,14 @@ fun MomentsPostSheet(
             state.pin?.let { pin ->
                 PinMap(latitude = pin.latitude, longitude = pin.longitude, area = state.showArea, avatarUrl = avatarUrl)
             }
-            // The place others will read: the venue's name, or the town with "Show the area instead".
+            // The place others will read: the venue's name (or the one picked), or the town with "Show the area instead".
             val label =
                 when {
                     atHome && !state.showArea -> "Your home"
                     state.showArea -> state.place?.areaLabel ?: state.place?.placeLabel ?: "Your area"
-                    else -> state.place?.placeLabel ?: "Where you are"
+                    else -> state.pickedPlace?.label ?: state.place?.placeLabel ?: "Where you are"
                 }
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(start = Spacing.s5, end = Spacing.s5, top = 10.dp)
-                        .heightIn(min = 32.dp)
-                        .testTag("moments.post.place"),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-            ) {
-                PantopusIconImage(
-                    icon = if (atHome && !state.showArea) PantopusIcon.Home else PantopusIcon.MapPin,
-                    contentDescription = null,
-                    size = 18.dp,
-                    strokeWidth = 2.2f,
-                    tint = PantopusColors.primary600,
-                )
-                Text(
-                    text = label,
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(text = if (state.showArea) "Area" else "Exact spot", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
-            }
+            PlaceRow(state = state, label = label, atHome = atHome, onPlace = onPlace)
             if (atHome && !state.showArea) {
                 Row(
                     modifier =
@@ -365,6 +350,123 @@ fun MomentsPostSheet(
             modifier = Modifier.padding(horizontal = Spacing.s4).testTag("moments.post.submit"),
         )
         Spacer(Modifier.height(Spacing.s6))
+    }
+}
+
+/**
+ * The place's name and "Exact spot" or "Area". When more than one name fits an exact pin away from home (contract v3,
+ * place-preview's `places`) the row is a button with a small chevron: a short list of the places right there, then the
+ * street, then the town, the automatic one first. The one picked is what everyone reads on the ring and in the viewer.
+ */
+@Composable
+private fun PlaceRow(
+    state: MomentsComposeUiState,
+    label: String,
+    atHome: Boolean,
+    onPlace: (String) -> Unit,
+) {
+    val pickable = state.canPickPlace
+    var choosing by remember { mutableStateOf(false) }
+    if (!pickable) choosing = false
+    Box(
+        modifier =
+            if (pickable) {
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button, onClickLabel = "Change the name") { choosing = true }
+                    .testTag("moments.post.placeChange")
+                    .semantics { contentDescription = "Place: $label, exact spot" }
+            } else {
+                Modifier.fillMaxWidth()
+            },
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = Spacing.s5, end = Spacing.s5, top = 10.dp)
+                    .heightIn(min = 32.dp)
+                    .testTag("moments.post.place"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
+            PantopusIconImage(
+                icon = if (atHome && !state.showArea) PantopusIcon.Home else PantopusIcon.MapPin,
+                contentDescription = null,
+                size = 18.dp,
+                strokeWidth = 2.2f,
+                tint = PantopusColors.primary600,
+            )
+            Text(
+                text = label,
+                fontSize = 15.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.appText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(text = if (state.showArea) "Area" else "Exact spot", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+            if (pickable) {
+                PantopusIconImage(
+                    icon = PantopusIcon.ChevronDown,
+                    contentDescription = null,
+                    size = 16.dp,
+                    strokeWidth = 2.2f,
+                    tint = PantopusColors.appTextSecondary,
+                )
+            }
+        }
+        if (pickable) {
+            val selectedKey = state.pickedPlace?.key ?: state.placeChoices.firstOrNull()?.key
+            DropdownMenu(
+                expanded = choosing,
+                onDismissRequest = { choosing = false },
+                modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moments.post.places"),
+            ) {
+                Text(
+                    text = "Name this place",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s2).semantics { heading() },
+                )
+                state.placeChoices.forEachIndexed { index, choice ->
+                    val on = choice.key == selectedKey
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = choice.label,
+                                fontSize = 15.sp,
+                                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                                color = PantopusColors.appText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        onClick = {
+                            choosing = false
+                            onPlace(choice.key)
+                        },
+                        leadingIcon = {
+                            RadioButton(
+                                selected = on,
+                                onClick = null,
+                                colors = RadioButtonDefaults.colors(selectedColor = PantopusColors.primary600),
+                            )
+                        },
+                        modifier =
+                            Modifier
+                                .widthIn(min = 240.dp, max = 320.dp)
+                                .testTag("moments.post.place.$index")
+                                .semantics {
+                                    role = Role.RadioButton
+                                    selected = on
+                                },
+                    )
+                }
+            }
+        }
     }
 }
 

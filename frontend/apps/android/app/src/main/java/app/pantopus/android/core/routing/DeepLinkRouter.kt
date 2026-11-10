@@ -437,6 +437,12 @@ object DeepLinkRouter {
         data object PlansTab : Destination
 
         /**
+         * Moments: `/moments/:id` (the push about a connection's new Moment, contract v3) plays that Moment over the
+         * Moments tab. Behind the `moments` flag; dropped while it is off.
+         */
+        data class Moment(val id: String) : Destination
+
+        /**
          * `pantopus://assistant` opens the assistant thread; `?nudge=<notificationId>` opens it at that brief's or
          * nudge's message (AI assistant phase 2 contract §8.2), and `&conversation=<id>` names the conversation it was
          * added to. Each is null without one, or when it isn't a UUID.
@@ -505,6 +511,28 @@ object DeepLinkRouter {
      * new person's first sign-in meets the default "off" and is dropped.
      */
     suspend fun plansAnswer(): Boolean = plansAnswerProvider()
+
+    /** Moments' server flag for the signed-in person, bound once from `MomentsFeature`. */
+    @Volatile
+    private var momentsEnabledProvider: () -> Boolean = { false }
+
+    fun bindMomentsEnabledProvider(provider: () -> Boolean) {
+        momentsEnabledProvider = provider
+    }
+
+    /** The `moments` answer a Moment link acts on, bound once from `MomentsFeature` (see [momentsAnswer]). */
+    @Volatile
+    private var momentsAnswerProvider: suspend () -> Boolean = { momentsEnabledProvider() }
+
+    fun bindMomentsAnswerProvider(provider: suspend () -> Boolean) {
+        momentsAnswerProvider = provider
+    }
+
+    /** True while Moments is on for the signed-in person. */
+    fun momentsEnabled(): Boolean = momentsEnabledProvider()
+
+    /** Whether a Moment link may open now, waiting for the server's answer on a first sign-in here (as [plansAnswer]). */
+    suspend fun momentsAnswer(): Boolean = momentsAnswerProvider()
 
     /** True when [destination] is a Plans page. Those open only while the `plans` flag is on. */
     fun isPlansDestination(destination: Destination): Boolean =
@@ -663,17 +691,24 @@ object DeepLinkRouter {
                 key.startsWith("booking_") -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
                 else -> LAUNCH_CUT_NOTIFICATION_TYPES[key].orEmpty()
             } + mailboxNotificationFeatures(key)
-        // Nearby Plans' notifications show only while the `plans` flag is on for this person.
+        // Nearby Plans' notifications show only while the `plans` flag is on for this person, and a connection's new
+        // Moment only while `moments` is.
         val plansOff = key.startsWith("plan_") && !plansEnabled()
-        if (plansOff || !typeFeatures.all(LaunchFeatures::isEnabled)) return false
+        val momentsOff = key == MOMENT_NEW_TYPE && !momentsEnabled()
+        if (plansOff || momentsOff || !typeFeatures.all(LaunchFeatures::isEnabled)) return false
         val path = notificationPath(type, link)?.takeIf { it.isNotBlank() } ?: return true
         val normalized = Paths.normalizeIncoming(path)
         return Paths.isOAuthCallback(normalized) || isLinkAvailable(resolveString(normalized))
     }
 
-    /** [isLaunchAvailable], and for a Plans page also the `plans` flag. */
+    /** [isLaunchAvailable], and for a Plans page also the `plans` flag, for a Moment the `moments` flag. */
     private fun isLinkAvailable(destination: Destination): Boolean =
-        (!isPlansDestination(destination) || plansEnabled()) && isLaunchAvailable(destination)
+        (!isPlansDestination(destination) || plansEnabled()) &&
+            (destination !is Destination.Moment || momentsEnabled()) &&
+            isLaunchAvailable(destination)
+
+    /** The push about a connection's new Moment (contract v3, "Push and its switch"). */
+    const val MOMENT_NEW_TYPE = "moment_new"
 
     /** Mail notifications (`mail_new`, `mail_summary`, `home_mail_removed` …) come from the Mailbox (#10). */
     private fun mailboxNotificationFeatures(key: String): Set<LaunchFeature> =
@@ -1007,6 +1042,11 @@ object DeepLinkRouter {
                     Destination.Unknown(raw)
                 }
             }
+            // Moments: `/moments/:id` (a connection's new Moment); its id is a UUID.
+            "moments" ->
+                segments.getOrNull(1)
+                    ?.takeIf { segments.size == 2 && MAIL_UUID.matches(it) }
+                    ?.let { Destination.Moment(it.lowercase()) } ?: Destination.Unknown(raw)
             "plans" -> {
                 // Nearby Plans: `/plans/new`, `/plans/:id` and `/plans/:id/requests` (brief section 7).
                 val id = segments.getOrNull(1)

@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.moments.MomentRingDto
 import app.pantopus.android.data.api.models.moments.MomentViewersResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.moments.MomentsDot
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.ui.screens.moments.components.MomentImages
@@ -79,6 +80,7 @@ class MomentsViewerViewModel
     @Inject
     constructor(
         private val repository: MomentsRepository,
+        private val dot: MomentsDot,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
         private val _state = MutableStateFlow(MomentsViewerUiState())
@@ -396,6 +398,12 @@ class MomentsViewerViewModel
             _state.update { state -> if (state.moment?.id == moment.id) state.copy(load = ViewerLoad.Ready(moment)) else state }
         }
 
+        override fun onCleared() {
+            // The viewer closed: what was just watched no longer counts as new for the tab's dot.
+            dot.read()
+            super.onCleared()
+        }
+
         private companion object {
             const val LINK_REUSE_MS = 10 * 60 * 1000L
             const val MAX_REPLY = 1000
@@ -435,9 +443,10 @@ internal fun leftLabel(
     now: Instant = Instant.now(),
 ): String? {
     val end = iso?.let { runCatching { Instant.parse(it.replace("+00:00", "Z")) }.getOrNull() } ?: return null
-    // Never less than "1m left": a Moment in its last seconds is still up.
-    val minutes = java.time.Duration.between(now, end).toMinutes().coerceAtLeast(1)
-    return if (minutes < 60) "${minutes}m left" else "${minutes / 60}h left"
+    val seconds = java.time.Duration.between(now, end).seconds
+    // Under an hour, minutes, never less than "1m left": a Moment in its last seconds is still up. An hour or more
+    // rounds up to whole hours, so a Moment just posted for 24 hours says "24h left" (REVIEW P7).
+    return if (seconds < 3600) "${(seconds / 60).coerceAtLeast(1)}m left" else "${(seconds + 3599) / 3600}h left"
 }
 
 /** Whether a Moment's end time has passed (an unreadable or missing time counts as not ended: the server decides). */

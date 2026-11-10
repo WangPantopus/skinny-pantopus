@@ -73,8 +73,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.R
 import app.pantopus.android.data.moments.MomentPosting
 import app.pantopus.android.ui.components.MessagesButton
@@ -136,6 +139,12 @@ fun MomentsMapScreen(
     val posts by viewModel.posts.collectAsStateWithLifecycle()
     val toast = remember { ToastController() }
     LaunchedEffect(Unit) { viewModel.messages.collect { toast.info(it) } }
+    // A note from outside the map ("This Moment has ended." after a push) is taken only by the map on screen: a map
+    // being replaced as the tab opens would take it and go.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) { viewModel.outsideNotes.collect { toast.info(it) } }
+    }
     val context = LocalContext.current
     val view = LocalView.current
     // Your Moment went live: one tap you can feel, with the note.

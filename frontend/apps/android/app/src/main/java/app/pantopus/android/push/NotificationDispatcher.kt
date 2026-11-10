@@ -515,9 +515,11 @@ class NotificationDispatcher
                         action = Intent.ACTION_VIEW
                         data = normalizeForIntent(deepLink)
                     }
-                    // Account-scoped pushes never navigate another signed-in person into this conversation.
+                    // Account-scoped pushes never navigate another signed-in person into this conversation (or to a
+                    // connection's Moment, which only its recipient may see).
                     if (routing.channel == Channel.CHAT ||
-                        DeepLinkRouter.assistantNotificationPath(routing.pushType, null, null) != null
+                        DeepLinkRouter.assistantNotificationPath(routing.pushType, null, null) != null ||
+                        routing.pushType == DeepLinkRouter.MOMENT_NEW_TYPE
                     ) {
                         routing.recipientUserId?.let { putExtra(ASSISTANT_RECIPIENT, it) }
                     }
