@@ -352,6 +352,23 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
     return records.filter((record) => record.key === sortKey);
   }
 
+  /**
+   * The records a county's release holds on one street name, around a house number: that number's block, and the block
+   * on each side when the street runs into it. Three small reads at most, however long the street is.
+   */
+  async function recordsNear(fips, release, sortKey) {
+    const current = await manifest(fips, release);
+    const index = findBlock(current.keys, sortKey);
+    if (index < 0) return [];
+    const street = sortKey.slice(0, sortKey.indexOf('\u0000') + 1);
+    // A block's first key says where it starts: the one before holds this street only when this block starts on it.
+    const wanted = [index];
+    if (index > 0 && current.keys[index].startsWith(street)) wanted.unshift(index - 1);
+    if (index + 1 < current.keys.length && current.keys[index + 1].startsWith(street)) wanted.push(index + 1);
+    const read = await Promise.all(wanted.map((at) => block(fips, release, current, at)));
+    return read.flat().filter((record) => record.key.startsWith(street));
+  }
+
   // Any other small file under this root, re-read as a state's file is. The oldest goes when too many are held.
   const files = new Map();
   function file(name, parse) {
@@ -365,9 +382,9 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
   /** For /health: whether storage is paused, and how long since it last answered. */
   const health = () => ({ paused: Boolean(pausedSince), answered_ms_ago: answeredAt ? Date.now() - answeredAt : null });
 
-  return { stateFile, heldStateFile, recordsAt, suppressions: suppressionsFile, switchesFile, file, health };
+  return { stateFile, heldStateFile, recordsAt, recordsNear, suppressions: suppressionsFile, switchesFile, file, health };
 }
 
 const shared = createReader();
 
-module.exports = { stateFile: shared.stateFile, heldStateFile: shared.heldStateFile, health: shared.health, recordsAt: shared.recordsAt, suppressions: shared.suppressions, switchesFile: shared.switchesFile, createReader, createStorage, StorageUnavailable };
+module.exports = { stateFile: shared.stateFile, heldStateFile: shared.heldStateFile, health: shared.health, recordsAt: shared.recordsAt, recordsNear: shared.recordsNear, suppressions: shared.suppressions, switchesFile: shared.switchesFile, createReader, createStorage, StorageUnavailable };
