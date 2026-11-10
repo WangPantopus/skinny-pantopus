@@ -28,6 +28,7 @@ import app.pantopus.android.data.auth.OAuthSessionStore
 import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.chats.ActiveChatThread
 import app.pantopus.android.data.chats.ChatOutbox
+import app.pantopus.android.data.moments.MomentsFeature
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.realtime.SocketManager
@@ -36,6 +37,7 @@ import app.pantopus.android.data.store.StoreSync
 import app.pantopus.android.push.ASSISTANT_RECIPIENT
 import app.pantopus.android.push.PushTokenSyncer
 import app.pantopus.android.push.ReminderActionReceiver
+import app.pantopus.android.ui.components.CutoutBand
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
@@ -97,6 +99,9 @@ class MainActivity : FragmentActivity() {
     /** Nearby Plans' server flags: read at sign-in and on every foreground. */
     @Inject lateinit var plansFeature: PlansFeature
 
+    /** Moments' server flag: read at sign-in and on every foreground. */
+    @Inject lateinit var momentsFeature: MomentsFeature
+
     /**
      * App-wide [ToastController]. Survives configuration changes via the
      * Activity instance. Feature view-models can grab the same instance
@@ -113,6 +118,7 @@ class MainActivity : FragmentActivity() {
         secureWindowController.bind(this)
         storeSync.start()
         plansFeature.start()
+        momentsFeature.start()
         observeAppLockPrivacyHold()
         lifecycleScope.launch {
             authRepository.state.collect { pilotEvents.authChanged() }
@@ -151,7 +157,8 @@ class MainActivity : FragmentActivity() {
                         Modifier
                             .closesKeyboardOnTapOrScroll()
                             .fillMaxSize()
-                            .background(PantopusColors.appSurface)
+                            // A screen on black (the Moments viewer and camera) paints the band its own color.
+                            .background(CutoutBand.color ?: PantopusColors.appSurface)
                             .windowInsetsPadding(WindowInsets.displayCutout)
                             .clipToBounds(),
                 ) {
@@ -177,6 +184,7 @@ class MainActivity : FragmentActivity() {
         appLockManager.appDidBecomeActive()
         storeSync.foregrounded()
         plansFeature.foregrounded()
+        momentsFeature.foregrounded()
         launchPushTokenSync()
     }
 

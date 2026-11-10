@@ -2,6 +2,7 @@
 
 package app.pantopus.android.data.api.models.chats
 
+import app.pantopus.android.data.api.models.moments.ChatMomentRefDto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -87,6 +88,8 @@ data class UnifiedConversationDto(
     @Json(name = "unmuted_unread") val unmutedUnread: Int? = null,
     @Json(name = "last_message_at") val lastMessageAt: String? = null,
     @Json(name = "last_message_preview") val lastMessagePreview: String? = null,
+    /** The Moment the last message replies to (Pantopus Moments contract "Chat"); null when it names none. */
+    @Json(name = "last_message_moment") val lastMessageMoment: ChatMomentRefDto? = null,
     @Json(name = "notifications_enabled") val notificationsEnabled: Boolean? = null,
 )
 
@@ -177,6 +180,8 @@ data class ChatMessageDto(
     /** Canonical DB column — preferred when `message_type` is absent. */
     val type: String? = null,
     val metadata: Map<String, Any>? = null,
+    /** The Moment this message replies to, drawn as a small quote above it (Pantopus Moments contract "Chat"). */
+    val moment: ChatMomentRefDto? = null,
     @Json(name = "reply_to_id") val replyToId: String? = null,
     @Json(name = "topic_id") val topicId: String? = null,
     @Json(name = "client_message_id") val clientMessageId: String? = null,
