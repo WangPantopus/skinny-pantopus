@@ -32,18 +32,21 @@ const ENTITY_LABELS: Record<string, string> = {
   listing: 'Listing',
   user: 'User',
   message: 'Message',
+  card: 'this card',
 };
 
 interface ReportModalProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (reason: string, details?: string) => Promise<void>;
-  entityType: 'post' | 'gig' | 'listing' | 'user' | 'message';
+  entityType: 'post' | 'gig' | 'listing' | 'user' | 'message' | 'card';
   /** Its stacking layer, when it opens over something above the app (the card on the table). */
   layerClassName?: string;
+  /** Said plainly under the heading: what the report shares ("Report this card" shares that one card with admins). */
+  disclosure?: string;
 }
 
-export default function ReportModal({ open, onClose, onSubmit, entityType, layerClassName = 'z-[60]' }: ReportModalProps) {
+export default function ReportModal({ open, onClose, onSubmit, entityType, layerClassName = 'z-[60]', disclosure }: ReportModalProps) {
   const [reason, setReason] = useState<ReportReason | typeof LISTING_REPORT_REASONS[number]['value'] | ''>('');
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -72,7 +75,9 @@ export default function ReportModal({ open, onClose, onSubmit, entityType, layer
   if (!open || !mounted) return null;
 
   const label = ENTITY_LABELS[entityType] || 'Content';
-  const reasons = entityType === 'listing' ? LISTING_REPORT_REASONS : REPORT_REASONS;
+  // A card isn't news: no "Misinformation" for it (the founder's choice with the wave 4 drawings).
+  const reasons = entityType === 'listing' ? LISTING_REPORT_REASONS
+    : entityType === 'card' ? REPORT_REASONS.filter((r) => r.value !== 'misinformation') : REPORT_REASONS;
 
   const handleSubmit = async () => {
     if (!reason) return;
@@ -107,6 +112,7 @@ export default function ReportModal({ open, onClose, onSubmit, entityType, layer
             <div>
               <h2 id={titleId} className="text-lg font-bold text-app-text">Report {label}</h2>
               <p className="text-sm text-app-text-secondary">Why are you reporting this?</p>
+              {disclosure ? <p className="mt-1.5 text-sm text-app-text" data-testid="reportDisclosure">{disclosure}</p> : null}
             </div>
           </div>
           <button onClick={handleClose} aria-label="Close" className="p-1 text-app-text-muted hover:text-app-text-secondary rounded-lg hover:bg-app-hover">
