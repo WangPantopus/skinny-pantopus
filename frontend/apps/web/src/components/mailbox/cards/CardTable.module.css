@@ -57,6 +57,19 @@
   animation: goldSweep 2.8s ease-in-out 0.3s 1 both;
 }
 @keyframes goldSweep { from { transform: translateX(-75%); } to { transform: translateX(75%); } }
+/* The welcome letter (design plan Part 10): a cream sheet folded in three, its heading and a few lines. */
+.letterSheet {
+  container-type: inline-size; overflow: hidden; border-radius: 2px; background: #f6efe0 url('/holiday-cards/table/paper.webp');
+  background-size: 60cqw; background-blend-mode: multiply; box-shadow: inset 0 0 2.6cqw rgba(110, 80, 30, 0.2);
+}
+.letterHead { position: absolute; left: 10cqw; right: 10cqw; top: 11cqw; font: 600 6.6cqw/1.15 var(--serif); color: #2a1a12; }
+.letterLines { position: absolute; left: 10cqw; right: 10cqw; top: 26cqw; display: flex; flex-direction: column; gap: 4.6cqw; }
+.letterLines i { display: block; height: 1.2cqw; border-radius: 1cqw; background: rgba(42, 26, 18, 0.16); }
+.letterLines i:nth-child(3n) { width: 68%; }
+.letterFold {
+  position: absolute; left: 0; right: 0; top: 40%; height: 2.4cqw;
+  background: linear-gradient(to bottom, rgba(60, 40, 20, 0.08), rgba(255, 255, 255, 0.22) 55%, rgba(60, 40, 20, 0.05));
+}
 @media (prefers-reduced-motion: reduce) {
   .speck, .flapSweep { display: none; }
   .candle { animation: none; opacity: 0.92; }
@@ -102,6 +115,10 @@
   position: absolute; left: 6.8%; bottom: 5.4%; font: 600 calc(var(--ew) * 0.0235) / 1 var(--serif); letter-spacing: 0.2em; color: var(--gold);
   text-transform: uppercase;
 }
+/* The welcome letter's cream envelope (design plan Part 10): the names in the pen's ink, the label in the seal's red. */
+.stage[data-mood='letter'] .toName { color: #1b2a5c; text-shadow: none; mix-blend-mode: multiply; }
+.stage[data-mood='letter'] .fromName { color: #2c3a64; mix-blend-mode: multiply; }
+.stage[data-mood='letter'] .kind { color: #8b1d1d; }
 .sealedMark {
   position: absolute; left: 50%; top: 74%; transform: translate(-50%, -50%) rotate(-7deg); border: calc(var(--ew) * 0.007) double #ecd7a4;
   padding: calc(var(--ew) * 0.018) calc(var(--ew) * 0.03); font: 700 calc(var(--ew) * 0.04) / 1.18 var(--serif); letter-spacing: 0.11em;
@@ -155,6 +172,7 @@
   text-decoration: underline; text-decoration-color: rgba(246, 236, 217, 0.35); text-underline-offset: 0.25em; transition: opacity 0.35s ease;
 }
 .stage .quiet:hover { color: var(--cream); }
+.quietRow { display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.25rem; transition: opacity 0.35s ease; }
 .toast {
   position: absolute; z-index: 60; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 62px); transform: translateX(-50%); width: max-content;
   max-width: 86%; padding: 9px 15px; border-radius: 14px; background: rgba(24, 18, 16, 0.88); font-size: 0.84375rem; line-height: 1.35; color: var(--cream);

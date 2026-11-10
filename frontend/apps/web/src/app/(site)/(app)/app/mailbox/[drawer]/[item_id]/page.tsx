@@ -486,10 +486,14 @@ function ItemDetailPage() {
             }}
           />
         )}
+
+        {/* With the card table on, what to do with a letter comes at its end (design plan Part 10). */}
+        {launchFeatures.cardTable && !(piece.card && !piece.removed) ? <LetterActions piece={piece} atEnd /> : null}
       </div>
 
-      {/* What to do with it, in mail words (on the table, a card keeps these in its menu) */}
-      {piece.card && launchFeatures.cardTable && !piece.removed ? null : <LetterActions piece={piece} />}
+      {/* What to do with it, in mail words (on the table, a card keeps these in its menu). With the card table on,
+          a letter keeps them at its end (design plan Part 10) instead of pinned over it. */}
+      {launchFeatures.cardTable ? null : <LetterActions piece={piece} />}
 
       {sheetOpen && (
         <SenderSheet piece={piece} recipientName={to.name} recipientLine={to.line} onClose={() => setSheetOpen(false)} />

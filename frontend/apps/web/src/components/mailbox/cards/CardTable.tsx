@@ -13,6 +13,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { createPortal } from 'react-dom';
 import { cardMood, cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, seededRandom, TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { cardPen } from './cardFont';
+import { playCardSound, preloadCardSounds } from './cardSounds';
+import type { CardSignature } from '@pantopus/api';
 import { PaperBack, PaperFront } from './CardPaper';
 import { CardTableEngine, type TableState } from './cardTableEngine';
 import { useDarkPage } from './useDarkPage';
@@ -22,6 +24,10 @@ const art = (name: string) => `${TABLE_ART}${name}`;
 const PEN = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
 const WAX_WHOLE = art('wax-gold.webp');
 const WAX_CRACKED = art('wax-gold-cracked.webp');
+// A letter (design plan Part 10): the same envelope made in cream, with a red seal, on a slate cloth.
+const LETTER_WAX_WHOLE = art('wax-red.webp');
+const LETTER_WAX_CRACKED = art('wax-red-cracked.webp');
+const LETTER_STAMP = art('stamp-peak.webp');
 // Everything the envelope is made of: it waits for these and the card's picture before it arrives.
 const ALL_ART = ['env-front.webp', 'env-pocket.webp', 'env-flap-out.webp', 'env-flap-in.webp', 'env-inside.webp', 'env-flap-gold.webp',
   'env-pocket-shadow.webp', 'env-flap-shadow.webp', 'wax-gold.webp', 'wax-gold-cracked.webp', 'postmark-blank.webp', 'table-cloth.webp',
@@ -51,6 +57,8 @@ export type TableCard = {
   sealed_until?: string | null;
   /** The whole verse printed on a Christmas with Jesus Christ picture: "Read the verse" (design plan 6.2). */
   verse?: string | null;
+  /** Signed beside FROM (design plan 8.2); like the note, not while it's sealed. */
+  signature?: CardSignature | null;
 };
 
 export type TableMenuItem = { label: string; onSelect: () => void };
@@ -108,6 +116,18 @@ function SidePieces({ side }: { side: 'Front' | 'Back' }) {
   );
 }
 
+/** The welcome letter folded in three (design plan Part 10): cream paper, its heading, a few lines, the fold. */
+function LetterSheet({ className, title, children }: { className: string; title: string; children?: ReactNode }) {
+  return (
+    <div className={`${styles.letterSheet} ${className}`} style={{ position: 'absolute', inset: 0 }}>
+      <div className={styles.letterHead}>{title}</div>
+      <div className={styles.letterLines}><i /><i /><i /><i /><i /><i /></div>
+      <div className={styles.letterFold} />
+      {children}
+    </div>
+  );
+}
+
 export default function CardTable({
   card,
   note,
@@ -124,6 +144,7 @@ export default function CardTable({
   onShare,
   onClose,
   overlay,
+  letter = null,
 }: {
   card: TableCard;
   /** The note. A sealed card's never reaches this far. */
@@ -148,6 +169,11 @@ export default function CardTable({
   onClose: () => void;
   /** Sheets and dialogs that belong over the table. */
   overlay?: ReactNode;
+  /**
+   * A letter, not a card (design plan Part 10, the welcome letter): the cream envelope with the red seal on slate, the
+   * same moves, and the folded sheet that comes out opens the letter itself (`onOut`).
+   */
+  letter?: { onOut: () => void } | null;
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<CardTableEngine | null>(null);
@@ -165,6 +191,14 @@ export default function CardTable({
   const from = firstNameOf(fromName);
   // The collection's mood (design plan Part 7): snow, candlelight or Santa's bounce. Off with Reduce Motion (CSS).
   const mood = cardMood(card.number, card.design);
+  const isLetter = Boolean(letter);
+  // The envelope's pictures: the cream set for a letter.
+  const envArt = (name: string) => art(isLetter ? `cream-${name}` : name);
+  const waxWhole = isLetter ? LETTER_WAX_WHOLE : WAX_WHOLE;
+  const waxCracked = isLetter ? LETTER_WAX_CRACKED : WAX_CRACKED;
+  const stampSrc = isLetter ? LETTER_STAMP : cardStampFile(card.number, card.design);
+  const letterRef = useRef(letter);
+  letterRef.current = letter;
   const days = daysWords(card.sealed_until);
 
   const say = useCallback((text: string) => {
@@ -183,14 +217,16 @@ export default function CardTable({
     const engine = new CardTableEngine(stage, {
       sealed: card.sealed,
       sending: Boolean(momentRef.current),
-      mood,
-      wholeSrc: WAX_WHOLE,
-      crackedSrc: WAX_CRACKED,
+      mood: isLetter ? undefined : mood,
+      wholeSrc: waxWhole,
+      crackedSrc: waxCracked,
       callbacks: {
         onState: setUi,
         onRefused: () => say(daysWords(card.sealed_until).notYet),
         onTableTap: () => setControlsHidden((hidden) => !hidden),
         onPress: () => setMenuOpen(false),
+        // Quiet paper sounds (design plan 8.3), when they're on in Mail Day settings.
+        onSound: playCardSound,
         // The card goes the moment the seal is on; one press sends one card (the engine takes no second press).
         onSeal: () => {
           const moment = momentRef.current;
@@ -204,6 +240,7 @@ export default function CardTable({
       },
     });
     engineRef.current = engine;
+    preloadCardSounds();
     if (process.env.NODE_ENV !== 'production') (window as unknown as { __cardTable?: CardTableEngine }).__cardTable = engine;
     const onImageError = (event: Event) => { if ((event.target as HTMLElement).tagName === 'IMG') retryImage(event.target as HTMLImageElement); };
     stage.addEventListener('error', onImageError, true);
@@ -224,7 +261,10 @@ export default function CardTable({
     // The art and the card's picture are ready before the envelope arrives; after 5 seconds it comes anyway.
     engine.restart(false);
     (stage.querySelector('[data-el="lFront"]') as HTMLElement).style.visibility = 'hidden';
-    const ready = [...ALL_ART, cardTrimmedPicture(card.design), cardStampFile(card.number, card.design)].map((src) => {
+    const pictures = isLetter
+      ? [...ALL_ART.map((src) => src.replace(/\/(env-|wax-gold)([^/]*)$/, (_, a: string, b: string) => (a === 'env-' ? `/cream-env-${b}` : `/wax-red${b}`))), stampSrc]
+      : [...ALL_ART, cardTrimmedPicture(card.design), stampSrc];
+    const ready = pictures.map((src) => {
       const image = new Image();
       image.src = src;
       return image.decode().catch(() => {});
@@ -321,6 +361,14 @@ export default function CardTable({
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
+  // A letter out of its envelope opens as the letter page, after a moment to see it come out.
+  useEffect(() => {
+    if (!isLetter || ui.step !== 'out') return undefined;
+    const reduceNow = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const timer = window.setTimeout(() => letterRef.current?.onOut(), reduceNow ? 300 : 1100);
+    return () => window.clearTimeout(timer);
+  }, [isLetter, ui.step]);
+
   if (!mounted) return null;
 
   const { step, backUp, turnedOnce, envTurnedOnce, heldOnce, send } = ui;
@@ -345,6 +393,12 @@ export default function CardTable({
     } else if (send === 'gone') {
       words = sendMoment.goneWords;
     }
+  } else if (isLetter) {
+    // The welcome letter: turn it over, open it, take the letter out; out, it opens as a letter page.
+    if (step === 'front') { words = `A letter from ${from}.`; primary = 'Turn it over'; hint = 'or swipe it, the way you’d turn it in your hand'; }
+    else if (step === 'back') { primary = 'Open it'; hint = 'or pull the flap up with your finger'; }
+    else if (step === 'flap') { primary = 'Take the letter out'; hint = 'or pull it out with your finger'; }
+    else if (step === 'out') { primary = 'Read the letter'; }
   } else if (step === 'front') {
     words = sealed ? `${from} sealed this card.` : `A Christmas card from ${from}.`;
     primary = 'Turn it over';
@@ -364,15 +418,19 @@ export default function CardTable({
   if (!sendMoment && step === 'out' && ui.enlarged) {
     hint = typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches ? 'double-tap to bring it back' : 'double-click to bring it back';
   }
-  const readVerse = !sendMoment && !sealed && step === 'out' && !ui.enlarged && Boolean(card.verse);
-  const showTopRight = !sendMoment && (step === 'out' || (sealed && (step === 'back' || step === 'front')));
+  const readVerse = !sendMoment && !isLetter && !sealed && step === 'out' && !ui.enlarged && Boolean(card.verse);
+  const turnedOver = step === 'out' && backUp;
+  const quietShare = Boolean(onShare) && !sendMoment && !isLetter && !sealed;
+  const showTopRight = !sendMoment && !isLetter && (step === 'out' || (sealed && (step === 'back' || step === 'front')));
   // The button is there only when there's something to press: never while things move by themselves.
   const sendButton = !sendMoment || send === 'ready' || send === 'in' || send === 'seal';
 
   // Read aloud as one sentence, as today's card is. The envelope reads as what it is.
   const caption = card.caption || 'A Christmas picture';
   const captionSentence = /[.!?]$/.test(caption) ? caption : `${caption}.`;
-  const spoken = sendMoment
+  const spoken = isLetter
+    ? (step === 'out' ? `The letter from ${fromName}. Opening it.` : `A letter from ${fromName}`)
+    : sendMoment
     ? [words, send === 'addressed' ? `Addressed to ${toName}.` : '', send === 'sending' ? 'Sealing it.' : ''].filter(Boolean).join(' ')
     : step === 'out' && !sealed
     ? `Card from ${fromName}: ${captionSentence} On the back: ${note}`
@@ -387,10 +445,10 @@ export default function CardTable({
         className={styles.stage}
         role="dialog"
         aria-modal="true"
-        aria-label={sendMoment ? `Your card for ${sendMoment.firstName}` : `Christmas card from ${fromName}`}
+        aria-label={sendMoment ? `Your card for ${sendMoment.firstName}` : isLetter ? `Letter from ${fromName}` : `Christmas card from ${fromName}`}
         tabIndex={-1}
         data-send={sendMoment ? '1' : undefined}
-        data-mood={mood}
+        data-mood={isLetter ? 'letter' : mood}
       >
         <div className={styles.safe} data-el="safe" />
         <div
@@ -400,14 +458,14 @@ export default function CardTable({
         />
         <div className={styles.objects} aria-hidden="true">
           <div className={`${styles.shadow} ${styles.envShadow}`} data-el="envShadow" />
-          <div className={`${styles.layer} ${styles.lInside}`} data-el="lInside"><Art src={art('env-inside.webp')} /></div>
+          <div className={`${styles.layer} ${styles.lInside}`} data-el="lInside"><Art src={envArt('env-inside.webp')} /></div>
           <div className={`${styles.layer} ${styles.lFlapIn}`} data-el="lFlapIn">
             <div className={styles.flapIn} data-el="flapIn">
-              <Art src={art('env-flap-in.webp')} />
-              <div className={styles.flapGold} style={{ WebkitMaskImage: `url(${art('env-flap-gold.webp')})`, maskImage: `url(${art('env-flap-gold.webp')})` }}>
+              <Art src={envArt('env-flap-in.webp')} />
+              <div className={styles.flapGold} style={{ WebkitMaskImage: `url(${envArt('env-flap-gold.webp')})`, maskImage: `url(${envArt('env-flap-gold.webp')})` }}>
                 <div className={styles.flapGlint} data-el="flapGlint" />
                 {/* Reverence: one slow glint crosses the gold when the flap opens (this side shows from then on). */}
-                {mood === 'reverence' ? <div className={styles.flapSweep} /> : null}
+                {!isLetter && mood === 'reverence' ? <div className={styles.flapSweep} /> : null}
               </div>
             </div>
           </div>
@@ -415,6 +473,12 @@ export default function CardTable({
           <div className={`${styles.shadow} ${styles.cardShadow}`} data-el="cardShadowTight" />
           <div className={styles.card} data-el="card">
             <div className={styles.flip} data-el="flip">
+              {isLetter ? (
+                <>
+                  <LetterSheet className={styles.side} title={`Welcome to ${fromName}`}><SidePieces side="Front" /></LetterSheet>
+                  <LetterSheet className={`${styles.side} ${styles.sideBack}`} title={`Welcome to ${fromName}`}><SidePieces side="Back" /></LetterSheet>
+                </>
+              ) : (<>
               <PaperFront
                 design={card.design}
                 caption={card.caption}
@@ -432,20 +496,22 @@ export default function CardTable({
                 fromName={fromName}
                 year={card.year}
                 note={sealed ? '' : note}
+                signature={sealed ? null : card.signature}
                 className={`${styles.side} ${styles.sideBack}`}
                 style={{ position: 'absolute', inset: 0, aspectRatio: 'auto' }}
               >
                 <SidePieces side="Back" />
               </PaperBack>
+              </>)}
             </div>
           </div>
-          <div className={`${styles.layer} ${styles.lPocketShadow}`} data-el="lPocketShadow"><Art src={art('env-pocket-shadow.webp')} /></div>
-          <div className={`${styles.layer} ${styles.lPocket}`} data-el="lPocket"><Art src={art('env-pocket.webp')} /></div>
-          <div className={`${styles.layer} ${styles.lFlapShadow}`} data-el="lFlapShadow"><Art src={art('env-flap-shadow.webp')} /></div>
+          <div className={`${styles.layer} ${styles.lPocketShadow}`} data-el="lPocketShadow"><Art src={envArt('env-pocket-shadow.webp')} /></div>
+          <div className={`${styles.layer} ${styles.lPocket}`} data-el="lPocket"><Art src={envArt('env-pocket.webp')} /></div>
+          <div className={`${styles.layer} ${styles.lFlapShadow}`} data-el="lFlapShadow"><Art src={envArt('env-flap-shadow.webp')} /></div>
           <div className={`${styles.layer} ${styles.lFlapOut}`} data-el="lFlapOut">
             <div className={styles.flapOut} data-el="flapOut">
-              <Art src={art('env-flap-out.webp')} />
-              <Art className={styles.seal} data-el="seal" src={WAX_WHOLE} />
+              <Art src={envArt('env-flap-out.webp')} />
+              <Art className={styles.seal} data-el="seal" src={waxWhole} />
               {sendMoment ? (
                 <>
                   <div className={styles.sealRing} />
@@ -456,32 +522,35 @@ export default function CardTable({
           </div>
           {sendMoment && (sendMoment.count ?? 1) > 1 ? (
             <div className={`${styles.layer} ${styles.lStack}`} data-el="lStack">
-              <Art src={art('env-front.webp')} />
-              <Art src={art('env-front.webp')} />
+              <Art src={envArt('env-front.webp')} />
+              <Art src={envArt('env-front.webp')} />
             </div>
           ) : null}
           <div className={`${styles.layer} ${styles.lFront}`} data-el="lFront">
-            <Art src={art('env-front.webp')} />
+            <Art src={envArt('env-front.webp')} />
             <div className={styles.frontWords}>
-              <Art className={styles.stampImg} src={cardStampFile(card.number, card.design)} />
-              <div className={styles.pmBox}>
-                <Art src={art('postmark-blank.webp')} />
-                <svg viewBox="0 0 622 365" aria-hidden="true">
-                  <text x="165" y="161.6" textAnchor="middle" fontFamily="ui-serif, 'New York', Georgia, serif" fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 165 161.6)">{month}{date ? ` ${date}` : ''}</text>
-                  <text x="160.3" y="199.6" textAnchor="middle" fontFamily="ui-serif, 'New York', Georgia, serif" fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 160.3 199.6)">{card.year}</text>
-                </svg>
-              </div>
+              <Art className={styles.stampImg} src={stampSrc} />
+              {/* A letter Pantopus puts straight in the box has no postmark (and the postmark says Christmas). */}
+              {isLetter ? null : (
+                <div className={styles.pmBox}>
+                  <Art src={art('postmark-blank.webp')} />
+                  <svg viewBox="0 0 622 365" aria-hidden="true">
+                    <text x="165" y="161.6" textAnchor="middle" fontFamily="ui-serif, 'New York', Georgia, serif" fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 165 161.6)">{month}{date ? ` ${date}` : ''}</text>
+                    <text x="160.3" y="199.6" textAnchor="middle" fontFamily="ui-serif, 'New York', Georgia, serif" fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 160.3 199.6)">{card.year}</text>
+                  </svg>
+                </div>
+              )}
               <div className={styles.fromName} style={{ fontFamily: PEN, fontSize: `calc(var(--ew) * ${fitOnEnvelope(fromName, 0.05, 0.62).toFixed(4)})` }}>{fromName}</div>
               <div className={styles.toName} style={{ fontFamily: PEN, fontSize: `calc(var(--ew) * ${fitOnEnvelope(toName, 0.094, 0.78).toFixed(4)})` }}>{toName}</div>
               {card.sealed
                 ? <div className={styles.sealedMark}>Do not open<br />until Christmas</div>
-                : <div className={styles.kind}>Christmas card</div>}
+                : <div className={styles.kind}>{isLetter ? 'A letter for you' : 'Christmas card'}</div>}
             </div>
           </div>
         </div>
-        {mood === 'reverence' ? <div className={styles.candle} /> : null}
+        {!isLetter && mood === 'reverence' ? <div className={styles.candle} /> : null}
         <div className={styles.snow} data-el="snow" style={{ WebkitMaskImage: `url(${art('light.webp')})`, maskImage: `url(${art('light.webp')})` }}>
-          {mood !== 'reverence' ? SNOW.map((speck, i) => (
+          {!isLetter && mood !== 'reverence' ? SNOW.map((speck, i) => (
             <i
               key={i}
               className={styles.speck}
@@ -550,7 +619,7 @@ export default function CardTable({
                 data-testid={sendMoment ? 'cardTableSendStep' : undefined}
                 aria-hidden={!sendButton}
                 tabIndex={sendButton ? 0 : -1}
-                onClick={() => { setRefusal(null); engineRef.current?.primary(); }}
+                onClick={() => { setRefusal(null); if (isLetter && step === 'out') { letter?.onOut(); return; } engineRef.current?.primary(); }}
               >
                 {primary || 'Turn it over'}
               </button>
@@ -565,19 +634,36 @@ export default function CardTable({
                   ) : <div className={styles.hint}>{hint}</div>}
                 </div>
               ) : <div className={styles.hint}>{hint}</div>}
-              {/* Its room is kept while it can be offered, so the card never moves when it shows. */}
-              {sendBack ? (
-                <button
-                  type="button"
-                  className={`${styles.quiet} ${step === 'out' && backUp ? '' : styles.hidden}`}
-                  data-ui
-                  data-testid="cardTableSendBack"
-                  aria-hidden={!(step === 'out' && backUp)}
-                  tabIndex={step === 'out' && backUp ? 0 : -1}
-                  onClick={() => { setMenuOpen(false); sendBack.onSelect(); }}
-                >
-                  {sendBack.label}
-                </button>
+              {/* Its room is kept while it can be offered, so the card never moves when it shows. Once the card is turned
+                  over: "Send {first name} a card" and, quietly beside it, "Share this card" (design plan 11.1; the corner
+                  icon stays). */}
+              {sendBack || quietShare ? (
+                <div className={`${styles.quietRow} ${turnedOver ? '' : styles.hidden}`} aria-hidden={!turnedOver}>
+                  {sendBack ? (
+                    <button
+                      type="button"
+                      className={styles.quiet}
+                      data-ui
+                      data-testid="cardTableSendBack"
+                      tabIndex={turnedOver ? 0 : -1}
+                      onClick={() => { setMenuOpen(false); sendBack.onSelect(); }}
+                    >
+                      {sendBack.label}
+                    </button>
+                  ) : null}
+                  {quietShare ? (
+                    <button
+                      type="button"
+                      className={styles.quiet}
+                      data-ui
+                      data-testid="cardTableShareQuiet"
+                      tabIndex={turnedOver ? 0 : -1}
+                      onClick={() => { setMenuOpen(false); onShare?.(); }}
+                    >
+                      Share this card
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>

@@ -17,12 +17,17 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -40,6 +45,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.zIndex
 import app.pantopus.android.ui.theme.PantopusColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.abs
@@ -95,6 +101,7 @@ internal fun CardTableScene(
         EnvelopeOver(state, art, geometry)
         EnvelopeFront(state, art, faceArt, geometry)
         TableLight(state, art)
+        MoodLight(state, art, on = state.moodsMove)
     }
 }
 
@@ -134,6 +141,27 @@ private fun TableCloth(
                         drawCover(canvas.nativeCanvas, art.cloth, RectF(-over, -over, size.width + over, size.height + over), paint)
                     }
                 },
+    )
+}
+
+/** Where the window's light lies over a screen of [width] × [height], slid by the light (about -1 to 1). */
+internal fun roomLightRect(
+    width: Float,
+    height: Float,
+    density: Float,
+    moveX: Float,
+    moveY: Float,
+): RectF {
+    val over = 40f * density
+    val shiftX = moveX * 22f * density
+    val shiftY = moveY * 22f * density
+    val grownX = (width + over * 2f) * 0.02f
+    val grownY = (height + over * 2f) * 0.02f
+    return RectF(
+        -over - grownX + shiftX,
+        -over - grownY + shiftY,
+        width + over + grownX + shiftX,
+        height + over + grownY + shiftY,
     )
 }
 
@@ -231,6 +259,19 @@ private fun FlapLining(
     g: TableGeometry,
 ) {
     val paints = remember { GlintPaints() }
+    // Reverence (plan Part 7): one slow glint crosses the gold lining as the flap opens, and rests where the light holds it.
+    val sweep = remember(state) { Animatable(0f) }
+    if (state.mood == CardMood.Reverence && state.moodsMove) {
+        LaunchedEffect(state) {
+            // Each time the flap opens ("Open it again" too); a card already out begins with it open.
+            while (true) {
+                snapshotFlow { state.flapAngle > 150f }.first { it }
+                sweep.snapTo(-2.4f)
+                sweep.animateTo(0f, tween(1800, easing = LinearOutSlowInEasing))
+                snapshotFlow { state.flapAngle < 120f }.first { it }
+            }
+        }
+    }
     Box(
         modifier =
             Modifier
@@ -249,7 +290,7 @@ private fun FlapLining(
                     drawIntoCanvas { canvas ->
                         val native = canvas.nativeCanvas
                         native.drawBitmap(art.flapIn, null, RectF(0f, 0f, size.width, size.height), paints.shaded(shade))
-                        drawGlint(native, art.flapGold, size.width, size.height, state.lightX.x, state.lightY.x, paints)
+                        drawGlint(native, art.flapGold, size.width, size.height, state.lightX.x + sweep.value, state.lightY.x, paints)
                     }
                 },
     )
@@ -576,7 +617,7 @@ private fun drawPostage(
     paints: EnvelopePaints,
     reveal: AddressReveal,
 ) {
-    art.stamps[card.stamp]?.takeIf { reveal.stamp > 0f }?.let { stamp ->
+    cardStamp(art.stamps, art.star, card.stamp, card.number, card.design)?.takeIf { reveal.stamp > 0f }?.let { stamp ->
         val left = width * 0.755f
         val top = height * 0.0345f
         val stampWidth = width * 0.2017f
@@ -842,24 +883,10 @@ internal fun RoomLight(
                     grain.xfermode = PorterDuffXfermode(PorterDuff.Mode.OVERLAY)
                     grain.alpha = (0.36f * 255f).toInt()
                     onDrawBehind {
-                        val over = 40f * density
-                        val shiftX = moveX() * 22f * density
-                        val shiftY = moveY() * 22f * density
-                        val grownX = (size.width + over * 2f) * 0.02f
-                        val grownY = (size.height + over * 2f) * 0.02f
                         drawIntoCanvas { canvas ->
                             val native = canvas.nativeCanvas
-                            native.drawBitmap(
-                                art.light,
-                                null,
-                                RectF(
-                                    -over - grownX + shiftX,
-                                    -over - grownY + shiftY,
-                                    size.width + over + grownX + shiftX,
-                                    size.height + over + grownY + shiftY,
-                                ),
-                                lightPaint,
-                            )
+                            val light = roomLightRect(size.width, size.height, density, moveX(), moveY())
+                            native.drawBitmap(art.light, null, light, lightPaint)
                             native.drawRect(0f, 0f, size.width, size.height, vignette)
                             native.drawRect(0f, 0f, size.width, size.height, grain)
                         }

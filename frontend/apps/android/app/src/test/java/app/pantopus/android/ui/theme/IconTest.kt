@@ -335,6 +335,10 @@ class IconTest {
             "ball",
             "coffee",
             "book-open",
+            // Pantopus Moments: the tab and a video's sound toggle.
+            "circle-dashed",
+            "volume-2",
+            "volume-x",
         )
 
     @Test

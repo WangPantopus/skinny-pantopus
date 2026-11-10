@@ -14,15 +14,17 @@ import { createPortal } from 'react-dom';
 import * as api from '@pantopus/api';
 import { APP_WEB_URL } from '@pantopus/utils';
 import { firstNameOf } from './cardArt';
-import { drawSharePicture, type ShareDetails, type ShareFormat } from './sharePicture';
+import { drawSharePicture, drawShareSet, type ShareDetails, type ShareFormat } from './sharePicture';
 import styles from './CardShareSheet.module.css';
 
 type Picture = { url: string; file: File };
-type Action = 'instagram' | 'facebook' | 'email' | 'link' | 'save' | 'more';
+type Action = 'instagram' | 'facebook' | 'email' | 'link' | 'save' | 'more' | 'all';
 
 const SIZES: { format: ShareFormat; label: string }[] = [
   { format: 'story', label: 'Story' },
   { format: 'post', label: 'Post' },
+  // The card lying open, picture and note side by side (design plan 11.2).
+  { format: 'open', label: 'Open card' },
   { format: 'link', label: 'Link preview' },
 ];
 
@@ -33,9 +35,10 @@ const ICONS: Record<Action, React.ReactNode> = {
   link: <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />,
   save: <path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 19.5h14" />,
   more: <path d="M12 15V4M8 7.5L12 3.5l4 4M5.5 12.5V19a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-6.5" />,
+  all: <><rect x="7.5" y="3.5" width="12" height="13" rx="1.5" /><path d="M4.5 7.5v11a2 2 0 0 0 2 2h9" /></>,
 };
 
-const ACTION_LABELS: Record<Action, string> = { instagram: 'Instagram', facebook: 'Facebook', email: 'Email', link: 'Copy link', save: 'Save', more: 'More' };
+const ACTION_LABELS: Record<Action, string> = { instagram: 'Instagram', facebook: 'Facebook', email: 'Email', link: 'Copy link', save: 'Save', more: 'More', all: 'Share all' };
 
 /** The public page a shared card leads to. A sealed card leads to all the cards: its link mustn't give its picture away. */
 export function cardPageLink(slug: string | null | undefined, sealed: boolean, inviteCode: string | null): string {
@@ -151,8 +154,11 @@ export default function CardShareSheet({
     return () => document.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  const count = useCallback((kind: Action) => {
-    api.mailbox.recordHolidayCardShare({ design: card.design, kind, format, with_note: noteInPicture }).catch(() => {});
+  // The founder's count knows Story, Post and Link and six kinds (no server change in Part 11): an Open card counts as
+  // a Post, and Share all as the share sheet (More) or Save.
+  const count = useCallback((kind: Action, sharedAll = false) => {
+    const counted = kind === 'all' ? (sharedAll ? 'more' : 'save') : kind;
+    api.mailbox.recordHolidayCardShare({ design: card.design, kind: counted, format: format === 'open' ? 'post' : format, with_note: noteInPicture }).catch(() => {});
   }, [card.design, format, noteInPicture]);
 
   const canSheet = Boolean(picture) && inTheHand() && Boolean(picture && navigator.canShare?.({ files: [picture.file] }));
@@ -182,8 +188,43 @@ export default function CardShareSheet({
     }
   };
 
+  /**
+   * Share all (design plan 11.3): the envelope, the card and (only with the note on) the note page, together where the
+   * browser's share takes several files, else saved one by one. A sealed card is its sealed picture only.
+   */
+  const shareAll = async () => {
+    setSaid('Drawing the pictures…');
+    let blobs: Blob[];
+    try {
+      blobs = await drawShareSet(details, hasNote && withNote);
+    } catch {
+      setSaid('Couldn\'t draw the pictures. Check your connection and try again.');
+      return;
+    }
+    const files = blobs.map((blob, i) => new File([blob], `pantopus-christmas-card-${i + 1}.jpg`, { type: 'image/jpeg' }));
+    if (inTheHand() && navigator.canShare?.({ files })) {
+      try {
+        await navigator.share({ files, title: words.subject, text: words.body });
+        count('all', true);
+        setSaid('');
+        return;
+      } catch (error) {
+        if ((error as { name?: string } | null)?.name === 'AbortError') { setSaid(''); return; }
+      }
+    }
+    for (const [i, file] of files.entries()) {
+      const url = URL.createObjectURL(file);
+      clickLink({ href: url, download: file.name });
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      if (i < files.length - 1) await new Promise((done) => { window.setTimeout(done, 400); });
+    }
+    count('all');
+    setSaid(files.length === 1 ? 'Saved to your downloads.' : `Saved ${files.length} pictures to your downloads.`);
+  };
+
   const act = (action: Action) => {
     setSaid('');
+    if (action === 'all') { void shareAll(); return; }
     if (action === 'link') { void copyLink(); return; }
     if (action === 'facebook' && format === 'link') {
       count('facebook');
@@ -214,9 +255,10 @@ export default function CardShareSheet({
     setSaid(`Saved to your downloads. Post it on ${action === 'instagram' ? 'Instagram' : 'Facebook'} from there.`);
   };
 
-  const needsPicture = (action: Action) => action !== 'link' && !(action === 'facebook' && format === 'link');
+  const needsPicture = (action: Action) => action !== 'link' && action !== 'all' && !(action === 'facebook' && format === 'link');
   const actions: Action[] = ['instagram', 'facebook', 'email', 'link', 'save'];
   if (canSheet) actions.push('more');
+  actions.push('all');
   const shown = failed ? actions.filter((action) => !needsPicture(action)) : actions;
 
   return createPortal(

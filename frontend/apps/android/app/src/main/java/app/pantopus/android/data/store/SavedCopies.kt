@@ -40,9 +40,10 @@ private const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
  * The envelope's format. A file written in another format is deleted instead of read. 3: Place copies keep their Ballot
  * fields; a schema-2 copy lost them, and revalidating it with its ETag (a 304) would keep showing it without them.
  * 4: a chat copy's messages keep their sender's photo (`avatarUrl`); a schema-3 copy has none, and chat copies survive
- * app updates, so it would keep showing initials beside the messages.
+ * app updates, so it would keep showing initials beside the messages. 5: a chat copy's messages and conversation rows keep
+ * the Moment a reply answers (`moment`, `last_message_moment`); a schema-4 copy has none, so a reply would show no quote.
  */
-private const val SCHEMA = 4
+private const val SCHEMA = 5
 
 /**
  * The screens' store on the phone (Instant Screens contract §6 "Saved copy", §5 "At rest on Android"): one file per

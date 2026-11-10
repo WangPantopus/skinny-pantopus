@@ -10,6 +10,8 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { cardTrimmedPicture, firstNameOf, isVerseReference, PAPER_SERIF, postmarkDay, seededRandom } from './cardArt';
 import { cardHand, cardPen } from './cardFont';
+import { SignatureInk, drawableSignature } from './cardSignature';
+import type { CardSignature } from '@pantopus/api';
 import styles from './CardPaper.module.css';
 
 const SERIF_VAR = { '--card-serif': PAPER_SERIF } as CSSProperties;
@@ -141,6 +143,7 @@ export function PaperBack({
   year,
   note,
   writing,
+  signature,
   className = '',
   style,
   children,
@@ -151,6 +154,8 @@ export function PaperBack({
   fromName: string;
   year: number;
   note?: string;
+  /** Signed beside FROM (design plan 8.2): drawn in the pen's ink in place of the typed first name. */
+  signature?: CardSignature | null;
   /** The writing box while it's being written, in place of the note. */
   writing?: ReactNode;
   className?: string;
@@ -159,6 +164,7 @@ export function PaperBack({
 }) {
   const text = note ?? '';
   const fit = useNoteFit(text);
+  const signed = drawableSignature(signature);
   const lines = useMemo(() => penWords(text, number), [text, number]);
   return (
     <div className={`${styles.face} ${className}`} style={{ ...SERIF_VAR, ...style }}>
@@ -177,7 +183,15 @@ export function PaperBack({
             </div>
           </>
         )}
-        <div className={styles.from}><b>FROM</b><span style={{ fontFamily: PEN_STACK }}>{firstNameOf(fromName)}</span></div>
+        <div className={styles.from}>
+          <b>FROM</b>
+          {signed ? (
+            <span className={styles.signed} data-testid="cardSignature">
+              <span className={styles.srOnly}>{firstNameOf(fromName)}</span>
+              <SignatureInk signature={signed} className={styles.signInk} />
+            </span>
+          ) : <span style={{ fontFamily: PEN_STACK }}>{firstNameOf(fromName)}</span>}
+        </div>
         <div className={styles.foot}>PANTOPUS POST · CHRISTMAS {year}</div>
         {/* Full grain under the table's light; away from it, lighter, so the back reads as the same paper. */}
         <div className={`${styles.grain} ${children ? '' : styles.grainSoft}`} />

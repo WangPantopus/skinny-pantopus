@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const multer = require('multer');
 const router = express.Router();
 const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -37,6 +38,7 @@ const { localDisplayNames } = require('../utils/identityProfiles');
 const { maskContact } = require('../jobs/mailEscrowExpiry');
 // Christmas cards (launch key holiday_cards): the season's pictures, arrivals and the sealed note.
 const holidayCards = require('../services/holidayCards');
+const cardMedia = require('../services/holidayCardMedia');
 const mailStamps = require('../services/mailStamps');
 const { personFindableBy } = require('./mailCompose');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
@@ -1728,6 +1730,11 @@ router.get('/campaigns', verifyToken, async (req, res) => {
 
 const CARD_ARRIVALS = [...new Set([...holidayCards.PERSON_ARRIVALS, ...holidayCards.EMAIL_ARRIVALS])];
 const CARD_SIGNATURE_FIELD = Joi.object().unknown(true).allow(null);
+const CARD_MEDIA_FIELDS = {
+  photo: Joi.string().uuid().allow(null),
+  photo_alt: Joi.string().allow('', null).max(800),
+  voice: Joi.string().uuid().allow(null),
+};
 const sendCardSchema = Joi.object({
   use_stamp: Joi.boolean(),
   design: Joi.string().max(64).required(),
@@ -1744,7 +1751,10 @@ const sendCardSchema = Joi.object({
   // The sender's signature beside FROM (launch key card_table): { w: 400, h: 100, strokes }. Only its shape is checked
   // here, so a refused one is never echoed or logged; checkCardSender checks the strokes (holidayCards.cleanSignature).
   signature: CARD_SIGNATURE_FIELD,
-});
+  // The card's own photo and voice (launch key holiday_card_memories): file ids from POST /cards/media, and the photo's
+  // description for screen readers. A card with them always carries its request ID, which ties them to the card.
+  ...CARD_MEDIA_FIELDS,
+}).with('photo', 'request_id').with('voice', 'request_id');
 
 // A list (POST /cards/batch and its look): the same picture, note and choice of arrival for up to 20 people or
 // addresses, each with a request ID of its own. No links: a link is one card for whoever opens it.
@@ -1764,6 +1774,8 @@ const cardListSchema = Joi.object({
   })).min(1).max(CARD_LIST_MAX).unique(sameCardRecipient).unique('request_id').required(),
   // One signature for the whole list, as one note (sendCardSchema).
   signature: CARD_SIGNATURE_FIELD,
+  // Accepted only to be refused clearly (CARD_MEDIA_ONE_PERSON): a photo or voice goes on a card to one person.
+  ...CARD_MEDIA_FIELDS,
 });
 
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
@@ -1820,6 +1832,8 @@ const cardRequestDigest = (body) => holidayCards.requestDigest({
   toUserId: body.to.user_id || null,
   // A card by link adds to the digest only here, so a person's and an email's stay what they were.
   toEmail: body.to.user_id ? null : (body.to.link ? 'link' : normalizeEscrowContact(body.to.email)),
+  // The card's own photo and voice (holiday_card_memories); none leaves the digest as it was.
+  media: cardMedia.digestMedia(body),
 });
 // A card by link's own link. Throws when the server has no secret to make it with (nothing is stored then).
 const cardLinkOf = (mailId) => {
@@ -1961,6 +1975,16 @@ async function checkCardSender(senderId, body, now) {
     return refuse(400, 'Sign a little more simply, or leave your name typed.', signed.refusal);
   }
   if (signed.refusal) return refuse(400, 'Your signature didn’t come through. Sign again, or leave your name typed.', signed.refusal);
+  // The card's own photo and voice (launch key holiday_card_memories): the sender's own uploads, within their 72 hours
+  // and not on another card. A send that has them while the key is off is refused, never sent without them.
+  let media = { media: null, files: [] };
+  try {
+    media = await cardMedia.checkRefs(senderId, body, {
+      rowId: body.request_id ? holidayCards.requestRowId(senderId, body.request_id) : null, now });
+  } catch (mediaErr) {
+    if (mediaErr.refusal) return refuse(mediaErr.status, mediaErr.message, mediaErr.code);
+    throw mediaErr;
+  }
 
   // A person sends Christmas cards; a business account doesn't.
   const { data: sender, error: senderError } = await supabaseAdmin.from('User')
@@ -1975,14 +1999,14 @@ async function checkCardSender(senderId, body, now) {
   if (!mailStamps.enabled(senderId) && (await cardsSentToday(senderId, senderZone, now)).length) {
     return refuse(429, 'You’ve sent today’s card. You can send another tomorrow.', 'CARD_DAILY_LIMIT');
   }
-  return { design, message, sender, senderZone, signature: signed.signature };
+  return { design, message, sender, senderZone, signature: signed.signature, media: media.media, mediaFiles: media.files };
 }
 
 // The checks of who it goes to: the person (or the address), when it can arrive by their clock, and the email limits,
 // counting `earlierAddresses` (those before it on the same list) as sent. `from` is what checkCardSender answered.
 async function checkCardRecipient(senderId, body, now, from, { earlierAddresses = [] } = {}) {
   const refuse = refuseCard;
-  const { design, message, sender, senderZone, signature } = from;
+  const { design, message, sender, senderZone, signature, media, mediaFiles } = from;
   const { arrival } = body;
   const byLink = body.to.link === true;
   const toUserId = body.to.user_id || null;
@@ -2004,7 +2028,7 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
     Object.assign(card, { sealed_until: timing.sealed_until, take_back_until: timing.take_back_until,
       arrives_on: mailDelivery.localDate(new Date(timing.delivered_at), recipientZone),
       to_name: people.get(String(toUserId))?.displayName || null });
-    return { design, message, signature, arrival, senderZone, toUserId, toEmail: null, card, zone: recipientZone,
+    return { design, message, signature, media, mediaFiles, arrival, senderZone, toUserId, toEmail: null, card, zone: recipientZone,
       senderDisplay: people.get(String(senderId))?.displayName || 'Someone',
       delivery: { delivered_at: timing.delivered_at, special_delivery: false }, escrowExpiresAt: null };
   }
@@ -2022,7 +2046,7 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
   // Sealed by email or link: until Christmas morning where the sender is, set again where they live once they open it.
   Object.assign(card, byLink ? { by_link: true } : { to_name: maskContact(toEmail) },
     { sealed_until: arrival === 'sealed_christmas' ? holidayCards.christmasMorning(senderZone).toISOString() : null });
-  return { design, message, signature, arrival, senderZone, toUserId: null, toEmail, card, zone: senderZone,
+  return { design, message, signature, media, mediaFiles, arrival, senderZone, toUserId: null, toEmail, card, zone: senderZone,
     senderDisplay: (await loadChatPeople([senderId])).get(String(senderId))?.displayName || 'Someone',
     delivery: { delivered_at: now.toISOString(), special_delivery: false },
     escrowExpiresAt: new Date(now.getTime() + ESCROW_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString() };
@@ -2056,6 +2080,8 @@ router.get('/cards', verifyToken, async (req, res) => {
       // server doesn't keep one, so the apps set the typed name.
       ...(cardTableOn() ? { signature: { w: holidayCards.SIGNATURE_BOX.w, h: holidayCards.SIGNATURE_BOX.h,
         max_bytes: holidayCards.SIGNATURE_MAX_BYTES } } : {}),
+      // Which of a card's own photo and voice can be added now (launch key holiday_card_memories), and their limits.
+      media: cardMedia.controls(),
       designs: holidayCards.DESIGNS,
       collections: holidayCards.COLLECTIONS,
       arrivals: { person: arrivals(false), email: arrivals(true) },
@@ -2118,6 +2144,85 @@ router.post('/cards/shared', verifyToken, cardSharedLimiter, validate(cardShared
   return res.status(204).end();
 });
 
+// ---- A card's own photo and voice (launch key holiday_card_memories; services/holidayCardMedia) ----
+// Added as soon as it's chosen, one at a time, each its own private File and S3 object. A send names them by id
+// (POST /cards `photo`, `voice`); a file id never opens anything by itself.
+
+const cardMediaLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => `card-media-${req.user?.id}`,
+  message: { error: 'Too many at once. Try again later.', code: 'CARD_MEDIA_LIMIT' },
+});
+// Held in memory: a photo is at most 10 MiB as it comes, and is read whole to be made into the card's copy.
+const cardMediaParts = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: cardMedia.PHOTO.max_bytes, files: 1, fields: 4, parts: 6, fieldSize: 256 },
+}).single('file');
+const cardMediaInvalid = (res) => res.status(400)
+  .json({ error: 'Send one photo or voice greeting as "file", with its kind.', code: 'CARD_MEDIA_INVALID' });
+const cardMediaTooLarge = (res, kind) => (kind === 'voice'
+  ? res.status(413).json({ error: 'This recording is too large. Record a shorter greeting.', code: 'CARD_VOICE_TOO_LARGE' })
+  : res.status(413).json({ error: cardMedia.photoTooLarge().message, code: 'CARD_PHOTO_TOO_LARGE' }));
+
+/**
+ * POST /api/mailbox/cards/media  multipart: `file` and `kind` (photo | voice)
+ * Adds a photo (or, once voice ships, a voice greeting) for a card the sender is writing. A photo is stored as the card
+ * keeps it: upright, at most 1600 px on its long side, a JPEG with no metadata (the original is never kept). Answers 201
+ * { media, expires_at }: `media` as a send names it (file_id, kind, mime_type, size, width and height, or duration_ms),
+ * sendable by its uploader until `expires_at` (72 hours). Refusals: 415 CARD_PHOTO_UNREADABLE / CARD_PHOTO_NOT_STILL, 413
+ * CARD_PHOTO_TOO_LARGE, 403 CARD_MEDIA_OFF (voice before it ships), 503 CARD_MEDIA_UNAVAILABLE.
+ */
+router.post('/cards/media', verifyToken, cardMediaLimiter, (req, res, next) => {
+  if (!cardMedia.memoriesOn()) return sendCardsOff(res);
+  return cardMediaParts(req, res, (error) => {
+    if (!error) return next();
+    if (error.code === 'LIMIT_FILE_SIZE') return cardMediaTooLarge(res, req.body?.kind);
+    return cardMediaInvalid(res);
+  });
+}, async (req, res) => {
+  const userId = req.user.id;
+  const kind = String(req.body?.kind || '');
+  if (!['photo', 'voice'].includes(kind) || !req.file?.buffer?.length) return cardMediaInvalid(res);
+  try {
+    if (kind === 'voice') {
+      if (!cardMedia.voiceOn()) {
+        return res.status(403).json({ error: 'Voice greetings on cards aren’t open yet.', code: 'CARD_MEDIA_OFF' });
+      }
+      return cardMediaInvalid(res);
+    }
+    const photo = await cardMedia.cardPhoto(req.file.buffer, req.file.mimetype);
+    const { file } = await cardMedia.storeUpload({ userId, kind, buffer: photo.buffer, mimeType: 'image/jpeg',
+      facts: { width: photo.width, height: photo.height } });
+    logMailEvent('holiday_card_media_added', null, userId, { kind });
+    return res.status(201).json({ media: cardMedia.mediaRef(file), expires_at: cardMedia.expiresAt(file) });
+  } catch (err) {
+    if (err.refusal) return res.status(err.status).json({ error: err.message, code: err.code });
+    logger.error('Card media upload error', { error: err.message, userId });
+    return res.status(503).json({ error: 'Couldn’t add it just now. Try again in a moment.', code: 'CARD_MEDIA_UNAVAILABLE' });
+  }
+});
+
+/**
+ * GET /api/mailbox/cards/media/:fileId
+ * The uploader's own photo or voice, for Write on the back and Look it over: its bytes, private and no-store (a voice
+ * also by byte range). Anyone else: 404. Once sent, the same bytes also open from Sent (GET /sent/:id/card-media/:fileId).
+ */
+router.get('/cards/media/:fileId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (!cardMedia.memoriesOn()) return sendCardsOff(res);
+  try {
+    const file = await cardMedia.ownFile(req.params.fileId, req.user.id);
+    return file ? await cardMedia.send(req, res, file) : cardMedia.notFound(res);
+  } catch (err) {
+    logger.error('Card media preview error', { error: err.message, userId: req.user.id });
+    if (!res.headersSent) return res.status(503).json({ error: 'Couldn’t open it just now. Try again in a moment.', code: 'CARD_MEDIA_UNAVAILABLE' });
+    return undefined;
+  }
+});
+
 /**
  * GET /api/mailbox/cards/arrivals?to=<user_id>
  * When a card to this person can come, by their clock rather than the sender's: the arrivals open for them and the day
@@ -2153,7 +2258,7 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
  * with others on one list (POST /cards/batch). Throws when it can't tell what became of the card.
  */
 async function storeCard({ senderId, checked, requestId, rowId, digest, now, listSize = null }) {
-  const { design, message, signature, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
+  const { design, message, signature, media, mediaFiles = [], arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
   const postage = mailStamps.enabled(senderId);
   if (requestId) card.request = { id: requestId, digest, ...(postage ? { settled_at: now.toISOString() } : {}) };
   if (postage) card.postage_v1 = true;
@@ -2164,7 +2269,21 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
     ? { token: byLink ? cardLinkOf(linkRowId).token : crypto.randomBytes(32).toString('hex'), expiresAt: checked.escrowExpiresAt }
     : null;
 
-  // The note and the signature live only in the card's private stored copy, never in the Mail row (services/holidayCards).
+  // A photo or voice is tied to the card's id (from its request ID) before the card is stored, so its routes can tell
+  // whose it is; a send that loses one to another card meanwhile is refused (services/holidayCardMedia).
+  if (mediaFiles.length) {
+    try {
+      await cardMedia.bind(rowId, mediaFiles);
+    } catch (bindErr) {
+      if (bindErr.refusal) return { status: bindErr.status, body: { error: bindErr.message, code: bindErr.code } };
+      logger.warn('Card media not tied', { senderId, error: bindErr.message });
+      return cardUnavailable();
+    }
+  }
+  const untie = () => (mediaFiles.length ? cardMedia.unbind(rowId, mediaFiles) : null);
+
+  // The note, the signature and the card's own photo and voice live only in the card's private stored copy, never in
+  // the Mail row (services/holidayCards).
   let objectResult;
   try {
     objectResult = await createMailObject({ senderId, objectPayload: {
@@ -2173,11 +2292,12 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
       recipient: toUserId
         ? { mode: 'user', userId: toUserId, deliveryTargetType: 'user', deliveryTargetId: toUserId }
         : { mode: 'contact' },
-      body: { content: message, payload: { card, ...(signature ? { signature } : {}) } },
+      body: { content: message, payload: { card, ...(signature ? { signature } : {}), ...(media ? { media } : {}) } },
       createdAt: now.toISOString(),
     } });
   } catch (objectErr) {
     logger.warn('Card copy not stored', { senderId, error: objectErr.message });
+    await untie();
     return cardUnavailable();
   }
 
@@ -2209,6 +2329,7 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
       mail = found;
     } else {
       await removeCardObject(objectResult.objectId);
+      if (!found) await untie();
       if (['STAMPS_REQUIRED', 'STAMP_DAILY_LIMIT'].includes(insertError?.message)) {
         const needsStamp = insertError.message === 'STAMPS_REQUIRED';
         return { status: needsStamp ? 402 : 429, body: {
@@ -2239,7 +2360,10 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
     }
     return cardUnavailable();
   }
-  if (settled.outcome === 'gone') return cardDailyLimit();
+  if (settled.outcome === 'gone') {
+    await untie();
+    return cardDailyLimit();
+  }
   if (settled.outcome === 'taken_back') return cardTakenBack(settled.mail);
   mail = settled.mail;
 
@@ -2259,7 +2383,8 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
   }
 
   const onList = listSize ? { listSize } : {};
-  logMailEvent('holiday_card_sent', mail.id, senderId, { design: design.id, arrival, byEmail: Boolean(toEmail), ...(byLink ? { byLink } : {}), ...onList });
+  const withMedia = media ? { withPhoto: Boolean(media.photo), withVoice: Boolean(media.voice) } : {};
+  logMailEvent('holiday_card_sent', mail.id, senderId, { design: design.id, arrival, byEmail: Boolean(toEmail), ...(byLink ? { byLink } : {}), ...onList, ...withMedia });
   logger.info('Christmas card sent', { mailId: mail.id, senderId, arrival, byEmail: Boolean(toEmail), byLink, ...onList });
   return { status: 201, body: cardAnswer(mail, now) };
 }
@@ -2306,7 +2431,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
 // What Look it over shows of a card that passed checkCard: the card as it will lie in their Mailbox, when it comes and
 // opens, and by email or link the words and page they get (POST /cards/preview; a list's look shows its first card).
 async function cardLook(senderId, checked, now) {
-  const { message, signature, arrival, toEmail, card, zone, senderDisplay, delivery } = checked;
+  const { message, signature, media, arrival, toEmail, card, zone, senderDisplay, delivery } = checked;
   const sealed = arrival === 'sealed_christmas';
   const arrivesOn = card.arrives_on || null;
   const opensOn = card.sealed_until ? mailDelivery.localDate(new Date(card.sealed_until), zone) : null;
@@ -2323,8 +2448,10 @@ async function cardLook(senderId, checked, now) {
       sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.SUBJECT, content: message,
       created_at: now.toISOString(), delivered_at: toEmail || byLink ? null : delivery.delivered_at,
       postmark: { town: null, date: mailDelivery.localDate(now, zone) },
-      // Their own signature shows here as their own note does, sealed or not.
-      card: { ...holidayCards.cardView({ mail_extracted: { card } }, now), signature: signature || null },
+      // Their own signature, photo and voice show here as their own note does, sealed or not, never covered; the photo
+      // and voice open through GET /cards/media/:fileId.
+      card: { ...holidayCards.cardView({ mail_extracted: { card } }, now), signature: signature || null,
+        ...holidayCards.mediaView({ card_media: media || null, card_photo_covered: false }, false) },
     },
     arrives_on: arrivesOn,
     opens_on: opensOn,
@@ -2378,6 +2505,10 @@ function listArrival(arrival, byEmail) {
   if (byEmail) return { next_morning: 'now', christmas_morning: 'sealed_christmas' }[arrival] || arrival;
   return arrival === 'now' ? 'next_morning' : arrival;
 }
+
+// A card's own photo and voice go on a card to one person: each is tied to one card (services/holidayCardMedia).
+const cardMediaOnePerson = () => ({ status: 400, body: { code: 'CARD_MEDIA_ONE_PERSON',
+  error: 'A photo or voice greeting goes on a card to one person. Send this card on its own, or remove them.' } });
 
 // A single send's check of an address (sendCardSchema), run on a list card by card.
 const cardEmailSchema = Joi.string().email().max(320);
@@ -2463,6 +2594,7 @@ router.post('/cards/batch/preview', verifyToken, validate(cardListSchema), async
   const senderId = req.user.id;
   // Without digital stamps it's one card a day: there's no list.
   if (!mailStamps.enabled(senderId)) return sendCardsOff(res);
+  if (req.body.photo || req.body.voice) return reply(res, cardMediaOnePerson());
   try {
     const now = new Date();
     const list = await checkCardList(senderId, req.body, now);
@@ -2505,6 +2637,7 @@ router.post('/cards/batch', verifyToken, validate(cardListSchema), async (req, r
   if (!cardsOn()) return sendCardsOff(res);
   const senderId = req.user.id;
   if (!mailStamps.enabled(senderId)) return sendCardsOff(res);
+  if (req.body.photo || req.body.voice) return reply(res, cardMediaOnePerson());
   try {
     const now = new Date();
     const list = await checkCardList(senderId, req.body, now);
@@ -2637,6 +2770,8 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
       if (!removed?.length) return tooLate(mail);
       await removeCardObject(mail.object_id);
     }
+    // Its own photo and voice go with it: nobody will open them (services/holidayCardMedia).
+    await cardMedia.removeForMail(id);
     logger.info('Christmas card taken back', { mailId: id, senderId });
     return res.json({ taken_back: true });
   } catch (err) {
@@ -2744,14 +2879,40 @@ router.get('/sent/:id', verifyToken, async (req, res) => {
     const piece = holidayCards.sentPiece(mail, { ...context, now });
     return res.json({ item: {
       ...piece,
-      // Their own signature, like their own note, also while it's sealed for the other person.
-      ...(holidayCards.isCard(mail) ? { card: { ...piece.card, signature: holidayCards.signatureOf(payload) } } : {}),
+      // Their own signature, photo and voice, like their own note, also while it's sealed for the other person, and never
+      // covered; the photo and voice open through GET /sent/:id/card-media/:fileId.
+      ...(holidayCards.isCard(mail) ? { card: { ...piece.card, signature: holidayCards.signatureOf(payload),
+        ...holidayCards.mediaView({ card_media: holidayCards.mediaOf(payload), card_photo_covered: false }, false) } } : {}),
       note: holidayCards.isCard(mail) ? (payload?.body?.content || '') : (mailObjects.textContent(content, format) || ''),
       trail: holidayCards.sentTrail(mail, { ...context, now }),
     } });
   } catch (err) {
     logger.error('Sent card read error', { error: err.message, mailId: id, userId });
     return res.status(503).json({ error: 'Couldn’t open your mail just now. Try again in a moment.', code: 'MAIL_UNAVAILABLE' });
+  }
+});
+
+/**
+ * GET /api/mailbox/sent/:id/card-media/:fileId
+ * The photo or voice on a card the caller sent (Sent and Look it over): its bytes, private and no-store, also while it
+ * waits or is sealed for the other person. Never covered. Anyone else, or a card taken back: 404. Needs only `mailbox`.
+ */
+router.get('/sent/:id/card-media/:fileId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (!sentOn()) return sendCardsOff(res);
+  const userId = req.user.id;
+  const { id } = req.params;
+  if (!UUID_REGEX.test(id)) return cardMedia.notFound(res);
+  try {
+    const { data: mail, error } = await holidayCards.sentCards(userId, 'id, mail_extracted').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!mail || !holidayCards.isCard(mail)) return cardMedia.notFound(res);
+    const file = await cardMedia.boundFile(req.params.fileId, mail.id);
+    return file ? await cardMedia.send(req, res, file) : cardMedia.notFound(res);
+  } catch (err) {
+    logger.error('Sent card media error', { error: err.message, mailId: id, userId });
+    if (!res.headersSent) return res.status(503).json({ error: 'Couldn’t open it just now. Try again in a moment.', code: 'CARD_MEDIA_UNAVAILABLE' });
+    return undefined;
   }
 });
 
@@ -2809,8 +2970,13 @@ router.get('/:id', verifyToken, async (req, res) => {
           if (typeof bodyContent === 'string' && bodyContent.length > 0) {
             mail.content = bodyContent;
           }
-          // A card's signature, for its card view (mailPiece.present reads it there and drops this field).
-          if (holidayCards.isCard(mail)) mail.card_signature = holidayCards.signatureOf(objectData.payload);
+          // A card's signature, photo and voice, for its card view (mailPiece.present reads them there and drops these
+          // fields). The photo stays covered unless the reader is the sender's connection (memories contract section 10).
+          if (holidayCards.isCard(mail)) {
+            mail.card_signature = holidayCards.signatureOf(objectData.payload);
+            mail.card_media = holidayCards.mediaOf(objectData.payload);
+            if (mail.card_media?.photo) mail.card_photo_covered = await cardMedia.photoCovered(userId, mail.sender_user_id);
+          }
           if ((!mail.attachments || mail.attachments.length === 0) && Array.isArray(objectAttachments)) {
             mail.attachments = objectAttachments;
           }
@@ -2869,6 +3035,39 @@ router.get('/:id/enclosures/:enclosureId', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Enclosure link error', { error: err.message, mailId: req.params.id });
     return res.status(503).json({ error: "Couldn't open this file just now. Try again in a moment.", code: 'ENCLOSURE_UNAVAILABLE' });
+  }
+});
+
+/**
+ * GET /api/mailbox/:id/card-media/:fileId
+ * The photo or voice on a card the caller received (memories contract section 4): its bytes, private and no-store, a
+ * voice also by byte range. Only the card's own recipient, once it's delivered and its seal has lifted, and never when a
+ * block between the two came before it was delivered (section 8). Anything else answers 404 and says nothing of it.
+ * Needs only `mailbox`: turning sending off never hides what was delivered. Apps keep what they download in their
+ * account's own cache and clear it on sign-out.
+ */
+router.get('/:id/card-media/:fileId', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (!sentOn()) return sendCardsOff(res);
+  const userId = req.user.id;
+  const { id } = req.params;
+  if (!UUID_REGEX.test(id)) return cardMedia.notFound(res);
+  try {
+    const { data: mail, error } = await supabaseAdmin.from('Mail')
+      .select('id, sender_user_id, recipient_user_id, recipient_home_id, deleted_at, delivered_at, mail_extracted')
+      .eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!mail || !holidayCards.isCard(mail) || String(mail.recipient_user_id) !== String(userId)
+      || !(await canAccessMail(mail, userId)) || holidayCards.isSealed(mail)
+      || await cardMedia.blockedBeforeDelivery(mail)) {
+      return cardMedia.notFound(res);
+    }
+    const file = await cardMedia.boundFile(req.params.fileId, mail.id);
+    return file ? await cardMedia.send(req, res, file) : cardMedia.notFound(res);
+  } catch (err) {
+    logger.error('Card media read error', { error: err.message, mailId: id, userId });
+    if (!res.headersSent) return res.status(503).json({ error: 'Couldn’t open it just now. Try again in a moment.', code: 'CARD_MEDIA_UNAVAILABLE' });
+    return undefined;
   }
 });
 

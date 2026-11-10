@@ -330,6 +330,8 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    // Moments: the in-app camera records videos up to 30 seconds.
+    implementation(libs.androidx.camera.video)
     // On-device QR decoding for the Add-Home wizard's "Scan WiFi QR".
     implementation(libs.mlkit.barcode.scanning)
     // EXIF orientation read for Snap & Sell photo normalization.
@@ -365,6 +367,9 @@ dependencies {
     // Media playback (Pulse video + Live Photo tiles)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    // Moments: a library video is exported to about 720p H.264 before it uploads.
+    implementation(libs.media3.transformer)
+    implementation(libs.media3.effect)
 
     // QR encoding (ShareLinkSheet booking-link QR)
     implementation(libs.zxing.core)

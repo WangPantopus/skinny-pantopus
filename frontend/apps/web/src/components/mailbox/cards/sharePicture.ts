@@ -8,8 +8,10 @@
 import { firstNameOf, isVerseReference, PAPER_SERIF, postmarkDay, TABLE_ART, tableTint, cardTrimmedPicture } from './cardArt';
 import { cardHand, cardPen } from './cardFont';
 import { measureNote, penWords, type NoteFit } from './CardPaper';
+import { drawableSignature, signaturePath, SIGNATURE_INK, SIGNATURE_LINE, SIGNATURE_ON_CARD, SIGNATURE_STROKE, SIGNATURE_W } from './cardSignature';
+import type { CardSignature } from '@pantopus/api';
 
-export type ShareFormat = 'story' | 'post' | 'link';
+export type ShareFormat = 'story' | 'post' | 'open' | 'link';
 
 export type ShareCard = {
   design: string;
@@ -27,13 +29,16 @@ export type ShareDetails = {
   mailedOn?: string | null;
   note: string;
   fromName: string;
+  /** Signed beside FROM (design plan 8.2): drawn as on the card, only where the back shows with the note. */
+  signature?: CardSignature | null;
 };
 
 const SCALE = 2;
 const PEN = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
 const HAND = `${cardHand.style.fontFamily}, ui-serif, Georgia, serif`;
 const SERIF = PAPER_SERIF;
-const SIZES = { story: [540, 960], post: [540, 675] } as const;
+// Open card (design plan 11.2): 1600 x 1200, drawn at 2x like the others.
+const SIZES = { story: [540, 960], post: [540, 675], open: [800, 600] } as const;
 const POSTMARK_LINES = 'M58 21q6-8 12 0t12 0t12 0M58 30q6-8 12 0t12 0t12 0M58 39q6-8 12 0t12 0t12 0';
 
 type Ctx = CanvasRenderingContext2D;
@@ -334,8 +339,21 @@ function cardBack(ctx: Ctx, details: ShareDetails, art: Art, fit: NoteFit, width
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
     ctx.fillStyle = '#1b2a5c';
-    ctx.font = `${nameSize}px ${PEN}`;
-    ctx.fillText(firstNameOf(details.fromName), nameX, rowBaseline);
+    const signed = drawableSignature(details.signature);
+    if (signed) {
+      // The signature's box: 48% of the card wide where the name starts, its line on the baseline.
+      const k = (u * 100 * SIGNATURE_ON_CARD) / SIGNATURE_W;
+      ctx.translate(nameX, rowBaseline - (SIGNATURE_LINE * k));
+      ctx.scale(k, k);
+      ctx.strokeStyle = SIGNATURE_INK;
+      ctx.lineWidth = SIGNATURE_STROKE;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke(new Path2D(signaturePath(signed)));
+    } else {
+      ctx.font = `${nameSize}px ${PEN}`;
+      ctx.fillText(firstNameOf(details.fromName), nameX, rowBaseline);
+    }
     ctx.restore();
 
     const footSize = u * 1.9;
@@ -515,11 +533,83 @@ async function loadFonts() {
   ]);
 }
 
+/** The crease where an open card folds: each page a little darker toward the fold (as on the open Duo), flat at 25%. */
+function foldShade(ctx: Ctx, foldX: number, top: number, pageW: number, pageH: number) {
+  for (const side of [-1, 1] as const) {
+    const g = ctx.createLinearGradient(foldX, 0, foldX + (side * pageW), 0);
+    const k = side < 0 ? 1 : 0.8; // the right page a little lighter
+    g.addColorStop(0, `rgba(0, 0, 0, ${(0.42 * 0.25 * k).toFixed(3)})`);
+    g.addColorStop(0.16, `rgba(0, 0, 0, ${(0.08 * 0.25 * k).toFixed(3)})`);
+    g.addColorStop(0.46, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(side < 0 ? foldX - pageW : foldX, top, pageW, pageH);
+  }
+}
+
+/**
+ * Open card (design plan 11.2), on an 800 x 600 canvas (1600 x 1200 out): the card lying open, picture page left (x 50)
+ * and note page right (x 400), each 350 x 420 (700 x 840 out) from y 60, meeting at the fold (x 400); the slip under
+ * the fold. With the note off, the right side is the open envelope and its lining (260 wide at x 445, its body from
+ * y 171) instead of the note page. A sealed card is the shut envelope only.
+ */
+function openCard(ctx: Ctx, details: ShareDetails, art: Art, showNote: boolean) {
+  if (details.card.sealed) {
+    shutEnvelope(ctx, art, 340, 230, 40, -1.6, 101);
+    doNotOpen(ctx, 274, 280, 15);
+    paperSlip(ctx, art, 261, 492, -1.2, 262, 46, 12, 12);
+    return;
+  }
+  if (showNote) {
+    cardFront(ctx, details, art, 350, 50, 60, 0);
+    cardBack(ctx, details, art, measureNote(details.note), 350, 400, 60, 0);
+    foldShade(ctx, 400, 60, 350, 420);
+  } else {
+    openEnvelope(ctx, art, 260, 445, 171, 0);
+    cardFront(ctx, details, art, 350, 50, 60, 0);
+  }
+  paperSlip(ctx, art, 261, 504, -1.2, 262, 46, 12, 12);
+}
+
+async function toJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('This browser couldn\'t make the picture.'));
+    }, 'image/jpeg', 0.92);
+  });
+}
+
+/**
+ * Share all (design plan 11.3): Post-size pictures for a carousel, in this order: the shut envelope with its seal, the
+ * card, and the note page only with `withNote`. A sealed card is the sealed picture only. Never a name or an address.
+ */
+export async function drawShareSet(details: ShareDetails, withNote: boolean): Promise<Blob[]> {
+  const { card } = details;
+  if (card.sealed) return [await drawSharePicture(details, 'post', false)];
+  const [art] = await Promise.all([loadArt(card.design, false), loadFonts()]);
+  const [width, height] = SIZES.post;
+  const showNote = withNote && Boolean(details.note.trim());
+  const one = async (draw: (ctx: Ctx) => void) => {
+    const [canvas, ctx] = canvasOf(width, height);
+    tableCloth(ctx, art, tableTint(card.table), width, height);
+    draw(ctx);
+    paperSlip(ctx, art, 139, 612, -1.2, 262, 46, 12, 12);
+    tableLight(ctx, art, width, height);
+    return toJpeg(canvas);
+  };
+  const set = [
+    one((ctx) => shutEnvelope(ctx, art, 410, 65, 90, -2.2, 122)),
+    one((ctx) => cardFront(ctx, details, art, 400, 70, 92, -2.2)),
+  ];
+  if (showNote) set.push(one((ctx) => cardBack(ctx, details, art, measureNote(details.note), 400, 70, 92, 2.2)));
+  return Promise.all(set);
+}
+
 /**
  * Story or Post as a JPEG. With `withNote`, the back of the card and the sender's first name are in it; without, neither is.
  * A sealed card is always the shut envelope, whatever is asked.
  */
-export async function drawSharePicture(details: ShareDetails, format: 'story' | 'post', withNote: boolean): Promise<Blob> {
+export async function drawSharePicture(details: ShareDetails, format: 'story' | 'post' | 'open', withNote: boolean): Promise<Blob> {
   const { card } = details;
   const [art] = await Promise.all([loadArt(card.design, card.sealed), loadFonts()]);
   const [width, height] = SIZES[format];
@@ -530,7 +620,9 @@ export async function drawSharePicture(details: ShareDetails, format: 'story' | 
   // A bigger card (design plan 1.11): 800 of 1080 px in a Story, 760 in a Post. A Story keeps everything but the slip out
   // of Instagram's top 250 and bottom 340 px (here 125 and 170, drawn at half size).
   tableCloth(ctx, art, tableTint(card.table), width, height);
-  if (card.sealed) {
+  if (format === 'open') {
+    openCard(ctx, details, art, showNote);
+  } else if (card.sealed) {
     shutEnvelope(ctx, art, story ? 460 : 410, story ? 40 : 65, story ? 190 : 62, story ? -2.4 : -2.2, story ? 136 : 122);
     doNotOpen(ctx, story ? 96 : 118, story ? 506 : 352, story ? 21 : 18);
     if (story) paperSlip(ctx, art, 122, 776, -1.6, 296, 54, 13.5, 13.5);

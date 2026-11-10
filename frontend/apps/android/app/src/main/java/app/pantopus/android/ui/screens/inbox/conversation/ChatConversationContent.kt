@@ -357,6 +357,19 @@ data class ChatReplyPreview(
     val roomId: String? = null,
 )
 
+/**
+ * A reply to a Moment, drawn as a small quote above the text (Pantopus Moments contract "Chat"): "Replied to your
+ * Moment" for its author, "Replied to their Moment" for the sender, and "Moment ended" with no picture once it has.
+ */
+@Immutable
+data class ChatMomentQuote(
+    val momentId: String,
+    val label: String,
+    /** A small picture of the photo or the video's poster; null for a text card and once it ended. */
+    val thumbUrl: String?,
+    val ended: Boolean,
+)
+
 @Immutable
 data class ChatBubbleReaction(
     val reaction: String,
@@ -502,6 +515,8 @@ data class ChatBubbleContent(
     val side: ChatMessageSide,
     val body: ChatBubbleBody,
     val replyPreview: ChatReplyPreview? = null,
+    /** The Moment this message replies to, if any. */
+    val momentQuote: ChatMomentQuote? = null,
     val reactions: List<ChatBubbleReaction> = emptyList(),
     val hasTail: Boolean,
     val stamp: String?,

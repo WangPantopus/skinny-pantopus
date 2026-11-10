@@ -61,6 +61,7 @@ export const LAUNCH_FEATURE_KEYS = [
   'pulse_redesign', // 11. The Pulse redesign, paused for launch (October 15); the web has no redesign screens
   'holiday_cards', // 12. Christmas cards sent through Mail (October 30); needs `mailbox` on too
   'card_table', // 13. The Christmas card on the table (November 6); needs `mailbox` and `holiday_cards` on too
+  'holiday_card_memories', // 14. A card's own photo and voice greeting (November 10); needs `mailbox` on too
 ] as const;
 
 export type LaunchFeatureKey = (typeof LAUNCH_FEATURE_KEYS)[number];
@@ -90,6 +91,8 @@ export const launchFeatures = {
   holidayCards: enabledLaunchFeatures.has('holiday_cards'),
   // The Christmas card on the table: never on without the two keys it builds on.
   cardTable: enabledLaunchFeatures.has('card_table') && enabledLaunchFeatures.has('holiday_cards') && enabledLaunchFeatures.has('mailbox'),
+  // A card's own photo and voice greeting. The apps also ask the server (GET /api/mailbox/cards `media`).
+  holidayCardMemories: enabledLaunchFeatures.has('holiday_card_memories') && enabledLaunchFeatures.has('mailbox'),
 };
 
 // Pages that exist only for a hidden feature, matched against the pathname.

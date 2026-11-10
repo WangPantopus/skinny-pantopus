@@ -84,6 +84,7 @@ import app.pantopus.android.data.api.services.MailboxV2Api
 import app.pantopus.android.data.api.services.MailboxVaultApi
 import app.pantopus.android.data.api.services.MatchedBusinessesApi
 import app.pantopus.android.data.api.services.MembershipApi
+import app.pantopus.android.data.api.services.MomentsApi
 import app.pantopus.android.data.api.services.NeighborMessagesApi
 import app.pantopus.android.data.api.services.NeighborhoodApi
 import app.pantopus.android.data.api.services.NotificationPreferencesApi
@@ -169,6 +170,8 @@ object NetworkModule {
             // UploadEvidenceRequest one omits optional fields when
             // null instead of writing JSON `null`.
             .add(UploadEvidenceRequestJsonAdapter())
+            // A chat message's Moment is read with its signed picture link and saved without it.
+            .add(app.pantopus.android.data.api.models.moments.ChatMomentRefJsonAdapter())
             // T2 hub preferences: partial PUT body that must emit the
             // changed keys only, plus explicit JSON null when quiet
             // hours are cleared.
@@ -787,6 +790,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun providePlansApi(retrofit: Retrofit): PlansApi = retrofit.create(PlansApi::class.java)
+
+    /** Pantopus Moments: `/api/moments` and the `moments` flag. */
+    @Provides
+    @Singleton
+    fun provideMomentsApi(retrofit: Retrofit): MomentsApi = retrofit.create(MomentsApi::class.java)
 
     /** Pulse's own routes (`/api/pulse/…`): the asker's keep-open and close (S7). */
     @Provides
