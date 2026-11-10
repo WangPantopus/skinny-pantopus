@@ -55,6 +55,20 @@ const COLLECTION_OF_DESIGN = new Map(COLLECTIONS.flatMap((c) => c.designs.map((d
 // 59–67 are the founder's nativity pictures (2026-11-08), each with its whole King James verse printed under the
 // painting, so the caption is the verse's reference (its book and numbers joined by a no-break space).
 // A number is never reused: every app picks the card's stamp from it.
+// The whole King James verse printed under each nativity picture (59–67), by its public page, as the apps show it
+// below the card in readable type ("Read the verse", design plan 6.2, 2026-11-09). The text is the NATIVITY kit's
+// nativity.json (KJV, public domain in the US; Project Gutenberg #10), word for word as printed on the picture.
+const VERSES = new Map([
+  ['isaiah-9-6', 'For unto us a child is born, unto us a son is given: and the government shall be upon his shoulder: and his name shall be called Wonderful, Counsellor, The mighty God, The everlasting Father, The Prince of Peace.'],
+  ['luke-2-7', 'And she brought forth her firstborn son, and wrapped him in swaddling clothes, and laid him in a manger; because there was no room for them in the inn.'],
+  ['john-3-16', 'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.'],
+  ['luke-2-10', 'And the angel said unto them, Fear not: for, behold, I bring you good tidings of great joy, which shall be to all people.'],
+  ['luke-2-14', 'Glory to God in the highest, and on earth peace, good will toward men.'],
+  ['matthew-2-2', 'Saying, Where is he that is born King of the Jews? for we have seen his star in the east, and are come to worship him.'],
+  ['matthew-2-11', 'And when they were come into the house, they saw the young child with Mary his mother, and fell down, and worshipped him: and when they had opened their treasures, they presented unto him gifts; gold, and frankincense and myrrh.'],
+  ['matthew-2-14', 'When he arose, he took the young child and his mother by night, and departed into Egypt.'],
+  ['john-8-12', 'Then spake Jesus again unto them, saying, I am the light of the world: he that followeth me shall not walk in darkness, but shall have the light of life.'],
+]);
 const DESIGNS = [
   ['Home for Christmas.', '#f7eee0', 1054, 'home-for-christmas', '#2c4071'],
   ['One more run?', '#f7efe1', 1054, 'one-more-run', '#3b4c6e'],
@@ -125,7 +139,11 @@ const DESIGNS = [
   ['John\u00a08:12 (KJV)', '#f7f0e2', 1022, 'john-8-12', '#6e4b30'],
 ].map(([caption, paper, height, slug, table], index) => {
   const id = designIdOf(index + 1);
-  return { id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height, slug, table };
+  return {
+    id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height, slug, table,
+    // Only the verse pictures carry it; apps read it when present (older apps ignore it).
+    ...(VERSES.has(slug) ? { verse: VERSES.get(slug) } : {}),
+  };
 });
 const DESIGN_BY_ID = new Map(DESIGNS.map((design) => [design.id, design]));
 
@@ -240,6 +258,7 @@ function cardView(mail, now = new Date()) {
   if (!isCard(mail)) return null;
   const card = mail.mail_extracted.card;
   const design = designById(card.design);
+  const sealed = isSealed(mail, now);
   return {
     design: card.design,
     number: design?.number ?? null,
@@ -254,7 +273,9 @@ function cardView(mail, now = new Date()) {
     year: card.year || SEASON.year,
     arrival: card.arrival || null,
     sealed_until: card.sealed_until || null,
-    sealed: isSealed(mail, now),
+    sealed,
+    // The whole verse printed on a nativity picture ("Read the verse"); like the picture, not before a seal lifts.
+    verse: (!sealed && design?.verse) || null,
   };
 }
 
