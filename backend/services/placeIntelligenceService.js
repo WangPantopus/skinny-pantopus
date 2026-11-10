@@ -292,18 +292,23 @@ function placeTimeZone(home) {
 const CONDITION_CODES = new Set([
   'clear', 'partly_cloudy', 'cloudy', 'fog', 'rain', 'snow', 'sleet', 'thunderstorm', 'wind',
 ]);
+// Every provider code lands in its own family, however the provider spells it: WeatherKit sends
+// "mostlyclear" and "wintrymix", Open-Meteo "mostly_clear". Flurries and a blizzard are snow, a
+// wintry mix is sleet, a hurricane or tornado is a storm, smoke and dust veil the sky like fog.
+// Before, those and WeatherKit's "mostlyclear" fell through to 'clear' and drew a plain sunny sky.
 function mapConditionCode(code) {
-  const c = String(code || '').toLowerCase();
-  if (CONDITION_CODES.has(c)) return c;
-  if (c.includes('thunder') || c.includes('storm')) return 'thunderstorm';
-  if (c.includes('snow')) return 'snow';
-  if (c.includes('sleet') || c.includes('hail')) return 'sleet';
-  if (c.includes('rain') || c.includes('drizzle') || c.includes('shower')) return 'rain';
-  if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'fog';
-  if (c.includes('partly') || c.includes('mostly_sunny') || c.includes('mostly_clear')) return 'partly_cloudy';
-  if (c.includes('cloud') || c.includes('overcast')) return 'cloudy';
-  if (c.includes('wind')) return 'wind';
-  if (c.includes('clear') || c.includes('sun') || c.includes('fair')) return 'clear';
+  const raw = String(code || '').toLowerCase();
+  if (CONDITION_CODES.has(raw)) return raw;
+  const c = raw.replace(/[^a-z]/g, '');
+  const has = (...words) => words.some((word) => c.includes(word));
+  if (has('thunder', 'storm', 'hurricane', 'tornado')) return 'thunderstorm';
+  if (has('sleet', 'hail', 'wintry', 'rainandsnow')) return 'sleet';
+  if (has('snow', 'flurr', 'blizzard')) return 'snow';
+  if (has('rain', 'drizzle', 'shower')) return 'rain';
+  if (has('fog', 'mist', 'haze', 'smok', 'dust')) return 'fog';
+  if (has('partly', 'mostlysunny', 'mostlyclear')) return 'partly_cloudy';
+  if (has('cloud', 'overcast')) return 'cloudy';
+  if (has('wind')) return 'wind';
   return 'clear';
 }
 

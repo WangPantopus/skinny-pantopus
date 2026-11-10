@@ -334,7 +334,8 @@ export default function HubTodayPage() {
                   <Droplets className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                   <span className="text-xs text-blue-700 dark:text-blue-400">
                     Precipitation expected in the next 6 hours
-                    {hydrated && today.weather.precipitation_start_at && (
+                    {/* An hour that has already started isn't "expected around" its first minute. */}
+                    {hydrated && today.weather.precipitation_start_at && new Date(today.weather.precipitation_start_at).getTime() > Date.now() && (
                       <> — around {new Date(today.weather.precipitation_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</>
                     )}
                   </span>
