@@ -567,7 +567,11 @@ export async function getPropertyValue(homeId: string) {
 
 // ---- Home Money Check: the appeal packet ----
 
-/** What the packet holds, in words to draw as they are; `available: false` where there is none for this viewer. */
+/**
+ * What the packet holds, in words to draw as they are; `available: false` where there is none for this viewer.
+ * `purchased`: this person has bought it for the home's current county value year. `on_sale`: the server takes the
+ * payment (it does not while Stripe is in test mode on a production server).
+ */
 export type AppealPacketSummary =
   | { available: false }
   | {
@@ -579,14 +583,27 @@ export type AppealPacketSummary =
       source: string | null;
       note: string;
       file_name: string;
-      price: null;
+      price: { amount_cents: number; currency: string; label: string };
+      covers: string;
+      on_sale: boolean;
+      purchased: boolean;
     };
 
 export async function getAppealPacket(homeId: string) {
   return get<AppealPacketSummary>(`/api/homes/${homeId}/appeal-packet`);
 }
 
-/** The packet itself, a PDF. */
+/** A Stripe Checkout page for the packet; `requestId` makes a double click one checkout. */
+export async function startAppealPacketCheckout(homeId: string, requestId: string) {
+  return post<{ url: string }>(`/api/homes/${homeId}/appeal-packet/checkout`, { request_id: requestId });
+}
+
+/** Back from the checkout page: the server records the purchase once Stripe says it was paid. */
+export async function confirmAppealPacketPurchase(homeId: string, reference: string) {
+  return post<AppealPacketSummary>(`/api/homes/${homeId}/appeal-packet/confirm`, { reference });
+}
+
+/** The packet itself, a PDF, for the person who bought it. */
 export async function downloadAppealPacket(homeId: string): Promise<Blob> {
   const response = await apiClient.get<Blob>(`/api/homes/${homeId}/appeal-packet/pdf`, { responseType: 'blob' });
   return response.data;
