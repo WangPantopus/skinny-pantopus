@@ -443,7 +443,7 @@ struct HolidayCardLookFooter: View {
                     .isLink == true ? "Seal it and get the link" : "Seal and send",
                 isLoading: viewModel.sending
             ) {
-                if needsStamps { viewModel.showsStampBooks = true } else { Task { await viewModel.send() } }
+                if needsStamps { viewModel.showsStampBooks = true } else { viewModel.sealOrSend() }
             }
             .accessibilityIdentifier("sendCardLookSend")
         }

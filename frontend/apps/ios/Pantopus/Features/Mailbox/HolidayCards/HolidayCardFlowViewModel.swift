@@ -174,6 +174,8 @@ final class HolidayCardFlowViewModel {
     private(set) var takenBackNote: String?
     /// Asks "Take your card back?" first.
     var confirmsTakeBack = false
+    /// "Seal and send" opened the table to seal it by hand (plan Part 2, `card_table`).
+    var sealsAtTable = false
     /// One request ID per card, sent with every look and retry of it, so a
     /// send whose answer was lost is answered with the card it stored, never
     /// a second one. A new card starts once this one is sent or taken back.

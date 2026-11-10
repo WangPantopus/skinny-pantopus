@@ -87,6 +87,8 @@ struct HolidayCardFlowView: View {
                 .presentationDragIndicator(.visible)
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Seal it by hand: the table over the flow, from Look it over until Done.
+        .modifier(CardTableSendCover(viewModel: viewModel, onDone: onClose))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sendCard")
     }
