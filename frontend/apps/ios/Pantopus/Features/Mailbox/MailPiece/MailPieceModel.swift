@@ -290,8 +290,9 @@ extension MailPieceModel {
         postmarkYear = String(calendar.component(.year, from: postmarked))
         self.isOpened = isOpened
         // Mail from before today that's been read (or never sealed) fades;
-        // a sealed envelope stays bright until it's opened.
-        isFaded = ageDays >= 1 && isOpened
+        // a sealed envelope stays bright until it's opened. A Christmas card
+        // keeps its full red once opened, as on Android (plan 1.4).
+        isFaded = ageDays >= 1 && isOpened && item.card == nil
         stamp = item.card?.number.map(MailStampArt.forCard(number:)) ?? MailStampArt.forPiece(item.id)
         // An opened card shows its picture over the torn top, not a line.
         peekLine = isOpened && kind.isEnvelope && item.card == nil ? subject : nil

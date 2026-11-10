@@ -3640,6 +3640,8 @@ public struct HubTabRoot: View {
                     }
                 }
             )
+            // The welcome moment is full screen: no tab bar (founder, 11-09).
+            .hidesTabBar()
         case .mailRoutingQueue:
             MailRoutingQueueView { Task { @MainActor in pop() } }
         case let .christmasCards(design):

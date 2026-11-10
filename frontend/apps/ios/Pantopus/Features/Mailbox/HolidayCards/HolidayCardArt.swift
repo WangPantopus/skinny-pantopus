@@ -316,7 +316,9 @@ struct HolidayCardBack<Note: View>: View {
                     fromName: HolidayCardWords.firstName(fromName),
                     year: year,
                     number: nil,
-                    drawsNote: false
+                    drawsNote: false,
+                    // Off the table the grain is lighter (multiply 25%), so the back reads bright cream (plan 1.9).
+                    grainOpacity: 0.25
                 )
                 .equatable()
                 .overlay(alignment: .topLeading) {
