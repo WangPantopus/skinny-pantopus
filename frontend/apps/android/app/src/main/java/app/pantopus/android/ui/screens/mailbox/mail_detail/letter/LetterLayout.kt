@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.mailbox.mail_detail.letter
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,7 +26,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -149,7 +155,7 @@ private fun PantopusNote(note: MailLetterNote) {
         Column(
             modifier =
                 Modifier
-                    .padding(top = 10.dp)
+                    .padding(top = 16.dp)
                     .fillMaxWidth()
                     .shadow(2.dp, RoundedCornerShape(6.dp))
                     .background(PantopusColors.appSurface, RoundedCornerShape(6.dp))
@@ -196,14 +202,33 @@ private fun PantopusNote(note: MailLetterNote) {
                 color = PantopusColors.appTextMuted,
             )
         }
-        // The clip holding the note to the letter.
-        Box(
+        // The clip holding the note on at its top corner, clear of the heading, drawn as iPhone draws it.
+        PaperClip(
             modifier =
                 Modifier
-                    .align(Alignment.TopCenter)
-                    .size(width = 30.dp, height = 22.dp)
-                    .border(2.5.dp, PantopusColors.mailClip, RoundedCornerShape(8.dp)),
+                    .align(Alignment.TopEnd)
+                    .padding(end = 28.dp)
+                    .size(width = 22.dp, height = 48.dp),
         )
+    }
+}
+
+/** The paper clip from the drawing (`M7 30 V9 a4 4 0 0 1 8 0 V36 a6 6 0 0 1 -12 0 V14`), in a 22 × 48 box. */
+@Composable
+private fun PaperClip(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.clearAndSetSemantics {}) {
+        val sx = size.width / 22f
+        val sy = size.height / 48f
+        val clip =
+            Path().apply {
+                moveTo(7f * sx, 30f * sy)
+                lineTo(7f * sx, 9f * sy)
+                arcTo(Rect(7f * sx, 5f * sy, 15f * sx, 13f * sy), 180f, 180f, false)
+                lineTo(15f * sx, 36f * sy)
+                arcTo(Rect(3f * sx, 30f * sy, 15f * sx, 42f * sy), 0f, 180f, false)
+                lineTo(3f * sx, 14f * sy)
+            }
+        drawPath(clip, PantopusColors.mailClip, style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 

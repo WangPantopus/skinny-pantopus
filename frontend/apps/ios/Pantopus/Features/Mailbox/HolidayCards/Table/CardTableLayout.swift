@@ -3,9 +3,9 @@
 //  Pantopus
 //
 //  Fitting the card to the screen (launch key `card_table`): the card nearly as
-//  wide as the phone, room below it for the buttons, and above it the open flap
-//  peeking out by between 13% and 47% of the card's width. If the screen is too
-//  short for 13% the card shrinks. Open on the iPhone Duo, the two pages of the
+//  wide as the phone, room below it for the buttons (at least 12 pt clear of
+//  any paper), and above it the open flap peeking out by between 13% and 47% of
+//  the card's width. If the screen is too short, the card shrinks. Open on the iPhone Duo, the two pages of the
 //  folded card meet at the hinge.
 //
 
@@ -53,26 +53,31 @@ struct CardTableLayout: Equatable {
         let height = screen.height
         self.width = width
         self.height = height
-        let bottom = bottomControls + 8
+        // The buttons start at least 12 pt below the lowest paper edge (plan 1.7), and 4 more for the
+        // envelope's and the card's small turns, which lower a corner.
+        let bottom = bottomControls + 12 + 4
         let topGap = safeTop + 6
         let room = height - topGap - bottom
         let side: CGFloat = width < 560 ? 9 : 14
+        // Laid down, the envelope reaches from the flap's tip (`cardTop − peek`) down 1.606 card widths
+        // (flap and body), lower than the card itself while the peek is under 0.406. Shut, it sits at least
+        // 88 pt below the safe area. If the screen is too short for either, the card shrinks. (Under the words
+        // when there's room; at the largest text sizes the words get their own glass instead.)
+        let laidReach: CGFloat = 1.012 * (512 + 1392) / 1200
+        let shutRoom = height - safeTop - bottom - 88
         var cardWidth = min(width - side * 2, width < 560 ? 470 : 560)
+        cardWidth = max(0, min(cardWidth, room / laidReach, shutRoom / (1.012 * 1392 / 1200)))
         var peek = room - cardWidth * 1.2
         let minPeek = cardWidth * 0.13
         let maxPeek = cardWidth * 0.47
-        if peek < minPeek {
-            cardWidth = min(cardWidth, room / (1.2 + 0.13))
-            peek = cardWidth * 0.13
-        }
-        peek = min(peek, maxPeek)
+        peek = min(max(peek, minPeek), maxPeek)
         let spare = max(0, room - cardWidth * 1.2 - peek)
         let cardTop = topGap + spare * 0.46 + peek
         let envelopeWidth = cardWidth * 1.012
         let envelopeHeight = envelopeWidth * 1392 / 1200
         let flapDepth = envelopeWidth * 512 / 1200
         let free = height - safeTop - bottom
-        let envelopeTop = safeTop + max(88, max((free - envelopeHeight) * 0.56, wordsBottom - safeTop + 8))
+        let envelopeTop = safeTop + max(88, min(max((free - envelopeHeight) * 0.56, wordsBottom - safeTop + 8), free - envelopeHeight))
         let envelopeTopOut = min(height - envelopeHeight * 0.5, cardWidth * 1.2 * 0.8 + 8)
         self.cardWidth = cardWidth
         cardHeight = cardWidth * 1.2

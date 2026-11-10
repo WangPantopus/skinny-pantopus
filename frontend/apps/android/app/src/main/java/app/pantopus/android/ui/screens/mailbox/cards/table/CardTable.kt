@@ -250,7 +250,8 @@ private fun rememberTableGeometry(
                 HINTS.maxOf { hint -> measurer.measure(hint, tableHintStyle, constraints = hintWidth).size.height }
             val primaryHeight = measurer.measure("Take the card out", tablePrimaryStyle).size.height
             val pillHeight = max(48.dp.toPx(), primaryHeight + 12.dp.toPx())
-            val bottomRoom = safeBottom + 8.dp.toPx() + hintHeight + 2.dp.toPx() + pillHeight + 8.dp.toPx()
+            // The button starts at least 12 dp below the lowest edge of paper; on a short screen the card shrinks.
+            val bottomRoom = safeBottom + 8.dp.toPx() + hintHeight + 2.dp.toPx() + pillHeight + 12.dp.toPx()
             val wordsWidth = Constraints(maxWidth = (width - 48.dp.roundToPx()).coerceAtLeast(1))
             val longestWords = if (card.sealed) "It opens Christmas morning, in 56 days." else "A Christmas card from ${card.fromFirst}."
             val wordsHeight = measurer.measure(longestWords, tableWordsStyle, constraints = wordsWidth).size.height
