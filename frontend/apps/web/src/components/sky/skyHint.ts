@@ -20,7 +20,7 @@ export type SkyPhase = 'dawn' | 'day' | 'dusk' | 'night';
  */
 export function skyFamily(condition: string): SkyFamily {
   const code = condition.toLowerCase();
-  if (/thunder|storm|hurricane/.test(code)) return 'storm';
+  if (/thunder|storm|hurricane|tornado/.test(code)) return 'storm';
   if (/snow|flurr|blizzard/.test(code)) return 'snow';
   if (/rain|drizzle|shower|sleet|hail|wintry/.test(code)) return 'wet';
   if (/fog|mist|haze|smok|dust/.test(code)) return 'fog';

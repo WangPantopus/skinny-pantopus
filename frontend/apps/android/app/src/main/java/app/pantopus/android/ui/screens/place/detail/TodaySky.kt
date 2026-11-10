@@ -83,9 +83,11 @@ import kotlin.math.roundToInt
  * this address. The numbers sit on top, read exactly as before.
  *
  * Motion is decoration, so it stops when animations are removed in the
- * system settings, in battery saver, while the app is in the background
- * and while the card is scrolled away; the still picture is the same
- * scene. Parity twin of iOS `TodaySky.swift`.
+ * system settings, while the app is in the background and while the card
+ * is scrolled away; the still picture is the same scene. It keeps moving
+ * in battery saver: rain held in mid-air reads as a stuck screen, and the
+ * card draws at 30 frames a second at most. Parity twin of iOS
+ * `TodaySky.swift`.
  */
 
 /** The "Now" reading drawn over the living sky. Touch and hold, then slide, to see the hours ahead (`TodaySkyScrub.kt`). */
@@ -143,9 +145,12 @@ fun TodaySkyHero(
                 }.skyScrubGesture(hours.size, scrub)
                 .testTag("todaySkyHero"),
     ) {
-        // A new hour, phase or kind of weather crossfades in.
+        // A new hour, phase or kind of weather crossfades in. The view itself isn't the key: it carries the minute
+        // clock and the whole forecast, so every tick and refresh faded the same picture over itself, and the
+        // card's backing showed through the house and clouds for a moment.
+        val scene = SkySceneKey(picked?.time, shown.moment.phase, skyWeather(shown.weather.conditionCode))
         Crossfade(
-            targetState = shown,
+            targetState = scene,
             modifier = Modifier.matchParentSize(),
             animationSpec =
                 tween(
@@ -158,7 +163,8 @@ fun TodaySkyHero(
                     },
                 ),
             label = "skyScene",
-        ) { view ->
+        ) { fading ->
+            val view = rememberSceneView(current = fading == scene, shown)
             val painter = view.painter(!animating, place.home, place.streetLights)
             Canvas(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
                 val t = time.doubleValue
@@ -187,6 +193,24 @@ private fun cardMinHeight(
     scrubbing: Boolean,
     rest: Float,
 ) = if (scrubbing) maxOf(188f, rest).dp else 188.dp
+
+/** What a scene draws: the one on screen follows the clock and the forecast; one fading out keeps the view it last drew. */
+@Composable
+private fun rememberSceneView(
+    current: Boolean,
+    shown: SkyView,
+): SkyView {
+    val held = remember { mutableStateOf(shown) }
+    if (current) held.value = shown
+    return held.value
+}
+
+/** What makes a different picture: the hour slid to, the time of day and the kind of weather (iOS `SceneKey`). */
+private data class SkySceneKey(
+    val hour: ZonedDateTime?,
+    val phase: SkyPalette.Phase,
+    val sky: SkyPalette.Weather,
+)
 
 /** What the card shows at a moment: now, or a forecast hour slid to. */
 private data class SkyView(
