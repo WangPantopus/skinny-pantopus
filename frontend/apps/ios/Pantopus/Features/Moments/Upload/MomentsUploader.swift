@@ -95,6 +95,9 @@ final class MomentsUploader {
             phase: .uploading
         )
         postings.insert(posting, at: 0)
+        // The outbox folder's id names this Post tap to the server, so a retry returns the same Moment.
+        var body = body
+        body.clientRequestId = folderId.lowercased()
         drafts[folderId] = (body, media)
         run(folderId)
     }

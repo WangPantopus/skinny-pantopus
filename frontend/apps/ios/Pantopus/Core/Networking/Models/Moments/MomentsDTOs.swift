@@ -387,10 +387,14 @@ public struct MomentCreateBody: Encodable, Sendable, Hashable {
     public let text: String?
     public let background: String?
     public let location: MomentLocationBody
+    /// One id per Post tap (a uuid): sending it again answers with the Moment
+    /// that tap made, so a retry after a lost answer never posts twice.
+    public var clientRequestId: String?
 
     private enum CodingKeys: String, CodingKey {
         case kind, hours, audience, caption, text, background, location
         case showArea = "show_area"
+        case clientRequestId = "client_request_id"
     }
 }
 

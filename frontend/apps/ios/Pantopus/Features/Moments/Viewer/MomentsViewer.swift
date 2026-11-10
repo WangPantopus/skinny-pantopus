@@ -49,7 +49,9 @@ struct MomentsViewer: View {
     }
 
     /// How far the viewer has been dragged down, never negative.
-    private var dragDown: CGFloat { max(dragOffset.height, 0) }
+    private var dragDown: CGFloat {
+        max(dragOffset.height, 0)
+    }
 
     /// The viewer shrinks a little as it's dragged down.
     private var dragScale: CGFloat {
