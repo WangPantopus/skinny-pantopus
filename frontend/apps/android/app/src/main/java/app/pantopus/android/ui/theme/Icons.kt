@@ -18,6 +18,8 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -713,6 +715,12 @@ enum class PantopusIcon(
     Ball("ball"),
     Coffee("coffee"),
     BookOpen("book-open"),
+
+    // Pantopus Moments (brief 2026-11-08): the tab is Lucide `circle-dashed` (SF `circle.dashed`); a video's sound
+    // toggle is Lucide `volume-2` / `volume-x` (Material `VolumeUp` / `VolumeOff`).
+    CircleDashed("circle-dashed"),
+    Volume2("volume-2"),
+    VolumeX("volume-x"),
     ;
 
     companion object {
@@ -1150,6 +1158,9 @@ internal fun PantopusIcon.source(): IconSource =
         PantopusIcon.Ball -> IconSource.Material(Icons.Filled.SportsBaseball)
         PantopusIcon.Coffee -> IconSource.Material(Icons.Filled.LocalCafe)
         PantopusIcon.BookOpen -> IconSource.Material(Icons.AutoMirrored.Filled.MenuBook)
+        PantopusIcon.CircleDashed -> IconSource.Drawable(R.drawable.ic_lucide_circle_dashed)
+        PantopusIcon.Volume2 -> IconSource.Material(Icons.AutoMirrored.Filled.VolumeUp)
+        PantopusIcon.VolumeX -> IconSource.Material(Icons.AutoMirrored.Filled.VolumeOff)
     }
 
 /**

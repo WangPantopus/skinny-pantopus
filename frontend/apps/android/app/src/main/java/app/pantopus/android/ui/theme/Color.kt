@@ -648,4 +648,76 @@ object PantopusColors {
     /** The dimming behind a sheet over a map — `#111827` at 38% (dark: black at 56%). */
     val sheetScrim = Color(0x61111827)
     val sheetScrimDark = Color(0x8F000000)
+
+    // ── Moments (design canvas 6DKjB6b55ZwvdN4sr6Viwy, boards M1–P5) ──
+
+    /** A new Moment's ring: sky `#0EA5E9` to green `#10B981`, top left to bottom right. */
+    val momentRingStart = Color(0xFF0EA5E9)
+    val momentRingEnd = Color(0xFF10B981)
+
+    /** A watched ring — `#C4CAD3`; the track under a posting ring — `#E5E7EB`. */
+    val momentRingSeen = Color(0xFFC4CAD3)
+    val momentRingTrack = Color(0xFFE5E7EB)
+
+    /** The viewer and the camera: black, with white at 35% for the progress bars' track. */
+    val momentStage = Color(0xFF000000)
+    val momentBarTrack = Color(0x59FFFFFF)
+
+    /** Scrims in the viewer: the top fade (black 55%), the caption pill (48%), the paused dim (50%). */
+    val momentTopFade = Color(0x8C000000)
+    val momentCaptionPill = Color(0x7A000000)
+    val momentDim = Color(0x80000000)
+
+    /** The camera's chips and round buttons — black at 42% — and the selected mode tab, white at 18%. */
+    val momentCameraChip = Color(0x6B000000)
+    val momentModeSelected = Color(0x2EFFFFFF)
+
+    /** The reply box's outline in the viewer — white at 45% (60% while typing). */
+    val momentReplyOutline = Color(0x73FFFFFF)
+    val momentReplyOutlineActive = Color(0x99FFFFFF)
+
+    /** Secondary text on the stage: white at 88% (the "place · 2h ago · 4h left" line). */
+    val momentOnStageSecondary = Color(0xE0FFFFFF)
+
+    /** Text card backgrounds: each a 160° gradient from the first color to the second (boards V3 and P2). */
+    val momentCardTealTop = Color(0xFF0F766E)
+    val momentCardTealBottom = Color(0xFF115E59)
+    val momentCardSkyTop = Color(0xFF0369A1)
+    val momentCardSkyBottom = Color(0xFF075985)
+    val momentCardGreenTop = Color(0xFF15803D)
+    val momentCardGreenBottom = Color(0xFF166534)
+    val momentCardAmberTop = Color(0xFFB45309)
+    val momentCardAmberBottom = Color(0xFF92400E)
+    val momentCardRoseTop = Color(0xFFBE123C)
+    val momentCardRoseBottom = Color(0xFF9F1239)
+    val momentCardSlateTop = Color(0xFF334155)
+    val momentCardSlateBottom = Color(0xFF1E293B)
+
+    /** Initials behind a face without a photo (M1's person palette): background, then letters. */
+    val momentFaceBlueBg = Color(0xFFDBEAFE)
+    val momentFaceBlue = Color(0xFF0369A1)
+    val momentFaceGreenBg = Color(0xFFDCFCE7)
+    val momentFaceGreen = Color(0xFF15803D)
+    val momentFaceAmberBg = Color(0xFFFEF3C7)
+    val momentFaceAmber = Color(0xFFB45309)
+    val momentFaceRoseBg = Color(0xFFFFE4E6)
+    val momentFaceRose = Color(0xFFBE123C)
+    val momentFaceSlateBg = Color(0xFFE2E8F0)
+    val momentFaceSlate = Color(0xFF334155)
+    val momentFaceTealBg = Color(0xFFCCFBF1)
+    val momentFaceTeal = Color(0xFF0F766E)
+    val momentFaceVioletBg = Color(0xFFF3E8FF)
+    val momentFaceViolet = Color(0xFF7C3AED)
+
+    /** The Pantopus curator's mark on a ring — `#0284C7` on white. */
+    val momentBrand = Color(0xFF0284C7)
+
+    /** P4's at-home notice: amber tint, its border, the house glyph and the line. */
+    val momentHomeNoticeBg = Color(0xFFFFFBEB)
+    val momentHomeNoticeBorder = Color(0xFFFDE68A)
+    val momentHomeNoticeIcon = Color(0xFF9A4A08)
+    val momentHomeNoticeText = Color(0xFF78350F)
+
+    /** The Post sheet's switch track while off — `#E9E9EB`. */
+    val momentSwitchTrack = Color(0xFFE9E9EB)
 }

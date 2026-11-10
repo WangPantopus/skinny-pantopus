@@ -26,9 +26,16 @@ class PantopusRouteTest {
         LaunchFeatures.overrideForTesting = emptySet()
         // The Pulse redesign is off for launch: the October 13 bar with Plans, its Nearby route named Pulse since the
         // founder's November 7 decision, without Messages.
-        assertEquals(listOf("Place", "Today", "Pulse", "Plans"), PantopusRoute.entries.map { it.label })
-        assertEquals(PantopusRoute.entries, PantopusRoute.barTabs(plansOn = true))
+        assertEquals(listOf("Place", "Today", "Pulse", "Moments", "Plans"), PantopusRoute.entries.map { it.label })
+        assertEquals(PantopusRoute.entries, PantopusRoute.barTabs(plansOn = true, momentsOn = true))
+        assertEquals(listOf("Place", "Today", "Pulse", "Plans"), PantopusRoute.barTabs(plansOn = true).map { it.label })
         assertEquals(listOf("Place", "Today", "Pulse"), PantopusRoute.barTabs(plansOn = false).map { it.label })
+        // Moments sits between Pulse and Plans while its switch is on (founder, 2026-11-08).
+        assertEquals(
+            listOf("Place", "Today", "Pulse", "Moments"),
+            PantopusRoute.barTabs(plansOn = false, momentsOn = true).map { it.label },
+        )
+        assertEquals(PantopusRoute.Moments, PantopusRoute.barTabFor(PantopusRoute.Moments))
         assertEquals(PantopusRoute.Nearby, PantopusRoute.barTabFor(PantopusRoute.Pulse))
         assertEquals(PantopusRoute.Plans, PantopusRoute.barTabFor(PantopusRoute.Plans))
         // The Messages route belongs to Mail, which is the conversation list while Mailbox is off.
@@ -36,18 +43,21 @@ class PantopusRouteTest {
         assertEquals(PantopusRoute.Mail, PantopusRoute.messagesTab)
         LaunchFeatures.overrideForTesting = setOf(LaunchFeature.PULSE_REDESIGN)
         val entries = PantopusRoute.entries
-        assertEquals(listOf(PantopusRoute.Place, PantopusRoute.Today, PantopusRoute.Pulse, PantopusRoute.Plans), entries)
+        assertEquals(
+            listOf(PantopusRoute.Place, PantopusRoute.Today, PantopusRoute.Pulse, PantopusRoute.Moments, PantopusRoute.Plans),
+            entries,
+        )
         // With Mailbox on, Mail is the Mailbox and stays on the bar; Messages is off it, with the redesign off and on.
         LaunchFeatures.overrideForTesting = setOf(LaunchFeature.MAILBOX)
-        assertEquals(listOf("Place", "Today", "Pulse", "Plans", "Mail"), PantopusRoute.entries.map { it.label })
+        assertEquals(listOf("Place", "Today", "Pulse", "Moments", "Plans", "Mail"), PantopusRoute.entries.map { it.label })
         assertEquals(listOf("Place", "Today", "Pulse", "Mail"), PantopusRoute.barTabs(plansOn = false).map { it.label })
         assertEquals(PantopusRoute.Messages, PantopusRoute.barTabFor(PantopusRoute.Messages))
         assertEquals(PantopusRoute.Messages, PantopusRoute.messagesTab)
         LaunchFeatures.overrideForTesting = setOf(LaunchFeature.PULSE_REDESIGN, LaunchFeature.MAILBOX)
         val mailEntries = PantopusRoute.entries
-        assertEquals(listOf("Place", "Today", "Pulse", "Plans", "Mail"), mailEntries.map { it.label })
-        // The Plans switch decides whether the bar draws Plans.
-        assertEquals(mailEntries, PantopusRoute.barTabs(plansOn = true))
+        assertEquals(listOf("Place", "Today", "Pulse", "Moments", "Plans", "Mail"), mailEntries.map { it.label })
+        // The Plans and Moments switches decide whether the bar draws Plans and Moments.
+        assertEquals(mailEntries, PantopusRoute.barTabs(plansOn = true, momentsOn = true))
         assertEquals(
             listOf(PantopusRoute.Place, PantopusRoute.Today, PantopusRoute.Pulse, PantopusRoute.Mail),
             PantopusRoute.barTabs(plansOn = false),
