@@ -1296,7 +1296,7 @@ export interface PlaceMoneyCard {
   notes: string[];
   /** Where the figures come from, with their date. */
   source: string | null;
-  /** One next step: an app path (`/app/…`) or an https page. */
+  /** One next step: an https page, or an app link in the words notifications use (`/place?section=money`). */
   action: { label: string; url: string } | null;
 }
 

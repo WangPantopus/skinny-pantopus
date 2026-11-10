@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.models.place.PlaceMoneyCard
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
@@ -93,10 +92,13 @@ private fun chipTone(name: String): PlaceChipTone =
         else -> PlaceChipTone.NEUTRAL
     }
 
-/** An https page as it is; an app path on this build's web origin. Nothing else opens. */
+/**
+ * An https page as it is; an app link in the words notifications use ("/place?section=money"), which opens as
+ * this app's own link and so lands on the same screen a notification would. Nothing else opens.
+ */
 internal fun moneyCardDestination(raw: String): String? =
     when {
         raw.startsWith("https://") -> raw
-        raw.startsWith("/") && !raw.startsWith("//") -> BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/') + raw
+        raw.startsWith("/") && !raw.startsWith("//") -> "pantopus:/$raw"
         else -> null
     }

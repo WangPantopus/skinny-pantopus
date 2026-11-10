@@ -37,6 +37,7 @@ import type {
 import { Zap, BadgePercent, Building2, Landmark, PlusCircle, Lock, BadgeCheck, CircleAlert, CircleHelp, TrendingDown, Loader2, Ban, Users, ChevronRight } from 'lucide-react';
 import Chip, { type ChipVariant } from '@/components/archetypes/primitives/Chip';
 import { SectionCard, LockedCard, DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow, InfoNote } from '@/components/archetypes/place';
+import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import { findPlaceSection, detailAddress } from './sections';
 import { usd, statusToState, apiErrorText } from './format';
 import { MoneyField, PrivacyNote, SkyButton, parseMoney, groupDigits } from './fields';
@@ -785,7 +786,10 @@ function ExemptionCard({ data, reason }: { data: PlaceExemptionCheckData; reason
 // here. An action opens a page of ours or an https page, nothing else.
 
 function MoneyCheckCard({ card }: { card: PlaceMoneyCard }) {
-  const action = card.action && /^(\/|https:\/\/)/.test(card.action.url) ? card.action : null;
+  // An https page opens in a new tab; an app link in the words notifications use ("/place?section=money") opens the
+  // page a notification would. Anything else is left off.
+  const external = card.action && card.action.url.startsWith('https://') ? card.action : null;
+  const inApp = card.action && card.action.url.startsWith('/') ? resolveWebNotificationPath(card.action.url) : null;
   const actionClass = 'inline-flex items-center gap-1 mt-3 text-[13px] font-semibold text-primary-600 hover:text-primary-700 transition';
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]" data-testid={`money-card-${card.id}`}>
@@ -814,11 +818,11 @@ function MoneyCheckCard({ card }: { card: PlaceMoneyCard }) {
       {card.notes.map((note) => (
         <div key={note} className="text-[12.5px] text-app-text-secondary leading-[18px] mt-2.5">{note}</div>
       ))}
-      {action && action.url.startsWith('/') ? (
-        <Link href={action.url} className={actionClass}>{action.label}<ChevronRight size={15} /></Link>
+      {card.action && inApp ? (
+        <Link href={inApp} className={actionClass}>{card.action.label}<ChevronRight size={15} /></Link>
       ) : null}
-      {action && !action.url.startsWith('/') ? (
-        <a href={action.url} target="_blank" rel="noopener noreferrer" className={actionClass}>{action.label}<ChevronRight size={15} /></a>
+      {external ? (
+        <a href={external.url} target="_blank" rel="noopener noreferrer" className={actionClass}>{external.label}<ChevronRight size={15} /></a>
       ) : null}
     </div>
   );

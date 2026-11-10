@@ -1885,7 +1885,7 @@ public struct PlaceMoneyCard: Decodable, Sendable, Hashable, Identifiable {
         public let value: String
     }
 
-    /// One next step: an app path ("/app/…") or an https page.
+    /// One next step: an https page, or an app link in the words notifications use ("/place?section=money").
     public struct Action: Decodable, Sendable, Hashable {
         public let label: String
         public let url: String

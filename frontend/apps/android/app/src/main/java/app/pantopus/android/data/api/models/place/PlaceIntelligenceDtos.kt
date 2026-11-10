@@ -1521,7 +1521,7 @@ data class PlaceMoneyCardRow(
     val value: String,
 )
 
-/** One next step: an app path ("/app/…") or an https page. */
+/** One next step: an https page, or an app link in the words notifications use ("/place?section=money"). */
 @JsonClass(generateAdapter = true)
 data class PlaceMoneyCardAction(
     val label: String,

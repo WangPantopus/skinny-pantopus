@@ -281,8 +281,8 @@ function serializeMoneyCard(card) {
   const chip = card.chip && text(card.chip.text) ? { tone: card.chip.tone, text: text(card.chip.text) } : null;
   if (chip) assertOneOf(chip.tone, MONEY_CHIP_TONES, 'money card chip tone');
   const action = card.action && text(card.action.label) && text(card.action.url) ? { label: text(card.action.label), url: text(card.action.url) } : null;
-  // An action opens a page of ours or a secure web page, nothing else.
-  if (action && !/^(\/|https:\/\/)/.test(action.url)) throw new Error('A money card action opens an app path or an https page');
+  // An action opens a secure web page, or a screen of ours named as a notification's link is ("/place?section=money").
+  if (action && !/^(\/|https:\/\/)/.test(action.url)) throw new Error('A money card action opens an https page or an app link');
   return {
     id,
     title,

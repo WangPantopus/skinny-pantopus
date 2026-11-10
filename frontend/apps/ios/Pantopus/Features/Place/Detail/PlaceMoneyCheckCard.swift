@@ -81,10 +81,11 @@ struct PlaceMoneyCheckCard: View {
         }
     }
 
-    /// An https page as it is; an app path on this build's web origin. Nothing else opens.
+    /// An https page as it is; an app link in the words notifications use ("/place?section=money"), which opens
+    /// as this app's own link and so lands on the same screen a notification would. Nothing else opens.
     private func destination(_ raw: String) -> URL? {
         if raw.hasPrefix("https://") { return URL(string: raw) }
         guard raw.hasPrefix("/"), !raw.hasPrefix("//") else { return nil }
-        return URL(string: InviteLinks.publicPageURLString(path: raw))
+        return URL(string: "pantopus:/" + raw)
     }
 }
