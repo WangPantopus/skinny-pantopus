@@ -83,7 +83,7 @@ internal class CardSharePictures(
         val y = 300f
         openEnvelope(canvas, w * 1.012f, x - 2f, y - 2f, 3.2f)
         cardFront(canvas, w, x, y, -2.8f)
-        slip(canvas, 122f, 776f, -1.6f, 296f, 54f, 13.5f, 13.5f)
+        slip(canvas, 122f, 798f, -1.6f, 296f, 54f, 13.5f, 13.5f)
     }
 
     private fun storyNote(canvas: Canvas) {
