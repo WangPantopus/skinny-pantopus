@@ -84,9 +84,11 @@ fun CardTableDialog(
     mine: Boolean = false,
     /** Look it over shows a card that hasn't been mailed: there's nothing to share yet. */
     canShare: Boolean = true,
+    /** "Send Hazel a card" under the main button once the card has been turned over; null when it can't go. */
+    sendBack: CardTableSendBack? = null,
 ) {
     FullScreenWindow(onDismissRequest = onClose) {
-        CardTable(card, firstOpen, onClose, onOpened, menu, message, mine, canShare)
+        CardTable(card, firstOpen, onClose, onOpened, menu, message, mine, canShare, sendBack)
     }
 }
 
@@ -100,6 +102,7 @@ private fun CardTable(
     message: String?,
     mine: Boolean,
     canShare: Boolean,
+    sendBack: CardTableSendBack?,
 ) {
     val reduceMotion = rememberReduceMotion()
     val scope = rememberCoroutineScope()
@@ -155,7 +158,7 @@ private fun CardTable(
         val density = LocalDensity.current
         val safeTop = WindowInsets.safeDrawing.getTop(density).toFloat()
         val safeBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
-        val geometry = rememberTableGeometry(card, constraints, safeTop, safeBottom, density)
+        val geometry = rememberTableGeometry(card, constraints, safeTop, safeBottom, density, quietButton = sendBack != null)
         SideEffect { state.geometry = geometry }
         val step = state.step
         val primaryLabel = state.primaryLabel
@@ -199,6 +202,7 @@ private fun CardTable(
             showsTurnTip = showsTurnTip,
             onClose = onClose,
             onShare = { sharing = true },
+            sendBack = sendBack,
         )
     }
     if (sharing) CardShareSheet(card, mine, onClose = { sharing = false })
@@ -230,7 +234,10 @@ private fun PictureProblem(
     }
 }
 
-/** The moment fitted to this screen, with room held for the largest words and hint at this text size. */
+/**
+ * The moment fitted to this screen, with room held for the largest words and hint at this text size, and for the quiet
+ * second button when there is one ([quietButton]).
+ */
 @Composable
 private fun rememberTableGeometry(
     card: CardOnTable,
@@ -238,11 +245,12 @@ private fun rememberTableGeometry(
     safeTop: Float,
     safeBottom: Float,
     density: Density,
+    quietButton: Boolean,
 ): TableGeometry {
     val measurer = rememberTextMeasurer()
     val width = constraints.maxWidth
     val height = constraints.maxHeight
-    return remember(width, height, safeTop, safeBottom, density, card.fromFirst, card.sealed) {
+    return remember(width, height, safeTop, safeBottom, density, card.fromFirst, card.sealed, quietButton) {
         with(density) {
             val textWidth = width - 32.dp.roundToPx()
             val hintWidth = Constraints(maxWidth = textWidth.coerceAtLeast(1))
@@ -250,8 +258,15 @@ private fun rememberTableGeometry(
                 HINTS.maxOf { hint -> measurer.measure(hint, tableHintStyle, constraints = hintWidth).size.height }
             val primaryHeight = measurer.measure("Take the card out", tablePrimaryStyle).size.height
             val pillHeight = max(48.dp.toPx(), primaryHeight + 12.dp.toPx())
+            val quietHeight =
+                if (quietButton && !card.sealed) {
+                    max(48.dp.toPx(), measurer.measure("Send ${card.fromFirst} a card", tableQuietStyle).size.height + 12.dp.toPx()) +
+                        2.dp.toPx()
+                } else {
+                    0f
+                }
             // The button starts at least 12 dp below the lowest edge of paper; on a short screen the card shrinks.
-            val bottomRoom = safeBottom + 8.dp.toPx() + hintHeight + 2.dp.toPx() + pillHeight + 12.dp.toPx()
+            val bottomRoom = safeBottom + 8.dp.toPx() + hintHeight + 2.dp.toPx() + quietHeight + pillHeight + 12.dp.toPx()
             val wordsWidth = Constraints(maxWidth = (width - 48.dp.roundToPx()).coerceAtLeast(1))
             val longestWords = if (card.sealed) "It opens Christmas morning, in 56 days." else "A Christmas card from ${card.fromFirst}."
             val wordsHeight = measurer.measure(longestWords, tableWordsStyle, constraints = wordsWidth).size.height

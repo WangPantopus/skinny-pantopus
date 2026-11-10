@@ -21,6 +21,7 @@ import app.pantopus.android.ui.screens.mailbox.cards.table.CardSenderActionsView
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardSenderSheets
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableMenuItem
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableSendBack
 import app.pantopus.android.ui.screens.mailbox.components.MailSender
 import app.pantopus.android.ui.theme.PantopusColors
 import kotlinx.coroutines.delay
@@ -54,8 +55,15 @@ internal fun HolidayCardTablePage(
     var confirmBlock by rememberSaveable { mutableStateOf(false) }
     // Only a person can be reported or blocked: Pantopus and a piece with no known sender can't.
     val person = senderUserId?.takeIf { letter.sender != MailSender.Pantopus }
+    // "Send Hazel a card": to the one who sent it, while sending is open and neither has blocked the other; a sealed
+    // card shows it once it opens.
+    val sendCard = actions.onSendCard
+    LaunchedEffect(person, sendCard != null) { if (person != null && sendCard != null) senderActions.checkSendBack(person) }
+    val canSendBack by senderActions.canSendBack.collectAsStateWithLifecycle()
+    val sendBack = sendBackAction(person, letter.fromName, sendCard.takeIf { canSendBack && !card.sealed })
     val menu =
         buildList {
+            sendBack?.let { add(CardTableMenuItem(it.title, "cardTableMenuSendBack", it.onClick)) }
             add(CardTableMenuItem("Who sent it and its trail", "cardTableEnvelope", actions.onEnvelope))
             if (letter.filed || letter.archived) {
                 val words = if (letter.filed) "Take out of the Vault" else "Back to Incoming"
@@ -76,6 +84,7 @@ internal fun HolidayCardTablePage(
         onOpened = actions.onOpenCard,
         menu = menu,
         message = message ?: said,
+        sendBack = sendBack,
     )
     if (person != null) {
         CardSenderSheets(
@@ -88,6 +97,17 @@ internal fun HolidayCardTablePage(
             viewModel = senderActions,
         )
     }
+}
+
+/** "Send Hazel a card", when there's a person to send one to and a way to; null otherwise. */
+private fun sendBackAction(
+    person: String?,
+    fromName: String,
+    sendCard: ((userId: String, name: String) -> Unit)?,
+): CardTableSendBack? {
+    val name = fromName.trim()
+    if (person == null || sendCard == null || name.isEmpty()) return null
+    return CardTableSendBack("Send ${name.substringBefore(' ')} a card") { sendCard(person, name) }
 }
 
 /** The card as the table draws it, with the names on its envelope. */

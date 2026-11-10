@@ -160,7 +160,9 @@ struct CardTableControls: View {
             title: model.primaryTitle,
             hint: model.hint,
             primarySize: primarySize,
-            hintSize: hintSize
+            hintSize: hintSize,
+            secondary: model.secondary,
+            reservesSecondary: model.reservesSecondary
         ) { model.primary() }
             .frame(width: max(0, contentWidth - 32))
             .padding(.leading, 16)
@@ -178,6 +180,10 @@ struct CardTableAct: View {
     let hint: String
     let primarySize: CGFloat
     let hintSize: CGFloat
+    /// The quiet button under the main one (Send {first name} a card).
+    var secondary: CardTableMenuItem?
+    /// Keep its room while it's hidden, so the card doesn't move when it comes.
+    var reservesSecondary = false
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -213,6 +219,25 @@ struct CardTableAct: View {
                 }
                 .accessibilityHidden(hint.isEmpty)
                 .accessibilityIdentifier("cardTableHint")
+            // The quiet button sits under the hint, so the hint stays with the main button.
+            if secondary != nil || reservesSecondary {
+                Button { secondary?.action() } label: {
+                    Text(secondary?.title ?? " ")
+                        .font(.system(size: primarySize, weight: .medium))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(MailPaper.tableCream)
+                        .underline(color: MailPaper.tableCream.opacity(0.4))
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .opacity(secondary == nil ? 0 : 1)
+                .disabled(secondary == nil)
+                .accessibilityHidden(secondary == nil)
+                .accessibilityIdentifier(secondary?.identifier ?? "cardTableSecondary")
+                .animation(.easeInOut(duration: 0.3), value: secondary == nil)
+            }
         }
         .frame(maxWidth: .infinity)
     }

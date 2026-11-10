@@ -133,6 +133,11 @@ final class CardTableModel {
     var turnedOnce = false
     var envelopeTurnedOnce = false
     var heldOnce = false
+    /// "Send {first name} a card" (plan Part 3), set by the reader's page once the server says a card can go to them.
+    var sendBack: CardTableMenuItem?
+    /// A quiet button may come (Send {first name} a card): the buttons keep room for it from the start, so the card
+    /// doesn't move.
+    var reservesSecondary = false
 
     @ObservationIgnored var drag: CardTableDrag?
     @ObservationIgnored private let startsOnTable: Bool
