@@ -809,6 +809,8 @@ router.get('/preferences', verifyToken, async (req, res) => {
     const prefs = data ? {
       ...data,
       beacon_push_enabled: data.beacon_push_enabled ?? true,
+      // "Moments from your connections" (services/moments/momentNotify.js): on unless the person turned it off.
+      moments_enabled: data.moments_enabled ?? true,
       evening_briefing_enabled: data.evening_briefing_enabled ?? true,
       evening_briefing_time_local: data.evening_briefing_time_local || '18:00',
     } : {
@@ -824,6 +826,7 @@ router.get('/preferences', verifyToken, async (req, res) => {
       mail_summary_enabled: true,
       gig_updates_enabled: true,
       beacon_push_enabled: true,
+      moments_enabled: true,
       home_reminders_enabled: true,
       quiet_hours_start_local: null,
       quiet_hours_end_local: null,
@@ -866,6 +869,8 @@ const preferencesSchema = Joi.object({
   mail_summary_enabled: Joi.boolean(),
   gig_updates_enabled: Joi.boolean(),
   beacon_push_enabled: Joi.boolean(),
+  // "Moments from your connections": the push when a connection adds a Moment. Only app builds with Moments send it.
+  moments_enabled: Joi.boolean(),
   home_reminders_enabled: Joi.boolean(),
   quiet_hours_start_local: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/).allow(null),
   quiet_hours_end_local: Joi.string().pattern(/^(?:[01]\d|2[0-3]):[0-5]\d$/).allow(null),

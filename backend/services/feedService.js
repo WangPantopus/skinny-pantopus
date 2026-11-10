@@ -463,9 +463,14 @@ async function getMuteAndHideFilters(userId) {
     }
   }
 
+  // "Mute this person's Moments" (surface 'moments') hides only their Moments; every other person or business mute
+  // hides their posts and their Moments.
+  const accountMutes = (mutes || []).filter(m => m.surface !== 'moments');
   const result = {
-    mutedUserIds: new Set((mutes || []).filter(m => m.muted_entity_type === 'user').map(m => m.muted_entity_id)),
-    mutedBusinessIds: new Set((mutes || []).filter(m => m.muted_entity_type === 'business').map(m => m.muted_entity_id)),
+    mutedUserIds: new Set(accountMutes.filter(m => m.muted_entity_type === 'user').map(m => m.muted_entity_id)),
+    mutedBusinessIds: new Set(accountMutes.filter(m => m.muted_entity_type === 'business').map(m => m.muted_entity_id)),
+    momentMutedIds: new Set((mutes || []).filter(m => m.surface === 'moments'
+      && ['user', 'business'].includes(m.muted_entity_type)).map(m => m.muted_entity_id)),
     mutedPersonaIds: new Set((mutes || []).filter(m => m.muted_entity_type === 'persona').map(m => m.muted_entity_id)),
     hiddenPostIds: new Set((hides || []).map(h => h.post_id)),
     blockedUserIds,
@@ -814,11 +819,13 @@ function isPoliticsPost(post) {
 // The feeds, the map and the pins show live posts that haven't ended (contract §5). A post whose
 // own end time has passed leaves them at once, before the archive job ends it (S7: a Heads-up ends
 // at the time it names). A post held for review or removed by moderation (S11) leaves them too;
-// its author still reads it on its page and in their own list (canReadPost).
+// its author still reads it on its page and in their own list (canReadPost). Moments (is_story)
+// show only on the Moments map (routes/moments.js), never in a feed or on the posts map.
 function onlyShownPosts(query) {
   return query
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-    .eq('moderation_state', 'live');
+    .eq('moderation_state', 'live')
+    .not('is_story', 'is', true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1368,7 +1375,7 @@ async function getListFeed({
   const surfacePosts = () => {
     const rows = supabaseAdmin.from('Post').select(surface === 'connections' ? CONNECTION_POST_SELECT : FEED_POST_SELECT);
     let query = scopeAccess.query(includeEnded
-      ? rows.eq('moderation_state', 'live').or('archive_reason.is.null,archive_reason.neq.moderation')
+      ? rows.eq('moderation_state', 'live').or('archive_reason.is.null,archive_reason.neq.moderation').not('is_story', 'is', true)
       : onlyShownPosts(rows.is('archived_at', null)));
     // 6. postType and topic filters (topic=sports is its own lane, above)
     if (postType) query = query.eq('post_type', postType);

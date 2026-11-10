@@ -1053,7 +1053,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       dealExpiresAt,
       lostFoundType,
       serviceCategory, refListingId, refTaskId, radiusMiles,
-      postAs: rawPostAs, audience, identityContextId, targetPlaceId, businessId, isStory,
+      postAs: rawPostAs, audience, identityContextId, targetPlaceId, businessId,
       distributionTargets, crossPostToConnections, gpsTimestamp, gpsLatitude, gpsLongitude, mediaLocations,
       purpose, profileVisibilityScope, showOnProfile,
       geocodeProvider, geocodeAccuracy, geocodePlaceId,
@@ -1480,8 +1480,10 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       target_place_id: targetPlaceId || null,
       business_id: businessId || null,
       business_author_id: (postAs === 'business' && businessId) ? businessId : null,
-      is_story: isStory || false,
-      story_expires_at: isStory ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+      // Stories are Moments now (routes/moments.js, with their own rules and map); a post made here is never one.
+      // isStory stays accepted so an older web build that sends it still posts.
+      is_story: false,
+      story_expires_at: null,
       // Event fields
       event_date: eventDate || null,
       event_end_date: eventEndDate || null,
@@ -2546,7 +2548,7 @@ router.get('/mute', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { data: rows, error } = await supabaseAdmin
       .from('PostMute')
-      .select('muted_entity_type, muted_entity_id, area_id, created_at')
+      .select('muted_entity_type, muted_entity_id, area_id, surface, created_at')
       .eq('user_id', userId)
       .in('muted_entity_type', ['user', 'business', 'topic'])
       .order('created_at', { ascending: false });
@@ -2565,7 +2567,18 @@ router.get('/mute', verifyToken, async (req, res) => {
         topicMutes.set(key, { topic: row.muted_entity_id, area_id: areaId, muted_at: row.created_at });
       }
     }
-    const mutes = (rows || []).filter((m) => m.muted_entity_type !== 'topic');
+    // A person muted in Moments only ("Mute this person's Moments") is listed with surface 'moments', so Settings can
+    // undo it; muted everywhere as well, they're listed once, as a mute of everything (surface null).
+    const mutesByAccount = new Map();
+    for (const row of rows || []) {
+      if (row.muted_entity_type === 'topic') continue;
+      const key = `${row.muted_entity_type}:${row.muted_entity_id}`;
+      const surface = row.surface === 'moments' ? 'moments' : null;
+      const listed = mutesByAccount.get(key);
+      if (!listed) mutesByAccount.set(key, { ...row, surface });
+      else if (surface === null) listed.surface = null;
+    }
+    const mutes = [...mutesByAccount.values()];
 
     const ids = [...new Set((mutes || []).map((m) => m.muted_entity_id))];
     let accounts = new Map();
@@ -2598,6 +2611,7 @@ router.get('/mute', verifyToken, async (req, res) => {
           username: chosenUsernameOrNull(account.username),
           avatar_url: account.profile_picture_url || null,
           muted_at: m.created_at,
+          surface: m.surface,
         };
       });
     res.json({ muted, topic_mutes: [...topicMutes.values()] });
@@ -2998,6 +3012,13 @@ router.get('/:id', optionalAuth, async (req, res) => {
 const isPlanPost = (post) => post?.post_metadata?.plan === true;
 const PLAN_POST_REFUSAL = { error: "This is your plan's post. Open the plan to change or cancel it.", code: 'PLAN_POST' };
 
+// A Moment (routes/moments.js) is nobody's to change and its author's to end only through DELETE /api/moments/:id: an
+// edit here could move its pin or rename its place, and a delete here would leave its private files behind and skip a
+// review's hold. The edit, delete, archive and restore routes answer its author as the read routes answer everyone
+// (canReadPost).
+const isMomentPost = (post) => post?.is_story === true;
+const MOMENT_POST_REFUSAL = { error: 'You do not have access to this post' };
+
 // True when an edit keeps at least one photo or video: the kept media (mediaUrls) by the types the edit sends, or by
 // the post's own types for the media it keeps.
 function keepsPhotoOrVideo(existing, updates) {
@@ -3018,10 +3039,12 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const { data: existing } = await supabaseAdmin.from('Post')
       .select(`user_id, media_urls, media_types, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
         post_type, content, topic, area_id, read_scope, latitude, longitude, location_precision,
-        visibility, visibility_scope, radius_miles, event_date, event_end_date, audience, distribution_targets, post_as, home_id`)
+        visibility, visibility_scope, radius_miles, event_date, event_end_date, audience, distribution_targets, post_as, home_id,
+        is_story`)
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
+    if (isMomentPost(existing)) return res.status(403).json(MOMENT_POST_REFUSAL);
     if (isPlanPost(existing)) return res.status(409).json(PLAN_POST_REFUSAL);
     if (req.body.eventDate !== undefined || req.body.eventEndDate !== undefined) {
       const dateError = eventRangeError(
@@ -3139,11 +3162,12 @@ router.delete('/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
     const { data: existing, error: lookupError } = await supabaseAdmin.from('Post')
-      .select('user_id, media_urls, media_thumbnails, media_live_urls, post_metadata').eq('id', id).maybeSingle();
+      .select('user_id, media_urls, media_thumbnails, media_live_urls, post_metadata, is_story').eq('id', id).maybeSingle();
     if (lookupError) return res.status(500).json({ error: 'Failed to delete post' });
     // A lost successful reply must not make the desired absence unrecoverable.
     if (!existing) return res.json({ message: 'Post deleted successfully' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only delete your own posts' });
+    if (isMomentPost(existing)) return res.status(403).json(MOMENT_POST_REFUSAL);
     if (isPlanPost(existing)) return res.status(409).json(PLAN_POST_REFUSAL);
 
     const keys = new Set();
@@ -3212,9 +3236,10 @@ router.post('/:id/archive', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { data: existing } = await supabaseAdmin.from('Post').select('user_id, post_metadata').eq('id', id).single();
+    const { data: existing } = await supabaseAdmin.from('Post').select('user_id, post_metadata, is_story').eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only archive your own posts' });
+    if (isMomentPost(existing)) return res.status(403).json(MOMENT_POST_REFUSAL);
     if (isPlanPost(existing)) return res.status(409).json(PLAN_POST_REFUSAL);
 
     const archivedAt = new Date().toISOString();
@@ -3238,9 +3263,10 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
     const { data: existing } = await supabaseAdmin
-      .from('Post').select('user_id, archive_reason, post_type, resolution').eq('id', id).single();
+      .from('Post').select('user_id, archive_reason, post_type, resolution, is_story').eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only restore your own posts' });
+    if (isMomentPost(existing)) return res.status(403).json(MOMENT_POST_REFUSAL);
     if (existing.archive_reason === 'moderation') {
       return res.status(403).json({ error: 'This post was removed for breaking the community guidelines.', code: 'POST_REMOVED' });
     }
@@ -3279,7 +3305,7 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
 
 const PROFILE_PIN_LIMIT = 3;
 const PROFILE_PIN_LIMIT_REPLY = { error: 'You can pin up to 3 posts. Unpin one first.', code: 'PROFILE_PIN_LIMIT' };
-const PROFILE_PIN_POST_SELECT = 'id, user_id, archived_at, archive_reason, moderation_state, show_on_profile, profile_visibility_scope, post_as, profile_pinned_at';
+const PROFILE_PIN_POST_SELECT = 'id, user_id, archived_at, archive_reason, moderation_state, show_on_profile, profile_visibility_scope, post_as, profile_pinned_at, is_story';
 
 // The post when it's the viewer's own, or the reply that refuses it.
 async function ownPostForProfilePin(postId, userId) {
@@ -3290,6 +3316,7 @@ async function ownPostForProfilePin(postId, userId) {
   if (post.user_id !== userId) {
     return { reply: [403, { error: 'You can only pin your own posts.', code: 'PROFILE_PIN_NOT_YOURS' }] };
   }
+  if (isMomentPost(post)) return { reply: [403, MOMENT_POST_REFUSAL] };
   return { post };
 }
 
@@ -4105,9 +4132,11 @@ async function sendProfilePosts(req, res, { pinned = false } = {}) {
     // targets (for example place + followers cross-posts) to appear when the profile
     // scope allows them.
 
+    // Moments never show on a profile, their author's own included (they live on the Moments map).
     let query = supabaseAdmin.from('Post')
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .not('is_story', 'is', true);
     query = pinned
       ? query.not('profile_pinned_at', 'is', null).order('profile_pinned_at', { ascending: false })
       : query.order('created_at', { ascending: false });
