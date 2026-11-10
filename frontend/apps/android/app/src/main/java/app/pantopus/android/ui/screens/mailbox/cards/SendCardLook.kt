@@ -402,7 +402,14 @@ internal fun CardNoteSide(
                 .clip(shape)
                 .clearAndSetSemantics { contentDescription = "On the back: $note From ${from.removeSuffix(".")}." },
     ) {
-        HolidayCardBack(paper = card.paper, fromName = from, year = card.year, design = card.design, message = card.note)
+        HolidayCardBack(
+            paper = card.paper,
+            fromName = from,
+            year = card.year,
+            design = card.design,
+            message = card.note,
+            signature = card.signature,
+        )
     }
 }
 
@@ -810,6 +817,7 @@ internal fun lookCard(
         slug = card?.slug ?: design.slug,
         table = card?.table ?: design.table,
         verse = (card?.verse ?: design.verse)?.takeIf { it.isNotBlank() },
+        signature = card?.signature?.takeIf { it.drawable },
     )
 }
 

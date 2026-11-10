@@ -129,7 +129,7 @@ private fun sealingCard(
     val from = preview.piece.senderDisplay.trim().ifEmpty { fromName }
     return lookCard(preview, design, cards.year)
         .tableCard(id = "seal-${form.requestId ?: design.id}", from = from, to = envelopeTo)
-        .copy(sealed = preview.sealed, note = form.message.trim())
+        .copy(sealed = preview.sealed, note = form.message.trim(), signature = form.signature)
 }
 
 /** "Hazel", an address as it is, or "Hazel and 2 more" for a list; null by link. */

@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt.agedEdges
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt.paperGrain
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableBack
@@ -234,8 +235,10 @@ fun HolidayCardBack(
     writing: (@Composable (TextStyle) -> Unit)? = null,
     /** The picture on its other side: with the table, how the pen falls goes with it. */
     design: String? = null,
+    /** Signed beside FROM (plan 8.2, with the table only); null: the first name typed in the pen. */
+    signature: CardSignature? = null,
 ) {
-    if (LaunchFeatures.cardTable) return CardTableBack(design, paper, fromName, year, message, writing, modifier)
+    if (LaunchFeatures.cardTable) return CardTableBack(design, paper, fromName, year, message, writing, modifier, signature)
     val paperColor = remember(paper) { HolidayCardArt.paper(paper) }
     BoxWithConstraints(modifier = modifier.fillMaxSize().background(paperColor)) {
         val scale = CardScale(constraints.maxWidth.toFloat(), LocalDensity.current)

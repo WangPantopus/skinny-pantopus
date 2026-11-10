@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
@@ -347,6 +348,9 @@ private fun Steps(
                     message = form.message,
                     onMessage = viewModel::onMessageChange,
                     onNext = viewModel::next,
+                    signature = form.signature,
+                    canSign = LaunchFeatures.cardTable && cards.signature != null,
+                    onSignature = viewModel::onSignature,
                 )
             }
         SendCardStep.Seal ->

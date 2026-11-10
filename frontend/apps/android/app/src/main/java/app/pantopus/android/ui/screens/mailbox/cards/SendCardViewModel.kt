@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardListRecipient
@@ -24,6 +25,7 @@ import app.pantopus.android.data.identity.LocalProfileRepository
 import app.pantopus.android.data.mailbox.CardLook
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardSignatureJson
 import app.pantopus.android.ui.screens.mailbox.components.mailMessage
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -151,6 +153,8 @@ data class SendCardForm(
     val to: CardRecipient? = null,
     val design: String? = null,
     val message: String = "",
+    /** Signed beside FROM (plan 8.2); null: the first name typed in the pen. Sent with every look and retry. */
+    val signature: CardSignature? = null,
     val arrival: String? = null,
     /** When a card to the person chosen can come, by their clock; null until read (the sender's next morning stands in). */
     val theirs: HolidayCardArrivalsFor? = null,
@@ -392,6 +396,11 @@ class SendCardViewModel
             _form.update { it.copy(message = text.takeLetters(limit)) }
         }
 
+        /** Signed beside FROM, or null for the typed first name again (plan 8.2). */
+        fun onSignature(signature: CardSignature?) {
+            _form.update { it.copy(signature = signature?.takeIf { s -> s.drawable }) }
+        }
+
         /** When a card to the person chosen can come, by their clock. A failure keeps the sender's next morning. */
         private fun readTheirs() {
             val person = _form.value.to as? CardRecipient.Person ?: return
@@ -483,7 +492,8 @@ class SendCardViewModel
                         else -> null
                     }
                 }
-            return form.copy(listIds = ids) to SendHolidayCardListBody(design, form.message.trim(), arrival, recipients)
+            return form.copy(listIds = ids) to
+                SendHolidayCardListBody(design, form.message.trim(), arrival, recipients, signature = form.signature)
         }
 
         /**
@@ -593,6 +603,7 @@ class SendCardViewModel
                     repo.preview(
                         design = design,
                         message = form.message.trim(),
+                        signature = form.signature,
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
@@ -612,7 +623,7 @@ class SendCardViewModel
                 val same = it.step == SendCardStep.Seal && it.to == asked.to && it.design == asked.design && it.arrival == asked.arrival
                 when {
                     // Back, or another choice, while it was read: only an answer for what's chosen now counts.
-                    !same || it.message != asked.message -> it.copy(previewing = false)
+                    !same || it.message != asked.message || it.signature != asked.signature -> it.copy(previewing = false)
                     look is CardLook.Shown ->
                         it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
                     look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
@@ -642,6 +653,7 @@ class SendCardViewModel
                     repo.send(
                         design = design,
                         message = form.message.trim(),
+                        signature = form.signature,
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
@@ -789,6 +801,7 @@ class SendCardViewModel
             // "Send this card to someone" on a public card page names the picture.
             val design = saved.get<String>(KEY_DESIGN) ?: saved.get<String>(SEND_CARD_DESIGN_KEY)?.takeIf { LaunchFeatures.cardTable }
             val message = saved.get<String>(KEY_MESSAGE).orEmpty()
+            val signature = saved.get<String>(KEY_SIGNATURE)?.let(CardSignatureJson::fromJson)
             val step = savedStep(opensAtPick = sendBack != null)
             val reachable =
                 when {
@@ -804,6 +817,7 @@ class SendCardViewModel
                 to = to.takeIf { reachable != SendCardStep.To },
                 design = design,
                 message = message,
+                signature = signature,
                 arrival = saved.get<String>(KEY_ARRIVAL),
                 requestId = saved.get<String>(KEY_REQUEST_ID),
                 listed = list?.first.orEmpty(),
@@ -857,6 +871,7 @@ class SendCardViewModel
             saved[KEY_LIST] = listJson(form).takeIf { form.step != SendCardStep.Sent }
             saved[KEY_DESIGN] = form.design.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_MESSAGE] = form.message.takeIf { form.step != SendCardStep.Sent }
+            saved[KEY_SIGNATURE] = form.signature?.takeIf { form.step != SendCardStep.Sent }?.let(CardSignatureJson::toJson)
             saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_REQUEST_ID] = form.requestId.takeIf { form.step != SendCardStep.Sent }
         }
@@ -902,6 +917,7 @@ class SendCardViewModel
             private const val KEY_TO_LINK = "sendCard.toLink"
             private const val KEY_DESIGN = "sendCard.design"
             private const val KEY_MESSAGE = "sendCard.message"
+            private const val KEY_SIGNATURE = "sendCard.signature"
             private const val KEY_ARRIVAL = "sendCard.arrival"
             private const val KEY_REQUEST_ID = "sendCard.requestId"
             private const val KEY_TO_LIST = "sendCard.toList"

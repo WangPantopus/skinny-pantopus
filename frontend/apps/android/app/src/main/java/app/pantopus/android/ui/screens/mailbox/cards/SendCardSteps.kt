@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.data.api.models.mailbox.HolidayCardCollection
 import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
@@ -748,8 +749,14 @@ internal fun WriteStep(
     message: String,
     onMessage: (String) -> Unit,
     onNext: () -> Unit,
+    /** Signed beside FROM (plan 8.2), or null for the typed first name. */
+    signature: CardSignature? = null,
+    /** The server keeps signatures (`GET /api/mailbox/cards` `signature`, launch key `card_table`). */
+    canSign: Boolean = false,
+    onSignature: (CardSignature?) -> Unit = {},
 ) {
     var showBack by rememberSaveable { mutableStateOf(true) }
+    var signing by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val count = message.letterCount()
     val greeting = (to as? CardRecipient.Person)?.firstName ?: "friend"
@@ -775,6 +782,7 @@ internal fun WriteStep(
                     year = year,
                     modifier = Modifier.shadow(10.dp, shape).clip(shape),
                     design = design.id,
+                    signature = signature,
                     writing = { style ->
                         BasicTextField(
                             value = message,
@@ -820,6 +828,45 @@ internal fun WriteStep(
                 fontWeight = if (count >= limit) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (count >= limit) PantopusColors.cardWax else PantopusColors.cardTextQuiet,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("sendCardCount"),
+            )
+        }
+        if (canSign) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                CardButton(
+                    if (signature != null) "Sign again" else "Sign your name",
+                    onClick = {
+                        focusManager.clearFocus()
+                        showBack = true
+                        signing = true
+                    },
+                    kind = CardButtonKind.Paper,
+                    fill = false,
+                    modifier = Modifier.testTag("sendCardSign"),
+                )
+                Text(
+                    if (signature != null) "Signed beside FROM." else "Or leave ${fromName.trim().substringBefore(' ')} typed.",
+                    fontSize = 13.sp,
+                    color = PantopusColors.cardTextQuiet,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (signing) {
+            CardSignaturePad(
+                initial = signature,
+                onDone = {
+                    onSignature(it)
+                    signing = false
+                },
+                onTyped = {
+                    onSignature(null)
+                    signing = false
+                },
+                onClose = { signing = false },
             )
         }
         CardButton(

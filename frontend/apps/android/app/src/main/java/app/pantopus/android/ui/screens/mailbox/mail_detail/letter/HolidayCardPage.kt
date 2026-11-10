@@ -194,6 +194,7 @@ internal fun HolidayCardOutOfEnvelope(
                         fromName = from,
                         year = card.year,
                         message = card.note,
+                        signature = card.signature,
                         modifier = Modifier.shadow(10.dp, shape).clip(shape),
                     )
                 },

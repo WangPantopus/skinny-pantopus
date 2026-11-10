@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.mailbox.v2
 
 import app.pantopus.android.data.api.models.common.JsonArrayValue
 import app.pantopus.android.data.api.models.common.JsonValue
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -111,6 +112,8 @@ data class MailCard(
     val table: String? = null,
     /** The whole verse printed on a Christmas with Jesus Christ picture, once it isn't sealed ("Read the verse"). */
     val verse: String? = null,
+    /** Signed beside FROM (plan 8.2): null while it's sealed and for a card with the name typed. */
+    val signature: CardSignature? = null,
 )
 
 /**

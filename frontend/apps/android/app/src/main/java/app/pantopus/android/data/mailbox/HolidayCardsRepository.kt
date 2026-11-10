@@ -1,6 +1,7 @@
 package app.pantopus.android.data.mailbox
 
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
@@ -66,6 +67,7 @@ class HolidayCardsRepository
          * when the server can't show it: it has no Look it over yet (a 404 without the server's code, as a server from
          * before it answers), or its answer can't be read. Sending still works there.
          */
+        @Suppress("LongParameterList") // The card's choices, its request ID and its signature (plan 8.2), as the body has them.
         suspend fun preview(
             design: String,
             message: String,
@@ -74,6 +76,7 @@ class HolidayCardsRepository
             toEmail: String?,
             requestId: String? = null,
             toLink: Boolean = false,
+            signature: CardSignature? = null,
         ): CardLook {
             val body =
                 SendHolidayCardBody(
@@ -86,6 +89,7 @@ class HolidayCardsRepository
                         true.takeIf {
                             latest.value?.postageEnabled == true
                         },
+                    signature = signature,
                 )
             val response =
                 when (val result = safeApiCall { api.preview(body) }) {
@@ -130,6 +134,7 @@ class HolidayCardsRepository
         }
 
         /** `POST /api/mailbox/cards`: today's card, to a person by their user id or by email. */
+        @Suppress("LongParameterList") // The card's choices, its request ID and its signature (plan 8.2), as the body has them.
         suspend fun send(
             design: String,
             message: String,
@@ -138,6 +143,7 @@ class HolidayCardsRepository
             toEmail: String?,
             requestId: String? = null,
             toLink: Boolean = false,
+            signature: CardSignature? = null,
         ): NetworkResult<SentHolidayCard> {
             val body =
                 SendHolidayCardBody(
@@ -150,6 +156,7 @@ class HolidayCardsRepository
                         true.takeIf {
                             latest.value?.postageEnabled == true
                         },
+                    signature = signature,
                 )
             return when (val result = safeApiCall { api.send(body) }) {
                 is NetworkResult.Success -> {
