@@ -13,6 +13,11 @@ import { tableEdge } from '@/components/mailbox/cards/cardArt';
 import { PublicCardPage, PublicCardsTrouble } from '@/components/mailbox/cards/PublicCards';
 import { fetchPublicCardDesigns, shareRefFrom } from '@/lib/publicShare';
 
+// Rendered on every request. A build or a first visit that met the server with
+// cards off (or down) would otherwise be saved as a fixed "not found" page, and
+// stay that way until the next web deploy (production, November 9).
+export const dynamic = 'force-dynamic';
+
 type CardPageProps = {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ ref?: string | string[] }>;
