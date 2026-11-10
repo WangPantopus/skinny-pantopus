@@ -14,8 +14,9 @@ import { createPortal } from 'react-dom';
 import { cardMood, cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, seededRandom, TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { cardPen } from './cardFont';
 import { playCardSound, preloadCardSounds } from './cardSounds';
-import type { CardPhoto, CardSignature } from '@pantopus/api';
+import type { CardPhoto, CardSignature, CardVoice } from '@pantopus/api';
 import CardPrint, { type PrintSource } from './CardPrint';
+import CardGreeting, { spokenLength } from './CardGreeting';
 import { PaperBack, PaperFront } from './CardPaper';
 import { CardTableEngine, type TableState } from './cardTableEngine';
 import { useDarkPage } from './useDarkPage';
@@ -62,6 +63,8 @@ export type TableCard = {
   signature?: CardSignature | null;
   /** The card's own photo (memories plan step 4); null while sealed. `covered` until the reader taps it. */
   photo?: CardPhoto | null;
+  /** The card's own voice greeting (memories plan step 7); null while sealed. Plays only when pressed. */
+  voice?: CardVoice | null;
 };
 
 export type TableMenuItem = { label: string; onSelect: () => void };
@@ -148,7 +151,7 @@ export default function CardTable({
   onClose,
   overlay,
   letter = null,
-  photoFrom = null,
+  mediaFrom = null,
 }: {
   card: TableCard;
   /** The note. A sealed card's never reaches this far. */
@@ -178,8 +181,8 @@ export default function CardTable({
    * same moves, and the folded sheet that comes out opens the letter itself (`onOut`).
    */
   letter?: { onOut: () => void } | null;
-  /** Where the card's photo loads from: the reader's piece, the sender's Sent, or their own upload (Look it over). */
-  photoFrom?: ((fileId: string) => PrintSource) | null;
+  /** Where the card's photo and greeting load from: the reader's piece, the sender's Sent, or their own upload (Look it over). */
+  mediaFrom?: ((fileId: string) => PrintSource) | null;
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<CardTableEngine | null>(null);
@@ -200,6 +203,10 @@ export default function CardTable({
   // A photo from someone who isn't the reader's connection stays covered until it's tapped (memories contract 10).
   const [uncovered, setUncovered] = useState(false);
   const isLetter = Boolean(letter);
+  // The card's own photo and voice greeting lie on the table beside it once it's turned over (wave 4 drawings 3 and 4).
+  const photo = !isLetter && !card.sealed && !sendMoment && mediaFrom ? card.photo ?? null : null;
+  const voice = !isLetter && !card.sealed && !sendMoment && mediaFrom ? card.voice ?? null : null;
+  const hasMedia = Boolean(photo || voice);
   // The envelope's pictures: the cream set for a letter.
   const envArt = (name: string) => art(isLetter ? `cream-${name}` : name);
   const waxWhole = isLetter ? LETTER_WAX_WHOLE : WAX_WHOLE;
@@ -226,6 +233,7 @@ export default function CardTable({
       sealed: card.sealed,
       sending: Boolean(momentRef.current),
       mood: isLetter ? undefined : mood,
+      media: hasMedia,
       wholeSrc: waxWhole,
       crackedSrc: waxCracked,
       callbacks: {
@@ -436,15 +444,21 @@ export default function CardTable({
   // Read aloud as one sentence, as today's card is. The envelope reads as what it is.
   const caption = card.caption || 'A Christmas picture';
   const captionSentence = /[.!?]$/.test(caption) ? caption : `${caption}.`;
+  // What lies with it, said once it's turned over (the photo and the greeting are on the table, not in the card).
+  const mediaSentence = photo || voice
+    ? ` With it: ${[photo ? 'a photo' : '', voice ? `a voice greeting, ${spokenLength(voice.duration_ms)}` : ''].filter(Boolean).join(' and ')}.`
+    : '';
   const spoken = isLetter
     ? (step === 'out' ? `The letter from ${fromName}. Opening it.` : `A letter from ${fromName}`)
     : sendMoment
     ? [words, send === 'addressed' ? `Addressed to ${toName}.` : '', send === 'sending' ? 'Sealing it.' : ''].filter(Boolean).join(' ')
     : step === 'out' && !sealed
-    ? `Card from ${fromName}: ${captionSentence} On the back: ${note}`
+    ? `Card from ${fromName}: ${captionSentence} On the back: ${note}${mediaSentence}`
     : `Christmas card from ${fromName}${sealed ? ', sealed until Christmas morning' : ''}`;
   const day = postmarkDay(mailedOn || new Date().toISOString());
   const [month, date] = day.split(' ');
+  // Shown once it's turned over, and not while it's enlarged (it would lie over them).
+  const mediaShown = hasMedia && turnedOver && !ui.enlarged;
 
   return createPortal(
     <>
@@ -512,31 +526,6 @@ export default function CardTable({
               </PaperBack>
               </>)}
             </div>
-            {/* The card's own photo, a print lying beside it once the card is turned over (wave 4 drawing 3); it moves
-                with the card and never flips. A nostalgia card's print has the orange date. */}
-            {card.photo && !sealed && !isLetter && photoFrom ? (
-              <div
-                className={`${styles.print} ${turnedOver ? styles.printShown : ''}`}
-                // A portrait print lies narrower, so either kind keeps clear of the buttons under the card.
-                style={{ width: (card.photo.height ?? 3) > (card.photo.width ?? 4) ? '34%' : '44%' }}
-                aria-hidden={!turnedOver}
-                data-ui
-                data-testid="cardTablePrint"
-              >
-                <CardPrint
-                  source={photoFrom(card.photo.file_id)}
-                  width={card.photo.width}
-                  height={card.photo.height}
-                  alt={card.photo.alt}
-                  covered={card.photo.covered && !uncovered}
-                  fromName={fromName}
-                  onUncover={() => setUncovered(true)}
-                  datedOn={mood === 'nostalgia' ? mailedOn : null}
-                  tilt={4}
-                  className="w-full"
-                />
-              </div>
-            ) : null}
           </div>
           <div className={`${styles.layer} ${styles.lPocketShadow}`} data-el="lPocketShadow"><Art src={envArt('env-pocket-shadow.webp')} /></div>
           <div className={`${styles.layer} ${styles.lPocket}`} data-el="lPocket"><Art src={envArt('env-pocket.webp')} /></div>
@@ -581,6 +570,48 @@ export default function CardTable({
             </div>
           </div>
         </div>
+        {/* The card's own photo and voice greeting, lying on the table beside the card once it's turned over (wave 4
+            drawings 3 and 4), or under it on a narrow table, where the engine keeps them room. Not part of the card: they
+            stay put while it moves, and screen readers reach them. */}
+        {hasMedia ? (
+          <div className={`${styles.media} ${mediaShown ? styles.mediaShown : ''}`} inert={!mediaShown} data-testid="cardTableMedia">
+            {photo ? (
+              <div
+                className={styles.mediaPrint}
+                // How tall the print is for its width: a portrait one lies narrower, so either fits the room.
+                style={{ '--print-k': `${(0.88 * (photo.height && photo.width ? photo.height / photo.width : 0.75) + 0.2).toFixed(3)}` } as CSSProperties}
+                data-ui
+                data-testid="cardTablePrint"
+              >
+                <CardPrint
+                  source={mediaFrom!(photo.file_id)}
+                  width={photo.width}
+                  height={photo.height}
+                  alt={photo.alt}
+                  covered={photo.covered && !uncovered}
+                  fromName={fromName}
+                  onUncover={() => setUncovered(true)}
+                  datedOn={mood === 'nostalgia' ? mailedOn : null}
+                  tilt={-3}
+                  className="w-full"
+                />
+              </div>
+            ) : null}
+            {voice ? (
+              <div className={`${styles.mediaVoice} ${photo ? '' : styles.mediaVoiceAlone}`} data-ui>
+                <CardGreeting
+                  source={mediaFrom!(voice.file_id)}
+                  durationMs={voice.duration_ms}
+                  forName={toName}
+                  fromName={fromName}
+                  gift={mood === 'reverence'}
+                  tilt={3}
+                  active={mediaShown}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {!isLetter && mood === 'reverence' ? <div className={styles.candle} /> : null}
         <div className={styles.snow} data-el="snow" style={{ WebkitMaskImage: `url(${art('light.webp')})`, maskImage: `url(${art('light.webp')})` }}>
           {!isLetter && mood !== 'reverence' ? SNOW.map((speck, i) => (

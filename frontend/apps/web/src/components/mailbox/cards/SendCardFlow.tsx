@@ -30,6 +30,7 @@ import CardFront from './CardFront';
 import CardBack, { BACK_TEXT, RULED } from './CardBack';
 import { SignaturePad } from './cardSignature';
 import CardPrint from './CardPrint';
+import { canRecordGreeting, GreetingObject, greetingLength, recordingClock, useGreetingPlayer, useGreetingRecorder } from './CardGreeting';
 import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, Slip, StepsAtTable } from './AtTheTable';
 import CardFlip from './CardFlip';
 import CardLinkActions from './CardLinkActions';
@@ -39,7 +40,7 @@ import CardShareSheet from './CardShareSheet';
 import CardRack from './CardRack';
 import { askTakeBack } from './takeBack';
 import { chosenPersonFor } from './sendOneBack';
-import { cardPicture, clockTime, firstNameOf, SERIF, shortDay, WAX } from './cardArt';
+import { cardMood, cardPicture, clockTime, firstNameOf, SERIF, shortDay, WAX } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
 /** Someone on a list (digital stamps on): a person found by name, or an address. */
@@ -664,6 +665,15 @@ type PhotoDraft = {
   error: string | null;
 };
 
+/** The card's own voice greeting while it's written (memories plan step 7): the recording, its upload, the server's reference. */
+type VoiceDraft = {
+  status: 'uploading' | 'ready' | 'failed';
+  blob: Blob;
+  localUrl: string;
+  ref: CardMediaRef | null;
+  error: string | null;
+};
+
 function WriteStep({
   design,
   year,
@@ -682,6 +692,12 @@ function WriteStep({
   onAddPhoto,
   onRemovePhoto,
   onRetryPhoto,
+  voice = null,
+  canAddVoice = false,
+  greetingFor = 'you',
+  onRecorded,
+  onRemoveVoice,
+  onRetryVoice,
   onCloth = false,
   onNext,
 }: {
@@ -706,6 +722,15 @@ function WriteStep({
   onAddPhoto?: (file: File) => void;
   onRemovePhoto?: () => void;
   onRetryPhoto?: () => void;
+  /** The card's own voice greeting (memories plan step 7): uploading, ready or failed. */
+  voice?: VoiceDraft | null;
+  /** GET /cards says a greeting can go on this card now; it's recorded only where the browser makes AAC (Firefox: no). */
+  canAddVoice?: boolean;
+  /** "For {first}" on the cassette: the person's first name, or "you". */
+  greetingFor?: string;
+  onRecorded?: (recording: Blob) => void;
+  onRemoveVoice?: () => void;
+  onRetryVoice?: () => void;
   /** On the card's cloth (design plan Part 9): cream words and glass buttons. */
   onCloth?: boolean;
   onNext: () => void;
@@ -720,6 +745,22 @@ function WriteStep({
   const photoWait = photo && photo.status !== 'ready'
     ? (photo.status === 'failed' ? 'The photo didn’t upload. Try again, or remove it.' : 'Waiting for the photo to finish uploading.')
     : null;
+  // Recorded only where this browser makes AAC (checked once it's in the browser, so the page renders the same first).
+  const [canRecord, setCanRecord] = useState(false);
+  useEffect(() => { setCanRecord(canAddVoice && canRecordGreeting()); }, [canAddVoice]);
+  const recorder = useGreetingRecorder((recording) => onRecorded?.(recording));
+  const listen = useGreetingPlayer(voice?.ref ? { own: voice.ref.file_id } : null, voice?.localUrl ?? null);
+  // Seal it waits for the greeting as for the photo.
+  const voiceWait = recorder.recording ? 'Stop the recording first.'
+    : voice && voice.status !== 'ready'
+      ? (voice.status === 'failed' ? 'The greeting didn’t upload. Try again, or remove it.' : 'Waiting for the greeting to finish uploading.')
+      : null;
+  const mediaWait = photoWait || voiceWait;
+  const showPhoto = canAddPhoto || Boolean(photo);
+  const showVoice = (canAddVoice && canRecord) || Boolean(voice) || recorder.recording;
+  const record = () => { listen.stop(); void recorder.start(); };
+  // Christmas with Jesus Christ: a gift tag, as the reader will see it (wave 4 drawing 4).
+  const gift = cardMood(design.number, design.id) === 'reverence';
   return (
     <div className="mt-3 px-4">
       <CardFlip
@@ -774,8 +815,10 @@ function WriteStep({
           onClose={() => setSigning(false)}
         />
       ) : null}
-      {canAddPhoto ? (
-        <div className="mx-auto mt-4 max-w-[420px]" data-testid="sendCardPhoto">
+      {showPhoto || showVoice ? (
+        // The card's own photo and voice greeting (wave 4 drawings 1 and 2): under the note, each uploaded as soon as
+        // it's added, with its own progress; the note stays first and required.
+        <div className="mx-auto mt-4 max-w-[420px]" data-testid="sendCardMedia">
           <input
             ref={photoInput}
             type="file"
@@ -786,37 +829,80 @@ function WriteStep({
             data-testid="sendCardPhotoInput"
             onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) onAddPhoto?.(file); }}
           />
-          {photo ? (
-            <div className="flex items-start gap-4">
-              <div className="w-[46%] shrink-0 [container-type:inline-size]">
-                <CardPrint
-                  source={photo.ref ? { own: photo.ref.file_id } : null}
-                  localUrl={photo.localUrl}
-                  width={photo.ref?.width}
-                  height={photo.ref?.height}
-                  alt={photoAlt}
-                  uploading={photo.status === 'uploading'}
-                  className="w-full"
-                />
-                <p aria-live="polite" className={`mt-2 text-[13px] ${quiet}`}>
-                  {photo.status === 'uploading' ? 'Uploading…' : photo.status === 'ready' ? 'Added.' : ''}
-                </p>
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
-                {photo.status === 'failed' ? (
-                  <>
-                    <p role="alert" className={`text-[13px] font-semibold ${onCloth ? 'text-[#ffb4a8]' : 'text-[#8b1d1d]'}`}>{photo.error}</p>
-                    <button type="button" data-testid="sendCardPhotoRetry" onClick={onRetryPhoto} className={ghost}>Try again</button>
-                  </>
-                ) : (
-                  <button type="button" data-testid="sendCardPhotoReplace" onClick={() => photoInput.current?.click()} className={ghost}>Replace</button>
-                )}
-                <button type="button" data-testid="sendCardPhotoRemove" onClick={onRemovePhoto} className={ghost}>Remove</button>
-              </div>
+          {!photo && !voice && !recorder.recording ? (
+            <div className="flex flex-wrap gap-2">
+              {showPhoto ? <button type="button" data-testid="sendCardAddPhoto" onClick={() => photoInput.current?.click()} className={ghost}>Add a photo</button> : null}
+              {showVoice ? <button type="button" data-testid="sendCardRecord" onClick={record} className={ghost}>Record a greeting</button> : null}
             </div>
           ) : (
-            <button type="button" data-testid="sendCardAddPhoto" onClick={() => photoInput.current?.click()} className={ghost}>Add a photo</button>
+            <div className="grid grid-cols-2 items-start gap-4">
+              <div className="min-w-0" data-testid="sendCardPhoto">
+                {photo ? (
+                  <>
+                    <div className="w-[92%] [container-type:inline-size]">
+                      <CardPrint
+                        source={photo.ref ? { own: photo.ref.file_id } : null}
+                        localUrl={photo.localUrl}
+                        width={photo.ref?.width}
+                        height={photo.ref?.height}
+                        alt={photoAlt}
+                        uploading={photo.status === 'uploading'}
+                        className="w-full"
+                      />
+                    </div>
+                    <p aria-live="polite" className={`mt-2 text-[13px] ${quiet}`}>
+                      {photo.status === 'uploading' ? 'Uploading…' : photo.status === 'ready' ? 'Added.' : ''}
+                    </p>
+                    {photo.status === 'failed' ? <p role="alert" className={`mt-1 text-[13px] font-semibold ${onCloth ? 'text-[#ffb4a8]' : 'text-[#8b1d1d]'}`}>{photo.error}</p> : null}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {photo.status === 'failed'
+                        ? <button type="button" data-testid="sendCardPhotoRetry" onClick={onRetryPhoto} className={ghost}>Try again</button>
+                        : <button type="button" data-testid="sendCardPhotoReplace" onClick={() => photoInput.current?.click()} className={ghost}>Replace</button>}
+                      <button type="button" data-testid="sendCardPhotoRemove" onClick={onRemovePhoto} className={ghost}>Remove</button>
+                    </div>
+                  </>
+                ) : showPhoto ? (
+                  <button type="button" data-testid="sendCardAddPhoto" onClick={() => photoInput.current?.click()} className={ghost}>Add a photo</button>
+                ) : null}
+              </div>
+              <div className="min-w-0" data-testid="sendCardVoice">
+                {recorder.recording ? (
+                  <>
+                    <div className="w-[92%] [container-type:inline-size]"><GreetingObject forName={greetingFor} gift={gift} turning recording tilt={2} /></div>
+                    <p aria-live="polite" className={`mt-2 flex items-center gap-1.5 text-[13px] ${quiet}`}>
+                      <span aria-hidden className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#e0453a] motion-reduce:animate-none" />
+                      Recording {recordingClock(recorder.elapsed)} of 1:00
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" data-testid="sendCardRecordStop" onClick={recorder.stop} className={ghost}>Stop</button>
+                    </div>
+                  </>
+                ) : voice ? (
+                  <>
+                    <div className="w-[92%] [container-type:inline-size]"><GreetingObject forName={greetingFor} gift={gift} turning={listen.playing} durationMs={voice.ref?.duration_ms ?? null} tilt={2} /></div>
+                    <p aria-live="polite" className={`mt-2 text-[13px] ${quiet}`}>
+                      {voice.status === 'uploading' ? 'Uploading…' : voice.status === 'ready' ? 'Added.' : ''}
+                    </p>
+                    {voice.status === 'failed' ? <p role="alert" className={`mt-1 text-[13px] font-semibold ${onCloth ? 'text-[#ffb4a8]' : 'text-[#8b1d1d]'}`}>{voice.error}</p> : null}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {voice.status === 'failed' ? (
+                        <button type="button" data-testid="sendCardVoiceRetry" onClick={onRetryVoice} className={ghost}>Try again</button>
+                      ) : (
+                        <button type="button" data-testid="sendCardListen" aria-pressed={listen.playing} onClick={listen.toggle} className={ghost}>
+                          {listen.playing ? '❚❚ Pause' : `▶ Listen${voice.ref?.duration_ms ? ` ${greetingLength(voice.ref.duration_ms)}` : ''}`}
+                        </button>
+                      )}
+                      {canRecord ? <button type="button" data-testid="sendCardRecordAgain" onClick={record} className={ghost}>Record again</button> : null}
+                      <button type="button" data-testid="sendCardVoiceRemove" onClick={() => { listen.stop(); onRemoveVoice?.(); }} className={ghost}>Remove</button>
+                    </div>
+                  </>
+                ) : showVoice ? (
+                  <button type="button" data-testid="sendCardRecord" onClick={record} className={ghost}>Record a greeting</button>
+                ) : null}
+              </div>
+            </div>
           )}
+          {recorder.refused ? <p role="alert" className={`mt-3 text-[13px] ${quiet}`} data-testid="sendCardMicRefused">{recorder.refused}</p> : null}
           {photo ? (
             <label className={`mt-3 block text-[13px] ${quiet}`}>
               Describe the photo (optional, for screen readers)
@@ -833,9 +919,9 @@ function WriteStep({
         </div>
       ) : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
-        <button type="button" disabled={!message.trim() || Boolean(photoWait)} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Seal it</button>
+        <button type="button" disabled={!message.trim() || Boolean(mediaWait)} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Seal it</button>
         {!message.trim() ? <p className={`mt-2 text-center text-[13px] ${quiet}`}>Write a few words on the back first.</p>
-          : photoWait ? <p className={`mt-2 text-center text-[13px] ${quiet}`}>{photoWait}</p> : null}
+          : mediaWait ? <p className={`mt-2 text-center text-[13px] ${quiet}`}>{mediaWait}</p> : null}
       </div>
     </div>
   );
@@ -1362,6 +1448,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
   // The card's own photo (memories plan step 4): uploaded as soon as it's chosen.
   const [photo, setPhoto] = useState<PhotoDraft | null>(null);
   const [photoAlt, setPhotoAlt] = useState('');
+  // Its own voice greeting (memories plan step 7): uploaded as soon as the recording stops.
+  const [voice, setVoice] = useState<VoiceDraft | null>(null);
   const [arrival, setArrival] = useState<HolidayCardArrival | null>(null);
   const [sent, setSent] = useState<SentHolidayCard | null>(null);
   // A card by link, just sent: its link, to copy and share.
@@ -1493,6 +1581,20 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
   };
   const photoReady = photo?.status === 'ready' && photo.ref ? photo.ref : null;
 
+  const uploadVoice = (blob: Blob) => {
+    setVoice((before) => {
+      if (before && before.blob !== blob) URL.revokeObjectURL(before.localUrl);
+      return { status: 'uploading', blob, localUrl: before?.blob === blob ? before.localUrl : URL.createObjectURL(blob), ref: null, error: null };
+    });
+    const mine = (draft: VoiceDraft | null) => Boolean(draft && draft.blob === blob);
+    mailbox.uploadHolidayCardMedia('voice', blob)
+      .then(({ media }) => setVoice((d) => (mine(d) ? { ...d!, status: 'ready', ref: media } : d)))
+      .catch((error: { data?: { error?: string } }) => setVoice((d) => (mine(d)
+        ? { ...d!, status: 'failed', error: error?.data?.error || 'The greeting didn’t upload. Check your connection.' } : d)));
+  };
+  const removeVoice = () => setVoice((before) => { if (before) URL.revokeObjectURL(before.localUrl); return null; });
+  const voiceReady = voice?.status === 'ready' && voice.ref ? voice.ref : null;
+
   const cardToSend = () => {
     if (!to || to.kind === 'list' || !design || !arrival) return null;
     requestId.current ??= crypto.randomUUID();
@@ -1505,6 +1607,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
       ...(data?.postage_enabled ? { use_stamp: true } : {}),
       ...(signature ? { signature } : {}),
       ...(photoReady ? { photo: photoReady.file_id, ...(photoAlt.trim() ? { photo_alt: photoAlt.trim() } : {}) } : {}),
+      ...(voiceReady ? { voice: voiceReady.file_id } : {}),
     };
   };
 
@@ -1516,7 +1619,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     listIds.current = new Map();
     setSent(null);
     setSentLink(null);
-    setTo(null); setDesignId(null); setMessage(''); setSignature(null); removePhoto(); setArrival(null); setLook(null); setLookUnavailable(false);
+    setTo(null); setDesignId(null); setMessage(''); setSignature(null); removePhoto(); removeVoice(); setArrival(null); setLook(null); setLookUnavailable(false);
     setListed([]); setListLook(null); setListSent(null); setListError(null); setListTakenBack(new Set()); setListTakeBackError(null);
     setStep('to');
   };
@@ -1882,6 +1985,13 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           onAddPhoto={uploadPhoto}
           onRemovePhoto={removePhoto}
           onRetryPhoto={() => { if (photo) uploadPhoto(photo.file); }}
+          // Its own voice greeting (memories plan step 7), the same way: one card to one person.
+          canAddVoice={launchFeatures.holidayCardMemories && Boolean(data.media?.voice.usable) && to?.kind !== 'list'}
+          voice={voice}
+          greetingFor={to?.kind === 'person' ? firstName(to.name) : 'you'}
+          onRecorded={uploadVoice}
+          onRemoveVoice={removeVoice}
+          onRetryVoice={() => { if (voice) uploadVoice(voice.blob); }}
           onCloth={atTable}
           onNext={() => { setStep('seal'); setLookUnavailable(false); if (to?.kind === 'person') void theirs.refetch(); }}
         />
