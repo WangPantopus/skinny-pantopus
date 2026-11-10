@@ -193,7 +193,8 @@ struct CardTableAct: View {
             Text(hint.isEmpty ? " " : hint)
                 .font(.system(size: hintSize))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(dynamicTypeSize.isAccessibilitySize ? MailPaper.tableCream : MailPaper.tableCreamFaint)
+                // White at 70%, so it reads on every cloth (plan 1.8).
+                .foregroundStyle(dynamicTypeSize.isAccessibilitySize ? MailPaper.tableCream : Color.white.opacity(0.7))
                 // At the largest sizes it runs over the mail, so it gets its own glass.
                 .padding(.horizontal, dynamicTypeSize.isAccessibilitySize && !hint.isEmpty ? 12 : 0)
                 .background {

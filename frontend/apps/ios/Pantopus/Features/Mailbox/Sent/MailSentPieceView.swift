@@ -191,7 +191,6 @@ struct MailSentPieceView: View {
             HolidayCardFlip(showBack: showBack) { front } back: { back }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Your card: \(HolidayCardWords.captionSentence(piece.card.caption)) On the back: \(note)")
-                .frame(maxWidth: 300)
                 .rotationEffect(.degrees(-1))
             HolidayCardPaperButton(title: showBack ? "Turn it back" : "Turn it over", isPressed: showBack) {
                 showBack.toggle()
@@ -201,7 +200,6 @@ struct MailSentPieceView: View {
                 .overlay { back }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("On the back: \(note) From \(HolidayCardWords.withoutPeriod(from)).")
-                .frame(maxWidth: 300)
                 .rotationEffect(.degrees(1))
         }
         .frame(maxWidth: .infinity)

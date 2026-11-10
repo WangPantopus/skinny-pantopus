@@ -102,8 +102,10 @@ struct CardTableShareScene: View {
                 back(width: 330, x: 184, y: 412, rotation: 3.5)
                 slip(CardShareSlip(x: 26, y: 806, rotation: -2.2, width: 250, height: 50, title: 12, line: 12.5))
             } else {
-                openEnvelope(width: 424 * 1.012, x: 56, y: 236, rotation: 3.2)
-                front(width: 424, x: 58, y: 244, rotation: -3)
+                // The card 800 px wide of 1080, and nothing but the slip in Instagram's top 250 or bottom 340 px
+                // (the flap's tip at 250, the card's lowest corner at 1580) (plan 1.11).
+                openEnvelope(width: 400 * 1.012, x: 68, y: 298, rotation: 3)
+                front(width: 400, x: 70, y: 302, rotation: -2)
                 slip(CardShareSlip(x: 122, y: 776, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5))
             }
         case .post:
@@ -117,8 +119,9 @@ struct CardTableShareScene: View {
                 back(width: 258, x: 266, y: 124, rotation: 2.8)
                 slip(CardShareSlip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             } else {
-                openEnvelope(width: 368 * 1.012, x: 84, y: 120, rotation: 3)
-                front(width: 368, x: 86, y: 118, rotation: -2.6)
+                // The card 760 px wide of 1080 (plan 1.11).
+                openEnvelope(width: 380 * 1.012, x: 78, y: 116, rotation: 3)
+                front(width: 380, x: 80, y: 112, rotation: -2.6)
                 slip(CardShareSlip(x: 139, y: 606, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             }
         case .link:
@@ -255,7 +258,7 @@ struct CardTableShareScene: View {
     private var linkWords: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(content.sealed ? "A Christmas card" : content.caption)
-                .font(Font(CardTableType.hand(29)))
+                .font(Font(content.sealed ? CardTableType.hand(29) : CardTableType.caption(content.caption, size: 29)))
                 .foregroundStyle(MailPaper.tableLinkCaption)
             Text("PANTOPUS POST")
                 .font(.system(size: 12, weight: .semibold, design: .serif))
