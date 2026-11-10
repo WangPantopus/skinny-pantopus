@@ -39,8 +39,12 @@ struct MomentsMapView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
-                mapLayer
-                    .ignoresSafeArea()
+                MapReader { proxy in
+                    mapLayer { context in
+                        cameraSettled(context, proxy: proxy, clear: Self.clearRect(in: geo))
+                    }
+                }
+                .ignoresSafeArea()
                 MomentsMapTopBar(viewModel: viewModel, onArea: actions.areaPicker, onBack: backToArea)
             }
             .overlay(alignment: .bottom) {
@@ -52,9 +56,6 @@ struct MomentsMapView: View {
                     onRetry: uploads.retry,
                     onDiscard: uploads.discard
                 )
-            }
-            .onChange(of: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom, initial: true) { _, height in
-                if abs(viewModel.mapPoints - height) > 1 { viewModel.mapPoints = height }
             }
         }
         .background(Theme.Color.appBg)
@@ -72,6 +73,11 @@ struct MomentsMapView: View {
         }
         .onChange(of: viewModel.recenterRequest) { _, _ in recenter() }
         .onChange(of: uploads.finished) { _, _ in
+            // "Your Moment is live" while the map shows somewhere else: go to the new ring.
+            if let spot = uploads.liveSpot {
+                uploads.liveSpot = nil
+                bringIntoView(spot)
+            }
             Task {
                 // The real ring first, then the posting ring makes way: nothing jumps.
                 await viewModel.load()
@@ -110,7 +116,48 @@ struct MomentsMapView: View {
 
     // MARK: - Map
 
-    private var mapLayer: some View {
+    /// The top row is this tall, and the strip this tall with its margin: the map keeps what it centers on
+    /// between them, so rings don't open underneath either.
+    private static let coveredTop = 52.0
+    private static let coveredBottom = 148.0
+
+    /// The part of the map nothing covers, in the full-screen map's own points.
+    private static func clearRect(in geo: GeometryProxy) -> CGRect {
+        CGRect(
+            x: 0,
+            y: geo.safeAreaInsets.top + coveredTop,
+            width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
+            height: max(geo.size.height - coveredTop - coveredBottom, 120)
+        )
+    }
+
+    /// The camera settled: what shows in the clear part is read off the map itself, so the strip lists what
+    /// can be seen and rings join bubbles at the same distance on every phone.
+    private func cameraSettled(_ context: MapCameraUpdateContext, proxy: MapProxy, clear: CGRect) {
+        guard let northWest = proxy.convert(CGPoint(x: clear.minX, y: clear.minY), from: .local),
+              let southEast = proxy.convert(CGPoint(x: clear.maxX, y: clear.maxY), from: .local),
+              northWest.latitude > southEast.latitude, southEast.longitude > northWest.longitude
+        else {
+            viewModel.cameraChanged(context.region, camera: context.camera)
+            return
+        }
+        viewModel.mapPoints = clear.height
+        viewModel.cameraChanged(
+            MKCoordinateRegion(
+                center: CLLocationCoordinate2D(
+                    latitude: (northWest.latitude + southEast.latitude) / 2,
+                    longitude: (northWest.longitude + southEast.longitude) / 2
+                ),
+                span: MKCoordinateSpan(
+                    latitudeDelta: northWest.latitude - southEast.latitude,
+                    longitudeDelta: southEast.longitude - northWest.longitude
+                )
+            ),
+            camera: context.camera
+        )
+    }
+
+    private func mapLayer(onSettled: @escaping (MapCameraUpdateContext) -> Void) -> some View {
         Map(position: $camera, interactionModes: [.pan, .zoom]) {
             UserAnnotation()
             ForEach(viewModel.markers) { marker in
@@ -152,9 +199,10 @@ struct MomentsMapView: View {
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
-        .onMapCameraChange(frequency: .onEnd) { context in
-            viewModel.cameraChanged(context.region, camera: context.camera)
-        }
+        .onMapCameraChange(frequency: .onEnd, onSettled)
+        // What the camera centers on lands between the top row and the strip.
+        .safeAreaPadding(.top, Self.coveredTop)
+        .safeAreaPadding(.bottom, Self.coveredBottom)
         .accessibilityIdentifier("moments.mapCanvas")
     }
 
@@ -169,8 +217,7 @@ struct MomentsMapView: View {
         let span = MomentsClustering.span(toOpen: cluster)
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) {
             camera = .region(MKCoordinateRegion(
-                // A little south, so the rings land above the strip.
-                center: CLLocationCoordinate2D(latitude: cluster.latitude - span * 0.18, longitude: cluster.longitude),
+                center: cluster.coordinate,
                 span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
             ))
         }
@@ -188,14 +235,26 @@ struct MomentsMapView: View {
         camera = .camera(last)
     }
 
-    /// About a neighborhood across, a little south so you sit above the strip.
+    /// About a neighborhood across, with you in the middle of the clear part.
     private func recenter() {
         guard let center = viewModel.center else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) {
             camera = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: center.latitude - 0.004, longitude: center.longitude),
+                center: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude),
                 span: MKCoordinateSpan(latitudeDelta: 0.025, longitudeDelta: 0.025)
             ))
+        }
+    }
+
+    /// Moves the map to a spot it isn't showing, at the zoom it has (never wider than a neighborhood).
+    private func bringIntoView(_ spot: CLLocationCoordinate2D) {
+        guard let region = viewModel.lastRegion else { return }
+        let inView = abs(region.center.latitude - spot.latitude) < region.span.latitudeDelta * 0.45
+            && abs(region.center.longitude - spot.longitude) < region.span.longitudeDelta * 0.45
+        guard !inView else { return }
+        let span = min(region.span.latitudeDelta, 0.025)
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) {
+            camera = .region(MKCoordinateRegion(center: spot, span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)))
         }
     }
 }

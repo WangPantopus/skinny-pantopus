@@ -18,7 +18,7 @@ struct MomentsSeenBySheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Seen by \(count)")
+                Text(count < 1 ? "No views yet" : "Seen by \(count)")
                     .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)

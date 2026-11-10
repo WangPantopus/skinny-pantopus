@@ -174,11 +174,12 @@ struct MomentsStrip: View {
                     if !viewModel.loaded, postings.isEmpty {
                         ForEach(0..<5, id: \.self) { _ in placeholderCell }
                     }
-                    ForEach(rings) { ring in
-                        Button { actions.watch(viewModel.watchQueue(from: ring), 0, false) } label: { MomentStripFace(ring: ring) }
+                    // One face per person: someone at three spots is one face, not three.
+                    ForEach(viewModel.stripPeople) { person in
+                        Button { actions.watch(viewModel.watchQueue(from: person), 0, false) } label: { MomentStripFace(ring: person.face) }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(MomentsSpeech.label(for: ring))
-                            .accessibilityIdentifier("moments.strip.ring.\(ring.id)")
+                            .accessibilityLabel(MomentsSpeech.label(for: person.face))
+                            .accessibilityIdentifier("moments.strip.ring.\(person.face.id)")
                     }
                 }
                 .padding(.horizontal, Spacing.s2)

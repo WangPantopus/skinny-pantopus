@@ -292,6 +292,11 @@ public struct MomentsMapResponse: Decodable, Sendable {
     public let rings: [MomentRingDTO]
 }
 
+/// `GET /api/moments/unseen`: people with something new in the box.
+public struct MomentsUnseenResponse: Decodable, Sendable {
+    public let count: Int
+}
+
 public struct MomentsMineResponse: Decodable, Sendable {
     public let moments: [MomentDTO]
 }
@@ -301,6 +306,12 @@ public struct MomentEnvelope: Decodable, Sendable {
 }
 
 /// `POST /api/moments/place-preview`: what the camera chip and the Post sheet say.
+/// One name that fits an exact pin (contract v3 "Picking the place"): `key` goes back as `place_key`.
+public struct MomentPlaceChoiceDTO: Decodable, Sendable, Hashable {
+    public let key: String
+    public let label: String
+}
+
 public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
     public let placeLabel: String
     /// The town shown when "Show the area instead" is on.
@@ -308,8 +319,11 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
     public let atHome: Bool
     /// The one-time 18+ confirmation is on file (nil from a server before contract v2).
     public let adultConfirmed: Bool?
+    /// The names that fit an exact pin here, the automatic one first; empty from a server before contract v3.
+    public let places: [MomentPlaceChoiceDTO]
 
     private enum CodingKeys: String, CodingKey {
+        case places
         case placeLabel = "place_label"
         case areaLabel = "area_label"
         case atHome = "at_home"
@@ -322,6 +336,9 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
         areaLabel = try c.decodeIfPresent(String.self, forKey: .areaLabel)
         atHome = try c.decodeIfPresent(Bool.self, forKey: .atHome) ?? false
         adultConfirmed = try c.decodeIfPresent(Bool.self, forKey: .adultConfirmed)
+        // One odd entry doesn't cost the whole preview: the list is then left out.
+        places = (try? c.decodeIfPresent([MomentPlaceChoiceDTO].self, forKey: .places))?
+            .filter { !$0.key.isEmpty && !$0.label.isEmpty } ?? []
     }
 }
 
@@ -423,11 +440,14 @@ public struct MomentCreateBody: Encodable, Sendable, Hashable {
     /// One id per Post tap (a uuid): sending it again answers with the Moment
     /// that tap made, so a retry after a lost answer never posts twice.
     public var clientRequestId: String?
+    /// The place name the person picked (a key from place-preview's `places`); left out for the automatic one.
+    public var placeKey: String?
 
     private enum CodingKeys: String, CodingKey {
         case kind, hours, audience, caption, text, background, location
         case showArea = "show_area"
         case clientRequestId = "client_request_id"
+        case placeKey = "place_key"
     }
 }
 
@@ -465,7 +485,9 @@ enum MomentTime {
     static func left(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "" }
         let seconds = max(0, date.timeIntervalSince(now))
-        if seconds >= 3600 { return "\(Int((seconds / 3600).rounded(.up)))h left" }
-        return "\(max(1, Int((seconds / 60).rounded(.up))))m left"
+        // Whole minutes first, so the last half minute before an hour reads "1h left", never "60m left".
+        let minutes = max(1, Int((seconds / 60).rounded(.up)))
+        if minutes >= 60 { return "\(Int((Double(minutes) / 60).rounded(.up)))h left" }
+        return "\(minutes)m left"
     }
 }

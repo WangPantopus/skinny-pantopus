@@ -588,21 +588,35 @@ public struct ChatMomentRefDTO: Codable, Sendable, Hashable {
     public let ended: Bool
     /// On a conversation row: the viewer sent that reply.
     public let fromMe: Bool?
+    /// A live text card's color name and its first words (contract v3.2); nil for a photo or video, once
+    /// ended, and from a server that doesn't send them.
+    public let background: String?
+    public let excerpt: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, ended
+        case id, kind, ended, background, excerpt
         case thumbURL = "thumb_url"
         case thumbURLCamel = "thumbUrl"
         case fromMe = "from_me"
         case fromMeCamel = "fromMe"
     }
 
-    public init(id: String, kind: String, thumbURL: String?, ended: Bool, fromMe: Bool?) {
+    public init(
+        id: String,
+        kind: String,
+        thumbURL: String?,
+        ended: Bool,
+        fromMe: Bool?,
+        background: String? = nil,
+        excerpt: String? = nil
+    ) {
         self.id = id
         self.kind = kind
         self.thumbURL = thumbURL
         self.ended = ended
         self.fromMe = fromMe
+        self.background = background
+        self.excerpt = excerpt
     }
 
     public init(from decoder: any Decoder) throws {
@@ -613,6 +627,8 @@ public struct ChatMomentRefDTO: Codable, Sendable, Hashable {
         thumbURL = try c.decodeIfPresent(String.self, forKey: .thumbURL) ?? c.decodeIfPresent(String.self, forKey: .thumbURLCamel)
         ended = try c.decodeIfPresent(Bool.self, forKey: .ended) ?? false
         fromMe = try c.decodeIfPresent(Bool.self, forKey: .fromMe) ?? c.decodeIfPresent(Bool.self, forKey: .fromMeCamel)
+        background = try c.decodeIfPresent(String.self, forKey: .background)
+        excerpt = try c.decodeIfPresent(String.self, forKey: .excerpt)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -621,6 +637,8 @@ public struct ChatMomentRefDTO: Codable, Sendable, Hashable {
         try c.encode(kind, forKey: .kind)
         try c.encode(ended, forKey: .ended)
         try c.encodeIfPresent(fromMe, forKey: .fromMe)
+        // The color is kept with the thread; the card's words, like the picture's link, are not.
+        try c.encodeIfPresent(background, forKey: .background)
     }
 
     public var thumbnail: URL? {

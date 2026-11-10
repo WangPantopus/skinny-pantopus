@@ -5,8 +5,8 @@
 //  Endpoint builders for the Moments API, `backend/routes/moments.js`
 //  (contract `~/pantopus-moments/coord/CONTRACT.md`). Every route needs a
 //  signed-in user and answers 404 `MOMENTS_UNAVAILABLE` while the `moments`
-//  flag is off for the caller. The media upload is multipart
-//  (`MultipartUploader.uploadMomentMedia`).
+//  flag is off for the caller. The media upload is multipart, through a
+//  background session (`MomentsBackgroundUpload`).
 //
 
 import Foundation
@@ -47,6 +47,20 @@ public enum MomentsEndpoints {
             ],
             cachePolicy: .reloadIgnoringLocalCacheData
         )
+    }
+
+    /// `GET /api/moments/unseen` (contract v3) — how many people have a live Moment in the box that the
+    /// caller may see and hasn't watched, new since `since`; for the tab's dot. Never the caller's own.
+    /// Route `backend/routes/moments.js` (unseen).
+    public static func unseen(south: Double, west: Double, north: Double, east: Double, since: Date?) -> Endpoint {
+        var query = [
+            "south": coordinate(south),
+            "west": coordinate(west),
+            "north": coordinate(north),
+            "east": coordinate(east)
+        ]
+        if let since { query["since"] = ISO8601DateFormatter().string(from: since) }
+        return Endpoint(method: .get, path: "/api/moments/unseen", query: query, cachePolicy: .reloadIgnoringLocalCacheData)
     }
 
     /// `GET /api/moments/mine` — the caller's own unexpired Moments, in any state.

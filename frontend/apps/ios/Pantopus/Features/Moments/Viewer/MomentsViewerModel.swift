@@ -383,6 +383,9 @@ extension MomentsViewerModel {
         do {
             try await MomentsAPI.send(MomentsEndpoints.report(id: moment.id, reason: reason))
             show(Toast(text: "Thanks. The Pantopus team will take a look."))
+            // What you reported doesn't keep playing for you: the viewer moves on, and the map leaves it out.
+            cache.forget(moment.id)
+            removeShowing(moment.id, lingering: true)
         } catch {
             show(Toast(text: (error as? MomentsFailure)?.message ?? "Couldn't send the report. Try again."))
         }
@@ -412,7 +415,7 @@ extension MomentsViewerModel {
         do {
             try await APIClient.shared.request(BlocksEndpoints.block(userId: author.id))
             onHide(author.id)
-            show(Toast(text: "You blocked \(author.name)."))
+            show(Toast(text: "You blocked \(author.shortName)."))
             dropAuthor(author.id)
         } catch {
             show(Toast(text: "Couldn't block \(author.shortName). Try again."))
@@ -448,19 +451,26 @@ extension MomentsViewerModel {
         } catch {}
         cache.forget(moment.id)
         show(Toast(text: "Moment deleted"))
-        rings[ringIndex].moments.removeAll { $0.id == moment.id }
+        removeShowing(moment.id, lingering: false)
+        return true
+    }
+
+    /// The Moment showing leaves the queue (deleted, or reported): the next one plays, or the viewer closes,
+    /// after a few seconds with its note when `lingering`.
+    private func removeShowing(_ id: String, lingering: Bool) {
+        guard rings.indices.contains(ringIndex) else { return }
+        rings[ringIndex].moments.removeAll { $0.id == id }
         if rings[ringIndex].moments.isEmpty {
             rings.remove(at: ringIndex)
             guard !rings.isEmpty, ringIndex < rings.count else {
-                close()
-                return true
+                if lingering { lingerThenClose() } else { close() }
+                return
             }
             momentIndex = startIndex(in: ringIndex)
         } else {
             momentIndex = min(momentIndex, rings[ringIndex].moments.count - 1)
         }
         show()
-        return true
     }
 
     /// Save to Photos: the picture, the video, or the text card drawn as a picture.

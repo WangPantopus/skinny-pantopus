@@ -170,7 +170,7 @@ public struct ConversationRow: View {
             // Board N3: the Moment's picture at the row's end, beside the time.
             HStack(alignment: .center, spacing: Spacing.s2) {
                 trailingDefault
-                ChatMomentThumbnail(url: reply.thumbURL, kind: reply.kind, width: 40, height: 54)
+                ChatMomentThumbnail(url: reply.thumbURL, kind: reply.kind, background: reply.background, width: 40, height: 54)
             }
         } else {
             trailingDefault

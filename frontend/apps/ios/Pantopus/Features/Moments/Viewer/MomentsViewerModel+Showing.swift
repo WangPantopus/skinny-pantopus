@@ -61,6 +61,9 @@ extension MomentsViewerModel {
         guard ring != nil else { return "" }
         let created = moment?.createdAtDate ?? brief.flatMap { MomentTime.parse($0.createdAt) }
         let ends = moment?.expiresAtDate ?? brief?.expiresAtDate
-        return [MomentTime.ago(created), MomentTime.left(ends)].filter { !$0.isEmpty }.joined(separator: " · ")
+        // Once it has ended ("This Moment has ended.") there is no time left to show.
+        var over = ends.map { $0 <= Date() } ?? false
+        if case .gone = load { over = true }
+        return [MomentTime.ago(created), over ? "" : MomentTime.left(ends)].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

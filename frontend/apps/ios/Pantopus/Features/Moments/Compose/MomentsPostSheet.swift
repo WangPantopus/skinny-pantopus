@@ -109,6 +109,7 @@ struct MomentsPostSheet: View {
     let onPosted: () -> Void
     @Environment(AuthManager.self) private var auth
     @State private var optionsHeight: CGFloat = 520
+    @State private var picksPlace = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -148,6 +149,11 @@ struct MomentsPostSheet: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Post your Moment")
         .accessibilityIdentifier("moments.post")
+        .sheet(isPresented: $picksPlace) {
+            MomentsPlacePicker(model: model) { picksPlace = false }
+                .presentationDetents([.medium])
+                .presentationBackground(Theme.Color.appSurface)
+        }
     }
 
     private var options: some View {
@@ -190,7 +196,21 @@ struct MomentsPostSheet: View {
         return MomentAuthorDTO(me: user)
     }
 
-    private var placeRow: some View {
+    /// The place row; a button with a chevron when more than one name fits the pin.
+    @ViewBuilder private var placeRow: some View {
+        if model.placeChoices.isEmpty {
+            placeLine(canChange: false)
+                .accessibilityElement(children: .combine)
+        } else {
+            Button { picksPlace = true } label: { placeLine(canChange: true).contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Picks another name for this place")
+                .accessibilityIdentifier("moments.post.placeChange")
+        }
+    }
+
+    private func placeLine(canChange: Bool) -> some View {
         HStack(spacing: Spacing.s2) {
             Icon(
                 model.place?.atHome == true && !model.showArea ? .home : .mapPin,
@@ -207,10 +227,13 @@ struct MomentsPostSheet: View {
             Text(model.showArea ? "Area only" : "Exact spot")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
+            if canChange {
+                Icon(.chevronRight, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextMuted)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.horizontal, Spacing.s1)
-        .frame(minHeight: 32)
-        .accessibilityElement(children: .combine)
+        .frame(minHeight: canChange ? 44 : 32)
     }
 
     private var homeNotice: some View {
