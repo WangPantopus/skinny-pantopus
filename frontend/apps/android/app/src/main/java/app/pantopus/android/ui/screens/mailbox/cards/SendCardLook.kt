@@ -783,11 +783,11 @@ internal fun LookFooter(
 }
 
 /** Sealed until Christmas morning once it's in their mailbox. */
-private val HolidayCardPreview.sealed: Boolean
+internal val HolidayCardPreview.sealed: Boolean
     get() = piece.card?.sealed == true || piece.card?.arrival == "sealed_christmas"
 
 /** The card as the page they open it on shows it: its picture and printing, the postmark, and the note on its back. */
-private fun lookCard(
+internal fun lookCard(
     preview: HolidayCardPreview,
     design: HolidayCardDesign,
     year: Int,

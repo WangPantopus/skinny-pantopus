@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.mailbox.cards.table
 
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Matrix
@@ -363,6 +364,7 @@ private fun FlapShut(
 ) {
     val paint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
     val sealPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
+    val placePaint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
     val cracked = state.cracked
     Box(
         modifier =
@@ -385,7 +387,12 @@ private fun FlapShut(
                     drawIntoCanvas { canvas ->
                         val native = canvas.nativeCanvas
                         native.drawBitmap(art.flapOut, null, RectF(0f, 0f, size.width, size.height), paint)
-                        drawSeal(native, art, size.width, size.height, cracked, sealPaint)
+                        val moment = state.sending
+                        when {
+                            moment == null -> drawSeal(native, art, size.width, size.height, cracked, sealPaint)
+                            moment.sealShown -> drawSeal(native, art, size.width, size.height, false, sealPaint)
+                            moment.step == SendStep.Seal -> drawSealPlace(native, size.width, size.height, moment.sealPress, placePaint)
+                        }
                     }
                 },
     )
@@ -413,6 +420,38 @@ private fun drawSeal(
     canvas.restoreToCount(saved)
 }
 
+/**
+ * Where the seal goes, while the sender is about to seal it: a soft gold ring, and while a finger holds it, the round
+ * shadow of the stamp head growing over the spot ([press], 0 … 1).
+ */
+private fun drawSealPlace(
+    canvas: Canvas,
+    flapWidth: Float,
+    flapHeight: Float,
+    press: Float,
+    paint: Paint,
+) {
+    val width = flapWidth * 0.28f
+    val cx = flapWidth * 0.36f + width / 2f
+    val cy = flapHeight * 0.71f + width / 2f
+    paint.reset()
+    paint.isAntiAlias = true
+    paint.style = Paint.Style.FILL
+    paint.color = PantopusColors.tableGold.copy(alpha = 0.16f).toArgb()
+    canvas.drawCircle(cx, cy, width * 0.46f, paint)
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = width * 0.035f
+    paint.color = PantopusColors.tableGold.copy(alpha = 0.7f).toArgb()
+    canvas.drawCircle(cx, cy, width * 0.42f, paint)
+    if (press > 0f) {
+        paint.style = Paint.Style.FILL
+        paint.color = PantopusColors.tableNight.copy(alpha = 0.18f + 0.3f * press).toArgb()
+        paint.maskFilter = BlurMaskFilter(width * 0.06f, BlurMaskFilter.Blur.NORMAL)
+        canvas.drawCircle(cx, cy, width * (0.2f + 0.32f * press), paint)
+        paint.maskFilter = null
+    }
+}
+
 /** The address side: the red paper, the stamp under its postmark, the two names by hand, and its label or stamped words. */
 @Composable
 private fun EnvelopeFront(
@@ -432,8 +471,14 @@ private fun EnvelopeFront(
                 .envelopeLayer(state, g, flapSide = false)
                 .drawBehind {
                     val pen = faceArt?.pen ?: return@drawBehind
+                    val moment = state.sending
+                    val reveal = AddressReveal.of(moment)
                     drawIntoCanvas { canvas ->
-                        drawAddressSide(canvas.nativeCanvas, art, pen, card, day, size.width, size.height, paint)
+                        // A list: the envelopes under the top one, their edges showing.
+                        if ((moment?.calls?.several ?: 1) > 1) {
+                            drawEnvelopeStack(canvas.nativeCanvas, art, size.width, size.height, paint)
+                        }
+                        drawAddressSide(canvas.nativeCanvas, art, pen, card, day, size.width, size.height, paint, reveal)
                     }
                 },
     )
@@ -448,15 +493,10 @@ private fun drawAddressSide(
     width: Float,
     height: Float,
     paints: EnvelopePaints,
+    reveal: AddressReveal = AddressReveal.All,
 ) {
     canvas.drawBitmap(art.front, null, RectF(0f, 0f, width, height), paints.bitmap)
-    art.stamps[card.stamp]?.let { stamp ->
-        val left = width * 0.755f
-        val top = height * 0.0345f
-        val stampWidth = width * 0.2017f
-        canvas.drawBitmap(stamp, null, RectF(left, top, left + stampWidth, top + stampWidth * stamp.height / stamp.width), paints.bitmap)
-    }
-    drawEnvelopePostmark(canvas, art.postmark, width * 0.345f, height * 0.0316f, width * 0.5183f, day, card.year, paints)
+    drawPostage(canvas, art, card, day, width, height, paints, reveal)
     penLine(
         canvas,
         pen,
@@ -470,7 +510,10 @@ private fun drawAddressSide(
         PantopusColors.tableEnvelopeFrom,
         paints,
     )
-    card.to?.takeIf { it.isNotBlank() }?.let { to ->
+    card.to?.takeIf { it.isNotBlank() && reveal.name > 0f }?.let { to ->
+        // Written left to right as it's revealed.
+        val saved = canvas.save()
+        if (reveal.name < 1f) canvas.clipRect(0f, 0f, width * (0.12f + 0.84f * reveal.name), height)
         penLine(
             canvas,
             pen,
@@ -484,19 +527,27 @@ private fun drawAddressSide(
             PantopusColors.tableEnvelopeTo,
             paints,
         )
+        canvas.restoreToCount(saved)
     }
     if (card.sealed) {
-        drawSealedMark(
-            canvas,
-            width * 0.5f,
-            height * 0.74f,
-            width * 0.04f,
-            width * 0.007f,
-            width * 0.018f,
-            width * 0.03f,
-            width * 0.012f,
-            paints,
-        )
+        if (reveal.sealedMark > 0f) {
+            // Sealed until Christmas: the gold stamp lands last.
+            val saved = canvas.save()
+            val grow = 1f + 0.3f * (1f - reveal.sealedMark)
+            canvas.scale(grow, grow, width * 0.5f, height * 0.74f)
+            drawSealedMark(
+                canvas,
+                width * 0.5f,
+                height * 0.74f,
+                width * 0.04f,
+                width * 0.007f,
+                width * 0.018f,
+                width * 0.03f,
+                width * 0.012f,
+                paints,
+            )
+            canvas.restoreToCount(saved)
+        }
     } else {
         val size = width * 0.0235f
         paints.text.reset()
@@ -508,6 +559,44 @@ private fun drawAddressSide(
         paints.text.color = PantopusColors.tableGold.toArgb()
         val baseline = height * (1f - 0.054f) - size * 0.2f
         canvas.drawText("CHRISTMAS CARD", width * 0.068f - size * 0.1f, baseline, paints.text)
+    }
+}
+
+/**
+ * The stamp, and the postmark over it with the day it was mailed. While the sender's envelope is addressed ([reveal]),
+ * each drops onto the paper: from a little larger, and faint, to where it lies.
+ */
+private fun drawPostage(
+    canvas: Canvas,
+    art: CardTableArt,
+    card: CardOnTable,
+    day: String,
+    width: Float,
+    height: Float,
+    paints: EnvelopePaints,
+    reveal: AddressReveal,
+) {
+    art.stamps[card.stamp]?.takeIf { reveal.stamp > 0f }?.let { stamp ->
+        val left = width * 0.755f
+        val top = height * 0.0345f
+        val stampWidth = width * 0.2017f
+        val stampHeight = stampWidth * stamp.height / stamp.width
+        val saved = canvas.save()
+        val grow = 1f + 0.45f * (1f - reveal.stamp)
+        canvas.scale(grow, grow, left + stampWidth / 2f, top + stampHeight / 2f)
+        paints.bitmap.alpha = (255 * reveal.stamp.coerceIn(0f, 1f)).toInt()
+        canvas.drawBitmap(stamp, null, RectF(left, top, left + stampWidth, top + stampHeight), paints.bitmap)
+        paints.bitmap.alpha = 255
+        canvas.restoreToCount(saved)
+    }
+    if (reveal.postmark > 0f) {
+        val saved = canvas.save()
+        val grow = 1f + 0.18f * (1f - reveal.postmark)
+        canvas.scale(grow, grow, width * 0.6f, height * 0.12f)
+        paints.bitmap.alpha = (255 * reveal.postmark.coerceIn(0f, 1f)).toInt()
+        drawEnvelopePostmark(canvas, art.postmark, width * 0.345f, height * 0.0316f, width * 0.5183f, day, card.year, paints)
+        paints.bitmap.alpha = 255
+        canvas.restoreToCount(saved)
     }
 }
 
@@ -778,3 +867,40 @@ private fun DrawScope.drawArt(
 
 /** One unit of a graphics layer's camera distance is 72 screen pixels. */
 private const val PIXELS_PER_CAMERA_UNIT = 72f
+
+/** How much of the address side is there yet: all of it, except while the sender's envelope is being addressed. */
+internal class AddressReveal(
+    val name: Float,
+    val stamp: Float,
+    val postmark: Float,
+    val sealedMark: Float,
+) {
+    companion object {
+        val All = AddressReveal(1f, 1f, 1f, 1f)
+
+        fun of(moment: SendingMoment?): AddressReveal =
+            if (moment == null) All else AddressReveal(moment.nameReveal, moment.stampOn, moment.postmarkOn, moment.sealedMarkOn)
+    }
+}
+
+/** A list's other envelopes under the top one: two edges, a little turned and set off, darker in the shade. */
+private fun drawEnvelopeStack(
+    canvas: Canvas,
+    art: CardTableArt,
+    width: Float,
+    height: Float,
+    paints: EnvelopePaints,
+) {
+    val shade =
+        Paint(Paint.FILTER_BITMAP_FLAG).apply {
+            colorFilter = PorterDuffColorFilter(PantopusColors.tableNight.copy(alpha = 0.3f).toArgb(), PorterDuff.Mode.SRC_ATOP)
+        }
+    for ((dx, dy, turn) in listOf(Triple(0.022f, 0.03f, 2.2f), Triple(0.011f, 0.015f, 1.1f))) {
+        val saved = canvas.save()
+        canvas.rotate(turn, width / 2f, height / 2f)
+        canvas.translate(width * dx, height * dy)
+        canvas.drawBitmap(art.front, null, RectF(0f, 0f, width, height), paints.bitmap)
+        canvas.drawBitmap(art.front, null, RectF(0f, 0f, width, height), shade)
+        canvas.restoreToCount(saved)
+    }
+}

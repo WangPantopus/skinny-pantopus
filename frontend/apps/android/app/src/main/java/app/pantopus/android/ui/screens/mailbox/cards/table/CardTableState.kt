@@ -142,7 +142,9 @@ internal class TableGeometry(
         val room = height - topGap - bottomRoom
         val wide = width / d >= 600f
         val side = (if (width / d < 560f) 9f else 14f) * d
-        var cw = min(width - side * 2f, (if (wide) 560f else 470f) * d)
+        // The open envelope lies lower than the card on a tight screen: its bottom (the card's top + 1.606 cw at the
+        // least peek) must clear the button too, so it's the envelope that limits the card there.
+        var cw = min(min(width - side * 2f, (if (wide) 560f else 470f) * d), room / ENVELOPE_REACH)
         var peek = room - cw * 1.2f
         val minPeek = cw * 0.13f
         val maxPeek = cw * 0.47f
@@ -169,6 +171,9 @@ internal class TableGeometry(
         cardTopOut = envelopeTopOut - cardHeight * 1.02f - 8f * d
     }
 }
+
+/** From the card's top at its least peek to the open envelope's bottom, in card widths: flap 0.432 + pocket 1.174. */
+private const val ENVELOPE_REACH = 1.606f
 
 /** The small taps you can feel, firmest last. */
 internal enum class TableTap { Hold, Soft, Land, Crack, Refuse }
@@ -206,6 +211,7 @@ internal class CardTableState(
     private val scope: CoroutineScope,
     saved: List<Int>?,
     firstOpen: Boolean,
+    sendingCalls: CardTableSendingCalls? = null,
 ) {
     val envelopeTurn = TableSpring(95f, 15f)
     val pull = TableSpring(70f, 16f)
@@ -263,8 +269,15 @@ internal class CardTableState(
     /** With no sensor, the light drifts by itself; not with animations off or in Battery Saver. */
     var driftAllowed = false
 
+    /** The sender's moment, sealing their own card by hand (Part 2); null when a card is being received. */
+    val sending: SendingMoment? = sendingCalls?.let { SendingMoment(this, it, reduceMotion, scope) }
+
     init {
         when {
+            sending != null -> {
+                placeOnTable()
+                sending.start()
+            }
             saved != null -> restore(saved)
             !firstOpen && !card.sealed -> placeOnTable()
             else -> drop.jump(if (reduceMotion) 0f else 1f)
@@ -303,7 +316,18 @@ internal class CardTableState(
 
     // ---- Words and buttons follow what's on the table ----
 
+    /** The words and buttons again, after the sending moment moved on. */
+    internal fun refreshLabels() = mark()
+
     private fun mark() {
+        sending?.let { moment ->
+            backUp = true
+            words = moment.words
+            primaryLabel = moment.primary
+            hint = moment.hint
+            showsTopRight = false
+            return
+        }
         val first = card.fromFirst
         val sealed = card.sealed
         backUp = cos(Math.toRadians(turn.target.toDouble())) < 0.0
@@ -406,6 +430,10 @@ internal class CardTableState(
     /** The button at the bottom: the next step, whatever it is. */
     fun primary() {
         touched()
+        sending?.let {
+            it.primary()
+            return
+        }
         when (step) {
             TableStep.Front ->
                 if (reduceMotion) {
@@ -472,11 +500,13 @@ internal class CardTableState(
         val now = nowMs()
         drag = TableDrag(x, y, now, envelopeTurn.x, pull.x, turn.x)
         lastTouchMs = now
+        sending?.onDown()
         wake()
     }
 
     /** Held still for a moment on the table: the finger moves the light instead. */
     fun onHold() {
+        if (sending != null) return
         val current = drag ?: return
         if (current.mode == null && step == TableStep.Out && !reduceMotion) {
             current.mode = DragMode.Tilt
@@ -501,11 +531,18 @@ internal class CardTableState(
         current.lastT = now
         lastTouchMs = now
         if (current.mode == null && hypot(x - current.x0, y - current.y0) > 8f * g.density) {
-            current.mode = dragModeFor(abs(x - current.x0) > abs(y - current.y0), y - current.y0)
+            current.mode =
+                sending?.let { if (it.dragFollows(x - current.x0, y - current.y0)) DragMode.Pull else DragMode.None }
+                    ?: dragModeFor(abs(x - current.x0) > abs(y - current.y0), y - current.y0)
             current.startX = x
             current.startY = y
         }
-        if (!reduceMotion) follow(current, x, y, g)
+        val moment = sending
+        if (moment != null) {
+            if (current.mode == DragMode.Pull) moment.follow(y - current.y0, g)
+        } else if (!reduceMotion) {
+            follow(current, x, y, g)
+        }
     }
 
     private fun dragModeFor(
@@ -559,6 +596,16 @@ internal class CardTableState(
         val current = drag ?: return
         drag = null
         val now = nowMs()
+        sending?.let { moment ->
+            moment.onUp()
+            when {
+                current.mode == DragMode.Pull -> moment.release(current.vy / (geometry?.density ?: 1f))
+                current.mode == null && now - current.t0 < 320L -> moment.onTap()
+            }
+            lastTouchMs = now
+            wake()
+            return
+        }
         if (current.mode == null) {
             if (now - current.t0 < 320L) onStageTap(x, y)
             return
@@ -741,6 +788,7 @@ internal class CardTableState(
             if (spring === held) continue
             if (spring.advance(steps, h)) moving = true
         }
+        if (sending?.frame(dt, steps, h) == true) moving = true
         // Once it has cleared the envelope, the card is laid down in front of it.
         if (step == TableStep.Pulling && pull.x > 0.985f) {
             pull.jump(1f)
@@ -789,7 +837,8 @@ internal class CardTableState(
     private fun envelopeTop(g: TableGeometry): Float =
         lerp(lerp(lerp(g.envelopeY, g.envelopeYOpen, flapProgress), g.envelopeTopOut, rise), g.envelopeTopFinal, lay.x)
 
-    private fun arrival(g: TableGeometry): Float = drop.x * (g.height * 0.9f)
+    /** Falling onto the table as it arrives, or (sent) sliding up and off it. */
+    private fun arrival(g: TableGeometry): Float = drop.x * (g.height * 0.9f) + (sending?.away?.x ?: 0f) * (g.height * 1.15f)
 
     fun envelopeX(g: TableGeometry): Float = g.envelopeX + lightX.x * 2.5f * g.density
 

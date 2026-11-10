@@ -184,14 +184,14 @@ internal fun CardLinkBox(
     }
 }
 
-private fun copyLink(
+internal fun copyLink(
     context: Context,
     link: String,
 ) {
     context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Card link", link))
 }
 
-private fun shareLink(
+internal fun shareLink(
     context: Context,
     link: String,
     fromFirst: String,

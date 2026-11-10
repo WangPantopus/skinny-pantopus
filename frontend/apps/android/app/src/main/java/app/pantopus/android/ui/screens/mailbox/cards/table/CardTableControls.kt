@@ -129,13 +129,24 @@ internal fun CardTableControls(
     onClose: () -> Unit,
     onShare: () -> Unit,
     sendBack: CardTableSendBack? = null,
+    /** The sender's quiet buttons once their card is gone. */
+    gone: List<CardTableSendBack> = emptyList(),
 ) {
     val top = insets.calculateTopPadding()
     val bottom = insets.calculateBottomPadding()
     val hidden = state.controlsHidden && !touchExploring
+    // The quiet buttons under the main one: the sender's once their card is gone, or the reader's "Send … a card" once
+    // the card has been turned over (not on a sealed card).
+    val moment = state.sending
+    val quiet =
+        when {
+            moment != null -> if (moment.step == SendStep.Gone) gone else emptyList()
+            sendBack != null && state.sendBackShows -> listOf(sendBack)
+            else -> emptyList()
+        }
     Box(modifier = Modifier.fillMaxSize()) {
         Words(state, top)
-        ActionBlock(state, hidden, bottom, sendBack)
+        ActionBlock(state, hidden, bottom, quiet)
         if (showsTurnTip) TurnTip()
         TopRow(state, top, hidden, canShare, menu.isNotEmpty(), onClose, onShare)
         if (state.menuOpen && menu.isNotEmpty()) MenuPanel(state, top, menu)
@@ -216,7 +227,10 @@ private fun Words(
     state: CardTableState,
     top: Dp,
 ) {
-    val shows by remember(state) { derivedStateOf { state.pull.x <= 0.02f && state.step != TableStep.Pulling } }
+    // The sender's words stay while their card is on the table; a reader's go while the card comes out.
+    val shows by remember(state) {
+        derivedStateOf { state.sending != null || (state.pull.x <= 0.02f && state.step != TableStep.Pulling) }
+    }
     val fade by animateFloatAsState(if (shows && state.words.isNotEmpty()) 1f else 0f, tween(400), label = "tableWords")
     val words = state.words
     if (words.isEmpty() && fade == 0f) return
@@ -238,7 +252,7 @@ private fun ActionBlock(
     state: CardTableState,
     hidden: Boolean,
     bottom: Dp,
-    sendBack: CardTableSendBack?,
+    quiet: List<CardTableSendBack>,
 ) {
     val away = hidden || state.step == TableStep.Pulling
     val fade by animateFloatAsState(if (away) 0f else 1f, tween(350), label = "tableAct")
@@ -274,8 +288,7 @@ private fun ActionBlock(
                     Text(state.primaryLabel, style = tablePrimaryStyle)
                 }
             }
-            // Once the card has been turned over: the next kind act, one tap away (not on a sealed card).
-            if (sendBack != null && state.sendBackShows) {
+            quiet.forEachIndexed { index, action ->
                 Box(
                     modifier =
                         Modifier
@@ -285,14 +298,14 @@ private fun ActionBlock(
                                 if (away) {
                                     Modifier
                                 } else {
-                                    Modifier.clickable(role = Role.Button, onClick = sendBack.onClick)
+                                    Modifier.clickable(role = Role.Button, onClick = action.onClick)
                                 },
                             ).heightIn(min = 44.dp)
                             .padding(horizontal = 16.dp)
-                            .testTag("cardTableSendBack"),
+                            .testTag(if (state.sending == null) "cardTableSendBack" else "cardTableGone.$index"),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(sendBack.title, style = tableQuietStyle)
+                    Text(action.title, style = tableQuietStyle)
                 }
             }
             Text(state.hint, style = tableHintStyle, modifier = Modifier.heightIn(min = 16.dp).testTag("cardTableHint"))
