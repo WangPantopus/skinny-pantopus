@@ -204,6 +204,12 @@ final class CardTableModel {
     @ObservationIgnored var driftEnabled = true
     /// Called when the seal cracks, the card lands, and so on.
     @ObservationIgnored let haptics = CardTableHaptics()
+    /// The light ticks along a card's pull and the three paper sounds (plan Part 8, `CardTableSounds.swift`).
+    @ObservationIgnored let paperTicks = CardTablePaperTicks()
+    @ObservationIgnored let sounds = CardTableSounds()
+    /// The card's way out of its envelope (0 in, 1 out) and how far it's laid down, as last heard; nil until the first
+    /// frame, so a card that starts on the table neither ticks nor sounds.
+    @ObservationIgnored private var heard: (travel: Double, lay: Double)?
 
     /// - Parameter startsOnTable: it's been opened before, so the card is already out.
     init(content: CardTableContent, startsOnTable: Bool) {
@@ -239,6 +245,7 @@ final class CardTableModel {
         guard !isReady else { return }
         // The cloth shows as soon as there's art; the picture has a little time to come first.
         art = await CardTableArt.load()
+        sounds.preload()
         picture = await CardTablePicture.load(content.design)
         begin()
     }
@@ -434,7 +441,26 @@ final class CardTableModel {
             didCardLand()
             moving = true
         }
+        listen()
         if !moving, drag == nil, !drifts { ticker.stop() }
+    }
+
+    /// Feel and hear the paper (plan 8.1, 8.3), by finger or by itself: a light tick every 8% of the card's way out of
+    /// its envelope or into it, the slide as it starts to leave or go back in, and the card set down. A jump (Reduce
+    /// Motion, opening straight onto the table) is neither a pull nor a slide.
+    private func listen() {
+        let travel = min(1, max(0, (springs.pull.x - Self.flapOpen) / (1 - Self.flapOpen)))
+        let lay = springs.lay.x
+        defer { heard = (travel, lay) }
+        guard let was = heard else { return }
+        let notch = Int(travel / 0.08)
+        let wasNotch = Int(was.travel / 0.08)
+        let sliding = abs(travel - was.travel) < 0.5
+        if sliding, notch != wasNotch { paperTicks.tick() }
+        if sliding, (was.travel < 0.08 && travel >= 0.08) || (was.travel > 0.92 && travel <= 0.92) {
+            sounds.play(.slide)
+        }
+        if was.lay < 0.9, lay >= 0.9 { sounds.play(.down) }
     }
 }
 
