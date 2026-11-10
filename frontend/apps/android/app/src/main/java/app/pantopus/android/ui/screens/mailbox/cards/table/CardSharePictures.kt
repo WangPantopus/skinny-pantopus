@@ -74,23 +74,20 @@ internal class CardSharePictures(
     }
 
     /*
-     * A Story keeps everything but the slip inside Instagram's safe area: nothing in the top 250 px or the bottom 340 px
-     * of 1920 (125 and 170 here). The card is 800 px wide of 1080; the envelope's flap reaches up to the top line.
+     * The same layout as the web and iPhone (the design's share.html, in a space 540 wide; `share-layout` in the build's
+     * notes). A Story keeps everything but the slip inside Instagram's safe area: nothing in the top 250 px or the bottom
+     * 340 px of 1920 (125 and 170 here). The card is 800 px wide of 1080 on a Story, 760 on a Post.
      */
     private fun storyCard(canvas: Canvas) {
-        val w = 400f
-        val x = (540f - w) / 2f
-        val y = 300f
-        openEnvelope(canvas, w * 1.012f, x - 2f, y - 2f, 3.2f)
-        cardFront(canvas, w, x, y, -2.8f)
-        slip(canvas, 122f, 798f, -1.6f, 296f, 54f, 13.5f, 13.5f)
+        openEnvelope(canvas, 400f * 1.012f, 68f, 298f, 2.4f)
+        cardFront(canvas, 400f, 70f, 302f, -2.6f)
+        slip(canvas, 122f, 806f, -1.6f, 296f, 54f, 13.5f, 13.5f)
     }
 
     private fun storyNote(canvas: Canvas) {
-        val w = 320f
-        openEnvelope(canvas, 350f, 96f, 276f, 5f)
-        cardFront(canvas, w, 26f, 138f, -4.5f)
-        cardBack(canvas, w, 194f, 396f, 3.5f)
+        openEnvelope(canvas, 372f, 84f, 300f, 4f)
+        cardFront(canvas, 360f, 16f, 138f, -4f)
+        cardBack(canvas, 360f, 164f, 346f, 3.2f)
         slip(canvas, 26f, 806f, -2.2f, 250f, 50f, 12f, 12.5f)
     }
 
@@ -101,21 +98,16 @@ internal class CardSharePictures(
         slip(canvas, 122f, 776f, -1.6f, 296f, 54f, 13.5f, 13.5f)
     }
 
-    /** A Post's card is 760 px wide of 1080. */
     private fun postCard(canvas: Canvas) {
-        val w = 380f
-        val x = (540f - w) / 2f
-        val y = 118f
-        openEnvelope(canvas, w * 1.012f, x - 2f, y + 2f, 3f)
-        cardFront(canvas, w, x, y, -2.6f)
-        slip(canvas, 139f, 606f, -1.2f, 262f, 46f, 12f, 12f)
+        openEnvelope(canvas, 380f * 1.012f, 78f, 112f, 3f)
+        cardFront(canvas, 380f, 80f, 110f, -2.6f)
+        slip(canvas, 139f, 612f, -1.2f, 262f, 46f, 12f, 12f)
     }
 
     private fun postNote(canvas: Canvas) {
-        val w = 258f
-        openEnvelope(canvas, 286f, 127f, 158f, 2.5f)
-        cardFront(canvas, w, 16f, 112f, -3.2f)
-        cardBack(canvas, w, 266f, 124f, 2.8f)
+        openEnvelope(canvas, 300f, 120f, 150f, 2.5f)
+        cardFront(canvas, 272f, 6f, 104f, -3.2f)
+        cardBack(canvas, 272f, 262f, 116f, 2.8f)
         slip(canvas, 139f, 612f, -1.2f, 262f, 46f, 12f, 12f)
     }
 

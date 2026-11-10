@@ -87,7 +87,10 @@ object HolidayCardArt {
     fun captionIsVerse(
         number: Int,
         caption: String,
-    ): Boolean = number in VERSE_NUMBERS || caption.trimEnd().endsWith("(KJV)")
+    ): Boolean = number in VERSE_NUMBERS || VERSE_REFERENCE.containsMatchIn(caption)
+
+    /** A caption ending in `<chapter>:<verse>`, with "(KJV)" or not: as the web tells a verse's reference. */
+    private val VERSE_REFERENCE = Regex("""\d+:\d+(\s*\(KJV\))?\s*$""")
 
     /** [captionIsVerse] for a design id ("christmas-2026-61"). */
     fun captionIsVerse(
