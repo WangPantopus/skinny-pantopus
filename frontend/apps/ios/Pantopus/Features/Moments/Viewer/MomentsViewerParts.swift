@@ -89,7 +89,8 @@ struct MomentsViewerHeader: View {
                 }
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.white.opacity(0.88))
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel([place, times].filter { !$0.isEmpty }.joined(separator: " · "))
                 .accessibilityIdentifier("moments.viewer.meta")
             }
             .foregroundStyle(.white)
@@ -107,7 +108,7 @@ struct MomentsViewerHeader: View {
                         action: onSound
                     )
                 }
-                if !isMine {
+                if !isMine, author != nil {
                     headerButton(
                         .moreHorizontal,
                         width: isVideo ? 40 : 44,
@@ -315,7 +316,8 @@ struct MomentsToastView: View {
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, 10)
         .background(Capsule().fill(Color.black.opacity(0.72)))
-        .accessibilityElement(children: .combine)
+        // Undo stays a button of its own under the note.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.viewer.toast")
     }
 }

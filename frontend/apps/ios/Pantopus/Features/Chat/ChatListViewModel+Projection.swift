@@ -39,7 +39,8 @@ extension ChatListViewModel {
                 topics: row.topics,
                 gigId: row.gigId,
                 storageKey: row.storageKey,
-                isMuted: mutedKeys.contains(row.storageKey)
+                isMuted: mutedKeys.contains(row.storageKey),
+                momentReply: row.momentReply
             )
         }
     }
@@ -209,7 +210,8 @@ extension ChatListViewModel {
                 topics: row.topics,
                 gigId: row.gigId,
                 storageKey: row.storageKey,
-                isMuted: row.isMuted
+                isMuted: row.isMuted,
+                momentReply: row.momentReply
             )
         }
     }

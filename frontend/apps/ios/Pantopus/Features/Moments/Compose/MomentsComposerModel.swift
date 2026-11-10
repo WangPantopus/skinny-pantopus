@@ -201,7 +201,7 @@ final class MomentsComposerModel {
             error = MomentsFailure.captureTooOld.message
             return
         }
-        let point = asset.location.map {
+        var point = asset.location.map {
             MediaCaptureLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude, capturedAt: taken)
         }
         switch asset.mediaType {
@@ -213,6 +213,10 @@ final class MomentsComposerModel {
             guard let url = await MomentsLibraryLoader.videoFile(for: asset) else {
                 error = "Couldn't open that video."
                 return
+            }
+            // Photos has no place for it: the file's own tag says where it was taken.
+            if point == nil, let tagged = await MomentsMediaExport.location(of: url) {
+                point = MediaCaptureLocation(latitude: tagged.latitude, longitude: tagged.longitude, capturedAt: taken)
             }
             capture = point
             await useVideo(url)

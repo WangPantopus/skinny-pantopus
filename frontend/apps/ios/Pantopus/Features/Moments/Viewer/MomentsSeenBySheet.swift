@@ -50,6 +50,16 @@ struct MomentsSeenBySheet: View {
             }
             .padding(.horizontal, Spacing.s5)
             .padding(.top, Spacing.s4)
+            if let toast = model.toast {
+                // "Saved to Photos", or why it couldn't be: the viewer's own note sits behind this sheet.
+                Text(toast.text)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.s5)
+                    .padding(.top, 10)
+                    .accessibilityIdentifier("moments.seenBy.note")
+            }
             list
                 .padding(.top, 14)
         }

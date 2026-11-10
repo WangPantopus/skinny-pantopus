@@ -20,8 +20,6 @@ struct MomentsPostStage: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            backdrop
-                .ignoresSafeArea()
             retakeButton
                 .padding(.leading, Spacing.s3)
                 .padding(.top, 2)
@@ -33,6 +31,15 @@ struct MomentsPostStage: View {
                     .layoutPriority(1)
             }
             .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Behind the screen, never part of its layout: a photo that fills the screen is larger than
+        // the screen, and as a sibling it pushed Retake under the clock and the sheet under the keyboard.
+        .background {
+            Color.black
+                .overlay { backdrop }
+                .clipped()
+                .ignoresSafeArea()
         }
         .onDisappear { player?.pause() }
     }
@@ -365,7 +372,7 @@ private struct MomentsPostMap: View {
             if let pin {
                 Map(initialPosition: .region(region(around: pin)), interactionModes: []) {
                     if showArea {
-                        MapCircle(center: pin, radius: 260)
+                        MapCircle(center: pin, radius: 800)
                             .foregroundStyle(Theme.Color.primary500.opacity(0.18))
                             .stroke(Theme.Color.primary500.opacity(0.6), lineWidth: 1.5)
                     } else {
@@ -418,7 +425,7 @@ private struct MomentsPostMap: View {
     }
 
     private func region(around pin: CLLocationCoordinate2D) -> MKCoordinateRegion {
-        let span = showArea ? 0.012 : 0.004
+        let span = showArea ? 0.03 : 0.004
         // The pin's head stands above its point: a little south keeps it in the middle.
         return MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: pin.latitude + (showArea ? 0 : span * 0.12), longitude: pin.longitude),

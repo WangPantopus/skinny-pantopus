@@ -56,6 +56,30 @@ enum MomentsMediaExport {
         return time.seconds.isFinite ? time.seconds : 0
     }
 
+    /// Where a video's own file says it was taken (its location tag,
+    /// "+45.6237-122.6812/"), for a library video Photos has no place for.
+    static func location(of url: URL) async -> (latitude: Double, longitude: Double)? {
+        guard let items = try? await AVURLAsset(url: url).load(.metadata) else { return nil }
+        let tagged = AVMetadataItem.metadataItems(from: items, filteredByIdentifier: .commonIdentifierLocation)
+            + AVMetadataItem.metadataItems(from: items, filteredByIdentifier: .quickTimeMetadataLocationISO6709)
+        for item in tagged {
+            if let text = try? await item.load(.stringValue), let point = coordinate(iso6709: text) { return point }
+        }
+        return nil
+    }
+
+    /// Latitude and longitude from "+45.6237-122.6812+012.3/".
+    static func coordinate(iso6709 text: String) -> (latitude: Double, longitude: Double)? {
+        let characters = Array(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        let isSign: (Character) -> Bool = { $0 == "+" || $0 == "-" }
+        guard let first = characters.first, isSign(first),
+              let split = characters.indices.dropFirst().first(where: { isSign(characters[$0]) }) else { return nil }
+        let end = characters.indices.first { $0 > split && (isSign(characters[$0]) || characters[$0] == "/") } ?? characters.count
+        guard let latitude = Double(String(characters[..<split])), let longitude = Double(String(characters[split..<end])),
+              abs(latitude) <= 90, abs(longitude) <= 180 else { return nil }
+        return (latitude, longitude)
+    }
+
     /// An MP4 at about 720p with its sound, its poster and two frames.
     static func video(at source: URL, into folder: URL) async throws -> MomentPreparedMedia {
         let asset = AVURLAsset(url: source)
