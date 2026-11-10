@@ -419,6 +419,8 @@ export default function CardTable({
     hint = typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches ? 'double-tap to bring it back' : 'double-click to bring it back';
   }
   const readVerse = !sendMoment && !isLetter && !sealed && step === 'out' && !ui.enlarged && Boolean(card.verse);
+  const turnedOver = step === 'out' && backUp;
+  const quietShare = Boolean(onShare) && !sendMoment && !isLetter && !sealed;
   const showTopRight = !sendMoment && !isLetter && (step === 'out' || (sealed && (step === 'back' || step === 'front')));
   // The button is there only when there's something to press: never while things move by themselves.
   const sendButton = !sendMoment || send === 'ready' || send === 'in' || send === 'seal';
@@ -632,19 +634,36 @@ export default function CardTable({
                   ) : <div className={styles.hint}>{hint}</div>}
                 </div>
               ) : <div className={styles.hint}>{hint}</div>}
-              {/* Its room is kept while it can be offered, so the card never moves when it shows. */}
-              {sendBack ? (
-                <button
-                  type="button"
-                  className={`${styles.quiet} ${step === 'out' && backUp ? '' : styles.hidden}`}
-                  data-ui
-                  data-testid="cardTableSendBack"
-                  aria-hidden={!(step === 'out' && backUp)}
-                  tabIndex={step === 'out' && backUp ? 0 : -1}
-                  onClick={() => { setMenuOpen(false); sendBack.onSelect(); }}
-                >
-                  {sendBack.label}
-                </button>
+              {/* Its room is kept while it can be offered, so the card never moves when it shows. Once the card is turned
+                  over: "Send {first name} a card" and, quietly beside it, "Share this card" (design plan 11.1; the corner
+                  icon stays). */}
+              {sendBack || quietShare ? (
+                <div className={`${styles.quietRow} ${turnedOver ? '' : styles.hidden}`} aria-hidden={!turnedOver}>
+                  {sendBack ? (
+                    <button
+                      type="button"
+                      className={styles.quiet}
+                      data-ui
+                      data-testid="cardTableSendBack"
+                      tabIndex={turnedOver ? 0 : -1}
+                      onClick={() => { setMenuOpen(false); sendBack.onSelect(); }}
+                    >
+                      {sendBack.label}
+                    </button>
+                  ) : null}
+                  {quietShare ? (
+                    <button
+                      type="button"
+                      className={styles.quiet}
+                      data-ui
+                      data-testid="cardTableShareQuiet"
+                      tabIndex={turnedOver ? 0 : -1}
+                      onClick={() => { setMenuOpen(false); onShare?.(); }}
+                    >
+                      Share this card
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
