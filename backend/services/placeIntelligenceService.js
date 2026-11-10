@@ -59,6 +59,7 @@ const homeRecords = require('./propertyRecords/homeRecord');
 const similarHomes = require('./propertyRecords/similarHomes');
 const propertyRecordsRouter = require('./propertyRecords/router');
 const homeInsuranceCheck = require('./homeInsuranceCheck');
+const appealPacket = require('./appealPacket');
 const { appealForState } = require('../data/appealPrograms');
 const { stateCode: recordStateCode } = require('./propertyRecords/addressKey');
 const recordVocabulary = require('./recordVocabulary');
@@ -170,6 +171,12 @@ async function similarHomesTeaser(recordRow) {
  * state says a value is reviewed (data/appealPrograms.js). From the copy the Home holds. `on` says whether the Home
  * Money Check is switched on for the home's county, which is also where the insurance check introduces itself.
  */
+/** The packet's web page: a full https address for the phones, or the page's own path where this server's web isn't https (a local rig). */
+function appealPacketLink(homeId) {
+  const web = String(process.env.PUBLIC_WEB_URL || process.env.APP_URL || 'https://pantopus.com').trim().replace(/\/+$/, '');
+  return web.startsWith('https://') ? `${web}/app/homes/${homeId}/appeal-packet` : `/homes/${homeId}/appeal-packet`;
+}
+
 async function propertyTaxCheck(recordRow) {
   const { data: stored } = await recordRow();
   const copy = stored ? homeRecords.liveCopy(stored) : null;
@@ -183,7 +190,10 @@ async function propertyTaxCheck(recordRow) {
     card.notes = [...card.notes, appeal.note];
     card.action = { label: `Official page: ${appeal.source.name}`, url: appeal.source.url };
   }
-  return { on, cards: [card] };
+  // The packet to file it oneself, where the county is switched on for it. It is on the web, so a phone opens the page there.
+  const packet = appeal && propertyRecordsRouter.appealPacketFor(copy.jurisdiction)
+    ? appealPacket.card({ state: recordStateCode(stored.state) }, appealPacketLink(stored.id)) : null;
+  return { on, cards: packet ? [card, packet] : [card] };
 }
 
 /**

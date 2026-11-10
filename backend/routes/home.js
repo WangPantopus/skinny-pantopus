@@ -46,6 +46,7 @@ const propertyIntelligenceService = require('../services/ai/propertyIntelligence
 const homeRecords = require('../services/propertyRecords/homeRecord');
 const householdFacts = require('../services/householdFacts');
 const countyLinks = require('../config/countyLinks');
+const appealPacket = require('../services/appealPacket');
 const floorPlans = require('../services/propertyRecords/floorPlans');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { encodeGeohash } = require('../utils/geohash');
@@ -5737,6 +5738,38 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
     if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
     logger.error('Property value error', { error: err.message, homeId: req.params.id });
     res.status(503).json({ error: 'Current property information could not be loaded. Please retry.', code: 'HOME_PROPERTY_UNAVAILABLE' });
+  }
+});
+
+/**
+ * The Home Money Check's appeal packet (services/appealPacket.js): for the Home's confirmed owner, where the county is
+ * on the switch file's appeal_packet list and values the home above similar homes. Off everywhere until then.
+ *
+ * GET /api/homes/:id/appeal-packet       what the packet holds, or { available: false } (to anyone else too)
+ * GET /api/homes/:id/appeal-packet/pdf   the packet
+ */
+router.get('/:id/appeal-packet', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const packet = await appealPacket.forOwner(req.params.id, req.user.id);
+    res.json(packet.ok ? appealPacket.summary(packet) : { available: false });
+  } catch (err) {
+    logger.error('Appeal packet error', { error: err.message, homeId: req.params.id });
+    res.status(503).json({ error: 'The packet could not be loaded. Please retry.', code: 'APPEAL_PACKET_UNAVAILABLE' });
+  }
+});
+
+router.get('/:id/appeal-packet/pdf', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const packet = await appealPacket.forOwner(req.params.id, req.user.id);
+    if (!packet.ok) return res.status(404).json({ error: 'There is no packet for this home.', code: 'APPEAL_PACKET_NONE' });
+    const file = await appealPacket.pdf(packet);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${appealPacket.summary(packet).file_name}"`, 'Content-Length': String(file.length) });
+    return res.send(file);
+  } catch (err) {
+    logger.error('Appeal packet PDF error', { error: err.message, homeId: req.params.id });
+    return res.status(503).json({ error: 'The packet could not be made. Please retry.', code: 'APPEAL_PACKET_UNAVAILABLE' });
   }
 });
 
