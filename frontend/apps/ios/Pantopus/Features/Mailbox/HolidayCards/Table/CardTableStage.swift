@@ -37,6 +37,8 @@ struct CardTableStage: View {
             }
             light(pose)
                 .zIndex(30)
+            moodLayer(pose)
+                .zIndex(30.5)
             CardTableVignette(spread: pose.spread)
                 .frame(width: layout.screen.width, height: layout.screen.height)
                 .zIndex(31)
@@ -71,6 +73,20 @@ struct CardTableStage: View {
             .clipped()
             .colorMultiply(tint)
             .offset(x: -14 - pose.lightX * 7, y: -14 - pose.lightY * 7)
+    }
+
+    /// The mood over the table (plan Part 7): snow's shadows falling through the window's light, which move with it;
+    /// or, for reverence, candlelight from the lower left.
+    @ViewBuilder
+    private func moodLayer(_ pose: CardTablePose) -> some View {
+        if model.mood == .reverence {
+            CardTableCandle(size: layout.screen, breathes: model.moodMoves)
+        } else if model.moodMoves, model.isReady {
+            CardTableSnow(size: CGSize(width: layout.screen.width + 80, height: layout.screen.height + 80))
+                .scaleEffect(1.04)
+                .offset(x: -40 + pose.lightX * 22, y: -40 + pose.lightY * 22)
+                .opacity(cardTableLerp(1, 0.8, pose.spread))
+        }
     }
 
     private func light(_ pose: CardTablePose) -> some View {
@@ -146,6 +162,11 @@ struct CardTableStage: View {
                 .resizable()
                 .frame(width: width, height: depth)
             CardTableGlint(width: width, depth: depth, mask: art.flapGold, lightX: pose.lightX, lightY: pose.lightY)
+            // Reverence: one slow glint crosses the gold as the flap opens, left to right (plan Part 7).
+            let sweep = model.springs.glint.x
+            if model.mood == .reverence, sweep > 0.001, sweep < 0.999 {
+                CardTableGlint(width: width, depth: depth, mask: art.flapGold, lightX: -1.2 + 2.4 * sweep, lightY: 0, band: 0.05)
+            }
         }
         .frame(width: width, height: depth)
         .colorMultiply(Color(white: pose.flapIsOpen ? pose.flapBrightness : 1))

@@ -26,6 +26,8 @@ final class CardTableArt: Sendable {
     let stampPeak: UIImage
     let stampFir: UIImage
     let stampRiver: UIImage
+    /// Christmas with Jesus Christ's stamp (plan Part 7).
+    let stampStar: UIImage
     let postmark: UIImage
     let paper: UIImage
     let light: UIImage
@@ -47,6 +49,7 @@ final class CardTableArt: Sendable {
         async let stampPeak = Self.decoded("stamp-peak")
         async let stampFir = Self.decoded("stamp-fir")
         async let stampRiver = Self.decoded("stamp-river")
+        async let stampStar = Self.decoded("stamp-star")
         async let postmark = Self.decoded("postmark-blank")
         async let paper = Self.decoded("paper")
         async let light = Self.decoded("light")
@@ -65,6 +68,7 @@ final class CardTableArt: Sendable {
         self.stampPeak = await stampPeak
         self.stampFir = await stampFir
         self.stampRiver = await stampRiver
+        self.stampStar = await stampStar
         self.postmark = await postmark
         self.paper = await paper
         self.light = await light
@@ -72,9 +76,11 @@ final class CardTableArt: Sendable {
         self.grain = await grain
     }
 
-    /// The card's stamp, from its number (`["fir","peak","river"][(n-1)%3]`, so a card always has the same one).
+    /// The card's stamp, from its number (`["fir","peak","river"][(n-1)%3]`, so a card always has the same one); the
+    /// star on Christmas with Jesus Christ cards (plan Part 7).
     func stamp(number: Int?) -> UIImage {
-        switch ((number ?? 1) - 1 + 3) % 3 {
+        if CardTableMood(number: number) == .reverence { return stampStar }
+        return switch ((number ?? 1) - 1 + 3) % 3 {
         case 0: stampFir
         case 1: stampPeak
         default: stampRiver

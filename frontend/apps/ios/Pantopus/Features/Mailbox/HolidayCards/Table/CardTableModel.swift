@@ -96,6 +96,20 @@ struct CardTableSprings: Equatable {
     var drop = CardTableSpring(1, k: 58, c: 11.5)
     /// The folded card opening across the Duo's hinge.
     var spread = CardTableSpring(k: 62, c: 12.5)
+    /// Reverence (plan Part 7): one slow glint across the gold lining as the flap opens, 0 to 1.
+    var glint = CardTableSpring(k: 3, c: 3.5)
+
+    /// One step of the springs no finger holds; true while any still moves.
+    mutating func advanceFree(step: Double, count: Int) -> Bool {
+        var moving = false
+        if lay.advance(step: step, count: count) { moving = true }
+        if lightX.advance(step: step, count: count) { moving = true }
+        if lightY.advance(step: step, count: count) { moving = true }
+        if drop.advance(step: step, count: count) { moving = true }
+        if spread.advance(step: step, count: count) { moving = true }
+        if glint.advance(step: step, count: count) { moving = true }
+        return moving
+    }
 }
 
 @MainActor
@@ -195,7 +209,21 @@ final class CardTableModel {
     init(content: CardTableContent, startsOnTable: Bool) {
         self.content = content
         self.startsOnTable = startsOnTable && !content.sealed
+        // Santa's envelope lands with a little more bounce (plan Part 7).
+        if CardTableMood(number: content.number) == .santa {
+            springs.drop = CardTableSpring(1, k: 58, c: 7.5)
+        }
         ticker.onTick = { [weak self] in self?.frame(at: $0) }
+    }
+
+    /// The card's mood (plan Part 7), from its collection.
+    var mood: CardTableMood {
+        CardTableMood(number: content.number)
+    }
+
+    /// The moods' snow, breathing candle and glint run: not with Reduce Motion or Low Power Mode.
+    var moodMoves: Bool {
+        !reduceMotion && !lowPower
     }
 
     /// The server's newer answer: the seal may have lifted, or the note come.
@@ -373,6 +401,7 @@ final class CardTableModel {
         springs.lay.t = 1
         haptics.tap(.medium)
         applyFold(animated: true)
+        startGlint()
     }
 
     // MARK: The clock
@@ -396,12 +425,8 @@ final class CardTableModel {
         let mode = drag?.mode
         if mode != .envelope, next.envelope.advance(step: slice, count: count) { moving = true }
         if mode != .pull, next.pull.advance(step: slice, count: count) { moving = true }
-        if next.lay.advance(step: slice, count: count) { moving = true }
         if mode != .turn, next.card.advance(step: slice, count: count) { moving = true }
-        if next.lightX.advance(step: slice, count: count) { moving = true }
-        if next.lightY.advance(step: slice, count: count) { moving = true }
-        if next.drop.advance(step: slice, count: count) { moving = true }
-        if next.spread.advance(step: slice, count: count) { moving = true }
+        if next.advanceFree(step: slice, count: count) { moving = true }
         springs = next
         if sending != nil, advanceSending(elapsed: elapsed) { moving = true }
         // Once it has cleared the envelope, the card is laid down in front of it.

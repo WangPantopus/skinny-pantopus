@@ -23,6 +23,7 @@ final class CardTableSmallArt {
     private(set) var stampFir: UIImage?
     private(set) var stampPeak: UIImage?
     private(set) var stampRiver: UIImage?
+    private(set) var stampStar: UIImage?
     @ObservationIgnored private var isLoaded = false
 
     private init() {}
@@ -31,7 +32,7 @@ final class CardTableSmallArt {
         guard !isLoaded else { return }
         isLoaded = true
         let loaded = await Task.detached(priority: .utility) {
-            ["env-front", "wax-gold", "postmark-blank", "paper", "stamp-fir", "stamp-peak", "stamp-river"].map { name in
+            ["env-front", "wax-gold", "postmark-blank", "paper", "stamp-fir", "stamp-peak", "stamp-river", "stamp-star"].map { name in
                 CardTableArt.file(name).flatMap { $0.preparingForDisplay() ?? $0 }
             }
         }.value
@@ -42,11 +43,13 @@ final class CardTableSmallArt {
         stampFir = loaded[4]
         stampPeak = loaded[5]
         stampRiver = loaded[6]
+        stampStar = loaded[7]
     }
 
-    /// The card's stamp, from its number, as on the envelope.
+    /// The card's stamp, from its number, as on the envelope (the star on Christmas with Jesus Christ cards).
     func stamp(number: Int?) -> UIImage? {
-        switch ((number ?? 1) - 1 + 3) % 3 {
+        if CardTableMood(number: number) == .reverence { return stampStar }
+        return switch ((number ?? 1) - 1 + 3) % 3 {
         case 0: stampFir
         case 1: stampPeak
         default: stampRiver
