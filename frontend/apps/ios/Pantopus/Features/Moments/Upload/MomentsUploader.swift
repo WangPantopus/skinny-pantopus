@@ -181,6 +181,9 @@ final class MomentsUploader {
             return
         }
         let uploaded = try await upload(id: id, momentId: momentId, media: prepared)
+        // The file is in: nothing is left to remind about, whatever the picture check takes from here
+        // (the wait for it can outlast the app's time in the background).
+        MomentsUploadReminder.cancel(id)
         await settle(id, state: uploaded.state, momentId: momentId)
     }
 

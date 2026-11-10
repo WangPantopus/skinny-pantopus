@@ -61,6 +61,13 @@ enum MomentsUploadReminder {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: ids)
         center.removeDeliveredNotifications(withIdentifiers: ids)
+        // One set by an earlier run of the app isn't in `live`: every reminder of ours goes, pending or shown.
+        Task {
+            let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) }
+            center.removePendingNotificationRequests(withIdentifiers: pending)
+            let shown = await center.deliveredNotifications().map(\.request.identifier).filter { $0.hasPrefix(prefix) }
+            center.removeDeliveredNotifications(withIdentifiers: shown)
+        }
     }
 
     /// The app is being closed by hand (swiped away) with files still going up: iOS stops them now, so the
@@ -85,7 +92,9 @@ enum MomentsUploadReminder {
         return UNNotificationRequest(identifier: identifier(id), content: content, trigger: trigger)
     }
 
+    private static let prefix = "moments.upload."
+
     private static func identifier(_ id: String) -> String {
-        "moments.upload.\(id)"
+        prefix + id
     }
 }
