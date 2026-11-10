@@ -537,6 +537,12 @@ private fun View.feel(tap: TableTap) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.LONG_PRESS
             TableTap.Refuse ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS
+            TableTap.Tick ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
+                } else {
+                    HapticFeedbackConstants.CLOCK_TICK
+                }
         }
     performHapticFeedback(constant)
 }
