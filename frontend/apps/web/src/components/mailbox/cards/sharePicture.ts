@@ -8,6 +8,8 @@
 import { firstNameOf, isVerseReference, PAPER_SERIF, postmarkDay, TABLE_ART, tableTint, cardTrimmedPicture } from './cardArt';
 import { cardHand, cardPen } from './cardFont';
 import { measureNote, penWords, type NoteFit } from './CardPaper';
+import { drawableSignature, signaturePath, SIGNATURE_INK, SIGNATURE_LINE, SIGNATURE_ON_CARD, SIGNATURE_STROKE, SIGNATURE_W } from './cardSignature';
+import type { CardSignature } from '@pantopus/api';
 
 export type ShareFormat = 'story' | 'post' | 'link';
 
@@ -27,6 +29,8 @@ export type ShareDetails = {
   mailedOn?: string | null;
   note: string;
   fromName: string;
+  /** Signed beside FROM (design plan 8.2): drawn as on the card, only where the back shows with the note. */
+  signature?: CardSignature | null;
 };
 
 const SCALE = 2;
@@ -334,8 +338,21 @@ function cardBack(ctx: Ctx, details: ShareDetails, art: Art, fit: NoteFit, width
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
     ctx.fillStyle = '#1b2a5c';
-    ctx.font = `${nameSize}px ${PEN}`;
-    ctx.fillText(firstNameOf(details.fromName), nameX, rowBaseline);
+    const signed = drawableSignature(details.signature);
+    if (signed) {
+      // The signature's box: 48% of the card wide where the name starts, its line on the baseline.
+      const k = (u * 100 * SIGNATURE_ON_CARD) / SIGNATURE_W;
+      ctx.translate(nameX, rowBaseline - (SIGNATURE_LINE * k));
+      ctx.scale(k, k);
+      ctx.strokeStyle = SIGNATURE_INK;
+      ctx.lineWidth = SIGNATURE_STROKE;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke(new Path2D(signaturePath(signed)));
+    } else {
+      ctx.font = `${nameSize}px ${PEN}`;
+      ctx.fillText(firstNameOf(details.fromName), nameX, rowBaseline);
+    }
     ctx.restore();
 
     const footSize = u * 1.9;
