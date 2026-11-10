@@ -264,6 +264,33 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
         </div>
       </div>
     );
+  } else if (item.card && launchFeatures.cardTable && torn) {
+    // An opened card shows its picture (design plan Part 4): the whole card, taken out, leans over the envelope's top
+    // edge; who it's from, its caption and the day beside it. The envelope keeps its red paper and height.
+    const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
+    const [month = '', date = ''] = postDate.split(' ');
+    const who = from.trim().split(/\s+/)[0] || 'Someone';
+    body = (
+      <div
+        className="relative h-[150px] rounded-md"
+        style={{ backgroundColor: '#9f2f28', backgroundImage: `url(${TABLE_ART}env-front.webp)`, backgroundSize: 'cover', backgroundPosition: '50% 12%', boxShadow: SHADOW }}
+      >
+        <div
+          className="absolute -top-[14px] left-4 w-[125px] -rotate-3 rounded-[2px]"
+          style={{ aspectRatio: '5 / 6', backgroundColor: item.card.paper || '#f7f0e2', boxShadow: '0 6px 14px rgba(40, 8, 6, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3)' }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={cardPicture(item.card.design, 'thumb')} alt="" className="absolute left-[2px] right-[2px] top-[2px] h-[86%] w-[calc(100%-4px)] rounded-[1px] object-cover" />
+        </div>
+        <div className="absolute left-[158px] right-3 top-[18px] text-[#f4e2bf]">
+          <div className="truncate text-[22px] leading-[26px]" style={{ fontFamily: pen }}>From {who}</div>
+          <div className="mt-1 line-clamp-2 text-[15px] italic leading-[19px] text-[#fbeed2]" style={{ fontFamily: SERIF }}>{item.card.caption || 'A Christmas card'}</div>
+          <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#d8b76f]" style={{ fontFamily: SERIF }}>
+            {month} {date} · Opened
+          </div>
+        </div>
+      </div>
+    );
   } else if (item.card && launchFeatures.cardTable) {
     // On the table's paper (launch key card_table): the same place for everything, on the real envelope.
     const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
@@ -462,9 +489,10 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
     <div
       aria-hidden="true"
       className="relative w-full [@media(prefers-color-scheme:dark)]:brightness-[0.94]"
-      style={{ paddingTop: torn ? 14 : 0, opacity: fade }}
+      // A Christmas card on the table's paper keeps its red, opened or not (design plan 1.4 and Part 4).
+      style={{ paddingTop: torn ? 14 : 0, opacity: item.card && launchFeatures.cardTable ? 1 : fade }}
     >
-      {torn && item.card ? (
+      {torn && item.card && launchFeatures.cardTable ? null : torn && item.card ? (
         // The card's picture peeking out of its torn envelope.
         <div
           className="absolute left-5 right-5 top-0 h-[30px] rounded-[2px] border border-[#e7dcc6]"
