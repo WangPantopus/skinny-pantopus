@@ -93,7 +93,7 @@ struct CardTableSendCover: ViewModifier {
                 present(seals ? makeItem() : nil)
             }
             .fullScreenCover(item: $item, onDismiss: { viewModel.sealsAtTable = false }, content: { item in
-                page(item)
+                tablePage(item)
             })
     }
 
@@ -131,7 +131,7 @@ struct CardTableSendCover: ViewModifier {
                 CardTableCoverSlot.Page(
                     id: next.id.uuidString,
                     owner: viewModel,
-                    content: { AnyView(page(next)) },
+                    content: { AnyView(tablePage(next)) },
                     onDismiss: { viewModel.sealsAtTable = false }
                 )
             }
@@ -139,7 +139,7 @@ struct CardTableSendCover: ViewModifier {
         }
     }
 
-    private func page(_ item: Item) -> CardTableSendPage {
+    private func tablePage(_ item: Item) -> CardTableSendPage {
         CardTableSendPage(viewModel: viewModel, model: item.model)
     }
 
