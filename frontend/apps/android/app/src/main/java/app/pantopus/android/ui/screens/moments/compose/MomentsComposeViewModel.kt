@@ -99,10 +99,16 @@ class MomentsComposeViewModel
         private val auth: AuthRepository,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
+        /** The sheet opens with the "How long" and "Who sees it" this person posted with last time (on this phone). */
+        private val choices = context.getSharedPreferences(CHOICES_PREFS, Context.MODE_PRIVATE)
+        private val accountId: String? = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
+
         private val _state =
             MutableStateFlow(
                 MomentsComposeUiState(
                     step = if (savedState.get<String>(MomentsRoutes.MODE_KEY) == "text") ComposeStep.Text else ComposeStep.Camera,
+                    hours = choices.getInt("$accountId.hours", DEFAULT_HOURS).takeIf { it in ALLOWED_HOURS } ?: DEFAULT_HOURS,
+                    audience = choices.getString("$accountId.audience", null).takeIf { it in ALLOWED_AUDIENCES } ?: "nearby",
                 ),
             )
         val state: StateFlow<MomentsComposeUiState> = _state.asStateFlow()
@@ -347,8 +353,13 @@ class MomentsComposeViewModel
                         if (media != null) {
                             posting.start(moment, media, moment.latitude ?: usable.latitude, moment.longitude ?: usable.longitude)
                         } else {
-                            repository.announceChange()
+                            posting.posted(moment)
                         }
+                        choices
+                            .edit()
+                            .putInt("$accountId.hours", current.hours)
+                            .putString("$accountId.audience", current.audience)
+                            .apply()
                         _state.update { it.copy(posting = false, done = true) }
                     }
                     is NetworkResult.Failure -> handlePostFailure(result.error, retried)
@@ -392,6 +403,10 @@ class MomentsComposeViewModel
         private companion object {
             const val MAX_TEXT = 200
             const val MAX_CAPTION = 100
+            const val CHOICES_PREFS = "pantopus.moments.post"
+            const val DEFAULT_HOURS = 24
+            val ALLOWED_HOURS = setOf(1, 6, 24, 48)
+            val ALLOWED_AUDIENCES = setOf("nearby", "connections")
             const val FIX_REFRESH_MS = 4 * 60 * 1000L
             const val DURATION_SLACK_MS = 500L
             const val NOTICE_MS = 4_000L

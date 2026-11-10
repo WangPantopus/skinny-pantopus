@@ -21,12 +21,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +39,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
+import app.pantopus.android.ui.screens.moments.MomentOpenHolder
+import app.pantopus.android.ui.screens.moments.components.MomentImages
+import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -92,20 +100,34 @@ fun ConversationRow(
     }
 }
 
-/** The replied-to Moment's small picture (board N3: 40 × 54), the text card's mark when it has none. */
+/**
+ * The replied-to Moment's small picture (board N3: 40 × 54), the text card's mark when it has none. While Moments is
+ * on, a tap on it opens that Moment in the viewer (the rest of the row opens the conversation, as always).
+ */
 @Composable
 private fun MomentThumb(reply: ConversationMomentReply) {
+    var gone by remember(reply.momentId) { mutableStateOf(false) }
+    if (gone) return
+    val open = MomentOpenHolder.current
     Box(
         modifier =
             Modifier
                 .size(width = 40.dp, height = 54.dp)
                 .clip(RoundedCornerShape(Radii.md))
-                .background(PantopusColors.momentCardTealTop),
+                .background(PantopusColors.momentCardTealTop)
+                .then(
+                    if (open != null) {
+                        Modifier.clickable(onClickLabel = "Open the Moment", role = Role.Button) { open(reply.momentId) { gone = true } }
+                    } else {
+                        Modifier
+                    },
+                ),
         contentAlignment = Alignment.Center,
     ) {
         PantopusIconImage(icon = PantopusIcon.CircleDashed, contentDescription = null, size = 18.dp, tint = PantopusColors.appTextInverse)
-        reply.thumbUrl?.let { url ->
-            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+        // The picture's link is signed and short-lived: memory only, never the image cache on disk.
+        rememberMomentImage(reply.thumbUrl, MomentImages.thumbKey(reply.momentId))?.let { picture ->
+            AsyncImage(model = picture, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
         }
     }
 }

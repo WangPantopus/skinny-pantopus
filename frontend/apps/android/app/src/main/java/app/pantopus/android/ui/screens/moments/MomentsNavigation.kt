@@ -1,5 +1,8 @@
 package app.pantopus.android.ui.screens.moments
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -22,6 +25,15 @@ object MomentsRoutes {
 
     /** Screens with the whole window: no tab bar under the viewer or the camera. */
     val fullScreen: Set<String> = setOf(WATCH, COMPOSE)
+}
+
+/**
+ * Set by `RootTabScreen` while Moments is on: opens the viewer on one Moment, by its id (the quote above a chat reply
+ * and the small picture in the conversation list). The second argument is called instead when the Moment has ended or
+ * can't be seen any more. Null while Moments is off and outside the tabs, where the quote is just a picture.
+ */
+object MomentOpenHolder {
+    var current: ((momentId: String, onEnded: () -> Unit) -> Unit)? by mutableStateOf(null)
 }
 
 /** Where Moments hands off to the rest of the app. */

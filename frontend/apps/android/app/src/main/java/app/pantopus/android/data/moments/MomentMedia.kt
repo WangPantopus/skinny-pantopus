@@ -109,6 +109,15 @@ object MomentMedia {
         extension: String,
     ): File = File(folder(context), "${UUID.randomUUID()}.$extension")
 
+    /** Where the notes about uploads still to finish are kept (one small file per Moment), beside the media folder. */
+    fun outbox(context: Context): File = File(context.filesDir, "moments-outbox").apply { mkdirs() }
+
+    /** Sign-out: every photo, video and upload note of the account leaves the phone. */
+    fun clear(context: Context) {
+        runCatching { File(context.filesDir, "moments").deleteRecursively() }
+        runCatching { File(context.filesDir, "moments-outbox").deleteRecursively() }
+    }
+
     /** Copies a picked item into the app's folder (a picker's grant can lapse before the upload ends). */
     suspend fun copyIn(
         context: Context,

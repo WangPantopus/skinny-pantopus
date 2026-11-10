@@ -90,6 +90,7 @@ data class ConversationRowContent(
 /** "Replied to your Moment" over a conversation's preview, with the Moment's picture at the row's end (board N3). */
 @Immutable
 data class ConversationMomentReply(
+    val momentId: String,
     val label: String,
     /** Null for a text card and once the Moment ended. */
     val thumbUrl: String?,

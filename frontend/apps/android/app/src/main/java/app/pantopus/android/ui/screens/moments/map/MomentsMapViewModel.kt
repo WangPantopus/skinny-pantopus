@@ -9,13 +9,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.MomentAuthorDto
 import app.pantopus.android.data.api.models.moments.MomentRingDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.moments.MomentPosting
 import app.pantopus.android.data.moments.MomentPostingOutcome
+import app.pantopus.android.data.moments.MomentsFeature
 import app.pantopus.android.data.moments.MomentsPlayback
 import app.pantopus.android.data.moments.MomentsPosting
 import app.pantopus.android.data.moments.MomentsRepository
+import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.data.plans.PlanLocationResolver
 import com.google.android.gms.maps.model.CameraPosition
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -126,6 +129,7 @@ class MomentsMapViewModel
         private val posting: MomentsPosting,
         private val locations: PlanLocationResolver,
         private val auth: AuthRepository,
+        private val feature: MomentsFeature,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
         private val _state = MutableStateFlow(MomentsMapUiState())
@@ -158,8 +162,13 @@ class MomentsMapViewModel
 
         private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 2)
 
-        /** One-line notices for the map's toast ("Your Moment is waiting for review."). */
+        /** One-line notices for the map's toast ("Your Moment is live. It shows for 24 hours."). */
         val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+        private val _wentLive = MutableSharedFlow<Unit>(extraBufferCapacity = 2)
+
+        /** A Moment of yours just went live: the map marks it with a tap you can feel. */
+        val wentLive: SharedFlow<Unit> = _wentLive.asSharedFlow()
 
         private var viewport: Viewport? = null
         private var fetching: Job? = null
@@ -170,8 +179,13 @@ class MomentsMapViewModel
             viewModelScope.launch { repository.changes.collect { refresh() } }
             viewModelScope.launch {
                 posting.outcomes.collect { outcome ->
-                    if (outcome is MomentPostingOutcome.Held) {
-                        _messages.tryEmit("Your Moment is waiting for a quick review before it shows.")
+                    when (outcome) {
+                        is MomentPostingOutcome.Held -> _messages.tryEmit("Your Moment is waiting for a quick review before it shows.")
+                        is MomentPostingOutcome.Live -> {
+                            val hours = outcome.moment.hours
+                            _messages.tryEmit("Your Moment is live. It shows for ${if (hours == 1) "1 hour" else "$hours hours"}.")
+                            _wentLive.tryEmit(Unit)
+                        }
                     }
                     refresh()
                 }
@@ -195,6 +209,8 @@ class MomentsMapViewModel
                 _state.update {
                     it.copy(center = center ?: it.center, locating = false, locationMissing = center == null && it.center == null)
                 }
+                // "Show my location" is also "look again".
+                refresh()
             }
         }
 
@@ -239,7 +255,14 @@ class MomentsMapViewModel
                             _state.update { it.copy(rings = result.data, loaded = true, failed = false) }
                             if (result.data.isEmpty()) emptyPlace()
                         }
-                        is NetworkResult.Failure -> _state.update { it.copy(loaded = true, failed = it.rings.isEmpty()) }
+                        is NetworkResult.Failure -> {
+                            // Moments was turned off while the app was open (every route then answers 404
+                            // `MOMENTS_UNAVAILABLE`): read the flag now, so the tab leaves at once.
+                            if (result.error == NetworkError.NotFound || result.error.serverCode == "MOMENTS_UNAVAILABLE") {
+                                feature.refresh()
+                            }
+                            _state.update { it.copy(loaded = true, failed = it.rings.isEmpty()) }
+                        }
                     }
                 }
         }

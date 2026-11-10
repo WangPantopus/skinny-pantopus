@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.moments.viewer
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.MomentBriefDto
@@ -10,10 +11,11 @@ import app.pantopus.android.data.api.models.moments.MomentRingDto
 import app.pantopus.android.data.api.models.moments.MomentViewersResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
+import app.pantopus.android.ui.screens.moments.components.MomentImages
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -77,7 +79,7 @@ class MomentsViewerViewModel
     @Inject
     constructor(
         private val repository: MomentsRepository,
-        private val auth: AuthRepository,
+        @ApplicationContext private val context: Context,
     ) : ViewModel() {
         private val _state = MutableStateFlow(MomentsViewerUiState())
         val state: StateFlow<MomentsViewerUiState> = _state.asStateFlow()
@@ -91,9 +93,6 @@ class MomentsViewerViewModel
 
         /** A person just muted: the viewer offers Undo (MOMLEAD 22:10Z: no confirm, a note with Undo, as on iPhone). */
         val muted: SharedFlow<MutedAuthor> = _muted.asSharedFlow()
-
-        /** Your photo, for the header of your own Moment. */
-        val avatarUrl: String? get() = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.avatarUrl
 
         private val loaded = mutableMapOf<String, Pair<MomentDto, Long>>()
         private val viewed = mutableSetOf<String>()
@@ -166,11 +165,16 @@ class MomentsViewerViewModel
             _state.update { it.copy(finished = true) }
         }
 
-        /** Reads the current Moment (signed links last 15 minutes, so a copy older than 10 is read again). */
+        /**
+         * Reads the current Moment (signed links last 15 minutes, so a copy older than 10 is read again). A Moment whose
+         * time is up never shows, whatever copy the phone holds: it says it ended and the viewer moves on.
+         */
         private fun load() {
             val brief = _state.value.brief ?: return finish()
+            if (hasEnded(brief.expiresAt)) return showEnded(brief.id)
             val cached = loaded[brief.id]?.takeIf { System.currentTimeMillis() - it.second < LINK_REUSE_MS }?.first
             if (cached != null) {
+                if (hasEnded(cached.expiresAt)) return showEnded(brief.id)
                 _state.update { it.copy(load = ViewerLoad.Ready(cached)) }
                 prefetchNext()
                 return
@@ -180,20 +184,34 @@ class MomentsViewerViewModel
                 val result = repository.moment(brief.id)
                 if (_state.value.brief?.id != brief.id) return@launch
                 when (result) {
-                    is NetworkResult.Success -> {
-                        loaded[brief.id] = result.data to System.currentTimeMillis()
-                        _state.update { it.copy(load = ViewerLoad.Ready(result.data)) }
-                        prefetchNext()
-                    }
-                    is NetworkResult.Failure ->
-                        _state.update {
-                            it.copy(load = if (result.error.isGone()) ViewerLoad.Ended else ViewerLoad.Failed)
+                    is NetworkResult.Success ->
+                        if (hasEnded(result.data.expiresAt)) {
+                            showEnded(brief.id)
+                        } else {
+                            loaded[brief.id] = result.data to System.currentTimeMillis()
+                            _state.update { it.copy(load = ViewerLoad.Ready(result.data)) }
+                            prefetchNext()
                         }
+                    is NetworkResult.Failure ->
+                        if (result.error.isGone()) showEnded(brief.id) else _state.update { it.copy(load = ViewerLoad.Failed) }
                 }
             }
         }
 
-        /** Reads the next Moment ahead, so it opens at once. */
+        /** The Moment ended (time up, deleted, removed): its copy and its pictures are forgotten, and the viewer says so. */
+        private fun showEnded(momentId: String) {
+            loaded.remove(momentId)
+            MomentImages.forget(context, momentId)
+            _state.update { it.copy(load = ViewerLoad.Ended) }
+        }
+
+        /** The Moment on screen ran out of time while it was up (a long pause): the same as finding it ended. */
+        fun endedOnScreen() {
+            val brief = _state.value.brief ?: return
+            if (hasEnded(brief.expiresAt) || hasEnded(_state.value.moment?.expiresAt)) showEnded(brief.id)
+        }
+
+        /** Reads the next Moment ahead, with its picture (a video's poster), so it opens at once and without a blank. */
         private fun prefetchNext() {
             val current = _state.value
             val ring = current.ring ?: return
@@ -201,10 +219,14 @@ class MomentsViewerViewModel
                 ring.moments.getOrNull(current.momentIndex + 1)
                     ?: current.rings.getOrNull(current.ringIndex + 1)?.let { it.moments.getOrNull(it.startAt) }
                     ?: return
-            if (loaded[nextBrief.id] != null) return
+            if (loaded[nextBrief.id] != null || hasEnded(nextBrief.expiresAt)) return
             viewModelScope.launch {
-                (repository.moment(nextBrief.id) as? NetworkResult.Success)?.data?.let {
-                    loaded[nextBrief.id] = it to System.currentTimeMillis()
+                (repository.moment(nextBrief.id) as? NetworkResult.Success)?.data?.let { next ->
+                    loaded[nextBrief.id] = next to System.currentTimeMillis()
+                    when (next.kind) {
+                        "photo" -> next.mediaUrl?.let { MomentImages.prefetch(context, it, MomentImages.mediaKey(next.id)) }
+                        "video" -> next.posterUrl?.let { MomentImages.prefetch(context, it, MomentImages.posterKey(next.id)) }
+                    }
                 }
             }
         }
@@ -254,7 +276,7 @@ class MomentsViewerViewModel
             val moment = _state.value.moment ?: return
             viewModelScope.launch {
                 when (val result = repository.report(moment.id, reason)) {
-                    is NetworkResult.Success -> _messages.tryEmit("Thanks. The Pantopus team will look at it.")
+                    is NetworkResult.Success -> _messages.tryEmit("Thanks. The Pantopus team will take a look.")
                     is NetworkResult.Failure -> _messages.tryEmit(result.error.viewerMessage("Couldn't send your report."))
                 }
             }
@@ -413,10 +435,16 @@ internal fun leftLabel(
     now: Instant = Instant.now(),
 ): String? {
     val end = iso?.let { runCatching { Instant.parse(it.replace("+00:00", "Z")) }.getOrNull() } ?: return null
-    val minutes = java.time.Duration.between(now, end).toMinutes()
-    return when {
-        minutes <= 0 -> "ending"
-        minutes < 60 -> "${minutes}m left"
-        else -> "${minutes / 60}h left"
-    }
+    // Never less than "1m left": a Moment in its last seconds is still up.
+    val minutes = java.time.Duration.between(now, end).toMinutes().coerceAtLeast(1)
+    return if (minutes < 60) "${minutes}m left" else "${minutes / 60}h left"
+}
+
+/** Whether a Moment's end time has passed (an unreadable or missing time counts as not ended: the server decides). */
+internal fun hasEnded(
+    expiresAt: String?,
+    now: Instant = Instant.now(),
+): Boolean {
+    val end = expiresAt?.let { runCatching { Instant.parse(it.replace("+00:00", "Z")) }.getOrNull() } ?: return false
+    return !end.isAfter(now)
 }

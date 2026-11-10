@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber", "LongParameterList", "TooManyFunctions")
+@file:Suppress("MagicNumber", "LongParameterList", "TooManyFunctions", "MatchingDeclarationName")
 
 package app.pantopus.android.ui.screens.moments.components
 
@@ -279,12 +279,16 @@ fun MomentMapPin(
     }
 }
 
-/** Your Moment while it posts (board P5): the progress ring around your face, on the pin. */
+/**
+ * Your Moment while it posts (board P5): the progress ring around your face, on the pin. With [author] (you, as the
+ * server names you) the face is the one your ring will wear, so nothing changes when the ring takes its place.
+ */
 @Composable
 fun MomentPostingPin(
     progress: Float,
     avatarUrl: String?,
     modifier: Modifier = Modifier,
+    author: MomentAuthorDto? = null,
 ) {
     Box(modifier = modifier.size(width = 64.dp, height = 72.dp)) {
         Canvas(modifier = Modifier.fillMaxSize().pantopusShadow(PinShadow, PinShape)) {
@@ -300,7 +304,11 @@ fun MomentPostingPin(
             drawPath(tail, Color.White)
             drawPostingRing(progress, Offset(32f * unit, 32f * unit), 29.25f * unit, 3.5f * unit)
         }
-        MomentSelfFace(size = 50.dp, avatarUrl = avatarUrl, modifier = Modifier.offset(x = 7.dp, y = 7.dp))
+        if (author != null) {
+            MomentFace(author = author, size = 50.dp, modifier = Modifier.offset(x = 7.dp, y = 7.dp), initialsSize = 18.sp)
+        } else {
+            MomentSelfFace(size = 50.dp, avatarUrl = avatarUrl, modifier = Modifier.offset(x = 7.dp, y = 7.dp))
+        }
     }
 }
 
@@ -351,6 +359,7 @@ fun MomentStripPosting(
     avatarUrl: String?,
     label: String,
     modifier: Modifier = Modifier,
+    author: MomentAuthorDto? = null,
 ) {
     Column(
         modifier = modifier.width(62.dp),
@@ -363,7 +372,11 @@ fun MomentStripPosting(
                 drawCircle(color = Color.White, radius = 27.5f * unit, center = Offset(28f * unit, 28f * unit))
                 drawPostingRing(progress, Offset(28f * unit, 28f * unit), 25.75f * unit, 3f * unit)
             }
-            MomentSelfFace(size = 44.dp, avatarUrl = avatarUrl, modifier = Modifier.offset(x = 6.dp, y = 6.dp))
+            if (author != null) {
+                MomentFace(author = author, size = 44.dp, modifier = Modifier.offset(x = 6.dp, y = 6.dp), initialsSize = 15.sp)
+            } else {
+                MomentSelfFace(size = 44.dp, avatarUrl = avatarUrl, modifier = Modifier.offset(x = 6.dp, y = 6.dp))
+            }
         }
         Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600, maxLines = 1)
     }
@@ -442,4 +455,3 @@ fun MomentClusterBubble(
 val MOMENT_CLUSTER_ANCHOR_FROM_TOP: Dp = 59.dp
 
 private val ClusterShadow = PantopusElevation(Color.Black, 0.25f, 6.dp, 0.dp, 2.dp)
-

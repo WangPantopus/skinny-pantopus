@@ -11,6 +11,8 @@ import app.pantopus.android.data.gigs.GigDraftQueue
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailEnclosureFiles
 import app.pantopus.android.data.mailbox.MailboxRepository
+import app.pantopus.android.data.moments.MomentsPosting
+import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.posts.PostCameraPhotos
 import app.pantopus.android.data.store.ScreenStore
@@ -52,6 +54,8 @@ class AccountDeviceData
         private val screenStore: ScreenStore,
         private val chatOutbox: ChatOutbox,
         private val plans: PlansRepository,
+        private val moments: MomentsRepository,
+        private val momentsPosting: MomentsPosting,
     ) {
         /** Never throws: a part that fails is logged and the rest is still cleared. */
         @OptIn(ExperimentalCoilApi::class)
@@ -60,6 +64,8 @@ class AccountDeviceData
             chatOutbox.clear()
             screenStore.wipe()
             plans.clearAccount()
+            // The next person must not see the last account's rings, nor send its photos and videos as theirs.
+            moments.clearAccount()
             MailboxRepository.forgetAccount()
             HolidayCardsRepository.forgetAccount()
             chatBadges.reset()
@@ -87,6 +93,9 @@ class AccountDeviceData
                     .onFailure { Timber.w(it, "Sign-out could not remove the task camera photos") }
                 runCatching { PostCameraPhotos.remove(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the post camera photos") }
+                // And the Moments it was still posting, with their photos and videos.
+                runCatching { momentsPosting.clearAccount() }
+                    .onFailure { Timber.w(it, "Sign-out could not remove the Moments being posted") }
                 // And the mail enclosures it opened.
                 runCatching { MailEnclosureFiles.remove(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the opened mail enclosures") }

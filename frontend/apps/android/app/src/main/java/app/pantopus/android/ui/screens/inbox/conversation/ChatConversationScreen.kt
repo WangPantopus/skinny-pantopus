@@ -161,6 +161,9 @@ import app.pantopus.android.ui.screens.inbox.conversation.ai.AiLinkButtons
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiStarterRow
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
 import app.pantopus.android.ui.screens.inbox.conversation.ai.starterChips
+import app.pantopus.android.ui.screens.moments.MomentOpenHolder
+import app.pantopus.android.ui.screens.moments.components.MomentImages
+import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
 import app.pantopus.android.ui.screens.plans.chat.PlanChatClosedBar
 import app.pantopus.android.ui.screens.plans.chat.PlanChatStrip
 import app.pantopus.android.ui.screens.plans.chat.rememberPlanChat
@@ -3381,7 +3384,7 @@ private fun BubbleRow(
                     )
                 }
             }
-            content.momentQuote?.let { quote -> MomentReplyQuote(quote = quote) }
+            content.momentQuote?.let { quote -> MomentReplyQuote(quote = quote, outgoing = isOut) }
             val canViewAttachments = content.lockedTier == null || isOut
             if (content.body !is ChatBubbleBody.Text && content.replyPreview != null && canViewAttachments) {
                 BubbleContainer(
@@ -6065,20 +6068,39 @@ private fun readChatAttachment(
 
 /**
  * The Moment a message replies to (Pantopus Moments contract "Chat"): the line ("Replied to your Moment") and a small
- * picture of it above the bubble, or "Moment ended" with no picture once it has.
+ * picture of it above the bubble, on the bubble's side, or "Moment ended" with no picture once it has. While Moments
+ * is on, a tap opens that Moment in the viewer; one that turns out to have ended says so here instead.
  */
 @Composable
-private fun MomentReplyQuote(quote: ChatMomentQuote) {
+private fun MomentReplyQuote(
+    quote: ChatMomentQuote,
+    outgoing: Boolean,
+) {
+    var gone by remember(quote.momentId) { mutableStateOf(false) }
+    val ended = quote.ended || gone
+    val open = MomentOpenHolder.current?.takeIf { !ended }
     Column(
         modifier =
             Modifier
                 .padding(bottom = Spacing.s1)
-                .testTag("chat.momentQuote")
+                .then(
+                    if (open != null) {
+                        Modifier.clickable(onClickLabel = "Open the Moment", role = Role.Button) { open(quote.momentId) { gone = true } }
+                    } else {
+                        Modifier
+                    },
+                ).testTag("chat.momentQuote")
                 .semantics(mergeDescendants = true) {},
+        horizontalAlignment = if (outgoing) Alignment.End else Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
-        Text(text = quote.label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appTextSecondary)
-        if (!quote.ended) {
+        Text(
+            text = if (gone) "Moment ended" else quote.label,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appTextSecondary,
+        )
+        if (!ended) {
             Box(
                 modifier =
                     Modifier
@@ -6089,9 +6111,10 @@ private fun MomentReplyQuote(quote: ChatMomentQuote) {
             ) {
                 // A text card has no picture: its mark on the teal card color.
                 PantopusIconImage(icon = PantopusIcon.CircleDashed, contentDescription = null, size = 22.dp, tint = Color.White)
-                quote.thumbUrl?.let { url ->
+                // The picture's link is signed and short-lived: memory only, never the image cache on disk.
+                rememberMomentImage(quote.thumbUrl, MomentImages.thumbKey(quote.momentId))?.let { picture ->
                     AsyncImage(
-                        model = url,
+                        model = picture,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.matchParentSize(),

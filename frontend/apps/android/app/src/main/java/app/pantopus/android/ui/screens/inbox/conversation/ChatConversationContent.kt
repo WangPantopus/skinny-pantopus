@@ -363,6 +363,7 @@ data class ChatReplyPreview(
  */
 @Immutable
 data class ChatMomentQuote(
+    val momentId: String,
     val label: String,
     /** A small picture of the photo or the video's poster; null for a text card and once it ended. */
     val thumbUrl: String?,

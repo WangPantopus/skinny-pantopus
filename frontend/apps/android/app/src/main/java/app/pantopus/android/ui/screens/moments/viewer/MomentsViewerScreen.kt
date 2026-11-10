@@ -5,6 +5,7 @@
     "LongMethod",
     "CyclomaticComplexMethod",
     "ComplexCondition",
+    "LoopWithTooManyJumpStatements",
 )
 
 @file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
@@ -17,8 +18,12 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,7 +66,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,7 +92,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -119,16 +126,19 @@ import androidx.media3.ui.PlayerView
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.moments.MomentViewerDto
 import app.pantopus.android.data.moments.MomentGallerySaver
-import app.pantopus.android.ui.components.KeyboardResizeEffect
+import app.pantopus.android.ui.components.CutoutBand
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.feed.pulseReportReasons
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentFace
-import app.pantopus.android.ui.screens.moments.components.MomentSelfFace
+import app.pantopus.android.ui.screens.moments.components.MomentHaptics
+import app.pantopus.android.ui.screens.moments.components.MomentImages
 import app.pantopus.android.ui.screens.moments.components.MomentVerifiedCheck
+import app.pantopus.android.ui.screens.moments.components.StageKeyboardResize
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
+import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -138,7 +148,6 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 /** The seven quick reactions (board V4): the post set, with the names TalkBack reads and the test ids use. */
 private val QUICK_REACTIONS =
@@ -151,6 +160,9 @@ private val QUICK_REACTIONS =
         "🙏" to "Thanks",
         "🎉" to "Celebrate",
     )
+
+/** The six report reasons (REVIEW P7): the post set's, with "Something else" last. */
+private val REPORT_REASONS = pulseReportReasons.map { (key, label) -> key to if (key == "other") "Something else" else label }
 
 /**
  * Watching Moments (boards V1 to V5), full screen: a progress bar per Moment in the ring, the author, the place, how
@@ -168,7 +180,7 @@ fun MomentsViewerScreen(
     val close by rememberUpdatedState(onClose)
     LaunchedEffect(state.finished) { if (state.finished) close() }
     StageSystemBars()
-    KeyboardResizeEffect()
+    StageKeyboardResize()
     val toast = remember { ToastController() }
     LaunchedEffect(Unit) { viewModel.messages.collect { toast.show(it) } }
     // After a mute, a note with Undo (MOMLEAD 22:10Z), gone after a few seconds.
@@ -188,6 +200,8 @@ fun MomentsViewerScreen(
     val brief = state.brief
     val moment = state.moment
     val mine = ring?.ring?.mine == true
+    // The gestures below are set up once (their pointerInput has a fixed key), so they read this through a state.
+    val mineNow by rememberUpdatedState(mine)
     val curator = ring?.ring?.author?.kind == "pantopus"
 
     // What stops the clock: a finger held down, typing a reply, the reactions or a menu open, the app away.
@@ -202,7 +216,24 @@ fun MomentsViewerScreen(
     var away by remember { mutableStateOf(false) }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { away = true }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { away = false }
-    val paused = holding || typing || reacting || menuOpen || reporting || confirmingBlock || seenByOpen || confirmingDelete || away
+    // The notification shade or a system dialog over the app takes the window's focus without pausing the app.
+    val covered = !LocalWindowInfo.current.isWindowFocused
+    val paused =
+        holding || typing || reacting || menuOpen || reporting || confirmingBlock || seenByOpen || confirmingDelete || away || covered
+    // Play picks up where it was; a Moment whose time ran out during the pause says so instead.
+    LaunchedEffect(paused) { if (!paused) viewModel.endedOnScreen() }
+    val view = LocalView.current
+    // The reaction just picked, popping over the Moment (its number makes each pick a new one).
+    var popped by remember { mutableStateOf<Pair<Int, String>?>(null) }
+    var pops by remember { mutableIntStateOf(0) }
+    // "Saved" on the Seen by sheet's button for a moment after Save to Photos.
+    var saveNote by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(saveNote) {
+        if (saveNote != null) {
+            delay(SAVE_NOTE_MS)
+            saveNote = null
+        }
+    }
 
     var reply by remember { mutableStateOf("") }
     var muted by remember { mutableStateOf(false) }
@@ -284,6 +315,8 @@ fun MomentsViewerScreen(
         typing = false
         reacting = false
     }
+    // Back puts the quick reactions away before it closes the viewer.
+    BackHandler(enabled = reacting && !typing) { dismissInput() }
     val density = LocalDensity.current
     val keyboardPx = WindowInsets.ime.getBottom(density)
     val belowPx = WindowInsets.navigationBars.getBottom(density)
@@ -326,7 +359,7 @@ fun MomentsViewerScreen(
                         onSwipeRight = viewModel::previousRing,
                         onSwipeDown = close,
                         onSwipeUp = {
-                            if (mine) {
+                            if (mineNow) {
                                 seenByOpen = true
                                 viewModel.loadViewers()
                             }
@@ -365,7 +398,7 @@ fun MomentsViewerScreen(
                 ViewerLoad.Loading -> Unit
                 ViewerLoad.Ended ->
                     Text(
-                        text = "This Moment has ended",
+                        text = "This Moment has ended.",
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
@@ -398,7 +431,8 @@ fun MomentsViewerScreen(
                         .background(Brush.verticalGradient(listOf(PantopusColors.momentTopFade, Color.Transparent)))
                         .clearAndSetSemantics {},
             )
-            moment?.caption?.takeIf { it.isNotBlank() && moment.kind != "text" }?.let { caption ->
+            // The caption gives way to the quick reactions while they are up.
+            moment?.caption?.takeIf { it.isNotBlank() && moment.kind != "text" && !typing && !reacting }?.let { caption ->
                 Text(
                     text = caption,
                     color = Color.White,
@@ -431,7 +465,6 @@ fun MomentsViewerScreen(
             ViewerHeader(
                 state = state,
                 mine = mine,
-                avatarUrl = viewModel.avatarUrl,
                 showsSound = moment?.kind == "video",
                 muted = muted,
                 showsMore = !mine && ring != null,
@@ -478,6 +511,11 @@ fun MomentsViewerScreen(
                 QuickReactions(
                     selected = moment?.myReaction,
                     onPick = { emoji ->
+                        if (moment?.myReaction != emoji) {
+                            pops += 1
+                            popped = pops to emoji
+                            MomentHaptics.light(view)
+                        }
                         viewModel.react(emoji)
                         dismissInput()
                     },
@@ -540,9 +578,19 @@ fun MomentsViewerScreen(
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = BOTTOM_BAR + Spacing.s3 + keyboardPadding),
             )
         }
+        popped?.let { (number, emoji) ->
+            key(number) {
+                ReactionPop(
+                    emoji = emoji,
+                    onDone = { if (popped?.first == number) popped = null },
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
+        }
+        // Notes sit just above the reply box, never on it.
         ToastHost(
             controller = toast,
-            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = Spacing.s16),
+            modifier = Modifier.padding(bottom = BOTTOM_BAR - Spacing.s6 + keyboardPadding),
         )
     }
 
@@ -551,13 +599,16 @@ fun MomentsViewerScreen(
             onDismissRequest = { reporting = false },
             title = { Text("Report this Moment?") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                Column(
+                    modifier = Modifier.semantics { testTagsAsResourceId = true },
+                    verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+                ) {
                     Text(
-                        text = "Reports are reviewed by the Pantopus team. The person isn't told who reported.",
+                        text = "Reports go to the Pantopus team. The person isn't told who reported.",
                         fontSize = 13.sp,
                         color = PantopusColors.appTextSecondary,
                     )
-                    pulseReportReasons.forEach { (key, label) ->
+                    REPORT_REASONS.forEach { (key, label) ->
                         TextButton(
                             onClick = {
                                 reporting = false
@@ -577,37 +628,38 @@ fun MomentsViewerScreen(
         AlertDialog(
             onDismissRequest = { confirmingBlock = false },
             title = { Text("Block $authorName?") },
-            text = { Text("You won't see each other's Moments or posts, and they can't message you.") },
+            text = { Text("You won't see each other's Moments or posts, and you can't message each other. They aren't told.") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         confirmingBlock = false
                         viewModel.blockAuthor()
                     },
-                    modifier = Modifier.testTag("moments.blockConfirm"),
+                    modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moments.blockConfirm"),
                 ) { Text("Block", color = PantopusColors.error) }
             },
             dismissButton = { TextButton(onClick = { confirmingBlock = false }) { Text("Cancel") } },
         )
     }
-    if (seenByOpen && moment != null) {
+    if (seenByOpen && moment != null && mine) {
         val storage =
             rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                 if (granted) {
-                    scope.launch { toast.show(if (MomentGallerySaver.save(context, moment)) "Saved to Photos" else "Couldn't save it.") }
+                    scope.launch { saveNote = if (MomentGallerySaver.save(context, moment)) "Saved" else "Couldn't save" }
                 } else {
-                    toast.show("Allow storage to save it.")
+                    saveNote = "Allow storage to save"
                 }
             }
         SeenBySheet(
             moment = moment,
             state = state,
+            saveNote = saveNote,
             onDismiss = { seenByOpen = false },
             onSave = {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && !context.canWriteStorage()) {
                     storage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 } else {
-                    scope.launch { toast.show(if (MomentGallerySaver.save(context, moment)) "Saved to Photos" else "Couldn't save it.") }
+                    scope.launch { saveNote = if (MomentGallerySaver.save(context, moment)) "Saved" else "Couldn't save" }
                 }
             },
             onDelete = { confirmingDelete = true },
@@ -617,13 +669,14 @@ fun MomentsViewerScreen(
         AlertDialog(
             onDismissRequest = { confirmingDelete = false },
             title = { Text("Delete this Moment?") },
+            text = { Text("It leaves the map for everyone.") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         confirmingDelete = false
                         viewModel.delete { seenByOpen = false }
                     },
-                    modifier = Modifier.testTag("moments.seenBy.deleteConfirm"),
+                    modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moments.seenBy.deleteConfirm"),
                 ) { Text("Delete", color = PantopusColors.error) }
             },
             dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text("Cancel") } },
@@ -666,7 +719,7 @@ private fun MomentStage(
         }
         "video" ->
             Box(modifier = Modifier.fillMaxSize().testTag("moments.viewer.video")) {
-                moment.posterUrl?.let { poster ->
+                rememberMomentImage(moment.posterUrl, MomentImages.posterKey(moment.id))?.let { poster ->
                     AsyncImage(
                         model = poster,
                         contentDescription = null,
@@ -692,7 +745,7 @@ private fun MomentStage(
             }
         else ->
             AsyncImage(
-                model = moment.mediaUrl,
+                model = rememberMomentImage(moment.mediaUrl, MomentImages.mediaKey(moment.id)),
                 contentDescription = moment.caption?.let { "Photo: $it" } ?: "Photo",
                 contentScale = ContentScale.Crop,
                 onSuccess = { onReady() },
@@ -776,7 +829,6 @@ private fun MutedNote(
 private fun ViewerHeader(
     state: MomentsViewerUiState,
     mine: Boolean,
-    avatarUrl: String?,
     showsSound: Boolean,
     muted: Boolean,
     showsMore: Boolean,
@@ -803,11 +855,8 @@ private fun ViewerHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                if (mine) {
-                    MomentSelfFace(size = 36.dp, avatarUrl = avatarUrl)
-                } else {
-                    MomentFace(author = ring.author, size = 36.dp, initialsSize = 13.sp)
-                }
+                // Your own Moment wears the face your ring does.
+                MomentFace(author = ring.author, size = 36.dp, initialsSize = 13.sp)
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text(
@@ -828,21 +877,40 @@ private fun ViewerHeader(
                         }
                     }
                     val place = moment?.placeLabel ?: ring.placeLabel
-                    val line =
+                    val times =
                         listOfNotNull(
-                            place,
                             agoLabel(moment?.createdAt ?: brief?.createdAt),
                             leftLabel(moment?.expiresAt ?: brief?.expiresAt),
                         ).joinToString(" · ")
-                    Text(
-                        text = line,
-                        color = PantopusColors.momentOnStageSecondary,
-                        fontSize = 12.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(shadow = STAGE_SHADOW),
-                        modifier = Modifier.testTag("moments.viewer.meta"),
-                    )
+                    // A long place name gives way; "2h ago · 4h left" always shows.
+                    Row(
+                        modifier =
+                            Modifier.testTag("moments.viewer.meta").clearAndSetSemantics {
+                                contentDescription = listOfNotNull(place, times.takeIf { it.isNotEmpty() }).joinToString(" · ")
+                            },
+                    ) {
+                        val metaStyle = TextStyle(shadow = STAGE_SHADOW)
+                        if (place != null) {
+                            Text(
+                                text = place,
+                                color = PantopusColors.momentOnStageSecondary,
+                                fontSize = 12.5.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = metaStyle,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                        }
+                        if (times.isNotEmpty()) {
+                            Text(
+                                text = if (place != null) " · $times" else times,
+                                color = PantopusColors.momentOnStageSecondary,
+                                fontSize = 12.5.sp,
+                                maxLines = 1,
+                                style = metaStyle,
+                            )
+                        }
+                    }
                 }
             }
         } else {
@@ -866,7 +934,11 @@ private fun ViewerHeader(
                     width = if (showsSound) 40.dp else 44.dp,
                     modifier = Modifier.testTag("moments.viewer.more"),
                 )
-                DropdownMenu(expanded = menuOpen, onDismissRequest = onDismissMenu) {
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = onDismissMenu,
+                    modifier = Modifier.semantics { testTagsAsResourceId = true },
+                ) {
                     DropdownMenuItem(
                         text = { Text("Report") },
                         leadingIcon = { PantopusIconImage(icon = PantopusIcon.Flag, contentDescription = null, size = 18.dp) },
@@ -1093,6 +1165,7 @@ private fun SeenByRow(
 private fun SeenBySheet(
     moment: MomentDto,
     state: MomentsViewerUiState,
+    saveNote: String?,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
@@ -1115,7 +1188,7 @@ private fun SeenBySheet(
                         .background(PantopusColors.appBorder),
             )
         },
-        modifier = Modifier.testTag("moments.seenBy"),
+        modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moments.seenBy"),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1148,10 +1221,11 @@ private fun SeenBySheet(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5, vertical = Spacing.s2),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                // The button itself says what happened: a note on the viewer would sit under this sheet.
                 SheetButton(
-                    icon = PantopusIcon.Download,
-                    label = "Save to Photos",
-                    tint = PantopusColors.appText,
+                    icon = if (saveNote == "Saved") PantopusIcon.Check else PantopusIcon.Download,
+                    label = saveNote ?: "Save to Photos",
+                    tint = if (saveNote == "Saved") PantopusColors.success else PantopusColors.appText,
                     onClick = onSave,
                     modifier = Modifier.weight(1f).testTag("moments.seenBy.save"),
                 )
@@ -1265,6 +1339,43 @@ private fun ViewerRow(viewer: MomentViewerDto) {
 }
 
 /**
+ * The reaction you picked, over the Moment for about half a second: it springs up (0.6 → 1.2 → 1), drifts upward and
+ * fades, and the Moment plays on.
+ */
+@Composable
+private fun ReactionPop(
+    emoji: String,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val progress = remember { Animatable(0f) }
+    val done by rememberUpdatedState(onDone)
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, tween(durationMillis = POP_MS, easing = LinearEasing))
+        done()
+    }
+    Text(
+        text = emoji,
+        fontSize = 96.sp,
+        modifier =
+            modifier
+                .graphicsLayer {
+                    val t = progress.value
+                    val scale =
+                        when {
+                            t < 0.35f -> 0.6f + 0.6f * (t / 0.35f)
+                            t < 0.55f -> 1.2f - 0.2f * ((t - 0.35f) / 0.2f)
+                            else -> 1f
+                        }
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = if (t < 0.6f) 1f else 1f - (t - 0.6f) / 0.4f
+                    translationY = -t * 56.dp.toPx()
+                }.clearAndSetSemantics {},
+    )
+}
+
+/**
  * The viewer's gestures (board V1 note): a tap on the left third goes back and elsewhere forward, a hold pauses, a
  * swipe left or right changes ring, a swipe down closes, a swipe up opens Seen by on your own Moment. [onDrag] follows
  * a downward drag so the Moment can move with the finger.
@@ -1317,7 +1428,10 @@ private fun Modifier.viewerGestures(
         }
     }
 
-/** Light status and navigation icons over the dark stage while it shows; the app's light bars come back after. */
+/**
+ * Light status and navigation icons over the dark stage while it shows, and the stage's black behind the status bar
+ * (the band the activity paints around a camera cutout); the app's light bars and band come back after.
+ */
 @Composable
 internal fun StageSystemBars() {
     val view = LocalView.current
@@ -1326,9 +1440,11 @@ internal fun StageSystemBars() {
         val controller = window?.let { WindowCompat.getInsetsController(it, view) }
         controller?.isAppearanceLightStatusBars = false
         controller?.isAppearanceLightNavigationBars = false
+        CutoutBand.color = PantopusColors.momentStage
         onDispose {
             controller?.isAppearanceLightStatusBars = true
             controller?.isAppearanceLightNavigationBars = true
+            CutoutBand.color = null
         }
     }
 }
@@ -1362,3 +1478,5 @@ private const val HOLD_MS = 180L
 private const val SWIPE_DP = 60f
 private const val ENDED_NOTICE_MS = 1_200L
 private const val MUTED_NOTE_MS = 4_000L
+private const val SAVE_NOTE_MS = 2_500L
+private const val POP_MS = 550

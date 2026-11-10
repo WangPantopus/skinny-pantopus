@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -344,6 +345,7 @@ import app.pantopus.android.ui.screens.mailbox.vacation.VacationHoldScreen
 import app.pantopus.android.ui.screens.mailbox.vault.VaultListScreen
 import app.pantopus.android.ui.screens.marketplace.MarketplaceScreen
 import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
+import app.pantopus.android.ui.screens.moments.MomentOpenHolder
 import app.pantopus.android.ui.screens.moments.MomentsExternalRoutes
 import app.pantopus.android.ui.screens.moments.MomentsGateViewModel
 import app.pantopus.android.ui.screens.moments.MomentsRoutes
@@ -2512,6 +2514,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         }
     SideEffect { if (MessagesEntryHolder.current != messagesEntry) MessagesEntryHolder.current = messagesEntry }
     DisposableEffect(Unit) { onDispose { MessagesEntryHolder.current = null } }
+    // The quote above a chat reply opens its Moment in the viewer, while Moments is on.
+    val momentScope = rememberCoroutineScope()
+    val openMoment: (String, () -> Unit) -> Unit =
+        remember(navController, momentsGate) {
+            { momentId, onEnded ->
+                momentScope.launch {
+                    if (momentsGate.queue(momentId)) navController.navigate(MomentsRoutes.WATCH) { launchSingleTop = true } else onEnded()
+                }
+            }
+        }
+    SideEffect { MomentOpenHolder.current = if (momentsOn) openMoment else null }
+    DisposableEffect(Unit) { onDispose { MomentOpenHolder.current = null } }
     // The Place tab's root sits at the bottom of the stack for the whole session. Its host holds the session's
     // current home, which the homes sheet, links and Add Home set, so they reach it from here.
     val placeRootEntry =
@@ -3064,6 +3078,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         },
     ) {
         Scaffold(
+            // The Moments viewer and camera stand on black, the strip behind the status bar included.
+            containerColor =
+                if (backStackEntry?.destination?.route in MomentsRoutes.fullScreen) {
+                    PantopusColors.momentStage
+                } else {
+                    MaterialTheme.colorScheme.background
+                },
             topBar = {
                 val route = backStackEntry?.destination?.route
                 if (!online && route in SAVED_PAGE_OFFLINE_STRIP_ROUTES) {

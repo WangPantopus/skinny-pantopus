@@ -544,12 +544,9 @@ class ChatListViewModel
                 momentReply =
                     dto.lastMessageMoment?.let { moment ->
                         ConversationMomentReply(
-                            label =
-                                when {
-                                    moment.ended -> "Replied to a Moment that ended"
-                                    moment.fromMe == true -> "Replied to their Moment"
-                                    else -> "Replied to your Moment"
-                                },
+                            momentId = moment.id,
+                            // The line stays once the Moment has ended, as on iPhone; only its picture goes.
+                            label = if (moment.fromMe == true) "Replied to their Moment" else "Replied to your Moment",
                             thumbUrl = moment.thumbUrl.takeIf { !moment.ended },
                             ended = moment.ended,
                         )

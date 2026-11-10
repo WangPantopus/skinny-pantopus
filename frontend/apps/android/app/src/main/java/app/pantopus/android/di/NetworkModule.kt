@@ -170,6 +170,8 @@ object NetworkModule {
             // UploadEvidenceRequest one omits optional fields when
             // null instead of writing JSON `null`.
             .add(UploadEvidenceRequestJsonAdapter())
+            // A chat message's Moment is read with its signed picture link and saved without it.
+            .add(app.pantopus.android.data.api.models.moments.ChatMomentRefJsonAdapter())
             // T2 hub preferences: partial PUT body that must emit the
             // changed keys only, plus explicit JSON null when quiet
             // hours are cleared.

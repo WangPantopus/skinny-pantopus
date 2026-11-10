@@ -22,6 +22,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +38,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -48,6 +48,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -62,9 +63,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -85,8 +88,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.moments.MomentMediaFile
-import app.pantopus.android.ui.components.KeyboardResizeEffect
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
+import app.pantopus.android.ui.screens.moments.components.MomentHaptics
+import app.pantopus.android.ui.screens.moments.components.StageKeyboardResize
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
 import app.pantopus.android.ui.screens.moments.viewer.StageSystemBars
 import app.pantopus.android.ui.theme.PantopusColors
@@ -96,6 +101,7 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -111,7 +117,7 @@ fun MomentsComposeScreen(
     val close by rememberUpdatedState(onClose)
     LaunchedEffect(state.done) { if (state.done) close() }
     StageSystemBars()
-    KeyboardResizeEffect()
+    StageKeyboardResize()
     val context = LocalContext.current
     val location =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
@@ -269,6 +275,20 @@ private fun CameraStep(
     var front by remember { mutableStateOf(false) }
     var flash by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
+    // How long the video has run, for "0:07" over the shutter.
+    var recordedSeconds by remember { mutableIntStateOf(0) }
+    val view = LocalView.current
+    LaunchedEffect(recording) {
+        recordedSeconds = 0
+        if (!recording) return@LaunchedEffect
+        // A video starting is a tap you can feel; so is its stopping, below.
+        MomentHaptics.firm(view)
+        val started = System.currentTimeMillis()
+        while (true) {
+            recordedSeconds = ((System.currentTimeMillis() - started) / 1000).toInt()
+            delay(200)
+        }
+    }
     var granted by remember { mutableStateOf(hasCamera) }
     val context = LocalContext.current
     LifecycleResumeEffect(Unit) {
@@ -282,7 +302,10 @@ private fun CameraStep(
                 front = front,
                 flash = flash,
                 onCaptured = onCaptured,
-                onRecording = { recording = it },
+                onRecording = {
+                    if (recording && !it) MomentHaptics.firm(view)
+                    recording = it
+                },
                 onFailed = onNotice,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -357,7 +380,12 @@ private fun CameraStep(
         ) {
             val notice = state.notice
             Text(
-                text = notice ?: if (recording) "Recording… let go to stop" else "Tap for a photo. Hold for a video up to 30 seconds.",
+                text =
+                    notice ?: if (recording) {
+                        "0:${recordedSeconds.toString().padStart(2, '0')} · let go to stop"
+                    } else {
+                        "Tap for a photo. Hold for a video up to 30 seconds."
+                    },
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
@@ -386,7 +414,12 @@ private fun CameraStep(
                 Spacer(Modifier.weight(1f))
                 MomentsShutter(
                     recording = recording,
-                    onPhoto = { if (granted) controller.takePhoto?.invoke() },
+                    onPhoto = {
+                        if (granted) {
+                            MomentHaptics.light(view)
+                            controller.takePhoto?.invoke()
+                        }
+                    },
                     onStartVideo = { if (granted) controller.startVideo?.invoke() },
                     onStopVideo = { controller.stopVideo?.invoke() },
                 )
@@ -494,7 +527,7 @@ private fun TextStep(
                     Box(contentAlignment = Alignment.Center) {
                         if (state.text.isEmpty()) {
                             Text(
-                                text = "Say what's happening",
+                                text = "What's happening here?",
                                 color = Color.White.copy(alpha = 0.6f),
                                 fontSize = 29.sp,
                                 lineHeight = 37.sp,
@@ -516,8 +549,9 @@ private fun TextStep(
             modifier = Modifier.fillMaxWidth().testTag("moments.textCard.count"),
         )
         Spacer(Modifier.height(Spacing.s3))
+        // Picking a color is part of writing the card: the keyboard stays up.
         Row(
-            modifier = Modifier.fillMaxWidth().height(44.dp).semantics { contentDescription = "Background color" },
+            modifier = Modifier.keepsKeyboard().fillMaxWidth().height(44.dp).semantics { contentDescription = "Background color" },
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -782,7 +816,7 @@ private fun GateCard(
     onSecondary: () -> Unit,
     onClose: () -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).blocksTouches()) {
         StageIcon(
             icon = PantopusIcon.X,
             label = "Close",
@@ -821,7 +855,7 @@ private fun AdultSheet(
     onConfirm: () -> Unit,
     onNotNow: () -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).testTag("moments.adult")) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).blocksTouches().testTag("moments.adult")) {
         Column(
             modifier =
                 Modifier
@@ -852,6 +886,12 @@ private fun AdultSheet(
         }
     }
 }
+
+/**
+ * Nothing under a gate (location, 18+) can be tapped while it is up: the shutter, Library and Text wait behind it
+ * (REVIEW P5).
+ */
+private fun Modifier.blocksTouches(): Modifier = pointerInput(Unit) { detectTapGestures { } }
 
 @Composable
 internal fun SheetPrimaryButton(

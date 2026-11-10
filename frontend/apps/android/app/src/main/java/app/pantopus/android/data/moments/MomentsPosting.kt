@@ -1,8 +1,9 @@
-@file:Suppress("MagicNumber")
+@file:Suppress("MagicNumber", "TooGenericExceptionCaught", "TooManyFunctions")
 
 package app.pantopus.android.data.moments
 
 import android.content.Context
+import app.pantopus.android.data.api.models.moments.MomentAuthorDto
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -30,8 +32,10 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okio.BufferedSink
 import okio.source
+import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,13 +46,16 @@ data class MomentPosting(
     val kind: String,
     val latitude: Double,
     val longitude: Double,
+    /** You, as your ring will show you, so the posting ring and the ring that follows it wear the same face. */
+    val author: MomentAuthorDto? = null,
     /** 0 to 1: exporting a video is the first fifth, the upload the rest. */
     val progress: Float = 0f,
     val stage: Stage = Stage.PREPARING,
     /** What went wrong when [stage] is [Stage.FAILED]. */
     val message: String? = null,
 ) {
-    enum class Stage { PREPARING, UPLOADING, CHECKING, FAILED }
+    /** [DONE]: it's live, and this stays on the map just until the map's own read has its ring, so nothing blinks. */
+    enum class Stage { PREPARING, UPLOADING, CHECKING, DONE, FAILED }
 }
 
 /** What the person hears about a Moment that finished posting. */
@@ -68,6 +75,9 @@ sealed interface MomentPostingOutcome {
  * Moments tab, waits out a lost connection, and retries a failed upload a few times before it asks the person to try
  * again (brief: "Upload continues in the background with retries"). The Moment itself was made when Post was tapped,
  * so its location was checked while it was fresh; its time starts when the upload finishes.
+ *
+ * Each upload leaves a small note beside its file until it is in, so one the app was closed on is picked up at the
+ * next launch for the same account ([resume]). Sign-out drops every upload, file and note ([clearAccount]).
  */
 @Singleton
 class MomentsPosting
@@ -81,6 +91,7 @@ class MomentsPosting
         private val jobs = ConcurrentHashMap<String, Job>()
         private val media = ConcurrentHashMap<String, MomentMediaFile>()
         private val prepared = ConcurrentHashMap<String, Prepared>()
+        private val resuming = AtomicBoolean(false)
 
         private val _posts = MutableStateFlow<List<MomentPosting>>(emptyList())
 
@@ -100,10 +111,18 @@ class MomentsPosting
             longitude: Double,
         ) {
             media[moment.id] = file
+            writeNote(Note.of(moment, file, latitude, longitude))
             _posts.update { list ->
-                list.filterNot { it.momentId == moment.id } + MomentPosting(moment.id, moment.kind, latitude, longitude)
+                list.filterNot { it.momentId == moment.id } +
+                    MomentPosting(moment.id, moment.kind, latitude, longitude, author = moment.author)
             }
             run(moment.id)
+        }
+
+        /** A text card has nothing to upload: it's live the moment it's posted. */
+        fun posted(moment: MomentDto) {
+            repository.announceChange()
+            _outcomes.tryEmit(MomentPostingOutcome.Live(moment))
         }
 
         /** "Try again" on a Moment that couldn't post. */
@@ -116,10 +135,65 @@ class MomentsPosting
         /** Gives up on a Moment that couldn't post: the server's copy (still uploading, so nobody saw it) goes too. */
         fun discard(momentId: String) {
             jobs.remove(momentId)?.cancel()
-            media.remove(momentId)?.let { cleanUp(it) }
-            prepared.remove(momentId)?.let { cleanUp(it) }
+            forget(momentId)
             _posts.update { list -> list.filterNot { it.momentId == momentId } }
             scope.launch { repository.delete(momentId) }
+        }
+
+        /**
+         * Picks up the uploads the app was closed on, for the account [userId] that made them: a Moment the server still
+         * has as "uploading" goes back on the map as a posting ring and its file goes up; one that got in, ended or was
+         * deleted meanwhile just has its file and note removed. Safe to call on every launch and foreground.
+         */
+        fun resume(userId: String) {
+            if (!resuming.compareAndSet(false, true)) return
+            scope.launch {
+                try {
+                    val notes = readNotes()
+                    // Another account's leftovers never go up as this one (sign-out clears them; this is the belt).
+                    notes.filter { it.userId != userId }.forEach { dropNote(it, deleteFile = true) }
+                    val pending = notes.filter { it.userId == userId && !media.containsKey(it.momentId) }
+                    if (pending.isEmpty()) return@launch
+                    val mine = (repository.mine() as? NetworkResult.Success)?.data
+                    pending.forEach { note ->
+                        val server = mine?.firstOrNull { it.id == note.momentId }
+                        val file = File(note.path)
+                        when {
+                            !file.exists() -> {
+                                dropNote(note, deleteFile = false)
+                                if (server?.state == UPLOADING) repository.delete(note.momentId)
+                            }
+                            mine != null && server?.state != UPLOADING -> dropNote(note, deleteFile = true)
+                            else -> restore(note, file, server?.author)
+                        }
+                    }
+                } finally {
+                    resuming.set(false)
+                }
+            }
+        }
+
+        /** Sign-out: stops every upload and removes the account's photos, videos and upload notes from the phone. */
+        fun clearAccount() {
+            jobs.values.forEach { it.cancel() }
+            jobs.clear()
+            media.clear()
+            prepared.clear()
+            _posts.value = emptyList()
+            MomentMedia.clear(context)
+        }
+
+        private fun restore(
+            note: Note,
+            file: File,
+            author: MomentAuthorDto?,
+        ) {
+            if (media.putIfAbsent(note.momentId, note.mediaFile(file)) != null) return
+            _posts.update { list ->
+                list.filterNot { it.momentId == note.momentId } +
+                    MomentPosting(note.momentId, note.kind, note.latitude, note.longitude, author = author)
+            }
+            run(note.momentId)
         }
 
         private fun run(momentId: String) {
@@ -163,7 +237,9 @@ class MomentsPosting
                 update(momentId) { it.copy(stage = MomentPosting.Stage.UPLOADING, progress = EXPORT_SHARE) }
                 val body =
                     ProgressBody(parts.file, parts.type) { sent ->
-                        update(momentId) { it.copy(progress = EXPORT_SHARE + (1f - EXPORT_SHARE) * sent) }
+                        // Bytes handed to the network aren't yet bytes the server has: the ring stops just short of full
+                        // until the server answers.
+                        update(momentId) { it.copy(progress = EXPORT_SHARE + (UPLOAD_CAP - EXPORT_SHARE) * sent) }
                     }
                 val filePart = MultipartBody.Part.createFormData("file", parts.file.name, body)
                 val posterPart = parts.poster?.let { MultipartBody.Part.createFormData("poster", it.name, it.asRequestBody(JPEG)) }
@@ -199,12 +275,19 @@ class MomentsPosting
                 waited += CHECK_POLL_MS
                 (repository.moment(momentId) as? NetworkResult.Success)?.data?.let { moment = it }
             }
-            media.remove(momentId)?.let { cleanUp(it) }
-            prepared.remove(momentId)?.let { cleanUp(it) }
+            forget(momentId)
             jobs.remove(momentId)
-            _posts.update { list -> list.filterNot { it.momentId == momentId } }
+            val held = moment.state == "held"
+            if (!held) update(momentId) { it.copy(stage = MomentPosting.Stage.DONE, progress = 1f) }
             repository.announceChange()
-            _outcomes.tryEmit(if (moment.state == "held") MomentPostingOutcome.Held(moment) else MomentPostingOutcome.Live(moment))
+            _outcomes.tryEmit(if (held) MomentPostingOutcome.Held(moment) else MomentPostingOutcome.Live(moment))
+            if (!held) {
+                // The posting ring stands in until the map's own read brings the Moment's ring, so nothing blinks.
+                withTimeoutOrNull(RING_WAIT_MS) {
+                    repository.rings.first { rings -> rings.any { ring -> ring.mine && ring.moments.any { it.id == momentId } } }
+                }
+            }
+            _posts.update { list -> list.filterNot { it.momentId == momentId } }
         }
 
         private fun fail(
@@ -221,12 +304,36 @@ class MomentsPosting
             _posts.update { list -> list.map { if (it.momentId == momentId) change(it) else it } }
         }
 
-        private fun cleanUp(file: MomentMediaFile) {
-            runCatching { file.file.delete() }
+        /** The upload is over, one way or another: its files and its note leave the phone. */
+        private fun forget(momentId: String) {
+            media.remove(momentId)?.let { runCatching { it.file.delete() } }
+            prepared.remove(momentId)?.let { parts ->
+                runCatching { (listOfNotNull(parts.file, parts.poster) + parts.frames).forEach { it.delete() } }
+            }
+            runCatching { noteFile(momentId).delete() }
         }
 
-        private fun cleanUp(parts: Prepared) {
-            runCatching { (listOfNotNull(parts.file, parts.poster) + parts.frames).forEach { it.delete() } }
+        private fun noteFile(momentId: String): File = File(MomentMedia.outbox(context), "$momentId.json")
+
+        private fun writeNote(note: Note) {
+            runCatching { noteFile(note.momentId).writeText(note.toJson()) }
+                .onFailure { timber.log.Timber.tag("Moments").w(it, "couldn't note the upload") }
+        }
+
+        private fun readNotes(): List<Note> =
+            MomentMedia.outbox(context).listFiles().orEmpty().mapNotNull { file ->
+                runCatching { Note.fromJson(file.readText()) }.getOrNull() ?: run {
+                    file.delete()
+                    null
+                }
+            }
+
+        private fun dropNote(
+            note: Note,
+            deleteFile: Boolean,
+        ) {
+            runCatching { noteFile(note.momentId).delete() }
+            if (deleteFile) runCatching { File(note.path).delete() }
         }
 
         private data class Prepared(
@@ -236,17 +343,82 @@ class MomentsPosting
             val frames: List<File>,
         )
 
+        /** What an upload needs to start again after the app was closed: whose it is, the file, and where it pins. */
+        private data class Note(
+            val momentId: String,
+            val userId: String,
+            val kind: String,
+            val path: String,
+            val durationMs: Long,
+            val recordedHere: Boolean,
+            val latitude: Double,
+            val longitude: Double,
+        ) {
+            fun mediaFile(file: File): MomentMediaFile =
+                if (kind == "video") MomentMediaFile.Video(file, durationMs, recordedHere) else MomentMediaFile.Photo(file)
+
+            fun toJson(): String =
+                JSONObject()
+                    .put("momentId", momentId)
+                    .put("userId", userId)
+                    .put("kind", kind)
+                    .put("path", path)
+                    .put("durationMs", durationMs)
+                    .put("recordedHere", recordedHere)
+                    .put("latitude", latitude)
+                    .put("longitude", longitude)
+                    .toString()
+
+            companion object {
+                fun of(
+                    moment: MomentDto,
+                    file: MomentMediaFile,
+                    latitude: Double,
+                    longitude: Double,
+                ): Note {
+                    val video = file as? MomentMediaFile.Video
+                    return Note(
+                        momentId = moment.id,
+                        userId = moment.author.id,
+                        kind = if (video != null) "video" else "photo",
+                        path = file.file.path,
+                        durationMs = video?.durationMs ?: 0L,
+                        recordedHere = video?.recordedHere ?: false,
+                        latitude = latitude,
+                        longitude = longitude,
+                    )
+                }
+
+                fun fromJson(text: String): Note {
+                    val json = JSONObject(text)
+                    return Note(
+                        momentId = json.getString("momentId"),
+                        userId = json.getString("userId"),
+                        kind = json.getString("kind"),
+                        path = json.getString("path"),
+                        durationMs = json.optLong("durationMs"),
+                        recordedHere = json.optBoolean("recordedHere"),
+                        latitude = json.getDouble("latitude"),
+                        longitude = json.getDouble("longitude"),
+                    )
+                }
+            }
+        }
+
         private companion object {
             val JPEG = "image/jpeg".toMediaType()
             val MP4 = "video/mp4".toMediaType()
 
-            /** The multipart name of the video's extra frames (contract: `frames[]`, up to two). */
+            /** The multipart name of the video's extra frames (QUESTIONS 11-08 21:05Z: `frames`, sent up to twice). */
             const val FRAMES_FIELD = "frames"
+            const val UPLOADING = "uploading"
             const val EXPORT_SHARE = 0.2f
+            const val UPLOAD_CAP = 0.97f
             const val MAX_ATTEMPTS = 5
             const val BACKOFF_MS = 2_000L
             const val CHECK_POLL_MS = 2_000L
             const val CHECK_WAIT_MS = 30_000L
+            const val RING_WAIT_MS = 4_000L
         }
     }
 

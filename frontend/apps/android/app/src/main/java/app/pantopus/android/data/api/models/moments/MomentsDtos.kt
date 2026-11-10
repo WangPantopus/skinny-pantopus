@@ -1,7 +1,9 @@
 package app.pantopus.android.data.api.models.moments
 
+import com.squareup.moshi.FromJson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.ToJson
 
 /*
  * Pantopus Moments (contract v2, `~/pantopus-moments/coord/CONTRACT.md`, owned by the server session). Every route
@@ -193,14 +195,40 @@ data class MomentReportBody(
 
 /**
  * The Moment a chat message replies to, as every chat serializer adds it (contract "Chat"): drawn as a small quote
- * above the text, "Moment ended" with no picture once it has.
+ * above the text, "Moment ended" with no picture once it has. The app's own JSON setup reads and writes it through
+ * [ChatMomentRefJsonAdapter], which never writes the picture link; a plain reader (the chat socket's) uses this class's
+ * own adapter.
  */
 @JsonClass(generateAdapter = true)
 data class ChatMomentRefDto(
     val id: String,
     val kind: String? = null,
+    /** Signed and short-lived (15 minutes): shown while the app runs, never written to a saved copy. */
     @Json(name = "thumb_url") val thumbUrl: String? = null,
     val ended: Boolean = false,
     /** Conversation lists only: the viewer sent that reply ("Replied to their Moment"). */
     @Json(name = "from_me") val fromMe: Boolean? = null,
 )
+
+/** [ChatMomentRefDto] on the wire. */
+@JsonClass(generateAdapter = true)
+data class ChatMomentRefJson(
+    val id: String,
+    val kind: String? = null,
+    @Json(name = "thumb_url") val thumbUrl: String? = null,
+    val ended: Boolean = false,
+    @Json(name = "from_me") val fromMe: Boolean? = null,
+)
+
+/**
+ * Reads a chat message's Moment with its picture link and writes it without: the chat copies saved on the phone are
+ * written with this, and a signed link must not sit in a file (a quote read back shows the Moment's mark until the
+ * next read brings a fresh link).
+ */
+class ChatMomentRefJsonAdapter {
+    @FromJson
+    fun fromJson(json: ChatMomentRefJson): ChatMomentRefDto = ChatMomentRefDto(json.id, json.kind, json.thumbUrl, json.ended, json.fromMe)
+
+    @ToJson
+    fun toJson(ref: ChatMomentRefDto): ChatMomentRefJson = ChatMomentRefJson(ref.id, ref.kind, null, ref.ended, ref.fromMe)
+}

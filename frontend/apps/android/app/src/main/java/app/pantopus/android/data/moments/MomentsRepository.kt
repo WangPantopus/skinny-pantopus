@@ -1,7 +1,10 @@
+@file:Suppress("MagicNumber", "TooManyFunctions")
+
 package app.pantopus.android.data.moments
 
 import app.pantopus.android.data.api.models.moments.CreateMomentBody
 import app.pantopus.android.data.api.models.moments.MomentAdultConfirmResponse
+import app.pantopus.android.data.api.models.moments.MomentBriefDto
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.moments.MomentPlacePreviewDto
 import app.pantopus.android.data.api.models.moments.MomentPointBody
@@ -65,6 +68,38 @@ class MomentsRepository
 
         fun announceChange() {
             _changes.tryEmit(Unit)
+        }
+
+        /** Sign-out: the next person on this phone starts with no rings, nothing watched and nothing queued. */
+        fun clearAccount() {
+            _rings.value = emptyList()
+            _watched.value = emptySet()
+            playback = null
+        }
+
+        /**
+         * Queues one Moment for the viewer (the quote above a chat reply, a link): true when it can be watched. A Moment
+         * that ended, was deleted or isn't visible any more answers false.
+         */
+        suspend fun queueSingle(
+            id: String,
+            viewerId: String?,
+        ): Boolean {
+            val moment = (moment(id) as? NetworkResult.Success)?.data ?: return false
+            val ring =
+                MomentRingDto(
+                    id = "single_${moment.id}",
+                    author = moment.author,
+                    latitude = moment.latitude ?: 0.0,
+                    longitude = moment.longitude ?: 0.0,
+                    placeLabel = moment.placeLabel,
+                    moments = listOf(MomentBriefDto(moment.id, moment.kind, moment.createdAt, moment.expiresAt, moment.seen)),
+                    unseenCount = if (moment.seen) 0 else 1,
+                    newestAt = moment.createdAt,
+                    mine = viewerId != null && moment.author.id == viewerId,
+                )
+            playback = MomentsPlayback(rings = listOf(ring), startIndex = 0, newOnly = false)
+            return true
         }
 
         suspend fun map(

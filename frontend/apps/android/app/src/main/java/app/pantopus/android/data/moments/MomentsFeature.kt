@@ -23,7 +23,8 @@ import javax.inject.Singleton
  *
  * Off: no Moments tab. The last answer is kept per account so a relaunch draws the bar the right way at once; the
  * re-check follows. A failed read keeps the last answer (every Moments route answers 404 while the flag is off, so
- * nothing private can show).
+ * nothing private can show), and a Moments route that answers `MOMENTS_UNAVAILABLE` has the flag read again at once, so
+ * the tab leaves without waiting for the next foreground.
  */
 @Singleton
 class MomentsFeature
@@ -31,6 +32,7 @@ class MomentsFeature
     constructor(
         private val api: MomentsApi,
         private val auth: AuthRepository,
+        private val posting: MomentsPosting,
         @ApplicationContext context: Context,
     ) {
         private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -97,6 +99,8 @@ class MomentsFeature
                     if (userId != id) return@launch
                     _on.value = answer
                     prefs.edit().putBoolean(id, answer).apply()
+                    // A photo or video the app was closed on goes up now (its Moment is still waiting for it).
+                    if (answer) posting.resume(id)
                 }
         }
 

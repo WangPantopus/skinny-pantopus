@@ -4328,6 +4328,7 @@ class ChatConversationViewModel
                             momentQuote =
                                 message.moment?.let { moment ->
                                     ChatMomentQuote(
+                                        momentId = moment.id,
                                         label =
                                             when {
                                                 moment.ended -> "Moment ended"

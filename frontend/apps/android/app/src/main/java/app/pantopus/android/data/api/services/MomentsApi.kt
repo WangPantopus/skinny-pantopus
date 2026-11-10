@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.moments.CreateMomentBody

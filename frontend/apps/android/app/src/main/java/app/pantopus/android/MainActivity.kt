@@ -37,6 +37,7 @@ import app.pantopus.android.data.store.StoreSync
 import app.pantopus.android.push.ASSISTANT_RECIPIENT
 import app.pantopus.android.push.PushTokenSyncer
 import app.pantopus.android.push.ReminderActionReceiver
+import app.pantopus.android.ui.components.CutoutBand
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
@@ -156,7 +157,8 @@ class MainActivity : FragmentActivity() {
                         Modifier
                             .closesKeyboardOnTapOrScroll()
                             .fillMaxSize()
-                            .background(PantopusColors.appSurface)
+                            // A screen on black (the Moments viewer and camera) paints the band its own color.
+                            .background(CutoutBand.color ?: PantopusColors.appSurface)
                             .windowInsetsPadding(WindowInsets.displayCutout)
                             .clipToBounds(),
                 ) {

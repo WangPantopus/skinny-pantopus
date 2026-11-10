@@ -1,4 +1,11 @@
-@file:Suppress("MagicNumber", "LongMethod", "LongParameterList", "TooManyFunctions")
+@file:Suppress(
+    "MagicNumber",
+    "LongMethod",
+    "LongParameterList",
+    "TooManyFunctions",
+    "CyclomaticComplexMethod",
+    "MatchingDeclarationName",
+)
 
 package app.pantopus.android.ui.screens.moments.compose
 

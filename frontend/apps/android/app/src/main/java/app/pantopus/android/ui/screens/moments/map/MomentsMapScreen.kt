@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -58,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -80,6 +82,7 @@ import app.pantopus.android.ui.components.MessagesEntryHolder
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.screens.moments.components.MomentHaptics
 import app.pantopus.android.ui.screens.moments.components.MomentStripFace
 import app.pantopus.android.ui.screens.moments.components.MomentStripPosting
 import app.pantopus.android.ui.theme.PantopusColors
@@ -94,7 +97,6 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.CameraPositionState
 import com.google.maps.android.compose.GoogleMap
@@ -135,6 +137,11 @@ fun MomentsMapScreen(
     val toast = remember { ToastController() }
     LaunchedEffect(Unit) { viewModel.messages.collect { toast.info(it) } }
     val context = LocalContext.current
+    val view = LocalView.current
+    // Your Moment went live: one tap you can feel, with the note.
+    LaunchedEffect(Unit) { viewModel.wentLive.collect { MomentHaptics.success(view) } }
+    val density = LocalDensity.current
+    var mapSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val permission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
             if (results.values.any { it }) viewModel.locate(waitForFix = true) else viewModel.locate()
@@ -196,7 +203,14 @@ fun MomentsMapScreen(
     }
 
     // The test ids read as resource ids, for UI automation (as My Homes does).
-    Box(modifier = Modifier.fillMaxSize().testTag("moments.map").semantics { testTagsAsResourceId = true }) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .onSizeChanged { mapSize = it }
+                .testTag("moments.map")
+                .semantics { testTagsAsResourceId = true },
+    ) {
         MomentsMap(
             state = state,
             rings = rings,
@@ -213,16 +227,17 @@ fun MomentsMapScreen(
             },
             onCluster = { cluster ->
                 val returnTo = camera.position
-                val bounds = LatLngBounds.builder().apply { cluster.forEach { include(LatLng(it.latitude, it.longitude)) } }.build()
-                val span =
-                    (bounds.northeast.latitude - bounds.southwest.latitude) +
-                        (bounds.northeast.longitude - bounds.southwest.longitude)
-                val update =
-                    if (span < SHARED_SPOT_DEGREES) {
-                        CameraUpdateFactory.newLatLngZoom(bounds.center, MOMENTS_SPREAD_ZOOM.toFloat() + 0.5f)
-                    } else {
-                        CameraUpdateFactory.newLatLngBounds(bounds, CLUSTER_PADDING_PX)
+                // Frame the spot between the top controls and the strip, with room for the pins above their spots.
+                val (latitude, longitude, zoom) =
+                    with(density) {
+                        clusterCamera(
+                            points = cluster.map { it.latitude to it.longitude },
+                            widthDp = mapSize.width.toDp().value.toDouble(),
+                            heightDp = (mapSize.height - chromeHeight - bottomHeight).coerceAtLeast(0).toDp().value.toDouble(),
+                            minZoom = returnTo.zoom.toDouble(),
+                        )
                     }
+                val update = CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), zoom)
                 scope.launch { camera.animateOrMove(update, CLUSTER_MS) }
                 viewModel.openSpot(cluster, returnTo)
             },
@@ -259,6 +274,8 @@ fun MomentsMapScreen(
             horizontalAlignment = Alignment.End,
         ) {
             val empty = state.loaded && !state.failed && shown.isEmpty() && posts.isEmpty()
+            // A Moment that just went live keeps its place in the strip until its ring is read; no second cell then.
+            val stripPosts = posts.filter { item -> shown.none { ring -> ring.mine && ring.ring.moments.any { it.id == item.momentId } } }
             MapRoundButton(
                 icon = PantopusIcon.Navigation,
                 label = "Show my location",
@@ -287,7 +304,7 @@ fun MomentsMapScreen(
                 Spacer(Modifier.height(9.dp))
                 MomentsStrip(
                     shown = shown,
-                    posts = posts,
+                    posts = stripPosts,
                     avatarUrl = viewModel.avatarUrl,
                     loading = !state.loaded,
                     failed = state.failed,
@@ -302,7 +319,11 @@ fun MomentsMapScreen(
                 )
             }
         }
-        ToastHost(controller = toast, modifier = Modifier.align(Alignment.TopCenter).padding(top = Spacing.s16))
+        // Notes sit just above the strip (or the empty card), never on it.
+        ToastHost(
+            controller = toast,
+            modifier = Modifier.padding(bottom = (with(density) { bottomHeight.toDp() } - Spacing.s6).coerceAtLeast(0.dp)),
+        )
     }
 }
 
@@ -572,6 +593,11 @@ private fun MomentsStrip(
 ) {
     val newPeople = shown.filter { it.anyNew && !it.mine }.distinctBy { it.author.id }.size
     val people = shown.distinctBy { it.author.id }.size
+    // Your posting Moment and your own ring come first: the strip goes back to its start when one arrives, and when
+    // the strip changes to a spot's people.
+    val list = rememberLazyListState()
+    val first = posts.firstOrNull()?.momentId ?: shown.firstOrNull()?.takeIf { it.mine }?.id
+    LaunchedEffect(first, spot?.ringIds) { list.animateScrollToItem(0) }
     Column(
         modifier =
             Modifier
@@ -610,7 +636,7 @@ private fun MomentsStrip(
                                 loading -> "Moments near you"
                                 failed -> "Couldn't load Moments"
                                 newPeople > 0 -> "$newPeople new near you"
-                                else -> "Nothing new near you"
+                                else -> "All caught up near you"
                             },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -656,14 +682,27 @@ private fun MomentsStrip(
             return@Column
         }
         LazyRow(
+            state = list,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(start = Spacing.s2, end = Spacing.s2, top = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             items(posts, key = { "posting:${it.momentId}" }) { item ->
+                val author = item.author
+                if (item.stage == MomentPosting.Stage.DONE && author != null) {
+                    // Live: the cell its ring will be, until the map's read brings the ring.
+                    MomentStripFace(
+                        author = author,
+                        seen = listOf(false),
+                        label = "You",
+                        modifier = Modifier.testTag("moments.strip.posting"),
+                    )
+                    return@items
+                }
                 MomentStripPosting(
                     progress = item.progress,
                     avatarUrl = avatarUrl,
+                    author = author,
                     label = if (item.stage == MomentPosting.Stage.FAILED) "Try again" else "Posting",
                     modifier =
                         Modifier
@@ -846,10 +885,6 @@ private const val CLUSTER_MS = 400
 private const val RECENTER_MS = 400
 private const val ANIMATE_GRACE_MS = 400L
 private const val REFRESH_MS = 60_000L
-private const val CLUSTER_PADDING_PX = 200
 
 /** Wider than this (about zoom 9 on a phone) the map doesn't ask for rings. */
 private const val MAX_FETCH_SPAN_DEGREES = 1.2
-
-/** Rings closer than this (about 100 m) count as one spot. */
-private const val SHARED_SPOT_DEGREES = 0.001

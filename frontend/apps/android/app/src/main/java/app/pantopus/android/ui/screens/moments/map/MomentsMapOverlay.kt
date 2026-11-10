@@ -44,12 +44,16 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.CameraPositionState
 import kotlin.math.PI
+import kotlin.math.atan
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.ln
+import kotlin.math.log2
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sinh
 
 /** What the overlay places: a ring, a crowded spot, or your Moment while it posts. */
 private sealed interface MomentItem {
@@ -215,6 +219,16 @@ private fun PostingItem(
     onTap: () -> Unit,
 ) {
     val label = postingLabel(posting)
+    val author = posting.author
+    if (posting.stage == MomentPosting.Stage.DONE && author != null) {
+        // It's live: the same pin its ring will be, standing in until the map's read brings the ring itself.
+        MomentMapPin(
+            author = author,
+            seen = listOf(false),
+            modifier = Modifier.testTag("moments.posting").clearAndSetSemantics { contentDescription = "Your Moment is live" },
+        )
+        return
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier =
@@ -236,7 +250,7 @@ private fun PostingItem(
                     role = Role.Button
                 },
     ) {
-        MomentPostingPin(progress = posting.progress, avatarUrl = avatarUrl)
+        MomentPostingPin(progress = posting.progress, avatarUrl = avatarUrl, author = author)
         Text(
             text = label,
             fontSize = 12.5.sp,
@@ -259,18 +273,60 @@ private fun PostingItem(
 internal fun postingLabel(posting: MomentPosting): String =
     when (posting.stage) {
         MomentPosting.Stage.FAILED -> "Couldn't post · Try again"
-        MomentPosting.Stage.CHECKING -> "Almost there…"
+        MomentPosting.Stage.CHECKING, MomentPosting.Stage.DONE -> "Almost there…"
         else -> "Posting · ${(posting.progress * 100).roundToInt()}%"
     }
 
 /** "Esther Short Park: 5 people, 3 new. Zoom in" (board M1). */
 internal fun clusterSpoken(rings: List<MomentRingUi>): String {
     val people = rings.distinctBy { it.author.id }.size
-    val fresh = rings.filter { it.anyNew }.distinctBy { it.author.id }.size
+    val fresh = rings.filter { it.anyNew && !it.mine }.distinctBy { it.author.id }.size
     val place = rings.groupingBy { it.placeLabel }.eachCount().maxByOrNull { it.value }?.key
     val count = if (people == 1) "1 person" else "$people people"
     return listOfNotNull(place?.let { "$it:" }, "$count, $fresh new").joinToString(" ")
 }
+
+/**
+ * Where the camera goes for a tapped crowded spot (board M2): the closest zoom at which all of [points] (latitude,
+ * longitude) fit in a map area of [widthDp] × [heightDp] with room for the pins themselves, which stand above their
+ * spots, and for the circle they fan out in when they share one. Returns the camera's latitude, longitude and zoom.
+ */
+internal fun clusterCamera(
+    points: List<Pair<Double, Double>>,
+    widthDp: Double,
+    heightDp: Double,
+    minZoom: Double,
+): Triple<Double, Double, Float> {
+    val world = points.map { (latitude, longitude) -> worldDp(latitude, longitude, 0.0) }
+    val spanX = world.maxOf { it.first } - world.minOf { it.first }
+    val spanY = world.maxOf { it.second } - world.minOf { it.second }
+    val maxZoom = MOMENTS_SPREAD_ZOOM + 0.5
+
+    fun fit(extra: Double): Double {
+        val roomX = (widthDp - 2 * (FRAME_SIDE_DP + extra)).coerceAtLeast(FRAME_MIN_DP)
+        val roomY = (heightDp - FRAME_TOP_DP - FRAME_BOTTOM_DP - 2 * extra).coerceAtLeast(FRAME_MIN_DP)
+        val byX = if (spanX > 0) log2(roomX / spanX) else maxZoom
+        val byY = if (spanY > 0) log2(roomY / spanY) else maxZoom
+        return min(byX, byY).coerceIn(minZoom.coerceAtMost(maxZoom), maxZoom)
+    }
+    // Zoomed far enough for rings sharing a spot to fan out, the frame leaves room for their circle too.
+    val plain = fit(0.0)
+    val zoom = if (plain >= MOMENTS_SPREAD_ZOOM) fit(SPREAD_DP_MAX).coerceAtLeast(MOMENTS_SPREAD_ZOOM) else plain
+    val scale = TILE_DP * 2.0.pow(zoom)
+    val centerX = (world.maxOf { it.first } + world.minOf { it.first }) / 2 * 2.0.pow(zoom)
+    val centerY = (world.maxOf { it.second } + world.minOf { it.second }) / 2 * 2.0.pow(zoom)
+    // Pins stand above their spots, so the spots sit a little below the middle.
+    val targetY = centerY - (FRAME_TOP_DP - FRAME_BOTTOM_DP) / 2
+    val longitude = centerX / scale * 360.0 - 180.0
+    val latitude = atan(sinh(PI * (1 - 2 * targetY / scale))) * 180.0 / PI
+    return Triple(latitude, longitude, zoom.toFloat())
+}
+
+/** Room kept around a framed crowded spot: a pin's height above its spot, half its width at the sides. */
+private const val FRAME_TOP_DP = 92.0
+private const val FRAME_SIDE_DP = 48.0
+private const val FRAME_BOTTOM_DP = 28.0
+private const val FRAME_MIN_DP = 40.0
 
 private const val CLUSTER_DP = 48.0
 
