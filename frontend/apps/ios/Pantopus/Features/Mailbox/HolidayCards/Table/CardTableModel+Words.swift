@@ -57,6 +57,13 @@ extension CardTableModel {
         }
     }
 
+    /// The quiet button under the main one: "Send {first name} a card", once the reader has turned the card over (on
+    /// the open Duo both sides show, so at once). Never on a sealed card.
+    var secondary: CardTableMenuItem? {
+        guard step == .out, !content.sealed, turnedOnce || fold.isSpread else { return nil }
+        return sendBack
+    }
+
     /// Once the card is on the table.
     private var restingHint: String {
         if fold.isSpread || reduceMotion { return "" }

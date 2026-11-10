@@ -233,10 +233,14 @@ final class HolidayCardFlowViewModel {
     private var searchTask: Task<Void, Never>?
     private var theirsTask: Task<Void, Never>?
 
-    init(api: APIClient = .shared, fromName: String, designId: String? = nil) {
+    /// The person "Send {first name} a card" chose on a card's table (plan Part 3): the flow opens at Pick a card.
+    @ObservationIgnored private var chosenAtStart: HolidayCardRecipient?
+
+    init(api: APIClient = .shared, fromName: String, designId: String? = nil, to person: (id: String, name: String)? = nil) {
         self.api = api
         self.fromName = fromName
         self.designId = designId
+        chosenAtStart = person.map { .person(userId: $0.id, name: $0.name) }
     }
 
     // MARK: - Reading
@@ -290,6 +294,11 @@ final class HolidayCardFlowViewModel {
         if case .loaded = state { return }
         state = .loading
         await fetch()
+        // Chosen on a card's table: straight to Pick a card while sending is open and today's card is free.
+        if let chosen = chosenAtStart, let cards, cards.open, cards.today == nil {
+            chosenAtStart = nil
+            choose(chosen)
+        }
         await readOwnName()
     }
 
@@ -856,4 +865,17 @@ struct HolidayCardRefusal: Error {
     var code: String?
     /// The answer's status (a 403 or a 404).
     var status: Int?
+}
+
+/// Whether "Send {first name} a card" shows on a card's table (plan Part 3): sending is open for the season, and the
+/// server would take a card to them now (the arrivals check runs the send's own person checks: neither has blocked
+/// the other, and their account is still here).
+enum HolidayCardSendBack {
+    static func isOpen(to userId: String, api: APIClient = .shared) async -> Bool {
+        guard let cards: HolidayCardsResponse = try? await api.request(HolidayCardEndpoints.cards()), cards.open else {
+            return false
+        }
+        let arrivals: HolidayCardArrivalsFor? = try? await api.request(HolidayCardEndpoints.arrivals(toUserId: userId))
+        return arrivals != nil
+    }
 }

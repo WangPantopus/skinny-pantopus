@@ -140,7 +140,8 @@ struct CardTableScreen: View {
                 title: "Take the card out",
                 hint: "or swipe it, the way you’d turn it in your hand",
                 primarySize: primarySize,
-                hintSize: hintSize
+                hintSize: hintSize,
+                reservesSecondary: model.reservesSendBack
             ) {}
                 .frame(width: max(0, width - 32))
                 .fixedSize(horizontal: false, vertical: true)
