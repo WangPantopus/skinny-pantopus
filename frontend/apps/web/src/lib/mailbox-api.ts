@@ -8,6 +8,7 @@
 // ============================================================
 
 import { get, post, uploadFile, apiRequest, mailbox, mailCompose } from '@pantopus/api';
+import { launchFeatures } from '@/lib/featureFlags';
 import type { DeletedMail, HolidayCards, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardList, HolidayCardListPreview, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, RecipientSearchResult } from '@pantopus/api';
 
 /** PATCH helper — not barrel-exported from @pantopus/api */
@@ -166,12 +167,16 @@ export async function takeBackHolidayCard(cardId: string): Promise<{ taken_back:
 // SENT (launch key mailbox)
 // ============================================================
 
+// A card a block withdrew shows in Sent as "Couldn't be delivered" (memories contract section 8; the founder's B), asked
+// for with the card memories (launch key holiday_card_memories): without it Sent leaves such cards out, as before.
+const sentInclude = (): { include?: 'not_delivered' } => (launchFeatures.holidayCardMemories ? { include: 'not_delivered' } : {});
+
 export async function getSentCards(params?: { before?: string; limit?: number }): Promise<{ items: SentPiece[]; next: string | null }> {
-  return call(() => mailbox.getSentCards(params));
+  return call(() => mailbox.getSentCards({ ...params, ...sentInclude() }));
 }
 
 export async function getSentCard(id: string): Promise<SentPieceDetail> {
-  return call(async () => (await mailbox.getSentCard(id)).item);
+  return call(async () => (await mailbox.getSentCard(id, sentInclude())).item);
 }
 
 /** People only (no businesses): a card goes to a person. */
