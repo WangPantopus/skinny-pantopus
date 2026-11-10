@@ -87,7 +87,9 @@ public final class ChatListViewModel {
         // `ScreenStoreLive` marks Messages for every chat change it is told
         // of (a message, a read, a membership, a mute) and after any drop of
         // the socket: with none since the list's last read, it has them all.
-        if let listReadSentAt, showsAnswer,
+        // A row whose last message replied to a Moment that still reads as running is the exception:
+        // the Moment ending is no chat change, so only a read says whether its picture still shows.
+        if let listReadSentAt, showsAnswer, !allRows.contains(where: { $0.momentReply?.ended == false }),
            !store.wasMarked(topics: [ScreenTopic.chats], kind: .messagesList, since: listReadSentAt) {
             allRows = Self.relabelingTimes(allRows, activity: activityDates)
             applyFilter()
