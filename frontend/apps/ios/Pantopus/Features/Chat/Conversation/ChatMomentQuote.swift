@@ -52,7 +52,7 @@ struct ChatMomentQuoteView: View {
                     .foregroundStyle(quote.ended ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
                 if !quote.ended {
                     if quote.kind == "text", let excerpt = quote.excerpt {
-                        ChatMomentCardQuote(excerpt: excerpt, background: quote.background)
+                        ChatMomentCardQuote(excerpt: excerpt, background: quote.background, side: side)
                     } else {
                         ChatMomentThumbnail(url: quote.thumbURL, kind: quote.kind, background: quote.background, width: 54, height: 72)
                     }
@@ -106,10 +106,12 @@ struct ChatMomentQuoteView: View {
     }
 }
 
-/// A text card in a quote: its own color with its first words, two lines at most.
+/// A text card in a quote: its own color with its first words, two lines at most. As wide as its words,
+/// up to 200 points, on the bubble's side.
 struct ChatMomentCardQuote: View {
     let excerpt: String
     let background: String?
+    let side: ChatMessageSide
 
     var body: some View {
         let colors = MomentsPalette.card(background)
@@ -118,14 +120,15 @@ struct ChatMomentCardQuote: View {
             .foregroundStyle(.white)
             .lineLimit(2)
             .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 10)
             .padding(.vertical, Spacing.s2)
-            .frame(maxWidth: 200, minHeight: 44, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: 44)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(LinearGradient(colors: [colors.top, colors.bottom], startPoint: .top, endPoint: .bottom))
             )
+            .frame(maxWidth: 200, alignment: side == .outgoing ? .trailing : .leading)
             .accessibilityHidden(true)
     }
 }
