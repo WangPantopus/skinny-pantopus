@@ -21,6 +21,7 @@ const momentPlace = require('../services/moments/momentPlace');
 const momentChat = require('../services/moments/momentChat');
 const { adultStatus, confirmAdult } = require('../services/adultAttestation');
 const momentUpload = require('../services/moments/momentUpload');
+const momentNotify = require('../services/moments/momentNotify');
 const { normalizePostReaction } = require('../utils/postReaction');
 const { REPORT_REASONS, filePostReport } = require('../services/postReportService');
 
@@ -85,7 +86,10 @@ router.post('/adult-confirm', actionLimiter, async (req, res) => {
   }
 });
 
-/** POST /place-preview — what the Post sheet shows: the place's label, the area's, the home notice, the 18+ state. */
+/**
+ * POST /place-preview — what the Post sheet shows: the place's label, the area's, the names the author may pick for an
+ * exact pin (`places`; the first is the label), the home notice, the 18+ state.
+ */
 router.post('/place-preview', actionLimiter, async (req, res) => {
   try {
     const { latitude, longitude } = parseBody(Joi.object(point), req.body);
@@ -116,6 +120,8 @@ const createSchema = Joi.object({
   ).required(),
   // A retry of the same Post tap returns the Moment it made (optional).
   client_request_id: Joi.string().uuid().allow(null),
+  // The Post sheet's pick among place-preview's `places` (optional): a key, never the place's words.
+  place_key: Joi.string().max(40).pattern(/^[a-z0-9_]+$/).allow('', null),
 });
 
 // The row id a retry key stands for, so the same tap never makes two Moments.
@@ -142,11 +148,13 @@ router.post('/', createLimiter, async (req, res) => {
     }
     await store.checkPostingRules(req.user, body);
     const { latitude, longitude } = body.location;
-    const [labels, atHome] = await Promise.all([
+    const [found, atHome] = await Promise.all([
       momentPlace.labelsAt(latitude, longitude),
       momentPlace.isAtHome(req.user.id, latitude, longitude),
     ]);
-    const { row } = await store.insertMoment(store.newMomentRow({
+    // The name the author picked for this point, worked out again here; an area or at-home Moment says the town.
+    const labels = { ...found, place_label: momentPlace.pickedLabel(found, body.place_key) || found.place_label };
+    const { row, created } = await store.insertMoment(store.newMomentRow({
       userId: req.user.id,
       accountType: req.user.accountType,
       kind: body.kind,
@@ -162,6 +170,9 @@ router.post('/', createLimiter, async (req, res) => {
     }), id);
     logger.info('moments.created', { momentId: row.id, kind: body.kind, hours: body.hours, audience: body.audience });
     res.status(201).json({ moment: await oneMoment(row, req.user.id) });
+    // A text card is live now: its author's connections hear of it (a photo or video when its check finishes). After
+    // the answer, and on its own: it never slows or fails the post.
+    if (created && body.kind === 'text') momentNotify.notifyConnections(row);
   } catch (error) {
     sendError(res, error, 'create');
   }
@@ -255,6 +266,20 @@ router.get('/map', async (req, res) => {
     res.json({ rings: await store.mapRings(req.user.id, box) });
   } catch (error) {
     sendError(res, error, 'map');
+  }
+});
+
+/**
+ * GET /unseen — the Moments tab's dot: how many people have a live Moment in the box that the caller may see and
+ * hasn't watched, new since `since` (the last time they had the tab open; none: any). Never their own.
+ */
+router.get('/unseen', async (req, res) => {
+  try {
+    const { since, ...box } = parseBody(mapSchema.keys({ since: Joi.string().isoDate() }), req.query);
+    if (box.south >= box.north || box.west >= box.east) throw store.fail(400, 'MOMENT_INVALID', 'Send a map area with south < north and west < east.');
+    res.json({ count: await store.unseenPeople(req.user.id, box, since ? Date.parse(since) : null) });
+  } catch (error) {
+    sendError(res, error, 'unseen');
   }
 });
 
