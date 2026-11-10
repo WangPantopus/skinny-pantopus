@@ -381,6 +381,10 @@ object PantopusColors {
 
     /** Gold: the focus ring and CHRISTMAS CARD `#D8B76F`; the stamped "Do not open until Christmas" `#ECD7A4`. */
     val tableGold = Color(0xFFD8B76F)
+
+    /** The moods (plan Part 7): snow's shadow drifting through the window light (10% dark), and candlelight's warm glow. */
+    val tableSnow = Color(0x1A000000)
+    val tableCandle = Color(0xFFFFB25E)
     val tableGoldInk = Color(0xFFECD7A4)
 
     /** The envelope's names in the pen: to `#FBEED2`, from `#F4E2BF`; the to-name's edge `rgb(60 8 10 / 50%)`. */

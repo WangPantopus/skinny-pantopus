@@ -58,6 +58,8 @@ internal class CardTableArt private constructor(
     val grain: Bitmap,
     val cloth: Bitmap,
     val stamps: Map<MailStamp, Bitmap>,
+    /** The Christmas with Jesus Christ stamp (plan Part 7). */
+    val star: Bitmap,
 ) {
     companion object {
         private var kept = SoftReference<CardTableArt>(null)
@@ -87,6 +89,7 @@ internal class CardTableArt private constructor(
                                 R.drawable.card_table_stamp_fir,
                                 R.drawable.card_table_stamp_peak,
                                 R.drawable.card_table_stamp_river,
+                                R.drawable.card_table_stamp_star,
                             )
                         val read =
                             ids
@@ -111,6 +114,7 @@ internal class CardTableArt private constructor(
                             grain = read[12],
                             cloth = read[13],
                             stamps = mapOf(MailStamp.Fir to read[14], MailStamp.Peak to read[15], MailStamp.River to read[16]),
+                            star = read[17],
                         )
                     }
                 }
