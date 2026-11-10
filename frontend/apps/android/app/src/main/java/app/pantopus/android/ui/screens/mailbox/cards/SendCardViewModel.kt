@@ -762,8 +762,14 @@ class SendCardViewModel
         private fun restoredForm(): SendCardForm {
             val email = saved.get<String>(KEY_EMAIL).orEmpty()
             val list = saved.get<String>(KEY_LIST)?.let(::readList)
+            // "Send Hazel a card" on a card she sent names her, and the flow opens at Pick a card.
+            val sendBack =
+                saved.get<String>(SEND_CARD_TO_USER_KEY)?.takeIf { it.isNotBlank() && saved.get<String>(KEY_STEP) == null }?.let {
+                    CardRecipient.Person(it, saved.get<String>(SEND_CARD_TO_NAME_KEY).orEmpty())
+                }
             val to =
-                saved.get<String>(KEY_TO_USER)?.let { CardRecipient.Person(it, saved.get<String>(KEY_TO_NAME).orEmpty()) }
+                sendBack
+                    ?: saved.get<String>(KEY_TO_USER)?.let { CardRecipient.Person(it, saved.get<String>(KEY_TO_NAME).orEmpty()) }
                     ?: saved.get<String>(KEY_TO_EMAIL)?.let { CardRecipient.Email(it) }
                     ?: CardRecipient.Link.takeIf { saved.get<Boolean>(KEY_TO_LINK) == true }
                     ?: list?.first?.takeIf { saved.get<Boolean>(KEY_TO_LIST) == true && it.size > 1 }?.let { CardRecipient.Several(it) }
@@ -772,6 +778,7 @@ class SendCardViewModel
             val message = saved.get<String>(KEY_MESSAGE).orEmpty()
             val step =
                 when (saved.get<String>(KEY_STEP)) {
+                    null -> if (sendBack != null) SendCardStep.Pick else SendCardStep.To
                     SendCardStep.Pick.name -> SendCardStep.Pick
                     SendCardStep.Write.name -> SendCardStep.Write
                     SendCardStep.Seal.name, SendCardStep.Look.name -> SendCardStep.Seal
@@ -857,6 +864,10 @@ class SendCardViewModel
         companion object {
             /** The nav argument naming a picture to start with (`mailbox/cards?design=`). */
             const val SEND_CARD_DESIGN_KEY = "design"
+
+            /** The nav arguments naming the person it's for ("Send Hazel a card"): their user id and their name. */
+            const val SEND_CARD_TO_USER_KEY = "toUser"
+            const val SEND_CARD_TO_NAME_KEY = "toName"
 
             /** An address that can take an email: the web's check, so the server's own check doesn't refuse it. */
             val EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$")

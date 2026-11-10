@@ -243,7 +243,9 @@ internal class CardTableState(
     var onOpened: () -> Unit = {}
     var onTap: (TableTap) -> Unit = {}
 
-    private var turnedOnce = false
+    /** The reader has turned the card over at least once (the quiet "Send … a card" shows from then). */
+    var turnedOnce by mutableStateOf(false)
+        private set
     private var envelopeTurnedOnce = false
     private var heldOnce = false
     private var openedReported = false

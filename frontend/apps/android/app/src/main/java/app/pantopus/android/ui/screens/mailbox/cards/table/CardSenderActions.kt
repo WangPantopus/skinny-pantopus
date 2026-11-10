@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.blocks.BlocksRepository
+import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.ui.screens.profile.ReportUserSheet
 import app.pantopus.android.ui.theme.PantopusColors
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,8 +30,29 @@ class CardSenderActionsViewModel
     @Inject
     constructor(
         private val blocks: BlocksRepository,
+        private val cards: HolidayCardsRepository,
     ) : ViewModel() {
         private val _said = MutableStateFlow<String?>(null)
+
+        private val _canSendBack = MutableStateFlow(false)
+
+        /**
+         * A card can go back to the one who sent this: sending is open for the season (`GET /api/mailbox/cards`), and
+         * the same checks as choosing them pass (`GET /api/mailbox/cards/arrivals?to=`): neither has blocked the other
+         * and their account is still there. False until both answer.
+         */
+        val canSendBack: StateFlow<Boolean> = _canSendBack.asStateFlow()
+
+        private var checked: String? = null
+
+        fun checkSendBack(userId: String) {
+            if (checked == userId) return
+            checked = userId
+            viewModelScope.launch {
+                val open = (cards.load() as? NetworkResult.Success)?.data?.open == true
+                _canSendBack.value = open && cards.arrivalsFor(userId) is NetworkResult.Success
+            }
+        }
 
         /** What to tell the person, until the next action. */
         val said: StateFlow<String?> = _said.asStateFlow()
@@ -48,7 +70,10 @@ class CardSenderActionsViewModel
                 val who = name.trimEnd('.')
                 _said.value =
                     when (blocks.block(userId)) {
-                        is NetworkResult.Success -> "You blocked $who. You won't get mail from them. You can unblock them in Settings."
+                        is NetworkResult.Success -> {
+                            _canSendBack.value = false
+                            "You blocked $who. You won't get mail from them. You can unblock them in Settings."
+                        }
                         is NetworkResult.Failure -> "Couldn't block $who. Check your connection and try again."
                     }
             }

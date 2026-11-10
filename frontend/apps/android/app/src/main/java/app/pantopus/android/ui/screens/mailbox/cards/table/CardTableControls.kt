@@ -66,6 +66,22 @@ data class CardTableMenuItem(
     val onClick: () -> Unit,
 )
 
+/** "Send Hazel a card": the quiet second button under the main one, once the card has been turned over. */
+data class CardTableSendBack(
+    val title: String,
+    val onClick: () -> Unit,
+)
+
+/** The quiet button's words: the cream of the words at the top, a little smaller than the main button. */
+internal val tableQuietStyle =
+    TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 1.35.em,
+        fontWeight = FontWeight.Medium,
+        color = PantopusColors.tableCreamSoft,
+        textAlign = TextAlign.Center,
+    )
+
 /** The words at the top of the table: the sample's italic serif. */
 internal val tableWordsStyle =
     TextStyle(
@@ -112,13 +128,14 @@ internal fun CardTableControls(
     showsTurnTip: Boolean,
     onClose: () -> Unit,
     onShare: () -> Unit,
+    sendBack: CardTableSendBack? = null,
 ) {
     val top = insets.calculateTopPadding()
     val bottom = insets.calculateBottomPadding()
     val hidden = state.controlsHidden && !touchExploring
     Box(modifier = Modifier.fillMaxSize()) {
         Words(state, top)
-        ActionBlock(state, hidden, bottom)
+        ActionBlock(state, hidden, bottom, sendBack)
         if (showsTurnTip) TurnTip()
         TopRow(state, top, hidden, canShare, menu.isNotEmpty(), onClose, onShare)
         if (state.menuOpen && menu.isNotEmpty()) MenuPanel(state, top, menu)
@@ -221,6 +238,7 @@ private fun ActionBlock(
     state: CardTableState,
     hidden: Boolean,
     bottom: Dp,
+    sendBack: CardTableSendBack?,
 ) {
     val away = hidden || state.step == TableStep.Pulling
     val fade by animateFloatAsState(if (away) 0f else 1f, tween(350), label = "tableAct")
@@ -254,6 +272,27 @@ private fun ActionBlock(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(state.primaryLabel, style = tablePrimaryStyle)
+                }
+            }
+            // Once the card has been turned over: the next kind act, one tap away (not on a sealed card).
+            if (sendBack != null && state.step == TableStep.Out && state.turnedOnce && !state.card.sealed) {
+                Box(
+                    modifier =
+                        Modifier
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(22.dp))
+                            .then(
+                                if (away) {
+                                    Modifier
+                                } else {
+                                    Modifier.clickable(role = Role.Button, onClick = sendBack.onClick)
+                                },
+                            ).heightIn(min = 44.dp)
+                            .padding(horizontal = 16.dp)
+                            .testTag("cardTableSendBack"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(sendBack.title, style = tableQuietStyle)
                 }
             }
             Text(state.hint, style = tableHintStyle, modifier = Modifier.heightIn(min = 16.dp).testTag("cardTableHint"))

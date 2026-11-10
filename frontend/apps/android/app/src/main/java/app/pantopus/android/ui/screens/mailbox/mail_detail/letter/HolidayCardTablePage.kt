@@ -21,6 +21,7 @@ import app.pantopus.android.ui.screens.mailbox.cards.table.CardSenderActionsView
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardSenderSheets
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableMenuItem
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableSendBack
 import app.pantopus.android.ui.screens.mailbox.components.MailSender
 import app.pantopus.android.ui.theme.PantopusColors
 import kotlinx.coroutines.delay
@@ -54,8 +55,21 @@ internal fun HolidayCardTablePage(
     var confirmBlock by rememberSaveable { mutableStateOf(false) }
     // Only a person can be reported or blocked: Pantopus and a piece with no known sender can't.
     val person = senderUserId?.takeIf { letter.sender != MailSender.Pantopus }
+    // "Send Hazel a card": to the one who sent it, while sending is open and neither has blocked the other; a sealed
+    // card shows it once it opens.
+    val sendCard = actions.onSendCard
+    LaunchedEffect(person, sendCard != null) { if (person != null && sendCard != null) senderActions.checkSendBack(person) }
+    val canSendBack by senderActions.canSendBack.collectAsStateWithLifecycle()
+    val fromName = letter.fromName.trim()
+    val sendBack =
+        if (person != null && sendCard != null && canSendBack && !card.sealed && fromName.isNotEmpty()) {
+            CardTableSendBack("Send ${fromName.substringBefore(' ')} a card") { sendCard(person, fromName) }
+        } else {
+            null
+        }
     val menu =
         buildList {
+            sendBack?.let { add(CardTableMenuItem(it.title, "cardTableMenuSendBack", it.onClick)) }
             add(CardTableMenuItem("Who sent it and its trail", "cardTableEnvelope", actions.onEnvelope))
             if (letter.filed || letter.archived) {
                 val words = if (letter.filed) "Take out of the Vault" else "Back to Incoming"
@@ -76,6 +90,7 @@ internal fun HolidayCardTablePage(
         onOpened = actions.onOpenCard,
         menu = menu,
         message = message ?: said,
+        sendBack = sendBack,
     )
     if (person != null) {
         CardSenderSheets(
