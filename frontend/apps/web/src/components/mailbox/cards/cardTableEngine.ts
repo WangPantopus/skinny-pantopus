@@ -6,6 +6,8 @@
 // tells React only when the words and buttons should change.
 // ============================================================
 
+import type { CardMood } from './cardArt';
+
 export type TableStep = 'front' | 'back' | 'flap' | 'pulling' | 'out';
 
 /**
@@ -157,8 +159,10 @@ export class CardTableEngine {
 
   private readonly elements = new Map<string, HTMLElement>();
 
-  constructor(root: HTMLElement, options: { sealed: boolean; crackedSrc: string; wholeSrc: string; callbacks: TableCallbacks; sending?: boolean }) {
+  constructor(root: HTMLElement, options: { sealed: boolean; crackedSrc: string; wholeSrc: string; callbacks: TableCallbacks; sending?: boolean; mood?: CardMood }) {
     this.root = root;
+    // Santa's cards land with a little more bounce (design plan Part 7): the same drop, less damped.
+    if (options.mood === 'santa') this.v.drop.c = 9.6;
     this.sending = Boolean(options.sending);
     this.sealed = this.sending ? false : options.sealed;
     this.crackedSrc = options.crackedSrc;
@@ -900,7 +904,10 @@ export class CardTableEngine {
     }
 
     // Light, sheen, shading as the card turns.
-    this.$('light').style.transform = `translate(${tx * 22}px,${ty * 22}px) scale(1.04)`;
+    const light = `translate(${tx * 22}px,${ty * 22}px) scale(1.04)`;
+    this.$('light').style.transform = light;
+    // The snow's shadows fall through the window light, so they move with it (design plan Part 7).
+    this.$('snow').style.transform = light;
     const sinD = Math.abs(Math.sin((v.deg.x * Math.PI) / 180));
     const sheen = `translate(${(tx * 0.9 + (v.deg.x / 180) * 0.6) * 26}%,${ty * 16}%)`;
     this.$('sheenFront').style.transform = sheen;
