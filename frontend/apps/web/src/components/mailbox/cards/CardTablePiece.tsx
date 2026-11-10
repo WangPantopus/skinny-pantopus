@@ -25,6 +25,7 @@ import CardShareSheet from './CardShareSheet';
 import CardTable, { type TableMenuItem } from './CardTable';
 import { firstNameOf } from './cardArt';
 import { sendOneBackPath } from './sendOneBack';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const DONE_WORDS: Partial<Record<MailActionName, string>> = {
   file: 'Filed in the Vault',
@@ -134,7 +135,7 @@ export default function CardTablePiece({
     setAsking(true);
     const yes = await confirmStore.open({
       title: `Block ${from}?`,
-      description: `You won't be able to message each other or see each other's posts, and they can't send you another card. You can unblock them in Settings.`,
+      description: `You won't be able to message each other or see each other's posts, and they can't send you another card.${launchFeatures.holidayCardMemories ? ' Cards and replies on their way between you are withdrawn.' : ''} You can unblock them in Settings.`,
       confirmLabel: 'Block',
       variant: 'destructive',
     });
@@ -158,8 +159,9 @@ export default function CardTablePiece({
     if (!card.sealed) items.push({ label: 'Open it again', onSelect: () => setReplay((n) => n + 1) });
     if (sendBack) items.push(sendBack);
     if (piece.sender_user_id) {
-      items.push({ label: 'Report', onSelect: () => setSheet('report') });
-      items.push({ label: 'Block', onSelect: () => { void block(); } });
+      // As drawn for card memories (wave 4 drawing 6): the card itself is reported, and the person is named.
+      items.push({ label: launchFeatures.holidayCardMemories ? 'Report this card' : 'Report', onSelect: () => setSheet('report') });
+      items.push({ label: launchFeatures.holidayCardMemories ? `Block ${firstNameOf(from)}` : 'Block', onSelect: () => { void block(); } });
     }
     return items;
     // The menu follows the piece; its handlers read the latest piece through this same render.
@@ -196,11 +198,16 @@ export default function CardTablePiece({
           {sheet === 'report' && piece.sender_user_id ? (
             <ReportModal
               open
-              entityType="user"
+              entityType={launchFeatures.holidayCardMemories ? 'card' : 'user'}
               layerClassName="z-[1000]"
+              // "Report this card" shares that one card with admins (the founder's choice, November 2): said plainly.
+              disclosure={launchFeatures.holidayCardMemories
+                ? `Pantopus will be able to see this card to review it. Only this card: nothing else in your mail or ${firstNameOf(from)}’s is shared.`
+                : undefined}
               onClose={() => setSheet(null)}
               onSubmit={async (reason, details) => {
-                await api.users.reportUser(piece.sender_user_id as string, reason, details);
+                await api.users.reportUser(piece.sender_user_id as string, reason, details,
+                  launchFeatures.holidayCardMemories ? piece.id : undefined);
                 toast.success('Report submitted');
                 setSheet(null);
               }}

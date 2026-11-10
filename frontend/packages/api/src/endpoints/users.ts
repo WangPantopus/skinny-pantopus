@@ -265,9 +265,12 @@ export async function getInviteProgress(): Promise<InviteProgress> {
 /**
  * Report an abusive user for moderation review.
  */
-export async function reportUser(userId: string, reason: string, details?: string): Promise<{
+export async function reportUser(userId: string, reason: string, details?: string, mailId?: string): Promise<{
   message: string;
   already_reported: boolean;
+  /** "Report this card" (launch key holiday_card_memories): the card was shared with Pantopus admins for review. */
+  shared_card?: boolean;
 }> {
-  return post(`/api/users/${userId}/report`, { reason, details });
+  // mail_id: the card they received from this person ("Report this card"); only that card is shared with admins.
+  return post(`/api/users/${userId}/report`, { reason, details, ...(mailId ? { mail_id: mailId } : {}) });
 }
