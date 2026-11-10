@@ -3,7 +3,7 @@
 // Digital mailbox and advertising campaigns
 // ============================================================
 
-import { get, post, put, del, patch } from '../client';
+import apiClient, { get, post, put, del, patch } from '../client';
 import type { Mail, AdCampaign, ApiResponse } from '@pantopus/types';
 import type { MailItemV2 } from './mailboxV2';
 
@@ -680,7 +680,64 @@ export interface CardSignature {
   strokes: number[][];
 }
 
+/**
+ * A card's own photo or voice greeting as uploaded (memories contract section 2, launch key holiday_card_memories): what a
+ * send names it by (`file_id`), never a link. Sendable by its uploader for 72 hours.
+ */
+export interface CardMediaRef {
+  file_id: string;
+  kind: 'photo' | 'voice';
+  mime_type: string;
+  size: number;
+  /** A photo, upright as stored (at most 1600 on the long side). */
+  width?: number | null;
+  height?: number | null;
+  alt?: string | null;
+  /** A voice greeting's length, read from the file: show this, never a player's guess. */
+  duration_ms?: number;
+}
+
+/** A card's photo on a piece, Look it over or Sent: null while sealed. `covered` until the reader taps (a non-connection). */
+export interface CardPhoto { file_id: string; width: number | null; height: number | null; alt: string | null; covered: boolean }
+export interface CardVoice { file_id: string; duration_ms: number | null }
+
+/**
+ * POST /api/mailbox/cards/media: one photo (or voice greeting) for the card being written, uploaded as soon as it's
+ * chosen. 201 { media, expires_at }; refusals CARD_PHOTO_UNREADABLE / NOT_STILL / TOO_LARGE, CARD_VOICE_* (as words).
+ */
+export async function uploadHolidayCardMedia(kind: 'photo' | 'voice', file: File | Blob,
+  options: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {}): Promise<{ media: CardMediaRef; expires_at: string }> {
+  const form = new FormData();
+  form.append('kind', kind);
+  form.append('file', file, kind === 'voice' ? 'greeting.m4a' : 'photo.jpg');
+  const response = await apiClient.post<{ media: CardMediaRef; expires_at: string }>('/api/mailbox/cards/media', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    signal: options.signal,
+    onUploadProgress: (event) => { if (event.total) options.onProgress?.(Math.min(1, event.loaded / event.total)); },
+  });
+  return response.data;
+}
+
+/**
+ * The bytes of a card's photo or voice as a Blob, through one of its reader-checked routes (never a storage link):
+ * `own` the uploader's upload, `sent` the sender's own card, `piece` the card they received.
+ */
+export async function getHolidayCardMediaBlob(
+  where: { own: string } | { sent: string; fileId: string } | { piece: string; fileId: string },
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const url = 'own' in where
+    ? `/api/mailbox/cards/media/${encodeURIComponent(where.own)}`
+    : 'sent' in where
+      ? `/api/mailbox/sent/${encodeURIComponent(where.sent)}/card-media/${encodeURIComponent(where.fileId)}`
+      : `/api/mailbox/${encodeURIComponent(where.piece)}/card-media/${encodeURIComponent(where.fileId)}`;
+  const response = await apiClient.get<Blob>(url, { responseType: 'blob', signal });
+  return response.data;
+}
+
 export interface HolidayCards {
+  /** Which of a card's own photo and voice can be added now (launch key holiday_card_memories), and their limits. */
+  media?: { photo: { usable: boolean; max_bytes: number; long_side: number }; voice: { usable: boolean; max_seconds: number; max_bytes: number } };
   postage_enabled?: boolean;
   /** The server keeps a signature beside FROM: its box and most bytes. Absent: set the typed name. */
   signature?: { w: number; h: number; max_bytes: number };
@@ -740,6 +797,10 @@ export async function sendHolidayCard(data: {
   request_id?: string;
   /** Signed beside FROM (only when `HolidayCards.signature` is there); CARD_SIGNATURE_INVALID / _TOO_LONG refuse it. */
   signature?: CardSignature | null;
+  /** The card's own photo and voice (file ids from uploadHolidayCardMedia; need `request_id`), and the photo's description. */
+  photo?: string | null;
+  photo_alt?: string | null;
+  voice?: string | null;
 }): Promise<{ card: SentHolidayCard; link?: string }> {
   return post<{ card: SentHolidayCard; link?: string }>('/api/mailbox/cards', data);
 }
@@ -867,7 +928,10 @@ export interface SentPiece {
     /** The whole verse on a Christmas with Jesus Christ picture ("Read the verse"); not while it's sealed. */
     verse?: string | null;
     /** Their own signature beside FROM (GET /sent/:id only; also while it's sealed for the other person). */
-    signature?: CardSignature | null };
+    signature?: CardSignature | null;
+    /** Their own photo and voice (GET /sent/:id only; never covered). */
+    photo?: CardPhoto | null;
+    voice?: CardVoice | null };
 }
 
 /** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */
