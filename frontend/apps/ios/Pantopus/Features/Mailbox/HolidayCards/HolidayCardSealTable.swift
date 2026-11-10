@@ -51,7 +51,8 @@ extension HolidayCardFlowViewModel {
                 sealedUntil: nil,
                 sealedInDays: "",
                 sealedDayCount: 0,
-                verse: design.verse
+                verse: design.verse,
+                signature: cards.signature == nil ? nil : signature
             )
         }
         return CardTableContent(
@@ -70,7 +71,8 @@ extension HolidayCardFlowViewModel {
             sealedUntil: nil,
             sealedInDays: "",
             sealedDayCount: 0,
-            verse: design.verse
+            verse: design.verse,
+            signature: cards.signature == nil ? nil : signature
         )
     }
 }

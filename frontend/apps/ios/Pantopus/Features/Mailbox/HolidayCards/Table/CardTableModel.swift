@@ -38,6 +38,9 @@ struct CardTableContent: Equatable {
     /// A Christmas with Jesus Christ card's whole verse, for "Read the verse" (plan 6.2); nil for the rest, while
     /// it's sealed, and in Sent (the server doesn't send it there).
     var verse: String?
+    /// The sender's signature beside FROM (plan 8.2), drawn in place of the typed first name; nil while sealed and when
+    /// unsigned.
+    var signature: CardSignature?
 
     var firstName: String {
         HolidayCardWords.firstName(fromName)

@@ -479,6 +479,8 @@ struct HolidayCardWriteStep: View {
     let cards: HolidayCardsResponse
     let design: HolidayCardDesign
     @State private var showBack = true
+    /// The pad for signing beside FROM is up (plan 8.2).
+    @State private var signing = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -490,7 +492,12 @@ struct HolidayCardWriteStep: View {
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .shadow(color: MailPaper.cardShadow.opacity(0.24), radius: 13, x: 0, y: 12)
             } back: {
-                HolidayCardBack(paper: design.paper, fromName: viewModel.fromName, year: cards.year) { width in
+                HolidayCardBack(
+                    paper: design.paper,
+                    fromName: viewModel.fromName,
+                    year: cards.year,
+                    signature: viewModel.signature
+                ) { width in
                     HolidayCardNoteText(
                         text: $viewModel.message,
                         cardWidth: width,
@@ -515,6 +522,9 @@ struct HolidayCardWriteStep: View {
                     .foregroundStyle(count >= cards.messageLimit ? MailPaper.wax : HolidayCardDesk.muted(scheme))
                     .accessibilityIdentifier("sendCardCount")
             }
+            if cards.signature != nil {
+                signRow
+            }
             VStack(spacing: Spacing.s2) {
                 HolidayCardWaxButton(title: "Seal it", isEnabled: !empty) { viewModel.toSeal() }
                     .accessibilityIdentifier("sendCardSealIt")
@@ -525,6 +535,33 @@ struct HolidayCardWriteStep: View {
                 }
             }
             .padding(.top, Spacing.s2)
+        }
+        .sheet(isPresented: $signing) {
+            CardTableSignPad(
+                initial: viewModel.signature,
+                onDone: { viewModel.signature = $0 },
+                onTyped: { viewModel.signature = nil }
+            )
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    /// Sign beside FROM with a finger, or leave the first name typed (plan 8.2).
+    private var signRow: some View {
+        let signed = viewModel.signature != nil
+        return HStack(spacing: Spacing.s3) {
+            HolidayCardPaperButton(title: signed ? "Sign again" : "Sign your name", isPressed: false) {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                showBack = true
+                signing = true
+            }
+            .accessibilityIdentifier("sendCardSign")
+            Text(signed ? "Signed beside FROM." : "Or leave \(HolidayCardWords.firstName(viewModel.fromName)) typed.")
+                .font(.system(size: 13))
+                .foregroundStyle(HolidayCardDesk.muted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("sendCardSignHint")
+            Spacer(minLength: 0)
         }
     }
 }

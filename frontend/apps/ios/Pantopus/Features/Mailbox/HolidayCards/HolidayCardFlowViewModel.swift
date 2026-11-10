@@ -133,6 +133,15 @@ final class HolidayCardFlowViewModel {
         }
     }
 
+    /// Signed beside FROM with a finger (plan 8.2); nil keeps the typed first name. Kept for every look and retry of
+    /// this card, like its note.
+    var signature: CardSignature? {
+        didSet {
+            sendError = nil
+            previewError = nil
+        }
+    }
+
     /// When it comes. Changing it here keeps a sentence about a choice
     /// that closed; the person's own pick clears it (`pick(_:)`).
     var arrival: HolidayCardArrival? {
@@ -468,7 +477,8 @@ final class HolidayCardFlowViewModel {
             arrival: arrival,
             to: to,
             requestId: requestId,
-            useStamp: cards?.postageEnabled == true ? true : nil
+            useStamp: cards?.postageEnabled == true ? true : nil,
+            signature: cards?.signature == nil ? nil : signature
         )
     }
 
@@ -670,7 +680,8 @@ extension HolidayCardFlowViewModel {
             design: design.id,
             message: message.trimmingCharacters(in: .whitespacesAndNewlines),
             arrival: arrival,
-            recipients: recipients
+            recipients: recipients,
+            signature: cards?.signature == nil ? nil : signature
         )
     }
 
