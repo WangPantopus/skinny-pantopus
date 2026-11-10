@@ -32,7 +32,7 @@ struct CardTableEnvelopeFront: View, Equatable {
             let height = size.height
             context.draw(Image(uiImage: paper), in: CGRect(origin: .zero, size: size))
             let stampWidth = width * 0.2017
-            let stampIn = Self.landing(reveal, at: CardTableAddress.stampLands)
+            let stampIn = CardTableAddress.progress(reveal, CardTableAddress.stamp)
             if stampIn > 0 {
                 var stampLayer = context
                 stampLayer.opacity = min(1, stampIn * 2)
@@ -40,15 +40,15 @@ struct CardTableEnvelopeFront: View, Equatable {
                 let box = CGRect(x: width * 0.755, y: height * 0.0345, width: stampWidth, height: stampWidth * 300 / 242)
                 stampLayer.draw(Image(uiImage: stamp), in: box.insetBy(dx: -box.width * (grow - 1) / 2, dy: -box.height * (grow - 1) / 2))
             }
-            let postmarkIn = Self.landing(reveal, at: CardTableAddress.postmarkLands)
+            let postmarkIn = CardTableAddress.progress(reveal, CardTableAddress.postmark)
             if postmarkIn > 0 {
                 var inked = context
                 inked.opacity = postmarkIn
                 drawPostmark(in: inked, size: size)
             }
-            drawNames(in: context, size: size, written: min(1, reveal / CardTableAddress.nameDone))
+            drawNames(in: context, size: size, written: CardTableAddress.progress(reveal, CardTableAddress.name))
             if sealed {
-                let goldIn = Self.landing(reveal, at: CardTableAddress.goldLands)
+                let goldIn = CardTableAddress.progress(reveal, CardTableAddress.gold)
                 if goldIn > 0 {
                     var gold = context
                     gold.opacity = goldIn
@@ -59,11 +59,6 @@ struct CardTableEnvelopeFront: View, Equatable {
             }
         }
         .accessibilityHidden(true)
-    }
-
-    /// 0 before it lands, then quickly to 1 (in about 0.15 s of the 2.2).
-    private static func landing(_ reveal: Double, at moment: Double) -> Double {
-        min(1, max(0, (reveal - moment + 0.07) / 0.07))
     }
 
     /// The inked postmark, with the mailed day over its rings.

@@ -80,6 +80,7 @@ extension CardTableModel {
             closeFlap()
         case .shut:
             // "Seal it" holds the seal down for them.
+            sealRefusal = nil
             sealHeld = true
             wake()
         case .gone:
@@ -128,8 +129,14 @@ extension CardTableModel {
         sealShown = true
         haptics.tap(.firm)
         wake()
+        let sealedAt = CACurrentMediaTime()
         Task { @MainActor [weak self] in
             let answer = await setup.seal()
+            // The seal stays in sight at least 0.8 s, however fast the server answers (web's timing).
+            if case .sent = answer, self?.reduceMotion == false {
+                let left = 0.8 - (CACurrentMediaTime() - sealedAt)
+                if left > 0 { try? await Task.sleep(nanoseconds: UInt64(left * 1_000_000_000)) }
+            }
             self?.sealAnswered(answer)
         }
     }
@@ -141,24 +148,29 @@ extension CardTableModel {
             gonePrimary = primary
             goneButtons = buttons
             step = .front
+            addressedAt = 0
             if reduceMotion {
+                // Addressed all at once, and it stays on the table; step 5 comes after 1.2 s.
                 springs.envelope.jump(to: 360)
                 addressing = 1
-                springs.drop.jump(to: 1)
-                sending = .gone
+                sending = .addressing
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    self?.sending = .gone
+                }
             } else {
                 // It turns over by itself, address side up.
                 springs.envelope.t = 360
                 addressing = 0
-                addressedAt = 0
                 sending = .addressing
             }
         case let .refused(message):
-            // The seal doesn't take: it lifts off, and the flap stays shut.
+            // The seal doesn't take: it lifts off, the flap stays shut, and the server's words take the place of
+            // "Press and hold to seal it." until the next press.
             sealShown = false
             sending = .shut
+            sealRefusal = message
             haptics.tap(.refuse)
-            if let message { showToast(message) }
         }
         wake()
     }
@@ -189,7 +201,7 @@ extension CardTableModel {
         case .shut:
             return advanceSealPress(elapsed: elapsed)
         case .addressing:
-            return advanceAddress(elapsed: elapsed)
+            return reduceMotion ? false : advanceAddress(elapsed: elapsed)
         case .ready, .inside, .sealing, .gone, nil:
             return false
         }
@@ -212,23 +224,23 @@ extension CardTableModel {
         return true
     }
 
-    /// The name written left to right in 0.7 s, the stamp landing, then the postmark's thump (and the gold seal
-    /// last when it's sealed until Christmas); a breath, and it slides off the table.
+    /// From the start of the turn: the name written left to right, the stamp landing, the postmark's thump (and the
+    /// gold seal last when it's sealed until Christmas); 0.9 s after the last mark it slides off the table.
     private func advanceAddress(elapsed: Double) -> Bool {
-        guard springs.envelope.x > 330 || addressing > 0 else { return true }
-        let before = addressing
-        addressing = min(1, addressing + elapsed / CardTableAddress.duration)
-        if before < CardTableAddress.stampLands, addressing >= CardTableAddress.stampLands { haptics.tap(.medium) }
-        if before < CardTableAddress.postmarkLands, addressing >= CardTableAddress.postmarkLands { haptics.tap(.firm) }
-        if sendingSetup?.sealedForChristmas == true, before < CardTableAddress.goldLands, addressing >= CardTableAddress.goldLands {
-            haptics.tap(.medium)
+        let before = addressedAt
+        addressedAt += elapsed
+        addressing = min(1, addressedAt / CardTableAddress.duration)
+        func landed(_ window: (Double, Double)) -> Bool {
+            before < window.1 && addressedAt >= window.1
         }
-        if addressing >= 1 {
-            addressedAt += elapsed
-            if addressedAt > 0.45 {
-                springs.drop.t = 1
-                sending = .gone
-            }
+        if landed(CardTableAddress.stamp) { haptics.tap(.medium) }
+        if landed(CardTableAddress.postmark) { haptics.tap(.firm) }
+        let sealedForChristmas = sendingSetup?.sealedForChristmas == true
+        if sealedForChristmas, landed(CardTableAddress.gold) { haptics.tap(.medium) }
+        let last = sealedForChristmas ? CardTableAddress.gold.1 : CardTableAddress.postmark.1
+        if addressedAt >= last + 0.9 {
+            springs.drop.t = 1
+            sending = .gone
         }
         return true
     }
@@ -251,7 +263,9 @@ extension CardTableModel {
                 pullAtStart: springs.pull.x,
                 cardAtStart: springs.card.x
             )
-            if sending == .shut, Self.envelopeBox(layout).contains(point) {
+            // A press anywhere on the table seals it (the buttons are their own).
+            if sending == .shut {
+                sealRefusal = nil
                 sealHeld = true
                 sinceTick = 1
             }
@@ -328,24 +342,19 @@ extension CardTableModel {
         springs.pull.t = pull
         springs.pull.v = 0
     }
-
-    /// Where a hold seals it: the shut envelope, flap and all.
-    private static func envelopeBox(_ layout: CardTableLayout) -> CGRect {
-        CGRect(
-            x: layout.envelopeX,
-            y: layout.envelopeTop - layout.flapDepth,
-            width: layout.envelopeWidth,
-            height: layout.envelopeHeight + layout.flapDepth
-        )
-    }
 }
 
-/// When things land on the address side, as parts of the 2.2 s it takes.
+/// When things land on the address side, in seconds from the start of the turn (web's timing, MCSRV seal-timing).
 enum CardTableAddress {
-    static let duration = 2.2
-    /// The name is written by 0.7 s.
-    static let nameDone = 0.7 / 2.2
-    static let stampLands = 1.0 / 2.2
-    static let postmarkLands = 1.35 / 2.2
-    static let goldLands = 1.8 / 2.2
+    /// `reveal` 0 to 1 runs over this long.
+    static let duration = 2.4
+    static let name = (0.7, 1.4)
+    static let stamp = (1.3, 1.6)
+    static let postmark = (1.74, 1.98)
+    static let gold = (2.12, 2.4)
+
+    /// How far along `window` the address side is, 0 to 1, at `reveal`.
+    static func progress(_ reveal: Double, _ window: (Double, Double)) -> Double {
+        min(1, max(0, (reveal * duration - window.0) / (window.1 - window.0)))
+    }
 }

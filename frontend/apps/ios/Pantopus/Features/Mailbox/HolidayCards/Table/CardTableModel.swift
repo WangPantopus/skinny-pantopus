@@ -154,6 +154,10 @@ final class CardTableModel {
     var goneButtons: [CardTableMenuItem] = []
     /// Step 5's Take it back asks first.
     var asksTakeBack = false
+    /// Why the seal didn't take, in place of "Press and hold to seal it." until the next press.
+    var sealRefusal: String?
+    /// Step 5's Share for a card by link: the words and the link, for the system share sheet.
+    var linkShareText: String?
     @ObservationIgnored var sealHeld = false
     @ObservationIgnored var sinceTick = 0.0
     @ObservationIgnored var addressedAt = 0.0

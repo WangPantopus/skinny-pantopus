@@ -110,9 +110,10 @@ struct CardTableSendCover: ViewModifier {
                 guard let model else { return .refused(nil) }
                 return await Self.seal(viewModel, model: model)
             },
+            // Done goes to the Mailbox.
             onDone: { [viewModel] in
                 viewModel.sealsAtTable = false
-                if viewModel.sent?.byLink != true { onDone() }
+                onDone()
             }
         ))
         return Item(model: model)
@@ -164,10 +165,19 @@ struct CardTableSendCover: ViewModifier {
             return .sent(words: words, primary: "Done", buttons: [share])
         }
         guard let card = viewModel.sent else { return .sent(words: "On its way.", primary: "Done", buttons: [share]) }
-        if card.byLink {
-            return .sent(words: "Your card is ready.", primary: "Get the link", buttons: [share])
+        if card.byLink, let link = viewModel.sentLink {
+            let from = HolidayCardWords.firstName(viewModel.fromName)
+            let copy = CardTableMenuItem(title: "Copy link", identifier: "cardTableSendCopyLink") { [weak model] in
+                UIPasteboard.general.string = link
+                model?.showToast("Link copied.")
+            }
+            let shareLink = CardTableMenuItem(title: "Share", identifier: "cardTableSendShareLink") { [weak model] in
+                model?.linkShareText = "A Christmas card for you from \(from): \(link)"
+            }
+            return .sent(words: "Your card is ready.", primary: "Done", buttons: [copy, shareLink])
         }
         let first = MailPieceModel.firstText(card.toName).map(HolidayCardWords.firstName) ?? "them"
+        let lines = [HolidayCardWords.arrivalLine(card), HolidayCardWords.takeBackLine(card)].compactMap(\.self)
         var buttons: [CardTableMenuItem] = []
         if card.canTakeBack {
             buttons.append(CardTableMenuItem(title: "Take it back", identifier: "cardTableSendTakeBack") { [weak model] in
@@ -175,7 +185,7 @@ struct CardTableSendCover: ViewModifier {
             })
         }
         buttons.append(share)
-        return .sent(words: "On its way to \(first).\n\(HolidayCardWords.arrivalLine(card))", primary: "Done", buttons: buttons)
+        return .sent(words: (["On its way to \(first)."] + lines).joined(separator: "\n"), primary: "Done", buttons: buttons)
     }
 }
 
@@ -194,6 +204,9 @@ struct CardTableSendPage: View {
             onClose: close
         )
         // Its own question: the Sent page under the table asks with the flow's.
+        .sheet(isPresented: Binding(get: { model.linkShareText != nil }, set: { if !$0 { model.linkShareText = nil } })) {
+            SystemShareSheet(items: [model.linkShareText ?? ""])
+        }
         .confirmationDialog(
             "Take your card back?",
             isPresented: Binding(get: { model.asksTakeBack }, set: { model.asksTakeBack = $0 }),

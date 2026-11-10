@@ -75,7 +75,7 @@ extension CardTableModel {
         let first = sendingSetup?.toFirstName ?? ""
         switch sending {
         case .ready: return first.isEmpty ? nil : "For \(first)."
-        case .shut: return "Press and hold to seal it."
+        case .shut: return sealRefusal ?? "Press and hold to seal it."
         case .gone: return goneWords
         case .goingIn, .inside, .closing, .sealing, .addressing: return nil
         }
