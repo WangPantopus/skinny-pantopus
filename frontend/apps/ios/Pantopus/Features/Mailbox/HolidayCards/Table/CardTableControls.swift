@@ -205,6 +205,21 @@ struct CardTableAct: View {
             .disabled(title == nil)
             .accessibilityHidden(title == nil)
             .accessibilityIdentifier("cardTablePrimary")
+            Text(hint.isEmpty ? " " : hint)
+                .font(.system(size: hintSize))
+                .multilineTextAlignment(.center)
+                // White at 70%, so it reads on every cloth (plan 1.8).
+                .foregroundStyle(dynamicTypeSize.isAccessibilitySize ? MailPaper.tableCream : Color.white.opacity(0.7))
+                // At the largest sizes it runs over the mail, so it gets its own glass.
+                .padding(.horizontal, dynamicTypeSize.isAccessibilitySize && !hint.isEmpty ? 12 : 0)
+                .background {
+                    if dynamicTypeSize.isAccessibilitySize, !hint.isEmpty {
+                        CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+                .accessibilityHidden(hint.isEmpty)
+                .accessibilityIdentifier("cardTableHint")
+            // The quiet button sits under the hint, so the hint stays with the main button.
             if secondary != nil || reservesSecondary {
                 Button { secondary?.action() } label: {
                     Text(secondary?.title ?? " ")
@@ -223,20 +238,6 @@ struct CardTableAct: View {
                 .accessibilityIdentifier(secondary?.identifier ?? "cardTableSecondary")
                 .animation(.easeInOut(duration: 0.3), value: secondary == nil)
             }
-            Text(hint.isEmpty ? " " : hint)
-                .font(.system(size: hintSize))
-                .multilineTextAlignment(.center)
-                // White at 70%, so it reads on every cloth (plan 1.8).
-                .foregroundStyle(dynamicTypeSize.isAccessibilitySize ? MailPaper.tableCream : Color.white.opacity(0.7))
-                // At the largest sizes it runs over the mail, so it gets its own glass.
-                .padding(.horizontal, dynamicTypeSize.isAccessibilitySize && !hint.isEmpty ? 12 : 0)
-                .background {
-                    if dynamicTypeSize.isAccessibilitySize, !hint.isEmpty {
-                        CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                }
-                .accessibilityHidden(hint.isEmpty)
-                .accessibilityIdentifier("cardTableHint")
         }
         .frame(maxWidth: .infinity)
     }
