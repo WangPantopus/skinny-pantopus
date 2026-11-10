@@ -39,6 +39,7 @@ const { maskContact } = require('../jobs/mailEscrowExpiry');
 // Christmas cards (launch key holiday_cards): the season's pictures, arrivals and the sealed note.
 const holidayCards = require('../services/holidayCards');
 const cardMedia = require('../services/holidayCardMedia');
+const cardVoice = require('../services/cardVoice');
 const mailStamps = require('../services/mailStamps');
 const { personFindableBy } = require('./mailCompose');
 // A letter sent as a business names the business to everyone it reaches, never the person who sent it.
@@ -2169,11 +2170,14 @@ const cardMediaTooLarge = (res, kind) => (kind === 'voice'
 
 /**
  * POST /api/mailbox/cards/media  multipart: `file` and `kind` (photo | voice)
- * Adds a photo (or, once voice ships, a voice greeting) for a card the sender is writing. A photo is stored as the card
- * keeps it: upright, at most 1600 px on its long side, a JPEG with no metadata (the original is never kept). Answers 201
- * { media, expires_at }: `media` as a send names it (file_id, kind, mime_type, size, width and height, or duration_ms),
- * sendable by its uploader until `expires_at` (72 hours). Refusals: 415 CARD_PHOTO_UNREADABLE / CARD_PHOTO_NOT_STILL, 413
- * CARD_PHOTO_TOO_LARGE, 403 CARD_MEDIA_OFF (voice before it ships), 503 CARD_MEDIA_UNAVAILABLE.
+ * Adds a photo or a voice greeting for a card the sender is writing. A photo is stored as the card keeps it: upright, at
+ * most 1600 px on its long side, a JPEG with no metadata (the original is never kept). A voice greeting is AAC-LC in an
+ * ordinary or fragmented MP4, at most 5 MiB and 60 seconds, stored as it came with its metadata boxes blanked; its
+ * length is read from the file (`duration_ms`, which the apps show). Answers 201 { media, expires_at }: `media` as a
+ * send names it (file_id, kind, mime_type, size, width and height, or duration_ms), sendable by its uploader until
+ * `expires_at` (72 hours). Refusals: 415 CARD_PHOTO_UNREADABLE / CARD_PHOTO_NOT_STILL, 413 CARD_PHOTO_TOO_LARGE, 415
+ * CARD_VOICE_UNREADABLE (WebM, Ogg, MP3, video, damaged), 413 CARD_VOICE_TOO_LONG / CARD_VOICE_TOO_LARGE, 503
+ * CARD_MEDIA_UNAVAILABLE.
  */
 router.post('/cards/media', verifyToken, cardMediaLimiter, (req, res, next) => {
   if (!cardMedia.memoriesOn()) return sendCardsOff(res);
@@ -2191,7 +2195,13 @@ router.post('/cards/media', verifyToken, cardMediaLimiter, (req, res, next) => {
       if (!cardMedia.voiceOn()) {
         return res.status(403).json({ error: 'Voice greetings on cards aren’t open yet.', code: 'CARD_MEDIA_OFF' });
       }
-      return cardMediaInvalid(res);
+      // AAC-LC in MP4, at most 5 MiB and 60 seconds, stored as it came (its metadata boxes blanked; services/cardVoice).
+      if (req.file.buffer.length > cardMedia.VOICE.max_bytes) return cardMediaTooLarge(res, 'voice');
+      const voice = cardVoice.checkVoice(req.file.buffer);
+      const { file } = await cardMedia.storeUpload({ userId, kind, buffer: req.file.buffer, mimeType: 'audio/mp4',
+        facts: { duration_ms: voice.durationMs } });
+      logMailEvent('holiday_card_media_added', null, userId, { kind });
+      return res.status(201).json({ media: cardMedia.mediaRef(file), expires_at: cardMedia.expiresAt(file) });
     }
     const photo = await cardMedia.cardPhoto(req.file.buffer, req.file.mimetype);
     const { file } = await cardMedia.storeUpload({ userId, kind, buffer: photo.buffer, mimeType: 'image/jpeg',
