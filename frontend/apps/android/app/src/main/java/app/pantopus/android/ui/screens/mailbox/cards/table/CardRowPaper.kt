@@ -52,6 +52,8 @@ internal class CardRowArt private constructor(
     val postmark: Bitmap,
     val wax: Bitmap,
     val stamps: Map<MailStamp, Bitmap>,
+    /** The Christmas with Jesus Christ stamp (plan Part 7). */
+    val star: Bitmap,
 ) {
     companion object {
         private var kept = SoftReference<CardRowArt>(null)
@@ -72,6 +74,7 @@ internal class CardRowArt private constructor(
                             MailStamp.Peak to read(R.drawable.card_table_stamp_peak),
                             MailStamp.River to read(R.drawable.card_table_stamp_river),
                         ),
+                    star = read(R.drawable.card_table_stamp_star),
                 )
             synchronized(this) { kept = SoftReference(art) }
             return art
@@ -122,7 +125,7 @@ internal fun CardRowPostage(
     val rowPostmarkInk = PantopusColors.tablePostmarkCream.toArgb()
     Canvas(modifier = modifier.size(width = 130.dp, height = 64.dp).clearAndSetSemantics {}) {
         val canvas = drawContext.canvas.nativeCanvas
-        val stamp = art.stamps[piece.stamp]
+        val stamp = piece.card?.let { cardStamp(art.stamps, art.star, piece.stamp, null, it.design) } ?: art.stamps[piece.stamp]
         val stampWidth = 42.dp.toPx()
         if (stamp != null) {
             val left = size.width - stampWidth

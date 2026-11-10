@@ -232,7 +232,12 @@ internal class CardTableState(
     val turn = TableSpring(88f, 13.5f)
     val lightX = TableSpring(40f, 11f)
     val lightY = TableSpring(40f, 11f)
-    val drop = TableSpring(58f, 11.5f, start = 0f)
+
+    /** The mood the card's picture sets (plan Part 7). */
+    val mood = CardMood.of(card.number, card.design)
+
+    /** Santa's envelope lands with a little more bounce. */
+    val drop = TableSpring(58f, if (mood == CardMood.Santa) 7f else 11.5f, start = 0f)
 
     /** The card enlarged (plan 6.1). */
     val zoom = TableZoom(reduceMotion, onEnlarged = { mark() }, wake = { wake() })
@@ -294,6 +299,9 @@ internal class CardTableState(
 
     /** With no sensor, the light drifts by itself; not with animations off or in Battery Saver. */
     var driftAllowed = false
+
+    /** The moods' snow and candlelight move: not with animations off or in Battery Saver, like the tilt light. */
+    val moodsMove: Boolean get() = driftAllowed && !reduceMotion
 
     /** The sender's moment, sealing their own card by hand (Part 2); null when a card is being received. */
     val sending: SendingMoment? = sendingCalls?.let { SendingMoment(this, it, reduceMotion, scope) }
