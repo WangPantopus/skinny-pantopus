@@ -150,7 +150,10 @@ struct CardTableSendCover: ViewModifier {
         let list = viewModel.recipient?.entries
         if list != nil { await viewModel.sendList() } else { await viewModel.send() }
         guard viewModel.step == .sent else {
-            if viewModel.showsStampBooks || viewModel.step != .look {
+            // Out of stamps: the seal doesn't take and the stamp books open over the table (as web).
+            if viewModel.showsStampBooks { return .refused(nil) }
+            // An arrival that closed: back to its choices, which say why.
+            if viewModel.step != .look {
                 viewModel.sealsAtTable = false
                 return .refused(nil)
             }
@@ -203,6 +206,15 @@ struct CardTableSendPage: View {
             closeLabel: closeLabel,
             onClose: close
         )
+        // The stamp books over the table when the seal didn't take for a stamp (the flow's own stand aside meanwhile).
+        .sheet(isPresented: Binding(
+            get: { viewModel.showsStampBooks && viewModel.sealsAtTable },
+            set: { viewModel.showsStampBooks = $0 }
+        )) {
+            StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         // Its own question: the Sent page under the table asks with the flow's.
         .sheet(isPresented: Binding(get: { model.linkShareText != nil }, set: { if !$0 { model.linkShareText = nil } })) {
             SystemShareSheet(items: [model.linkShareText ?? ""])
