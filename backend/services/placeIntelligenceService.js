@@ -161,6 +161,22 @@ async function similarHomesTeaser(recordRow) {
   }
 }
 
+/**
+ * The Home Money Check's cards for the money page, the confirmed owner's: today the property tax check, the county's
+ * value beside similar houses on the street. From the copy the Home holds; a failure or nothing to say is no card.
+ */
+async function ownerMoneyCards(recordRow) {
+  try {
+    const { data: stored } = await recordRow();
+    const copy = stored ? homeRecords.liveCopy(stored) : null;
+    const found = copy ? await similarHomes.forHome(stored, copy) : null;
+    return found ? [{ ...similarHomes.card(found), source: homeRecords.provenanceOf(copy).label }] : [];
+  } catch (err) {
+    logger.warn('placeIntelligence: money cards failed', { error: err.message });
+    return [];
+  }
+}
+
 // A claim still in progress: not decided, withdrawn or merged into another.
 const isOpenClaim = (claim) => (claimsConfig.flags.v2ReadPaths
   ? claimsPolicy.isClaimActiveRecord(claim) : claimsPolicy.isLegacyStateActive(claim.state));
@@ -1677,6 +1693,8 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   const budgetMs = sectionBudgetMs();
   // Beside the composers, so the locked card's line costs the response no time of its own.
   const teaserRead = viewer.role === 'owner' && setupLocked.includes('your_home') && !claimant ? similarHomesTeaser(recordRow) : Promise.resolve(null);
+  // The money page's cards ride with its sections, and only to the owner whose ownership is confirmed.
+  const moneyCardsRead = viewer.ownership === 'confirmed' && requested.has('exemption_check') ? ownerMoneyCards(recordRow) : Promise.resolve([]);
   const late = [];
   // When the budget fallbacks ran (near budgetMs unless the process itself was
   // held up) and when every section had answered, for the over-budget log.
@@ -1753,6 +1771,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
     place: buildPlaceRef(home, privacy),
     tier,
     viewer,
+    moneyCards: await moneyCardsRead,
     // A private setup verifies by mail too; guests and service providers can't,
     // and a claimant's next step is their claim's own.
     verifyAvailable: !claimant && (tier === 'T3' || viewer.stage === 'setup') && viewer.role !== 'nonresident',

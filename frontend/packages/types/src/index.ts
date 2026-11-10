@@ -253,6 +253,7 @@ export type {
   PlaceGroupBlock,
   PlaceIntelligence,
   PlaceViewer,
+  PlaceMoneyCard,
   BallotCoverage,
   BallotPhase,
   BallotGovernmentLevel,

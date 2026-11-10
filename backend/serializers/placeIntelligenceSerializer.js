@@ -270,6 +270,31 @@ function serializePlaceSection(id, options = {}) {
  *                                                serialize inline.
  * @returns {object} The PlaceIntelligence response.
  */
+const MONEY_CHIP_TONES = ['warning', 'success', 'neutral'];
+const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+
+/** One money card, with only the fields the apps know: nothing else a composer holds can ride out in it. */
+function serializeMoneyCard(card) {
+  const id = text(card && card.id);
+  const title = text(card && card.title);
+  if (!id || !title) throw new Error('A money card needs an id and a title');
+  const chip = card.chip && text(card.chip.text) ? { tone: card.chip.tone, text: text(card.chip.text) } : null;
+  if (chip) assertOneOf(chip.tone, MONEY_CHIP_TONES, 'money card chip tone');
+  const action = card.action && text(card.action.label) && text(card.action.url) ? { label: text(card.action.label), url: text(card.action.url) } : null;
+  // An action opens a secure web page, or a screen of ours named as a notification's link is ("/place?section=money").
+  if (action && !/^(\/|https:\/\/)/.test(action.url)) throw new Error('A money card action opens an https page or an app link');
+  return {
+    id,
+    title,
+    chip,
+    lead: text(card.lead),
+    rows: (card.rows || []).filter((row) => row && text(row.label) && text(row.value)).map((row) => ({ id: String(row.id || row.label), label: text(row.label), value: text(row.value) })),
+    notes: (card.notes || []).map(text).filter(Boolean),
+    source: text(card.source),
+    action,
+  };
+}
+
 function serializePlaceIntelligence(options = {}) {
   const {
     place,
@@ -279,6 +304,7 @@ function serializePlaceIntelligence(options = {}) {
     sections = [],
     verifyAvailable = false,
     viewer = null,
+    moneyCards = [],
     moveInDate,
     timeZone,
   } = options;
@@ -327,6 +353,10 @@ function serializePlaceIntelligence(options = {}) {
     // household member, guest) and the stage what is locked (setup, claimed,
     // verified). Absent on responses that aren't about a Home.
     ...(viewer ? { viewer: { role: viewer.role, stage: viewer.stage, ownership: viewer.ownership } } : {}),
+    // The Home Money Check's cards for the money page, each in words the apps draw as they come: a title, an optional
+    // chip, lead line, rows, notes, source line and one action. The confirmed owner's only; absent when there are none,
+    // and builds that predate them ignore the key.
+    ...(moneyCards.length ? { money_cards: moneyCards.map(serializeMoneyCard) } : {}),
     // The Home's move-in date (the movers card), so the apps don't read the
     // whole Home detail for one field. Absent on responses that aren't about a Home.
     ...(moveInDate !== undefined ? { move_in_date: moveInDate } : {}),
