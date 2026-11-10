@@ -18,6 +18,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1402,14 +1403,27 @@ private fun Modifier.viewerGestures(
                 val startedAt = down.uptimeMillis
                 var travel = Offset.Zero
                 var holding = false
+                // Whether the hold's wait is over: a finger resting on the glass sends nothing, so the hold starts on
+                // the clock, not on the finger's next movement.
+                var decided = false
                 while (true) {
-                    val event = awaitPointerEvent()
+                    val left = HOLD_MS - (SystemClock.uptimeMillis() - startedAt)
+                    val event =
+                        when {
+                            decided -> awaitPointerEvent()
+                            left > 0 -> withTimeoutOrNull(left) { awaitPointerEvent() }
+                            else -> null
+                        }
+                    if (event == null) {
+                        decided = true
+                        if (travel.getDistance() < slop) {
+                            holding = true
+                            onHold(true)
+                        }
+                        continue
+                    }
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     travel = change.position - start
-                    if (!holding && travel.getDistance() < slop && change.uptimeMillis - startedAt > HOLD_MS) {
-                        holding = true
-                        onHold(true)
-                    }
                     if (abs(travel.y) > abs(travel.x) && travel.y > slop) onDrag(travel.y)
                     if (!change.pressed) break
                     change.consume()

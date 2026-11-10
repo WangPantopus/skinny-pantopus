@@ -31,6 +31,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -55,6 +57,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.R
 import app.pantopus.android.ui.screens.moments.components.MomentSelfFace
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevation
@@ -66,7 +69,9 @@ import app.pantopus.android.ui.theme.pantopusShadow
 import com.google.android.gms.maps.GoogleMapOptions
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlin.math.PI
@@ -376,8 +381,8 @@ private fun SectionLabel(text: String) {
 
 /**
  * The mini map with the pin (board P3): a still Google map in lite mode, your face in the new-Moment ring on the spot.
- * With "Show the area instead" the map pulls back and a soft circle covers where the pin may land for others (within
- * about half a mile), with no pin on your spot.
+ * With "Show the area instead" there is no pin on your spot: the area others may see the pin in (within about half a
+ * mile) is tinted, which at this map's street-level zoom is all of it.
  */
 @Composable
 private fun PinMap(
@@ -387,9 +392,13 @@ private fun PinMap(
     avatarUrl: String?,
 ) {
     val target = LatLng(latitude, longitude)
-    val zoom = if (area) AREA_ZOOM else MINI_ZOOM
+    val zoom = MINI_ZOOM
     val camera = rememberCameraPositionState(key = "$latitude,$longitude,$area") { position = CameraPosition.fromLatLngZoom(target, zoom) }
     val options = remember { GoogleMapOptions().liteMode(true) }
+    val context = LocalContext.current
+    // The same quiet map as the Moments tab's.
+    val properties =
+        remember(context) { MapProperties(mapStyleOptions = MapStyleOptions.loadRawResourceStyle(context, R.raw.nearby_map_style)) }
     Box(
         modifier =
             Modifier
@@ -403,18 +412,21 @@ private fun PinMap(
                     contentDescription = if (area) "Map with the area around your Moment" else "Map with your Moment's pin"
                 },
     ) {
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = camera,
-            googleMapOptionsFactory = { options },
-            uiSettings =
-                MapUiSettings(
-                    zoomControlsEnabled = false,
-                    mapToolbarEnabled = false,
-                    scrollGesturesEnabled = false,
-                    zoomGesturesEnabled = false,
-                ),
-        )
+        key(area) {
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = camera,
+                googleMapOptionsFactory = { options },
+                properties = properties,
+                uiSettings =
+                    MapUiSettings(
+                        zoomControlsEnabled = false,
+                        mapToolbarEnabled = false,
+                        scrollGesturesEnabled = false,
+                        zoomGesturesEnabled = false,
+                    ),
+            )
+        }
         if (area) {
             // Drawn over the map rather than on it, so it shows whatever the tiles do.
             val metersPerDp = EQUATOR_METERS_PER_DP * cos(latitude * PI / 180.0) / 2.0.pow(zoom.toDouble())
@@ -458,9 +470,6 @@ private fun PinMap(
 private val SheetShadow = PantopusElevation(Color.Black, 0.30f, 24.dp, 0.dp, (-6).dp)
 private val SegmentShadow = PantopusElevation(Color.Black, 0.12f, 3.dp, 0.dp, 1.dp)
 private const val MINI_ZOOM = 15.5f
-
-/** Pulled back far enough for the whole area to show. */
-private const val AREA_ZOOM = 12.5f
 
 /** "Within about half a mile": how far from the real spot the server may place an area pin (0.55 mile). */
 private const val AREA_RADIUS_M = 885.0
