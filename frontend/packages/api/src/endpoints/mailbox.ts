@@ -847,7 +847,9 @@ export interface SentPiece {
     height?: number | null;
     /** Its public page, and the colour of the cloth it lies on (launch key card_table). */
     slug?: string | null;
-    table?: string | null };
+    table?: string | null;
+    /** The whole verse on a Christmas with Jesus Christ picture ("Read the verse"); not while it's sealed. */
+    verse?: string | null };
 }
 
 /** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */
