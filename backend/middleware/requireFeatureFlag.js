@@ -21,20 +21,22 @@
 const { isFeatureEnabled } = require('../services/featureFlagService');
 const logger = require('../utils/logger');
 
-function notFound(res) {
-  return res.status(404).json({ error: 'Not found' });
+// `body` is the 404's body: by default a plain "Not found"; a feature whose apps tell this apart passes its own code
+// (Moments: MOMENTS_UNAVAILABLE).
+function notFound(res, body = { error: 'Not found' }) {
+  return res.status(404).json(body);
 }
 
-function requireFeatureFlag(flagName) {
+function requireFeatureFlag(flagName, body) {
   if (!flagName || typeof flagName !== 'string') {
     throw new Error('requireFeatureFlag: flagName is required.');
   }
   return async function flagGuard(req, res, next) {
     try {
       const user = req.user || null;
-      if (!user || !user.id) return notFound(res);
+      if (!user || !user.id) return notFound(res, body);
       const enabled = await isFeatureEnabled(flagName, user);
-      if (!enabled) return notFound(res);
+      if (!enabled) return notFound(res, body);
       return next();
     } catch (err) {
       logger.error('requireFeatureFlag.error', {

@@ -1152,7 +1152,7 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, postMediaUpload.a
 
     const { data: postRecord, error: postErr } = await supabaseAdmin
       .from('Post')
-      .select('id, user_id, media_urls, media_types, media_thumbnails, media_live_urls')
+      .select('id, user_id, media_urls, media_types, media_thumbnails, media_live_urls, is_story')
       .eq('id', postId)
       .single();
 
@@ -1162,6 +1162,10 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, postMediaUpload.a
     }
     if (String(postRecord.user_id) !== String(userId)) {
       return res.status(403).json({ error: 'Only the post creator can upload media' });
+    }
+    // A Moment's files go to private storage through POST /api/moments/:id/media; nothing public is attached to one.
+    if (postRecord.is_story === true) {
+      return res.status(403).json({ error: 'You do not have access to this post' });
     }
 
     // Match the accepted comment upload contract: multipart filenames can
