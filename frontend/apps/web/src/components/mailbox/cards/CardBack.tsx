@@ -11,6 +11,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { INK, paperStyle, SERIF } from './cardArt';
 import { cardPen } from './cardFont';
 import { PaperBack } from './CardPaper';
+import type { CardSignature } from '@pantopus/api';
 
 export const BACK_TEXT: CSSProperties = launchFeatures.cardTable ? {
   fontFamily: `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`,
@@ -39,6 +40,7 @@ export default function CardBack({
   fromName,
   year,
   message,
+  signature,
   children,
   className = '',
 }: {
@@ -49,11 +51,13 @@ export default function CardBack({
   year: number;
   /** The note; or pass `children` (the writing box while it's being written). */
   message?: string;
+  /** Signed beside FROM (design plan 8.2, card table only). */
+  signature?: CardSignature | null;
   children?: ReactNode;
   className?: string;
 }) {
   if (launchFeatures.cardTable) {
-    return <PaperBack number={number} paper={paper} fromName={fromName} year={year} note={message} writing={children} className={className} />;
+    return <PaperBack number={number} paper={paper} fromName={fromName} year={year} note={message} writing={children} signature={signature} className={className} />;
   }
   return (
     <div className={`relative h-full w-full overflow-hidden ${className}`} style={{ ...paperStyle(paper), containerType: 'inline-size' }}>

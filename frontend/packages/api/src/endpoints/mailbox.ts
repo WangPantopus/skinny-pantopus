@@ -670,8 +670,20 @@ export interface SentHolidayCard {
   sent_at: string | null;
 }
 
+/**
+ * The sender's signature beside FROM (design plan 8.2, launch key card_table): pen strokes in a w × h box (400 × 100),
+ * x to the right, y down, whole numbers, each stroke [x, y, x, y, ...]. At most `max_bytes` as compact JSON.
+ */
+export interface CardSignature {
+  w: number;
+  h: number;
+  strokes: number[][];
+}
+
 export interface HolidayCards {
   postage_enabled?: boolean;
+  /** The server keeps a signature beside FROM: its box and most bytes. Absent: set the typed name. */
+  signature?: { w: number; h: number; max_bytes: number };
   /** Digital stamps left (postage on; null when they couldn't be read). */
   stamps?: { available: number; free_remaining: number; paid_remaining: number } | null;
   /** Sending is open (until December 31 ends where you are). */
@@ -726,6 +738,8 @@ export async function sendHolidayCard(data: {
    * changed after it went.
    */
   request_id?: string;
+  /** Signed beside FROM (only when `HolidayCards.signature` is there); CARD_SIGNATURE_INVALID / _TOO_LONG refuse it. */
+  signature?: CardSignature | null;
 }): Promise<{ card: SentHolidayCard; link?: string }> {
   return post<{ card: SentHolidayCard; link?: string }>('/api/mailbox/cards', data);
 }
@@ -775,6 +789,8 @@ export interface HolidayCardList {
   arrival: HolidayCardArrival;
   use_stamp: true;
   recipients: { to: { user_id: string } | { email: string }; request_id: string }[];
+  /** One signature for the whole list, as one note. */
+  signature?: CardSignature | null;
 }
 
 /** One card on a list's look: ready to go, sent by an earlier try of the list, or refused (and why). */
@@ -849,7 +865,9 @@ export interface SentPiece {
     slug?: string | null;
     table?: string | null;
     /** The whole verse on a Christmas with Jesus Christ picture ("Read the verse"); not while it's sealed. */
-    verse?: string | null };
+    verse?: string | null;
+    /** Their own signature beside FROM (GET /sent/:id only; also while it's sealed for the other person). */
+    signature?: CardSignature | null };
 }
 
 /** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */

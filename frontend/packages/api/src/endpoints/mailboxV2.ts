@@ -137,6 +137,8 @@ export interface MailCard {
   sealed: boolean;
   /** The whole verse printed on a Christmas with Jesus Christ picture ("Read the verse"); not while it's sealed. */
   verse?: string | null;
+  /** The sender's signature beside FROM (8.2) on an opened piece and Look it over; null: their typed first name. */
+  signature?: { w: number; h: number; strokes: number[][] } | null;
   /** Its public page, /cards/<slug>, and the colour of the cloth it lies on (launch key card_table). */
   slug?: string | null;
   table?: string | null;

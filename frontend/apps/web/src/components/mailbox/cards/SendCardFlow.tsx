@@ -15,7 +15,7 @@ import { PostageLine, StampChip, StampSheet, useStamps, type Stamps } from './St
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
+import type { CardSignature, HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
 import { ChevronLeft, Check, Link2, Loader2, Mail, Search, Send, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
@@ -27,6 +27,7 @@ import MailPiece from '../MailPiece';
 import { mailLoadMessage } from '../mailLoadMessage';
 import CardFront from './CardFront';
 import CardBack, { BACK_TEXT, RULED } from './CardBack';
+import { SignaturePad } from './cardSignature';
 import CardFlip from './CardFlip';
 import CardLinkActions from './CardLinkActions';
 import LookItOver from './LookItOver';
@@ -620,6 +621,9 @@ function WriteStep({
   limit,
   message,
   onMessage,
+  signature,
+  onSignature,
+  canSign,
   onNext,
 }: {
   design: HolidayCardDesign;
@@ -629,9 +633,15 @@ function WriteStep({
   limit: number;
   message: string;
   onMessage: (text: string) => void;
+  /** Signed beside FROM (design plan 8.2), or null for the typed first name. */
+  signature: CardSignature | null;
+  onSignature: (signature: CardSignature | null) => void;
+  /** The server keeps signatures (GET /cards `signature`, launch key card_table). */
+  canSign: boolean;
   onNext: () => void;
 }) {
   const [showBack, setShowBack] = useState(true);
+  const [signing, setSigning] = useState(false);
   const count = letters(message);
   return (
     <div className="mt-3 px-4">
@@ -640,7 +650,7 @@ function WriteStep({
         showBack={showBack}
         front={<CardFront design={design.id} caption={design.caption} paper={design.paper} year={year} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]" />}
         back={(
-          <CardBack number={design.number} paper={design.paper} fromName={fromName} year={year} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]">
+          <CardBack number={design.number} paper={design.paper} fromName={fromName} year={year} signature={signature} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]">
             <label htmlFor="card-note" className="sr-only">Your note on the back of the card</label>
             <textarea
               id="card-note"
@@ -665,6 +675,28 @@ function WriteStep({
         </button>
         <span aria-live="polite" className={`text-[13px] ${count >= limit ? 'font-semibold text-[#8b1d1d]' : muted}`}>{count} of {limit} letters</span>
       </div>
+      {canSign ? (
+        <div className="mx-auto mt-2 flex max-w-[420px] items-center gap-2">
+          <button
+            type="button"
+            data-testid="sendCardSign"
+            onClick={() => { setShowBack(true); setSigning(true); }}
+            className="inline-flex min-h-[40px] items-center rounded-full border border-[#d6cbb6] bg-[#fffdf8] px-3.5 text-[14px] font-semibold text-[#374151] hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+          >
+            {signature ? 'Sign again' : 'Sign your name'}
+          </button>
+          <span className={`text-[13px] ${muted}`}>{signature ? 'Signed beside FROM.' : `Or leave ${firstName(fromName)} typed.`}</span>
+        </div>
+      ) : null}
+      {signing ? (
+        <SignaturePad
+          initial={signature}
+          wax={WAX}
+          onDone={(signed) => { onSignature(signed); setSigning(false); }}
+          onTyped={() => { onSignature(null); setSigning(false); }}
+          onClose={() => setSigning(false)}
+        />
+      ) : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
         <button type="button" disabled={!message.trim()} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Seal it</button>
         {!message.trim() ? <p className={`mt-2 text-center text-[13px] ${muted}`}>Write a few words on the back first.</p> : null}
@@ -1174,6 +1206,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
   const theirs = useCardArrivals(to?.kind === 'person' ? to.userId : null);
   const [designId, setDesignId] = useState<string | null>(launchFeatures.cardTable ? chosenDesign : null);
   const [message, setMessage] = useState('');
+  // Signed beside FROM (design plan 8.2); null: the first name typed in the pen, as before.
+  const [signature, setSignature] = useState<CardSignature | null>(null);
   const [arrival, setArrival] = useState<HolidayCardArrival | null>(null);
   const [sent, setSent] = useState<SentHolidayCard | null>(null);
   // A card by link, just sent: its link, to copy and share.
@@ -1283,6 +1317,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
         to: entry.kind === 'person' ? { user_id: entry.userId } : { email: entry.email.trim() },
         request_id: listId(entry),
       })),
+      ...(signature ? { signature } : {}),
     };
   };
 
@@ -1296,6 +1331,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
       to: to.kind === 'person' ? { user_id: to.userId } : to.kind === 'email' ? { email: to.email } : { link: true as const },
       request_id: requestId.current,
       ...(data?.postage_enabled ? { use_stamp: true } : {}),
+      ...(signature ? { signature } : {}),
     };
   };
 
@@ -1307,7 +1343,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     listIds.current = new Map();
     setSent(null);
     setSentLink(null);
-    setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null); setLookUnavailable(false);
+    setTo(null); setDesignId(null); setMessage(''); setSignature(null); setArrival(null); setLook(null); setLookUnavailable(false);
     setListed([]); setListLook(null); setListSent(null); setListError(null); setListTakenBack(new Set()); setListTakeBackError(null);
     setStep('to');
   };
@@ -1433,6 +1469,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     const piece = to.kind === 'list' ? listLook?.piece : look?.piece;
     const card: TableCard | null = piece?.card ?? (design ? {
       design: design.id, number: design.number, caption: design.caption, paper: design.paper, table: design.table ?? null, year: data.year, sealed: false,
+      signature,
     } : null);
     if (!card) return;
     setLinkSaid(null);
@@ -1656,6 +1693,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           limit={data.message_limit}
           message={message}
           onMessage={setMessage}
+          signature={signature}
+          onSignature={setSignature}
+          canSign={launchFeatures.cardTable && Boolean(data.signature)}
           onNext={() => { setStep('seal'); setLookUnavailable(false); if (to?.kind === 'person') void theirs.refetch(); }}
         />
       ) : null}
@@ -1780,7 +1820,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           }}
           overlay={sealShare && sent ? (
             <CardShareSheet
-              details={{ card: { ...sealing.card, sealed: sent.arrival === 'sealed_christmas' }, note: sealing.note, fromName: sealing.fromName, mailedOn: sent.sent_at }}
+              details={{ card: { ...sealing.card, sealed: sent.arrival === 'sealed_christmas' }, note: sealing.note, fromName: sealing.fromName, mailedOn: sent.sent_at, signature: sealing.card.signature ?? null }}
               slug={data.designs.find((d) => d.id === sealing.card.design)?.slug}
               mine
               onClose={() => setSealShare(false)}

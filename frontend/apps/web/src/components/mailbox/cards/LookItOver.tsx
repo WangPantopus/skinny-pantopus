@@ -53,7 +53,7 @@ function Back({ piece }: { piece: MailItemV2 }) {
     <CardFlip
       showBack
       front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />}
-      back={<CardBack number={card.number} paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} className={shadow} />}
+      back={<CardBack number={card.number} paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} signature={card.signature ?? null} className={shadow} />}
     />
   );
 }

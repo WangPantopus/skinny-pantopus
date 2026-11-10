@@ -13,6 +13,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { createPortal } from 'react-dom';
 import { cardMood, cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, seededRandom, TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { cardPen } from './cardFont';
+import { playCardSound, preloadCardSounds } from './cardSounds';
+import type { CardSignature } from '@pantopus/api';
 import { PaperBack, PaperFront } from './CardPaper';
 import { CardTableEngine, type TableState } from './cardTableEngine';
 import { useDarkPage } from './useDarkPage';
@@ -51,6 +53,8 @@ export type TableCard = {
   sealed_until?: string | null;
   /** The whole verse printed on a Christmas with Jesus Christ picture: "Read the verse" (design plan 6.2). */
   verse?: string | null;
+  /** Signed beside FROM (design plan 8.2); like the note, not while it's sealed. */
+  signature?: CardSignature | null;
 };
 
 export type TableMenuItem = { label: string; onSelect: () => void };
@@ -191,6 +195,8 @@ export default function CardTable({
         onRefused: () => say(daysWords(card.sealed_until).notYet),
         onTableTap: () => setControlsHidden((hidden) => !hidden),
         onPress: () => setMenuOpen(false),
+        // Quiet paper sounds (design plan 8.3), when they're on in Mail Day settings.
+        onSound: playCardSound,
         // The card goes the moment the seal is on; one press sends one card (the engine takes no second press).
         onSeal: () => {
           const moment = momentRef.current;
@@ -204,6 +210,7 @@ export default function CardTable({
       },
     });
     engineRef.current = engine;
+    preloadCardSounds();
     if (process.env.NODE_ENV !== 'production') (window as unknown as { __cardTable?: CardTableEngine }).__cardTable = engine;
     const onImageError = (event: Event) => { if ((event.target as HTMLElement).tagName === 'IMG') retryImage(event.target as HTMLImageElement); };
     stage.addEventListener('error', onImageError, true);
@@ -432,6 +439,7 @@ export default function CardTable({
                 fromName={fromName}
                 year={card.year}
                 note={sealed ? '' : note}
+                signature={sealed ? null : card.signature}
                 className={`${styles.side} ${styles.sideBack}`}
                 style={{ position: 'absolute', inset: 0, aspectRatio: 'auto' }}
               >

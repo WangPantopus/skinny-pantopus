@@ -14,6 +14,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { useMailboxContext } from '@/contexts/MailboxContext';
 import ErrorState from '@/components/ui/ErrorState';
 import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
+import { cardSoundsOn, setCardSoundsOn } from '@/components/mailbox/cards/cardSounds';
 
 // ── Season helper ────────────────────────────────────────────
 
@@ -113,6 +114,9 @@ export default function MailDayPage() {
 
   // Local draft settings for the form
   const [draft, setDraft] = useState<Partial<MailDaySettings>>({});
+  // The Christmas card table's quiet sounds (design plan 8.3): on this device only, on until turned off.
+  const [cardSounds, setCardSounds] = useState(true);
+  useEffect(() => { setCardSounds(cardSoundsOn()); }, []);
 
   useEffect(() => {
     if (settings) {
@@ -365,6 +369,23 @@ export default function MailDayPage() {
                   ready, between 9 AM and 8 PM, and respect your quiet hours.
                 </p>
               </div>
+
+              {/* Christmas cards: the table's quiet paper sounds, on this device only */}
+              {launchFeatures.cardTable ? (
+                <div>
+                  <p className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider mb-1">
+                    Christmas cards
+                  </p>
+                  <div className="border border-app-border rounded-lg px-3 py-2.5" data-testid="cardSoundsSetting">
+                    <ToggleRow
+                      label="Card sounds"
+                      description="Quiet paper sounds as a card slides, its seal breaks and it's set down. On this device only; it changes right away."
+                      checked={cardSounds}
+                      onChange={(on) => { setCardSoundsOn(on); setCardSounds(on); }}
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               {/* Browser notifications */}
               <div>
