@@ -400,7 +400,8 @@ private extension HolidayCardLookStep {
             sealed: false,
             sealedUntil: nil,
             sealedInDays: "",
-            sealedDayCount: 0
+            sealedDayCount: 0,
+            verse: design.verse
         )
     }
 }

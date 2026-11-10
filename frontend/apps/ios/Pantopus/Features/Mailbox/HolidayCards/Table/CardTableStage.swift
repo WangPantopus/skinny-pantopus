@@ -27,6 +27,10 @@ struct CardTableStage: View {
             if ready {
                 envelopeBack(pose)
                 cardLayer(pose)
+                    .frame(width: layout.screen.width, height: layout.screen.height, alignment: .topLeading)
+                    // Enlarged (plan 6.1), from the card's middle; the light over it keeps moving.
+                    .scaleEffect(model.zoom, anchor: zoomAnchor(pose))
+                    .offset(model.zoomOffset)
                     .zIndex(pose.cardIsOut && pose.showsCard ? 20 : (pose.showsCard ? 5 : -1))
                 envelopeFront(pose)
                     .zIndex(10)
@@ -46,6 +50,15 @@ struct CardTableStage: View {
         .frame(width: layout.screen.width, height: layout.screen.height, alignment: .topLeading)
         .clipped()
         .allowsHitTesting(false)
+    }
+
+    /// The card's middle, as a point of the screen.
+    private func zoomAnchor(_ pose: CardTablePose) -> UnitPoint {
+        guard layout.screen.width > 0, layout.screen.height > 0 else { return .center }
+        return UnitPoint(
+            x: (pose.cardX + layout.cardWidth / 2) / layout.screen.width,
+            y: (pose.cardY + layout.cardHeight / 2) / layout.screen.height
+        )
     }
 
     // MARK: The table and its light

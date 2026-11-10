@@ -58,6 +58,14 @@ struct CardTableScreen: View {
                         .accessibilityElement()
                         .accessibilityLabel(model.spokenLabel)
                         .accessibilityIdentifier("cardTableMail")
+                        // Enlarging without a pinch or a double-tap (plan 6.1).
+                        .accessibilityActions {
+                            if model.canZoom || model.isZoomed {
+                                Button(model.isZoomed ? "Make it smaller" : "Enlarge the card") {
+                                    model.toggleZoom(at: nil, layout: layout)
+                                }
+                            }
+                        }
                 }
                 CardTableControls(
                     model: model,
@@ -123,9 +131,20 @@ struct CardTableScreen: View {
                     .onEnded { value in
                         let pages = model.fold.pages(screen: layout.screen, bottomRoom: model.pagesBottomRoom(layout))
                         let pose = CardTablePose(springs: model.springs, layout: layout, pages: pages)
-                        let card = CGRect(x: pose.cardX, y: pose.cardY, width: layout.cardWidth, height: layout.cardHeight)
+                        let card = model.zoomedCardFrame(CGRect(
+                            x: pose.cardX,
+                            y: pose.cardY,
+                            width: layout.cardWidth,
+                            height: layout.cardHeight
+                        ))
                         model.fingerLifted(at: value.location, layout: layout, isOnCard: card.contains(value.location))
                     }
+            )
+            // Two fingers enlarge the card (plan 6.1).
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { value in model.pinchChanged(value.magnification, layout: layout) }
+                    .onEnded { _ in model.pinchEnded() }
             )
     }
 

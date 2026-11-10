@@ -57,8 +57,13 @@ extension CardTableModel {
         case .pulling:
             ""
         case .out:
-            restingHint
+            readsVerse ? "Read the verse" : restingHint
         }
+    }
+
+    /// A Christmas with Jesus Christ card out of its envelope: the hint is the link "Read the verse" (plan 6.2).
+    var readsVerse: Bool {
+        step == .out && sending == nil && !content.sealed && !(content.verse ?? "").isEmpty
     }
 
     /// The quiet button under the main one: "Send {first name} a card", once the reader has turned the card over (on

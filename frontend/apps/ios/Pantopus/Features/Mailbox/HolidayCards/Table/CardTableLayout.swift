@@ -68,7 +68,8 @@ struct CardTableLayout: Equatable {
         // when there's room; at the largest text sizes the words get their own glass instead.)
         let laidReach: CGFloat = 1.012 * (512 + 1392) / 1200
         let shutRoom = height - safeTop - bottom - 88
-        var cardWidth = min(width - side * 2, width < 560 ? 470 : 560)
+        // Tablets and wide windows: up to 640 where the height allows (plan 6.3).
+        var cardWidth = min(width - side * 2, width < 560 ? 470 : (width < 720 ? 560 : 640))
         cardWidth = max(0, min(cardWidth, room / laidReach, shutRoom / (1.012 * 1392 / 1200)))
         var peek = room - cardWidth * 1.2
         let minPeek = cardWidth * 0.13
