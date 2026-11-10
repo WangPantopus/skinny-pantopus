@@ -1,7 +1,8 @@
 // A reply to a Moment is a direct chat message to its author (CONTRACT "Chat"). The stored message names the Moment in
 // metadata.moment = { id, kind, expires_at }; every chat serializer adds the quote the apps draw above the text,
-// `moment: { id, kind, thumb_url|null, ended }`, and both conversation lists add `last_message_moment` (with `from_me`).
-// The picture is a fresh 15-minute link each time, never stored; once the Moment ends the quote says so and has none.
+// `moment: { id, kind, thumb_url|null, ended, background|null, excerpt|null }`, and both conversation lists add
+// `last_message_moment` (with `from_me`). The picture is a fresh 15-minute link each time, never stored; a text card's
+// quote carries its color and the start of its words instead. Once the Moment ends the quote says so and has neither.
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
@@ -20,7 +21,17 @@ function quotedMomentId(metadata) {
 function storedQuote(id, stored) {
   const ends = Date.parse(stored?.expires_at);
   return { id, kind: KINDS.includes(stored?.kind) ? stored.kind : null, thumb_url: null,
-    ended: !Number.isFinite(ends) || ends <= Date.now() };
+    ended: !Number.isFinite(ends) || ends <= Date.now(), background: null, excerpt: null };
+}
+
+// The start of a text card's words for its quote: one line, EXCERPT_CHARS at most, cut at a word where it can be.
+const EXCERPT_CHARS = 80;
+function excerptOf(text) {
+  const line = String(text || '').replace(/\s+/g, ' ').trim();
+  if (line.length <= EXCERPT_CHARS) return line || null;
+  const cut = line.slice(0, EXCERPT_CHARS);
+  const atWord = cut.lastIndexOf(' ');
+  return `${(atWord > EXCERPT_CHARS / 2 ? cut.slice(0, atWord) : cut).trimEnd()}…`;
 }
 
 /**
@@ -41,7 +52,7 @@ async function momentQuotes(messages, readerId = null) {
     const ids = [...named.keys()];
     const pages = await Promise.all(Array.from({ length: Math.ceil(ids.length / 100) }, async (_, page) => {
       const { data, error } = await supabaseAdmin.from('Post')
-        .select('id, user_id, story_expires_at, archived_at, moderation_state, post_metadata')
+        .select('id, user_id, content, story_expires_at, archived_at, moderation_state, post_metadata')
         .in('id', ids.slice(page * 100, page * 100 + 100)).eq('is_story', true);
       if (error) throw error;
       return data || [];
@@ -51,9 +62,10 @@ async function momentQuotes(messages, readerId = null) {
     const others = readerId && [...rows.values()].some((row) => String(row.user_id) !== String(readerId));
     const blocked = new Set(others ? [...await require('../blockService').blockedUserIds(readerId)].map(String) : []);
     const acrossBlock = (row) => blocked.has(String(row.user_id));
-    // A picture only while the Moment is live: not once it ended, nor while it's held for review, nor across a block.
-    const thumbKey = (row) => (row && !hasEnded(row) && row.moderation_state === 'live' && !acrossBlock(row)
-      ? meta(row).media?.thumb_key || null : null);
+    // A picture, or a text card's color and words, only while the Moment is live: not once it ended, nor while it's
+    // held for review, nor across a block.
+    const shown = (row) => Boolean(row) && !hasEnded(row) && row.moderation_state === 'live' && !acrossBlock(row);
+    const thumbKey = (row) => (shown(row) ? meta(row).media?.thumb_key || null : null);
     const links = await media.signedLinks(undefined, [...rows.values()].map(thumbKey).filter(Boolean));
     for (const [id, stored] of named) {
       const row = rows.get(id);
@@ -62,11 +74,14 @@ async function momentQuotes(messages, readerId = null) {
         continue;
       }
       const key = thumbKey(row);
+      const card = meta(row).kind === 'text' && shown(row);
       quotes.set(id, {
         id,
         kind: KINDS.includes(meta(row).kind) ? meta(row).kind : storedQuote(id, stored).kind,
         thumb_url: key ? links.get(key) || null : null,
         ended: hasEnded(row) || acrossBlock(row),
+        background: card ? meta(row).background || 'teal' : null,
+        excerpt: card ? excerptOf(row.content) : null,
       });
     }
   } catch (error) {
