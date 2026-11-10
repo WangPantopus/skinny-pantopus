@@ -209,6 +209,10 @@ taken. Others see only what the author chose on the Post sheet, which shows the 
 - **Kept out of the generic surfaces:** `distribution_targets` is empty, `visibility` is `private`, they're off
   profiles, and `feedService.onlyShownPosts` and `readAccess.canReadPost` refuse `is_story` rows, so no feed, posts
   map layer, profile list or post route shows one, its author's included.
+- **The pin and label can't be changed afterwards:** the generic post routes that act on an author's own row
+  (`PATCH`, `DELETE`, archive and restore under `/api/posts/:id`, and `POST /api/upload/post-media/:postId`) refuse
+  an `is_story` row, so a Moment's point, place label and text stay what the Moments routes stored, and it ends
+  only through `DELETE /api/moments/:id` (which also deletes its private files, or keeps them for a review).
 
 ### Saved / Viewing Places
 
