@@ -912,6 +912,7 @@ Tells a verified homeowner whether their home costs more than it should, from re
 - [x] Similar homes (server): a confirmed owner's value card shows the county's value per square foot beside up to ten similar houses on the street; an owner who hasn't verified yet gets one true line on the locked Your home card. [#3837](https://github.com/WangPantopus/skinny-pantopus/pull/3837), merged November 10 and released; checked on web, iPhone and Android.
 - [x] The Property tax check card on the money page, web, iPhone and Android, sent by the server as `money_cards` so a later check needs no app release. [#3839](https://github.com/WangPantopus/skinny-pantopus/pull/3839), merged November 10; checked on web, iPhone and Android. The phones show it from the first store build cut after that; until then they show the same figures in the value card on Your home.
 - [x] A yearly notice when the county values a home above similar homes, and how the state reviews a value (Washington, Texas, Florida). [#3840](https://github.com/WangPantopus/skinny-pantopus/pull/3840). The weekly job is registered beside the rate watch; whether the production worker runs these weekly jobs wasn't visible from here.
+- [x] The home insurance check (step 5). Send a photo of the policy's renewal page to Pantopus AI on a phone: the reminder it drafts now also keeps the premium for the term, the term before when the page prints it, the day the term starts and the insurer's name, and never the policy number. The money page then shows a Home insurance card with the two terms side by side (web, iPhone and Android, with no app release), and a policy's first reminder comes 45 days before it ends. This card needs no county: it shows for any confirmed owner who saved a policy. An owner with no policy on file sees a short starting card only where a county is switched on. [#3843](https://github.com/WangPantopus/skinny-pantopus/pull/3843); checked on web, iPhone and Android with made-up policy pages.
 
 **Measured on live releases:** Clark County, WA: 156,087 houses, 64% get a comparison, 19% of those above similar homes. Dallas County, TX: 561,002 houses, 85%, 23% above. Alachua County, FL: 71,134 houses, 62%, 18% above.
 
@@ -922,12 +923,11 @@ Tells a verified homeowner whether their home costs more than it should, from re
 - [ ] Decide the appeal packet's price, and whether it may list the similar homes by parcel number. Today nothing names a neighbor's home.
 - [ ] Turn on real Stripe payments in production before anything is sold; it is in test mode.
 - [ ] Have a lawyer read the card's and the packet's wording.
-- [ ] Choose an insurance quote partner, when the insurance check is built.
+- [ ] Choose an insurance quote partner. The insurance check is built and names no insurer and no partner; a "get quotes" link waits for this.
 
 **Not built yet.**
 
 - [ ] The appeal packet (step 4): waits on the price, payments and parcel decisions above.
-- [ ] The insurance check (step 5). The assistant already reads a policy page into a reminder with its end date and deliberately keeps no number from it; the premium needs its own typed field.
 - [ ] A Today card. The apps accept only the Today kinds they know, so a new kind needs an app change.
 
 ## Background backlog
