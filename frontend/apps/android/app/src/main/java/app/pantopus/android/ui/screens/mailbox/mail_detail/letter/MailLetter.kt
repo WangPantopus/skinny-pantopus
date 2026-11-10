@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.mailbox.mail_detail.letter
 
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailEnclosure
@@ -65,6 +66,8 @@ data class MailLetterCard(
     val daysUntilOpen: Int? = null,
     /** The whole verse printed on a Christmas with Jesus Christ picture: "Read the verse" on the table. */
     val verse: String? = null,
+    /** Signed beside FROM (plan 8.2): the server keeps it until Christmas morning while it's sealed, like the note. */
+    val signature: CardSignature? = null,
 )
 
 /**
@@ -186,6 +189,7 @@ data class MailLetter(
                 table = card.table,
                 daysUntilOpen = HolidayCardTimes.daysUntil(card.sealedUntil, zone, now).takeIf { card.sealed },
                 verse = card.verse?.takeIf { !card.sealed && it.isNotBlank() },
+                signature = card.signature?.takeIf { !card.sealed && it.drawable },
             )
         }
 

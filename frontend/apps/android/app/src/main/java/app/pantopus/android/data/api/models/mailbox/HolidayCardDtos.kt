@@ -37,7 +37,39 @@ data class HolidayCardsResponse(
     val today: SentHolidayCard? = null,
     /** How many one card can go to at once: 20 with digital stamps on (a list, `POST /api/mailbox/cards/batch`), else 1. */
     @Json(name = "max_recipients") val maxRecipients: Int = 1,
+    /** The box a signature beside FROM is drawn in (plan 8.2, launch key `card_table`); absent: no signing, the typed name. */
+    val signature: CardSignatureBox? = null,
 )
+
+/** Where `GET /api/mailbox/cards` keeps signatures: a [w] × [h] box, at most [maxBytes] as compact JSON. */
+@JsonClass(generateAdapter = true)
+data class CardSignatureBox(
+    val w: Int = CardSignature.WIDTH,
+    val h: Int = CardSignature.HEIGHT,
+    @Json(name = "max_bytes") val maxBytes: Int = CardSignature.MAX_BYTES,
+)
+
+/**
+ * The sender's own signature beside FROM (plan 8.2): pen strokes in a 400 × 100 box, whole numbers, each stroke a flat
+ * list of x, y points (a dot is one point). The sender's own data, kept with the note: never in a share picture's file
+ * name, a log or analytics.
+ */
+@JsonClass(generateAdapter = true)
+data class CardSignature(
+    val w: Int = WIDTH,
+    val h: Int = HEIGHT,
+    val strokes: List<List<Int>> = emptyList(),
+) {
+    /** One this app can draw: the box every app uses, with ink in it. */
+    val drawable: Boolean get() = w == WIDTH && h == HEIGHT && strokes.any { it.size >= 2 }
+
+    companion object {
+        const val WIDTH = 400
+        const val HEIGHT = 100
+        const val MAX_BYTES = 2048
+        const val MAX_STROKES = 40
+    }
+}
 
 /** The digital stamps left, with `GET /api/mailbox/cards` while postage is on (the Mailbox row's line). */
 @JsonClass(generateAdapter = true)
@@ -136,6 +168,8 @@ data class SendHolidayCardBody(
      */
     @Json(name = "request_id") val requestId: String? = null,
     @Json(name = "use_stamp") val useStamp: Boolean? = null,
+    /** Signed beside FROM (plan 8.2); null: the first name typed in the pen. The same on every look and retry. */
+    val signature: CardSignature? = null,
 )
 
 /** `POST /api/mailbox/cards/shared` (launch key `card_table`): what was shared, for the counts; never the note or a name. */
@@ -170,6 +204,8 @@ data class SendHolidayCardListBody(
     val arrival: String,
     val recipients: List<HolidayCardListRecipient>,
     @Json(name = "use_stamp") val useStamp: Boolean = true,
+    /** One signature for the whole list, as one note (plan 8.2). */
+    val signature: CardSignature? = null,
 )
 
 /** A person or an address on a list, and its card's request ID. */
@@ -379,6 +415,8 @@ data class SentCardFace(
     val table: String? = null,
     /** The whole verse on a Christmas with Jesus Christ picture, not while it's sealed ("Read the verse"). */
     val verse: String? = null,
+    /** The sender's own signature beside FROM (plan 8.2; the card's page only), also while it's sealed for them. */
+    val signature: CardSignature? = null,
 )
 
 /**

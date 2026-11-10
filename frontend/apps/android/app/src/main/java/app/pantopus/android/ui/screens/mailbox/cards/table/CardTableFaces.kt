@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.LineHeightStyle
 import app.pantopus.android.R
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt
 import app.pantopus.android.ui.theme.PantopusColors
 
@@ -84,13 +85,14 @@ internal fun CardTableBack(
     message: String?,
     writing: (@Composable (TextStyle) -> Unit)?,
     modifier: Modifier = Modifier,
+    signature: CardSignature? = null,
 ) {
     val art = rememberCardFaceArt()
     val density = LocalDensity.current
     val painter = remember(art, density.density) { art?.let { CardFacePainter(it, density.density) } }
     val first = remember(fromName) { fromName.trim().substringBefore(' ').removeSuffix(",") }
     val words =
-        remember(design, paper, first, year, message, writing == null) {
+        remember(design, paper, first, year, message, writing == null, signature) {
             CardFaceWords(
                 number = cardNumber(null, design.orEmpty()),
                 caption = "",
@@ -99,6 +101,7 @@ internal fun CardTableBack(
                 postmarkDay = "",
                 note = if (writing == null) message.orEmpty() else "",
                 from = first,
+                signature = signature,
             )
         }
     BoxWithConstraints(

@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.res.ResourcesCompat
 import app.pantopus.android.R
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardTimes
 import app.pantopus.android.ui.theme.PantopusColors
@@ -50,6 +51,8 @@ internal data class CardFaceWords(
     val note: String,
     /** Who it's from, the first name only. */
     val from: String,
+    /** Signed beside FROM (plan 8.2): drawn in place of the typed [from]; null or one it can't draw: [from] typed. */
+    val signature: CardSignature? = null,
 )
 
 /** The picture on a card, and how much of its edges to leave out (an older copy has its own border baked in). */
@@ -144,6 +147,8 @@ internal class CardFacePainter(
     private var edgeHeight = -1f
     private var edgeShaders: List<LinearGradient> = emptyList()
     private var noteCache: PenNote? = null
+    private val signatureInk = CardSignatureInk.paint()
+    private var signatureCache: Pair<CardSignature, Path>? = null
     private val verseType = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
 
     /** The picture side: the picture, its caption by hand, CHRISTMAS, 2026 and the postmark. */
@@ -178,7 +183,7 @@ internal class CardFacePainter(
         canvas.drawColor(face.paper)
         drawRules(canvas, u)
         drawNote(canvas, u, face)
-        drawFrom(canvas, u, face.from)
+        drawFrom(canvas, u, face.from, face.signature?.takeIf { it.drawable })
         drawFoot(canvas, u, face.year)
         drawGrain(canvas, width, u, grain)
         drawEdges(canvas, width, u)
@@ -343,8 +348,9 @@ internal class CardFacePainter(
         canvas: Canvas,
         u: Float,
         from: String,
+        signature: CardSignature?,
     ) {
-        if (from.isBlank()) return
+        if (from.isBlank() && signature == null) return
         val labelSize = u * 2.3f
         textStyle(Typeface.SERIF, labelSize, PantopusColors.tableFromInk, spacing = 0.24f)
         val labelWidth = text.measureText("FROM")
@@ -356,6 +362,13 @@ internal class CardFacePainter(
         val baseline = u * 97f + max(labelTop, lineBoxAscent(u * 6.4f))
         textStyle(Typeface.SERIF, labelSize, PantopusColors.tableFromInk, spacing = 0.24f)
         canvas.drawText("FROM", u * 8f - labelSize * 0.12f, baseline, text)
+        if (signature != null) {
+            // Their own hand where the name would be: the box starts where the name starts, its line on the baseline.
+            val kept = signatureCache?.takeIf { it.first == signature }
+            val path = kept?.second ?: CardSignatureInk.path(signature).also { signatureCache = signature to it }
+            CardSignatureInk.draw(canvas, path, signatureInk, u, left = u * 8f + labelWidth + u * 2f, baseline = baseline)
+            return
+        }
         textStyle(art.pen, nameSize, PantopusColors.tablePen)
         multiplyInk()
         canvas.drawText(from, u * 8f + labelWidth + u * 2f, baseline, text)

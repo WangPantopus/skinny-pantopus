@@ -332,6 +332,7 @@ private fun ColumnScope.BothSides(
                 year = card.year,
                 message = card.note,
                 design = card.design,
+                signature = card.signature,
                 modifier = Modifier.shadow(6.dp, shape).clip(shape),
             )
         },
@@ -558,6 +559,7 @@ private fun sentLetterCard(card: SentCard): MailLetterCard? {
         slug = face.slug,
         table = face.table,
         verse = face.verse?.takeIf { it.isNotBlank() },
+        signature = face.signature?.takeIf { it.drawable },
     )
 }
 

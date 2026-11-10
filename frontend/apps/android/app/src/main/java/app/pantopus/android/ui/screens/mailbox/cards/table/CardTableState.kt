@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.ui.screens.mailbox.components.MailStamp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -57,6 +58,8 @@ data class CardOnTable(
     val daysUntilOpen: Int?,
     /** The whole verse printed on a Christmas with Jesus Christ picture: "Read the verse" (plan 6.2). */
     val verse: String? = null,
+    /** Signed beside FROM (plan 8.2); null: the first name typed in the pen. Null while it's sealed for them. */
+    val signature: CardSignature? = null,
 ) {
     /** The first name, the only one a shared picture or the words on the table ever use. */
     val fromFirst: String = from.trim().substringBefore(' ').removeSuffix(",").ifEmpty { "Someone" }
@@ -73,6 +76,7 @@ data class CardOnTable(
             postmarkDay = cardPostmarkDay(mailedOn),
             note = note,
             from = fromFirst,
+            signature = signature,
         )
 }
 
