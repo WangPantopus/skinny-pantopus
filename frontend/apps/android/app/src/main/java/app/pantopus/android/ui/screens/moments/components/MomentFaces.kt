@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import app.pantopus.android.data.api.models.moments.MomentAuthorDto
 import app.pantopus.android.ui.theme.MarkVariant
 import app.pantopus.android.ui.theme.PantopusColors
@@ -412,11 +413,14 @@ fun MomentClusterBubble(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box {
+                // 32 dp faces in their 2 dp white edge, 8 dp over each other, the first on top (REVIEW L2/LA7): the
+                // overlap stays clear of the initials, so "OP" never reads "OF".
                 authors.take(3).forEachIndexed { index, author ->
                     Box(
                         modifier =
                             Modifier
-                                .offset(x = (24 * index).dp)
+                                .zIndex(-index.toFloat())
+                                .offset(x = (BUBBLE_FACE_STEP * index).dp)
                                 .size(36.dp)
                                 .clip(CircleShape)
                                 .background(Color.White)
@@ -426,7 +430,7 @@ fun MomentClusterBubble(
                     }
                 }
                 // Holds the overlapped faces' full width.
-                Box(modifier = Modifier.width((36 + 24 * (authors.take(3).size - 1).coerceAtLeast(0)).dp).height(36.dp))
+                Box(modifier = Modifier.width((36 + BUBBLE_FACE_STEP * (authors.take(3).size - 1).coerceAtLeast(0)).dp).height(36.dp))
             }
             if (extra > 0) {
                 Text(
@@ -455,3 +459,6 @@ fun MomentClusterBubble(
 val MOMENT_CLUSTER_ANCHOR_FROM_TOP: Dp = 59.dp
 
 private val ClusterShadow = PantopusElevation(Color.Black, 0.25f, 6.dp, 0.dp, 2.dp)
+
+/** From one face to the next in a crowded spot's bubble: 36 dp faces (with their edge) 8 dp over each other. */
+private const val BUBBLE_FACE_STEP = 28
