@@ -173,7 +173,8 @@ extension MailPieceModel {
             paper: piece.card.paper ?? "",
             height: piece.card.height,
             slug: piece.card.slug,
-            table: piece.card.table
+            table: piece.card.table,
+            verse: nil
         )
         return MailPieceModel(
             id: piece.id,

@@ -141,6 +141,9 @@ public struct HolidayCardDesign: Decodable, Sendable, Hashable, Identifiable {
     /// Its public page's name, and the colour of its table (`card_table`); older servers don't send them.
     public let slug: String?
     public let table: String?
+    /// A Christmas with Jesus Christ picture's whole verse, in the KJV words its caption names ("For unto us a child
+    /// is born…"); nil for every other picture and from older servers (`card_table`, plan 6.2).
+    public let verse: String?
 }
 
 /// A collection of the season's pictures ("Christmas with Friends"): who

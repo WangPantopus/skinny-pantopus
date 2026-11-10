@@ -162,36 +162,7 @@ struct CardTableLinkPagePicture: View {
     }
 
     private var table: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            ZStack(alignment: .topLeading) {
-                MailPaper.tableNight
-                if let art {
-                    Image(uiImage: art.cloth)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: size.width + 28, height: size.height + 28)
-                        .clipped()
-                        .colorMultiply(MailPaper.tableTint(nil))
-                        .offset(x: -14, y: -14)
-                    Image(uiImage: art.light)
-                        .resizable()
-                        .frame(width: size.width + 80, height: size.height + 80)
-                        .offset(x: -40, y: -40)
-                        .opacity(0.88)
-                        .blendMode(.softLight)
-                    CardTableVignette()
-                        .frame(width: size.width, height: size.height)
-                    Image(uiImage: art.grain)
-                        .resizable(resizingMode: .tile)
-                        .frame(width: size.width, height: size.height)
-                        .opacity(0.36)
-                        .blendMode(.overlay)
-                }
-            }
-            .frame(width: size.width, height: size.height, alignment: .topLeading)
-            .clipped()
-        }
+        CardTableClothBackdrop(art: art, table: nil)
     }
 
     private var envelope: some View {
