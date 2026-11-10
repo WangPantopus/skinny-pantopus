@@ -19,6 +19,8 @@ struct CardTableLayout: Equatable {
     let width: CGFloat
     let height: CGFloat
     let safeTop: CGFloat
+    /// What the buttons take at the bottom, with the safe area.
+    let bottomControls: CGFloat
     /// The card.
     let cardWidth: CGFloat
     let cardHeight: CGFloat
@@ -49,6 +51,7 @@ struct CardTableLayout: Equatable {
     init(screen: CGSize, trailingStrip: CGFloat, safeTop: CGFloat, bottomControls: CGFloat, wordsBottom: CGFloat) {
         self.screen = screen
         self.safeTop = safeTop
+        self.bottomControls = bottomControls
         let width = screen.width - trailingStrip
         let height = screen.height
         self.width = width
@@ -115,16 +118,18 @@ enum CardTableFold: Equatable {
         }
     }
 
-    /// The two pages and the flap above them, for this fold on a screen this wide.
-    func pages(screen: CGSize) -> CardTablePages? {
+    /// The two pages and the flap above them, for this fold on a screen this wide. `bottomRoom`: when a button can
+    /// show under the open card, the pages end this far above the bottom (the buttons start 12 pt below the paper).
+    func pages(screen: CGSize, bottomRoom: CGFloat? = nil) -> CardTablePages? {
         switch self {
         case .single:
             return nil
         case let .sideways(hingeX, _):
             // Each page is as big as the whole card on an iPhone, from just under the top.
-            let width: CGFloat = 391
+            var width: CGFloat = 391
+            let top = min(100, max(0, screen.height - width * 1.2 - 100))
+            if let bottomRoom { width = min(width, max(200, (screen.height - top - bottomRoom) / 1.2)) }
             let height = width * 1.2
-            let top = min(100, max(0, screen.height - height - 100))
             return CardTablePages(
                 pictureFrame: CGRect(x: hingeX - width, y: top, width: width, height: height),
                 noteFrame: CGRect(x: hingeX, y: top, width: width, height: height),
@@ -135,9 +140,10 @@ enum CardTableFold: Equatable {
             )
         case let .upright(hingeY, _):
             // Each page near the hinge, about 366 wide, in the middle of the screen.
-            let width: CGFloat = 366
-            let height = width * 1.2
             let gap: CGFloat = 8.5
+            var width: CGFloat = 366
+            if let bottomRoom { width = min(width, max(200, (screen.height - hingeY - gap - bottomRoom) / 1.2)) }
+            let height = width * 1.2
             let x = (screen.width - width) / 2
             return CardTablePages(
                 pictureFrame: CGRect(x: x, y: hingeY - gap - height, width: width, height: height),

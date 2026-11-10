@@ -120,7 +120,8 @@ struct CardTableScreen: View {
                         model.fingerMoved(to: value.location, layout: layout)
                     }
                     .onEnded { value in
-                        let pose = CardTablePose(springs: model.springs, layout: layout, pages: model.fold.pages(screen: layout.screen))
+                        let pages = model.fold.pages(screen: layout.screen, bottomRoom: model.pagesBottomRoom(layout))
+                        let pose = CardTablePose(springs: model.springs, layout: layout, pages: pages)
                         let card = CGRect(x: pose.cardX, y: pose.cardY, width: layout.cardWidth, height: layout.cardHeight)
                         model.fingerLifted(at: value.location, layout: layout, isOnCard: card.contains(value.location))
                     }

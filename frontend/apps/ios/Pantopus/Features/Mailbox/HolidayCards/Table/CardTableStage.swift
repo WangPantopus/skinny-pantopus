@@ -18,7 +18,7 @@ struct CardTableStage: View {
     let layout: CardTableLayout
 
     var body: some View {
-        let pages = model.fold.pages(screen: layout.screen)
+        let pages = model.fold.pages(screen: layout.screen, bottomRoom: model.pagesBottomRoom(layout))
         let pose = CardTablePose(springs: model.springs, layout: layout, pages: pages)
         let content = model.content
         let ready = model.isReady

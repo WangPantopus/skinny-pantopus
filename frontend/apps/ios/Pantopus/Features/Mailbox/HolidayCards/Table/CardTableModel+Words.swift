@@ -64,6 +64,11 @@ extension CardTableModel {
         return sendBack
     }
 
+    /// Where the open Duo's pages must end: above the buttons when one can show under them (plan 1.7).
+    func pagesBottomRoom(_ layout: CardTableLayout) -> CGFloat? {
+        reservesSecondary ? layout.bottomControls + 12 : nil
+    }
+
     /// Once the card is on the table.
     private var restingHint: String {
         if fold.isSpread || reduceMotion { return "" }
