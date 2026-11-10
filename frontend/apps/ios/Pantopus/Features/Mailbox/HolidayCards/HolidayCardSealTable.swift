@@ -28,8 +28,30 @@ extension HolidayCardFlowViewModel {
     func sealContent() -> CardTableContent? {
         guard let design, let cards, let recipient else { return nil }
         if recipient.entries == nil, let preview {
-            return HolidayCardLookStep(viewModel: self, cards: cards, design: design, recipient: recipient, preview: preview)
-                .lookContent
+            // As Look it over lays it out: the name it will really carry, the postmark by their clock, the note.
+            let envelope = MailPieceModel(
+                mail: preview.piece,
+                recipient: MailPieceRecipient(name: recipient.envelopeName, addressLine: nil),
+                opened: false
+            )
+            let card = preview.piece.item.card
+            return CardTableContent(
+                design: design.id,
+                number: design.number,
+                caption: card?.caption ?? design.caption,
+                paper: card?.paper ?? design.paper,
+                table: card?.table ?? design.table,
+                slug: design.slug,
+                year: card?.year ?? cards.year,
+                mailedOn: envelope.postmarkDate,
+                note: MailPieceModel.firstText(preview.piece.item.content, message) ?? "",
+                fromName: envelope.from,
+                toName: recipient.envelopeName,
+                sealed: false,
+                sealedUntil: nil,
+                sealedInDays: "",
+                sealedDayCount: 0
+            )
         }
         return CardTableContent(
             design: design.id,
