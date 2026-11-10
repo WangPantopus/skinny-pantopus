@@ -126,8 +126,12 @@ private fun CardTable(
     val state = rememberTableState(card, firstOpen, calls)
     SendingAnswers(state, sending.answer, onClose)
     val view = LocalView.current
+    val context = LocalContext.current
+    val sounds = remember { CardSounds(context) }
+    DisposableEffect(sounds) { onDispose { sounds.release() } }
     state.onOpened = onOpened
     state.onTap = { tap -> view.feel(tap) }
+    state.onSound = sounds::play
     LaunchedEffect(state) { state.run() }
     LaunchedEffect(message) { message?.let { state.toast = it } }
     // Back brings an enlarged card back to its size first, closes the menu, and puts the verse's bookmark away.
