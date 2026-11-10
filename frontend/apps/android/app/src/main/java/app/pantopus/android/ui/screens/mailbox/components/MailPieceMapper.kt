@@ -116,7 +116,7 @@ object MailPieceMapper {
                     ?: spokenLabel(row, kind, from, sender, dueWords, whenWords, cameToday),
             bundleCount = row.bundleItemCount,
             pageCount = row.pageCount,
-            card = row.card?.let { MailPieceCard(design = it.design, sealed = it.sealed) },
+            card = row.card?.let { MailPieceCard(design = it.design, sealed = it.sealed, caption = it.caption, paper = it.paper) },
         )
     }
 
