@@ -254,7 +254,7 @@ private struct MailCardTablePage: View {
             }
             // Send one back (plan Part 3): only when a card can go to them now. Hidden while it's sealed, when the
             // season is closed, when either has blocked the other, and when their account is gone.
-            .onAppear { model.reservesSendBack = sendBackPerson != nil }
+            .onAppear { model.reservesSecondary = sendBackPerson != nil }
             .task(id: sendBackPerson?.id) { await checkSendBack() }
     }
 

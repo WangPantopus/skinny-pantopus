@@ -162,7 +162,7 @@ struct CardTableControls: View {
             primarySize: primarySize,
             hintSize: hintSize,
             secondary: model.secondary,
-            reservesSecondary: model.reservesSendBack
+            reservesSecondary: model.reservesSecondary
         ) { model.primary() }
             .frame(width: max(0, contentWidth - 32))
             .padding(.leading, 16)

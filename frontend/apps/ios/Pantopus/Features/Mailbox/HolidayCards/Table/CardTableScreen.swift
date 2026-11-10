@@ -142,7 +142,7 @@ struct CardTableScreen: View {
                 hint: "or swipe it, the way you’d turn it in your hand",
                 primarySize: primarySize,
                 hintSize: hintSize,
-                reservesSecondary: model.reservesSendBack
+                reservesSecondary: model.reservesSecondary
             ) {}
                 .frame(width: max(0, width - 32))
                 .fixedSize(horizontal: false, vertical: true)
