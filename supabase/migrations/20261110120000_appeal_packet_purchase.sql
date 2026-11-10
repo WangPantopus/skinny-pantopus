@@ -6,14 +6,16 @@
 -- 2026. Additive: nothing else reads or writes this table.
 --
 -- `reference` is the payment provider's own id for the purchase (a Stripe Checkout Session). `revoked` is set when
--- the payment is refunded or disputed. An account or Home that is deleted leaves the receipt, without its owner.
+-- the payment is refunded or disputed. A deleted account leaves the receipt, without its owner. `home_id` is the Home's
+-- id as a plain value, not a link: a receipt is no part of a Home, so deleting the Home neither waits on it nor changes
+-- it (the Home deletion policy reviews every table linked to "Home", supabase/tests/home-delete-transaction.test.sql).
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE public."AppealPacketPurchase" (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  user_id uuid REFERENCES public."User"(id) ON DELETE SET NULL,
- home_id uuid REFERENCES public."Home"(id) ON DELETE SET NULL,
+ home_id uuid NOT NULL,
  value_year integer NOT NULL,
  provider text NOT NULL CHECK(provider IN ('stripe')), reference text NOT NULL,
  amount_cents integer NOT NULL CHECK(amount_cents > 0), currency text NOT NULL DEFAULT 'usd',
