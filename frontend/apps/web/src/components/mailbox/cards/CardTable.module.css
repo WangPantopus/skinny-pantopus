@@ -139,3 +139,49 @@
 .stage .tipClose { min-height: 2.75rem; padding: 0 22px; border-radius: 22px; background: rgba(246, 236, 217, 0.14); font: 600 0.9375rem/1 sans-serif; }
 @media (orientation: landscape) and (max-height: 480px) { .turnTip { display: flex; } }
 .srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* Sealing it by hand (design plan Part 2). The engine sets data-send-step on the stage; data-addressed once it went. */
+.stage[data-send] .seal { opacity: 0; transform: translateY(-14%) scale(1.18); transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.3, 1.4, 0.5, 1); }
+.stage[data-send-step='sending'] .seal, .stage[data-send-step='addressed'] .seal, .stage[data-send-step='gone'] .seal { opacity: 1; transform: none; }
+.sealRing, .press { position: absolute; left: 36%; top: 71%; width: 28%; aspect-ratio: 540 / 546; border-radius: 50%; pointer-events: none; }
+.sealRing { opacity: 0; box-shadow: 0 0 0 calc(var(--ew) * 0.004) rgba(236, 215, 164, 0.55), 0 0 calc(var(--ew) * 0.05) calc(var(--ew) * 0.01) rgba(236, 215, 164, 0.35); transition: opacity 0.3s ease; }
+.stage[data-send-step='seal'] .sealRing { opacity: 1; animation: sealGlow 1.8s ease-in-out infinite; }
+.stage[data-pressing] .sealRing { animation: none; opacity: 0.4; }
+.press { opacity: 0; transform: scale(0.35); background-color: rgba(18, 6, 5, 0.62); box-shadow: 0 0 calc(var(--ew) * 0.03) calc(var(--ew) * 0.014) rgba(18, 6, 5, 0.45); }
+.stage:not([data-pressing]) .press { transition: opacity 0.25s ease, transform 0.25s ease; }
+@keyframes sealGlow { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+.lStack { z-index: 8; }
+.lStack > img { position: absolute; inset: 0; filter: brightness(0.78); }
+.lStack > img:first-child { transform: translate(1.4%, 3.2%) rotate(1.6deg); }
+.lStack > img:last-child { transform: translate(-1.2%, 5.6%) rotate(-1.1deg); filter: brightness(0.66); }
+/* Addressed: the name is written left to right in 0.7 s, the stamp drops, the postmark thumps, a sealed card's gold
+   stamp lands last. The same times as the engine's ticks (STAMP_AT, POSTMARK_AT, SEALED_MARK_AT). */
+.stage[data-send] .toName { clip-path: inset(-20% 100% -20% 0); }
+.stage[data-send] .stampImg, .stage[data-send] .pmBox, .stage[data-send] .sealedMark { opacity: 0; }
+.stage[data-addressed] .toName { animation: writeName 0.7s linear 0.7s forwards; }
+.stage[data-addressed] .stampImg { animation: stampDrop 0.3s cubic-bezier(0.3, 0, 0.6, 1) 1.3s forwards; }
+.stage[data-addressed] .pmBox { animation: thump 0.24s ease-out 1.74s forwards; }
+.stage[data-addressed] .sealedMark { animation: thumpMark 0.28s ease-out 2.12s forwards; }
+@keyframes writeName { to { clip-path: inset(-20% -5% -20% 0); } }
+@keyframes stampDrop { from { opacity: 0; transform: translateY(-30%) scale(1.5) rotate(-8deg); } to { opacity: 1; transform: none; } }
+@keyframes thump { from { opacity: 0; transform: scale(1.3); } 60% { opacity: 1; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes thumpMark { from { opacity: 0; transform: translate(-50%, -50%) rotate(-7deg) scale(1.4); } to { opacity: 1; transform: translate(-50%, -50%) rotate(-7deg); } }
+/* Step 5: what happens now, under the table. */
+.gone { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 460px; text-align: center; animation: goneIn 0.5s ease both; }
+.gone p { margin: 0; font-size: 0.9375rem; line-height: 1.4; color: var(--cream); text-wrap: balance; overflow-wrap: anywhere; }
+.gone p + p { color: var(--cream-soft); font-size: 0.875rem; }
+.gone [data-row] { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 2px; }
+.stage .gone button, .stage .gone a {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 2.75rem; padding: 0 1.25rem; border-radius: 1.375rem;
+  background: var(--glass); box-shadow: inset 0 0 0 0.5px var(--glass-line); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  font-weight: 600; font-size: 0.9375rem; color: var(--cream); text-decoration: none;
+}
+.stage .gone [data-strong] { background: var(--cream); color: #2a1a12; box-shadow: none; }
+.stage .gone button:disabled { opacity: 0.6; }
+@keyframes goneIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .stage[data-addressed] .toName, .stage[data-addressed] .stampImg, .stage[data-addressed] .pmBox, .stage[data-addressed] .sealedMark { animation: none; clip-path: none; opacity: 1; }
+  .stage[data-send-step='seal'] .sealRing { animation: none; }
+  .gone { animation: goneFade 0.4s ease both; }
+  @keyframes goneFade { from { opacity: 0; } to { opacity: 1; } }
+}
