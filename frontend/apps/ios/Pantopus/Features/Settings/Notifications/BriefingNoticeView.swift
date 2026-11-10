@@ -8,8 +8,10 @@ import UserNotifications
 /// briefing notice, never right behind it.
 ///
 /// The briefing notice is also where the phone's notification question is
-/// asked ("Allow notifications"), not at launch; so it shows again on a phone
-/// that hasn't answered, for an account that has seen it elsewhere.
+/// asked, not at launch; so it shows again on a phone that hasn't answered,
+/// for an account that has seen it elsewhere. While it asks it follows Apple's
+/// rule for a screen before a permission alert: one button, "Continue", that
+/// opens the alert, and no way to leave without it.
 struct BriefingNoticeView: View {
     /// False while something else is asking (RootTabView: the "Keep this
     /// address handy" step, a plan or post opened by a link): the notice waits.
@@ -21,7 +23,7 @@ struct BriefingNoticeView: View {
     @State private var needsPermission = false
     /// The briefing notice showed during this launch: Suggestions waits for the next one.
     @MainActor private static var briefingShownThisLaunch = false
-    /// The notice offered "Allow notifications" on this phone.
+    /// "Continue" asked this phone the notification question.
     private static let askedHereKey = "pantopus.briefingNotice.askedForNotifications"
     private var scope: HomeClaimSessionScope {
         model.sessionScope
@@ -65,7 +67,7 @@ struct BriefingNoticeView: View {
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             if let error { Text(error).foregroundStyle(Theme.Color.error) }
                             if needsPermission {
-                                PrimaryButton(title: "Allow notifications", isLoading: saving) {
+                                PrimaryButton(title: "Continue", isLoading: saving) {
                                     await allowNotifications()
                                 }
                                 .accessibilityIdentifier("briefingNoticeAllowNotifications")
@@ -73,9 +75,9 @@ struct BriefingNoticeView: View {
                                 PrimaryButton(title: "Manage notifications", isLoading: saving) {
                                     managing = true
                                 }
-                            }
-                            GhostButton(title: "Got it", isEnabled: !saving) {
-                                notice = nil
+                                GhostButton(title: "Got it", isEnabled: !saving) {
+                                    notice = nil
+                                }
                             }
                         }
                         .padding(Spacing.s6)
@@ -83,12 +85,9 @@ struct BriefingNoticeView: View {
                     }
                     .foregroundStyle(Theme.Color.appText)
                     .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
-                    .interactiveDismissDisabled(saving)
+                    .interactiveDismissDisabled(saving || needsPermission)
                     .accessibilityIdentifier("briefingDefaultsNotice")
-                    .task {
-                        if needsPermission { UserDefaults.standard.set(true, forKey: Self.askedHereKey) }
-                        _ = await recordNotice()
-                    }
+                    .task { _ = await recordNotice() }
                 }
             }
     }
@@ -146,7 +145,7 @@ struct BriefingNoticeView: View {
             let prefs = response.preferences
             needsPermission = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .notDetermined
             try scope.requireCurrent()
-            // Once per phone for an account that saw the notice elsewhere ("Got it" is an answer too).
+            // Until "Continue" has asked this phone, for an account that saw the notice elsewhere.
             let askHere = needsPermission && !UserDefaults.standard.bool(forKey: Self.askedHereKey)
             if prefs.dailyBriefingPromptedAt == nil || askHere {
                 Self.briefingShownThisLaunch = true
@@ -160,6 +159,8 @@ struct BriefingNoticeView: View {
     /// The phone's notification question, with the reason on screen.
     @MainActor
     private func allowNotifications() async {
+        // Asked once whatever the answer: a phone that says no is told in Settings → Notifications.
+        UserDefaults.standard.set(true, forKey: Self.askedHereKey)
         let granted = await (try? UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])) ?? false
         if granted { UIApplication.shared.registerForRemoteNotifications() }
         needsPermission = false

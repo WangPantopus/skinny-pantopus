@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -45,8 +46,9 @@ import java.time.ZoneId
 import javax.inject.Inject
 
 /**
- * The daily briefings notice. It is also where the phone's notification question is asked ("Allow notifications"),
- * not at launch, so it shows again on a phone that hasn't answered, for an account that has seen it elsewhere.
+ * The daily briefings notice. It is also where the phone's notification question is asked, not at launch, so it shows
+ * again on a phone that hasn't answered, for an account that has seen it elsewhere. While it asks it has one button,
+ * "Continue", that opens the question, and no way to leave without it (Apple's rule for the iPhone notice).
  * [mayShow] is false while something else is asking (RootTabScreen): it waits. As on iPhone (`BriefingNoticeView`).
  */
 @Composable
@@ -88,16 +90,25 @@ fun BriefingNotice(
         confirmButton = {
             if (needsPermission) {
                 TextButton(
-                    onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                    onClick = {
+                        viewModel.markAsked()
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    },
                     enabled = !saving,
                     modifier = Modifier.testTag("briefingNoticeAllowNotifications"),
-                ) { Text("Allow notifications") }
+                ) { Text("Continue") }
             } else {
                 TextButton(onClick = { viewModel.finish(onManage) }, enabled = !saving) { Text("Manage notifications") }
             }
         },
-        dismissButton = { TextButton(onClick = { viewModel.finish() }, enabled = !saving) { Text("Got it") } },
+        dismissButton =
+            if (needsPermission) {
+                null
+            } else {
+                { TextButton(onClick = { viewModel.finish() }, enabled = !saving) { Text("Got it") } }
+            },
         modifier = Modifier.testTag("briefingDefaultsNotice"),
+        properties = DialogProperties(dismissOnBackPress = !needsPermission, dismissOnClickOutside = !needsPermission),
     )
 }
 
@@ -152,7 +163,7 @@ class BriefingNoticeViewModel
                         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
                         PackageManager.PERMISSION_GRANTED
                 _needsPermission.value = undecided
-                // Once per phone for an account that saw the notice elsewhere ("Got it" is an answer too).
+                // Until "Continue" has asked this phone, for an account that saw the notice elsewhere.
                 val askHere = undecided && !devicePrefs.getBoolean(KEY_ASKED_HERE, false)
                 if (response is NetworkResult.Success && (response.data.dailyBriefingPromptedAt == null || askHere)) {
                     _preferences.value = response.data
@@ -167,10 +178,14 @@ class BriefingNoticeViewModel
             _saving.value = false
         }
 
-        /** On screen: Suggestions waits for a later launch, and this phone's question counts as offered. */
+        /** On screen: Suggestions waits for a later launch. */
         fun markShown() {
             BriefingNoticeLaunch.shown = true
-            if (_needsPermission.value) devicePrefs.edit().putBoolean(KEY_ASKED_HERE, true).apply()
+        }
+
+        /** "Continue": the phone is asked once whatever the answer (Settings → Notifications tells a phone that said no). */
+        fun markAsked() {
+            devicePrefs.edit().putBoolean(KEY_ASKED_HERE, true).apply()
         }
 
         fun finish(onFinished: () -> Unit = {}) {
@@ -221,7 +236,7 @@ class BriefingNoticeViewModel
         private companion object {
             const val PREFS = "pantopus_briefing_notice"
 
-            /** The notice offered "Allow notifications" on this phone. */
+            /** "Continue" asked this phone the notification question. */
             const val KEY_ASKED_HERE = "asked_for_notifications"
         }
     }
