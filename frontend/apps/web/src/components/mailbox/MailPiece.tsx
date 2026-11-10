@@ -222,13 +222,15 @@ export type MailPieceProps = {
   opened: boolean;
   /** 1 = fresh; lower = older read mail. */
   fade?: number;
+  /** A card in Sent that the other person has: drawn as taken out of its envelope, "To {first name}". */
+  sentTo?: string | null;
 };
 
 /**
  * The drawing alone; the row around it gives it a name (pieceSentence), so
  * the drawing itself is hidden from screen readers.
  */
-export default function MailPiece({ item, recipientName, recipientLine, opened, fade = 1 }: MailPieceProps) {
+export default function MailPiece({ item, recipientName, recipientLine, opened, fade = 1, sentTo = null }: MailPieceProps) {
   const kind = pieceKind(item);
   const trust = pieceTrust(item);
   const from = item.sender_display || 'Unknown sender';
@@ -266,10 +268,10 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
     );
   } else if (item.card && launchFeatures.cardTable && torn) {
     // An opened card shows its picture (design plan Part 4): the whole card, taken out, leans over the envelope's top
-    // edge; who it's from, its caption and the day beside it. The envelope keeps its red paper and height.
+    // edge; who it's from (in Sent: to), its caption and the day beside it. The envelope keeps its red paper and height.
     const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
     const [month = '', date = ''] = postDate.split(' ');
-    const who = from.trim().split(/\s+/)[0] || 'Someone';
+    const who = ((sentTo ?? from).trim().split(/\s+/)[0]) || (sentTo ? 'them' : 'Someone');
     body = (
       <div
         className="relative h-[150px] rounded-md"
@@ -283,10 +285,10 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
           <img src={cardPicture(item.card.design, 'thumb')} alt="" className="absolute left-[2px] right-[2px] top-[2px] h-[86%] w-[calc(100%-4px)] rounded-[1px] object-cover" />
         </div>
         <div className="absolute left-[158px] right-3 top-[18px] text-[#f4e2bf]">
-          <div className="truncate text-[22px] leading-[26px]" style={{ fontFamily: pen }}>From {who}</div>
+          <div className="truncate text-[22px] leading-[26px]" style={{ fontFamily: pen }}>{sentTo ? 'To' : 'From'} {who}</div>
           <div className="mt-1 line-clamp-2 text-[15px] italic leading-[19px] text-[#fbeed2]" style={{ fontFamily: SERIF }}>{item.card.caption || 'A Christmas card'}</div>
           <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#d8b76f]" style={{ fontFamily: SERIF }}>
-            {month} {date} · Opened
+            {month} {date} · {sentTo ? 'Delivered' : 'Opened'}
           </div>
         </div>
       </div>

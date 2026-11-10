@@ -394,7 +394,9 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = 
     // The envelope as it reaches them: postmarked once the carrier has it (by email, the day it was sent).
     envelope: { from: senderName, postmarked_on: status === 'waiting' ? null : dayIn(mail.created_at, zone) },
     card: { design: view.design || null, number: view.number ?? null, caption: view.caption || null, paper: view.paper || null,
-      year: view.year || null, height: view.height ?? null, slug: view.slug || null, table: view.table || null },
+      year: view.year || null, height: view.height ?? null, slug: view.slug || null, table: view.table || null,
+      // The whole verse on a Christmas with Jesus Christ picture ("Read the verse"), not while it's sealed (cardView).
+      verse: view.verse || null },
   };
 }
 
