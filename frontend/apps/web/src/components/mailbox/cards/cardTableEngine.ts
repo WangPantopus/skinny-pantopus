@@ -510,6 +510,13 @@ export class CardTableEngine {
       el.style.height = `${eh}px`;
       el.style.transformOrigin = `${ew / 2}px ${eh / 2}px`;
     }
+    // Several cards: the stack of envelopes behind the top one is the envelope's size.
+    const stack = this.root.querySelector<HTMLElement>('[data-el="lStack"]');
+    if (stack) {
+      stack.style.width = `${ew}px`;
+      stack.style.height = `${eh}px`;
+      stack.style.transformOrigin = `${ew / 2}px ${eh / 2}px`;
+    }
     this.$('flapIn').style.top = `${-fd}px`;
     this.$('flapIn').style.height = `${fd}px`;
     this.$('flapOut').style.height = `${fd}px`;
