@@ -394,14 +394,26 @@ function sentSummary(mail, now = new Date()) {
 
 /**
  * The letters and cards this person sent as themselves (not as a business) that weren't taken back: a card that was taken
- * back is gone, one by email is withdrawn. A query to add filters and order to.
+ * back is gone, one by email is withdrawn. With `notDelivered` (Sent's opt-in ?include=not_delivered), also the cards a
+ * block withdrew since they keep their picture (notDeliveredOf). A query to add filters and order to.
  */
-function sentCards(userId, select, options) {
+function sentCards(userId, select, options, { notDelivered = false } = {}) {
   return supabaseAdmin.from('Mail').select(select, options)
     .eq('sender_user_id', userId)
     .eq('type', 'letter')
     .is('sender_entity_id', null)
-    .or('escrow_status.is.null,escrow_status.neq.withdrawn');
+    .or(`escrow_status.is.null,escrow_status.neq.withdrawn${notDelivered ? ',mail_extracted->card->withdrawn->>design.not.is.null' : ''}`);
+}
+
+/**
+ * A card a block withdrew before it was delivered, as its withdrawn record keeps it (migration 20261110210000; memories
+ * contract section 8): { design, to_name }, or null for anything else (a take-back, a letter, a card withdrawn before
+ * the record kept its picture). Its sender's Sent says "Couldn't be delivered" and never why.
+ */
+function notDeliveredOf(mail) {
+  const withdrawn = mail?.mail_extracted?.card?.withdrawn;
+  return mail?.escrow_status === 'withdrawn' && withdrawn?.reason === 'blocked' && withdrawn.design
+    ? { design: String(withdrawn.design), to_name: withdrawn.to_name || null } : null;
 }
 
 /**
@@ -438,6 +450,19 @@ function instant(at) {
  * as a first name. Never the recipient's ids, address or time zone, nor anything they did with it.
  */
 function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = new Date() }) {
+  const notDelivered = notDeliveredOf(mail);
+  if (notDelivered) {
+    // Couldn't be delivered: its picture and the name it went to, nothing of when or why.
+    const view = cardView({ mail_extracted: { card: { design: notDelivered.design } } }, now) || {};
+    return {
+      id: mail.id, kind: 'card', subject: SUBJECT, sent_at: instant(mail.created_at), to_name: notDelivered.to_name || toName || null,
+      to_household: false, by_email: false, arrival: null, status: 'not_delivered', arrives_at: null, arrives_on: null,
+      opens_on: null, sealed: false, can_take_back: false, take_back_until: null,
+      envelope: { from: senderName, postmarked_on: null },
+      card: { design: view.design || null, number: view.number ?? null, caption: view.caption || null, paper: view.paper || null,
+        year: view.year || null, height: view.height ?? null, slug: view.slug || null, table: view.table || null, verse: null },
+    };
+  }
   const isHolidayCard = isCard(mail);
   const card = mail.mail_extracted?.card || {};
   const view = cardView(mail, now) || {};
@@ -477,6 +502,9 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = 
  * joined (at the claim) or returned (on the day its 90 days ended). By link, the same steps, each marked `by_link`.
  */
 function sentTrail(mail, { zone, now = new Date() }) {
+  if (notDeliveredOf(mail)) {
+    return [{ step: 'sealed', at: instant(mail.created_at), done: true }, { step: 'not_delivered', done: true }];
+  }
   const card = mail.mail_extracted?.card || {};
   const reached = (at) => Boolean(at) && Date.parse(at) <= now.getTime();
   const trail = [{ step: 'sealed', at: instant(mail.created_at), done: true }];
@@ -523,5 +551,5 @@ module.exports = {
   SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf, mediaOf, mediaView,
   designById, isCard, isByLink, cardLinkToken, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
   daysBetween, arrivalsFor,
-  personDelivery, cardView, pickupAt, sentSummary, sentCards, sentStatus, sentPiece, sentTrail, sentLine,
+  personDelivery, cardView, pickupAt, sentSummary, sentCards, notDeliveredOf, sentStatus, sentPiece, sentTrail, sentLine,
 };
