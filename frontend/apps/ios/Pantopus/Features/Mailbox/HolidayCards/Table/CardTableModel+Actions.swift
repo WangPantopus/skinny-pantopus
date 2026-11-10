@@ -66,6 +66,15 @@ extension CardTableModel {
         haptics.tap(.firm)
     }
 
+    /// Reverence: one slow glint crosses the gold lining once it's in view (plan Part 7): the flap left open, or the
+    /// card laid down below it. Once per card.
+    func startGlint() {
+        guard mood == .reverence, moodMoves, springs.glint.t == 0 else { return }
+        springs.glint.jump(to: 0)
+        springs.glint.t = 1
+        wake()
+    }
+
     func openFlap() {
         guard !content.sealed else {
             resist()
@@ -74,6 +83,7 @@ extension CardTableModel {
         crack()
         springs.pull.t = Self.flapOpen
         step = .flap
+        startGlint()
         wake()
     }
 

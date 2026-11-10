@@ -45,6 +45,8 @@ struct CardTableGlint: View {
     let mask: UIImage
     let lightX: Double
     let lightY: Double
+    /// Half the band's width, of the gradient's length: the light's broad sheen, or a narrow glint (plan Part 7).
+    var band = 0.12
 
     var body: some View {
         let boxWidth = width * 2.2
@@ -52,9 +54,9 @@ struct CardTableGlint: View {
         let points = CardTableGradientPoints(degrees: 105, width: boxWidth, height: boxHeight)
         LinearGradient(
             stops: [
-                .init(color: MailPaper.tableGlintEdge.opacity(0), location: 0.38),
+                .init(color: MailPaper.tableGlintEdge.opacity(0), location: 0.5 - band),
                 .init(color: MailPaper.tableGlint.opacity(0.9), location: 0.5),
-                .init(color: MailPaper.tableGlintEdge.opacity(0), location: 0.62)
+                .init(color: MailPaper.tableGlintEdge.opacity(0), location: 0.5 + band)
             ],
             startPoint: points.start,
             endPoint: points.end

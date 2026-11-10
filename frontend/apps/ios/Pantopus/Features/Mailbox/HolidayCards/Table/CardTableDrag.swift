@@ -203,6 +203,7 @@ extension CardTableModel {
         } else if aim > 0.14 {
             springs.pull.t = Self.flapOpen
             step = .flap
+            startGlint()
         } else {
             springs.pull.t = 0
             step = .back
