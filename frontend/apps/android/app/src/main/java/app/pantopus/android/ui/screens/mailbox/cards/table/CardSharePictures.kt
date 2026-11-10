@@ -73,20 +73,24 @@ internal class CardSharePictures(
         return bitmap
     }
 
+    /*
+     * A Story keeps everything but the slip inside Instagram's safe area: nothing in the top 250 px or the bottom 340 px
+     * of 1920 (125 and 170 here). The card is 800 px wide of 1080; the envelope's flap reaches up to the top line.
+     */
     private fun storyCard(canvas: Canvas) {
-        val w = 424f
+        val w = 400f
         val x = (540f - w) / 2f
-        val y = 244f
-        openEnvelope(canvas, w * 1.012f, x - 2f, y - 8f, 3.2f)
-        cardFront(canvas, w, x, y, -3f)
+        val y = 300f
+        openEnvelope(canvas, w * 1.012f, x - 2f, y - 2f, 3.2f)
+        cardFront(canvas, w, x, y, -2.8f)
         slip(canvas, 122f, 776f, -1.6f, 296f, 54f, 13.5f, 13.5f)
     }
 
     private fun storyNote(canvas: Canvas) {
-        val w = 330f
+        val w = 320f
         openEnvelope(canvas, 350f, 96f, 276f, 5f)
-        cardFront(canvas, w, 26f, 118f, -4.5f)
-        cardBack(canvas, w, 184f, 412f, 3.5f)
+        cardFront(canvas, w, 26f, 138f, -4.5f)
+        cardBack(canvas, w, 194f, 396f, 3.5f)
         slip(canvas, 26f, 806f, -2.2f, 250f, 50f, 12f, 12.5f)
     }
 
@@ -97,8 +101,9 @@ internal class CardSharePictures(
         slip(canvas, 122f, 776f, -1.6f, 296f, 54f, 13.5f, 13.5f)
     }
 
+    /** A Post's card is 760 px wide of 1080. */
     private fun postCard(canvas: Canvas) {
-        val w = 368f
+        val w = 380f
         val x = (540f - w) / 2f
         val y = 118f
         openEnvelope(canvas, w * 1.012f, x - 2f, y + 2f, 3f)
