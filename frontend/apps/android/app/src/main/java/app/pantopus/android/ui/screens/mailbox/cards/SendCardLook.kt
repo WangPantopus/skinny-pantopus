@@ -809,6 +809,7 @@ internal fun lookCard(
         number = card?.number ?: design.number,
         slug = card?.slug ?: design.slug,
         table = card?.table ?: design.table,
+        verse = (card?.verse ?: design.verse)?.takeIf { it.isNotBlank() },
     )
 }
 

@@ -377,6 +377,8 @@ data class SentCardFace(
     /** The picture's name on its public page and its table colour (launch key `card_table`). */
     val slug: String? = null,
     val table: String? = null,
+    /** The whole verse on a Christmas with Jesus Christ picture, not while it's sealed ("Read the verse"). */
+    val verse: String? = null,
 )
 
 /**

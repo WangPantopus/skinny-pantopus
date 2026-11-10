@@ -557,6 +557,7 @@ private fun sentLetterCard(card: SentCard): MailLetterCard? {
         number = face.number,
         slug = face.slug,
         table = face.table,
+        verse = face.verse?.takeIf { it.isNotBlank() },
     )
 }
 

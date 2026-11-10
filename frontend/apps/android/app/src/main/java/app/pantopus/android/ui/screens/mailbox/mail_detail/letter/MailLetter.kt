@@ -63,6 +63,8 @@ data class MailLetterCard(
     val table: String? = null,
     /** Days until it opens, while it's sealed. */
     val daysUntilOpen: Int? = null,
+    /** The whole verse printed on a Christmas with Jesus Christ picture: "Read the verse" on the table. */
+    val verse: String? = null,
 )
 
 /**
@@ -183,6 +185,7 @@ data class MailLetter(
                 slug = card.slug,
                 table = card.table,
                 daysUntilOpen = HolidayCardTimes.daysUntil(card.sealedUntil, zone, now).takeIf { card.sealed },
+                verse = card.verse?.takeIf { !card.sealed && it.isNotBlank() },
             )
         }
 
