@@ -16,15 +16,28 @@ const MESSAGES = {
   IDENTITY_CONFIRMATION_REQUIRED: 'The claimant\'s identity isn\'t confirmed yet, so this claim can\'t be approved.',
   MEMBERSHIP_RENEWAL_REQUIRED: 'This membership needs a new review before it can be restored.',
   CLAIM_ACCESS_NOT_STARTED: 'This claim can be approved when its existing access window starts.',
-  OWNERSHIP_REVIEW_REQUIRED: 'This ownership history needs a separate ownership review.',
+  OWNERSHIP_REVIEW_REQUIRED: 'This person has an owner record on this home that this approval can\'t change.',
   COMPETING_OWNER_CLAIM_OPEN: 'Another person\'s claim to own this home is still open. Approve or reject that claim first.',
   PROPOSED_ROLE_FORBIDDEN: 'The proposed role exceeds the current authority or age limit.',
   PERMISSION_DELEGATION_FORBIDDEN: 'You cannot grant permissions that you do not hold.',
   OWNERSHIP_MANAGE_REQUIRED: 'You do not have permission to resolve this claim.',
   OWNER_INVITE_AUTHORITY_REQUIRED: 'Only a current verified owner can approve a co-owner.',
 };
-function failure(code = 'CLAIM_REVIEW_UNAVAILABLE', status = 503) {
-  return Object.assign(new Error(MESSAGES[code] || 'Could not confirm the claim request. Please retry.'), { code, status, statusCode: status });
+// Why an approval answered OWNERSHIP_REVIEW_REQUIRED: the "reason" home_claim_review_target and
+// mutate_home_claim_review send with it (migration 20261110223300), in a reviewer's words.
+const OWNERSHIP_REVIEW_REASONS = {
+  ownership_disputed: 'This person\'s ownership of this home is in dispute. Settle the dispute before approving this claim.',
+  ownership_ended: 'This person was an owner of this home before and that ownership was ended, so this claim can\'t be approved.',
+  home_has_owner: 'This home already has a verified owner, so this claim can\'t make this person its owner. The current owner can add them as a co-owner.',
+  owner_record: 'This person already has an owner record on this home, so they can\'t be approved in a non-owner role. Approve as Owner if their proof supports it, or reject this claim.',
+  verified_role_higher: 'This person is already a verified member of this home in a higher role, so this claim can\'t lower it.',
+  primary_place_held: 'Another owner record on this home is disputed or not finished, so this person can\'t be approved as its owner yet.',
+};
+function failure(code = 'CLAIM_REVIEW_UNAVAILABLE', status = 503, reason = null) {
+  const message = (code === 'OWNERSHIP_REVIEW_REQUIRED' && typeof reason === 'string'
+    && Object.hasOwn(OWNERSHIP_REVIEW_REASONS, reason) && OWNERSHIP_REVIEW_REASONS[reason])
+    || MESSAGES[code] || 'Could not confirm the claim request. Please retry.';
+  return Object.assign(new Error(message), { code, status, statusCode: status });
 }
 async function call(name, args) {
   let response;
@@ -33,7 +46,7 @@ async function call(name, args) {
   const result = response.data;
   if (result.ok !== true) {
     if (result.ok === false && Object.hasOwn(MESSAGES, result.code) && [400,403,404,409,410].includes(result.status)) {
-      throw failure(result.code, result.status);
+      throw failure(result.code, result.status, result.reason);
     }
     throw failure();
   }
