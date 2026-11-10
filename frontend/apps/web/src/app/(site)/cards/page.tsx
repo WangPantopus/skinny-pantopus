@@ -11,6 +11,11 @@ import { APP_WEB_URL } from '@pantopus/utils';
 import { PublicCardsPage, PublicCardsTrouble } from '@/components/mailbox/cards/PublicCards';
 import { fetchPublicCardDesigns, shareRefFrom } from '@/lib/publicShare';
 
+// Rendered on every request. A build or a first visit that met the server with
+// cards off (or down) would otherwise be saved as a fixed "not found" page, and
+// stay that way until the next web deploy (production, November 9).
+export const dynamic = 'force-dynamic';
+
 const TITLE = 'Christmas cards you can send on Pantopus';
 const DESCRIPTION = 'Pick a card and send it to someone. It arrives with their morning mail, and they open it like real mail.';
 const IMAGE = { url: '/holiday-cards/share/christmas-2026-08-link.jpg', width: 1200, height: 630, alt: 'A Christmas card lying on its open envelope' };
