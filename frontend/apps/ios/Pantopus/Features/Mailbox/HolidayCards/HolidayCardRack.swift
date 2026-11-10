@@ -6,7 +6,7 @@
 //  one card at a time on its own cloth under the table's light, its caption in the pen (a verse card's whole verse
 //  in the serif), swiped left and right through its collection. ✕ goes back to the grid with the last card seen
 //  chosen; Write on this card goes on with it. On the open iPhone Duo the card has one page and the words the
-//  other, except upright and flat, where it is one large card.
+//  other; upright and flat it's one large card, as on a phone (the fold reader says so).
 //
 
 import SwiftUI
@@ -69,12 +69,10 @@ struct HolidayCardRack: View {
                 switch fold {
                 case let .sideways(hingeX, _):
                     sideways(screen: screen, insets: insets, hingeX: hingeX)
-                case let .upright(hingeY, true):
+                case let .upright(hingeY, _):
                     tabletop(screen: screen, insets: insets, hingeY: hingeY)
-                case .upright:
-                    column(screen: screen, insets: insets, cap: 600)
                 case .single:
-                    column(screen: screen, insets: insets, cap: screen.width < 560 ? 470 : 560)
+                    column(screen: screen, insets: insets, cap: CardTableLayout.cardCap(width: screen.width))
                 }
             }
             .frame(width: screen.width, height: screen.height, alignment: .topLeading)
