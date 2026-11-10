@@ -95,6 +95,8 @@ data class ConversationMomentReply(
     /** Null for a text card and once the Moment ended. */
     val thumbUrl: String?,
     val ended: Boolean,
+    /** A live text card's color (contract v3.2): its small picture is that color; teal when the server doesn't say. */
+    val background: String? = null,
 )
 
 /** Filter-tab entry the view renders. */

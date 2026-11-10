@@ -40,7 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
 import app.pantopus.android.ui.screens.moments.MomentOpenHolder
+import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentImages
+import app.pantopus.android.ui.screens.moments.components.momentCardGradient
 import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -114,7 +116,7 @@ private fun MomentThumb(reply: ConversationMomentReply) {
             Modifier
                 .size(width = 40.dp, height = 54.dp)
                 .clip(RoundedCornerShape(Radii.md))
-                .background(PantopusColors.momentCardTealTop)
+                .momentCardGradient(MomentCardBackground.fromWire(reply.background))
                 .then(
                     if (open != null) {
                         Modifier.clickable(onClickLabel = "Open the Moment", role = Role.Button) { open(reply.momentId) { gone = true } }

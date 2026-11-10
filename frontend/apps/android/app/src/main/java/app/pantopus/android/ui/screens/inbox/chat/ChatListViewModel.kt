@@ -549,6 +549,7 @@ class ChatListViewModel
                             label = if (moment.fromMe == true) "Replied to their Moment" else "Replied to your Moment",
                             thumbUrl = moment.thumbUrl.takeIf { !moment.ended },
                             ended = moment.ended,
+                            background = moment.background.takeIf { !moment.ended },
                         )
                     },
             )

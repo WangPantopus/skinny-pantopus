@@ -85,6 +85,7 @@ import app.pantopus.android.ui.components.MessagesEntryHolder
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.screens.moments.components.MOMENT_PIN_ANCHOR_FROM_TOP
 import app.pantopus.android.ui.screens.moments.components.MomentHaptics
 import app.pantopus.android.ui.screens.moments.components.MomentStripFace
 import app.pantopus.android.ui.screens.moments.components.MomentStripPosting
@@ -137,6 +138,7 @@ fun MomentsMapScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val rings by viewModel.rings.collectAsStateWithLifecycle()
     val posts by viewModel.posts.collectAsStateWithLifecycle()
+    val liveSpot by viewModel.liveSpot.collectAsStateWithLifecycle()
     val toast = remember { ToastController() }
     LaunchedEffect(Unit) { viewModel.messages.collect { toast.info(it) } }
     // A note from outside the map ("This Moment has ended." after a push) is taken only by the map on screen: a map
@@ -174,6 +176,9 @@ fun MomentsMapScreen(
     // The top controls cover the top of the map: the map keeps its middle below them.
     var chromeHeight by remember { mutableIntStateOf(0) }
     var bottomHeight by remember { mutableIntStateOf(0) }
+    // A ring stands above its spot, so the map's clear part starts a pin's height below the top row and ends at the
+    // strip: the area read, the opening center, recenter and a framed spot keep every ring clear of both (REVIEW LA3).
+    val topPadding = chromeHeight + with(density) { MOMENT_PIN_ANCHOR_FROM_TOP.roundToPx() }
     val spot = state.spot
     BackHandler(enabled = spot != null) {
         spot?.returnTo?.let { back -> scope.launch { camera.animateOrMove(CameraUpdateFactory.newCameraPosition(back), CLUSTER_MS) } }
@@ -227,8 +232,14 @@ fun MomentsMapScreen(
             avatarUrl = viewModel.avatarUrl,
             camera = camera,
             recenter = recenter,
-            topPaddingPx = chromeHeight,
+            topPaddingPx = topPadding,
             bottomPaddingPx = bottomHeight,
+            liveSpot = liveSpot,
+            onLiveSpotShown = { moved ->
+                // The map moved off a crowded spot to your new ring: the strip shows the area again.
+                if (moved) viewModel.closeSpot()
+                viewModel.liveSpotShown()
+            },
             onViewport = viewModel::setViewport,
             onRing = { ring ->
                 viewModel.watch(ring, shown.ifEmpty { listOf(ring) })
@@ -242,7 +253,7 @@ fun MomentsMapScreen(
                         clusterCamera(
                             points = cluster.map { it.latitude to it.longitude },
                             widthDp = mapSize.width.toDp().value.toDouble(),
-                            heightDp = (mapSize.height - chromeHeight - bottomHeight).coerceAtLeast(0).toDp().value.toDouble(),
+                            heightDp = (mapSize.height - topPadding - bottomHeight).coerceAtLeast(0).toDp().value.toDouble(),
                             minZoom = returnTo.zoom.toDouble(),
                         )
                     }
@@ -318,8 +329,8 @@ fun MomentsMapScreen(
                     loading = !state.loaded,
                     failed = state.failed,
                     spot = spot,
-                    onRing = { ring ->
-                        viewModel.watch(ring, shown)
+                    onPerson = { person ->
+                        viewModel.watchPerson(person, shown)
                         actions.onWatch()
                     },
                     onPlayAll = { if (viewModel.playAll(shown)) actions.onWatch() },
@@ -356,6 +367,8 @@ private fun MomentsMap(
     recenter: Int,
     topPaddingPx: Int,
     bottomPaddingPx: Int,
+    liveSpot: Pair<Double, Double>?,
+    onLiveSpotShown: (moved: Boolean) -> Unit,
     onViewport: (Double, Double, Double, Double, Float) -> Unit,
     onRing: (MomentRingUi) -> Unit,
     onCluster: (List<MomentRingUi>) -> Unit,
@@ -419,6 +432,23 @@ private fun MomentsMap(
         delay(VIEWPORT_SETTLE_MS)
         reportViewport()
     }
+    // "Your Moment is live" while the map shows another area: the map moves to your new ring, at the same zoom, when
+    // it's outside the clear part between the top row and the strip.
+    var mapSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    LaunchedEffect(liveSpot, googleMap, mapSize) {
+        val map = googleMap ?: return@LaunchedEffect
+        val (latitude, longitude) = liveSpot ?: return@LaunchedEffect
+        if (mapSize.height == 0) return@LaunchedEffect
+        val target = LatLng(latitude, longitude)
+        val point = map.projection.toScreenLocation(target)
+        val inView = point.x in 0..mapSize.width && point.y in topPaddingPx..(mapSize.height - bottomPaddingPx)
+        if (!inView) {
+            camera.animateOrMove(CameraUpdateFactory.newLatLng(target), RECENTER_MS)
+            delay(VIEWPORT_SETTLE_MS)
+            reportViewport()
+        }
+        onLiveSpotShown(!inView)
+    }
     LaunchedEffect(camera) {
         snapshotFlow { if (mapLoaded) liveCamera ?: camera.position else null }
             .filterNotNull()
@@ -438,7 +468,7 @@ private fun MomentsMap(
         remember {
             MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false, compassEnabled = false, mapToolbarEnabled = false)
         }
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().onSizeChanged { mapSize = it }) {
         GoogleMap(
             modifier = Modifier.fillMaxSize().testTag("moments.mapCanvas").semantics { contentDescription = "Map of Moments near you" },
             cameraPositionState = camera,
@@ -595,13 +625,13 @@ private fun MomentsStrip(
     loading: Boolean,
     failed: Boolean,
     spot: MomentsSpot?,
-    onRing: (MomentRingUi) -> Unit,
+    onPerson: (MomentStripPerson) -> Unit,
     onPlayAll: () -> Unit,
     onRetry: () -> Unit,
     onPosting: (MomentPosting) -> Unit,
 ) {
     val newPeople = shown.filter { it.anyNew && !it.mine }.distinctBy { it.author.id }.size
-    val people = shown.distinctBy { it.author.id }.size
+    val people = remember(shown) { stripPeople(shown) }
     // Your posting Moment and your own ring come first: the strip goes back to its start when one arrives, and when
     // the strip changes to a spot's people.
     val list = rememberLazyListState()
@@ -633,7 +663,7 @@ private fun MomentsStrip(
                         modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        text = "${if (people == 1) "1 person" else "$people people"} · $newPeople new",
+                        text = "${if (people.size == 1) "1 person" else "${people.size} people"} · $newPeople new",
                         fontSize = 12.5.sp,
                         lineHeight = 16.sp,
                         color = PantopusColors.appTextSecondary,
@@ -723,17 +753,18 @@ private fun MomentsStrip(
                             },
                 )
             }
-            items(shown, key = { it.id }) { ring ->
+            // One face per person: someone at three spots is one face, and their spots play one after another.
+            items(people, key = { it.author.id }) { person ->
                 MomentStripFace(
-                    author = ring.author,
-                    seen = ring.seen,
-                    label = ring.stripLabel,
+                    author = person.author,
+                    seen = person.seen,
+                    label = person.stripLabel,
                     modifier =
                         Modifier
-                            .testTag("moments.strip.ring.${ring.id}")
-                            .clickable(role = Role.Button) { onRing(ring) }
+                            .testTag("moments.strip.ring.${person.first.id}")
+                            .clickable(role = Role.Button) { onPerson(person) }
                             .clearAndSetSemantics {
-                                contentDescription = ring.spoken
+                                contentDescription = person.spoken
                                 role = Role.Button
                             },
                 )

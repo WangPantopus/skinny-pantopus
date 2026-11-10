@@ -4337,6 +4337,9 @@ class ChatConversationViewModel
                                             },
                                         thumbUrl = moment.thumbUrl.takeIf { !moment.ended },
                                         ended = moment.ended,
+                                        kind = moment.kind,
+                                        background = moment.background.takeIf { !moment.ended },
+                                        excerpt = moment.excerpt?.trim()?.takeIf { it.isNotEmpty() && !moment.ended },
                                     )
                                 },
                             reactions = reactions,

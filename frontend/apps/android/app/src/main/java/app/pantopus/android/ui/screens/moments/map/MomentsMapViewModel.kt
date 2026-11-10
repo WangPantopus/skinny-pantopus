@@ -88,6 +88,43 @@ data class MomentRingUi(
         }
 }
 
+/**
+ * One face in the strip: a person, with every spot they have a Moment at in view, nearest first (the order they play
+ * in). Someone at three spots is one face, not three; the face's segments and its "new" count every spot.
+ */
+@Immutable
+data class MomentStripPerson(
+    val rings: List<MomentRingUi>,
+) {
+    /** Their nearest spot: the strip's test id and what plays first. */
+    val first: MomentRingUi get() = rings.first()
+    val author: MomentAuthorDto get() = first.author
+    val seen: List<Boolean> get() = rings.flatMap { it.seen }
+    val stripLabel: String get() = first.stripLabel
+
+    /** As a ring reads, but someone at several spots reads "at 3 places" (as on iPhone). */
+    val spoken: String
+        get() {
+            if (rings.size == 1) return first.spoken
+            val count = seen.size
+            val name = if (first.mine) "Your Moments" else author.name ?: author.firstName ?: "Someone"
+            return listOfNotNull(
+                name,
+                if (count == 1) "1 Moment" else "$count Moments",
+                if (seen.any { !it }) "new" else "watched",
+                "at ${rings.size} places",
+                if (author.verified) "verified resident" else null,
+            ).joinToString(", ")
+        }
+}
+
+/** The strip's faces, one per person, in [shown]'s order (you first, then new ones, then nearest). */
+fun stripPeople(shown: List<MomentRingUi>): List<MomentStripPerson> =
+    shown
+        .groupBy { it.author.id }
+        .values
+        .map { rings -> MomentStripPerson(rings.sortedBy { it.distanceMeters }) }
+
 /** Where the map opens and recenters: the person (a fresh fix) or, with location off, their home. */
 data class MomentsCenter(
     val latitude: Double,
@@ -148,11 +185,14 @@ class MomentsMapViewModel
 
         /** The rings with what's been watched here, nearest the middle of the map first. */
         val rings: StateFlow<List<MomentRingUi>> =
-            combine(_state.map { it.rings }, repository.watched, viewCenter) { rings, watched, center ->
+            combine(_state.map { it.rings }, repository.watched, repository.reported, viewCenter) { rings, watched, reported, center ->
                 val now = Instant.now()
                 rings.mapNotNull { ring ->
-                    // A Moment leaves the moment its time is up, before the next read.
-                    val live = ring.moments.filter { brief -> brief.expiresAt?.let { parseInstant(it)?.isAfter(now) } ?: true }
+                    // A Moment leaves the moment its time is up, before the next read, and one you reported at once.
+                    val live =
+                        ring.moments.filter { brief ->
+                            brief.id !in reported && brief.expiresAt?.let { parseInstant(it)?.isAfter(now) } ?: true
+                        }
                     if (live.isEmpty()) return@mapNotNull null
                     MomentRingUi(
                         ring = ring.copy(moments = live),
@@ -173,6 +213,11 @@ class MomentsMapViewModel
 
         private val _wentLive = MutableSharedFlow<Unit>(extraBufferCapacity = 2)
 
+        private val _liveSpot = MutableStateFlow<Pair<Double, Double>?>(null)
+
+        /** Where your Moment that just went live is, until the map has made sure it's in view (it moves there if not). */
+        val liveSpot: StateFlow<Pair<Double, Double>?> = _liveSpot.asStateFlow()
+
         /** A Moment of yours just went live: the map marks it with a tap you can feel. */
         val wentLive: SharedFlow<Unit> = _wentLive.asSharedFlow()
 
@@ -191,6 +236,8 @@ class MomentsMapViewModel
                             val hours = outcome.moment.hours
                             _messages.tryEmit("Your Moment is live. It shows for ${if (hours == 1) "1 hour" else "$hours hours"}.")
                             _wentLive.tryEmit(Unit)
+                            val moment = outcome.moment
+                            if (moment.latitude != null && moment.longitude != null) _liveSpot.value = moment.latitude to moment.longitude
                         }
                     }
                     refresh()
@@ -336,15 +383,19 @@ class MomentsMapViewModel
             start: MomentRingUi,
             shown: List<MomentRingUi>,
         ) {
-            val rest =
-                shown
-                    .filter { it.id != start.id }
-                    .sortedWith(
-                        compareByDescending<MomentRingUi> { it.anyNew }
-                            .thenBy { metersBetween(start.latitude, start.longitude, it.latitude, it.longitude) },
-                    )
+            val rest = othersAfter(start, shown.filter { it.id != start.id })
             repository.playback = MomentsPlayback(rings = (listOf(start) + rest).map { it.ring }, startIndex = 0, newOnly = false)
         }
+
+        /** What plays after [start]: [others], new ones before watched ones, nearest to [start] first. */
+        private fun othersAfter(
+            start: MomentRingUi,
+            others: List<MomentRingUi>,
+        ): List<MomentRingUi> =
+            others.sortedWith(
+                compareByDescending<MomentRingUi> { it.anyNew }
+                    .thenBy { metersBetween(start.latitude, start.longitude, it.latitude, it.longitude) },
+            )
 
         /** Play all: every ring shown with something new, nearest first, playing only the new Moments. */
         fun playAll(shown: List<MomentRingUi>): Boolean {
@@ -353,6 +404,24 @@ class MomentsMapViewModel
             if (queue.isEmpty()) return false
             repository.playback = MomentsPlayback(rings = queue.map { it.ring }, startIndex = 0, newOnly = fresh.isNotEmpty())
             return true
+        }
+
+        /** The map has your new ring in view (it was there, or the map moved to it). */
+        fun liveSpotShown() {
+            _liveSpot.value = null
+        }
+
+        /**
+         * A face in the strip: that person's spots one after another, nearest first, then the other rings shown as after
+         * a tapped ring.
+         */
+        fun watchPerson(
+            person: MomentStripPerson,
+            shown: List<MomentRingUi>,
+        ) {
+            val theirs = person.rings.map { it.id }.toSet()
+            val rest = othersAfter(person.first, shown.filter { it.id !in theirs })
+            repository.playback = MomentsPlayback(rings = (person.rings + rest).map { it.ring }, startIndex = 0, newOnly = false)
         }
 
         fun retryPosting(momentId: String) = posting.retry(momentId)

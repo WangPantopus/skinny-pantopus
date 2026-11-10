@@ -48,6 +48,9 @@ data class ComposePin(
     val capture: Boolean,
 )
 
+/** What the chip says at home (board P4: the Post sheet's "Your home"). */
+internal const val HOME_CHIP = "Your home"
+
 /** Before anything can be captured: location, then the one-time 18+ confirmation (contract v2). */
 enum class ComposeGate { Locating, NeedsLocation, NeedsAdult, NotEligible, Open }
 
@@ -84,6 +87,12 @@ data class MomentsComposeUiState(
                 is MomentMediaFile.Video -> "video"
                 null -> "text"
             }
+
+    /**
+     * The camera's and the card's chip: where it will pin, or "Your home" at home, as the Post sheet says (others read
+     * the town, never the place the home sits at).
+     */
+    val chipPlace: String? get() = if (herePlace?.atHome == true) HOME_CHIP else herePlace?.placeLabel
 
     /** The names that fit the pin, the automatic one first (contract v3); empty from a server without them. */
     val placeChoices: List<MomentPlaceChoiceDto> get() = place?.places.orEmpty()
