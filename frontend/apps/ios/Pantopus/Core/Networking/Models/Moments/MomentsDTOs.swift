@@ -461,11 +461,11 @@ enum MomentTime {
         return "\(Int(seconds / 86400))d ago"
     }
 
-    /// "4h left", "35m left", "1m left".
+    /// "24h left", "35m left", "1m left": rounded up, so a Moment just posted for 24 hours says 24, and never under a minute.
     static func left(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "" }
         let seconds = max(0, date.timeIntervalSince(now))
-        if seconds >= 3600 { return "\(Int(seconds / 3600))h left" }
-        return "\(max(1, Int(seconds / 60)))m left"
+        if seconds >= 3600 { return "\(Int((seconds / 3600).rounded(.up)))h left" }
+        return "\(max(1, Int((seconds / 60).rounded(.up))))m left"
     }
 }

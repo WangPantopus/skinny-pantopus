@@ -68,6 +68,9 @@ struct MomentsViewerHeader: View {
                     MomentAvatar(author: author, size: 36)
                 }
             }
+            // Light fill and dark initials with a white edge, as the boards draw it over a dark picture.
+            .environment(\.colorScheme, .light)
+            .overlay { if isMine || author != nil { Circle().stroke(Color.white, lineWidth: 1.5) } }
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 5) {
                     Text(isMine ? "Your Moment" : author?.name ?? "")

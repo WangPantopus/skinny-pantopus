@@ -59,8 +59,10 @@ final class MomentsMapViewModel {
     private(set) var center: UserCoordinate?
     private(set) var centerSource: CenterSource?
     private(set) var homeCenter: UserCoordinate?
-    /// "Downtown Vancouver", for the area pill and the empty card.
+    /// "Downtown Vancouver", for the area pill.
     private(set) var areaName: String?
+    /// What the spot you're at reads as ("Esther Short Park"), for the empty card.
+    private(set) var herePlace: String?
     private(set) var rings: [MomentRingDTO] = []
     private(set) var loaded = false
     private(set) var loadFailed = false
@@ -150,6 +152,25 @@ final class MomentsMapViewModel {
         phase = .ready
         focus = nil
         recenterRequest += 1
+        herePlace = nil
+        guard source == .gps else { return }
+        // What this spot reads as, for the empty card ("Share what's happening at Esther Short Park.").
+        Task { [weak self] in
+            let endpoint = MomentsEndpoints.placePreview(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            let preview: MomentPlacePreviewDTO? = try? await MomentsAPI.send(endpoint)
+            guard let self, center == coordinate else { return }
+            herePlace = preview?.placeLabel
+        }
+    }
+
+    /// The empty card's line: the place where you are while the map shows it, else "around here".
+    var emptyLine: String {
+        if centerSource == .gps, let center, let herePlace, !herePlace.isEmpty, let region = lastRegion,
+           abs(region.center.latitude - center.latitude) < region.span.latitudeDelta / 2,
+           abs(region.center.longitude - center.longitude) < region.span.longitudeDelta / 2 {
+            return "Share what's happening at \(herePlace)."
+        }
+        return "Share what's happening around here."
     }
 
     // MARK: - Reading
@@ -349,10 +370,10 @@ final class MomentsMapViewModel {
     private static func areaName(at point: CLLocation) async -> String? {
         guard let placemark = try? await CLGeocoder().reverseGeocodeLocation(point).first else { return nil }
         let town = placemark.locality ?? placemark.subAdministrativeArea
-        if let neighborhood = placemark.subLocality, let town, !neighborhood.contains(town) {
-            return "\(neighborhood) \(town)"
-        }
-        return placemark.subLocality ?? town
+        // A long neighborhood name from the geocoder reads badly in the pill: the town alone then.
+        guard let neighborhood = placemark.subLocality, neighborhood.count <= 20 else { return town }
+        if let town, !neighborhood.contains(town) { return "\(neighborhood) \(town)" }
+        return neighborhood
     }
 
     private static func homeCoordinate(store: ScreenStore) async -> UserCoordinate? {

@@ -100,7 +100,7 @@ struct MomentsMapBottom: View {
                     MomentsLoadFailedCard { Task { await viewModel.load() } }
                         .padding(.top, 14)
                 } else if viewModel.isEmpty, postings.isEmpty {
-                    MomentsEmptyCard(place: viewModel.areaName, onAdd: actions.compose)
+                    MomentsEmptyCard(line: viewModel.emptyLine, onAdd: actions.compose)
                         .padding(.top, 14)
                 } else {
                     MomentsRoundButton.add(action: actions.compose)
@@ -299,14 +299,14 @@ struct MomentsStrip: View {
 
 /// Board M3: nothing in view.
 struct MomentsEmptyCard: View {
-    let place: String?
+    let line: String
     let onAdd: @MainActor () -> Void
 
     var body: some View {
         MomentsMapCard(
             icon: .circleDashed,
             title: "Nothing here right now",
-            line: "Share what's happening at \(place ?? "this spot").",
+            line: line,
             button: "Add a Moment",
             buttonIcon: .plus,
             buttonId: "moments.empty.add",

@@ -84,6 +84,8 @@ struct MomentsViewer: View {
         }
         .onChange(of: showsReactions) { _, open in model.replying = open || replyFocused }
         .onChange(of: covered) { _, isCovered in model.covered = isCovered }
+        // A reply half-typed for one person is never left in the next person's box.
+        .onChange(of: model.brief?.id) { _, _ in replyText = "" }
         // Another app, a call or the notification shade: it waits, and picks up where it was.
         .onChange(of: scenePhase, initial: true) { _, phase in model.away = phase != .active }
         .confirmationDialog("Moment options", isPresented: $showsMenu, titleVisibility: .hidden) { menu }
@@ -251,14 +253,14 @@ struct MomentsViewer: View {
     private var bottomColumn: some View {
         VStack(spacing: 0) {
             if isReplying {
-                Spacer(minLength: 120)
+                Spacer(minLength: 0)
                 MomentsQuickReactions(chosen: model.myReaction) { emoji in
                     Task { await model.react(emoji) }
                     closeReply()
                 }
                 // A tap on a reaction while typing must reach it: the keyboard stays up until it has.
                 .keepsKeyboardOnTap()
-                Spacer(minLength: Spacing.s6)
+                .padding(.bottom, 14)
                 if replyFocused, let name = model.ring?.author.shortName {
                     Text("\(name) gets your reply in Messages.")
                         .font(.system(size: 12.5))
