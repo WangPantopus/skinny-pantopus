@@ -56,6 +56,7 @@ const propertyRecordsConfig = require('../config/propertyRecords');
 const propertyEstimates = require('./propertyRecords/estimates');
 const { serializeEstimate } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
+const similarHomes = require('./propertyRecords/similarHomes');
 const recordVocabulary = require('./recordVocabulary');
 const homeValueCard = require('./homeValueCard');
 const areaTrend = require('./propertyRecords/areaTrend');
@@ -141,6 +142,23 @@ function sectionApplies(id, viewer) {
   if (OWNER_ONLY_SECTIONS.has(id)) return viewer.role === 'owner';
   if (RENTER_ONLY_SECTIONS.has(id)) return viewer.role === 'renter';
   return true;
+}
+
+/**
+ * One true line about this home for an owner who hasn't verified the address yet (propertyRecords/similarHomes.js):
+ * how the county's value compares with similar houses on the street, from the copy the Home already holds, so no
+ * lookup is made for a locked section. Never a dollar figure. It leads the locked Your home card, where the comparison
+ * itself shows once the address is verified and the ownership confirmed. Null when there is nothing to say.
+ */
+async function similarHomesTeaser(recordRow) {
+  try {
+    const { data: stored } = await recordRow();
+    const found = stored ? await similarHomes.forHome(stored, homeRecords.liveCopy(stored)) : null;
+    return found ? similarHomes.teaser(found) : null;
+  } catch (err) {
+    logger.warn('placeIntelligence: similar homes teaser failed', { error: err.message });
+    return null;
+  }
 }
 
 // A claim still in progress: not decided, withdrawn or merged into another.
@@ -1657,6 +1675,8 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // past it is a retryable error, and its lookup keeps going to fill the
   // cache for the next look.
   const budgetMs = sectionBudgetMs();
+  // Beside the composers, so the locked card's line costs the response no time of its own.
+  const teaserRead = viewer.role === 'owner' && setupLocked.includes('your_home') && !claimant ? similarHomesTeaser(recordRow) : Promise.resolve(null);
   const late = [];
   // When the budget fallbacks ran (near budgetMs unless the process itself was
   // held up) and when every section had answered, for the over-budget log.
@@ -1699,10 +1719,10 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
 
   const composed = {};
   for (const env of groups.flat()) composed[env.id] = env;
+  const teaser = await teaserRead;
   for (const id of setupLocked) {
-    composed[id] = serializePlaceSection(id, {
-      access: 'locked', unavailableReason: claimant ? CLAIM_REVIEW_REASON : verifyReason(id),
-    });
+    const reason = claimant ? CLAIM_REVIEW_REASON : verifyReason(id);
+    composed[id] = serializePlaceSection(id, { access: 'locked', unavailableReason: id === 'your_home' && teaser ? `${teaser} ${reason}` : reason });
   }
   if (viewer.ownership === 'pending' && composed.exemption_check && !setupLocked.includes('exemption_check')) {
     composed.exemption_check = serializePlaceSection('exemption_check', {

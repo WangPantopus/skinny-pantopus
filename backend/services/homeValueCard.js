@@ -8,7 +8,9 @@
  *   2. the last recorded sale, or that prices aren't public in this state;
  *   3. the area's price change, from an index, labeled as the area's (propertyRecords/areaTrend.js);
  *   4. a Pantopus estimate, with its range and what was measured (propertyRecords/valueEstimate.js);
- *   5. with no estimate, the Census Bureau's figures for the ZIP, called the neighborhood's.
+ *   5. with no estimate, the Census Bureau's figures for the ZIP, called the neighborhood's;
+ *   6. where its county shows it, the county's value per square foot beside similar houses on the street
+ *      (propertyRecords/similarHomes.js).
  *
  * Only for the confirmed owner: callers check before they send it. An answer from
  * ATTOM's stored copy has its own fields and no card.
@@ -18,6 +20,7 @@ const { stateCode } = require('./propertyRecords/addressKey');
 const { dateLabel } = require('./propertyRecords/homeRecord');
 const { coversMoreThanHome, COVERS_MORE_NOTE } = require('./propertyRecords/salePrice');
 const areaTrend = require('./propertyRecords/areaTrend');
+const similarHomes = require('./propertyRecords/similarHomes');
 const { SALE_PRICES_NOT_PUBLIC, ASSESSMENT_SHARE, ASSESSED_VALUE_NOTE } = require('../data/valuePractice');
 
 const TAXABLE_VALUE_NOTE = 'Taxable value is what the county uses to figure property tax, not what the home would sell for.';
@@ -118,6 +121,11 @@ function build(profile, { trend = null, lookup = null, neighborhood = null } = {
       { id: 'neighborhood_range', label: 'Middle half of homes here', value: `${money(neighborhood.low)} – ${money(neighborhood.high)}` },
     );
     notes.push(`What owners here told the Census Bureau their homes are worth (${neighborhood.source}). These are the neighborhood's figures, not this home's.`);
+  }
+  // Only beside the county's own value: the comparison is of that figure.
+  if (headline && profile.similar_homes) {
+    rows.push(...similarHomes.rows(profile.similar_homes));
+    notes.push(similarHomes.note(profile.similar_homes));
   }
   let emptyMessage = null;
   if (!headline) {

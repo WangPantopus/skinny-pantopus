@@ -8,11 +8,13 @@
  * worker can't disagree for long.
  *
  *   switches/<name>.json   { v: 1, counties: { "<fips>": { mode: 'off'|'shadow'|'live', withheld: [fact, ...], estimates: true } },
- *                            shared_facts: ["<fips>", ...] }
+ *                            shared_facts: ["<fips>", ...], similar_homes: ["<fips>", ...] }
  *
  * `estimates: true` shows a live county's owners a Pantopus estimate (propertyRecords/valueEstimate.js). Without it, none.
  * `shared_facts` names the live counties where an address with several homes on record shows what all of them agree
  * on (identity.js `agreed`). A file without the list has it off everywhere, and the counties' own lines read as before.
+ * `similar_homes` names the live counties where a house's owner sees its county value beside similar houses on its street
+ * (similarHomes.js). A file without the list has that off everywhere too.
  *
  * A county the file names follows the file; any other follows the environment's lists.
  * The file is written by scripts/property-index/switch-county.cjs, by hand. If it can't
@@ -35,6 +37,7 @@ const MODES = new Set(['off', 'shadow', 'live']);
 
 let counties = {};
 let sharedFacts = new Set();
+let similarHomes = new Set();
 let modes = config.listedModes();
 let liveStates = new Set();
 let anyShadowCounty = false;
@@ -45,6 +48,7 @@ let missingLive = [];
 function apply(file) {
   counties = file?.counties || {};
   sharedFacts = file?.sharedFacts || new Set();
+  similarHomes = file?.similarHomes || new Set();
   modes = config.listedModes();
   for (const [fips, entry] of Object.entries(counties)) modes.set(fips, entry.mode);
   const listed = [...modes];
@@ -52,8 +56,11 @@ function apply(file) {
   anyShadowCounty = listed.some(([, mode]) => mode === 'shadow');
   const named = listed.filter(([, mode]) => mode !== 'off').sort();
   const shared = [...sharedFacts].sort();
-  // The shared-facts list joins the line only when it names a county, so a file without one logs as before.
-  const now = JSON.stringify(shared.length ? [named, shared] : named);
+  const similar = [...similarHomes].sort();
+  // A list joins the line only when it names a county, so a file without one logs as before.
+  let now = shared.length ? [named, shared] : named;
+  if (similar.length) now = [named, shared, similar];
+  now = JSON.stringify(now);
   if (now !== loggedAs && config.enabled()) {
     loggedAs = now;
     logger.info('property_records.switches', {
@@ -61,6 +68,7 @@ function apply(file) {
       shadow: listed.filter(([, mode]) => mode === 'shadow').map(([fips]) => fips),
       from_file: Object.keys(counties).length,
       ...(shared.length ? { shared_facts: shared } : {}),
+      ...(similar.length ? { similar_homes: similar } : {}),
     });
   }
 }
@@ -76,7 +84,8 @@ function parseFile(bytes) {
     }
   }
   const shared = Array.isArray(data.shared_facts) ? data.shared_facts.filter((fips) => /^\d{5}$/.test(fips)) : [];
-  return { counties: found, sharedFacts: new Set(shared) };
+  const similar = Array.isArray(data.similar_homes) ? data.similar_homes.filter((fips) => /^\d{5}$/.test(fips)) : [];
+  return { counties: found, sharedFacts: new Set(shared), similarHomes: new Set(similar) };
 }
 
 const readFile = reader.switchesFile(config.switchesName, parseFile, READ_EVERY_MS);
@@ -134,6 +143,9 @@ const estimatesFor = (fips) => modeFor(fips) === 'live' && counties[fips]?.estim
 /** Whether an address with several homes on record in this county shows what they all agree on: only a live county the file's list names. */
 const sharedFactsFor = (fips) => modeFor(fips) === 'live' && sharedFacts.has(fips);
 
+/** Whether a house's owner in this county sees its county value beside similar houses on its street: only a live county the file's list names. */
+const similarHomesFor = (fips) => modeFor(fips) === 'live' && similarHomes.has(fips);
+
 function withholding(fips) {
   return counties[fips]?.withheld?.size ? counties[fips].withheld : null;
 }
@@ -153,12 +165,15 @@ function summary() {
   const shared = [...sharedFacts].sort();
   let lists = estimates.length ? [named, withheld, estimates] : [named, withheld];
   if (shared.length) lists = [named, withheld, estimates, shared];
+  const similar = [...similarHomes].sort();
+  if (similar.length) lists = [named, withheld, estimates, shared, similar];
   return {
     live: named.filter(([, mode]) => mode === 'live').length,
     shadow: named.filter(([, mode]) => mode === 'shadow').length,
     estimates: estimates.length,
     ...(shared.length ? { shared_facts: shared.length } : {}),
-    // Estimates and shared facts join the hash only when a county has them, so servers before and after them agree on a file without any.
+    ...(similar.length ? { similar_homes: similar.length } : {}),
+    // Estimates, shared facts and similar homes join the hash only when a county has them, so servers before and after them agree on a file without any.
     hash: crypto.createHash('sha256').update(JSON.stringify(lists)).digest('hex').slice(0, 12),
   };
 }
@@ -170,4 +185,4 @@ function served(copy) {
   return { ...copy, facts: without(copy.facts, withheld), ...(copy.building ? { building: without(copy.building, withheld) } : {}) };
 }
 
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served, estimatesFor, sharedFactsFor, listed, summary, health };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, withholding, estimatesFor, sharedFactsFor, similarHomesFor, listed, summary, health };
