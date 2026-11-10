@@ -459,7 +459,7 @@ function PickStep({
   };
 
   const gridView = (
-    <div role="radiogroup" aria-label={shown?.name ?? 'Christmas cards'} className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4">
+    <div role="radiogroup" aria-label={shown?.name ?? 'Christmas cards'} className={launchFeatures.cardTable ? 'grid grid-cols-2 gap-x-3.5 gap-y-5 sm:grid-cols-3' : 'grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4'}>
       {grid.map((design) => {
         const selected = design.id === chosen;
         return (
@@ -485,7 +485,7 @@ function PickStep({
                 </span>
               ) : null}
             </span>
-            <span className="line-clamp-2 text-[12px] font-medium leading-4 text-[#374151] [@media(prefers-color-scheme:dark)]:text-app-text-secondary">{design.caption}</span>
+            <span className={`${launchFeatures.cardTable ? 'text-[13px] leading-[18px]' : 'line-clamp-2 text-[12px] leading-4'} font-medium text-[#374151] [@media(prefers-color-scheme:dark)]:text-app-text-secondary`}>{design.caption}</span>
           </button>
         );
       })}
@@ -532,14 +532,44 @@ function PickStep({
           </div>
         </>
       ) : gridView}
-      <div className="mt-6 space-y-2.5 pb-4">
-        {picked ? (
-          <button type="button" data-testid="sendCardSeeLarger" onClick={() => setLarge(picked)} className={secondary}>See it larger</button>
-        ) : (
-          <p className={`text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
-        )}
-        <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Write on this card</button>
-      </div>
+      {/* On the table's paper (launch key card_table) the main button stays in sight at the bottom edge while the
+          pictures scroll, with the chosen picture beside it (design plan 1.1). */}
+      {launchFeatures.cardTable ? (
+        <div
+          data-testid="sendCardPickBar"
+          className="sticky bottom-0 z-10 -mx-4 mt-5 md:-bottom-6 border-t border-[#e3d8c3] bg-[#f5f0e8] px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-6px_16px_rgba(60,40,10,0.08)] [@media(prefers-color-scheme:dark)]:border-app [@media(prefers-color-scheme:dark)]:bg-app"
+        >
+          <div className="flex min-h-[48px] items-center gap-3">
+            {picked ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cardPicture(picked.id, 'thumb')} alt="" className="w-10 flex-shrink-0 -rotate-2 rounded-[2px] shadow-[0_3px_8px_rgba(60,40,10,0.25)]" />
+                <p className="min-w-0 flex-1 text-[14px] font-medium leading-[18px] text-[#374151] [@media(prefers-color-scheme:dark)]:text-app-text-secondary">{picked.caption}</p>
+                <button
+                  type="button"
+                  data-testid="sendCardSeeLarger"
+                  onClick={() => setLarge(picked)}
+                  className="flex min-h-[44px] flex-shrink-0 items-center rounded-xl border border-[#d6cbb6] bg-[#fffdf8] px-3.5 text-[14px] font-semibold text-[#374151] transition hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+                >
+                  See it larger
+                </button>
+              </>
+            ) : (
+              <p className={`flex-1 text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
+            )}
+          </div>
+          <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={`${primary} mt-2`} style={{ backgroundColor: WAX }}>Write on this card</button>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-2.5 pb-4">
+          {picked ? (
+            <button type="button" data-testid="sendCardSeeLarger" onClick={() => setLarge(picked)} className={secondary}>See it larger</button>
+          ) : (
+            <p className={`text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
+          )}
+          <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Write on this card</button>
+        </div>
+      )}
 
       {large ? (
         <div role="dialog" aria-modal="true" aria-label={large.caption} data-testid="sendCardLarge" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4" onClick={() => setLarge(null)}>

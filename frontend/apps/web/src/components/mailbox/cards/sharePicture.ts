@@ -5,7 +5,7 @@
 // on the site, because Facebook reads them from the page.
 // ============================================================
 
-import { firstNameOf, PAPER_SERIF, postmarkDay, TABLE_ART, tableTint, cardTrimmedPicture } from './cardArt';
+import { firstNameOf, isVerseReference, PAPER_SERIF, postmarkDay, TABLE_ART, tableTint, cardTrimmedPicture } from './cardArt';
 import { cardHand, cardPen } from './cardFont';
 import { measureNote, penWords, type NoteFit } from './CardPaper';
 
@@ -228,7 +228,8 @@ function cardFront(ctx: Ctx, details: ShareDetails, art: Art, width: number, x: 
     const caption = card.caption || '';
     const size = u * Math.min(4.8, 70 / Math.max(1, caption.length * 0.53));
     ctx.fillStyle = '#1d2b63';
-    ctx.font = `${size}px ${HAND}`;
+    // A verse reference prints in the card's serif, italic, so the colon reads (design plan 1.12).
+    ctx.font = isVerseReference(caption) ? `italic ${size}px ${SERIF}` : `${size}px ${HAND}`;
     ctx.fillText(caption, u * 4.2, baselineIn(ctx, u * 107.4, size, size));
 
     const yearSize = u * 2.2;
@@ -526,6 +527,8 @@ export async function drawSharePicture(details: ShareDetails, format: 'story' | 
   const story = format === 'story';
   const showNote = withNote && !card.sealed && Boolean(details.note.trim());
 
+  // A bigger card (design plan 1.11): 800 of 1080 px in a Story, 760 in a Post. A Story keeps everything but the slip out
+  // of Instagram's top 250 and bottom 340 px (here 125 and 170, drawn at half size).
   tableCloth(ctx, art, tableTint(card.table), width, height);
   if (card.sealed) {
     shutEnvelope(ctx, art, story ? 460 : 410, story ? 40 : 65, story ? 190 : 62, story ? -2.4 : -2.2, story ? 136 : 122);
@@ -535,24 +538,24 @@ export async function drawSharePicture(details: ShareDetails, format: 'story' | 
   } else if (showNote) {
     const fit = measureNote(details.note);
     if (story) {
-      openEnvelope(ctx, art, 350, 96, 276, 5);
-      cardFront(ctx, details, art, 330, 26, 118, -4.5);
-      cardBack(ctx, details, art, fit, 330, 184, 412, 3.5);
+      openEnvelope(ctx, art, 372, 84, 300, 4);
+      cardFront(ctx, details, art, 360, 16, 138, -4);
+      cardBack(ctx, details, art, fit, 360, 164, 346, 3.2);
       paperSlip(ctx, art, 26, 806, -2.2, 250, 50, 12, 12.5);
     } else {
-      openEnvelope(ctx, art, 286, 127, 158, 2.5);
-      cardFront(ctx, details, art, 258, 16, 112, -3.2);
-      cardBack(ctx, details, art, fit, 258, 266, 124, 2.8);
+      openEnvelope(ctx, art, 300, 120, 150, 2.5);
+      cardFront(ctx, details, art, 272, 6, 104, -3.2);
+      cardBack(ctx, details, art, fit, 272, 262, 116, 2.8);
       paperSlip(ctx, art, 139, 612, -1.2, 262, 46, 12, 12);
     }
   } else if (story) {
-    openEnvelope(ctx, art, 424 * 1.012, 56, 236, 3.2);
-    cardFront(ctx, details, art, 424, 58, 244, -3);
-    paperSlip(ctx, art, 122, 776, -1.6, 296, 54, 13.5, 13.5);
+    openEnvelope(ctx, art, 400 * 1.012, 68, 298, 2.4);
+    cardFront(ctx, details, art, 400, 70, 302, -2.6);
+    paperSlip(ctx, art, 122, 806, -1.6, 296, 54, 13.5, 13.5);
   } else {
-    openEnvelope(ctx, art, 368 * 1.012, 84, 120, 3);
-    cardFront(ctx, details, art, 368, 86, 118, -2.6);
-    paperSlip(ctx, art, 139, 606, -1.2, 262, 46, 12, 12);
+    openEnvelope(ctx, art, 380 * 1.012, 78, 112, 3);
+    cardFront(ctx, details, art, 380, 80, 110, -2.6);
+    paperSlip(ctx, art, 139, 612, -1.2, 262, 46, 12, 12);
   }
   tableLight(ctx, art, width, height);
 

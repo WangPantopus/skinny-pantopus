@@ -281,12 +281,16 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={cardStampFile(item.card.number, item.card.design)} alt="" className="absolute right-3 top-2.5 h-[54px] w-auto" />
         {postDate ? (
-          <div className="absolute right-[30px] top-2 w-[108px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`${TABLE_ART}postmark-blank.webp`} alt="" className="block h-auto w-full" />
+          // In cream ink at 60% so it reads on the dark red (design plan 1.6); the table keeps its black ink.
+          <div className="absolute right-[30px] top-2 aspect-[622/365] w-[108px] opacity-60">
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-[#f4e2bf]"
+              style={{ WebkitMaskImage: `url(${TABLE_ART}postmark-blank.webp)`, maskImage: `url(${TABLE_ART}postmark-blank.webp)`, WebkitMaskSize: '100% 100%', maskSize: '100% 100%' }}
+            />
             <svg viewBox="0 0 622 365" className="absolute inset-0 h-full w-full" aria-hidden="true">
-              <text x="165" y="161.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 165 161.6)">{month} {date}</text>
-              <text x="160.3" y="199.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 160.3 199.6)">{year}</text>
+              <text x="165" y="161.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill="#f4e2bf" transform="rotate(7 165 161.6)">{month} {date}</text>
+              <text x="160.3" y="199.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill="#f4e2bf" transform="rotate(7 160.3 199.6)">{year}</text>
             </svg>
           </div>
         ) : null}
