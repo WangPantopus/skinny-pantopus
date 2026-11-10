@@ -3344,17 +3344,17 @@ class ChatConversationViewModel
         }
 
         /**
-         * Re-read every loaded page after reconnect. New-message-only backfill cannot repair a missed edit,
-         * reaction or deletion, and a fixed newest-page window can leave a gap after a busy disconnection.
-         * Apply once at the end so the reader keeps the same timeline and scroll anchor during recovery.
-         */
-        /**
          * Whether the change log can catch the window up. A Moment ending, being deleted or a block changes no message,
          * so the log never brings it: while a held quote still reads as running, the window is read again instead and
          * each message takes the server's `moment` (Moments contract "Chat"; as iPhone's #3871).
          */
         private fun changeLogCatchesUp(): Boolean = contextMessageId == null && messages.none { it.moment?.ended == false }
 
+        /**
+         * Re-read every loaded page after reconnect. New-message-only backfill cannot repair a missed edit,
+         * reaction or deletion, and a fixed newest-page window can leave a gap after a busy disconnection.
+         * Apply once at the end so the reader keeps the same timeline and scroll anchor during recovery.
+         */
         private fun catchUpMessages() {
             if (catchUpJob?.isActive == true || mode is ChatThreadMode.Ai) return
             val context = historyContext()
