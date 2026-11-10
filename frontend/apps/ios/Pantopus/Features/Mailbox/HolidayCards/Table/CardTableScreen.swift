@@ -120,7 +120,8 @@ struct CardTableScreen: View {
                         model.fingerMoved(to: value.location, layout: layout)
                     }
                     .onEnded { value in
-                        let pose = CardTablePose(springs: model.springs, layout: layout, pages: model.fold.pages(screen: layout.screen))
+                        let pages = model.fold.pages(screen: layout.screen, bottomRoom: model.pagesBottomRoom(layout))
+                        let pose = CardTablePose(springs: model.springs, layout: layout, pages: pages)
                         let card = CGRect(x: pose.cardX, y: pose.cardY, width: layout.cardWidth, height: layout.cardHeight)
                         model.fingerLifted(at: value.location, layout: layout, isOnCard: card.contains(value.location))
                     }
@@ -140,7 +141,8 @@ struct CardTableScreen: View {
                 title: "Take the card out",
                 hint: "or swipe it, the way you’d turn it in your hand",
                 primarySize: primarySize,
-                hintSize: hintSize
+                hintSize: hintSize,
+                reservesSecondary: model.reservesSecondary
             ) {}
                 .frame(width: max(0, width - 32))
                 .fixedSize(horizontal: false, vertical: true)
