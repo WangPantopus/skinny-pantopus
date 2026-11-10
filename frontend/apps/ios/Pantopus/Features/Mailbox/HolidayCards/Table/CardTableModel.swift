@@ -35,6 +35,9 @@ struct CardTableContent: Equatable {
     var sealedInDays: String
     /// How many days until it opens, for "Not yet."
     var sealedDayCount: Int
+    /// A Christmas with Jesus Christ card's whole verse, for "Read the verse" (plan 6.2); nil for the rest, while
+    /// it's sealed, and in Sent (the server doesn't send it there).
+    var verse: String?
 
     var firstName: String {
         HolidayCardWords.firstName(fromName)
@@ -158,6 +161,14 @@ final class CardTableModel {
     var sealRefusal: String?
     /// Step 5's Share for a card by link: the words and the link, for the system share sheet.
     var linkShareText: String?
+    /// Enlarged on the table (plan 6.1, `CardTableZoom.swift`): 1 to 3 times, moved this far from its place.
+    var zoom: CGFloat = 1
+    var zoomOffset: CGSize = .zero
+    /// "Read the verse" (plan 6.2): the bookmark is up.
+    var showsVerse = false
+    @ObservationIgnored var pinchStartZoom: CGFloat?
+    /// One tap on the card waits 0.3 s for a second (a double-tap enlarges it) before it turns the card.
+    @ObservationIgnored var pendingCardTap: Task<Void, Never>?
     @ObservationIgnored var sealHeld = false
     @ObservationIgnored var sinceTick = 0.0
     @ObservationIgnored var addressedAt = 0.0
@@ -295,6 +306,7 @@ final class CardTableModel {
         guard fold != self.fold else { return }
         let wasSpread = self.fold.isSpread
         self.fold = fold
+        resetZoom()
         // Closing the phone goes back to the picture side.
         if wasSpread, !fold.isSpread {
             springs.card.jump(to: 0)
