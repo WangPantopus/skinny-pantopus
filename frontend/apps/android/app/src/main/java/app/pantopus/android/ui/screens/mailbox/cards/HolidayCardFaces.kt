@@ -104,7 +104,7 @@ fun HolidayCardFront(
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier.fillMaxWidth().aspectRatio(HolidayCardArt.pictureAspect(design, pictureHeight)),
             )
-            PrintedStrip(caption.orEmpty(), year, mailedOn, scale)
+            PrintedStrip(caption.orEmpty(), year, mailedOn, scale, verse = HolidayCardArt.captionIsVerse(design, caption.orEmpty()))
         }
         Box(Modifier.matchParentSize().drawBehind { agedEdges(scale.px(0.03f)) })
     }
@@ -117,6 +117,8 @@ private fun PrintedStrip(
     year: Int,
     mailedOn: String?,
     scale: CardScale,
+    /** A verse's reference: set in the serif italic, not the pen. */
+    verse: Boolean = false,
 ) {
     // About the size the original cards printed it; a long caption gets smaller so it stays on one line beside the
     // postmark (the hand runs up to 0.53 em a letter).
@@ -130,7 +132,8 @@ private fun PrintedStrip(
     ) {
         Text(
             caption,
-            fontFamily = HolidayCardArt.captionHand,
+            fontFamily = if (verse) FontFamily.Serif else HolidayCardArt.captionHand,
+            fontStyle = if (verse) FontStyle.Italic else FontStyle.Normal,
             fontSize = scale.sp(captionSize),
             lineHeight = scale.sp(captionSize),
             color = PantopusColors.cardCaptionInk,

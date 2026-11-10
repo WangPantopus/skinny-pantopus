@@ -38,6 +38,7 @@ struct CardTableControls: View {
     @ScaledMetric(relativeTo: .caption) private var hintSize: CGFloat = 12.5
     @ScaledMetric(relativeTo: .footnote) private var toastSize: CGFloat = 13.5
     @ScaledMetric(relativeTo: .subheadline) private var menuSize: CGFloat = 14.5
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -115,6 +116,14 @@ struct CardTableControls: View {
             .multilineTextAlignment(.center)
             .foregroundStyle(MailPaper.tableCreamSoft)
             .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 1)
+            // At the largest sizes it can run over the mail, so it gets its own glass, as the hint does.
+            .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 12 : 0)
+            .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 6 : 0)
+            .background {
+                if dynamicTypeSize.isAccessibilitySize, model.words != nil {
+                    CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
             .frame(width: max(0, contentWidth - 48))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, 24)
@@ -193,7 +202,8 @@ struct CardTableAct: View {
             Text(hint.isEmpty ? " " : hint)
                 .font(.system(size: hintSize))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(dynamicTypeSize.isAccessibilitySize ? MailPaper.tableCream : MailPaper.tableCreamFaint)
+                // White at 70%, so it reads on every cloth (plan 1.8).
+                .foregroundStyle(dynamicTypeSize.isAccessibilitySize ? MailPaper.tableCream : Color.white.opacity(0.7))
                 // At the largest sizes it runs over the mail, so it gets its own glass.
                 .padding(.horizontal, dynamicTypeSize.isAccessibilitySize && !hint.isEmpty ? 12 : 0)
                 .background {

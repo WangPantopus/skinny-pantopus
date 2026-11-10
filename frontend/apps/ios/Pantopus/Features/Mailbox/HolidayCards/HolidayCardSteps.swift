@@ -306,13 +306,13 @@ struct HolidayCardToStep: View {
 struct HolidayCardPickStep: View {
     @Bindable var viewModel: HolidayCardFlowViewModel
     let cards: HolidayCardsResponse
-    @State private var large: HolidayCardDesign?
     /// The collection picked in the row; until then the one holding the card
     /// already chosen (back from step 3), else the first.
     @State private var collectionId: String?
     @Environment(\.colorScheme) private var scheme
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.s3, alignment: .top), count: 3)
+    /// Two across (about 177 pt each on an iPhone 17), so every caption gets two full lines.
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.s3, alignment: .top), count: 2)
 
     var body: some View {
         let collections = cards.pickableCollections
@@ -321,37 +321,21 @@ struct HolidayCardPickStep: View {
             ?? collections.first
         // A server without collections: one grid of every picture, as before.
         let designs = shown.map { cards.designs(in: $0) } ?? cards.designs
-        VStack(spacing: Spacing.s6) {
-            VStack(alignment: .leading, spacing: Spacing.s3) {
-                if let shown {
-                    VStack(alignment: .leading, spacing: Spacing.s2) {
-                        HolidayCardCollectionRow(collections: collections, shown: shown) { collectionId = $0.id }
-                        if !shown.line.isEmpty {
-                            Text(shown.line)
-                                .font(.system(size: 14))
-                                .foregroundStyle(HolidayCardDesk.muted(scheme))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityIdentifier("sendCardCollectionLine")
-                        }
+        // "Write on this card" and "See it larger" are pinned under the page (`HolidayCardPickBar`).
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            if let shown {
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    HolidayCardCollectionRow(collections: collections, shown: shown) { collectionId = $0.id }
+                    if !shown.line.isEmpty {
+                        Text(shown.line)
+                            .font(.system(size: 14))
+                            .foregroundStyle(HolidayCardDesk.muted(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("sendCardCollectionLine")
                     }
                 }
-                grid(designs, label: shown?.name)
             }
-            VStack(spacing: 10) {
-                if let picked = viewModel.design {
-                    HolidayCardPaperButton(title: "See it larger", fullWidth: true) { large = picked }
-                        .accessibilityIdentifier("sendCardSeeLarger")
-                } else {
-                    Text("Tap a picture to choose it.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(HolidayCardDesk.muted(scheme))
-                }
-                HolidayCardWaxButton(title: "Write on this card", isEnabled: viewModel.design != nil) { viewModel.toWrite() }
-                    .accessibilityIdentifier("sendCardWriteOn")
-            }
-        }
-        .sheet(item: $large) { design in
-            largeCard(design)
+            grid(designs, label: shown?.name)
         }
         // The collection's small pictures, and the chosen card's large one, before they're needed.
         .task(id: shown?.id) { HolidayCardPicture.loadAhead(designs.map(\.id), thumb: true) }
@@ -360,7 +344,7 @@ struct HolidayCardPickStep: View {
         }
     }
 
-    /// The pictures three across, a caption under each. VoiceOver names the
+    /// The pictures two across, a caption under each. VoiceOver names the
     /// grid after its collection.
     @ViewBuilder
     private func grid(_ designs: [HolidayCardDesign], label: String?) -> some View {
@@ -381,7 +365,7 @@ struct HolidayCardPickStep: View {
     private func tile(_ design: HolidayCardDesign) -> some View {
         let selected = design.id == viewModel.designId
         return Button {
-            if selected { large = design } else { viewModel.designId = design.id }
+            if selected { viewModel.largeDesign = design } else { viewModel.designId = design.id }
         } label: {
             VStack(spacing: 6) {
                 HolidayCardPictureView(design: design.id, paper: design.paper, height: design.height, thumb: true)
@@ -401,7 +385,7 @@ struct HolidayCardPickStep: View {
                     }
                     .shadow(color: MailPaper.cardShadow.opacity(selected ? 0.25 : 0.22), radius: selected ? 7 : 5, x: 0, y: 4)
                 Text(design.caption)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(scheme == .dark ? Theme.Color.appTextSecondary : MailPaper.cardTextSoft)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -416,6 +400,62 @@ struct HolidayCardPickStep: View {
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("sendCardDesign.\(design.id)")
     }
+}
+
+// MARK: - Step 2's bar, pinned above the bottom edge
+
+/// The chosen picture's thumbnail and caption, "See it larger", and "Write on
+/// this card" (greyed until a picture is chosen), pinned under Pick a card so
+/// the main button is never at the end of the scrolling grid.
+struct HolidayCardPickBar: View {
+    @Bindable var viewModel: HolidayCardFlowViewModel
+    let cards: HolidayCardsResponse
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: Spacing.s3) {
+                if let picked = viewModel.design {
+                    Button { viewModel.largeDesign = picked } label: {
+                        HolidayCardPictureView(design: picked.id, paper: picked.paper, height: picked.height, thumb: true)
+                            .frame(width: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                            .shadow(color: MailPaper.cardShadow.opacity(0.22), radius: 3, x: 0, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHidden(true)
+                    Text(picked.caption)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(HolidayCardDesk.text(scheme))
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityLabel("Chosen: \(picked.caption)")
+                        .accessibilityIdentifier("sendCardPickedCaption")
+                    HolidayCardPaperButton(title: "See it larger") { viewModel.largeDesign = picked }
+                        .fixedSize()
+                        .accessibilityIdentifier("sendCardSeeLarger")
+                } else {
+                    Text("Tap a picture to choose it.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(HolidayCardDesk.muted(scheme))
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
+            }
+            HolidayCardWaxButton(title: "Write on this card", isEnabled: viewModel.design != nil) { viewModel.toWrite() }
+                .accessibilityIdentifier("sendCardWriteOn")
+        }
+        .frame(maxWidth: 560)
+        .padding(.horizontal, Spacing.s4)
+        .padding(.vertical, Spacing.s3)
+        .frame(maxWidth: .infinity)
+        .background(HolidayCardDesk.background(scheme).ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) {
+            Rectangle().fill(MailPaper.cardRowLine).frame(height: 1)
+        }
+        .sheet(item: $viewModel.largeDesign) { design in
+            largeCard(design)
+        }
+    }
 
     /// The picture large, to choose it or close.
     private func largeCard(_ design: HolidayCardDesign) -> some View {
@@ -427,11 +467,11 @@ struct HolidayCardPickStep: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(design.caption)
             HStack(spacing: 10) {
-                HolidayCardPaperButton(title: "Close", fullWidth: true) { large = nil }
+                HolidayCardPaperButton(title: "Close", fullWidth: true) { viewModel.largeDesign = nil }
                     .accessibilityIdentifier("sendCardLargeClose")
                 HolidayCardWaxButton(title: "Choose this card") {
                     viewModel.designId = design.id
-                    large = nil
+                    viewModel.largeDesign = nil
                 }
                 .accessibilityIdentifier("sendCardChooseThis")
             }
