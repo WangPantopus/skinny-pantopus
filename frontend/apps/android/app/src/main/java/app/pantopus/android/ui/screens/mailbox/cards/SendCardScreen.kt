@@ -86,6 +86,8 @@ fun SendCardScreen(
     var confirmTakeBack by rememberSaveable { mutableStateOf(false) }
     // Pick a card's picture shown large ("See it larger", or a second tap on the chosen one).
     var largeDesign by rememberSaveable { mutableStateOf<String?>(null) }
+    // "Seal and send" on Look it over: the table, to seal it by hand (Part 2).
+    var sealing by rememberSaveable { mutableStateOf(false) }
     // A card on a sent list, asked about before it's taken back.
     var listTakeBack by remember { mutableStateOf<SentHolidayCard?>(null) }
     val back = { if (!viewModel.back()) onClose() }
@@ -176,7 +178,7 @@ fun SendCardScreen(
                 form = form,
                 look = listLook,
                 stamps = stamps?.balance,
-                onSend = viewModel::sendList,
+                onSend = { sealing = true },
                 onGetStamps = { viewModel.getStampsForList(stamps?.balance?.available ?: 0) },
             )
         } else if (form.step == SendCardStep.To && listGrowing) {
@@ -194,12 +196,35 @@ fun SendCardScreen(
             LookFooter(
                 byEmail = form.to is CardRecipient.Email,
                 form = form,
-                onSend = viewModel::send,
+                onSend = { sealing = true },
                 byLink = form.to is CardRecipient.Link,
                 stamps = stamps?.balance,
                 onGetStamps = getStamps,
             )
         }
+    }
+    // The table stays while the card is looked over and sent; anything else (step 4 saying why) puts it away.
+    LaunchedEffect(form.step) {
+        if (form.step != SendCardStep.Look && form.step != SendCardStep.Sent) sealing = false
+    }
+    val sealable = form.step == SendCardStep.Look || form.step == SendCardStep.Sent
+    if (sealing && season != null && sealable) {
+        SealByHand(
+            cards = season,
+            form = form,
+            fromName = fromName,
+            onSeal = { if (viewModel.form.value.to is CardRecipient.Several) viewModel.sendList() else viewModel.send() },
+            onBack = { sealing = false },
+            // Done (or ✕) once it's sent: back to the Mailbox.
+            onFinished = {
+                sealing = false
+                onClose()
+            },
+            onTakeBack = {
+                sealing = false
+                confirmTakeBack = true
+            },
+        )
     }
     if (stamps != null && showsStampBooks) {
         StampBooksSheet(
@@ -740,7 +765,7 @@ internal fun arrivalLine(
 }
 
 /** Until when it can be taken back, on the sender's own clock; null once it can't. */
-private fun takeBackLine(
+internal fun takeBackLine(
     card: SentHolidayCard,
     zone: ZoneId,
 ): String? =
