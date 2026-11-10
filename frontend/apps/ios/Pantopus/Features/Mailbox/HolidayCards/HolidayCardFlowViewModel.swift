@@ -174,6 +174,8 @@ final class HolidayCardFlowViewModel {
     private(set) var takenBackNote: String?
     /// Asks "Take your card back?" first.
     var confirmsTakeBack = false
+    /// "Seal and send" opened the table to seal it by hand (plan Part 2, `card_table`).
+    var sealsAtTable = false
     /// One request ID per card, sent with every look and retry of it, so a
     /// send whose answer was lost is answered with the card it stored, never
     /// a second one. A new card starts once this one is sent or taken back.
@@ -294,8 +296,9 @@ final class HolidayCardFlowViewModel {
         if case .loaded = state { return }
         state = .loading
         await fetch()
-        // Chosen on a card's table: straight to Pick a card while sending is open and today's card is free.
-        if let chosen = chosenAtStart, let cards, cards.open, cards.today == nil {
+        // Chosen on a card's table: straight to Pick a card while sending is open and today's card is free, or with
+        // stamp books on, where a card uses a stamp instead (as web does).
+        if let chosen = chosenAtStart, let cards, cards.open, HolidayCardWords.today(cards) == nil {
             chosenAtStart = nil
             choose(chosen)
         }

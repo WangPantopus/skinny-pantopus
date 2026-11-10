@@ -11,7 +11,8 @@ import Foundation
 extension CardTableModel {
     /// The words at the top; nil when there are none.
     var words: String? {
-        switch step {
+        if let sending { return sendingWords(sending) }
+        return switch step {
         case .front:
             content.sealed ? "\(content.firstName) sealed this card." : "A Christmas card from \(content.firstName)."
         case .back:
@@ -23,12 +24,14 @@ extension CardTableModel {
 
     /// The words stay out of the way of what's moving.
     var wordsShow: Bool {
-        words != nil && springs.pull.x <= 0.02 && step != .pulling && !controlsHidden
+        if sending != nil { return words != nil && !controlsHidden }
+        return words != nil && springs.pull.x <= 0.02 && step != .pulling && !controlsHidden
     }
 
     /// The button at the bottom; nil when there's none to press.
     var primaryTitle: String? {
-        switch step {
+        if let sending { return sendingTitle(sending) }
+        return switch step {
         case .front:
             "Turn it over"
         case .back:
@@ -43,7 +46,8 @@ extension CardTableModel {
     }
 
     var hint: String {
-        switch step {
+        if let sending { return sendingHint(sending) }
+        return switch step {
         case .front:
             envelopeTurnedOnce ? "or swipe it" : "or swipe it, the way you’d turn it in your hand"
         case .back:
@@ -59,9 +63,42 @@ extension CardTableModel {
 
     /// The quiet button under the main one: "Send {first name} a card", once the reader has turned the card over (on
     /// the open Duo both sides show, so at once). Never on a sealed card.
-    var secondary: CardTableMenuItem? {
-        guard step == .out, !content.sealed, turnedOnce || fold.isSpread else { return nil }
-        return sendBack
+    var secondaries: [CardTableMenuItem] {
+        if let sending { return sending == .gone ? goneButtons : [] }
+        guard step == .out, !content.sealed, turnedOnce || fold.isSpread, let sendBack else { return [] }
+        return [sendBack]
+    }
+
+    // MARK: Sealing (plan Part 2)
+
+    private func sendingWords(_ sending: CardTableSending) -> String? {
+        let first = sendingSetup?.toFirstName ?? ""
+        switch sending {
+        case .ready: return first.isEmpty ? nil : "For \(first)."
+        case .shut: return sealRefusal ?? "Press and hold to seal it."
+        case .gone: return goneWords
+        case .goingIn, .inside, .closing, .sealing, .addressing: return nil
+        }
+    }
+
+    private func sendingTitle(_ sending: CardTableSending) -> String? {
+        switch sending {
+        case .ready: reduceMotion ? "Seal and send" : "Put it in the envelope"
+        case .inside: "Close the flap"
+        case .shut: "Seal it"
+        case .gone: gonePrimary
+        case .goingIn, .closing, .sealing, .addressing: nil
+        }
+    }
+
+    private func sendingHint(_ sending: CardTableSending) -> String {
+        guard !reduceMotion else { return "" }
+        switch sending {
+        case .ready: return "or push the card up into the envelope"
+        case .inside: return "or pull the flap down"
+        case .shut: return "or press and hold the envelope"
+        case .goingIn, .closing, .sealing, .addressing, .gone: return ""
+        }
     }
 
     /// Where the open Duo's pages must end: above the buttons when one can show under them (plan 1.7).
@@ -78,7 +115,8 @@ extension CardTableModel {
 
     /// Share and ⋯: once the card is out, or any time on a sealed card.
     var showsTopRight: Bool {
-        step == .out || (content.sealed && (step == .back || step == .front))
+        if sending != nil { return false }
+        return step == .out || (content.sealed && (step == .back || step == .front))
     }
 
     var cardBackIsUp: Bool {
@@ -96,11 +134,29 @@ extension CardTableModel {
 
     /// What VoiceOver reads for what's on the table.
     var spokenLabel: String {
-        switch step {
+        if let sending { return sendingSpoken(sending) }
+        return switch step {
         case .front, .back, .flap, .pulling:
             "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")"
         case .out:
             "Card from \(content.firstName): \(HolidayCardWords.captionSentence(content.caption)) On the back: \(content.note)"
+        }
+    }
+
+    private func sendingSpoken(_ sending: CardTableSending) -> String {
+        let first = sendingSetup?.toFirstName ?? ""
+        let to = first.isEmpty ? "" : " for \(first)"
+        switch sending {
+        case .ready, .goingIn:
+            return "Your card\(to), note side up, with its open envelope"
+        case .inside, .closing:
+            return "Your card in its envelope\(to), the flap open"
+        case .shut:
+            return "The envelope\(to), the flap shut, not sealed yet"
+        case .sealing, .addressing:
+            return "The envelope\(to), sealed"
+        case .gone:
+            return goneWords ?? "On its way."
         }
     }
 }

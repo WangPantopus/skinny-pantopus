@@ -81,12 +81,18 @@ struct HolidayCardFlowView: View {
             if postageOn { await viewModel.stamps.refresh() }
         }
         .onChange(of: phase) { if phase == .active, postageOn { Task { await viewModel.stamps.recover() } } }
-        .sheet(isPresented: $viewModel.showsStampBooks) {
+        // While the sealing table is up, it shows the stamp books itself, over the table.
+        .sheet(isPresented: Binding(
+            get: { viewModel.showsStampBooks && !viewModel.sealsAtTable },
+            set: { viewModel.showsStampBooks = $0 }
+        )) {
             StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Seal it by hand: the table over the flow, from Look it over until Done.
+        .modifier(CardTableSendCover(viewModel: viewModel, onDone: onClose))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sendCard")
     }

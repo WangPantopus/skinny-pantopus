@@ -37,6 +37,10 @@ struct CardTableDrag {
 extension CardTableModel {
     /// The finger came down or moved, in the table's coordinates.
     func fingerMoved(to point: CGPoint, layout: CardTableLayout) {
+        if sending != nil {
+            sendingFingerMoved(to: point, layout: layout)
+            return
+        }
         let now = CACurrentMediaTime()
         lastTouch = now
         guard var finger = drag else {
@@ -133,6 +137,10 @@ extension CardTableModel {
 
     /// The finger lifted: a tap, or where the flick sends the mail.
     func fingerLifted(at point: CGPoint, layout: CardTableLayout, isOnCard: Bool) {
+        if sending != nil {
+            sendingFingerLifted(at: point, layout: layout)
+            return
+        }
         guard let finger = drag else { return }
         drag = nil
         finger.holdTimer?.cancel()
