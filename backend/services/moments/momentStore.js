@@ -2,7 +2,8 @@
 // or a text card, pinned where it was posted, for 1, 6, 24 or 48 hours. Each one is a Post row with is_story = true and
 // story_expires_at, and its own details in post_metadata.moment:
 //   { v: 1, kind, hours, background, show_area, at_home, location_source,
-//     state: 'uploading' | 'checking' | 'live', media: {...} | null, check: {...} | null, purged_at }
+//     state: 'uploading' | 'checking' | 'live', media: {...} | null, check: {...} | null, purged_at,
+//     label_kind, notify: { sent_at } | { skipped } (services/moments/momentNotify.js) }
 // Its place label is location_name (what everyone reads), its audience Post.audience ('nearby' | 'connections').
 // The row is private (visibility 'private', no distribution targets, off profiles), and every other post path leaves
 // it out (feedService.onlyShownPosts, readAccess.canReadPost, profiles): this module is its only reader. Every read here
@@ -293,8 +294,11 @@ async function openMoment(id, viewerId, { liveOnly = true } = {}) {
   return row;
 }
 
-/** Live Moments in view as rings (CONTRACT GET /api/moments/map), newest first. */
-async function mapRings(viewerId, { south, west, north, east }) {
+/**
+ * The live Moments shown in the box that `viewerId` may see (blocks, mutes, audience), newest first, each with the
+ * point everyone sees: [{ row, point }]. The map and the tab's dot both read this.
+ */
+async function shownInBox(viewerId, { south, west, north, east }) {
   if (north - south > MAX_MAP_SPAN_DEGREES || east - west > MAX_MAP_SPAN_DEGREES) return [];
   // An area pin's displayed point can be up to MAX_DISPLAY_OFFSET_DEGREES from its stored point: read the stored points
   // in a box that wide, on whole cells (so the rows read never depend on where an edge falls between stored points),
@@ -317,11 +321,20 @@ async function mapRings(viewerId, { south, west, north, east }) {
   if (error) throw new Error(`Failed to load Moments: ${error.message}`);
   const rows = (data || []).filter((row) => momentState(row) === 'live');
   const ctx = await viewerContext(viewerId, rows.map((r) => r.user_id));
-  const groups = new Map();
+  const shown = [];
   for (const row of rows) {
     if (!canSee(row, ctx)) continue;
     const point = displayedPoint(row);
     if (point.latitude < south || point.latitude > north || point.longitude < west || point.longitude > east) continue;
+    shown.push({ row, point });
+  }
+  return shown;
+}
+
+/** Live Moments in view as rings (CONTRACT GET /api/moments/map), newest first. */
+async function mapRings(viewerId, box) {
+  const groups = new Map();
+  for (const { row, point } of await shownInBox(viewerId, box)) {
     const key = ringKey(row, point);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({ row, point });
@@ -350,6 +363,25 @@ async function mapRings(viewerId, { south, west, north, east }) {
       mine,
     };
   });
+}
+
+/** When a Moment went live: its end time less its hours (a photo's or video's time starts when its upload finishes). */
+function wentLiveAt(row) {
+  const hours = HOURS.includes(meta(row).hours) ? meta(row).hours : 24;
+  return Date.parse(row.story_expires_at) - hours * HOUR_MS;
+}
+
+/**
+ * How many people have something new for `viewerId` in the box (CONTRACT GET /api/moments/unseen): a live Moment the
+ * viewer may see and hasn't watched, that went live after `since` (a time in ms; none: any). Never the viewer's own.
+ */
+async function unseenPeople(viewerId, box, since = null) {
+  const fresh = (await shownInBox(viewerId, box)).map(({ row }) => row)
+    .filter((row) => row.user_id !== viewerId && (since == null || wentLiveAt(row) > since));
+  if (!fresh.length) return 0;
+  const watched = new Set((await readInBatches(fresh.map((row) => row.id), (batch) => supabaseAdmin.from('PostView')
+    .select('post_id').eq('user_id', viewerId).in('post_id', batch), 'views')).map((view) => view.post_id));
+  return new Set(fresh.filter((row) => !watched.has(row.id)).map((row) => row.user_id)).size;
 }
 
 /** The caller's own Moments that haven't ended, any state, newest first. */
@@ -403,7 +435,7 @@ async function viewersOf(row) {
 
 /** The Post row a new Moment is stored as. */
 function newMomentRow({ userId, accountType, kind, hours, audience, showArea, atHome, caption, text, background,
-  location, labels, createdAt }) {
+  location, labels, labelKind = null, createdAt }) {
   const now = createdAt ? new Date(createdAt) : new Date();
   const live = kind === 'text';
   return {
@@ -442,6 +474,8 @@ function newMomentRow({ userId, accountType, kind, hours, audience, showArea, at
         background: kind === 'text' ? background : null,
         show_area: Boolean(showArea),
         at_home: Boolean(atHome),
+        // What the place label names ('place' | 'street' | 'town' | 'none'), for the push's "At", "On" or "In".
+        ...(labelKind ? { label_kind: labelKind } : {}),
         location_source: location.source,
         state: live ? 'live' : 'uploading',
         media: null,
@@ -608,7 +642,7 @@ async function deleteMoment(row) {
 module.exports = {
   KINDS, HOURS, BACKGROUNDS, AUDIENCES, DAILY_LIMIT, HOUR_MS, MOMENT_SELECT,
   fail, meta, hasEnded, momentState, displayedPoint, viewerContext, canSee, loadAuthors, loadMoment,
-  serializeMoments, openMoment, mapRings, ownMoments, viewersOf,
+  serializeMoments, openMoment, mapRings, unseenPeople, wentLiveAt, ownMoments, viewersOf,
   newMomentRow, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
   filesHeld, purgeFiles, deleteMoment,
 };

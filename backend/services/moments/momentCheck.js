@@ -125,6 +125,9 @@ async function finishUpload(row, result) {
   const updated = await store.goLive(row, check);
   if (result.status === 'flagged') await reportFlagged(row, check.reasons);
   logger.info('moments.checked', { momentId: row.id, status: result.status });
+  // Live now, unless the check held it: the author's connections hear of it (never of a held one, nor later when a
+  // hold is released). On its own, after this answer.
+  if (updated && result.status !== 'flagged') require('./momentNotify').notifyConnections(updated);
   return updated;
 }
 
