@@ -134,14 +134,33 @@
 /* The side clips and isolates its paper, as the sample's face does: without that, Safari shows the picture mirrored from behind. */
 .side { backface-visibility: hidden; -webkit-backface-visibility: hidden; overflow: hidden; isolation: isolate; border-radius: calc(var(--u) * 0.7); }
 .sideBack { transform: rotateY(180deg); }
-/* The card's own photo (memories plan step 4): a print over the card's lower right once it's turned over, clear of FROM
-   and its signature on the left and of the buttons under the card. */
-.print {
-  position: absolute; right: 1%; top: 72%; width: 44%; z-index: 7; container-type: inline-size; opacity: 0;
-  transform: translateY(4%); transition: opacity 0.45s ease, transform 0.45s ease; pointer-events: none;
+/* The card's own photo and voice greeting (memories plan steps 4 and 7) lie on the table once it's turned over (wave 4
+   drawings 3 and 4): beside the card where the table has room at its sides, else under it and a little over its bottom
+   edge, in the room the engine keeps (--media-room). Under the light, so the window light falls on them too. */
+.media { position: absolute; inset: 0; z-index: 24; pointer-events: none; opacity: 0; transition: opacity 0.45s ease; }
+.mediaShown { opacity: 1; }
+.mediaShown [data-ui] { pointer-events: auto; }
+.mediaPrint, .mediaVoice { position: absolute; container-type: inline-size; transform: translateY(5%); transition: transform 0.45s ease; }
+.mediaShown .mediaPrint, .mediaShown .mediaVoice { transform: none; }
+@media (prefers-reduced-motion: reduce) { .media, .mediaPrint, .mediaVoice { transition: none; } }
+.stage[data-media='below'] .mediaPrint {
+  left: calc(var(--card-x) + var(--card-w) * 0.02); top: calc(var(--card-top) + var(--card-h) - var(--media-room) * 0.16);
+  width: min(calc(var(--card-w) * 0.47), calc(var(--media-room) * 1.1 / var(--print-k)));
 }
-.printShown { opacity: 1; transform: none; pointer-events: auto; }
-@media (prefers-reduced-motion: reduce) { .print { transition: none; } }
+.stage[data-media='below'] .mediaVoice {
+  right: calc(100% - var(--card-x) - var(--card-w) * 0.98); top: calc(var(--card-top) + var(--card-h) - var(--media-room) * 0.08);
+  width: min(calc(var(--card-w) * 0.45), calc((var(--media-room) * 1.02 - 1.9rem) / 0.62));
+}
+.stage[data-media='below'] .mediaVoiceAlone { right: auto; left: calc(var(--card-x) + var(--card-w) * 0.5); transform: translateX(-50%); }
+.stage[data-media='below'] .mediaShown .mediaVoiceAlone { transform: translateX(-50%); }
+.stage[data-media='beside'] .mediaPrint {
+  right: calc(100% - var(--card-x) - 1.25rem); top: calc(var(--card-top) + var(--card-h) * 0.5);
+  width: min(15rem, calc(var(--card-x) - 1.5rem));
+}
+.stage[data-media='beside'] .mediaVoice {
+  left: calc(var(--card-x) + var(--card-w) - 1rem); top: calc(var(--card-top) + var(--card-h) * 0.58);
+  width: min(14rem, calc(var(--card-x) - 1.5rem));
+}
 .turnShade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 .sheen {
   position: absolute; inset: -30%; pointer-events: none; will-change: transform; mix-blend-mode: soft-light;
