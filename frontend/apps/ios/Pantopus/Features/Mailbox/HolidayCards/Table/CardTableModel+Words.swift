@@ -12,7 +12,7 @@ extension CardTableModel {
     /// The words at the top; nil when there are none.
     var words: String? {
         if let sending { return sendingWords(sending) }
-        switch step {
+        return switch step {
         case .front:
             content.sealed ? "\(content.firstName) sealed this card." : "A Christmas card from \(content.firstName)."
         case .back:
@@ -31,7 +31,7 @@ extension CardTableModel {
     /// The button at the bottom; nil when there's none to press.
     var primaryTitle: String? {
         if let sending { return sendingTitle(sending) }
-        switch step {
+        return switch step {
         case .front:
             "Turn it over"
         case .back:
@@ -47,7 +47,7 @@ extension CardTableModel {
 
     var hint: String {
         if let sending { return sendingHint(sending) }
-        switch step {
+        return switch step {
         case .front:
             envelopeTurnedOnce ? "or swipe it" : "or swipe it, the way you’d turn it in your hand"
         case .back:
@@ -135,7 +135,7 @@ extension CardTableModel {
     /// What VoiceOver reads for what's on the table.
     var spokenLabel: String {
         if let sending { return sendingSpoken(sending) }
-        switch step {
+        return switch step {
         case .front, .back, .flap, .pulling:
             "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")"
         case .out:
