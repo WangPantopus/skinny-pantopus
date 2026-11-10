@@ -64,6 +64,7 @@ struct CardTableScreen: View {
                     menuItems: menuItems,
                     safeArea: safeArea,
                     contentWidth: layout.width,
+                    wordsMaxHeight: screen.height - insets.top - 54 - layout.bottomControls - 16,
                     closeLabel: closeLabel,
                     shareLabel: shareContent.sealed ? "Share the sealed card" : "Share this card",
                     onClose: onClose,

@@ -26,6 +26,8 @@ struct CardTableControls: View {
     /// Top and sides of the safe area, and how much the words and buttons take (measured by the screen).
     let safeArea: EdgeInsets
     let contentWidth: CGFloat
+    /// The room the words at the top have above the buttons; at the largest sizes longer words scroll in it.
+    var wordsMaxHeight: CGFloat = .infinity
     /// What ✕ says it does.
     let closeLabel: String
     let shareLabel: String
@@ -110,6 +112,22 @@ struct CardTableControls: View {
     // MARK: Words
 
     private var words: some View {
+        ViewThatFits(in: .vertical) {
+            wordsText
+            ScrollView { wordsText }
+        }
+        .frame(maxHeight: max(60, wordsMaxHeight), alignment: .top)
+        .padding(.leading, 24)
+        .padding(.top, safeArea.top + 54)
+        .opacity(model.wordsShow ? 1 : 0)
+        .animation(.easeInOut(duration: 0.4), value: model.wordsShow)
+        // Only scrolling needs the finger (at the largest sizes); otherwise it passes through to the mail.
+        .allowsHitTesting(dynamicTypeSize.isAccessibilitySize && model.wordsShow)
+        .accessibilityHidden(model.words == nil)
+        .accessibilityIdentifier("cardTableWords")
+    }
+
+    private var wordsText: some View {
         Text(model.words ?? " ")
             .font(.system(size: wordsSize, design: .serif).italic())
             .lineSpacing(wordsSize * 0.3 * 0.5)
@@ -127,13 +145,6 @@ struct CardTableControls: View {
             }
             .frame(width: max(0, contentWidth - 48))
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.leading, 24)
-            .padding(.top, safeArea.top + 54)
-            .opacity(model.wordsShow ? 1 : 0)
-            .animation(.easeInOut(duration: 0.4), value: model.wordsShow)
-            .allowsHitTesting(false)
-            .accessibilityHidden(model.words == nil)
-            .accessibilityIdentifier("cardTableWords")
     }
 
     private var wordsOnGlass: Bool {
