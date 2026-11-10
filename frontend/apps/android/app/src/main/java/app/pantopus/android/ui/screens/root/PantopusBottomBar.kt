@@ -1,4 +1,5 @@
 @file:Suppress("MagicNumber")
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package app.pantopus.android.ui.screens.root
 

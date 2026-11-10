@@ -1,4 +1,5 @@
 @file:Suppress("MagicNumber", "LongMethod", "LongParameterList", "CyclomaticComplexMethod")
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package app.pantopus.android.ui.screens.moments.compose
 
@@ -417,7 +418,7 @@ private fun PlaceRow(
             }
         }
         if (pickable) {
-            val selected = state.pickedPlace?.key ?: state.placeChoices.firstOrNull()?.key
+            val selectedKey = state.pickedPlace?.key ?: state.placeChoices.firstOrNull()?.key
             DropdownMenu(
                 expanded = choosing,
                 onDismissRequest = { choosing = false },
@@ -431,7 +432,7 @@ private fun PlaceRow(
                     modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s2).semantics { heading() },
                 )
                 state.placeChoices.forEachIndexed { index, choice ->
-                    val on = choice.key == selected
+                    val on = choice.key == selectedKey
                     DropdownMenuItem(
                         text = {
                             Text(
