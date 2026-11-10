@@ -56,6 +56,34 @@ fun PlaceMoneyCheckCard(card: PlaceMoneyCard) {
     }
 }
 
+/** Any card of the Home Money Check beyond the property tax check, each under its own title with its source below. */
+@Composable
+fun PlaceOtherMoneyCards(cards: List<PlaceMoneyCard>) {
+    cards.forEach { card ->
+        PlaceDetailSectionLabel(card.title)
+        PlaceMoneyCheckCard(card)
+        card.source?.let { PlaceSourceNote(it) }
+    }
+}
+
+/** Shown until the server has a property tax check for this home. */
+@Composable
+fun PlaceHowAppealsWork() {
+    PlaceDetailCard {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("How appeals work", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            Text(
+                "If your assessment is above market, that's the usual basis for an appeal. Check your county's " +
+                    "deadline, gather comparable sales, and file a petition with the assessor.",
+                fontSize = 13.5.sp,
+                lineHeight = 18.sp,
+                color = PantopusColors.appTextSecondary,
+            )
+            Text("Informational only — not legal or tax advice.", fontSize = 12.sp, color = PantopusColors.warning)
+        }
+    }
+}
+
 @Composable
 private fun MoneyCheckRows(card: PlaceMoneyCard) {
     Column(
