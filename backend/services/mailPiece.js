@@ -11,10 +11,11 @@ const holidayCards = require('./holidayCards');
 const KINDS = ['letter', 'bill', 'notice', 'postcard', 'booklet', 'parcel', 'bundle'];
 
 // mail_extracted keys only the server writes: the kept note, Pantopus's mark, the postmark town, the private
-// enclosures and a Christmas card. A sender's own extractedData never sets them (the send route strips them).
+// enclosures, a Christmas card, a reply to one and the reports that share a card (memories contract section 2). A
+// sender's own extractedData never sets them (the send route strips them).
 const SERVER_EXTRACTED_KEYS = ['summary', 'summary_source', 'summary_at', 'ai_summary', 'from_pantopus', 'postmark_town',
   'enclosures', 'pantopus_letter', 'invoice_bill', 'vacation_hold_id', 'natural_delivered_at', 'vacation_bundle_hold_id',
-  'card'];
+  'card', 'card_reply', 'reports'];
 
 /** A sender's extractedData without the keys only the server writes. */
 function withoutServerKeys(extracted) {
@@ -83,8 +84,13 @@ function summaryOf(mail) {
 function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   if (!mail) return mail;
   const posted = mail.created_at || mail.delivered_at;
-  // card_signature only carries a card's signature to cardView (GET /api/mailbox/:id); apps read it under card.
-  const { card_signature: _signature, ...rest } = mail;
+  // card_signature, card_media and card_photo_covered only carry a card's signature, photo and voice to cardView (GET
+  // /api/mailbox/:id); apps read them under card. Which reports share a card is the server's and the admins' alone.
+  const { card_signature: _signature, card_media: _media, card_photo_covered: _covered, ...rest } = mail;
+  if (rest.mail_extracted?.reports) {
+    const { reports: _reports, ...extracted } = rest.mail_extracted;
+    rest.mail_extracted = extracted;
+  }
   return {
     ...rest,
     kind: kindOf(mail),
