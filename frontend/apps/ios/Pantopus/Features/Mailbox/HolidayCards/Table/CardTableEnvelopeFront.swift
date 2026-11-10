@@ -117,10 +117,10 @@ enum CardTableInkedPostmark {
             context.draw(Image(uiImage: postmark), in: box)
         }
         func line(_ text: String, x: CGFloat, y: CGFloat, size: CGFloat, tracking: CGFloat) {
-            var ink = context
-            ink.translateBy(x: box.minX + box.width * x, y: box.minY + box.height * y)
-            ink.rotate(by: .degrees(7))
-            ink.drawText(
+            var stamp = context
+            stamp.translateBy(x: box.minX + box.width * x, y: box.minY + box.height * y)
+            stamp.rotate(by: .degrees(7))
+            stamp.drawText(
                 Text(text)
                     .font(.custom("Georgia-Bold", fixedSize: box.width * size))
                     .tracking(box.width * tracking)
