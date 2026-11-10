@@ -146,6 +146,9 @@ const sharedFactsFor = (fips) => modeFor(fips) === 'live' && sharedFacts.has(fip
 /** Whether a house's owner in this county sees its county value beside similar houses on its street: only a live county the file's list names. */
 const similarHomesFor = (fips) => modeFor(fips) === 'live' && similarHomes.has(fips);
 
+/** The live counties with similar homes on, for the yearly watch (services/propertyTaxWatch.js). */
+const similarHomesCounties = () => [...similarHomes].filter(similarHomesFor).sort();
+
 function withholding(fips) {
   return counties[fips]?.withheld?.size ? counties[fips].withheld : null;
 }
@@ -185,4 +188,4 @@ function served(copy) {
   return { ...copy, facts: without(copy.facts, withheld), ...(copy.building ? { building: without(copy.building, withheld) } : {}) };
 }
 
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served, withholding, estimatesFor, sharedFactsFor, similarHomesFor, listed, summary, health };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, listed, summary, health };

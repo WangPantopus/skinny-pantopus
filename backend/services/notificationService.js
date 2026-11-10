@@ -252,6 +252,8 @@ const HOME_TYPES = new Set([
   'home_claim_set_aside', 'home_claim_to_review', 'home_claim_confirmed',
   // Home Record Watch (Wave 2b) — governed by the home-reminders toggle.
   'rate_watch',
+  // The Home Money Check's yearly watch (services/propertyTaxWatch.js): the county values a home above similar homes.
+  'property_tax_check',
   // A household letter another member deleted or dismissed (with Restore).
   'home_mail_removed',
 ]);

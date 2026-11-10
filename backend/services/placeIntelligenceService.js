@@ -57,6 +57,8 @@ const propertyEstimates = require('./propertyRecords/estimates');
 const { serializeEstimate } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
 const similarHomes = require('./propertyRecords/similarHomes');
+const { appealForState } = require('../data/appealPrograms');
+const { stateCode: recordStateCode } = require('./propertyRecords/addressKey');
 const recordVocabulary = require('./recordVocabulary');
 const homeValueCard = require('./homeValueCard');
 const areaTrend = require('./propertyRecords/areaTrend');
@@ -163,14 +165,23 @@ async function similarHomesTeaser(recordRow) {
 
 /**
  * The Home Money Check's cards for the money page, the confirmed owner's: today the property tax check, the county's
- * value beside similar houses on the street. From the copy the Home holds; a failure or nothing to say is no card.
+ * value beside similar houses on the street, and for a home above them, how its state says a value is reviewed
+ * (data/appealPrograms.js). From the copy the Home holds; a failure or nothing to say is no card.
  */
 async function ownerMoneyCards(recordRow) {
   try {
     const { data: stored } = await recordRow();
     const copy = stored ? homeRecords.liveCopy(stored) : null;
     const found = copy ? await similarHomes.forHome(stored, copy) : null;
-    return found ? [{ ...similarHomes.card(found), source: homeRecords.provenanceOf(copy).label }] : [];
+    if (!found) return [];
+    const card = { ...similarHomes.card(found), source: homeRecords.provenanceOf(copy).label };
+    // Above similar homes: how the state says a value is reviewed, in its own words, with its page.
+    const appeal = found.stance === 'above' ? appealForState(recordStateCode(stored.state)) : null;
+    if (appeal) {
+      card.notes = [...card.notes, appeal.note];
+      card.action = { label: `Official page: ${appeal.source.name}`, url: appeal.source.url };
+    }
+    return [card];
   } catch (err) {
     logger.warn('placeIntelligence: money cards failed', { error: err.message });
     return [];
