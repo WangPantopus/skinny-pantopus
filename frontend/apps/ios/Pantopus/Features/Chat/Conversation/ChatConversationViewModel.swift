@@ -3231,7 +3231,11 @@ public final class ChatConversationViewModel {
         do {
             var cursor = syncCursors
             if cursor == nil, case .merge = kind, topicId == nil { cursor = await savedCursorsForSearchContext() }
-            if case .merge = kind, topicId == nil, let cursor,
+            // A reply to a Moment that still reads as running: whether it has ended since (its time ran
+            // out, it was deleted, a block came between) is the server's to say, and a Moment ending
+            // changes no message, so the change log never brings it. Such a thread reads its window
+            // again, and every message's Moment is the server's copy; the stored one was the first frame.
+            if case .merge = kind, topicId == nil, let cursor, !holdsRunningMomentQuote,
                try await fetchChanges(
                    cursor: cursor, requestId: requestId, generation: generation, cacheVersion: cacheVersion, sentAt: sentAt
                ) {
@@ -3271,6 +3275,11 @@ public final class ChatConversationViewModel {
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return }
             handleFetchFailure(error, kind: kind)
         }
+    }
+
+    /// A held message quotes a Moment that, as far as this copy knows, hasn't ended.
+    private var holdsRunningMomentQuote: Bool {
+        messages.contains { $0.moment?.ended == false }
     }
 
     /// Access removals apply before any later page can fail, and a later
