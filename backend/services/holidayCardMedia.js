@@ -401,9 +401,85 @@ async function removeForMail(mailId) {
   }
 }
 
+/**
+ * Removes the photo and voice of the cards a block between these two people withdrew (contract section 8; the block
+ * itself withdraws them in the database, 20261103053000_pending_mail_personal_blocks). Best effort: what stays is
+ * unreachable (a withdrawn card has no reader) and the nightly cleanup removes it. Answers how many files went.
+ */
+async function removeWithdrawnBetween(a, b) {
+  try {
+    const { data: cards, error } = await supabaseAdmin.from('Mail').select('id')
+      .in('sender_user_id', [a, b]).eq('escrow_status', 'withdrawn')
+      .eq('mail_extracted->card->withdrawn->>reason', 'blocked');
+    if (error) throw new Error(error.message);
+    const ids = (cards || []).map((card) => String(card.id));
+    if (!ids.length) return 0;
+    const { data: files, error: fileError } = await supabaseAdmin.from('File').select(FILE_SELECT)
+      .eq('file_context', CONTEXT).in('metadata->>mail_id', ids);
+    if (fileError) throw new Error(fileError.message);
+    return files?.length ? removeFiles(files) : 0;
+  } catch (error) {
+    logger.warn('Card media of withdrawn cards not removed', { error: error.message });
+    return 0;
+  }
+}
+
+const CLEANUP_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+const CLEANUP_BATCH = 200;
+
+/**
+ * The nightly cleanup (contract section 11): after seven days, an upload no card took, or one whose card is gone or was
+ * withdrawn (taken back, or by a block), goes; so does a stored object no File row names any more (an account's rows go
+ * with it). A file on a card someone can still read is never removed, whatever its age; a row marked deleted (its
+ * object couldn't be removed before) is tried again. Answers { removed, orphans }.
+ */
+async function cleanup(now = new Date()) {
+  const before = new Date(now.getTime() - CLEANUP_GRACE_MS).toISOString();
+  let removed = 0;
+  let after = null;
+  for (let round = 0; round < 25; round += 1) {
+    let query = supabaseAdmin.from('File').select(FILE_SELECT).eq('file_context', CONTEXT).lt('created_at', before)
+      .order('id').limit(CLEANUP_BATCH);
+    if (after) query = query.gt('id', after);
+    const { data: files, error } = await query;
+    if (error) throw new Error(error.message);
+    if (!files?.length) break;
+    after = files[files.length - 1].id;
+    const cardIds = [...new Set(files.map((f) => f.metadata?.mail_id).filter(Boolean))];
+    const live = new Set();
+    if (cardIds.length) {
+      const { data: cards, error: cardError } = await supabaseAdmin.from('Mail').select('id, escrow_status').in('id', cardIds);
+      if (cardError) throw new Error(cardError.message);
+      for (const card of cards || []) if (card.escrow_status !== 'withdrawn') live.add(String(card.id));
+    }
+    const doomed = files.filter((f) => f.is_deleted || !f.metadata?.mail_id || !live.has(String(f.metadata.mail_id)));
+    if (doomed.length) removed += await removeFiles(doomed);
+    if (files.length < CLEANUP_BATCH) break;
+  }
+  // Rows marked deleted more recently (an object a take-back couldn't remove) are tried again too.
+  const { data: marked, error: markedError } = await supabaseAdmin.from('File').select(FILE_SELECT)
+    .eq('file_context', CONTEXT).eq('is_deleted', true).gte('created_at', before).limit(CLEANUP_BATCH);
+  if (markedError) throw new Error(markedError.message);
+  if (marked?.length) removed += await removeFiles(marked);
+
+  // Objects no row names (written before the grace period): an upload that stopped between storing and saving, or an
+  // account deleted with its rows.
+  let orphans = 0;
+  const keys = await s3.listKeysWrittenBefore(PREFIX, Date.parse(before), 1000);
+  for (let i = 0; i < keys.length; i += 100) {
+    const page = keys.slice(i, i + 100).filter((key) => key.startsWith(PREFIX) && !key.includes('..'));
+    if (!page.length) continue;
+    const { data: named, error: namedError } = await supabaseAdmin.from('File').select('file_path').in('file_path', page);
+    if (namedError) throw new Error(namedError.message);
+    const known = new Set((named || []).map((row) => row.file_path));
+    for (const key of page.filter((k) => !known.has(k))) if (await s3.deleteFromS3(key)) orphans += 1;
+  }
+  return { removed, orphans };
+}
+
 module.exports = {
   CONTEXT, STORAGE_CONTRACT, PREFIX, PHOTO, VOICE, ALT_LIMIT, DRAFT_MS,
   memoriesOn, voiceOn, controls, cardPhoto, looksLikeVideo, storeUpload, mediaRef, expiresAt,
   checkRefs, cleanAlt, digestMedia, bind, unbind, boundFile, ownFile, photoCovered, blockedBeforeDelivery, send,
-  removeFiles, removeForMail, notFound, photoTooLarge,
+  removeFiles, removeForMail, removeWithdrawnBetween, cleanup, notFound, photoTooLarge,
 };

@@ -66,6 +66,12 @@ router.post('/:userId/block', verifyToken, async (req, res) => {
 
     await removeFollowsBetween(blockerId, blockedId);
 
+    // The block withdrew the cards on their way between the two (in the database, with the block); their own photos
+    // and voices go too. Not waited for: nobody can open them, and the nightly cleanup finishes what this doesn't.
+    setImmediate(() => {
+      require('../services/holidayCardMedia').removeWithdrawnBetween(blockerId, blockedId).catch(() => {});
+    });
+
     // P1.14: audience-profile §9 + unified-IA §5.1 — personal-side
     // block cascades to every persona the blocker owns. The cascade
     // is fire-and-forget so this HTTP request stays fast; failures
