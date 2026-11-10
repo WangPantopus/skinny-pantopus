@@ -430,8 +430,12 @@ Supabase dashboard → Authentication:
     `https://<staging ref>.supabase.co/auth/v1/callback`, a Sign in with Apple
     key (`.p8`) turned into the client secret (it expires after at most six
     months: put the renewal in your calendar), and Supabase "Client IDs"
-    `app.pantopus.web,app.pantopus.ios` (the iOS app uses Apple's native sheet,
-    so the bundle ID must be listed).
+    `app.pantopus.web,app.pantopus.ios,com.pantopus.app`: the Services ID
+    first, then every bundle ID an iPhone build has had. The iPhone app uses
+    Apple's native sheet, whose token names the app's bundle ID
+    (`com.pantopus.app` since October 23), and Supabase refuses a token whose
+    ID isn't listed. Each backend release checks this (see "Status, November
+    10" under P3).
   - Google: a Web OAuth client in Google Cloud with the authorized redirect URI
     `https://<staging ref>.supabase.co/auth/v1/callback`; its client ID and
     secret go into the Supabase Google provider.
@@ -859,6 +863,37 @@ deliberately invalid token showed the apps'
 `pantopus://auth/callback**`, the same check accepted the apps' address at
 06:05 UTC, and the founder signed in with Google on the iPhone app. Not checked:
 Android sign-in on a phone.
+
+**Status, November 10:** Continue with Apple had failed in the iPhone app since
+the store switch to `com.pantopus.app` (October 23; public as 2.0.7 on November
+2). Apple's native sheet issues its token to the app's bundle ID, and the
+production Apple provider's Client IDs still read
+`app.pantopus.web,app.pantopus.ios`, so Supabase Auth answered every attempt
+with "Unacceptable audience in id_token: [com.pantopus.app]" and the app showed
+"Sign-in didn't finish". The founder hit it at 23:04 UTC. Email, Google, and
+Apple on the web and Android (which use the Services ID) were not affected.
+With the founder's OK the list became
+`app.pantopus.web,app.pantopus.ios,com.pantopus.app` at 23:44 UTC; the Auth
+service reloaded with it the same minute. Nothing else on the provider changed
+and no app update is needed. Not checked yet: a real Apple sign-in on the
+founder's iPhone after the change, and the staging project's list (it is not in
+the Chrome profile agents can reach).
+
+So a changed bundle ID or setting can't go unseen again:
+
+- Every backend release reads the environment's Apple provider through
+  Supabase's Management API and compares it with the bundle ID of the iOS
+  target that has the Sign in with Apple entitlement
+  (`scripts/deploy/check-signin-settings.cjs`). The run's **Sign-in settings
+  match the apps** job is red, with the ID to add, when they differ. It never
+  stops the release.
+- `POST /api/users/oauth/native` tells a setup refusal (the app's own ID not
+  accepted, or the provider switched off) from a bad token: the person reads
+  "Apple sign-in isn't available right now. Please use your email instead.",
+  and the admin inbox (`ADMIN_ALERT_EMAIL`) gets one email a day with the cause
+  and the fix while it lasts.
+- Before changing an app's bundle ID, add the new ID to both environments'
+  Client IDs first; keep the old ones while builds with them are in use.
 
 ### P4. Production Firebase and APNs (founder)
 

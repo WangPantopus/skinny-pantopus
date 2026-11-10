@@ -54,6 +54,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     environment: ${{ needs.preflight.outputs.target }}
+    outputs:
+      signin: ${{ steps.signin.outputs.result }}
+      signin_message: ${{ steps.signin.outputs.message }}
     steps:
       - name: Check configuration
         id: configuration
@@ -86,6 +89,18 @@ jobs:
         with:
           script: |
             await require('./scripts/deploy/require-ci.cjs')({github, context, core}, {recheck: true})
+      # Read-only, and never stops the release: the "Sign-in settings match the
+      # apps" job below reports it. It runs here because the Supabase secrets
+      # belong to this environment, and a second job in the environment would
+      # add a deployment record for require-ci.cjs to pass over.
+      - name: Read this environment's sign-in settings
+        id: signin
+        if: steps.configuration.outputs.enabled == 'true'
+        continue-on-error: true
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: node scripts/deploy/check-signin-settings.cjs
       - uses: docker/login-action@v4
         if: steps.configuration.outputs.enabled == 'true'
         with:
@@ -174,3 +189,26 @@ jobs:
           IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/pantopus-backend@${{ steps.image.outputs.digest }}
           SHA: ${{ needs.preflight.outputs.sha }}
         run: printf 'Commit `%s`\n\nImage `%s`\n' "$SHA" "$IMAGE" >> "$GITHUB_STEP_SUMMARY"
+
+  # Red when the environment's Supabase sign-in settings don't accept the apps
+  # this commit ships (scripts/deploy/check-signin-settings.cjs). The release
+  # itself is the job above; this one only says what to change in Supabase.
+  signin-settings:
+    name: Sign-in settings match the apps
+    needs: [preflight, release]
+    if: always() && needs.release.outputs.signin != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Report
+        env:
+          RESULT: ${{ needs.release.outputs.signin }}
+          MESSAGE: ${{ needs.release.outputs.signin_message }}
+          TARGET: ${{ needs.preflight.outputs.target }}
+        run: |
+          printf '%s sign-in settings: %s\n' "$TARGET" "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+          case "$RESULT" in
+            ok) echo "$MESSAGE" ;;
+            unreadable) echo "::warning::Sign-in settings not checked in $TARGET. $MESSAGE" ;;
+            *) echo "::error::Sign-in is broken in $TARGET. $MESSAGE"; exit 1 ;;
+          esac
