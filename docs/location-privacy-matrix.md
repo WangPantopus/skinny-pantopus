@@ -185,6 +185,44 @@ through `PlanDetail` (`backend/services/plans/planService.js`).
   the `plans_playdates` flag off), and show the part of the day instead of the
   time until the viewer is in.
 
+### Moments
+
+A Moment (a photo, a short video or a text card for 1–48 hours, on the Moments map; behind the `moments` flag) is
+a `Post` with `is_story = true` (`backend/services/moments/momentStore.js`). Its pin is where the phone was when
+posting (a GPS fix at most 5 minutes old) or, for a library photo or video taken in the last 24 hours, where it was
+taken. Others see only what the author chose on the Post sheet, which shows the pin and the label first.
+
+| Moment | Point everyone sees (author included) | Place label |
+|--------|---------------------------------------|-------------|
+| Exact pin (default) | the exact point | a named place, else the street's name without a number, else the town |
+| "Show the area instead" | the grid-cell point under [Approximate-area points](#approximate-area-points) | the town |
+| Posted within ~60 m of the author's own home | as chosen (the Post sheet warns first) | the town |
+
+- **No live location, no trail:** only the posted point is stored; nothing joins one Moment to the next.
+- **The author may pick the name, never write it:** the Post sheet lists the names that fit an exact pin
+  (`places` on `POST /api/moments/place-preview`: the places at or within about 100 m, then the street's name
+  without a number, then the town). Posting sends back only a key from that list (`place_key`); the server works
+  the list out again for the Moment's own point, and an area or at-home Moment says the town whatever was picked.
+- **The push to connections says no more than the ring:** "Priya added a Moment" / "At Esther Short Park" ("On" a
+  street's name, "In" a town; an area or at-home Moment always says the town), the same label everyone reads, with
+  no picture, caption or card text (`backend/services/moments/momentNotify.js`). It goes only to accepted
+  connections who could open the Moment and whose app has Moments.
+- **Rings group by what viewers see:** an exact pin's ring is its 0.005° cell, an area pin's ring its displayed
+  point, so grouping never places an area Moment more precisely than its own point.
+- **Map queries filter on displayed points:** `GET /api/moments/map` reads stored points in a box widened by
+  `MAX_DISPLAY_OFFSET_DEGREES` on whole neighborhood cells, then keeps the Moments whose displayed point is in view.
+- **Files carry no location:** photo EXIF and video location tags are removed on upload (`photoMetadata.js`,
+  `videoMetadata.js`); files sit in private storage behind 15-minute signed links and are deleted 7 days after the
+  Moment ends (sooner when its author deletes it) unless a report holds them. Deleting the account deletes all of
+  its Moment files at once (`DELETE /api/users/account`, `momentMedia.removeAccountFiles`).
+- **Kept out of the generic surfaces:** `distribution_targets` is empty, `visibility` is `private`, they're off
+  profiles, and `feedService.onlyShownPosts` and `readAccess.canReadPost` refuse `is_story` rows, so no feed, posts
+  map layer, profile list or post route shows one, its author's included.
+- **The pin and label can't be changed afterwards:** the generic post routes that act on an author's own row
+  (`PATCH`, `DELETE`, archive and restore under `/api/posts/:id`, and `POST /api/upload/post-media/:postId`) refuse
+  an `is_story` row, so a Moment's point, place label and text stay what the Moments routes stored, and it ends
+  only through `DELETE /api/moments/:id` (which also deletes its private files, or keeps them for a review).
+
 ### Saved / Viewing Places
 
 These are per-user preferences stored locally or in `SavedPlace`.

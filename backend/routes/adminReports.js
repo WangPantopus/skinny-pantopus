@@ -57,15 +57,46 @@ async function usersById(ids) {
   }]));
 }
 
+// A reported Moment as the reviewer needs it: its kind, words and state, and short links to its picture (Moments live
+// in private storage, services/moments/momentMedia.js).
+async function momentsForReview(posts) {
+  const moments = posts.filter((p) => p.is_story);
+  if (!moments.length) return new Map();
+  const { meta, momentState } = require('../services/moments/momentStore');
+  const { signedLinks } = require('../services/moments/momentMedia');
+  const links = await signedLinks(undefined, moments.flatMap((p) => {
+    const stored = meta(p).media;
+    return stored ? [stored.key, stored.poster_key].filter(Boolean) : [];
+  }));
+  return new Map(moments.map((p) => {
+    const m = meta(p);
+    return [p.id, {
+      kind: m.kind || null,
+      state: momentState(p),
+      moderation_state: p.moderation_state,
+      expires_at: p.story_expires_at,
+      media_url: m.media?.key ? links.get(m.media.key) || null : null,
+      poster_url: m.media?.poster_key ? links.get(m.media.poster_key) || null : null,
+      check: m.check || null,
+    }];
+  }));
+}
+
 async function targetsFor(kind, ids) {
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return {};
   if (kind === 'post') {
     const { data } = await supabaseAdmin
       .from('Post')
-      .select('id, user_id, title, content, post_type, archived_at, created_at')
+      .select('id, user_id, title, content, post_type, archived_at, archive_reason, created_at, is_story, story_expires_at, moderation_state, post_metadata')
       .in('id', unique);
-    const authors = await usersById((data || []).map((p) => p.user_id));
+    const [authors, moments] = await Promise.all([
+      usersById((data || []).map((p) => p.user_id)),
+      momentsForReview(data || []).catch((err) => {
+        logger.warn('Admin reports: Moment links failed', { error: err.message });
+        return new Map();
+      }),
+    ]);
     return Object.fromEntries((data || []).map((p) => [p.id, {
       id: p.id,
       title: p.title || null,
@@ -73,6 +104,7 @@ async function targetsFor(kind, ids) {
       post_type: p.post_type || null,
       archived: Boolean(p.archived_at),
       author: authors[p.user_id] || null,
+      ...(moments.has(p.id) ? { moment: moments.get(p.id) } : {}),
     }]));
   }
   if (kind === 'gig') {
@@ -223,6 +255,15 @@ router.post('/:kind/:reportId/resolve', async (req, res) => {
     }
 
     logger.info('admin.report_closed', { kind, report_id: reportId, outcome, admin_id: req.user.id });
+    // A Moment held for review (two reports, or the picture check) is live again once its reports are all closed.
+    if (kind === 'post') {
+      const { data: target } = await supabaseAdmin.from('PostReport').select('post_id').eq('id', reportId).maybeSingle();
+      if (target?.post_id) {
+        await require('../services/moments/momentStore').releaseIfReviewed(target.post_id).catch((err) => {
+          logger.warn('Admin reports: Moment release failed', { reportId, error: err.message });
+        });
+      }
+    }
     res.json({ report: { kind, ...closed } });
   } catch (err) {
     logger.error('Admin report resolve error', { error: err.message });
@@ -255,7 +296,7 @@ router.post('/post/:reportId/remove', async (req, res) => {
     const now = new Date().toISOString();
     const { data: post, error: postError } = await supabaseAdmin
       .from('Post')
-      .select('id, user_id, archive_reason')
+      .select('id, user_id, archive_reason, is_story')
       .eq('id', report.post_id)
       .maybeSingle();
     if (postError) {
@@ -274,13 +315,14 @@ router.post('/post/:reportId/remove', async (req, res) => {
       // The author still sees the post, so without this they'd never learn neighbors can't.
       // Neither the reporter nor the moderator is named. The apps sort notices by words in the
       // type, and one with "post" in it would show as a Reply; this one lands under System.
+      // A Moment has no post page to open, so its notice links nowhere.
       notificationService.createNotification({
         userId: post.user_id,
         type: 'content_removed',
-        title: 'Your post was removed',
+        title: post.is_story ? 'Your Moment was removed' : 'Your post was removed',
         body: 'A Pantopus moderator removed it after a report. Neighbors can no longer see it.',
         icon: '🛡️',
-        link: `/posts/${post.id}`,
+        link: post.is_story ? null : `/posts/${post.id}`,
         metadata: { post_id: post.id },
         idempotencyKey: `post-removed:${post.id}`,
       }).catch((err) => {

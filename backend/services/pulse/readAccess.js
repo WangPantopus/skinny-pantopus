@@ -34,6 +34,7 @@ const POST_READ_SELECT = [
   'moderation_state',
   'read_scope',
   'area_id',
+  'is_story',
 ].join(', ');
 
 const METERS_PER_MILE = 1609.34;
@@ -152,6 +153,9 @@ function canReadPostModeration(post, userId, staff = false) {
  * block list (blockService.blockedUserIds, or that read in flight) when the caller reads it anyway.
  */
 async function canReadPost(post, userId, scopeAccess, blocked) {
+  // A Moment is read only through the Moments routes (routes/moments.js), with their flag, end time and audience; no
+  // post page, comment, like, share, save or report path opens one, its author's included.
+  if (post.is_story === true) return false;
   if (userId && post.user_id === userId) return true;
   if (!canReadPostModeration(post, userId, post.moderation_state === 'held' && await isStaff(userId))) return false;
   // A held post that passed the shared check belongs to staff's review view.
@@ -291,6 +295,7 @@ async function readablePosts(posts, userId) {
  * and verified-neighbors-only posts never show, and connections-only posts only to `connections`.
  */
 function audienceCanReadPost(post, audience) {
+  if (post.is_story === true) return false;
   if (!canReadPostModeration(post, null)) return false;
   if (post.identity_context_type === 'persona') return false;
   if (post.audience === 'household') return false;
