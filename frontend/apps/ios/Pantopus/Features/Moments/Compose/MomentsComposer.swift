@@ -14,6 +14,7 @@ import SwiftUI
 struct MomentsComposer: View {
     let onClose: @MainActor () -> Void
     @State private var model = MomentsComposerModel()
+    @State private var asksDiscard = false
 
     var body: some View {
         ZStack {
@@ -47,11 +48,28 @@ struct MomentsComposer: View {
         ) {
             Button("OK", role: .cancel) { close() }
         }
+        .alert("Discard this Moment?", isPresented: $asksDiscard) {
+            Button("Discard", role: .destructive) { leave() }
+                .accessibilityIdentifier("moments.compose.discard")
+            Button("Keep editing", role: .cancel) {}
+                .accessibilityIdentifier("moments.compose.keep")
+        } message: {
+            Text("What you wrote won't be saved.")
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.compose")
     }
 
+    /// Close asks first when a written card would be lost.
     private func close() {
+        if model.draft == nil, !model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            asksDiscard = true
+        } else {
+            leave()
+        }
+    }
+
+    private func leave() {
         model.abandon()
         onClose()
     }
@@ -89,7 +107,7 @@ struct MomentsComposerTopBar<Trailing: View>: View {
             .background(Capsule().fill(Color.black.opacity(onCard ? 0.22 : 0.42)))
             .background(Capsule().fill(.ultraThinMaterial).opacity(onCard ? 0 : 1))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("This Moment will pin at \(place)")
+            .accessibilityLabel("This Moment will pin at \(place == "Your home" ? "your home" : place)")
             .accessibilityIdentifier("moments.camera.place")
             Spacer(minLength: Spacing.s2)
             trailing()

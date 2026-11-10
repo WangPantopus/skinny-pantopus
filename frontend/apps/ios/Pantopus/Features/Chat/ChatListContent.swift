@@ -143,6 +143,8 @@ public struct ConversationMomentReply: Sendable, Hashable {
     public let thumbURL: URL?
     public let kind: String
     public let ended: Bool
+    /// A text card's color name.
+    public let background: String?
 
     init?(_ moment: ChatMomentRefDTO?) {
         guard let moment else { return nil }
@@ -150,6 +152,7 @@ public struct ConversationMomentReply: Sendable, Hashable {
         thumbURL = moment.thumbnail
         kind = moment.kind
         ended = moment.ended
+        background = moment.ended ? nil : moment.background
     }
 }
 

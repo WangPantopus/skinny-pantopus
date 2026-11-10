@@ -385,7 +385,11 @@ private struct RootTabBarItem: View {
         VStack(spacing: 3) {
             Icon(tab.icon, size: 24, strokeWidth: isSelected ? 2.25 : 1.75, color: flatTint)
                 .overlay(alignment: .topLeading) {
-                    if badge > 0 {
+                    if badge > 0, tab.badgeIsDot {
+                        RootTabDot(ring: true)
+                            .offset(x: 17, y: -2)
+                            .accessibilityIdentifier("tab.\(tab.id).badge")
+                    } else if badge > 0 {
                         RootTabBadge(count: badge, ring: true)
                             .offset(x: 16, y: -5)
                     }
@@ -417,7 +421,11 @@ private struct RootTabBarItem: View {
         Icon(tab.icon, size: 23, color: floatingTint)
             .symbolVariant(.fill)
             .overlay(alignment: .topLeading) {
-                if badge > 0 {
+                if badge > 0, tab.badgeIsDot {
+                    RootTabDot(ring: false)
+                        .offset(x: 16, y: -2)
+                        .accessibilityIdentifier("tab.\(tab.id).badge")
+                } else if badge > 0 {
                     RootTabBadge(count: badge, ring: false)
                         .offset(x: 15, y: -5)
                 }
@@ -436,7 +444,24 @@ private struct RootTabBarItem: View {
     /// "Mail, 3 unopened", "Messages, 2 unread", or the tab's name.
     private var accessibilityLabel: String {
         guard badge > 0 else { return tab.label }
+        if tab.badgeIsDot { return "\(tab.label), new" }
         return tab == .mail ? "\(tab.label), \(badge) unopened" : "\(tab.label), \(badge) unread"
+    }
+}
+
+/// A badge without a number: something new (the Moments tab).
+struct RootTabDot: View {
+    /// The flat bar's ring in the bar's color; the glass bar's has none.
+    let ring: Bool
+
+    var body: some View {
+        Circle()
+            .fill(Theme.Color.errorSolid)
+            .frame(width: 10, height: 10)
+            .overlay {
+                if ring { Circle().strokeBorder(Theme.Color.appSurface, lineWidth: 2).padding(-2) }
+            }
+            .accessibilityHidden(true)
     }
 }
 

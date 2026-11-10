@@ -56,6 +56,9 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
     public var gigUpdatesEnabled: Bool
     public var beaconPushEnabled: Bool
     public var homeRemindersEnabled: Bool
+    /// "Moments from your connections" (Moments contract v3): a push when a connection adds a Moment.
+    /// Nil from a server that doesn't send the field: the switch is hidden then.
+    public var momentsEnabled: Bool?
     /// `HH:mm` or nil. Nil on *either* end means quiet hours are off.
     public var quietHoursStartLocal: String?
     public var quietHoursEndLocal: String?
@@ -115,7 +118,8 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         dailyBriefingPromptedAt: String? = nil,
         suggestionsEnabled: Bool? = nil,
         suggestionsSupported: Bool = false,
-        suggestionsMuted: [String: String] = [:]
+        suggestionsMuted: [String: String] = [:],
+        momentsEnabled: Bool? = nil
     ) {
         self.dailyBriefingEnabled = dailyBriefingEnabled
         self.dailyBriefingTimeLocal = dailyBriefingTimeLocal
@@ -129,6 +133,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         self.gigUpdatesEnabled = gigUpdatesEnabled
         self.beaconPushEnabled = beaconPushEnabled
         self.homeRemindersEnabled = homeRemindersEnabled
+        self.momentsEnabled = momentsEnabled
         self.quietHoursStartLocal = quietHoursStartLocal
         self.quietHoursEndLocal = quietHoursEndLocal
         self.locationMode = locationMode
@@ -150,6 +155,7 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
         case gigUpdatesEnabled = "gig_updates_enabled"
         case beaconPushEnabled = "beacon_push_enabled"
         case homeRemindersEnabled = "home_reminders_enabled"
+        case momentsEnabled = "moments_enabled"
         case quietHoursStartLocal = "quiet_hours_start_local"
         case quietHoursEndLocal = "quiet_hours_end_local"
         case locationMode = "location_mode"
@@ -181,7 +187,8 @@ public struct NotificationPreferencesDTO: Decodable, Sendable, Hashable {
             suggestionsEnabled: container.decodeIfPresent(Bool.self, forKey: .suggestionsEnabled),
             suggestionsSupported: container.contains(.suggestionsEnabled),
             // A mute map of another shape reads as nothing muted.
-            suggestionsMuted: (try? container.decodeIfPresent([String: String].self, forKey: .suggestionsMuted)) ?? [:]
+            suggestionsMuted: (try? container.decodeIfPresent([String: String].self, forKey: .suggestionsMuted)) ?? [:],
+            momentsEnabled: container.decodeIfPresent(Bool.self, forKey: .momentsEnabled)
         )
     }
 }

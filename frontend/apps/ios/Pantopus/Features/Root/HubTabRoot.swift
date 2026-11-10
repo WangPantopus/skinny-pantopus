@@ -1575,7 +1575,7 @@ public struct HubTabRoot: View {
         case .feed, .post, .gig, .listing, .hubToday, .conversation,
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home,
              .creatorInbox, .fanInbox, .creatorAudienceMembers,
-             .plans, .plan, .planRequests, .planNew:
+             .plans, .plan, .planRequests, .planNew, .moments, .moment:
             return false
         // `/nearby` opens "Verified homes nearby" here while the Pulse redesign
         // is off (founder decision 2026-11-07); with it on, the Pulse tab takes it.

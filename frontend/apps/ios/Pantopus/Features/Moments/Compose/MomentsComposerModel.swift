@@ -64,6 +64,8 @@ final class MomentsComposerModel {
     }
 
     var background = "teal"
+    /// The place name picked on the Post sheet (a key from the preview's `places`); nil: the automatic one.
+    var placeKey: String?
     // The Post sheet (P3).
     var showArea = false
     var hours = 24
@@ -149,6 +151,8 @@ final class MomentsComposerModel {
                 longitude: longitude
             ))
             place = reply
+            // A picked name stays only while it still fits the pin.
+            if let placeKey, !reply.places.contains(where: { $0.key == placeKey }) { self.placeKey = nil }
             if reply.adultConfirmed == false { asksAdult = true }
         } catch let failure as MomentsFailure {
             if failure == .adultConfirmRequired { asksAdult = true }
@@ -171,12 +175,14 @@ final class MomentsComposerModel {
         }
     }
 
-    /// The place chip: "Esther Short Park", or why there's no pin yet.
+    /// The place chip: "Esther Short Park", "Your home" at home (as the Post sheet says; others read the
+    /// town), or why there's no pin yet.
     var placeChip: String {
         switch locating {
         case .locating: "Finding where you are…"
         case .unavailable: "Location is off"
-        case .located: place?.placeLabel.isEmpty == false ? place?.placeLabel ?? "" : "Near you"
+        case .located:
+            if place?.atHome == true { "Your home" } else { place?.placeLabel.isEmpty == false ? place?.placeLabel ?? "" : "Near you" }
         }
     }
 
@@ -289,11 +295,30 @@ final class MomentsComposerModel {
 
     // MARK: - The Post sheet
 
-    /// What the place row says: the place, the town for an area, or "Your home".
+    /// What the place row says: the place (the picked name, when one was picked), the town for an area, or
+    /// "Your home".
     var placeLine: String {
         if showArea { return place?.areaLabel ?? place?.placeLabel ?? "This area" }
         if place?.atHome == true { return "Your home" }
+        if let picked = pickedPlace { return picked.label }
         return place?.placeLabel.isEmpty == false ? place?.placeLabel ?? "" : "Near you"
+    }
+
+    /// The names to pick from: more than one fits the exact pin, and neither the area nor the home hides it.
+    var placeChoices: [MomentPlaceChoiceDTO] {
+        guard let place, place.places.count > 1, !showArea, !place.atHome else { return [] }
+        return place.places
+    }
+
+    /// The name the person picked, while it can still be picked.
+    var pickedPlace: MomentPlaceChoiceDTO? {
+        guard let placeKey else { return nil }
+        return placeChoices.first { $0.key == placeKey }
+    }
+
+    /// The row with the check: the picked one, else the automatic one (the first).
+    var selectedPlaceKey: String? {
+        pickedPlace?.key ?? placeChoices.first?.key
     }
 
     var showsHomeNotice: Bool {
@@ -356,7 +381,9 @@ extension MomentsComposerModel {
             background: kind == .text ? background : nil,
             location: pinAt,
             // The outbox folder's id (or the text card's) names this Post tap: a retry returns the same Moment.
-            clientRequestId: (prepared?.0 ?? textRequestId).lowercased()
+            clientRequestId: (prepared?.0 ?? textRequestId).lowercased(),
+            // Only a name other than the automatic one is sent; the server checks it against the pin itself.
+            placeKey: pickedPlace.flatMap { $0.key == placeChoices.first?.key ? nil : $0.key }
         )
         let created: MomentDTO
         do {

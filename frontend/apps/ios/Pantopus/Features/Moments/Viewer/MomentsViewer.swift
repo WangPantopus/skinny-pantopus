@@ -132,7 +132,7 @@ struct MomentsViewer: View {
             media
                 .frame(width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing, height: mediaHeight)
                 .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 18, bottomTrailingRadius: 18, style: .continuous))
-                .overlay { if isReplying { Color.black.opacity(0.5) } }
+                .overlay { if isReplying { Color.black.opacity(0.55) } }
                 .overlay(alignment: .top) {
                     LinearGradient(colors: [Color.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
                         .frame(height: 180)
@@ -237,7 +237,9 @@ struct MomentsViewer: View {
                 .accessibilityLabel("\(moment.author.shortName)'s video")
                 .accessibilityIdentifier("moments.viewer.video")
             case .text:
-                MomentsTextCard(text: moment.text ?? "", background: moment.background)
+                // While a reply is being written the card keeps its color and gives up its words, so they
+                // don't read through the reactions and the reply box.
+                MomentsTextCard(text: isReplying ? "" : moment.text ?? "", background: moment.background)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("moments.viewer.text")
             }

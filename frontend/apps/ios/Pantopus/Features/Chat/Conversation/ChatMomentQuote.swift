@@ -18,6 +18,9 @@ public struct ChatMomentQuote: Sendable, Hashable {
     public let thumbURL: URL?
     public let kind: String
     public let ended: Bool
+    /// A text card's color name and its first words, while it runs and the server sends them.
+    public let background: String?
+    public let excerpt: String?
 
     init?(_ moment: ChatMomentRefDTO?, side: ChatMessageSide) {
         guard let moment else { return nil }
@@ -26,6 +29,9 @@ public struct ChatMomentQuote: Sendable, Hashable {
         thumbURL = moment.thumbnail
         kind = moment.kind
         ended = moment.ended
+        background = moment.ended ? nil : moment.background
+        let words = moment.ended ? nil : moment.excerpt?.trimmingCharacters(in: .whitespacesAndNewlines)
+        excerpt = words?.isEmpty == false ? words : nil
     }
 }
 
@@ -45,7 +51,11 @@ struct ChatMomentQuoteView: View {
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(quote.ended ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
                 if !quote.ended {
-                    ChatMomentThumbnail(url: quote.thumbURL, kind: quote.kind, width: 54, height: 72)
+                    if quote.kind == "text", let excerpt = quote.excerpt {
+                        ChatMomentCardQuote(excerpt: excerpt, background: quote.background, side: side)
+                    } else {
+                        ChatMomentThumbnail(url: quote.thumbURL, kind: quote.kind, background: quote.background, width: 54, height: 72)
+                    }
                 }
             }
             .contentShape(Rectangle())
@@ -60,14 +70,18 @@ struct ChatMomentQuoteView: View {
                 onWatched: { _ in },
                 onHideAuthor: { _ in },
                 onShowAuthor: { _ in },
-                onClose: { watching = nil }
+                onClose: {
+                    watching = nil
+                    // What was watched here is no longer new on the Moments tab.
+                    Task { await MomentsTabDot.shared.reread() }
+                }
             )
         }
         .alert(note ?? "", isPresented: Binding(get: { note != nil }, set: { if !$0 { note = nil } })) {
             Button("OK", role: .cancel) {}
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(quote.label)
+        .accessibilityLabel(quote.excerpt.map { "\(quote.label): \($0)" } ?? quote.label)
         .accessibilityHint(quote.ended ? "" : "Opens the Moment")
         .accessibilityAddTraits(quote.ended ? [] : .isButton)
         .accessibilityIdentifier("chat.momentQuote")
@@ -92,10 +106,39 @@ struct ChatMomentQuoteView: View {
     }
 }
 
-/// A Moment's small picture: its photo or video poster, else a mark for its kind.
+/// A text card in a quote: its own color with its first words, two lines at most. As wide as its words,
+/// up to 200 points, on the bubble's side.
+struct ChatMomentCardQuote: View {
+    let excerpt: String
+    let background: String?
+    let side: ChatMessageSide
+
+    var body: some View {
+        let colors = MomentsPalette.card(background)
+        Text(excerpt)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 10)
+            .padding(.vertical, Spacing.s2)
+            .frame(minHeight: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(LinearGradient(colors: [colors.top, colors.bottom], startPoint: .top, endPoint: .bottom))
+            )
+            .frame(maxWidth: 200, alignment: side == .outgoing ? .trailing : .leading)
+            .accessibilityHidden(true)
+    }
+}
+
+/// A Moment's small picture: its photo or video poster, else a mark for its kind (a text card in its color).
 struct ChatMomentThumbnail: View {
     let url: URL?
     let kind: String
+    /// A text card's color name; the teal card when the server doesn't say.
+    var background: String?
     let width: CGFloat
     let height: CGFloat
 
@@ -124,7 +167,7 @@ struct ChatMomentThumbnail: View {
 
     private var placeholderFill: AnyShapeStyle {
         if kind == "text" {
-            let colors = MomentsPalette.card(nil)
+            let colors = MomentsPalette.card(background)
             return AnyShapeStyle(LinearGradient(colors: [colors.top, colors.bottom], startPoint: .top, endPoint: .bottom))
         }
         return AnyShapeStyle(Theme.Color.appSurfaceSunken)

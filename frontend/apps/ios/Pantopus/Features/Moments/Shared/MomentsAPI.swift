@@ -110,6 +110,8 @@ enum MomentsFailure: Error, Equatable {
         if let code, let known = codes[code] { return known }
         switch status {
         case 404: return .notFound
+        // The server gave up waiting for the rest of a slow upload: the same as a dropped connection.
+        case 408: return .offline
         case 410: return .ended
         case 413, 415: return .mediaRejected
         // The 20-a-day limit comes with its code; a bare 429 is the server's rate limit.

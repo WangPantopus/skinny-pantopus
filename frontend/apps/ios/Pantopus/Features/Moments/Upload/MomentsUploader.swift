@@ -6,12 +6,15 @@
 //  Moment itself is made while the sheet is still up (so "20 today" or "no
 //  connection" shows where the person can act); then its file goes up here
 //  with retries on a weak connection, and your ring on the map shows the
-//  progress ("Posting · 65%") until the Moment is live. Each one waits in its
-//  own outbox folder, so an upload the app was closed in the middle of picks
-//  up at the next launch (the server takes the same file again as a no-op).
-//  The files go once it's done.
+//  progress ("Posting · 65%") until the Moment is live. The file goes up
+//  through a background session (`MomentsBackgroundUpload`), so it finishes
+//  with the app in the background or closed by the system. Each one waits in
+//  its own outbox folder, so an upload that didn't finish (the app swiped
+//  away, no connection for hours) picks up at the next launch (the server
+//  takes the same file again as a no-op). The files go once it's done.
 //
 
+import CoreLocation
 import Foundation
 import Logging
 import Observation
@@ -63,18 +66,17 @@ final class MomentsUploader {
     var notice: String?
     /// "Your Moment is live. It shows for 24 hours.": the map shows it for a few seconds, then clears it.
     var liveNote: String?
+    /// A plain sentence for the same pill, without its check mark ("This Moment has ended." after a link to one).
+    var plainNote: String?
+    /// Where the Moment that just went live is pinned: the map goes there when it's showing somewhere else.
+    var liveSpot: CLLocationCoordinate2D?
 
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var media: [String: MomentPreparedMedia] = [:]
     @ObservationIgnored private var resumed = false
+    /// Postings picked up from the outbox at launch: the system may still be carrying their upload.
+    @ObservationIgnored private var pickedUp: Set<String> = []
     private let logger = Logger(label: "app.pantopus.ios.MomentsUploader")
-    /// Uploads get longer than the shared uploader's two minutes: a 50 MB video on a weak connection.
-    private let uploader: MultipartUploader = {
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 90
-        config.timeoutIntervalForResource = 900
-        return MultipartUploader(session: URLSession(configuration: config))
-    }()
 
     // MARK: - Posting
 
@@ -113,6 +115,7 @@ final class MomentsUploader {
 
     /// A text card is live the moment it's made: the map says so and reads its rings again.
     func wentLive(_ moment: MomentDTO) {
+        liveSpot = CLLocationCoordinate2D(latitude: moment.latitude, longitude: moment.longitude)
         announceLive(hours: moment.hours)
         finished += 1
     }
@@ -132,6 +135,7 @@ final class MomentsUploader {
     /// Give up on one: its files go.
     func discard(_ id: String) {
         tasks.removeValue(forKey: id)?.cancel()
+        MomentsBackgroundUpload.shared.cancel(id)
         let momentId = postings.first { $0.id == id }?.momentId
         finish(id)
         // A Moment made but never uploaded would wait as "uploading" until it ends; delete it.
@@ -180,28 +184,64 @@ final class MomentsUploader {
         await settle(id, state: uploaded.state, momentId: momentId)
     }
 
+    /// The file goes up in the background session. An upload an earlier run of the app started is
+    /// joined (or its answer taken), not sent twice. A 401 means the token ran out on the way, which
+    /// the session can't renew by itself: renewed here, then once more.
     private func upload(id: String, momentId: String, media: MomentPreparedMedia) async throws -> MomentDTO {
+        let progress: @Sendable (Double) -> Void = { fraction in
+            Task { @MainActor [weak self] in
+                self?.update(id) { $0.progress = max($0.progress, fraction) }
+            }
+        }
+        var outcome: MomentUploadOutcome = if let earlier = await earlierUpload(id, progress: progress) {
+            earlier
+        } else {
+            try await send(id: id, momentId: momentId, media: media, renewing: false, progress: progress)
+        }
+        if outcome.status == 401 {
+            outcome = try await send(id: id, momentId: momentId, media: media, renewing: true, progress: progress)
+            // The token just renewed was refused too: the session is over.
+            if outcome.status == 401 { await AuthManager.shared.handleUnauthorized() }
+        }
+        if outcome.cancelled { throw CancellationError() }
+        guard outcome.status != 0 else { throw MomentsFailure.offline }
+        guard outcome.succeeded else { throw MomentsFailure(status: outcome.status, body: outcome.body) }
+        update(id) { $0.progress = 1 }
+        if let moment = try? JSONDecoder().decode(MomentEnvelope.self, from: outcome.body).moment { return moment }
+        // The file is in but its answer didn't come whole (it arrived with the app closed): read the Moment.
+        return try await MomentsAPI.send(MomentsEndpoints.moment(id: momentId), as: MomentEnvelope.self).moment
+    }
+
+    /// What became of an upload that a run of the app before this one started: its answer when it ended
+    /// while the app was closed, or the wait for it when the system is still carrying it.
+    private func earlierUpload(_ id: String, progress: @escaping @Sendable (Double) -> Void) async -> MomentUploadOutcome? {
+        let background = MomentsBackgroundUpload.shared
+        if let ended = background.takeFinished(id) { return ended }
+        guard pickedUp.remove(id) != nil else { return nil }
+        if let joined = await background.join(id: id, progress: progress) { return joined }
+        // The system hands over what ended while the app was closed a moment after launch.
+        try? await Task.sleep(for: .milliseconds(700))
+        return background.takeFinished(id)
+    }
+
+    private func send(
+        id: String, momentId: String, media: MomentPreparedMedia, renewing: Bool, progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> MomentUploadOutcome {
         let folder = try Self.outboxRoot().appendingPathComponent(id, isDirectory: true)
         let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let request = try await MomentsBackgroundUpload.request(momentId: momentId, boundary: boundary, renewing: renewing)
+        // The body stays in the folder while the system sends it; it goes with the folder.
         let body = try MomentsUploadBody.write(media: media, folder: folder, boundary: boundary)
-        defer { try? FileManager.default.removeItem(at: body) }
-        let (data, response): (Data, HTTPURLResponse)
-        do {
-            (data, response) = try await uploader.uploadMomentMedia(momentId: momentId, bodyFile: body, boundary: boundary) { fraction in
-                Task { @MainActor [weak self] in
-                    self?.update(id) { $0.progress = max($0.progress, fraction) }
-                }
-            }
-        } catch let error as APIError {
-            throw MomentsFailure(error)
-        } catch is URLError {
-            throw MomentsFailure.offline
-        }
-        guard (200..<300).contains(response.statusCode) else {
-            throw MomentsFailure(status: response.statusCode, body: data)
-        }
-        update(id) { $0.progress = 1 }
-        return try JSONDecoder().decode(MomentEnvelope.self, from: data).moment
+        return await MomentsBackgroundUpload.shared.send(id: id, request: request, bodyFile: body, progress: progress)
+    }
+
+    /// An upload ended with nobody waiting for it: it finished while the app was closed. When it went in and
+    /// no posting ring is up for it, its files go and the map reads again; anything else waits for `resume`.
+    func endedInBackground(_ id: String, succeeded: Bool) {
+        guard succeeded, !postings.contains(where: { $0.id == id }) else { return }
+        _ = MomentsBackgroundUpload.shared.takeFinished(id)
+        removeFiles(id)
+        finished += 1
     }
 
     /// Live: the map says so and reads the ring. Checking: waits for the picture
@@ -228,7 +268,12 @@ final class MomentsUploader {
                 $0.progress = 1
             }
             removeFiles(id)
-            if state == .live { announceLive(hours: hours) }
+            if state == .live {
+                if let posting = postings.first(where: { $0.id == id }) {
+                    liveSpot = CLLocationCoordinate2D(latitude: posting.latitude, longitude: posting.longitude)
+                }
+                announceLive(hours: hours)
+            }
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(6))
                 self?.postings.removeAll { $0.id == id && $0.phase == .live }
@@ -279,6 +324,7 @@ final class MomentsUploader {
     func resume(account: String?) {
         guard !resumed, let account, let root = try? Self.outboxRoot() else { return }
         resumed = true
+        MomentsBackgroundUpload.shared.start()
         let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
         for folder in folders {
             let id = folder.lastPathComponent
@@ -298,6 +344,7 @@ final class MomentsUploader {
                 phase: .uploading,
                 hours: saved.hours ?? 24
             ))
+            pickedUp.insert(id)
             run(id)
         }
     }
@@ -335,8 +382,12 @@ final class MomentsUploader {
         }
         tasks = [:]
         media = [:]
+        pickedUp = []
+        MomentsBackgroundUpload.shared.cancelAll()
         postings = []
+        plainNote = nil
         liveNote = nil
+        liveSpot = nil
         resumed = false
         if let root = try? Self.outboxRoot() { try? FileManager.default.removeItem(at: root) }
     }
