@@ -185,11 +185,13 @@ function Booklet({ credits }: { credits: number }) {
  * The stamp books: what's left, the three books, and what a stamp does. `short`: opened for a list whose cards need more
  * stamps than are left.
  */
-export function StampSheet({ open, onClose, stamps, short = null }: {
+export function StampSheet({ open, onClose, stamps, short = null, overTable = false }: {
   open: boolean;
   onClose: () => void;
   stamps: Stamps;
   short?: { cards: number; missing: number } | null;
+  /** Opened while sealing a card on the table: drawn above it. */
+  overTable?: boolean;
 }) {
   const headingId = useId();
   const b = stamps.balance;
@@ -205,7 +207,7 @@ export function StampSheet({ open, onClose, stamps, short = null }: {
           ? `You have ${plural(paid, "stamp")}.`
           : `You have ${plural(free, "free card")} left.`;
   return (
-    <BottomSheet open={open} onClose={onClose} labelledBy={headingId} className="!bg-[#f7f1e6] !border-[#e7dcc6]">
+    <BottomSheet open={open} onClose={onClose} labelledBy={headingId} overTable={overTable} className="!bg-[#f7f1e6] !border-[#e7dcc6]">
       <div data-testid="stampSheet" className="px-1 pb-1 text-[#1f2937]">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
