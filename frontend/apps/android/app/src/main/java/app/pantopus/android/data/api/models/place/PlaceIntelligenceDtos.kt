@@ -1482,10 +1482,51 @@ data class PlaceIntelligence(
     @Json(name = "move_in_date") val moveInDate: String? = null,
     /** The home's IANA time zone (Today turns over at its midnight); null without coordinates and from older servers. */
     @Json(name = "time_zone") val timeZone: String? = null,
+    /** The Home Money Check's cards for the money page, the confirmed owner's. Null when there are none and from older servers. */
+    @Json(name = "money_cards") val moneyCards: List<PlaceMoneyCard>? = null,
 ) {
     /** [timeZone] as a zone: every clock time shown for this place is read in it (TPR contract); null when unknown. */
     val homeZone: ZoneId? get() = timeZone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
 }
+
+/**
+ * One card of the Home Money Check on the money page, in words to draw as they come: the server writes every
+ * line, so a new check needs no app release. Tones and ids are strings, so a new value never fails the decode.
+ */
+@JsonClass(generateAdapter = true)
+data class PlaceMoneyCard(
+    /** "property_tax_check" today; an id this build doesn't know is still drawn. */
+    val id: String,
+    val title: String,
+    val chip: PlaceMoneyCardChip? = null,
+    val lead: String? = null,
+    val rows: List<PlaceMoneyCardRow> = emptyList(),
+    val notes: List<String> = emptyList(),
+    /** Where the figures come from, with their date. */
+    val source: String? = null,
+    val action: PlaceMoneyCardAction? = null,
+)
+
+/** [tone] is "warning", "success" or "neutral". */
+@JsonClass(generateAdapter = true)
+data class PlaceMoneyCardChip(
+    val tone: String,
+    val text: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class PlaceMoneyCardRow(
+    val id: String,
+    val label: String,
+    val value: String,
+)
+
+/** One next step: an app path ("/app/…") or an https page. */
+@JsonClass(generateAdapter = true)
+data class PlaceMoneyCardAction(
+    val label: String,
+    val url: String,
+)
 
 // ─── Anonymous T0 preview (`GET /api/public/place`) ──────────
 

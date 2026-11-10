@@ -70,7 +70,9 @@ import app.pantopus.android.ui.screens.place.components.PlaceIconTile
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
 import app.pantopus.android.ui.screens.place.components.PlaceTileTone
 import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.screens.place.otherMoneyCards
 import app.pantopus.android.ui.screens.place.ownerTools
+import app.pantopus.android.ui.screens.place.propertyTaxCheck
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -134,6 +136,11 @@ fun PlaceMoneyDetailContent(
     }
     // Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check.
     if (intel.ownerTools) OwnerTools(intel, viewModel)
+    intel.otherMoneyCards.forEach { card ->
+        PlaceDetailSectionLabel(card.title)
+        PlaceMoneyCheckCard(card)
+        card.source?.let { PlaceSourceNote(it) }
+    }
 }
 
 /** A provider note under a section, left off a locked card (as on the web). */
@@ -173,6 +180,18 @@ private fun OwnerTools(
     PlaceComingSoonRow(PantopusIcon.Landmark, "Deed & lien alerts", "Know within days if anyone records against your home")
 
     PlaceDetailSectionLabel("Property tax")
+    val taxCheck = intel.propertyTaxCheck
+    if (taxCheck != null) {
+        PlaceMoneyCheckCard(taxCheck)
+        taxCheck.source?.let { PlaceSourceNote(it) }
+    } else {
+        HowAppealsWork()
+    }
+}
+
+/** Shown until the server has a property tax check for this home. */
+@Composable
+private fun HowAppealsWork() {
     PlaceDetailCard {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("How appeals work", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)

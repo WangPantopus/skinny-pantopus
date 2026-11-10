@@ -56,21 +56,33 @@ struct PlaceMoneyDetailContent: View {
             )
 
             PlaceDetailSectionLabel(text: "Property tax")
-            PlaceDetailCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("How appeals work")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                    Text(
-                        "If your assessment is above market, that's the usual basis for an appeal. Check your county's deadline, gather comparable sales, and file a petition with the assessor."
-                    )
-                    .font(.system(size: 13.5))
-                    .lineSpacing(2)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    Text("Informational only — not legal or tax advice.")
-                        .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.warning)
+            if let card = intel.propertyTaxCheck {
+                PlaceMoneyCheckCard(card: card)
+                if let source = card.source {
+                    PlaceSourceNote(name: source, asOf: nil)
                 }
+            } else {
+                howAppealsWork
+            }
+        }
+    }
+
+    /// Shown until the server has a property tax check for this home.
+    private var howAppealsWork: some View {
+        PlaceDetailCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("How appeals work")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                Text(
+                    "If your assessment is above market, that's the usual basis for an appeal. Check your county's deadline, gather comparable sales, and file a petition with the assessor."
+                )
+                .font(.system(size: 13.5))
+                .lineSpacing(2)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                Text("Informational only — not legal or tax advice.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.warning)
             }
         }
     }
@@ -155,6 +167,14 @@ struct PlaceMoneyDetailContent: View {
             // Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check.
             if intel.ownerTools {
                 ownerTools
+            }
+
+            ForEach(intel.otherMoneyCards) { card in
+                PlaceDetailSectionLabel(text: card.title)
+                PlaceMoneyCheckCard(card: card)
+                if let source = card.source {
+                    PlaceSourceNote(name: source, asOf: nil)
+                }
             }
         }
     }

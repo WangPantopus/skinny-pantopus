@@ -1853,14 +1853,69 @@ public struct PlaceIntelligence: Decodable, Sendable, Hashable {
     /// The place's IANA time zone (`America/Los_Angeles`): Today turns over
     /// at midnight there. Nil without coordinates and from older servers.
     public var timeZone: String?
+    /// The Home Money Check's cards for the money page, the confirmed
+    /// owner's. Nil when there are none and from older servers.
+    public var moneyCards: [PlaceMoneyCard]?
 
     private enum CodingKeys: String, CodingKey {
         case place, tier, groups, viewer
+        case moneyCards = "money_cards"
         case moveInDate = "move_in_date"
         case timeZone = "time_zone"
         case verifyAvailable = "verify_available"
         case regionSupported = "region_supported"
         case generatedAt = "generated_at"
+    }
+}
+
+/// One card of the Home Money Check on the money page, in words to draw as
+/// they come: the server writes every line, so a new check needs no app
+/// release. Tones and ids are strings, and a missing list reads as empty,
+/// so a new value never fails the decode.
+public struct PlaceMoneyCard: Decodable, Sendable, Hashable, Identifiable {
+    public struct Chip: Decodable, Sendable, Hashable {
+        /// "warning", "success" or "neutral".
+        public let tone: String
+        public let text: String
+    }
+
+    public struct Row: Decodable, Sendable, Hashable, Identifiable {
+        public let id: String
+        public let label: String
+        public let value: String
+    }
+
+    /// One next step: an app path ("/app/…") or an https page.
+    public struct Action: Decodable, Sendable, Hashable {
+        public let label: String
+        public let url: String
+    }
+
+    /// "property_tax_check" today; an id this build doesn't know is still drawn.
+    public let id: String
+    public let title: String
+    public let chip: Chip?
+    public let lead: String?
+    public let rows: [Row]
+    public let notes: [String]
+    /// Where the figures come from, with their date.
+    public let source: String?
+    public let action: Action?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, chip, lead, rows, notes, source, action
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        chip = try? container.decodeIfPresent(Chip.self, forKey: .chip)
+        lead = try? container.decodeIfPresent(String.self, forKey: .lead)
+        rows = (try? container.decodeIfPresent([Row].self, forKey: .rows)) ?? []
+        notes = (try? container.decodeIfPresent([String].self, forKey: .notes)) ?? []
+        source = try? container.decodeIfPresent(String.self, forKey: .source)
+        action = try? container.decodeIfPresent(Action.self, forKey: .action)
     }
 }
 
