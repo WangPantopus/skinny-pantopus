@@ -30,8 +30,12 @@ import CardBack, { BACK_TEXT, RULED } from './CardBack';
 import CardFlip from './CardFlip';
 import CardLinkActions from './CardLinkActions';
 import LookItOver from './LookItOver';
+import CardTable, { type SendMoment, type TableCard } from './CardTable';
+import CardShareSheet from './CardShareSheet';
+import CardRack from './CardRack';
 import { askTakeBack } from './takeBack';
-import { cardPicture, clockTime, SERIF, shortDay, WAX } from './cardArt';
+import { chosenPersonFor } from './sendOneBack';
+import { cardPicture, clockTime, firstNameOf, SERIF, shortDay, WAX } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
 /** Someone on a list (digital stamps on): a person found by name, or an address. */
@@ -412,6 +416,8 @@ function PickStep({
   onNext: () => void;
 }) {
   const [large, setLarge] = useState<HolidayCardDesign | null>(null);
+  // The card rack (launch key card_table, design plan Part 5): the picture it's open at.
+  const [rack, setRack] = useState<string | null>(null);
   const byId = useMemo(() => new Map(designs.map((design) => [design.id, design])), [designs]);
   const shelves = useMemo(() => collections.filter((c) => c.designs.some((id) => byId.has(id))), [collections, byId]);
   // The collection that holds the chosen card (coming back from step 3), else the first. Switching keeps the card.
@@ -459,7 +465,7 @@ function PickStep({
   };
 
   const gridView = (
-    <div role="radiogroup" aria-label={shown?.name ?? 'Christmas cards'} className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4">
+    <div role="radiogroup" aria-label={shown?.name ?? 'Christmas cards'} className={launchFeatures.cardTable ? 'grid grid-cols-2 gap-x-3.5 gap-y-5 sm:grid-cols-3' : 'grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4'}>
       {grid.map((design) => {
         const selected = design.id === chosen;
         return (
@@ -470,7 +476,7 @@ function PickStep({
             aria-checked={selected}
             aria-label={design.caption}
             data-testid={`sendCardDesign.${design.id}`}
-            onClick={() => (selected ? setLarge(design) : onChoose(design.id))}
+            onClick={() => (launchFeatures.cardTable ? setRack(design.id) : selected ? setLarge(design) : onChoose(design.id))}
             className="group flex flex-col items-center gap-1.5 rounded-lg p-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
           >
             <span
@@ -485,7 +491,7 @@ function PickStep({
                 </span>
               ) : null}
             </span>
-            <span className="line-clamp-2 text-[12px] font-medium leading-4 text-[#374151] [@media(prefers-color-scheme:dark)]:text-app-text-secondary">{design.caption}</span>
+            <span className={`${launchFeatures.cardTable ? 'text-[13px] leading-[18px]' : 'line-clamp-2 text-[12px] leading-4'} font-medium text-[#374151] [@media(prefers-color-scheme:dark)]:text-app-text-secondary`}>{design.caption}</span>
           </button>
         );
       })}
@@ -532,15 +538,55 @@ function PickStep({
           </div>
         </>
       ) : gridView}
-      <div className="mt-6 space-y-2.5 pb-4">
-        {picked ? (
-          <button type="button" data-testid="sendCardSeeLarger" onClick={() => setLarge(picked)} className={secondary}>See it larger</button>
-        ) : (
-          <p className={`text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
-        )}
-        <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Write on this card</button>
-      </div>
+      {/* On the table's paper (launch key card_table) the main button stays in sight at the bottom edge while the
+          pictures scroll, with the chosen picture beside it (design plan 1.1). */}
+      {launchFeatures.cardTable ? (
+        <div
+          data-testid="sendCardPickBar"
+          className="sticky bottom-0 z-10 -mx-4 mt-5 md:-bottom-6 border-t border-[#e3d8c3] bg-[#f5f0e8] px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-6px_16px_rgba(60,40,10,0.08)] [@media(prefers-color-scheme:dark)]:border-app [@media(prefers-color-scheme:dark)]:bg-app"
+        >
+          <div className="flex min-h-[48px] items-center gap-3">
+            {picked ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cardPicture(picked.id, 'thumb')} alt="" className="w-10 flex-shrink-0 -rotate-2 rounded-[2px] shadow-[0_3px_8px_rgba(60,40,10,0.25)]" />
+                <p className="min-w-0 flex-1 text-[14px] font-medium leading-[18px] text-[#374151] [@media(prefers-color-scheme:dark)]:text-app-text-secondary">{picked.caption}</p>
+                <button
+                  type="button"
+                  data-testid="sendCardSeeLarger"
+                  onClick={() => setRack(picked.id)}
+                  className="flex min-h-[44px] flex-shrink-0 items-center rounded-xl border border-[#d6cbb6] bg-[#fffdf8] px-3.5 text-[14px] font-semibold text-[#374151] transition hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+                >
+                  See it larger
+                </button>
+              </>
+            ) : (
+              <p className={`flex-1 text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
+            )}
+          </div>
+          <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={`${primary} mt-2`} style={{ backgroundColor: WAX }}>Write on this card</button>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-2.5 pb-4">
+          {picked ? (
+            <button type="button" data-testid="sendCardSeeLarger" onClick={() => setLarge(picked)} className={secondary}>See it larger</button>
+          ) : (
+            <p className={`text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
+          )}
+          <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Write on this card</button>
+        </div>
+      )}
 
+      {rack ? (
+        <CardRack
+          designs={grid}
+          collectionName={shown?.name ?? null}
+          start={rack}
+          year={year}
+          onClose={(lastSeen) => { onChoose(lastSeen); setRack(null); }}
+          onWrite={(id) => { onChoose(id); setRack(null); onNext(); }}
+        />
+      ) : null}
       {large ? (
         <div role="dialog" aria-modal="true" aria-label={large.caption} data-testid="sendCardLarge" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4" onClick={() => setLarge(null)}>
           <div style={{ width: 'min(420px, calc((100vh - 120px) * 0.72), 100%)' }} onClick={(event) => event.stopPropagation()}>
@@ -794,6 +840,7 @@ function LookStep({
   stamps = null,
   design = '',
   onGetStamps,
+  onSealOnTable,
 }: {
   preview: HolidayCardPreview;
   to: Recipient;
@@ -804,6 +851,8 @@ function LookStep({
   stamps?: Stamps | null;
   design?: string;
   onGetStamps?: () => void;
+  /** Seal it by hand on the table (design plan Part 2, launch key card_table) instead of sending it from here. */
+  onSealOnTable?: () => void;
 }) {
   const needsStamps = stamps?.balance?.available === 0;
   return (
@@ -815,7 +864,7 @@ function LookStep({
         </p>
         {stamps ? <div className="mt-3"><PostageLine stamps={stamps} design={design} /></div> : null}
         {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
-        <button type="button" data-testid="sendCardLookSend" disabled={sending} onClick={needsStamps ? onGetStamps : onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
+        <button type="button" data-testid="sendCardLookSend" disabled={sending} onClick={needsStamps ? onGetStamps : onSealOnTable ?? onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
           {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
           {needsStamps ? 'Get stamps to send' : sendWords(to)}
         </button>
@@ -855,6 +904,7 @@ function ListLookStep({
   stamps,
   design,
   onGetStamps,
+  onSealOnTable,
 }: {
   look: HolidayCardListPreview;
   entries: ListEntry[];
@@ -865,6 +915,8 @@ function ListLookStep({
   stamps: Stamps | null;
   design: string;
   onGetStamps: () => void;
+  /** Seal them by hand on the table (design plan Part 2): the moment plays once for the whole list. */
+  onSealOnTable?: () => void;
 }) {
   const byId = new Map(entries.map((entry) => [idOf(entry), entry]));
   const ready = look.recipients.filter((line) => line.status === 'ready');
@@ -901,7 +953,7 @@ function ListLookStep({
         {stamps && look.needed ? <div className="mt-3"><PostageLine stamps={stamps} design={design} count={look.needed} /></div> : null}
         {!look.needed ? <p className={`mt-3 text-center text-[14px] ${muted}`}>None of these cards can go now.</p> : null}
         {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
-        <button type="button" data-testid="sendCardLookSend" disabled={sending || !look.needed} onClick={needsStamps ? onGetStamps : onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
+        <button type="button" data-testid="sendCardLookSend" disabled={sending || !look.needed} onClick={needsStamps ? onGetStamps : onSealOnTable ?? onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
           {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
           {needsStamps ? 'Get stamps to send' : sending ? `Sending ${cards}…` : `Seal and send ${cards}`}
         </button>
@@ -1095,9 +1147,11 @@ function SentCard({
 
 // ── The flow ─────────────────────────────────────────────────
 
-export default function SendCardFlow({ chosenDesign = null }: {
+export default function SendCardFlow({ chosenDesign = null, chosenPerson = null }: {
   /** The picture a public card page sent them here with (launch key card_table). */
   chosenDesign?: string | null;
+  /** Send one back (launch key card_table): the person a card on the table sent them here for. */
+  chosenPerson?: string | null;
 }) {
   const router = useRouter();
   const cards = useHolidayCards();
@@ -1147,6 +1201,13 @@ export default function SendCardFlow({ chosenDesign = null }: {
   const [listTakeBackError, setListTakeBackError] = useState<{ id: string; message: string } | null>(null);
   // The stamp books opened because a list's cards need more stamps than are left.
   const [stampShort, setStampShort] = useState<{ cards: number; missing: number } | null>(null);
+  // Sealing it by hand (design plan Part 2, launch key card_table): after Look it over, the card lies on the table and
+  // goes the moment the seal is pressed home. What the table shows is kept here, so it stays through the send.
+  const [sealing, setSealing] = useState<{ card: TableCard; note: string; fromName: string; toName: string; who: string; count: number } | null>(null);
+  const [sealShare, setSealShare] = useState(false);
+  const [linkSaid, setLinkSaid] = useState<string | null>(null);
+  const sealingOpen = useRef(false);
+  sealingOpen.current = Boolean(sealing);
 
   const data = cards.data;
   const max = data?.max_recipients ?? 1;
@@ -1174,6 +1235,18 @@ export default function SendCardFlow({ chosenDesign = null }: {
     setTo(listed.length === 1 ? listed[0] : { kind: 'list', entries: listed });
     setStep('pick');
   };
+
+  // Send one back: that person is already chosen and the flow opens at Pick a card, unless today's card has gone and
+  // there are no stamps to send another (then this page shows today's card, as it always does). Once, as it opens.
+  const choseOnce = useRef(false);
+  useEffect(() => {
+    if (choseOnce.current || !launchFeatures.cardTable || !data) return;
+    choseOnce.current = true;
+    const person = chosenPersonFor(chosenPerson);
+    if (!person || !data.open) return;
+    setTo({ kind: 'person', userId: person.userId, name: person.name });
+    if (!(today && !data.postage_enabled)) setStep('pick');
+  }, [data, chosenPerson, today]);
 
   // Each step starts at its heading, for keyboards and screen readers.
   useEffect(() => { headingRef.current?.focus(); }, [step]);
@@ -1228,6 +1301,8 @@ export default function SendCardFlow({ chosenDesign = null }: {
 
   // Everything written goes, and the next card starts on its first step with a request ID of its own.
   const startOver = () => {
+    setSealing(null);
+    setSealShare(false);
     requestId.current = null;
     listIds.current = new Map();
     setSent(null);
@@ -1352,6 +1427,127 @@ export default function SendCardFlow({ chosenDesign = null }: {
     });
   };
 
+  // ── Sealing it by hand on the table ──
+  const openSealing = () => {
+    if (!to || !data) return;
+    const piece = to.kind === 'list' ? listLook?.piece : look?.piece;
+    const card: TableCard | null = piece?.card ?? (design ? {
+      design: design.id, number: design.number, caption: design.caption, paper: design.paper, table: design.table ?? null, year: data.year, sealed: false,
+    } : null);
+    if (!card) return;
+    setLinkSaid(null);
+    setSealing({
+      card,
+      note: piece?.content || message.trim(),
+      fromName: piece?.sender_display || fromName,
+      toName: (to.kind !== 'list' && piece?.recipient_name) || envelopeName(to),
+      who: to.kind === 'person' ? firstName(to.name) : toName(to),
+      count: to.kind === 'list' ? to.entries.length : 1,
+    });
+  };
+
+  // The seal is on: send it now, with the card's request ID, as "Seal and send" does. Answers whether it went; a
+  // refusal leaves the card unsent and says why (no stamps: the stamp books open over the table).
+  const sealAndSend: SendMoment['onSeal'] = () => new Promise((resolve) => {
+    const refused = (message: string | null = null) => resolve({ ok: false, message });
+    if (to?.kind === 'list') {
+      const list = listToSend(to.entries);
+      if (!list) { refused(); return; }
+      setListError(null);
+      sendList.mutate(list, {
+        onSuccess: (res) => {
+          setListSent(res.results);
+          resolve({ ok: true });
+          if (!sealingOpen.current) { setListLook(null); setStep('sent'); }
+        },
+        onError: (error) => {
+          if (error.serverCode === 'STAMPS_REQUIRED') {
+            const needed = Number(error.data?.needed) || list.recipients.length;
+            const have = Number(error.data?.available) || 0;
+            setStampShort({ cards: needed, missing: Math.max(1, needed - have) });
+            void stamps.refresh();
+            setStampSheet(true);
+            refused();
+            return;
+          }
+          refused(sendMessage(error));
+        },
+      });
+      return;
+    }
+    const card = cardToSend();
+    if (!card) { refused(); return; }
+    send.mutate(card, {
+      onSuccess: (res) => {
+        requestId.current = null;
+        setSent(res.card);
+        setSentLink(res.link ?? null);
+        resolve({ ok: true });
+        if (!sealingOpen.current) { setLook(null); setStep('sent'); }
+      },
+      onError: (error) => {
+        const earlier = error.serverCode === 'CARD_REQUEST_SENT' ? (error.data?.card as SentHolidayCard | undefined) : undefined;
+        if (earlier) {
+          // An earlier try went and its answer was lost: this is that card.
+          requestId.current = null;
+          setSent(earlier);
+          send.reset();
+          resolve({ ok: true });
+          return;
+        }
+        if (error.serverCode === 'CARD_TAKEN_BACK') { refused(); wentEarlier(error); return; }
+        if (error.serverCode === 'STAMPS_REQUIRED') {
+          send.reset();
+          void stamps.refresh();
+          setStampSheet(true);
+          refused();
+          return;
+        }
+        if (error.serverCode === 'CARD_ARRIVAL_CLOSED') {
+          // Their 7 a.m. came while they looked it over: choose again on step 4, as before.
+          refused();
+          setSealing(null);
+          setSealError(sendMessage(error));
+          send.reset();
+          setLook(null);
+          setStep('seal');
+          void cards.refetch();
+          if (to?.kind === 'person') void theirs.refetch();
+          return;
+        }
+        send.reset();
+        refused(sendMessage(error, to?.kind === 'email'));
+      },
+    });
+  });
+
+  // The table closes: what was sent shows underneath; nothing sent, they're back at Look it over.
+  const closeSealing = () => {
+    setSealing(null);
+    setSealShare(false);
+    if (sent || listSent) { setLook(null); setListLook(null); setStep('sent'); }
+  };
+  const listWent = listSent?.filter((result) => result.status !== 'not_sent').length ?? 0;
+  const listMissed = (listSent?.length ?? 0) - listWent;
+  // Done: back to the Mailbox, where the flag is up. A list with cards that didn't go shows which, to send them again.
+  const sealingDone = () => {
+    if (listMissed) { closeSealing(); return; }
+    setSealing(null);
+    router.push('/app/mailbox/personal');
+  };
+  const copySealedLink = async () => {
+    if (!sentLink) return;
+    try { await navigator.clipboard.writeText(sentLink); setLinkSaid('Link copied'); } catch { setLinkSaid('Couldn’t copy it from here. Select the link and copy it.'); }
+  };
+  const shareSealedLink = async () => {
+    if (!sentLink) return;
+    try {
+      await navigator.share({ text: `A Christmas card for you from ${firstNameOf(fromName)}: ${sentLink}` });
+    } catch (error) {
+      if ((error as { name?: string } | null)?.name !== 'AbortError') setLinkSaid('Couldn’t open the share sheet. Copy the link and send it yourself.');
+    }
+  };
+
   const doTakeBack = async () => {
     if (!today) return;
     // Today's card: taking it back frees the day.
@@ -1420,7 +1616,7 @@ export default function SendCardFlow({ chosenDesign = null }: {
         trailing={data.postage_enabled ? <StampChip stamps={stamps} onOpen={() => { setStampShort(null); setStampSheet(true); }} /> : null}
       />
       {data.postage_enabled ? (
-        <StampSheet open={stampSheet} onClose={() => { setStampSheet(false); setStampShort(null); }} stamps={stamps} short={stampShort} />
+        <StampSheet open={stampSheet} onClose={() => { setStampSheet(false); setStampShort(null); }} stamps={stamps} short={stampShort} overTable={Boolean(sealing)} />
       ) : null}
       {(tookBack || takenBackNote) && step === 'to' ? (
         <p role="status" className="mx-4 mt-2 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[14px] text-[#374151]">
@@ -1493,6 +1689,7 @@ export default function SendCardFlow({ chosenDesign = null }: {
           stamps={data.postage_enabled ? stamps : null}
           design={design?.id ?? ''}
           onGetStamps={() => setStampSheet(true)}
+          onSealOnTable={launchFeatures.cardTable ? openSealing : undefined}
         />
       ) : null}
       {step === 'look' && listLook && to?.kind === 'list' ? (
@@ -1510,6 +1707,7 @@ export default function SendCardFlow({ chosenDesign = null }: {
             setStampShort({ cards: listLook.needed, missing: Math.max(1, listLook.needed - have) });
             setStampSheet(true);
           }}
+          onSealOnTable={launchFeatures.cardTable ? openSealing : undefined}
         />
       ) : null}
       {step === 'sent' && listSent && to?.kind === 'list' ? (
@@ -1536,6 +1734,60 @@ export default function SendCardFlow({ chosenDesign = null }: {
         </div>
       ) : null}
       </div>
+      {sealing ? (
+        <CardTable
+          card={sealing.card}
+          note={sealing.note}
+          fromName={sealing.fromName}
+          toName={sealing.toName}
+          closeLabel={sent || listSent ? 'Done' : 'Back to Look it over'}
+          paused={sealShare || stampSheet}
+          onClose={closeSealing}
+          sendMoment={{
+            firstName: sealing.who,
+            count: sealing.count,
+            onSeal: sealAndSend,
+            goneWords: listSent
+              ? (listWent === 1 ? 'One card on its way.' : `${listWent} cards on their way.`)
+              : sent?.by_link ? 'Your card is ready.' : `On its way to ${sealing.who}.`,
+            gone: listSent ? (
+              <>
+                <p>{listMissed ? `${listMissed === 1 ? 'One card' : `${listMissed} cards`} didn’t go. See which, and send them again.` : to ? takeBackBefore(to) : ''}</p>
+                <div data-row>
+                  <button type="button" data-strong data-testid="sealDone" onClick={sealingDone}>{listMissed ? 'See which' : 'Done'}</button>
+                  {listMissed ? null : <button type="button" data-testid="sealSeeThem" onClick={closeSealing}>See them</button>}
+                </div>
+              </>
+            ) : sent ? (
+              <>
+                <p>{arrivalLine(sent)}</p>
+                {sent.by_link && sentLink ? <p data-testid="sealLink" style={{ userSelect: 'text', WebkitUserSelect: 'text' }}>{sentLink}</p> : null}
+                {takeBackLine(sent) ? <p>{takeBackLine(sent)}</p> : null}
+                <div data-row>
+                  <button type="button" data-strong data-testid="sealDone" onClick={sealingDone}>Done</button>
+                  {sent.by_link && sentLink ? <button type="button" data-testid="sealCopyLink" onClick={() => { void copySealedLink(); }}>Copy link</button> : null}
+                  {sent.by_link && sentLink && typeof navigator !== 'undefined' && 'share' in navigator ? (
+                    <button type="button" data-testid="sealShareLink" onClick={() => { void shareSealedLink(); }}>Share</button>
+                  ) : null}
+                  {sent.can_take_back ? (
+                    <button type="button" data-testid="sealTakeBack" disabled={takeBack.isPending} onClick={() => { void doTakeBack(); }}>Take it back</button>
+                  ) : null}
+                  {sent.by_link ? null : <button type="button" data-testid="sealShare" onClick={() => setSealShare(true)}>Share this card</button>}
+                </div>
+                {linkSaid || takeBackError ? <p role="status">{linkSaid ?? takeBackError}</p> : null}
+              </>
+            ) : null,
+          }}
+          overlay={sealShare && sent ? (
+            <CardShareSheet
+              details={{ card: { ...sealing.card, sealed: sent.arrival === 'sealed_christmas' }, note: sealing.note, fromName: sealing.fromName, mailedOn: sent.sent_at }}
+              slug={data.designs.find((d) => d.id === sealing.card.design)?.slug}
+              mine
+              onClose={() => setSealShare(false)}
+            />
+          ) : null}
+        />
+      ) : null}
     </div>
   );
 }

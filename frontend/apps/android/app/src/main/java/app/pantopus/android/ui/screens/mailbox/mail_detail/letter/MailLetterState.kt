@@ -53,4 +53,6 @@ data class LetterActions(
     val onRetryBundle: () -> Unit,
     /** A Christmas card's "Open the envelope". */
     val onOpenCard: () -> Unit = {},
+    /** A Christmas card's "Send Hazel a card": the send flow at Pick a card, with the one who sent it chosen. */
+    val onSendCard: ((userId: String, name: String) -> Unit)? = null,
 )

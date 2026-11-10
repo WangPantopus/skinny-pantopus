@@ -8,7 +8,7 @@
 // ============================================================
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { cardTrimmedPicture, firstNameOf, PAPER_SERIF, postmarkDay, seededRandom } from './cardArt';
+import { cardTrimmedPicture, firstNameOf, isVerseReference, PAPER_SERIF, postmarkDay, seededRandom } from './cardArt';
 import { cardHand, cardPen } from './cardFont';
 import styles from './CardPaper.module.css';
 
@@ -123,7 +123,7 @@ export function PaperFront({
       <div className={styles.inner} style={{ backgroundColor: paper }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={cardTrimmedPicture(design)} alt="" className={styles.photo} draggable={false} />
-        <div className={`${styles.caption} ${cardHand.className}`} style={{ fontSize: `${captionSize}cqw` }}>{text}</div>
+        <div className={`${styles.caption} ${isVerseReference(text) ? styles.verse : cardHand.className}`} style={{ fontSize: `${captionSize}cqw` }}>{text}</div>
         <div className={styles.year}>CHRISTMAS, {year}</div>
         <div className={styles.pm}><CardPostmarkSvg day={day} year={year} /></div>
         <div className={`${styles.grain} ${styles.grainFront}`} />

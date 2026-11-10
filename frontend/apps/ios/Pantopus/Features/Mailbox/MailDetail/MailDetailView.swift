@@ -51,6 +51,8 @@ public struct MailDetailView: View {
     private let onOpenMail: (@MainActor (String) -> Void)?
     /// "Verify your home" on a Home letter that waits for proof of address.
     private let onVerifyHome: (@MainActor (String) -> Void)?
+    /// "Send {first name} a card" on a Christmas card's table: the send flow, that person chosen (their id and name).
+    private let onSendCard: (@MainActor (_ userId: String, _ name: String) -> Void)?
 
     /// - Parameter viewModel: the page's model when it's kept elsewhere (the Mail tab keeps it across folds); a new
     ///   one otherwise.
@@ -68,7 +70,8 @@ public struct MailDetailView: View {
         onAskNeighbor: (@MainActor @Sendable (_ isPreDelivery: Bool) -> Void)? = nil,
         onPay: (@MainActor (String) -> Void)? = nil,
         onOpenMail: (@MainActor (String) -> Void)? = nil,
-        onVerifyHome: (@MainActor (String) -> Void)? = nil
+        onVerifyHome: (@MainActor (String) -> Void)? = nil,
+        onSendCard: (@MainActor (_ userId: String, _ name: String) -> Void)? = nil
     ) {
         self.mailId = mailId
         _viewModel = State(initialValue: viewModel ?? MailDetailViewModel(mailId: mailId))
@@ -84,6 +87,7 @@ public struct MailDetailView: View {
         self.onPay = onPay
         self.onOpenMail = onOpenMail
         self.onVerifyHome = onVerifyHome
+        self.onSendCard = onSendCard
     }
 
     public var body: some View {
@@ -148,7 +152,7 @@ public struct MailDetailView: View {
             }
         }
         .modifier(MailVaultFolderPickers(viewModel: viewModel, isShown: viewModel.cardTable == nil))
-        .modifier(MailCardTableCover(viewModel: viewModel, senderLink: { senderLink($0) }, onClose: back))
+        .modifier(MailCardTableCover(viewModel: viewModel, senderLink: { senderLink($0) }, onSendCard: onSendCard, onClose: back))
         .confirmationDialog(
             "Done with it?",
             isPresented: Binding(get: { viewModel.confirmsDone }, set: { viewModel.confirmsDone = $0 }),

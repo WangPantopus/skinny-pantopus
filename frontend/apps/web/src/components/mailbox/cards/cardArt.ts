@@ -50,6 +50,14 @@ export function tableEdge(hex: string | null | undefined): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+/**
+ * A Bible verse reference ("John 3:16 (KJV)"), the caption of the Christmas with Jesus Christ pictures. It prints in the
+ * card's serif, italic, not in the pen, so the colon reads (design plan 1.12). Stored captions don't change.
+ */
+export function isVerseReference(caption: string | null | undefined): boolean {
+  return /\d+:\d+(?:[-\u2013]\d+)?(?:\s*\([A-Z]+\))?$/u.test((caption || '').trim());
+}
+
 /** The first name of a shown name ("Juniper H." is Juniper). */
 export function firstNameOf(name: string | null | undefined): string {
   return (name || '').trim().split(/\s+/)[0] || 'Someone';

@@ -11,7 +11,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import * as api from '@pantopus/api';
 import { authPageHref } from '@/lib/auth-utils';
-import { cardPicture, TABLE_ART, tableEdge, tableTint } from './cardArt';
+import { cardPicture, isVerseReference, TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { cardHand } from './cardFont';
 import { PaperFront } from './CardPaper';
 import styles from './PublicCards.module.css';
@@ -21,7 +21,7 @@ const SLATE = '#3b4c6e';
 // Every picture on a public page prints the same postmark: there's no person's day to print.
 const POSTMARK_DAY = '2026-12-25';
 
-export type PublicDesign = { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string };
+export type PublicDesign = { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string; verse?: string | null };
 export type PublicCollection = { id: string; name: string; designs: string[] };
 
 const withRef = (path: string, ref: string | null) => (ref ? `${path}?ref=${encodeURIComponent(ref)}` : path);
@@ -73,7 +73,9 @@ export function PublicCardPage({ design, year, inviteCode }: { design: PublicDes
           </div>
         </div>
         <div className={styles.words}>
-          <h1 className={`${styles.caption} ${cardHand.className}`}>{design.caption}</h1>
+          <h1 className={`${styles.caption} ${isVerseReference(design.caption) ? styles.verse : cardHand.className}`}>{design.caption}</h1>
+          {/* The whole verse printed on the picture, in readable type (design plan 6.2). */}
+          {design.verse ? <blockquote className={styles.verseText} data-testid="publicCardVerse">{design.verse}</blockquote> : null}
           <p className={styles.line}>A Christmas card you can send on Pantopus</p>
         </div>
         <div className={styles.actions}>

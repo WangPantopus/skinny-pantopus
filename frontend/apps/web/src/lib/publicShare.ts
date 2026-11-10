@@ -52,7 +52,7 @@ async function fetchPublicJson<T>(
 export type PublicCardDesigns = {
   year: number;
   collections?: { id: string; name: string; designs: string[] }[];
-  designs: { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string }[];
+  designs: { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string; verse?: string | null }[];
 };
 
 /** Every Christmas card, for the public card pages (launch key card_table; 404 while it's off). */

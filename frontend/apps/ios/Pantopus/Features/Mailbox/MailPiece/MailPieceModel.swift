@@ -202,6 +202,17 @@ struct MailPieceModel: Identifiable, Hashable {
     /// Cancelled by the carrier's postmark. A card in its sender's Sent that
     /// still waits for the 7 a.m. pickup isn't yet.
     var isPostmarked = true
+    /// In its sender's Sent, a card the other person has (delivered or
+    /// claimed, not sealed): drawn taken out, as they see it (plan Part 4).
+    var cardIsWithThem = false
+
+    /// With `card_table` on, an opened card (or one they have, in Sent) is
+    /// drawn taken out of its envelope, its picture leaning over the top edge
+    /// (plan Part 4). Never a sealed one.
+    var showsCardTakenOut: Bool {
+        guard LaunchFeatures.cardTable, let card, !card.sealed else { return false }
+        return isOpened || cardIsWithThem
+    }
 
     /// One sentence: "Bill from Alder Creek Water, verified utility, sealed,
     /// $42.10 due Fri, Nov 7."
@@ -290,8 +301,9 @@ extension MailPieceModel {
         postmarkYear = String(calendar.component(.year, from: postmarked))
         self.isOpened = isOpened
         // Mail from before today that's been read (or never sealed) fades;
-        // a sealed envelope stays bright until it's opened.
-        isFaded = ageDays >= 1 && isOpened
+        // a sealed envelope stays bright until it's opened. A Christmas card
+        // keeps its full red once opened, as on Android (plan 1.4).
+        isFaded = ageDays >= 1 && isOpened && item.card == nil
         stamp = item.card?.number.map(MailStampArt.forCard(number:)) ?? MailStampArt.forPiece(item.id)
         // An opened card shows its picture over the torn top, not a line.
         peekLine = isOpened && kind.isEnvelope && item.card == nil ? subject : nil

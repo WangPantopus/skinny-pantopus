@@ -1727,6 +1727,7 @@ router.get('/campaigns', verifyToken, async (req, res) => {
 // card costs a stamp instead, and one card can go to a list of up to 20 (POST /cards/batch). Declared before GET /:id.
 
 const CARD_ARRIVALS = [...new Set([...holidayCards.PERSON_ARRIVALS, ...holidayCards.EMAIL_ARRIVALS])];
+const CARD_SIGNATURE_FIELD = Joi.object().unknown(true).allow(null);
 const sendCardSchema = Joi.object({
   use_stamp: Joi.boolean(),
   design: Joi.string().max(64).required(),
@@ -1740,6 +1741,9 @@ const sendCardSchema = Joi.object({
   // One per card draft, sent again with every retry of it: a repeat of the send answers with the card it stored
   // (services/holidayCards requestRowId). Apps from before it send none and are answered as before.
   request_id: Joi.string().uuid(),
+  // The sender's signature beside FROM (launch key card_table): { w: 400, h: 100, strokes }. Only its shape is checked
+  // here, so a refused one is never echoed or logged; checkCardSender checks the strokes (holidayCards.cleanSignature).
+  signature: CARD_SIGNATURE_FIELD,
 });
 
 // A list (POST /cards/batch and its look): the same picture, note and choice of arrival for up to 20 people or
@@ -1758,6 +1762,8 @@ const cardListSchema = Joi.object({
     to: Joi.object({ user_id: Joi.string().uuid(), email: Joi.string().trim().max(320) }).xor('user_id', 'email').required(),
     request_id: Joi.string().uuid().required(),
   })).min(1).max(CARD_LIST_MAX).unique(sameCardRecipient).unique('request_id').required(),
+  // One signature for the whole list, as one note (sendCardSchema).
+  signature: CARD_SIGNATURE_FIELD,
 });
 
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
@@ -1809,6 +1815,8 @@ const CARD_REQUEST_SELECT = 'id, sender_user_id, created_at, delivered_at, escro
 const cardNote = (message) => String(message || '').replace(/\r\n?/g, '\n').trim();
 const cardRequestDigest = (body) => holidayCards.requestDigest({
   design: String(body.design), message: cardNote(body.message), arrival: body.arrival,
+  // A retry of a signed card must sign the same; a refused signature digests as none (the send refuses it anyway).
+  signature: holidayCards.cleanSignature(body.signature).signature || null,
   toUserId: body.to.user_id || null,
   // A card by link adds to the digest only here, so a person's and an email's stay what they were.
   toEmail: body.to.user_id ? null : (body.to.link ? 'link' : normalizeEscrowContact(body.to.email)),
@@ -1937,7 +1945,7 @@ async function checkCard(senderId, body, now) {
 }
 
 // The checks of the card itself and of who sends it: the design, the note, a personal account, the season and one card
-// a day. Answers { refusal }, or { design, message, sender, senderZone } for checkCardRecipient.
+// a day. Answers { refusal }, or { design, message, sender, senderZone, signature } for checkCardRecipient.
 async function checkCardSender(senderId, body, now) {
   const refuse = refuseCard;
   const design = holidayCards.designById(body.design);
@@ -1947,6 +1955,12 @@ async function checkCardSender(senderId, body, now) {
   if ([...message].length > holidayCards.MESSAGE_LIMIT) {
     return refuse(400, `Keep the note to ${holidayCards.MESSAGE_LIMIT} letters.`, 'CARD_MESSAGE_TOO_LONG');
   }
+  // The signature beside FROM rides the card table (launch key card_table); without it a card keeps the typed name.
+  const signed = cardTableOn() ? holidayCards.cleanSignature(body.signature) : { signature: null };
+  if (signed.refusal === 'CARD_SIGNATURE_TOO_LONG') {
+    return refuse(400, 'Sign a little more simply, or leave your name typed.', signed.refusal);
+  }
+  if (signed.refusal) return refuse(400, 'Your signature didn’t come through. Sign again, or leave your name typed.', signed.refusal);
 
   // A person sends Christmas cards; a business account doesn't.
   const { data: sender, error: senderError } = await supabaseAdmin.from('User')
@@ -1961,14 +1975,14 @@ async function checkCardSender(senderId, body, now) {
   if (!mailStamps.enabled(senderId) && (await cardsSentToday(senderId, senderZone, now)).length) {
     return refuse(429, 'You’ve sent today’s card. You can send another tomorrow.', 'CARD_DAILY_LIMIT');
   }
-  return { design, message, sender, senderZone };
+  return { design, message, sender, senderZone, signature: signed.signature };
 }
 
 // The checks of who it goes to: the person (or the address), when it can arrive by their clock, and the email limits,
 // counting `earlierAddresses` (those before it on the same list) as sent. `from` is what checkCardSender answered.
 async function checkCardRecipient(senderId, body, now, from, { earlierAddresses = [] } = {}) {
   const refuse = refuseCard;
-  const { design, message, sender, senderZone } = from;
+  const { design, message, sender, senderZone, signature } = from;
   const { arrival } = body;
   const byLink = body.to.link === true;
   const toUserId = body.to.user_id || null;
@@ -1990,7 +2004,7 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
     Object.assign(card, { sealed_until: timing.sealed_until, take_back_until: timing.take_back_until,
       arrives_on: mailDelivery.localDate(new Date(timing.delivered_at), recipientZone),
       to_name: people.get(String(toUserId))?.displayName || null });
-    return { design, message, arrival, senderZone, toUserId, toEmail: null, card, zone: recipientZone,
+    return { design, message, signature, arrival, senderZone, toUserId, toEmail: null, card, zone: recipientZone,
       senderDisplay: people.get(String(senderId))?.displayName || 'Someone',
       delivery: { delivered_at: timing.delivered_at, special_delivery: false }, escrowExpiresAt: null };
   }
@@ -2008,7 +2022,7 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
   // Sealed by email or link: until Christmas morning where the sender is, set again where they live once they open it.
   Object.assign(card, byLink ? { by_link: true } : { to_name: maskContact(toEmail) },
     { sealed_until: arrival === 'sealed_christmas' ? holidayCards.christmasMorning(senderZone).toISOString() : null });
-  return { design, message, arrival, senderZone, toUserId: null, toEmail, card, zone: senderZone,
+  return { design, message, signature, arrival, senderZone, toUserId: null, toEmail, card, zone: senderZone,
     senderDisplay: (await loadChatPeople([senderId])).get(String(senderId))?.displayName || 'Someone',
     delivery: { delivered_at: now.toISOString(), special_delivery: false },
     escrowExpiresAt: new Date(now.getTime() + ESCROW_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString() };
@@ -2038,6 +2052,10 @@ router.get('/cards', verifyToken, async (req, res) => {
       year: holidayCards.SEASON.year,
       closes_on: holidayCards.SEASON.closes_on,
       message_limit: holidayCards.MESSAGE_LIMIT,
+      // Signing beside FROM (launch key card_table): the strokes' box and their most bytes as stored. Absent: the
+      // server doesn't keep one, so the apps set the typed name.
+      ...(cardTableOn() ? { signature: { w: holidayCards.SIGNATURE_BOX.w, h: holidayCards.SIGNATURE_BOX.h,
+        max_bytes: holidayCards.SIGNATURE_MAX_BYTES } } : {}),
       designs: holidayCards.DESIGNS,
       collections: holidayCards.COLLECTIONS,
       arrivals: { person: arrivals(false), email: arrivals(true) },
@@ -2066,8 +2084,8 @@ router.get('/cards/designs', (req, res) => {
   return res.json({
     year: holidayCards.SEASON.year,
     collections: holidayCards.COLLECTIONS,
-    designs: holidayCards.DESIGNS.map(({ id, number, slug, caption, paper, collection, table }) =>
-      ({ id, number, slug, caption, paper, collection, table })),
+    designs: holidayCards.DESIGNS.map(({ id, number, slug, caption, paper, collection, table, verse }) =>
+      ({ id, number, slug, caption, paper, collection, table, ...(verse ? { verse } : {}) })),
   });
 });
 
@@ -2135,7 +2153,7 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
  * with others on one list (POST /cards/batch). Throws when it can't tell what became of the card.
  */
 async function storeCard({ senderId, checked, requestId, rowId, digest, now, listSize = null }) {
-  const { design, message, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
+  const { design, message, signature, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
   const postage = mailStamps.enabled(senderId);
   if (requestId) card.request = { id: requestId, digest, ...(postage ? { settled_at: now.toISOString() } : {}) };
   if (postage) card.postage_v1 = true;
@@ -2146,7 +2164,7 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
     ? { token: byLink ? cardLinkOf(linkRowId).token : crypto.randomBytes(32).toString('hex'), expiresAt: checked.escrowExpiresAt }
     : null;
 
-  // The note lives only in the card's private stored copy, never in the Mail row (services/holidayCards).
+  // The note and the signature live only in the card's private stored copy, never in the Mail row (services/holidayCards).
   let objectResult;
   try {
     objectResult = await createMailObject({ senderId, objectPayload: {
@@ -2155,7 +2173,7 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
       recipient: toUserId
         ? { mode: 'user', userId: toUserId, deliveryTargetType: 'user', deliveryTargetId: toUserId }
         : { mode: 'contact' },
-      body: { content: message, payload: { card } },
+      body: { content: message, payload: { card, ...(signature ? { signature } : {}) } },
       createdAt: now.toISOString(),
     } });
   } catch (objectErr) {
@@ -2288,7 +2306,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
 // What Look it over shows of a card that passed checkCard: the card as it will lie in their Mailbox, when it comes and
 // opens, and by email or link the words and page they get (POST /cards/preview; a list's look shows its first card).
 async function cardLook(senderId, checked, now) {
-  const { message, arrival, toEmail, card, zone, senderDisplay, delivery } = checked;
+  const { message, signature, arrival, toEmail, card, zone, senderDisplay, delivery } = checked;
   const sealed = arrival === 'sealed_christmas';
   const arrivesOn = card.arrives_on || null;
   const opensOn = card.sealed_until ? mailDelivery.localDate(new Date(card.sealed_until), zone) : null;
@@ -2305,7 +2323,8 @@ async function cardLook(senderId, checked, now) {
       sender_trust: 'pantopus_user', sender_business_name: null, subject: holidayCards.SUBJECT, content: message,
       created_at: now.toISOString(), delivered_at: toEmail || byLink ? null : delivery.delivered_at,
       postmark: { town: null, date: mailDelivery.localDate(now, zone) },
-      card: holidayCards.cardView({ mail_extracted: { card } }, now),
+      // Their own signature shows here as their own note does, sealed or not.
+      card: { ...holidayCards.cardView({ mail_extracted: { card } }, now), signature: signature || null },
     },
     arrives_on: arrivesOn,
     opens_on: opensOn,
@@ -2380,7 +2399,8 @@ async function checkCardList(senderId, body, now) {
   const from = await checkCardSender(senderId, body, now);
   if (from.refusal) return from;
   const items = body.recipients.map(({ to, request_id: id }) => {
-    const single = { design: body.design, message: body.message, arrival: listArrival(body.arrival, Boolean(to.email)), to };
+    const single = { design: body.design, message: body.message, arrival: listArrival(body.arrival, Boolean(to.email)), to,
+      signature: body.signature };
     const requestId = String(id).toLowerCase();
     return { requestId, rowId: holidayCards.requestRowId(senderId, requestId), single, digest: cardRequestDigest(single) };
   });
@@ -2721,8 +2741,11 @@ router.get('/sent/:id', verifyToken, async (req, res) => {
     const format = [payload?.body?.payload?.bodyFormat, payload?.objectFormat, metadata?.format]
       .find((value) => CONTENT_RENDER_FORMATS.includes(value)) || mailObjects.storedFormat(content);
     const [context] = await sentContexts([mail], userId);
+    const piece = holidayCards.sentPiece(mail, { ...context, now });
     return res.json({ item: {
-      ...holidayCards.sentPiece(mail, { ...context, now }),
+      ...piece,
+      // Their own signature, like their own note, also while it's sealed for the other person.
+      ...(holidayCards.isCard(mail) ? { card: { ...piece.card, signature: holidayCards.signatureOf(payload) } } : {}),
       note: holidayCards.isCard(mail) ? (payload?.body?.content || '') : (mailObjects.textContent(content, format) || ''),
       trail: holidayCards.sentTrail(mail, { ...context, now }),
     } });
@@ -2786,6 +2809,8 @@ router.get('/:id', verifyToken, async (req, res) => {
           if (typeof bodyContent === 'string' && bodyContent.length > 0) {
             mail.content = bodyContent;
           }
+          // A card's signature, for its card view (mailPiece.present reads it there and drops this field).
+          if (holidayCards.isCard(mail)) mail.card_signature = holidayCards.signatureOf(objectData.payload);
           if ((!mail.attachments || mail.attachments.length === 0) && Array.isArray(objectAttachments)) {
             mail.attachments = objectAttachments;
           }

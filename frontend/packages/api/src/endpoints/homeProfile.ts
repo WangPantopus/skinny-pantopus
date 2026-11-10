@@ -4,7 +4,7 @@
 // Maps to the new Home Profile tables (HomeTask, HomeBill, etc.)
 // ============================================================
 
-import { get, post, put, patch, del, RECORD_VOCABULARY } from '../client';
+import apiClient, { get, post, put, patch, del, RECORD_VOCABULARY } from '../client';
 import type { HomeEmergencyType, HomePoll, HomePollOption, HomePollType, HomePollStatus } from '@pantopus/types';
 import { assertHomeTaskSession, taskSessionHeaders, rethrowTaskSessionError, type HomeTaskSessionScope } from '../taskSessionScope';
 
@@ -563,4 +563,31 @@ export async function getHomeTimeline(homeId: string, page?: number, limit?: num
 
 export async function getPropertyValue(homeId: string) {
   return get<PropertyValueData>(`/api/homes/${homeId}/property-value`, RECORD_VOCABULARY);
+}
+
+// ---- Home Money Check: the appeal packet ----
+
+/** What the packet holds, in words to draw as they are; `available: false` where there is none for this viewer. */
+export type AppealPacketSummary =
+  | { available: false }
+  | {
+      available: true;
+      title: string;
+      lead: string;
+      contents: string[];
+      rows: { id: string; label: string; value: string }[];
+      source: string | null;
+      note: string;
+      file_name: string;
+      price: null;
+    };
+
+export async function getAppealPacket(homeId: string) {
+  return get<AppealPacketSummary>(`/api/homes/${homeId}/appeal-packet`);
+}
+
+/** The packet itself, a PDF. */
+export async function downloadAppealPacket(homeId: string): Promise<Blob> {
+  const response = await apiClient.get<Blob>(`/api/homes/${homeId}/appeal-packet/pdf`, { responseType: 'blob' });
+  return response.data;
 }

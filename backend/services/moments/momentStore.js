@@ -295,8 +295,23 @@ async function openMoment(id, viewerId, { liveOnly = true } = {}) {
 }
 
 /**
- * The live Moments shown in the box that `viewerId` may see (blocks, mutes, audience), newest first, each with the
- * point everyone sees: [{ row, point }]. The map and the tab's dot both read this.
+ * The posts `viewerId` reported in the last few days (a Moment lasts two at most): a Moment someone reported leaves
+ * their map and their tab's dot for good, whatever becomes of the report. A failed read hides nothing: this is for
+ * the reporter's comfort, not a rule about who may see what.
+ */
+async function reportedIds(viewerId) {
+  const { data, error } = await supabaseAdmin.from('PostReport').select('post_id').eq('reported_by', viewerId)
+    .gte('created_at', new Date(Date.now() - 4 * 24 * HOUR_MS).toISOString()).limit(500);
+  if (error) {
+    logger.warn('moments.reported_read_failed', { error: error.message });
+    return new Set();
+  }
+  return new Set((data || []).map((report) => report.post_id));
+}
+
+/**
+ * The live Moments shown in the box that `viewerId` may see (blocks, mutes, audience) and hasn't reported, newest
+ * first, each with the point everyone sees: [{ row, point }]. The map and the tab's dot both read this.
  */
 async function shownInBox(viewerId, { south, west, north, east }) {
   if (north - south > MAX_MAP_SPAN_DEGREES || east - west > MAX_MAP_SPAN_DEGREES) return [];
@@ -320,10 +335,13 @@ async function shownInBox(viewerId, { south, west, north, east }) {
     .limit(MAX_MAP_ROWS);
   if (error) throw new Error(`Failed to load Moments: ${error.message}`);
   const rows = (data || []).filter((row) => momentState(row) === 'live');
-  const ctx = await viewerContext(viewerId, rows.map((r) => r.user_id));
+  const [ctx, reported] = await Promise.all([
+    viewerContext(viewerId, rows.map((r) => r.user_id)),
+    rows.length ? reportedIds(viewerId) : new Set(),
+  ]);
   const shown = [];
   for (const row of rows) {
-    if (!canSee(row, ctx)) continue;
+    if (!canSee(row, ctx) || reported.has(row.id)) continue;
     const point = displayedPoint(row);
     if (point.latitude < south || point.latitude > north || point.longitude < west || point.longitude > east) continue;
     shown.push({ row, point });

@@ -477,6 +477,16 @@ extension PlaceIntelligence {
         viewer == nil || viewer?.role == "owner"
     }
 
+    /// The Home Money Check's property tax card, which takes the place of the "How appeals work" note.
+    var propertyTaxCheck: PlaceMoneyCard? {
+        moneyCards?.first { $0.id == "property_tax_check" }
+    }
+
+    /// Any other card of the Home Money Check, each under its own title.
+    var otherMoneyCards: [PlaceMoneyCard] {
+        (moneyCards ?? []).filter { $0.id != "property_tax_check" }
+    }
+
     /// Set up but not verified (T1): every lock is the verify-by-mail step, never another claim.
     var verifiesFirst: Bool {
         tier == .t1

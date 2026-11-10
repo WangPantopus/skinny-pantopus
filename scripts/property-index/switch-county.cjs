@@ -15,6 +15,13 @@
 //     --shared-facts with --mode live or off: an address with several homes on record in the county shows what all of
 //     them agree on (year built, size, bedrooms, baths), or doesn't. Only the file's shared_facts list changes; the
 //     county's own line stays as it is (backend/services/propertyRecords/identity.js and router.js).
+//   node scripts/property-index/switch-county.cjs --similar-homes --county 53011 --mode live --target production --bucket <name>
+//     --similar-homes with --mode live or off: a house's owner in the county sees its county value beside similar houses
+//     on its street, or doesn't (backend/services/propertyRecords/similarHomes.js). Only the file's similar_homes list changes.
+//   node scripts/property-index/switch-county.cjs --appeal-packet --county 53011 --mode live --target production --bucket <name>
+//     --appeal-packet with --mode live or off: an owner in the county whose home is valued above similar homes can get
+//     the appeal packet, or can't (backend/services/appealPacket.js). It shows only where similar homes are on too.
+//     Only the file's appeal_packet list changes.
 //
 // A list changes every county in it or none: one refused county refuses the whole run, and the file is written once.
 // Shadow and live take only a county whose release holds homes; off takes any county.
@@ -38,6 +45,11 @@ const target = opt('--target').trim();
 const withhold = opt('--withhold').trim();
 const estimates = opt('--estimates').trim();
 const sharedFacts = process.argv.includes('--shared-facts');
+const similarHomes = process.argv.includes('--similar-homes');
+const appealPacket = process.argv.includes('--appeal-packet');
+// A list beside the counties' lines, changed by itself: [the file's key, what the log calls it].
+const list = (sharedFacts && ['shared_facts', 'shared facts']) || (similarHomes && ['similar_homes', 'similar homes'])
+  || (appealPacket && ['appeal_packet', 'appeal packets']) || null;
 const root = opt('--root');
 const remote = `s3://${opt('--bucket')}/${opt('--prefix') || 'index'}`;
 
@@ -45,8 +57,9 @@ if (!counties.length) refuse('A county is its five-digit FIPS code');
 if (mode && !['off', 'shadow', 'live'].includes(mode)) refuse('A county is off, shadow or live');
 if (!/^[a-z]+$/.test(target)) refuse('Name the environment: production or staging');
 if (estimates && !['on', 'off'].includes(estimates)) refuse('Estimates are on or off');
-if (sharedFacts && !['live', 'off'].includes(mode)) refuse('Shared facts are live or off: pass --mode live or --mode off');
-if (sharedFacts && (withhold || estimates)) refuse('Shared facts change by themselves: leave out --withhold and --estimates');
+if ([sharedFacts, similarHomes, appealPacket].filter(Boolean).length > 1) refuse('One list at a time: --shared-facts, --similar-homes or --appeal-packet');
+if (list && !['live', 'off'].includes(mode)) refuse(`${list[1][0].toUpperCase()}${list[1].slice(1)} are live or off: pass --mode live or --mode off`);
+if (list && (withhold || estimates)) refuse(`${list[1][0].toUpperCase()}${list[1].slice(1)} change by themselves: leave out --withhold and --estimates`);
 if (!mode && !withhold && !estimates) refuse('Nothing to change: pass --mode, --withhold, --estimates or several');
 if (!root && !opt('--bucket')) refuse('Pass --bucket, or --root for a local rig');
 
@@ -110,7 +123,7 @@ const text = read(name);
 const file = text ? JSON.parse(text) : { v: 1, counties: {} };
 if (file.v !== 1 || !file.counties) refuse('A switch file this tool can\'t read');
 
-const changes = sharedFacts ? [] : known.map((county) => {
+const changes = list ? [] : known.map((county) => {
   const before = file.counties[county] || { mode: 'off (not named)' };
   const next = { ...before, ...(mode ? { mode } : {}), ...(withheld ? { withheld } : {}), ...(estimates ? { estimates: estimates === 'on' } : {}) };
   if (!['off', 'shadow', 'live'].includes(next.mode)) problems.push(`${county} is named for the first time, so it needs --mode`);
@@ -124,16 +137,16 @@ if (problems.length) {
   refuse(`Nothing changed: ${problems.length} of ${counties.length} refused`);
 }
 
-// The shared-facts list sits beside the counties' lines; a file without it has shared facts off everywhere.
-const shared = new Set(file.shared_facts || []);
-const sharedBefore = new Map(known.map((county) => [county, shared.has(county) ? 'live' : 'off']));
-if (sharedFacts) {
+// The lists sit beside the counties' lines; a file without one has it off everywhere.
+const named = new Set((list && file[list[0]]) || []);
+const namedBefore = new Map(known.map((county) => [county, named.has(county) ? 'live' : 'off']));
+if (list) {
   for (const county of known) {
-    if (mode === 'live') shared.add(county);
-    else shared.delete(county);
+    if (mode === 'live') named.add(county);
+    else named.delete(county);
   }
-  if (shared.size) file.shared_facts = [...shared].sort();
-  else delete file.shared_facts;
+  if (named.size) file[list[0]] = [...named].sort();
+  else delete file[list[0]];
 }
 for (const { county, next } of changes) file.counties[county] = next;
 file.updated_at = new Date().toISOString();
@@ -144,10 +157,10 @@ for (const { county, before, next } of changes) {
   const release = releases.get(county);
   log(`${target}: ${county} ${before.mode} -> ${next.mode}${release ? `, release ${release.release} as of ${release.as_of}` : ''}; withheld: ${(next.withheld || []).join(', ') || 'none'}; estimates: ${next.estimates ? (next.mode === 'live' ? 'on' : 'on once live') : 'off'}`);
 }
-if (sharedFacts) {
+if (list) {
   for (const county of known) {
     const line = file.counties[county]?.mode || 'off (not named)';
-    log(`${target}: ${county} shared facts ${sharedBefore.get(county)} -> ${mode}; the county is ${line}${line === 'live' ? '' : ', so they show once it is live'}`);
+    log(`${target}: ${county} ${list[1]} ${namedBefore.get(county)} -> ${mode}; the county is ${line}${line === 'live' ? '' : ', so they show once it is live'}`);
   }
 }
-log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off, estimates on in ${Object.values(file.counties).filter((entry) => entry.estimates).length}, shared facts in ${shared.size}; servers follow within about a minute`);
+log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off, estimates on in ${Object.values(file.counties).filter((entry) => entry.estimates).length}, shared facts in ${(file.shared_facts || []).length}, similar homes in ${(file.similar_homes || []).length}, appeal packets in ${(file.appeal_packet || []).length}; servers follow within about a minute`);

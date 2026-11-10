@@ -23,6 +23,7 @@ const rules = require('../plans/planRules');
 const { canReadPost, POST_READ_SELECT } = require('../pulse/readAccess');
 const homeRecordService = require('../homeRecordService');
 const homeDetailService = require('../homeDetailService');
+const homeInsuranceCheck = require('../homeInsuranceCheck');
 const { SYSTEM_DEFS } = require('../homeSystemsService');
 const { yearAhead } = require('../seasonalChecklistService');
 const { createHomeAssetSchema } = require('../../utils/homeAssetFields');
@@ -42,6 +43,18 @@ const NOTE = 'One short sentence shown under the card: the assumption that matte
 const LIST_CLAIM = /\balready\b[^.]{0,40}\b(list|tasks?|added|scheduled)\b/i;
 // What a home paper's end date can be (a task's details.kind; the home_paperwork nudge reads it).
 const DOCUMENT_KINDS = ['warranty', 'policy', 'lease'];
+// A home insurance premium is the one number a card keeps from a paper, and only as a typed amount with its period
+// (never in a title or a note), so the money page can set this term beside the last (services/homeInsuranceCheck.js).
+const premiumField = (description) => ({
+  type: ['object', 'null'],
+  description,
+  properties: {
+    amount_cents: { type: 'integer', minimum: homeInsuranceCheck.MIN_CENTS, maximum: homeInsuranceCheck.MAX_CENTS, description: 'The amount in cents: $1,842.00 is 184200.' },
+    period: { type: 'string', enum: Object.keys(homeInsuranceCheck.PERIODS), description: 'What the amount covers: a year, six months or a month.' },
+  },
+  required: ['amount_cents', 'period'],
+  additionalProperties: false,
+});
 // What HomeTask's checks take (HomeTask_type_chk, HomeTask_priority_chk).
 const TASK_TYPES = ['reminder', 'chore', 'repair', 'project', 'shopping'];
 const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -304,8 +317,12 @@ const actionCardDefinitions = [
             kind: { type: 'string', enum: DOCUMENT_KINDS },
             ends_on: { type: 'string', description: 'The day it ends, YYYY-MM-DD, as printed.' },
             page: { type: ['integer', 'null'], minimum: 1, description: 'The page the date is on; null for a photo.' },
+            starts_on: nullable({ type: 'string', description: 'Only for an insurance policy on this home: the day the policy term starts, YYYY-MM-DD, as printed (a renewal page is often for a term that has not started). Null otherwise.' }),
+            insurer: nullable({ type: 'string', description: 'Only for an insurance policy on this home: the insurer\'s name as printed ("State Farm"). Null otherwise.' }),
+            premium: premiumField('Only for an insurance policy on this home (homeowners, condo, renters, landlord, flood or earthquake): the total premium for the term, as printed. Null when the page prints none, or for any other paper.'),
+            last_premium: premiumField('The premium for the term before, only when this same page prints it (a renewal notice often does). Null otherwise; never work it out.'),
           },
-          required: ['name', 'kind', 'ends_on', 'page'],
+          required: ['name', 'kind', 'ends_on', 'page', 'starts_on', 'insurer', 'premium', 'last_premium'],
           additionalProperties: false,
         },
         note: { type: ['string', 'null'], description: NOTE },
@@ -1205,9 +1222,21 @@ async function draftHomeTask(args, ctx) {
   const title = clip(args.title, 255);
   if (!title) return { error: 'The task needs a title.' };
   const paper = args.document || null;
-  if (numberLike(args.title, args.description, paper?.name)) return NO_NUMBERS;
+  if (numberLike(args.title, args.description, paper?.name, paper?.insurer)) return NO_NUMBERS;
+  // A policy's premium, and the term before when the same page prints it: typed amounts, kept only for a policy.
+  const premium = homeInsuranceCheck.premiumOf(paper?.premium);
+  const lastPremium = homeInsuranceCheck.premiumOf(paper?.last_premium);
+  const insurer = paper?.kind === 'policy' ? clip(paper.insurer, 60) : null;
   if (paper) {
     if (!DOCUMENT_KINDS.includes(paper.kind)) return { error: 'document.kind must be warranty, policy or lease.' };
+    if ((paper.premium || paper.last_premium) && paper.kind !== 'policy') return { error: 'document.premium is only for an insurance policy on the home. Leave it null.' };
+    if ((paper.premium && !premium) || (paper.last_premium && !lastPremium)) {
+      return { error: 'A premium is the amount for the term in cents (amount_cents, a whole number from 100 to 25000000) with its period: year, six_months or month.' };
+    }
+    if (lastPremium && !premium) return { error: 'document.last_premium goes with document.premium: this term first.' };
+    if (paper.starts_on && (paper.kind !== 'policy' || !isCalendarDay(paper.starts_on) || paper.starts_on >= paper.ends_on)) {
+      return { error: 'document.starts_on is the day an insurance policy term starts, YYYY-MM-DD, before the day it ends. Leave it null otherwise.' };
+    }
     if (!isCalendarDay(paper.ends_on)) return { error: 'document.ends_on must be the day it ends, YYYY-MM-DD.' };
     if (paper.ends_on < todayIn(ctx.timeZone)) {
       return { error: `It ended on ${longDay(paper.ends_on)}. Tell them it has ended instead of drafting a reminder.` };
@@ -1251,7 +1280,16 @@ async function draftHomeTask(args, ctx) {
     ...(TASK_PRIORITIES.includes(args.priority) ? { priority: args.priority } : {}),
     visibility,
     // How home_paperwork finds it, and what it calls it. The server keeps details.source for tasks made from mail.
-    ...(paper ? { details: { origin: 'document', kind: paper.kind, ends_on: paper.ends_on, name: clip(paper.name, 80) } } : {}),
+    ...(paper ? {
+      details: {
+        origin: 'document', kind: paper.kind, ends_on: paper.ends_on, name: clip(paper.name, 80),
+        // What the money page's Home insurance card reads.
+        ...(paper.kind === 'policy' && paper.starts_on ? { starts_on: paper.starts_on } : {}),
+        ...(insurer ? { insurer } : {}),
+        ...(premium ? { premium } : {}),
+        ...(lastPremium ? { last_premium: lastPremium } : {}),
+      },
+    } : {}),
   };
   const thisYear = todayIn(zone).slice(0, 4);
   const dueYear = dueAt ? dueDate.slice(0, 4) : null;
@@ -1262,6 +1300,10 @@ async function draftHomeTask(args, ctx) {
       line('Due', dueAt ? `${dayLabel(dueAt, zone)}${dueYear && dueYear !== thisYear ? `, ${dueYear}` : ''}${args.due_time ? '' : ', 9:00 AM'}` : 'No date'),
       line('Repeats', repeatText(repeat)),
       paper ? line({ warranty: 'Warranty ends', policy: 'Policy ends', lease: 'Lease ends' }[paper.kind], longDay(paper.ends_on)) : null,
+      paper?.kind === 'policy' && paper.starts_on ? line('Term starts', longDay(paper.starts_on)) : null,
+      line('Insurer', insurer),
+      line('Premium', premium ? homeInsuranceCheck.premiumText(premium) : null),
+      line('Premium the term before', lastPremium ? homeInsuranceCheck.premiumText(lastPremium) : null),
       line('From', sourceText(paper)),
       line('Seen by', SEEN_BY[visibility]),
       line('Home', [home.city, home.state].filter(Boolean).join(', ')),

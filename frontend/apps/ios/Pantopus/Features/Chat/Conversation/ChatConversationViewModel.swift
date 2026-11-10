@@ -4548,7 +4548,8 @@ public final class ChatConversationViewModel {
                 senderUserId: side == .incoming ? roomSenderUserId(for: message) : nil,
                 senderAvatarURL: side == .incoming ? message.sender?.photoURL : nil,
                 aiLinks: message.messageType == "ai_reply" ? aiLinksByMessageId[message.id] ?? [] : [],
-                attachments: message.attachments
+                attachments: message.attachments,
+                momentQuote: ChatMomentQuote(message.moment, side: side)
             )))
         }
         state = .loaded(rows: rows)

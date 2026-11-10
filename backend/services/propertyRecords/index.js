@@ -111,4 +111,4 @@ async function shadow(address) {
   }
 }
 
-module.exports = { lookup, shadow, StorageUnavailable: reader.StorageUnavailable };
+module.exports = { lookup, shadow, suppressionHash, StorageUnavailable: reader.StorageUnavailable };

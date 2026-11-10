@@ -30,6 +30,7 @@ const propertyRecordsConfig = require('../../config/propertyRecords');
 const propertyRecords = require('../propertyRecords');
 const homeRecords = require('../propertyRecords/homeRecord');
 const valueEstimate = require('../propertyRecords/valueEstimate');
+const similarHomes = require('../propertyRecords/similarHomes');
 const { changeNicheData } = require('../homeNicheData');
 const householdFacts = require('../householdFacts');
 const { pickAttomRooms, pickAttomSummaryLot } = require('./attomFacts');
@@ -519,7 +520,7 @@ function factsOnly(profile) {
  * (propertyRecords/valueEstimate.js) takes that place, with its range; a rough one can't
  * carry its label under their fixed "Estimated home value", so it stays on the card.
  */
-function buildProfileFromRecord(home, copy, estimate = null) {
+function buildProfileFromRecord(home, copy, estimate = null, similar = null) {
   const facts = copy.facts || {};
   const building = copy.building || {};
   // A condo's account lists the complex's common land, and a tower's lot isn't an apartment's.
@@ -575,6 +576,8 @@ function buildProfileFromRecord(home, copy, estimate = null) {
       },
     } : {}),
     ...(estimate ? { estimate } : {}),
+    // The county's value beside similar houses on the street (propertyRecords/similarHomes.js): the owner's, like the value.
+    ...(similar ? { similar_homes: similar } : {}),
     county_values: Object.fromEntries(COUNTY_VALUE_FACTS.filter((name) => facts[name] !== undefined).map((name) => [name, facts[name]])),
     value_match: copy.match,
     // The card says for itself when only the building was found.
@@ -1072,7 +1075,8 @@ async function getProfile(homeId, { wait = false, home: callerRow = null, reads:
     propertyRecords.shadow(homeRecords.homeAddress(row));
     const found = await homeRecords.forHome(row);
     if (found?.copy) {
-      return { profile: buildProfileFromRecord(row, found.copy, await valueEstimate.forCopy(found.copy, row)), source: 'cache', lookup: null };
+      const [estimate, similar] = await Promise.all([valueEstimate.forCopy(found.copy, row), similarHomes.forHome(row, found.copy)]);
+      return { profile: buildProfileFromRecord(row, found.copy, estimate, similar), source: 'cache', lookup: null };
     }
     if (found) return { profile: buildFallbackProfile(row), source: 'fallback', lookup: found.lookup === 'pending' ? 'pending' : null };
   }

@@ -8,6 +8,14 @@
 
 export type TableStep = 'front' | 'back' | 'flap' | 'pulling' | 'out';
 
+/**
+ * Sealing it by hand (design plan Part 2): the receiving moment run backwards. ready: the card note side up in front
+ * of the open envelope; putting: it goes in; in: its top edge shows in the V; closing: the flap comes down; seal: shut,
+ * waiting for the press; sending: the seal is on and the card is going; addressed: the envelope turns over, the name is
+ * written, the stamp and the postmark land; gone: it slides up and off the table.
+ */
+export type SendStep = 'ready' | 'putting' | 'in' | 'closing' | 'seal' | 'sending' | 'addressed' | 'gone';
+
 export type TableState = {
   step: TableStep;
   /** The card's back is up (or turning to it). */
@@ -15,6 +23,10 @@ export type TableState = {
   turnedOnce: boolean;
   envTurnedOnce: boolean;
   heldOnce: boolean;
+  /** Sealing it by hand: where it is. Null when receiving. */
+  send: SendStep | null;
+  /** The card is enlarged (pinch or double-tap, design plan 6.1). */
+  enlarged?: boolean;
 };
 
 export type TableCallbacks = {
@@ -26,14 +38,16 @@ export type TableCallbacks = {
   onTableTap: () => void;
   /** Something other than a control was pressed: close any open menu. */
   onPress: () => void;
+  /** Sealing it by hand: the seal is pressed home. The host sends the card and answers with sealResult. */
+  onSeal?: () => void;
 };
 
 type Spring = { x: number; v: number; t: number; k: number; c: number };
-type SpringKey = 'envDeg' | 'pull' | 'lay' | 'deg' | 'tx' | 'ty' | 'drop';
+type SpringKey = 'envDeg' | 'pull' | 'lay' | 'deg' | 'tx' | 'ty' | 'drop' | 'zs' | 'zx' | 'zy';
 type Drag = {
   id: number; x0: number; y0: number; t0: number; lx: number; ly: number; lt: number; vx: number; vy: number;
-  mode: null | 'env' | 'pull' | 'turn' | 'tilt' | 'none';
-  env0: number; pull0: number; deg0: number; xs?: number; ys?: number; holdTimer?: number;
+  mode: null | 'env' | 'pull' | 'turn' | 'tilt' | 'none' | 'push' | 'shut' | 'press' | 'pan';
+  env0: number; pull0: number; deg0: number; lay0: number; xs?: number; ys?: number; holdTimer?: number; zx0?: number; zy0?: number;
 };
 type Geometry = {
   w: number; h: number; cw: number; ch: number; ew: number; eh: number; fd: number; cardTop: number; envTopFinal: number;
@@ -41,6 +55,15 @@ type Geometry = {
 };
 
 const FLAP_OPEN = 0.3;
+/** The press that seals it, in milliseconds. */
+const SEAL_HOLD = 600;
+/** The gold seal stays in sight this long before the envelope turns over. */
+const SEAL_BEAT = 800;
+/** After the seal: the envelope turns over, the name is written (0.7 s), the stamp drops, the postmark thumps (and a
+ * sealed card's gold stamp lands); then it leaves. design.md / CardTable.module.css keep the same times. */
+const STAMP_AT = 1600;
+const POSTMARK_AT = 1980;
+const SEALED_MARK_AT = 2380;
 const LAYERS = ['lInside', 'lPocket', 'lPocketShadow', 'lFlapShadow', 'lFront', 'lFlapOut', 'lFlapIn'];
 const BACK_LAYERS = ['lInside', 'lPocket', 'lPocketShadow', 'lFlapShadow', 'lFlapOut', 'lFlapIn'];
 
@@ -73,7 +96,20 @@ export class CardTableEngine {
     tx: { x: 0, v: 0, t: 0, k: 40, c: 11 }, // the light
     ty: { x: 0, v: 0, t: 0, k: 40, c: 11 },
     drop: { x: 1, v: 0, t: 0, k: 58, c: 11.5 }, // the envelope arriving on the table
+    zs: { x: 1, v: 0, t: 1, k: 150, c: 24 }, // the card enlarged (design plan 6.1): 1 to 3
+    zx: { x: 0, v: 0, t: 0, k: 150, c: 24 }, // and moved around while it's enlarged
+    zy: { x: 0, v: 0, t: 0, k: 150, c: 24 },
   };
+
+  /** Two fingers on the card: where the pinch began. */
+  private pinch: { ids: [number, number]; d0: number; s0: number; mx0: number; my0: number; x0: number; y0: number } | null = null;
+
+  private readonly pointers = new Map<number, { x: number; y: number }>();
+
+  /** A tap on the card waits this long for a second one (a double-tap enlarges it) before it turns the card. */
+  private tapTimer = 0;
+
+  private lastTap = { t: 0, x: 0, y: 0 };
 
   private step: TableStep = 'front';
 
@@ -103,11 +139,28 @@ export class CardTableEngine {
 
   private flapTimer = 0;
 
+  private readonly sending: boolean;
+
+  private send: SendStep | null = null;
+
+  /** When the press began (0: not pressing), and whether the button is doing the press. */
+  private holdStart = 0;
+
+  private holdTicks = 0;
+
+  private sendTimers: number[] = [];
+
+  private sealedMark = false;
+
+  /** When the seal went on: it stays in sight a moment before the envelope turns over, however fast the answer is. */
+  private sealedAt = 0;
+
   private readonly elements = new Map<string, HTMLElement>();
 
-  constructor(root: HTMLElement, options: { sealed: boolean; crackedSrc: string; wholeSrc: string; callbacks: TableCallbacks }) {
+  constructor(root: HTMLElement, options: { sealed: boolean; crackedSrc: string; wholeSrc: string; callbacks: TableCallbacks; sending?: boolean }) {
     this.root = root;
-    this.sealed = options.sealed;
+    this.sending = Boolean(options.sending);
+    this.sealed = this.sending ? false : options.sealed;
     this.crackedSrc = options.crackedSrc;
     this.wholeSrc = options.wholeSrc;
     this.callbacks = options.callbacks;
@@ -126,6 +179,8 @@ export class CardTableEngine {
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
     window.clearTimeout(this.flapTimer);
+    window.clearTimeout(this.tapTimer);
+    this.clearSendTimers();
     if (this.dragging?.holdTimer) window.clearTimeout(this.dragging.holdTimer);
     this.root.removeEventListener('pointerdown', this.onDown);
     this.root.removeEventListener('mousemove', this.onMouse);
@@ -159,6 +214,8 @@ export class CardTableEngine {
       turnedOnce: this.turnedOnce,
       envTurnedOnce: this.envTurnedOnce,
       heldOnce: this.heldOnce,
+      send: this.send,
+      enlarged: this.v.zs.t > 1.02,
     };
   }
 
@@ -209,6 +266,166 @@ export class CardTableEngine {
     tick(14);
   }
 
+  // ---- Enlarging the card (design plan 6.1) ----
+
+  /** The card is enlarged: a drag moves around it instead of turning it. */
+  get enlarged() {
+    return this.v.zs.t > 1.02;
+  }
+
+  private setZoom(scale: number, x: number, y: number, immediate = false) {
+    const g = this.g;
+    const s = clamp(scale, 1, 3);
+    // It never moves so far that the card leaves its own place on the table.
+    const mx = g ? (g.cw * (s - 1)) / 2 : 0;
+    const my = g ? (g.ch * (s - 1)) / 2 : 0;
+    const zx = clamp(x, -mx, mx);
+    const zy = clamp(y, -my, my);
+    const set = (key: 'zs' | 'zx' | 'zy', value: number) => {
+      this.v[key].t = value;
+      if (immediate || reducedMotion()) { this.v[key].x = value; this.v[key].v = 0; }
+    };
+    set('zs', s); set('zx', zx); set('zy', zy);
+    this.mark();
+    this.wake();
+  }
+
+  /** Back to its size on the table. */
+  resetZoom(immediate = false) {
+    if (this.v.zs.t === 1 && this.v.zx.t === 0 && this.v.zy.t === 0) return;
+    this.setZoom(1, 0, 0, immediate);
+  }
+
+  /** Double-tap (or double-click): enlarge it 2.4x around that spot, or back again. */
+  private toggleZoom(px: number, py: number) {
+    if (this.enlarged) { this.resetZoom(); return; }
+    const r = this.$('card').getBoundingClientRect();
+    const s = 2.4;
+    this.setZoom(s, (r.left + r.width / 2 - px) * (s - 1), (r.top + r.height / 2 - py) * (s - 1));
+    tick(6);
+  }
+
+  // ---- Sealing it by hand (design plan Part 2) ----
+
+  private setSend(next: SendStep) {
+    this.send = next;
+    this.root.dataset.sendStep = next;
+    this.mark();
+    this.wake();
+  }
+
+  private clearSendTimers() {
+    for (const id of this.sendTimers) window.clearTimeout(id);
+    this.sendTimers = [];
+  }
+
+  /** The card lies note side up in front of the open envelope, flap up, as the other person will find it. */
+  startSending(options: { sealedMark: boolean }) {
+    const set = (key: SpringKey, x: number) => { this.v[key].x = x; this.v[key].t = x; this.v[key].v = 0; };
+    this.clearSendTimers();
+    this.sealedMark = options.sealedMark;
+    set('drop', 0); set('envDeg', 180); set('pull', 1); set('lay', 1); set('deg', 180);
+    this.step = 'out';
+    this.envTurnedOnce = true;
+    this.turnedOnce = true;
+    this.setCracked(false);
+    delete this.root.dataset.addressed;
+    this.holdStart = 0;
+    this.layout();
+    this.render();
+    this.setSend('ready');
+  }
+
+  private putIn() {
+    if (this.send !== 'ready') return;
+    this.v.lay.t = 0;
+    tick();
+    this.setSend('putting');
+  }
+
+  private closeFlap() {
+    if (this.send !== 'in') return;
+    this.v.pull.t = 0;
+    this.setSend('closing');
+  }
+
+  /** The press: the stamp head's shadow grows over the spot, with ticks closer and closer, for SEAL_HOLD ms. */
+  private beginPress() {
+    if (this.send !== 'seal' || this.holdStart) return;
+    this.holdStart = performance.now();
+    this.holdTicks = 0;
+    this.root.dataset.pressing = '1';
+    tick(6);
+    this.wake();
+  }
+
+  private endPress() {
+    if (!this.holdStart) return;
+    // Let go early: nothing happens.
+    this.holdStart = 0;
+    delete this.root.dataset.pressing;
+    this.$('press').style.transform = '';
+    this.$('press').style.opacity = '';
+  }
+
+  private sealNow() {
+    this.holdStart = 0;
+    delete this.root.dataset.pressing;
+    this.$('press').style.transform = '';
+    this.$('press').style.opacity = '';
+    tick(26);
+    this.sealedAt = performance.now();
+    this.setSend('sending');
+    this.callbacks.onSeal?.();
+  }
+
+  /** The host's answer to the seal: it went (the envelope is addressed and leaves), or it didn't (the seal lifts off). */
+  sealResult(ok: boolean) {
+    if (this.send !== 'sending') return;
+    if (!ok) { tick(20); this.setSend('seal'); return; }
+    const reduce = reducedMotion();
+    const beat = reduce ? 0 : Math.max(0, SEAL_BEAT - (performance.now() - this.sealedAt));
+    if (beat > 0) { this.sendTimers.push(window.setTimeout(() => this.address(), beat)); return; }
+    this.address();
+  }
+
+  private address() {
+    const reduce = reducedMotion();
+    this.v.envDeg.t = 0;
+    if (reduce) { this.v.envDeg.x = 0; this.v.envDeg.v = 0; }
+    this.step = 'front';
+    this.root.dataset.addressed = '1';
+    this.setSend('addressed');
+    this.render();
+    if (reduce) {
+      this.sendTimers.push(window.setTimeout(() => this.setSend('gone'), 1200));
+      return;
+    }
+    this.sendTimers.push(window.setTimeout(() => tick(16), STAMP_AT));
+    this.sendTimers.push(window.setTimeout(() => tick(24), POSTMARK_AT));
+    if (this.sealedMark) this.sendTimers.push(window.setTimeout(() => tick(16), SEALED_MARK_AT));
+    this.sendTimers.push(window.setTimeout(() => {
+      this.v.drop.t = 1;
+      this.setSend('gone');
+    }, (this.sealedMark ? SEALED_MARK_AT : POSTMARK_AT) + 900));
+  }
+
+  /** The button under the table while sealing it: whatever comes next. With Reduce Motion it does all of it. */
+  private sendPrimary() {
+    const reduce = reducedMotion();
+    if (reduce && (this.send === 'ready' || this.send === 'in' || this.send === 'seal')) {
+      const set = (key: SpringKey, x: number) => { this.v[key].x = x; this.v[key].t = x; this.v[key].v = 0; };
+      set('lay', 0); set('pull', 0);
+      this.step = 'back';
+      this.render();
+      this.sealNow();
+      return;
+    }
+    if (this.send === 'ready') this.putIn();
+    else if (this.send === 'in') this.closeFlap();
+    else if (this.send === 'seal') this.beginPress();
+  }
+
   private toFlapSide() {
     this.v.envDeg.t = 180 * (Math.sign(this.v.envDeg.t) || -1);
     this.envTurnedOnce = true;
@@ -246,6 +463,7 @@ export class CardTableEngine {
   /** The button under the table: whatever comes next. */
   primary() {
     this.lastTouch = performance.now();
+    if (this.sending) { this.sendPrimary(); return; }
     const reduce = reducedMotion();
     if (this.step === 'front') {
       if (reduce) {
@@ -276,6 +494,7 @@ export class CardTableEngine {
   /** Arrow keys: the same turns a finger makes. */
   arrow(direction: -1 | 1) {
     this.lastTouch = performance.now();
+    if (this.sending) return;
     if (this.step === 'front') { this.primary(); return; }
     if (this.step === 'back') {
       // Back to the address side.
@@ -292,6 +511,7 @@ export class CardTableEngine {
   }
 
   private turnCard(dir = -1) {
+    this.resetZoom();
     this.v.deg.t = (Math.round(this.v.deg.t / 180) + (dir < 0 ? -1 : 1)) * 180;
     if (reducedMotion()) this.v.deg.x = this.v.deg.t;
     this.turnedOnce = true;
@@ -303,7 +523,8 @@ export class CardTableEngine {
 
   // ---- Layout: design.md section 2 ----
 
-  private readonly onResize = () => { this.layout(); this.render(); };
+  // A new window size brings an enlarged card back to its size; the controls changing height only lays it out again.
+  private readonly onResize = () => { this.resetZoom(true); this.layout(); this.render(); };
 
   layout() {
     const stage = this.root;
@@ -317,7 +538,8 @@ export class CardTableEngine {
     const room = h - topGap - bottom;
     const side = w < 560 ? 9 : 14;
     // Phones: nearly as wide as the screen. Tablets and wide windows cap the card on a big table.
-    let cw = Math.min(w - side * 2, w < 760 ? 470 : 560);
+    // Tablets and wide windows go to 640 where the height allows (design plan 6.3); the room below keeps it in.
+    let cw = Math.min(w - side * 2, w < 760 ? 470 : 640);
     let peek = room - cw * 1.2;
     const minPeek = cw * 0.13;
     const maxPeek = cw * 0.47;
@@ -347,6 +569,13 @@ export class CardTableEngine {
       el.style.height = `${eh}px`;
       el.style.transformOrigin = `${ew / 2}px ${eh / 2}px`;
     }
+    // Several cards: the stack of envelopes behind the top one is the envelope's size.
+    const stack = this.root.querySelector<HTMLElement>('[data-el="lStack"]');
+    if (stack) {
+      stack.style.width = `${ew}px`;
+      stack.style.height = `${eh}px`;
+      stack.style.transformOrigin = `${ew / 2}px ${eh / 2}px`;
+    }
     this.$('flapIn').style.top = `${-fd}px`;
     this.$('flapIn').style.height = `${fd}px`;
     this.$('flapOut').style.height = `${fd}px`;
@@ -367,18 +596,38 @@ export class CardTableEngine {
 
   private readonly onDown = (e: PointerEvent) => {
     if ((e.target as Element).closest?.('[data-ui]')) return;
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // A second finger on the card while it lies on the table: pinch to enlarge it (design plan 6.1).
+    if (!this.sending && this.step === 'out' && this.pointers.size === 2 && !reducedMotion()) {
+      const [a, b] = [...this.pointers.entries()];
+      if (this.dragging?.holdTimer) window.clearTimeout(this.dragging.holdTimer);
+      this.dragging = null;
+      window.clearTimeout(this.tapTimer);
+      this.pinch = {
+        ids: [a[0], b[0]], d0: Math.max(1, Math.hypot(a[1].x - b[1].x, a[1].y - b[1].y)), s0: this.v.zs.t,
+        mx0: (a[1].x + b[1].x) / 2, my0: (a[1].y + b[1].y) / 2, x0: this.v.zx.t, y0: this.v.zy.t,
+      };
+      try { this.root.setPointerCapture?.(e.pointerId); } catch { /* not a live pointer */ }
+      return;
+    }
     this.callbacks.onPress();
     this.root.setPointerCapture?.(e.pointerId);
     const now = performance.now();
     const drag: Drag = {
       id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: now, lx: e.clientX, ly: e.clientY, lt: now, vx: 0, vy: 0, mode: null,
-      env0: this.v.envDeg.x, pull0: this.v.pull.x, deg0: this.v.deg.x,
+      env0: this.v.envDeg.x, pull0: this.v.pull.x, deg0: this.v.deg.x, lay0: this.v.lay.x,
     };
     this.dragging = drag;
     this.lastTouch = now;
+    if (this.sending) {
+      // Sealing: a press anywhere on the table holds the seal down; nothing tilts the light.
+      if (this.send === 'seal' && !reducedMotion()) { drag.mode = 'press'; this.beginPress(); }
+      this.wake();
+      return;
+    }
     // Hold still for a moment on the card: the finger moves the light instead.
     drag.holdTimer = window.setTimeout(() => {
-      if (this.dragging === drag && !drag.mode && this.step === 'out' && !reducedMotion()) {
+      if (this.dragging === drag && !drag.mode && this.step === 'out' && !this.enlarged && !reducedMotion()) {
         drag.mode = 'tilt';
         this.heldOnce = true;
         tick(5);
@@ -389,6 +638,19 @@ export class CardTableEngine {
   };
 
   private readonly onMove = (e: PointerEvent) => {
+    if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = this.pinch;
+    if (p && p.ids.includes(e.pointerId)) {
+      const a = this.pointers.get(p.ids[0]);
+      const b = this.pointers.get(p.ids[1]);
+      if (a && b) {
+        const scale = p.s0 * (Math.hypot(a.x - b.x, a.y - b.y) / p.d0);
+        this.setZoom(scale, p.x0 + ((a.x + b.x) / 2 - p.mx0), p.y0 + ((a.y + b.y) / 2 - p.my0), true);
+        this.lastTouch = performance.now();
+        this.render();
+      }
+      return;
+    }
     const d = this.dragging;
     if (!d || e.pointerId !== d.id || !this.g) return;
     const dx = e.clientX - d.x0;
@@ -404,8 +666,10 @@ export class CardTableEngine {
       const horizontal = Math.abs(dx) > Math.abs(dy);
       // With Reduce Motion nothing turns under a finger: the button does it all.
       if (reducedMotion()) d.mode = 'none';
+      else if (this.sending) d.mode = this.send === 'ready' && !horizontal && dy < 0 ? 'push' : this.send === 'in' && !horizontal && dy > 0 ? 'shut' : 'none';
       else if (this.step === 'front') d.mode = horizontal ? 'env' : 'none';
       else if (this.step === 'back' || this.step === 'flap') d.mode = !horizontal && dy < 0 ? 'pull' : (horizontal && this.step === 'back' ? 'env' : 'none');
+      else if (this.step === 'out' && this.enlarged) { d.mode = 'pan'; d.zx0 = this.v.zx.t; d.zy0 = this.v.zy.t; }
       else if (this.step === 'out') d.mode = horizontal ? 'turn' : 'tilt';
       else d.mode = 'none';
       d.xs = e.clientX; d.ys = e.clientY;
@@ -423,6 +687,17 @@ export class CardTableEngine {
     } else if (d.mode === 'turn') {
       v.deg.x = d.deg0 + ((e.clientX - (d.xs ?? 0)) / (g.cw * 0.86)) * 180;
       v.deg.t = v.deg.x; v.deg.v = 0;
+    } else if (d.mode === 'pan') {
+      // Moving around the enlarged card.
+      this.setZoom(v.zs.t, (d.zx0 ?? 0) + (e.clientX - (d.xs ?? 0)), (d.zy0 ?? 0) + (e.clientY - (d.ys ?? 0)), true);
+    } else if (d.mode === 'push') {
+      // Pushing the card up off the table, toward the envelope's open top.
+      const up = (d.ys ?? 0) - e.clientY;
+      v.lay.x = clamp(d.lay0 - up / (g.ch * 0.55)); v.lay.t = v.lay.x; v.lay.v = 0;
+    } else if (d.mode === 'shut') {
+      // Pulling the flap down over the card.
+      const down = e.clientY - (d.ys ?? 0);
+      v.pull.x = clamp(d.pull0 - (down / (g.fd * 1.6)) * FLAP_OPEN, 0, FLAP_OPEN); v.pull.t = v.pull.x; v.pull.v = 0;
     } else if (d.mode === 'tilt') {
       const r = this.root.getBoundingClientRect();
       v.tx.t = clamp(((e.clientX - r.left) / r.width) * 2 - 1, -1, 1) * 1.1;
@@ -432,12 +707,34 @@ export class CardTableEngine {
   };
 
   private readonly onUp = (e: PointerEvent) => {
+    this.pointers.delete(e.pointerId);
+    if (this.pinch && this.pinch.ids.includes(e.pointerId)) {
+      this.pinch = null;
+      // Hardly enlarged: back to its size.
+      if (this.v.zs.t < 1.08) this.resetZoom();
+      this.dragging = null;
+      return;
+    }
     const d = this.dragging;
     if (!d || e.pointerId !== d.id || !this.g) return;
     this.dragging = null;
     window.clearTimeout(d.holdTimer);
     const now = performance.now();
     const { v, g } = this;
+    if (d.mode === 'press') { if (this.holdStart) this.endPress(); return; }
+    if (this.sending && d.mode === 'push') {
+      const flick = ((-d.vy * 1000) / (g.ch * 0.55)) * 0.22;
+      if (v.lay.x - flick < 0.62) this.putIn(); else { v.lay.t = 1; }
+      this.wake();
+      return;
+    }
+    if (this.sending && d.mode === 'shut') {
+      const flick = ((d.vy * 1000) / (g.fd * 1.6)) * FLAP_OPEN * 0.22;
+      if (v.pull.x - flick < FLAP_OPEN * 0.55) this.closeFlap(); else { v.pull.t = FLAP_OPEN; }
+      this.wake();
+      return;
+    }
+    if (this.sending) return;
     if (e.type !== 'pointercancel' && !d.mode && now - d.t0 < 320) { this.onTap(e); return; }
     if (d.mode === 'env') {
       const flick = ((d.vx * 1000) / (g.ew * 0.8)) * 180 * 0.22;
@@ -471,8 +768,16 @@ export class CardTableEngine {
     if (this.step === 'out') {
       const r = this.$('card').getBoundingClientRect();
       const inCard = e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
-      if (inCard) this.turnCard();
-      else this.callbacks.onTableTap();
+      if (inCard) {
+        // A second tap soon after on the same spot enlarges it (or brings it back); one tap turns it, a moment later.
+        const now = performance.now();
+        const twice = now - this.lastTap.t < 330 && Math.hypot(e.clientX - this.lastTap.x, e.clientY - this.lastTap.y) < 44;
+        window.clearTimeout(this.tapTimer);
+        if (twice && !reducedMotion()) { this.lastTap.t = 0; this.toggleZoom(e.clientX, e.clientY); return; }
+        this.lastTap = { t: now, x: e.clientX, y: e.clientY };
+        if (this.enlarged) return;
+        this.tapTimer = window.setTimeout(() => this.turnCard(), 300);
+      } else this.callbacks.onTableTap();
       return;
     }
     if (this.step === 'front' || this.step === 'back') { this.primary(); return; }
@@ -575,7 +880,9 @@ export class CardTableEngine {
     const out = r >= 0.999;
     card.style.zIndex = out ? '20' : '5';
     card.style.transform = `translate3d(${cx}px,${cy + yFix}px,0) rotate(${cRot}deg) scale(${cs})`;
-    this.$('flip').style.transform = `rotateX(${-ty * 2.6}deg) rotateY(${v.deg.x + tx * 3.2}deg)`;
+    const zoom = v.zs.x > 1.0005 || Math.abs(v.zx.x) > 0.1 || Math.abs(v.zy.x) > 0.1
+      ? `translate(${v.zx.x.toFixed(1)}px,${v.zy.x.toFixed(1)}px) scale(${v.zs.x.toFixed(4)}) ` : '';
+    this.$('flip').style.transform = `${zoom}rotateX(${-ty * 2.6}deg) rotateY(${v.deg.x + tx * 3.2}deg)`;
 
     // The card's shadows grow as it lifts off the paper.
     const lift = (1 - lay) * r;
@@ -602,9 +909,18 @@ export class CardTableEngine {
     this.$('shadeBack').style.opacity = String(sinD * 0.34);
     this.$('table').style.transform = `translate(${-tx * 7}px,${-ty * 7}px)`;
 
-    // Words stay out of the way of what's moving.
-    this.$('words').style.opacity = pull > 0.02 || this.step === 'pulling' ? '0' : '';
-    this.$('act').style.opacity = this.step === 'pulling' ? '0' : '';
+    // Words stay out of the way of what's moving. Sealing, the host shows them step by step.
+    if (!this.sending) {
+      this.$('words').style.opacity = pull > 0.02 || this.step === 'pulling' ? '0' : '';
+      this.$('act').style.opacity = this.step === 'pulling' ? '0' : '';
+    } else {
+      // Several cards: a stack of envelope edges behind the top one, once it's addressed.
+      const stack = this.root.querySelector<HTMLElement>('[data-el="lStack"]');
+      if (stack) {
+        stack.style.display = flapSide ? 'none' : 'block';
+        stack.style.transform = frontT;
+      }
+    }
   }
 
   // ---- The animation loop ----
@@ -633,7 +949,8 @@ export class CardTableEngine {
     let moving = false;
     for (const key of Object.keys(v) as (SpringKey)[]) {
       const s = v[key];
-      const held = dragging && ((dragging.mode === 'env' && key === 'envDeg') || (dragging.mode === 'pull' && key === 'pull') || (dragging.mode === 'turn' && key === 'deg'));
+      const held = dragging && ((dragging.mode === 'env' && key === 'envDeg') || (dragging.mode === 'pull' && key === 'pull') || (dragging.mode === 'turn' && key === 'deg')
+        || (dragging.mode === 'push' && key === 'lay') || (dragging.mode === 'shut' && key === 'pull'));
       if (!held) {
         for (let i = 0; i < steps; i += 1) {
           const a = s.k * (s.t - s.x) - s.c * s.v;
@@ -644,8 +961,34 @@ export class CardTableEngine {
         else { s.x = s.t; s.v = 0; }
       }
     }
+    if (this.sending) {
+      // Lifted off the table, the card slides down into the envelope; then the flap can come down.
+      if (this.send === 'putting' && v.lay.x < 0.05 && v.pull.t !== FLAP_OPEN) { v.pull.t = FLAP_OPEN; moving = true; }
+      if (this.send === 'putting' && v.pull.t === FLAP_OPEN && v.pull.x < FLAP_OPEN + 0.012) {
+        this.step = 'flap';
+        tick(8);
+        this.setSend('in');
+      }
+      if (this.send === 'closing' && v.pull.x < 0.006) {
+        v.pull.x = 0; v.pull.t = 0; v.pull.v = 0;
+        this.step = 'back';
+        tick(12);
+        this.setSend('seal');
+      }
+      if (this.holdStart) {
+        const p = clamp((now - this.holdStart) / SEAL_HOLD);
+        const press = this.$('press');
+        press.style.transform = `scale(${(0.35 + 0.7 * p).toFixed(3)})`;
+        press.style.opacity = (0.3 + 0.6 * p).toFixed(3);
+        // Soft ticks, closer and closer together.
+        const due = [0.3, 0.55, 0.72, 0.84, 0.93].filter((at) => p >= at).length;
+        if (due > this.holdTicks) { this.holdTicks = due; tick(5); }
+        if (p >= 1) this.sealNow();
+        else moving = true;
+      }
+    }
     // Once it has cleared the envelope, the card is laid down in front of it.
-    if (this.step === 'pulling' && v.pull.x > 0.985) {
+    if (!this.sending && this.step === 'pulling' && v.pull.x > 0.985) {
       v.pull.x = 1; v.pull.t = 1; v.pull.v = 0;
       this.step = 'out';
       v.lay.t = 1;
@@ -654,7 +997,7 @@ export class CardTableEngine {
       moving = true;
     }
     this.render();
-    if (moving || dragging || (!reduce && !this.gyro)) this.raf = requestAnimationFrame(this.frame);
+    if (moving || dragging || this.holdStart || (!reduce && !this.gyro)) this.raf = requestAnimationFrame(this.frame);
   };
 
   /** For checks in a browser: jump straight to any moment, as the sample's __sample.go does. */

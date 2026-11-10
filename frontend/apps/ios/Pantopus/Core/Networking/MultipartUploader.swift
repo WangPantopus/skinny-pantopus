@@ -82,7 +82,8 @@ public final class MultipartUploader: @unchecked Sendable {
         body: Data = Data(),
         bodyFile: URL? = nil,
         headers: [String: String] = [:],
-        expectedSessionGeneration: Int? = nil
+        expectedSessionGeneration: Int? = nil,
+        progress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let sessionOwner = auth
         let generation = sessionOwner.requestSessionGeneration
@@ -126,7 +127,9 @@ public final class MultipartUploader: @unchecked Sendable {
 
         let deviceId = sessionOwner.deviceId
         let token = sessionOwner.accessToken
-        var (data, response) = try await uploadPayload(makeRequest(token: token, deviceId: deviceId), body: body, file: bodyFile)
+        var (data, response) = try await uploadPayload(
+            makeRequest(token: token, deviceId: deviceId), body: body, file: bodyFile, progress: progress
+        )
         try checkSession()
         guard var http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
 
@@ -136,7 +139,9 @@ public final class MultipartUploader: @unchecked Sendable {
             switch outcome {
             case .rotated:
                 let refreshed = sessionOwner.accessToken
-                (data, response) = try await uploadPayload(makeRequest(token: refreshed, deviceId: deviceId), body: body, file: bodyFile)
+                (data, response) = try await uploadPayload(
+                    makeRequest(token: refreshed, deviceId: deviceId), body: body, file: bodyFile, progress: progress
+                )
                 try checkSession()
                 guard let retryHTTP = response as? HTTPURLResponse else { throw APIError.invalidResponse }
                 http = retryHTTP
@@ -160,9 +165,12 @@ public final class MultipartUploader: @unchecked Sendable {
         return (data, http)
     }
 
-    private func uploadPayload(_ request: URLRequest, body: Data, file: URL?) async throws -> (Data, URLResponse) {
-        if let file { return try await session.upload(for: request, fromFile: file) }
-        return try await session.upload(for: request, from: body)
+    private func uploadPayload(
+        _ request: URLRequest, body: Data, file: URL?, progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> (Data, URLResponse) {
+        let delegate = progress.map { UploadProgressDelegate(onProgress: $0) }
+        if let file { return try await session.upload(for: request, fromFile: file, delegate: delegate) }
+        return try await session.upload(for: request, from: body, delegate: delegate)
     }
 
     /// Upload a single file to `POST /api/files/upload`. Optional form
@@ -779,5 +787,25 @@ public final class MultipartUploader: @unchecked Sendable {
         }
         body.append(Data("--\(boundary)--\r\n".utf8))
         return body
+    }
+}
+
+/// Hands a request body's sending progress (0 to 1) to an upload's caller.
+private final class UploadProgressDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    let onProgress: @Sendable (Double) -> Void
+
+    init(onProgress: @escaping @Sendable (Double) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    func urlSession(
+        _: URLSession,
+        task _: URLSessionTask,
+        didSendBodyData _: Int64,
+        totalBytesSent: Int64,
+        totalBytesExpectedToSend: Int64
+    ) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        onProgress(min(1, Double(totalBytesSent) / Double(totalBytesExpectedToSend)))
     }
 }

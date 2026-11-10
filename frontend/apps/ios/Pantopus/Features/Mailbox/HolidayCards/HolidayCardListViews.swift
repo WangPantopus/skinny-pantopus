@@ -199,7 +199,7 @@ struct HolidayCardListLookFooter: View {
                 isLoading: viewModel.sending,
                 isEnabled: needed > 0
             ) {
-                if needsStamps { viewModel.getStampsForList() } else { Task { await viewModel.sendList() } }
+                if needsStamps { viewModel.getStampsForList() } else { viewModel.sealOrSend() }
             }
             .accessibilityIdentifier("sendCardLookSend")
         }

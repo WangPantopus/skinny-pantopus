@@ -222,13 +222,15 @@ export type MailPieceProps = {
   opened: boolean;
   /** 1 = fresh; lower = older read mail. */
   fade?: number;
+  /** A card in Sent that the other person has: drawn as taken out of its envelope, "To {first name}". */
+  sentTo?: string | null;
 };
 
 /**
  * The drawing alone; the row around it gives it a name (pieceSentence), so
  * the drawing itself is hidden from screen readers.
  */
-export default function MailPiece({ item, recipientName, recipientLine, opened, fade = 1 }: MailPieceProps) {
+export default function MailPiece({ item, recipientName, recipientLine, opened, fade = 1, sentTo = null }: MailPieceProps) {
   const kind = pieceKind(item);
   const trust = pieceTrust(item);
   const from = item.sender_display || 'Unknown sender';
@@ -264,6 +266,33 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
         </div>
       </div>
     );
+  } else if (item.card && launchFeatures.cardTable && torn) {
+    // An opened card shows its picture (design plan Part 4): the whole card, taken out, leans over the envelope's top
+    // edge; who it's from (in Sent: to), its caption and the day beside it. The envelope keeps its red paper and height.
+    const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
+    const [month = '', date = ''] = postDate.split(' ');
+    const who = ((sentTo ?? from).trim().split(/\s+/)[0]) || (sentTo ? 'them' : 'Someone');
+    body = (
+      <div
+        className="relative h-[150px] rounded-md"
+        style={{ backgroundColor: '#9f2f28', backgroundImage: `url(${TABLE_ART}env-front.webp)`, backgroundSize: 'cover', backgroundPosition: '50% 12%', boxShadow: SHADOW }}
+      >
+        <div
+          className="absolute -top-[14px] left-4 w-[125px] -rotate-3 rounded-[2px]"
+          style={{ aspectRatio: '5 / 6', backgroundColor: item.card.paper || '#f7f0e2', boxShadow: '0 6px 14px rgba(40, 8, 6, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3)' }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={cardPicture(item.card.design, 'thumb')} alt="" className="absolute left-[2px] right-[2px] top-[2px] h-[86%] w-[calc(100%-4px)] rounded-[1px] object-cover" />
+        </div>
+        <div className="absolute left-[158px] right-3 top-[18px] text-[#f4e2bf]">
+          <div className="truncate text-[22px] leading-[26px]" style={{ fontFamily: pen }}>{sentTo ? 'To' : 'From'} {who}</div>
+          <div className="mt-1 line-clamp-2 text-[15px] italic leading-[19px] text-[#fbeed2]" style={{ fontFamily: SERIF }}>{item.card.caption || 'A Christmas card'}</div>
+          <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#d8b76f]" style={{ fontFamily: SERIF }}>
+            {month} {date} · {sentTo ? 'Delivered' : 'Opened'}
+          </div>
+        </div>
+      </div>
+    );
   } else if (item.card && launchFeatures.cardTable) {
     // On the table's paper (launch key card_table): the same place for everything, on the real envelope.
     const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
@@ -281,12 +310,16 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={cardStampFile(item.card.number, item.card.design)} alt="" className="absolute right-3 top-2.5 h-[54px] w-auto" />
         {postDate ? (
-          <div className="absolute right-[30px] top-2 w-[108px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`${TABLE_ART}postmark-blank.webp`} alt="" className="block h-auto w-full" />
+          // In cream ink at 60% so it reads on the dark red (design plan 1.6); the table keeps its black ink.
+          <div className="absolute right-[30px] top-2 aspect-[622/365] w-[108px] opacity-60">
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-[#f4e2bf]"
+              style={{ WebkitMaskImage: `url(${TABLE_ART}postmark-blank.webp)`, maskImage: `url(${TABLE_ART}postmark-blank.webp)`, WebkitMaskSize: '100% 100%', maskSize: '100% 100%' }}
+            />
             <svg viewBox="0 0 622 365" className="absolute inset-0 h-full w-full" aria-hidden="true">
-              <text x="165" y="161.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 165 161.6)">{month} {date}</text>
-              <text x="160.3" y="199.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill="rgb(19, 13, 15)" fillOpacity="0.8" transform="rotate(7 160.3 199.6)">{year}</text>
+              <text x="165" y="161.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="39.8" letterSpacing="1.74" fill="#f4e2bf" transform="rotate(7 165 161.6)">{month} {date}</text>
+              <text x="160.3" y="199.6" textAnchor="middle" fontFamily={SERIF} fontWeight="700" fontSize="32.5" letterSpacing="1.49" fill="#f4e2bf" transform="rotate(7 160.3 199.6)">{year}</text>
             </svg>
           </div>
         ) : null}
@@ -458,9 +491,10 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
     <div
       aria-hidden="true"
       className="relative w-full [@media(prefers-color-scheme:dark)]:brightness-[0.94]"
-      style={{ paddingTop: torn ? 14 : 0, opacity: fade }}
+      // A Christmas card on the table's paper keeps its red, opened or not (design plan 1.4 and Part 4).
+      style={{ paddingTop: torn ? 14 : 0, opacity: item.card && launchFeatures.cardTable ? 1 : fade }}
     >
-      {torn && item.card ? (
+      {torn && item.card && launchFeatures.cardTable ? null : torn && item.card ? (
         // The card's picture peeking out of its torn envelope.
         <div
           className="absolute left-5 right-5 top-0 h-[30px] rounded-[2px] border border-[#e7dcc6]"

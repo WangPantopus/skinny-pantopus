@@ -22,6 +22,9 @@ struct CardTableEnvelopeFront: View, Equatable {
     let mailedOn: String?
     let year: Int
     let sealed: Bool
+    /// Being addressed as it's sent (plan Part 2), 0 to 1: the name written left to right, the stamp landing, the
+    /// postmark's thump, and the gold seal last (`CardTableAddress`). 1 shows it all.
+    var reveal: Double = 1
 
     var body: some View {
         Canvas(rendersAsynchronously: false) { context, size in
@@ -29,14 +32,28 @@ struct CardTableEnvelopeFront: View, Equatable {
             let height = size.height
             context.draw(Image(uiImage: paper), in: CGRect(origin: .zero, size: size))
             let stampWidth = width * 0.2017
-            context.draw(
-                Image(uiImage: stamp),
-                in: CGRect(x: width * 0.755, y: height * 0.0345, width: stampWidth, height: stampWidth * 300 / 242)
-            )
-            drawPostmark(in: context, size: size)
-            drawNames(in: context, size: size)
+            let stampIn = CardTableAddress.progress(reveal, CardTableAddress.stamp)
+            if stampIn > 0 {
+                var stampLayer = context
+                stampLayer.opacity = min(1, stampIn * 2)
+                let grow = 1 + 0.35 * (1 - stampIn)
+                let box = CGRect(x: width * 0.755, y: height * 0.0345, width: stampWidth, height: stampWidth * 300 / 242)
+                stampLayer.draw(Image(uiImage: stamp), in: box.insetBy(dx: -box.width * (grow - 1) / 2, dy: -box.height * (grow - 1) / 2))
+            }
+            let postmarkIn = CardTableAddress.progress(reveal, CardTableAddress.postmark)
+            if postmarkIn > 0 {
+                var inked = context
+                inked.opacity = postmarkIn
+                drawPostmark(in: inked, size: size)
+            }
+            drawNames(in: context, size: size, written: CardTableAddress.progress(reveal, CardTableAddress.name))
             if sealed {
-                drawSealedStamp(in: context, size: size)
+                let goldIn = CardTableAddress.progress(reveal, CardTableAddress.gold)
+                if goldIn > 0 {
+                    var gold = context
+                    gold.opacity = goldIn
+                    drawSealedStamp(in: gold, size: size)
+                }
             } else {
                 drawKind(in: context, size: size)
             }
@@ -51,7 +68,7 @@ struct CardTableEnvelopeFront: View, Equatable {
         CardTableInkedPostmark.draw(postmark, in: context, box: box, day: mailedOn, year: year)
     }
 
-    private func drawNames(in context: GraphicsContext, size: CGSize) {
+    private func drawNames(in context: GraphicsContext, size: CGSize, written: Double) {
         let width = size.width
         // The sender small at the top left, turned a little.
         CardTablePenLine(
@@ -63,7 +80,13 @@ struct CardTableEnvelopeFront: View, Equatable {
             maxWidth: width * 0.27
         )
         .draw(in: context, x: width * 0.066, top: size.height * 0.062)
-        // Who it's for, large across the middle. A long name gets smaller instead of running off the paper.
+        // Who it's for, large across the middle. A long name gets smaller instead of running off the paper. Being
+        // addressed, it's written left to right.
+        guard written > 0 else { return }
+        var pen = context
+        if written < 1 {
+            pen.clip(to: Path(CGRect(x: 0, y: 0, width: width * (0.13 + 0.82 * written), height: size.height)))
+        }
         CardTablePenLine(
             text: toName,
             fontSize: width * 0.094,
@@ -73,7 +96,7 @@ struct CardTableEnvelopeFront: View, Equatable {
             maxWidth: width * 0.78,
             shadow: MailPaper.tableToNameShadow
         )
-        .draw(in: context, x: width * 0.15, top: size.height * 0.46)
+        .draw(in: pen, x: width * 0.15, top: size.height * 0.46)
     }
 
     private func drawKind(in context: GraphicsContext, size: CGSize) {
@@ -101,22 +124,31 @@ struct CardTableEnvelopeFront: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.paper === rhs.paper && lhs.stamp === rhs.stamp && lhs.postmark === rhs.postmark && lhs.fromName == rhs.fromName
             && lhs.toName == rhs.toName && lhs.mailedOn == rhs.mailedOn && lhs.year == rhs.year && lhs.sealed == rhs.sealed
+            && lhs.reveal == rhs.reveal
     }
 }
 
 /// The inked postmark on an envelope: the art's rings and wavy lines, with the real mailed day printed over them.
 enum CardTableInkedPostmark {
-    static func draw(_ postmark: UIImage, in context: GraphicsContext, box: CGRect, day: String?, year: Int) {
-        context.draw(Image(uiImage: postmark), in: box)
+    /// `ink`: the postmark in another ink (the Mailbox row's cream, so it reads on the dark red); nil keeps the art's black.
+    static func draw(_ postmark: UIImage, in context: GraphicsContext, box: CGRect, day: String?, year: Int, ink: Color? = nil) {
+        if let ink {
+            context.drawLayer { layer in
+                layer.clipToLayer { mask in mask.draw(Image(uiImage: postmark), in: box) }
+                layer.fill(Path(box), with: .color(ink))
+            }
+        } else {
+            context.draw(Image(uiImage: postmark), in: box)
+        }
         func line(_ text: String, x: CGFloat, y: CGFloat, size: CGFloat, tracking: CGFloat) {
-            var ink = context
-            ink.translateBy(x: box.minX + box.width * x, y: box.minY + box.height * y)
-            ink.rotate(by: .degrees(7))
-            ink.drawText(
+            var stamp = context
+            stamp.translateBy(x: box.minX + box.width * x, y: box.minY + box.height * y)
+            stamp.rotate(by: .degrees(7))
+            stamp.drawText(
                 Text(text)
                     .font(.custom("Georgia-Bold", fixedSize: box.width * size))
                     .tracking(box.width * tracking)
-                    .foregroundColor(MailPaper.tablePostmarkInk),
+                    .foregroundColor(ink ?? MailPaper.tablePostmarkInk),
                 centeredOn: 0,
                 baseline: 0
             )

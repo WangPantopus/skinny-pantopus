@@ -35,6 +35,9 @@ struct CardTableContent: Equatable {
     var sealedInDays: String
     /// How many days until it opens, for "Not yet."
     var sealedDayCount: Int
+    /// A Christmas with Jesus Christ card's whole verse, for "Read the verse" (plan 6.2); nil for the rest, while
+    /// it's sealed, and in Sent (the server doesn't send it there).
+    var verse: String?
 
     var firstName: String {
         HolidayCardWords.firstName(fromName)
@@ -133,6 +136,42 @@ final class CardTableModel {
     var turnedOnce = false
     var envelopeTurnedOnce = false
     var heldOnce = false
+    /// "Send {first name} a card" (plan Part 3), set by the reader's page once the server says a card can go to them.
+    var sendBack: CardTableMenuItem?
+    /// The quiet buttons may come (Send {first name} a card, or step 5's): the buttons keep room for them from the
+    /// start, so the card doesn't move.
+    var reservesSecondary = false
+
+    // Sealing a card by hand (plan Part 2, CardTableSending.swift); nil while reading one.
+    var sending: CardTableSending?
+    var sendingSetup: CardTableSendingSetup?
+    /// The wax seal shows: always on a card being read; on one being sent, once it's pressed home.
+    var sealShown = true
+    /// The stamp head pressing the seal, 0 to 1 over 0.6 s.
+    var sealPress = 0.0
+    /// The address side being written on, 0 to 1 (`CardTableAddress`).
+    var addressing = 1.0
+    /// Step 5's words, main button and quiet buttons, once it's sent.
+    var goneWords: String?
+    var gonePrimary = "Done"
+    var goneButtons: [CardTableMenuItem] = []
+    /// Step 5's Take it back asks first.
+    var asksTakeBack = false
+    /// Why the seal didn't take, in place of "Press and hold to seal it." until the next press.
+    var sealRefusal: String?
+    /// Step 5's Share for a card by link: the words and the link, for the system share sheet.
+    var linkShareText: String?
+    /// Enlarged on the table (plan 6.1, `CardTableZoom.swift`): 1 to 3 times, moved this far from its place.
+    var zoom: CGFloat = 1
+    var zoomOffset: CGSize = .zero
+    /// "Read the verse" (plan 6.2): the bookmark is up.
+    var showsVerse = false
+    @ObservationIgnored var pinchStartZoom: CGFloat?
+    /// One tap on the card waits 0.3 s for a second (a double-tap enlarges it) before it turns the card.
+    @ObservationIgnored var pendingCardTap: Task<Void, Never>?
+    @ObservationIgnored var sealHeld = false
+    @ObservationIgnored var sinceTick = 0.0
+    @ObservationIgnored var addressedAt = 0.0
 
     @ObservationIgnored var drag: CardTableDrag?
     @ObservationIgnored private let startsOnTable: Bool
@@ -185,7 +224,9 @@ final class CardTableModel {
             springs.pull.jump(to: 1)
             springs.lay.jump(to: 1)
             springs.drop.jump(to: 0)
-            cracked = true
+            // Being sealed: note side up, and no seal on the envelope yet.
+            if sending != nil { springs.card.jump(to: 180) }
+            cracked = sending == nil
             step = .out
             applyFold(animated: false)
         } else {
@@ -265,6 +306,7 @@ final class CardTableModel {
         guard fold != self.fold else { return }
         let wasSpread = self.fold.isSpread
         self.fold = fold
+        resetZoom()
         // Closing the phone goes back to the picture side.
         if wasSpread, !fold.isSpread {
             springs.card.jump(to: 0)
@@ -361,6 +403,7 @@ final class CardTableModel {
         if next.drop.advance(step: slice, count: count) { moving = true }
         if next.spread.advance(step: slice, count: count) { moving = true }
         springs = next
+        if sending != nil, advanceSending(elapsed: elapsed) { moving = true }
         // Once it has cleared the envelope, the card is laid down in front of it.
         if step == .pulling, springs.pull.x > 0.985 {
             didCardLand()

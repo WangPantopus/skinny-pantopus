@@ -13,7 +13,8 @@ import type { SentPiece } from '@pantopus/api';
 import { Loader2 } from 'lucide-react';
 import MailPiece from '../MailPiece';
 import { cardPicture } from '../cards/cardArt';
-import { sentEnvelope, sentEnvelopeName, sentStatusLine, sentToLine } from './sentWords';
+import { sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, sentToLine } from './sentWords';
+import { launchFeatures } from '@/lib/featureFlags';
 
 export default function SentRow({
   piece,
@@ -30,6 +31,7 @@ export default function SentRow({
   const href = `/app/mailbox/sent/${piece.id}`;
   const toLine = sentToLine(piece);
   const statusLine = sentStatusLine(piece);
+  const theyHaveIt = launchFeatures.cardTable && piece.kind !== 'letter' && !piece.sealed && (piece.status === 'delivered' || piece.status === 'claimed');
   // Read out as a sentence: "Your card to Maya O. In their mailbox since Sat, Oct 31."
   const who = piece.by_link
     ? `your card by link`
@@ -53,7 +55,13 @@ export default function SentRow({
           selected ? 'ring-2 ring-primary-500 ring-offset-2 ring-offset-app-bg' : ''
         }`}
       >
-        <MailPiece item={sentEnvelope(piece)} recipientName={sentEnvelopeName(piece)} opened={false} />
+        <MailPiece
+          item={sentEnvelope(piece)}
+          recipientName={sentEnvelopeName(piece)}
+          // Once the other person has it, the card shows its picture, taken out (design plan Part 4, launch key card_table).
+          opened={theyHaveIt}
+          sentTo={theyHaveIt ? sentFirst(piece) : null}
+        />
         <span aria-hidden="true" className={`mt-2 flex items-center gap-2.5 ${piece.can_take_back ? 'pr-[124px]' : ''}`}>
           {piece.card.design ? (
             // eslint-disable-next-line @next/next/no-img-element

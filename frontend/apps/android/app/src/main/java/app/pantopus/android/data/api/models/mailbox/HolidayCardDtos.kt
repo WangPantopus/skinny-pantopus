@@ -62,6 +62,8 @@ data class HolidayCardDesign(
     val slug: String? = null,
     /** The picture's table colour, a colour like `#3b4c6e` (launch key `card_table`). */
     val table: String? = null,
+    /** The whole verse printed on a Christmas with Jesus Christ picture (59-67), shown under the card; others have none. */
+    val verse: String? = null,
 )
 
 /** A collection on "Pick a card" (Christmas as a Kid …): its name, who it's for, and its pictures in order. */
@@ -375,6 +377,8 @@ data class SentCardFace(
     /** The picture's name on its public page and its table colour (launch key `card_table`). */
     val slug: String? = null,
     val table: String? = null,
+    /** The whole verse on a Christmas with Jesus Christ picture, not while it's sealed ("Read the verse"). */
+    val verse: String? = null,
 )
 
 /**

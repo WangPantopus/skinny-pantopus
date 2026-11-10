@@ -208,6 +208,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         case RowID.gigUpdates:
             preferences?.gigUpdatesEnabled = isOn
             enqueue(["gig_updates_enabled": .bool(isOn)])
+        case RowID.moments:
+            preferences?.momentsEnabled = isOn
+            enqueue(["moments_enabled": .bool(isOn)])
         case RowID.beaconPush:
             preferences?.beaconPushEnabled = isOn
             enqueue(["beacon_push_enabled": .bool(isOn)])
@@ -579,6 +582,13 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                     control: .toggle(isOn: prefs.gigUpdatesEnabled)
                 ),
                 GroupedListRow(
+                    id: RowID.moments,
+                    label: "Moments from your connections",
+                    subtext: "When a connection adds a Moment",
+                    control: .toggle(isOn: prefs.momentsEnabled ?? true),
+                    accessibilityIdentifier: "settings.notifications.moments"
+                ),
+                GroupedListRow(
                     id: RowID.beaconPush,
                     label: "Beacon Push Notifications",
                     subtext: "Device alerts for Beacon updates. Updates stay in the app when off.",
@@ -592,8 +602,10 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                 )
                 // Launch cut #1 (Beacon): no Beacon push toggle; launch cut #10
                 // (Mailbox): no mail summary.
+                // Moments: only while they're on for the account and the server keeps the switch.
             ].filter {
                 ($0.id != RowID.beaconPush || LaunchFeatures.beacon) && ($0.id != RowID.mailSummary || LaunchFeatures.mailbox)
+                    && ($0.id != RowID.moments || (MomentsFlags.shared.moments && prefs.momentsEnabled != nil))
             }
         )
     }
@@ -678,6 +690,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         public static let aqiAlerts = "alerts.aqi"
         public static let homeReminders = "alerts.homeReminders"
         public static let gigUpdates = "alerts.gigUpdates"
+        public static let moments = "alerts.moments"
         public static let beaconPush = "alerts.beaconPush"
         public static let mailSummary = "alerts.mailSummary"
         public static let quietHours = "quietHours.enabled"
