@@ -789,7 +789,9 @@ function MoneyCheckCard({ card }: { card: PlaceMoneyCard }) {
   // An https page opens in a new tab; an app link in the words notifications use ("/place?section=money") opens the
   // page a notification would. Anything else is left off.
   const external = card.action && card.action.url.startsWith('https://') ? card.action : null;
-  const inApp = card.action && card.action.url.startsWith('/') ? resolveWebNotificationPath(card.action.url) : null;
+  // The assistant is in the iPhone and Android apps only, so its link is left off here; the card's notes say where it is.
+  const appOnly = card.action ? /^\/assistant(?=$|[/?#])/.test(card.action.url) : false;
+  const inApp = card.action && card.action.url.startsWith('/') && !appOnly ? resolveWebNotificationPath(card.action.url) : null;
   const actionClass = 'inline-flex items-center gap-1 mt-3 text-[13px] font-semibold text-primary-600 hover:text-primary-700 transition';
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]" data-testid={`money-card-${card.id}`}>

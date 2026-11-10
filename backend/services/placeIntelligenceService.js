@@ -57,6 +57,8 @@ const propertyEstimates = require('./propertyRecords/estimates');
 const { serializeEstimate } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
 const similarHomes = require('./propertyRecords/similarHomes');
+const propertyRecordsRouter = require('./propertyRecords/router');
+const homeInsuranceCheck = require('./homeInsuranceCheck');
 const { appealForState } = require('../data/appealPrograms');
 const { stateCode: recordStateCode } = require('./propertyRecords/addressKey');
 const recordVocabulary = require('./recordVocabulary');
@@ -164,28 +166,43 @@ async function similarHomesTeaser(recordRow) {
 }
 
 /**
- * The Home Money Check's cards for the money page, the confirmed owner's: today the property tax check, the county's
- * value beside similar houses on the street, and for a home above them, how its state says a value is reviewed
- * (data/appealPrograms.js). From the copy the Home holds; a failure or nothing to say is no card.
+ * The property tax check: the county's value beside similar houses on the street, and for a home above them, how its
+ * state says a value is reviewed (data/appealPrograms.js). From the copy the Home holds. `on` says whether the Home
+ * Money Check is switched on for the home's county, which is also where the insurance check introduces itself.
  */
-async function ownerMoneyCards(recordRow) {
-  try {
-    const { data: stored } = await recordRow();
-    const copy = stored ? homeRecords.liveCopy(stored) : null;
-    const found = copy ? await similarHomes.forHome(stored, copy) : null;
-    if (!found) return [];
-    const card = { ...similarHomes.card(found), source: homeRecords.provenanceOf(copy).label };
-    // Above similar homes: how the state says a value is reviewed, in its own words, with its page.
-    const appeal = found.stance === 'above' ? appealForState(recordStateCode(stored.state)) : null;
-    if (appeal) {
-      card.notes = [...card.notes, appeal.note];
-      card.action = { label: `Official page: ${appeal.source.name}`, url: appeal.source.url };
-    }
-    return [card];
-  } catch (err) {
-    logger.warn('placeIntelligence: money cards failed', { error: err.message });
-    return [];
+async function propertyTaxCheck(recordRow) {
+  const { data: stored } = await recordRow();
+  const copy = stored ? homeRecords.liveCopy(stored) : null;
+  const on = Boolean(copy && propertyRecordsRouter.similarHomesFor(copy.jurisdiction));
+  const found = copy ? await similarHomes.forHome(stored, copy) : null;
+  if (!found) return { on, cards: [] };
+  const card = { ...similarHomes.card(found), source: homeRecords.provenanceOf(copy).label };
+  // Above similar homes: how the state says a value is reviewed, in its own words, with its page.
+  const appeal = found.stance === 'above' ? appealForState(recordStateCode(stored.state)) : null;
+  if (appeal) {
+    card.notes = [...card.notes, appeal.note];
+    card.action = { label: `Official page: ${appeal.source.name}`, url: appeal.source.url };
   }
+  return { on, cards: [card] };
+}
+
+/**
+ * The Home Money Check's cards for the money page, the confirmed owner's: the property tax check, then the home
+ * insurance check (homeInsuranceCheck.js), which is the household's own policy page as the assistant read it. Each
+ * check stands alone: one that fails or has nothing to say is no card, and the other still shows.
+ */
+async function ownerMoneyCards(recordRow, { home, userId }) {
+  const taxRead = propertyTaxCheck(recordRow).catch((err) => {
+    logger.warn('placeIntelligence: property tax check failed', { error: err.message });
+    return { on: false, cards: [] };
+  });
+  // Read beside the tax check, so the second card costs the page no time of its own.
+  const insuranceRead = homeInsuranceCheck.forHome({ homeId: home.id, userId, timeZone: placeTimeZone(home), invited: taxRead.then((tax) => tax.on) }).catch((err) => {
+    logger.warn('placeIntelligence: insurance check failed', { error: err.message });
+    return [];
+  });
+  const [tax, insurance] = await Promise.all([taxRead, insuranceRead]);
+  return [...tax.cards, ...insurance];
 }
 
 // A claim still in progress: not decided, withdrawn or merged into another.
@@ -1705,7 +1722,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // Beside the composers, so the locked card's line costs the response no time of its own.
   const teaserRead = viewer.role === 'owner' && setupLocked.includes('your_home') && !claimant ? similarHomesTeaser(recordRow) : Promise.resolve(null);
   // The money page's cards ride with its sections, and only to the owner whose ownership is confirmed.
-  const moneyCardsRead = viewer.ownership === 'confirmed' && requested.has('exemption_check') ? ownerMoneyCards(recordRow) : Promise.resolve([]);
+  const moneyCardsRead = viewer.ownership === 'confirmed' && requested.has('exemption_check') ? ownerMoneyCards(recordRow, { home, userId }) : Promise.resolve([]);
   const late = [];
   // When the budget fallbacks ran (near budgetMs unless the process itself was
   // held up) and when every section had answered, for the over-budget log.

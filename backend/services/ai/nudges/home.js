@@ -8,7 +8,7 @@
  *   home_overdue     Mondays, from the person's morning brief time: the home's overdue tasks,
  *                    then this week's that no one has taken, where they can edit tasks. Up to 3,
  *                    each with Mark done, Move to Saturday and, when no one has it, I'll do it.
- *   home_paperwork   30 days, then 7 days, before a warranty, policy or lease ends: the
+ *   home_paperwork   30 days (45 for a policy), then 7 days, before a warranty, policy or lease ends: the
  *                    reminders a home paper made (HomeTask.details.origin "document") and
  *                    appliances' warranties (HomeAsset.warranty_expires_at). To owners and
  *                    admins who can see it, with a card for a task to check or renew it.
@@ -140,7 +140,7 @@ async function overdueNudge({ home, tasks, userId, zone, local, now }) {
 
 // ─── home_paperwork ────────────────────────────────────────────────────────
 
-/** The papers ending within 30 days that this person may see. */
+/** The papers this person may see: every reminder a home paper made, and appliances' warranties ending within 30 days. */
 async function papersEnding({ home, tasks, access, today }) {
   const papers = [];
   for (const task of tasks || []) {
@@ -168,6 +168,10 @@ async function papersEnding({ home, tasks, access, today }) {
   return papers;
 }
 
+// An insurance renewal takes longer to look into than a warranty, so a policy's first notice comes 45 days out.
+// It keeps the "30d" checkpoint name, so a policy already noticed isn't noticed twice.
+const FIRST_NOTICE_DAYS = { policy: 45 };
+
 const PAPER_TASKS = {
   warranty: (name) => `Claim any repairs under the ${name} before it ends`,
   policy: (name) => `Renew or compare the ${name}`,
@@ -180,7 +184,7 @@ async function paperworkNudges({ home, tasks, access, userId, zone, local }) {
   for (const paper of await papersEnding({ home, tasks, access, today })) {
     const ends = DateTime.fromISO(paper.endsOn, { zone });
     const daysLeft = Math.round(ends.diff(today, 'days').days);
-    if (daysLeft < 0 || daysLeft > 30) continue;
+    if (daysLeft < 0 || daysLeft > (FIRST_NOTICE_DAYS[paper.kind] || 30)) continue;
     const name = /warranty|policy|lease/i.test(paper.name) ? paper.name : `${paper.name} ${paper.kind}`;
     const due = DateTime.max(today.plus({ days: 1 }), ends.minus({ days: 7 }));
     const expiresAt = ends.endOf('day').toJSDate();
