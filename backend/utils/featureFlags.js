@@ -38,6 +38,7 @@ const LAUNCH_FEATURE_KEYS = [
   'pulse_redesign', // 11. The Pulse redesign (PR 625), paused for launch (2026-10-15); the October 13 Pulse stays
   'holiday_cards', // 12. Christmas cards sent through Mail (2026-10-30); needs `mailbox` on too
   'card_table', // 13. The Christmas card on the table: full screen, sharing, sending by link, public card pages (2026-11-06); needs `mailbox` and `holiday_cards` on too
+  'holiday_card_memories', // 14. A card's own photo and voice greeting (memories plan 2026-11-02, built 2026-11-10); needs `mailbox` on too
 ];
 
 function isLaunchFeatureEnabled(key) {

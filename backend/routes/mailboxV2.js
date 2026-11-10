@@ -16,6 +16,7 @@ const mailDelivery = require('../services/mailDelivery');
 // the Vault's folders (Home folders belong to the Home).
 const mailPiece = require('../services/mailPiece');
 const holidayCards = require('../services/holidayCards');
+const cardMedia = require('../services/holidayCardMedia');
 const mailSummaries = require('../services/mailSummaries');
 const mailVault = require('../services/mailVault');
 const mailEnclosures = require('../services/mailEnclosures');
@@ -658,6 +659,10 @@ router.get('/item/:id', verifyToken, async (req, res) => {
     // card sealed until Christmas morning answers its short note and stays unopened (services/holidayCards).
     Object.assign(mail, await mailObjects.hydrateMail(mail));
     const objectPayload = mail.object_payload || null;
+    // A card's own photo stays covered unless the reader is the sender's connection (memories contract section 10).
+    if (holidayCards.isCard(mail) && holidayCards.mediaOf(objectPayload)?.photo) {
+      mail.card_photo_covered = await cardMedia.photoCovered(userId, mail.sender_user_id);
+    }
     if (!mail.opened_at && !mail.removed && !holidayCards.isSealed(mail)) {
       const now = new Date().toISOString();
       const opened = { opened_at: now, viewed: true, viewed_at: mail.viewed_at || now,
