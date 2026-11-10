@@ -225,11 +225,11 @@ Steps 1–5 change only the apps and the web, so they need one new store build o
 
 ## Decisions for the founder
 
-Each has my default. Say only what you want different.
+**All eight are approved.** On November 9 the founder said: "for D2-D8, I agree with all the default approaches, let's go with these." D1 was agreed earlier the same day. The defaults below are therefore the decisions.
 
-| # | Decision | Default |
+| # | Decision | Decided |
 |---|---|---|
-| D1 | Hide the tab bar in the send flow and the welcome moment | Yes (you agreed November 9) |
+| D1 | Hide the tab bar in the send flow and the welcome moment | Yes |
 | D2 | Upright open Duo shows one large card instead of two stacked pages | Yes |
 | D3 | Letter page: actions move to the end of the letter | Yes |
 | D4 | New art: a star stamp and a cream envelope set, made by the existing scripts, one sample shown first | Yes |
@@ -240,6 +240,7 @@ Each has my default. Say only what you want different.
 
 ## For the builder
 
+- How the build is run (coordinator, sessions, waves, rules) is in [mail-cards-build-kickoff-2026-11-09.md](mail-cards-build-kickoff-2026-11-09.md).
 - Read [AGENTS.md](../../AGENTS.md), then [christmas-card-table/design.md](christmas-card-table/design.md) and its `sample/`. This plan changes that design only where it says so.
 - Everything rides the existing `card_table` key. Do not add a key or a table.
 - No unit tests. Verify each part in the real apps: web in a browser, iPhone in a simulator, the Duo closed, sideways, book, upright and tabletop, Android in an emulator, against a local backend, with a relaunch, and from the other person's side.
