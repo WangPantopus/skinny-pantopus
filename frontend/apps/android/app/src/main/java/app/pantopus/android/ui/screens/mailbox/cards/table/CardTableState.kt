@@ -246,6 +246,9 @@ internal class CardTableState(
     /** The reader has turned the card over at least once (the quiet "Send … a card" shows from then). */
     var turnedOnce by mutableStateOf(false)
         private set
+
+    /** "Send … a card" can show: the card is out and has been turned over, and it isn't sealed. */
+    val sendBackShows: Boolean get() = step == TableStep.Out && turnedOnce && !card.sealed
     private var envelopeTurnedOnce = false
     private var heldOnce = false
     private var openedReported = false

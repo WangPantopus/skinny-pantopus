@@ -275,7 +275,7 @@ private fun ActionBlock(
                 }
             }
             // Once the card has been turned over: the next kind act, one tap away (not on a sealed card).
-            if (sendBack != null && state.step == TableStep.Out && state.turnedOnce && !state.card.sealed) {
+            if (sendBack != null && state.sendBackShows) {
                 Box(
                     modifier =
                         Modifier
