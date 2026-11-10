@@ -311,7 +311,7 @@ private fun ColumnScope.BothSides(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                .padding(vertical = Spacing.s2)
                 .rotate(-1f)
                 .clearAndSetSemantics { contentDescription = "The card you sent: $caption" },
         front = {
@@ -344,7 +344,7 @@ private fun ColumnScope.BothSides(
         state = if (showBack) "Showing the back" else "Showing the picture",
         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Spacing.s3).testTag("mailSentPieceTurn"),
     )
-    CardNoteSide(card, from, modifier = Modifier.padding(horizontal = Spacing.s3, vertical = Spacing.s4).rotate(1f))
+    CardNoteSide(card, from, modifier = Modifier.padding(vertical = Spacing.s4).rotate(1f))
 }
 
 /** Where the card has been, step by step, and that a card never says when it was opened. */
@@ -557,6 +557,7 @@ private fun sentLetterCard(card: SentCard): MailLetterCard? {
         number = face.number,
         slug = face.slug,
         table = face.table,
+        verse = face.verse?.takeIf { it.isNotBlank() },
     )
 }
 

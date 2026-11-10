@@ -185,6 +185,31 @@ This is the largest restyle in the plan and comes last.
 
 ---
 
+## Part 11. Sharing that gets seen, and the invitation that is already there
+
+Added November 10. The founder asked whether the Mailbox should get a Share button and an Invite button, and approved this answer ("Yes, add it").
+
+**Share: improve what cards already have.** Every card has a share sheet (Story, Post, Link preview; the note off unless switched on).
+
+- **11.1 Easier to find.** Once the reader has turned the card over, a quiet **Share this card** button sits with "Send {first name} a card" under the main button. The corner icon stays. The sender gets the same on the last step of sealing (Part 2, step 5) and already has it in Sent.
+- **11.2 A new size, "Open card":** the folded card lying open, picture page on the left and note page on the right, as on the open iPhone Duo. 1600×1200, each page 700×840, the paper slip under the fold. With "Show the note" off, the right side shows the open envelope and its lining instead of the note page. Offered on every device, not only the Duo. No phone or Duo frame is drawn around any share picture.
+- **11.3 A set of pictures.** A **Share all** choice sends up to three pictures at once for a carousel: the shut envelope with its seal, the card, and the note page only if "Show the note" is on. iPhone and Android pass them to the share sheet together; the web uses the browser's share where it takes several files, and otherwise saves them one by one. Sealed cards share the sealed picture only.
+- **11.4 The privacy rule does not change,** and no AI decides what is sensitive. A share picture is built only from parts that are never private: the card's face, the envelope without a name or address, the slip. The note and the sender's first name appear only when the person switches them on. Nothing is drawn from the screen itself.
+- **11.5 Only cards are shared.** Bills, home mail, letters from Pantopus and letters between people get no Share.
+- **Later, not in this part:** a six-second clip of the envelope opening.
+
+**Invite: no separate button.** Sending a card to someone who isn't on Pantopus, by email or by link, already invites them: they join to open it, and the link records who brought them.
+
+- **11.6 Say it at the door.** On "Who it's for", the two choices read "Not on Pantopus yet? Send it to their email" and "Send it by link", under one line: "They don't need Pantopus yet. They join to open it."
+- **11.7 Pick from the phone's contacts.** Beside the email box, **Choose from contacts** opens the phone's own contact picker and fills in the address; the app never reads the address book and asks for no permission. iPhone: the system contact picker. Android: the system pick-a-contact screen. Web: only where the browser has a contact picker; hidden elsewhere.
+- **11.8 Open, the founder's decision (D9):** whether a card to someone not yet on Pantopus should be free of the one-card-a-day rule. Nothing is built for it until the founder decides.
+
+Files. Share: iOS `Table/CardTableShareSheet.swift`, `CardTableShareScene.swift`, `CardTableControls.swift`; Android `table/CardShareSheet.kt`, `CardSharePictures.kt`, `CardShareViewModel.kt`, `CardTableControls.kt`; web `CardShareSheet.tsx`, `sharePicture.ts`, `CardTable.tsx`. Who it's for: iOS `HolidayCardSteps.swift`; Android `SendCardSteps.kt`; web `SendCardFlow.tsx`. No server change for 11.1–11.7.
+
+Done when: each picture is made on each app and checked for a name, address or note that should not be there, with the switch off and on, for an ordinary and a sealed card; Share all hands three pictures to another app; a contact's email fills the box without a permission prompt; a relaunch keeps nothing of the picked contact.
+
+---
+
 ## Should people attach their own pictures, voice, links, documents and video?
 
 **You already decided part of this on November 2:** one personal photo and one voice greeting of up to 60 seconds inside a Christmas card, and one reply per card. The storage (private S3, like chat files), "Report this card", and covering a photo from someone you aren't connected to until you tap it were also decided. The first step (safe re-sends) is live. The drawings were the next step and have not been made.
@@ -220,6 +245,7 @@ Each line is one small set of pull requests (iPhone with the Duo, Android, serve
 6. **Part 7**, the moods (needs the star stamp).
 7. The **photo**, then the **voice greeting**, from the November 2 plan, drawn as above.
 8. **Part 8** (ticks, signature, sounds), **Part 10** (letters), **Part 9** (the flow at the table).
+9. **Part 11**, sharing and the invitation (added November 10). It touches only the share sheet and "Who it's for", so it can go alongside whichever wave is running.
 
 Steps 1–5 change only the apps and the web, so they need one new store build of each app after they merge. The season runs from about Thanksgiving to December 20 and store review takes days, so steps 1–3 are the ones to get into the next build.
 
@@ -237,6 +263,7 @@ Steps 1–5 change only the apps and the web, so they need one new store build o
 | D6 | Quiet paper sounds | Yes, in step 8, on when the ringer is on |
 | D7 | Send flow at the table from Write on the back onward | Yes, last |
 | D8 | Attachments: photo, then voice, as approved; no links, documents, video or music this season | As written |
+| D9 | A card to someone not yet on Pantopus (by email or link) is free of the one-card-a-day rule | **Open.** Added November 10 with Part 11. Recommended: yes for the first such card each day; keep the cap of three new email addresses a week. Needs a server rule and new words; build nothing until the founder answers. |
 
 ## For the builder
 

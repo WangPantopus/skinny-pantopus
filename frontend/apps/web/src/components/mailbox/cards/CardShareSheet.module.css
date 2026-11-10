@@ -31,6 +31,7 @@
 .drawing { height: 100%; max-width: 100%; border-radius: 8px; background: rgba(246, 236, 217, 0.06); }
 .drawing[data-format='story'] { aspect-ratio: 9 / 16; }
 .drawing[data-format='post'] { aspect-ratio: 4 / 5; }
+.drawing[data-format='open'] { width: 100%; height: auto; aspect-ratio: 4 / 3; }
 .drawing[data-format='link'] { width: 100%; height: auto; aspect-ratio: 40 / 21; }
 .failed { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 22rem; text-align: center; font-size: 0.875rem; color: var(--cream-soft); }
 .wrap .retry { min-height: 2.75rem; padding: 0 22px; border-radius: 1.375rem; background: rgba(246, 236, 217, 0.14); font-weight: 600; color: var(--cream); }

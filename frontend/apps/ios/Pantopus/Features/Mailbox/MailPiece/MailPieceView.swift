@@ -22,7 +22,10 @@ struct MailPieceView: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            if model.isOpened, model.kind.isEnvelope {
+            if model.showsCardTakenOut {
+                // The card leans out over the envelope's top edge into this room, so the row keeps its height.
+                Color.clear.frame(height: 14)
+            } else if model.isOpened, model.kind.isEnvelope {
                 Group {
                     if let card = model.card {
                         // An opened Christmas card: its picture peeks out.

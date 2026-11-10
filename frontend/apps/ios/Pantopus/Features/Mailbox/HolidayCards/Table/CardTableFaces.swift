@@ -36,6 +36,21 @@ enum CardTableType {
         (lineHeight - (font.ascender - font.descender)) / 2 + font.ascender
     }
 
+    /// A Bible verse's reference ("John 3:16 (KJV)", the Christmas with Jesus Christ collection): it's set in the
+    /// card's serif, italic, so the colon reads (plan 1.12). Web's rule: it ends in chapter:verse, with an optional
+    /// "(KJV)". Stored captions don't change.
+    static func isVerseReference(_ caption: String) -> Bool {
+        caption.range(of: #"[\s\u{00A0}]\d{1,3}:\d{1,3}([-–]\d{1,3})?(\s\(KJV\))?$"#, options: .regularExpression) != nil
+    }
+
+    /// The caption's type: the hand, or the serif italic for a verse's reference.
+    static func caption(_ caption: String, size: CGFloat) -> UIFont {
+        guard isVerseReference(caption) else { return hand(size) }
+        let serif = CardTableSerif.font(size: size)
+        guard let italic = serif.fontDescriptor.withSymbolicTraits(.traitItalic) else { return serif }
+        return UIFont(descriptor: italic, size: size)
+    }
+
     /// The size a caption is printed at, in u: a long one gets smaller so it stays on one line beside the postmark.
     static func captionSize(_ caption: String) -> CGFloat {
         min(4.8, 70 / max(1, CGFloat(caption.count) * 0.53))
@@ -127,7 +142,7 @@ struct CardTableFront: View, Equatable {
 
     private func drawStrip(in context: GraphicsContext, u: CGFloat) {
         let size = CardTableType.captionSize(caption) * u
-        let hand = CardTableType.hand(size)
+        let hand = CardTableType.caption(caption, size: size)
         context.drawText(
             Text(caption).font(Font(hand)).foregroundColor(MailPaper.cardCaptionInk),
             x: 4.2 * u,

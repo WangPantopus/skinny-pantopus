@@ -31,6 +31,7 @@ extension CardTableContent {
         sealedDayCount = card.card.sealedUntil
             .flatMap { MailDates.parse($0) }
             .map { MailDates.daysBetween(now, $0, calendar: .current) } ?? 0
+        verse = card.card.sealed ? nil : card.card.verse
     }
 }
 
@@ -127,6 +128,7 @@ private struct CardTableCoverItem: Identifiable {
 struct MailCardTableCover: ViewModifier {
     let viewModel: MailDetailViewModel
     let senderLink: (MailDetailContent) -> (title: String, open: () -> Void)?
+    var onSendCard: (@MainActor (_ userId: String, _ name: String) -> Void)?
     let onClose: () -> Void
 
     @Environment(\.cardTableCoverSlot) private var slot
@@ -161,7 +163,7 @@ struct MailCardTableCover: ViewModifier {
     }
 
     private func tablePage(_ item: CardTableCoverItem) -> MailCardTablePage {
-        MailCardTablePage(viewModel: viewModel, model: item.model, senderLink: senderLink, onClose: close)
+        MailCardTablePage(viewModel: viewModel, model: item.model, senderLink: senderLink, onSendCard: onSendCard, onClose: close)
     }
 
     private func close() {
@@ -175,6 +177,7 @@ private struct MailCardTablePage: View {
     let viewModel: MailDetailViewModel
     let model: CardTableModel
     let senderLink: (MailDetailContent) -> (title: String, open: () -> Void)?
+    let onSendCard: (@MainActor (_ userId: String, _ name: String) -> Void)?
     let onClose: () -> Void
 
     @State private var reportsSender = false
@@ -250,6 +253,34 @@ private struct MailCardTablePage: View {
             .onChange(of: viewModel.toast) { _, toast in
                 if let toast { model.showToast(toast) }
             }
+            // Send one back (plan Part 3): only when a card can go to them now. Hidden while it's sealed, when the
+            // season is closed, when either has blocked the other, and when their account is gone.
+            .onAppear { model.reservesSecondary = sendBackPerson != nil }
+            .task(id: sendBackPerson?.id) { await checkSendBack() }
+    }
+
+    /// Who "Send {first name} a card" goes to: the person who sent it, on an opened card, when this page can open
+    /// the send flow.
+    private var sendBackPerson: (id: String, name: String)? {
+        guard onSendCard != nil, !model.content.sealed, let id = senderPersonId else { return nil }
+        return (id, model.content.fromName)
+    }
+
+    private func checkSendBack() async {
+        guard let person = sendBackPerson, model.sendBack == nil else { return }
+        guard await HolidayCardSendBack.isOpen(to: person.id), !Task.isCancelled else { return }
+        model.sendBack = CardTableMenuItem(title: "Send \(model.content.firstName) a card", identifier: "cardTableSendBack") {
+            sendCard(to: person)
+        }
+    }
+
+    /// The table closes and the send flow opens at Pick a card, that person chosen.
+    private func sendCard(to person: (id: String, name: String)) {
+        onClose()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            onSendCard?(person.id, person.name)
+        }
     }
 
     /// The sender's page takes the card's place: Back from it goes to the Mailbox, and the card opens again from there.
@@ -291,6 +322,9 @@ private struct MailCardTablePage: View {
                 model.restart(animated: true)
             })
         }
+        if let sendBack = model.sendBack {
+            items.append(CardTableMenuItem(title: sendBack.title, identifier: "cardTableMenuSendBack", action: sendBack.action))
+        }
         if senderPersonId != nil {
             items.append(CardTableMenuItem(title: "Report", identifier: "cardTableMenuReport") {
                 reportsSender = true
@@ -308,6 +342,7 @@ private struct MailCardTablePage: View {
         defer { blockInFlight = false }
         do {
             _ = try await APIClient.shared.request(BlocksEndpoints.block(userId: senderPersonId))
+            model.sendBack = nil
             model.showToast("\(model.content.firstName) is blocked.")
         } catch {
             model.showToast("Couldn't block \(model.content.firstName). Check your connection and try again.")

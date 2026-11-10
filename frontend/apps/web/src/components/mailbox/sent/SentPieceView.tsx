@@ -113,7 +113,7 @@ export default function SentPieceView({ id }: { id: string }) {
   const front = card.design ? (
     <CardFront design={card.design} caption={card.caption} paper={card.paper ?? '#f7eee0'} year={card.year ?? new Date(piece.sent_at).getFullYear()} mailedOn={piece.envelope.postmarked_on ?? piece.sent_at} className={shadow} />
   ) : null;
-  const back = <CardBack number={card.number} paper={card.paper ?? '#f7eee0'} fromName={piece.envelope.from} year={card.year ?? new Date(piece.sent_at).getFullYear()} message={piece.note} className={shadow} />;
+  const back = <CardBack number={card.number} paper={card.paper ?? '#f7eee0'} fromName={piece.envelope.from} year={card.year ?? new Date(piece.sent_at).getFullYear()} message={piece.note} signature={card.signature ?? null} className={shadow} />;
   const delivered = piece.status === 'delivered' || piece.status === 'claimed';
   const byLinkUnopened = Boolean(piece.by_link) && !linkOpened(piece);
   const theirMailbox = delivered
@@ -136,7 +136,7 @@ export default function SentPieceView({ id }: { id: string }) {
       {/* The same full-screen moment they have. Your own note is shown, so it opens as it did for them, seal or none. */}
       {onTable && card.design ? (
         <CardTable
-          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false }}
+          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null }}
           note={piece.note}
           fromName={piece.envelope.from}
           toName={sentEnvelopeName(piece)}
@@ -155,6 +155,7 @@ export default function SentPieceView({ id }: { id: string }) {
             note: piece.note,
             fromName: piece.envelope.from,
             mailedOn: piece.envelope.postmarked_on || piece.sent_at,
+            signature: card.signature ?? null,
           }}
           slug={card.slug}
           mine
@@ -190,7 +191,7 @@ export default function SentPieceView({ id }: { id: string }) {
             ) : <section aria-label="The card you sent" className="[grid-area:card]">
               <h3 className={label}>The card you sent</h3>
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
-                <div className="mx-auto w-full max-w-[300px] md:max-w-none">
+                <div className={`mx-auto w-full md:max-w-none ${launchFeatures.cardTable ? '' : 'max-w-[300px]'}`}>
                   {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
                   {front && launchFeatures.cardTable ? (
                     <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -226,7 +227,7 @@ export default function SentPieceView({ id }: { id: string }) {
                   ) : null}
                 </div>
                 {front ? (
-                  <div className="mx-auto w-full max-w-[300px] md:max-w-none">
+                  <div className={`mx-auto w-full md:max-w-none ${launchFeatures.cardTable ? '' : 'max-w-[300px]'}`}>
                     <CardFlip showBack front={front} back={back} />
                   </div>
                 ) : null}

@@ -13,6 +13,8 @@ interface BottomSheetProps {
   className?: string;
   /** Id of a heading inside the children that names the sheet, for sheets drawn without `title`. */
   labelledBy?: string;
+  /** Opened over a full-screen moment (the card on the table, z 999): drawn above it. */
+  overTable?: boolean;
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -43,6 +45,7 @@ export default function BottomSheet({
   footer,
   className = '',
   labelledBy,
+  overTable = false,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -121,7 +124,7 @@ export default function BottomSheet({
   // stacking context (relative z-0), so from inside it the phone tab bar (z-40)
   // covered the sheet's footer, and the header stayed above the backdrop.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className={`fixed inset-0 ${overTable ? 'z-[1000]' : 'z-50'} flex items-end sm:items-center justify-center`}>
       {/* Backdrop – fade in */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-[2px] animate-[fadeIn_0.2s_ease-out]"

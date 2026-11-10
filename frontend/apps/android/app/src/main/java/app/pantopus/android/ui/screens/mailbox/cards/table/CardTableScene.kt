@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.mailbox.cards.table
 
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Matrix
@@ -16,12 +17,17 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -39,6 +45,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.zIndex
 import app.pantopus.android.ui.theme.PantopusColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.abs
@@ -94,6 +101,7 @@ internal fun CardTableScene(
         EnvelopeOver(state, art, geometry)
         EnvelopeFront(state, art, faceArt, geometry)
         TableLight(state, art)
+        MoodLight(state, art, on = state.moodsMove)
     }
 }
 
@@ -136,8 +144,29 @@ private fun TableCloth(
     )
 }
 
+/** Where the window's light lies over a screen of [width] × [height], slid by the light (about -1 to 1). */
+internal fun roomLightRect(
+    width: Float,
+    height: Float,
+    density: Float,
+    moveX: Float,
+    moveY: Float,
+): RectF {
+    val over = 40f * density
+    val shiftX = moveX * 22f * density
+    val shiftY = moveY * 22f * density
+    val grownX = (width + over * 2f) * 0.02f
+    val grownY = (height + over * 2f) * 0.02f
+    return RectF(
+        -over - grownX + shiftX,
+        -over - grownY + shiftY,
+        width + over + grownX + shiftX,
+        height + over + grownY + shiftY,
+    )
+}
+
 /** [bitmap] centred and cut to cover [target], never stretched. */
-private fun drawCover(
+internal fun drawCover(
     canvas: Canvas,
     bitmap: Bitmap,
     target: RectF,
@@ -174,7 +203,7 @@ private fun EnvelopeShadow(
     )
 }
 
-private fun DrawScope.drawShadow(shadow: SoftShadow) {
+internal fun DrawScope.drawShadow(shadow: SoftShadow) {
     val pad = shadow.pad
     drawIntoCanvas { canvas ->
         canvas.nativeCanvas.drawBitmap(
@@ -230,6 +259,19 @@ private fun FlapLining(
     g: TableGeometry,
 ) {
     val paints = remember { GlintPaints() }
+    // Reverence (plan Part 7): one slow glint crosses the gold lining as the flap opens, and rests where the light holds it.
+    val sweep = remember(state) { Animatable(0f) }
+    if (state.mood == CardMood.Reverence && state.moodsMove) {
+        LaunchedEffect(state) {
+            // Each time the flap opens ("Open it again" too); a card already out begins with it open.
+            while (true) {
+                snapshotFlow { state.flapAngle > 150f }.first { it }
+                sweep.snapTo(-2.4f)
+                sweep.animateTo(0f, tween(1800, easing = LinearOutSlowInEasing))
+                snapshotFlow { state.flapAngle < 120f }.first { it }
+            }
+        }
+    }
     Box(
         modifier =
             Modifier
@@ -248,7 +290,7 @@ private fun FlapLining(
                     drawIntoCanvas { canvas ->
                         val native = canvas.nativeCanvas
                         native.drawBitmap(art.flapIn, null, RectF(0f, 0f, size.width, size.height), paints.shaded(shade))
-                        drawGlint(native, art.flapGold, size.width, size.height, state.lightX.x, state.lightY.x, paints)
+                        drawGlint(native, art.flapGold, size.width, size.height, state.lightX.x + sweep.value, state.lightY.x, paints)
                     }
                 },
     )
@@ -363,6 +405,7 @@ private fun FlapShut(
 ) {
     val paint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
     val sealPaint = remember { Paint(Paint.FILTER_BITMAP_FLAG) }
+    val placePaint = remember { Paint(Paint.ANTI_ALIAS_FLAG) }
     val cracked = state.cracked
     Box(
         modifier =
@@ -385,7 +428,12 @@ private fun FlapShut(
                     drawIntoCanvas { canvas ->
                         val native = canvas.nativeCanvas
                         native.drawBitmap(art.flapOut, null, RectF(0f, 0f, size.width, size.height), paint)
-                        drawSeal(native, art, size.width, size.height, cracked, sealPaint)
+                        val moment = state.sending
+                        when {
+                            moment == null -> drawSeal(native, art, size.width, size.height, cracked, sealPaint)
+                            moment.sealShown -> drawSeal(native, art, size.width, size.height, false, sealPaint)
+                            moment.step == SendStep.Seal -> drawSealPlace(native, size.width, size.height, moment.sealPress, placePaint)
+                        }
                     }
                 },
     )
@@ -413,6 +461,38 @@ private fun drawSeal(
     canvas.restoreToCount(saved)
 }
 
+/**
+ * Where the seal goes, while the sender is about to seal it: a soft gold ring, and while a finger holds it, the round
+ * shadow of the stamp head growing over the spot ([press], 0 … 1).
+ */
+private fun drawSealPlace(
+    canvas: Canvas,
+    flapWidth: Float,
+    flapHeight: Float,
+    press: Float,
+    paint: Paint,
+) {
+    val width = flapWidth * 0.28f
+    val cx = flapWidth * 0.36f + width / 2f
+    val cy = flapHeight * 0.71f + width / 2f
+    paint.reset()
+    paint.isAntiAlias = true
+    paint.style = Paint.Style.FILL
+    paint.color = PantopusColors.tableGold.copy(alpha = 0.16f).toArgb()
+    canvas.drawCircle(cx, cy, width * 0.46f, paint)
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = width * 0.035f
+    paint.color = PantopusColors.tableGold.copy(alpha = 0.7f).toArgb()
+    canvas.drawCircle(cx, cy, width * 0.42f, paint)
+    if (press > 0f) {
+        paint.style = Paint.Style.FILL
+        paint.color = PantopusColors.tableNight.copy(alpha = 0.18f + 0.3f * press).toArgb()
+        paint.maskFilter = BlurMaskFilter(width * 0.06f, BlurMaskFilter.Blur.NORMAL)
+        canvas.drawCircle(cx, cy, width * (0.2f + 0.32f * press), paint)
+        paint.maskFilter = null
+    }
+}
+
 /** The address side: the red paper, the stamp under its postmark, the two names by hand, and its label or stamped words. */
 @Composable
 private fun EnvelopeFront(
@@ -432,8 +512,14 @@ private fun EnvelopeFront(
                 .envelopeLayer(state, g, flapSide = false)
                 .drawBehind {
                     val pen = faceArt?.pen ?: return@drawBehind
+                    val moment = state.sending
+                    val reveal = AddressReveal.of(moment)
                     drawIntoCanvas { canvas ->
-                        drawAddressSide(canvas.nativeCanvas, art, pen, card, day, size.width, size.height, paint)
+                        // A list: the envelopes under the top one, their edges showing.
+                        if ((moment?.calls?.several ?: 1) > 1) {
+                            drawEnvelopeStack(canvas.nativeCanvas, art, size.width, size.height, paint)
+                        }
+                        drawAddressSide(canvas.nativeCanvas, art, pen, card, day, size.width, size.height, paint, reveal)
                     }
                 },
     )
@@ -448,15 +534,10 @@ private fun drawAddressSide(
     width: Float,
     height: Float,
     paints: EnvelopePaints,
+    reveal: AddressReveal = AddressReveal.All,
 ) {
     canvas.drawBitmap(art.front, null, RectF(0f, 0f, width, height), paints.bitmap)
-    art.stamps[card.stamp]?.let { stamp ->
-        val left = width * 0.755f
-        val top = height * 0.0345f
-        val stampWidth = width * 0.2017f
-        canvas.drawBitmap(stamp, null, RectF(left, top, left + stampWidth, top + stampWidth * stamp.height / stamp.width), paints.bitmap)
-    }
-    drawEnvelopePostmark(canvas, art.postmark, width * 0.345f, height * 0.0316f, width * 0.5183f, day, card.year, paints)
+    drawPostage(canvas, art, card, day, width, height, paints, reveal)
     penLine(
         canvas,
         pen,
@@ -470,7 +551,10 @@ private fun drawAddressSide(
         PantopusColors.tableEnvelopeFrom,
         paints,
     )
-    card.to?.takeIf { it.isNotBlank() }?.let { to ->
+    card.to?.takeIf { it.isNotBlank() && reveal.name > 0f }?.let { to ->
+        // Written left to right as it's revealed.
+        val saved = canvas.save()
+        if (reveal.name < 1f) canvas.clipRect(0f, 0f, width * (0.12f + 0.84f * reveal.name), height)
         penLine(
             canvas,
             pen,
@@ -484,19 +568,27 @@ private fun drawAddressSide(
             PantopusColors.tableEnvelopeTo,
             paints,
         )
+        canvas.restoreToCount(saved)
     }
     if (card.sealed) {
-        drawSealedMark(
-            canvas,
-            width * 0.5f,
-            height * 0.74f,
-            width * 0.04f,
-            width * 0.007f,
-            width * 0.018f,
-            width * 0.03f,
-            width * 0.012f,
-            paints,
-        )
+        if (reveal.sealedMark > 0f) {
+            // Sealed until Christmas: the gold stamp lands last.
+            val saved = canvas.save()
+            val grow = 1f + 0.3f * (1f - reveal.sealedMark)
+            canvas.scale(grow, grow, width * 0.5f, height * 0.74f)
+            drawSealedMark(
+                canvas,
+                width * 0.5f,
+                height * 0.74f,
+                width * 0.04f,
+                width * 0.007f,
+                width * 0.018f,
+                width * 0.03f,
+                width * 0.012f,
+                paints,
+            )
+            canvas.restoreToCount(saved)
+        }
     } else {
         val size = width * 0.0235f
         paints.text.reset()
@@ -508,6 +600,44 @@ private fun drawAddressSide(
         paints.text.color = PantopusColors.tableGold.toArgb()
         val baseline = height * (1f - 0.054f) - size * 0.2f
         canvas.drawText("CHRISTMAS CARD", width * 0.068f - size * 0.1f, baseline, paints.text)
+    }
+}
+
+/**
+ * The stamp, and the postmark over it with the day it was mailed. While the sender's envelope is addressed ([reveal]),
+ * each drops onto the paper: from a little larger, and faint, to where it lies.
+ */
+private fun drawPostage(
+    canvas: Canvas,
+    art: CardTableArt,
+    card: CardOnTable,
+    day: String,
+    width: Float,
+    height: Float,
+    paints: EnvelopePaints,
+    reveal: AddressReveal,
+) {
+    cardStamp(art.stamps, art.star, card.stamp, card.number, card.design)?.takeIf { reveal.stamp > 0f }?.let { stamp ->
+        val left = width * 0.755f
+        val top = height * 0.0345f
+        val stampWidth = width * 0.2017f
+        val stampHeight = stampWidth * stamp.height / stamp.width
+        val saved = canvas.save()
+        val grow = 1f + 0.45f * (1f - reveal.stamp)
+        canvas.scale(grow, grow, left + stampWidth / 2f, top + stampHeight / 2f)
+        paints.bitmap.alpha = (255 * reveal.stamp.coerceIn(0f, 1f)).toInt()
+        canvas.drawBitmap(stamp, null, RectF(left, top, left + stampWidth, top + stampHeight), paints.bitmap)
+        paints.bitmap.alpha = 255
+        canvas.restoreToCount(saved)
+    }
+    if (reveal.postmark > 0f) {
+        val saved = canvas.save()
+        val grow = 1f + 0.18f * (1f - reveal.postmark)
+        canvas.scale(grow, grow, width * 0.6f, height * 0.12f)
+        paints.bitmap.alpha = (255 * reveal.postmark.coerceIn(0f, 1f)).toInt()
+        drawEnvelopePostmark(canvas, art.postmark, width * 0.345f, height * 0.0316f, width * 0.5183f, day, card.year, paints)
+        paints.bitmap.alpha = 255
+        canvas.restoreToCount(saved)
     }
 }
 
@@ -559,9 +689,9 @@ private fun CardShadows(
                 .pinned(g.cardWidth, g.cardHeight)
                 .graphicsLayer {
                     val off = (6f + state.lift * 26f) * g.density
-                    val scale = state.cardScale()
-                    translationX = state.cardX(g) + off * 0.45f - state.lightX.x * 10f * g.density
-                    translationY = state.cardY(g) + off - state.lightY.x * 10f * g.density
+                    val scale = state.cardScale() * state.zoom.size.x
+                    translationX = state.cardX(g) + state.zoom.dx.x + off * 0.45f - state.lightX.x * 10f * g.density
+                    translationY = state.cardY(g) + state.zoom.dy.x + off - state.lightY.x * 10f * g.density
                     rotationZ = state.cardTurnZ()
                     scaleX = scale * state.cardNarrow
                     scaleY = scale
@@ -575,9 +705,9 @@ private fun CardShadows(
                 .zIndex(19f)
                 .pinned(g.cardWidth, g.cardHeight)
                 .graphicsLayer {
-                    val scale = state.cardScale()
-                    translationX = state.cardX(g) + (1.5f - state.lightX.x * 2f) * g.density
-                    translationY = state.cardY(g) + (2.5f - state.lightY.x * 2f) * g.density
+                    val scale = state.cardScale() * state.zoom.size.x
+                    translationX = state.cardX(g) + state.zoom.dx.x + (1.5f - state.lightX.x * 2f) * g.density
+                    translationY = state.cardY(g) + state.zoom.dy.x + (2.5f - state.lightY.x * 2f) * g.density
                     rotationZ = state.cardTurnZ()
                     scaleX = scale * state.cardNarrow
                     scaleY = scale
@@ -606,9 +736,10 @@ private fun TableCardLayer(
                 .zIndex(if (out) 20f else 5f)
                 .pinned(g.cardWidth, g.cardHeight)
                 .graphicsLayer {
-                    val scale = state.cardScale()
-                    translationX = state.cardX(g)
-                    translationY = state.cardY(g)
+                    // Enlarged (plan 6.1): bigger around its middle, and moved around.
+                    val scale = state.cardScale() * state.zoom.size.x
+                    translationX = state.cardX(g) + state.zoom.dx.x
+                    translationY = state.cardY(g) + state.zoom.dy.x
                     rotationZ = state.cardTurnZ()
                     scaleX = scale
                     scaleY = scale
@@ -698,18 +829,31 @@ private fun TurningLight(state: CardTableState) {
     )
 }
 
-/** The room's light over everything: the window's light, a vignette and a fine film grain. */
+/** The room's light over everything on the table, moving a little with the light's springs. */
 @Composable
 private fun TableLight(
     state: CardTableState,
     art: CardTableArt,
 ) {
+    RoomLight(art, Modifier.zIndex(30f), moveX = { state.lightX.x }, moveY = { state.lightY.x })
+}
+
+/**
+ * The room's light: the window's light, a vignette and a fine film grain, over the table or the card rack. [moveX] and
+ * [moveY] (about -1 to 1) slide the window's light; they're read while drawing, so a moving light doesn't recompose.
+ */
+@Composable
+internal fun RoomLight(
+    art: CardTableArt,
+    modifier: Modifier = Modifier,
+    moveX: () -> Float = { 0f },
+    moveY: () -> Float = { 0f },
+) {
     val density = LocalDensity.current.density
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
-                .zIndex(30f)
                 .drawWithCache {
                     val lightPaint = Paint(Paint.FILTER_BITMAP_FLAG)
                     softLight(lightPaint, strength = 0.88f)
@@ -739,24 +883,10 @@ private fun TableLight(
                     grain.xfermode = PorterDuffXfermode(PorterDuff.Mode.OVERLAY)
                     grain.alpha = (0.36f * 255f).toInt()
                     onDrawBehind {
-                        val over = 40f * density
-                        val moveX = state.lightX.x * 22f * density
-                        val moveY = state.lightY.x * 22f * density
-                        val grownX = (size.width + over * 2f) * 0.02f
-                        val grownY = (size.height + over * 2f) * 0.02f
                         drawIntoCanvas { canvas ->
                             val native = canvas.nativeCanvas
-                            native.drawBitmap(
-                                art.light,
-                                null,
-                                RectF(
-                                    -over - grownX + moveX,
-                                    -over - grownY + moveY,
-                                    size.width + over + grownX + moveX,
-                                    size.height + over + grownY + moveY,
-                                ),
-                                lightPaint,
-                            )
+                            val light = roomLightRect(size.width, size.height, density, moveX(), moveY())
+                            native.drawBitmap(art.light, null, light, lightPaint)
                             native.drawRect(0f, 0f, size.width, size.height, vignette)
                             native.drawRect(0f, 0f, size.width, size.height, grain)
                         }
@@ -778,3 +908,40 @@ private fun DrawScope.drawArt(
 
 /** One unit of a graphics layer's camera distance is 72 screen pixels. */
 private const val PIXELS_PER_CAMERA_UNIT = 72f
+
+/** How much of the address side is there yet: all of it, except while the sender's envelope is being addressed. */
+internal class AddressReveal(
+    val name: Float,
+    val stamp: Float,
+    val postmark: Float,
+    val sealedMark: Float,
+) {
+    companion object {
+        val All = AddressReveal(1f, 1f, 1f, 1f)
+
+        fun of(moment: SendingMoment?): AddressReveal =
+            if (moment == null) All else AddressReveal(moment.nameReveal, moment.stampOn, moment.postmarkOn, moment.sealedMarkOn)
+    }
+}
+
+/** A list's other envelopes under the top one: two edges, a little turned and set off, darker in the shade. */
+private fun drawEnvelopeStack(
+    canvas: Canvas,
+    art: CardTableArt,
+    width: Float,
+    height: Float,
+    paints: EnvelopePaints,
+) {
+    val shade =
+        Paint(Paint.FILTER_BITMAP_FLAG).apply {
+            colorFilter = PorterDuffColorFilter(PantopusColors.tableNight.copy(alpha = 0.3f).toArgb(), PorterDuff.Mode.SRC_ATOP)
+        }
+    for ((dx, dy, turn) in listOf(Triple(0.022f, 0.03f, 2.2f), Triple(0.011f, 0.015f, 1.1f))) {
+        val saved = canvas.save()
+        canvas.rotate(turn, width / 2f, height / 2f)
+        canvas.translate(width * dx, height * dy)
+        canvas.drawBitmap(art.front, null, RectF(0f, 0f, width, height), paints.bitmap)
+        canvas.drawBitmap(art.front, null, RectF(0f, 0f, width, height), shade)
+        canvas.restoreToCount(saved)
+    }
+}

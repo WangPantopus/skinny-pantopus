@@ -79,7 +79,8 @@ const PRIVATE_IMMUTABLE = 'private, max-age=31536000, immutable';
 const PRIVATE_NO_STORE = 'private, no-store';
 
 function cacheControl(key) {
-  if (key.startsWith('ai-chat/')) return PRIVATE_NO_STORE;
+  // A card's own photo or voice is served only by the API to the card's reader (services/holidayCardMedia).
+  if (key.startsWith('ai-chat/') || key.startsWith('holiday-card-media/')) return PRIVATE_NO_STORE;
   return key.startsWith('chat/') ? PRIVATE_IMMUTABLE : PUBLIC_IMMUTABLE;
 }
 

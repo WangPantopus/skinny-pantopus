@@ -56,6 +56,12 @@ const propertyRecordsConfig = require('../config/propertyRecords');
 const propertyEstimates = require('./propertyRecords/estimates');
 const { serializeEstimate } = require('../serializers/countyRecordSerializer');
 const homeRecords = require('./propertyRecords/homeRecord');
+const similarHomes = require('./propertyRecords/similarHomes');
+const propertyRecordsRouter = require('./propertyRecords/router');
+const homeInsuranceCheck = require('./homeInsuranceCheck');
+const appealPacket = require('./appealPacket');
+const { appealForState } = require('../data/appealPrograms');
+const { stateCode: recordStateCode } = require('./propertyRecords/addressKey');
 const recordVocabulary = require('./recordVocabulary');
 const homeValueCard = require('./homeValueCard');
 const areaTrend = require('./propertyRecords/areaTrend');
@@ -141,6 +147,72 @@ function sectionApplies(id, viewer) {
   if (OWNER_ONLY_SECTIONS.has(id)) return viewer.role === 'owner';
   if (RENTER_ONLY_SECTIONS.has(id)) return viewer.role === 'renter';
   return true;
+}
+
+/**
+ * One true line about this home for an owner who hasn't verified the address yet (propertyRecords/similarHomes.js):
+ * how the county's value compares with similar houses on the street, from the copy the Home already holds, so no
+ * lookup is made for a locked section. Never a dollar figure. It leads the locked Your home card, where the comparison
+ * itself shows once the address is verified and the ownership confirmed. Null when there is nothing to say.
+ */
+async function similarHomesTeaser(recordRow) {
+  try {
+    const { data: stored } = await recordRow();
+    const found = stored ? await similarHomes.forHome(stored, homeRecords.liveCopy(stored)) : null;
+    return found ? similarHomes.teaser(found) : null;
+  } catch (err) {
+    logger.warn('placeIntelligence: similar homes teaser failed', { error: err.message });
+    return null;
+  }
+}
+
+/**
+ * The property tax check: the county's value beside similar houses on the street, and for a home above them, how its
+ * state says a value is reviewed (data/appealPrograms.js). From the copy the Home holds. `on` says whether the Home
+ * Money Check is switched on for the home's county, which is also where the insurance check introduces itself.
+ */
+/** The packet's web page: a full https address for the phones, or the page's own path where this server's web isn't https (a local rig). */
+function appealPacketLink(homeId) {
+  const web = String(process.env.PUBLIC_WEB_URL || process.env.APP_URL || 'https://pantopus.com').trim().replace(/\/+$/, '');
+  return web.startsWith('https://') ? `${web}/app/homes/${homeId}/appeal-packet` : `/homes/${homeId}/appeal-packet`;
+}
+
+async function propertyTaxCheck(recordRow) {
+  const { data: stored } = await recordRow();
+  const copy = stored ? homeRecords.liveCopy(stored) : null;
+  const on = Boolean(copy && propertyRecordsRouter.similarHomesFor(copy.jurisdiction));
+  const found = copy ? await similarHomes.forHome(stored, copy) : null;
+  if (!found) return { on, cards: [] };
+  const card = { ...similarHomes.card(found), source: homeRecords.provenanceOf(copy).label };
+  // Above similar homes: how the state says a value is reviewed, in its own words, with its page.
+  const appeal = found.stance === 'above' ? appealForState(recordStateCode(stored.state)) : null;
+  if (appeal) {
+    card.notes = [...card.notes, appeal.note];
+    card.action = { label: `Official page: ${appeal.source.name}`, url: appeal.source.url };
+  }
+  // The packet to file it oneself, where the county is switched on for it. It is on the web, so a phone opens the page there.
+  const packet = appeal && propertyRecordsRouter.appealPacketFor(copy.jurisdiction)
+    ? appealPacket.card({ state: recordStateCode(stored.state) }, appealPacketLink(stored.id)) : null;
+  return { on, cards: packet ? [card, packet] : [card] };
+}
+
+/**
+ * The Home Money Check's cards for the money page, the confirmed owner's: the property tax check, then the home
+ * insurance check (homeInsuranceCheck.js), which is the household's own policy page as the assistant read it. Each
+ * check stands alone: one that fails or has nothing to say is no card, and the other still shows.
+ */
+async function ownerMoneyCards(recordRow, { home, userId }) {
+  const taxRead = propertyTaxCheck(recordRow).catch((err) => {
+    logger.warn('placeIntelligence: property tax check failed', { error: err.message });
+    return { on: false, cards: [] };
+  });
+  // Read beside the tax check, so the second card costs the page no time of its own.
+  const insuranceRead = homeInsuranceCheck.forHome({ homeId: home.id, userId, timeZone: placeTimeZone(home), invited: taxRead.then((tax) => tax.on) }).catch((err) => {
+    logger.warn('placeIntelligence: insurance check failed', { error: err.message });
+    return [];
+  });
+  const [tax, insurance] = await Promise.all([taxRead, insuranceRead]);
+  return [...tax.cards, ...insurance];
 }
 
 // A claim still in progress: not decided, withdrawn or merged into another.
@@ -1657,6 +1729,10 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // past it is a retryable error, and its lookup keeps going to fill the
   // cache for the next look.
   const budgetMs = sectionBudgetMs();
+  // Beside the composers, so the locked card's line costs the response no time of its own.
+  const teaserRead = viewer.role === 'owner' && setupLocked.includes('your_home') && !claimant ? similarHomesTeaser(recordRow) : Promise.resolve(null);
+  // The money page's cards ride with its sections, and only to the owner whose ownership is confirmed.
+  const moneyCardsRead = viewer.ownership === 'confirmed' && requested.has('exemption_check') ? ownerMoneyCards(recordRow, { home, userId }) : Promise.resolve([]);
   const late = [];
   // When the budget fallbacks ran (near budgetMs unless the process itself was
   // held up) and when every section had answered, for the over-budget log.
@@ -1699,10 +1775,10 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
 
   const composed = {};
   for (const env of groups.flat()) composed[env.id] = env;
+  const teaser = await teaserRead;
   for (const id of setupLocked) {
-    composed[id] = serializePlaceSection(id, {
-      access: 'locked', unavailableReason: claimant ? CLAIM_REVIEW_REASON : verifyReason(id),
-    });
+    const reason = claimant ? CLAIM_REVIEW_REASON : verifyReason(id);
+    composed[id] = serializePlaceSection(id, { access: 'locked', unavailableReason: id === 'your_home' && teaser ? `${teaser} ${reason}` : reason });
   }
   if (viewer.ownership === 'pending' && composed.exemption_check && !setupLocked.includes('exemption_check')) {
     composed.exemption_check = serializePlaceSection('exemption_check', {
@@ -1733,6 +1809,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
     place: buildPlaceRef(home, privacy),
     tier,
     viewer,
+    moneyCards: await moneyCardsRead,
     // A private setup verifies by mail too; guests and service providers can't,
     // and a claimant's next step is their claim's own.
     verifyAvailable: !claimant && (tier === 'T3' || viewer.stage === 'setup') && viewer.role !== 'nonresident',

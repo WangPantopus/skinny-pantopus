@@ -60,14 +60,16 @@ internal class CardPicture(
 
 /**
  * What every face needs: the pen, the caption's hand and the paper's grain. Read once, away from the main thread. The
- * grain is multiplied into the face; [paperHalf] and [paperShare] are that grain already eased toward white (the front
- * at 50%, a shared picture at 70%), because a plain multiply takes no opacity on every Android this app runs on.
+ * grain is multiplied into the face; [paperHalf], [paperQuarter] and [paperShare] are that grain already eased toward
+ * white (the front at 50%, the back off the table at 25%, a shared picture at 70%), because a plain multiply takes no
+ * opacity on every Android this app runs on.
  */
 internal class CardFaceArt private constructor(
     val pen: Typeface,
     val hand: Typeface,
     val paper: Bitmap,
     val paperHalf: Bitmap,
+    val paperQuarter: Bitmap,
     val paperShare: Bitmap,
 ) {
     companion object {
@@ -86,6 +88,7 @@ internal class CardFaceArt private constructor(
                 hand = ResourcesCompat.getFont(context, R.font.nothing_you_could_do) ?: Typeface.SERIF,
                 paper = paper,
                 paperHalf = eased(paper, 0.5f),
+                paperQuarter = eased(paper, 0.25f),
                 paperShare = eased(paper, 0.7f),
             )
         }
@@ -141,6 +144,7 @@ internal class CardFacePainter(
     private var edgeHeight = -1f
     private var edgeShaders: List<LinearGradient> = emptyList()
     private var noteCache: PenNote? = null
+    private val verseType = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
 
     /** The picture side: the picture, its caption by hand, CHRISTMAS, 2026 and the postmark. */
     fun drawFront(
@@ -231,7 +235,9 @@ internal class CardFacePainter(
         face: CardFaceWords,
     ) {
         val captionSize = min(4.8f, 70f / max(1f, face.caption.length * 0.53f)) * u
-        textStyle(art.hand, captionSize, PantopusColors.cardCaptionInk)
+        // A verse's reference is set in the serif italic, so "3:16" reads; every other caption is by hand.
+        val verse = HolidayCardArt.captionIsVerse(face.number, face.caption)
+        textStyle(if (verse) verseType else art.hand, captionSize, PantopusColors.cardCaptionInk)
         canvas.drawText(face.caption, u * 4.2f, boxBaseline(u * 107.4f, captionSize), text)
         val yearSize = u * 2.2f
         textStyle(Typeface.SERIF, yearSize, PantopusColors.cardYearInk, spacing = 0.42f)

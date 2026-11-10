@@ -10,6 +10,10 @@ import QuartzCore
 extension CardTableModel {
     /// The button at the bottom does what the finger can do.
     func primary() {
+        if sending != nil {
+            sendingPrimary()
+            return
+        }
         lastTouch = CACurrentMediaTime()
         switch step {
         case .front:

@@ -32,10 +32,12 @@ import type {
   IncentiveType,
   BenchmarkComparison,
   BillUtilityKind,
+  PlaceMoneyCard,
 } from '@pantopus/types';
 import { Zap, BadgePercent, Building2, Landmark, PlusCircle, Lock, BadgeCheck, CircleAlert, CircleHelp, TrendingDown, Loader2, Ban, Users, ChevronRight } from 'lucide-react';
 import Chip, { type ChipVariant } from '@/components/archetypes/primitives/Chip';
 import { SectionCard, LockedCard, DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow, InfoNote } from '@/components/archetypes/place';
+import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import { findPlaceSection, detailAddress } from './sections';
 import { usd, statusToState, apiErrorText } from './format';
 import { MoneyField, PrivacyNote, SkyButton, parseMoney, groupDigits } from './fields';
@@ -778,6 +780,56 @@ function ExemptionCard({ data, reason }: { data: PlaceExemptionCheckData; reason
   );
 }
 
+// ── Home Money Check cards ───────────────────────────────────
+// Each card comes from the server in words to draw as they are (title, chip,
+// lead line, rows, notes, source, one action), so a new check needs no change
+// here. An action opens a page of ours or an https page, nothing else.
+
+function MoneyCheckCard({ card }: { card: PlaceMoneyCard }) {
+  // An https page opens in a new tab; an app link in the words notifications use ("/place?section=money") opens the
+  // page a notification would. Anything else is left off.
+  const external = card.action && card.action.url.startsWith('https://') ? card.action : null;
+  // The assistant is in the iPhone and Android apps only, so its link is left off here; the card's notes say where it is.
+  const appOnly = card.action ? /^\/assistant(?=$|[/?#])/.test(card.action.url) : false;
+  const inApp = card.action && card.action.url.startsWith('/') && !appOnly ? resolveWebNotificationPath(card.action.url) : null;
+  const actionClass = 'inline-flex items-center gap-1 mt-3 text-[13px] font-semibold text-primary-600 hover:text-primary-700 transition';
+  return (
+    <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]" data-testid={`money-card-${card.id}`}>
+      <div className="flex items-center gap-3">
+        <span className="w-11 h-11 rounded-xl bg-app-home-bg flex items-center justify-center shrink-0">
+          <Landmark size={22} strokeWidth={2} className="text-app-home" />
+        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+          <span className="text-[15.5px] font-semibold text-app-text -tracking-[0.01em]">{card.title}</span>
+          {card.chip ? <Chip label={card.chip.text} variant={card.chip.tone} /> : null}
+        </div>
+      </div>
+      {card.lead ? (
+        <div className="text-[13.5px] text-app-text-strong leading-[20px] mt-3 pt-3 border-t border-app-border-subtle">{card.lead}</div>
+      ) : null}
+      {card.rows.length ? (
+        <dl className="mt-2.5 px-3.5 py-2 bg-app-surface-muted border border-app-border-subtle rounded-[11px]">
+          {card.rows.map((row) => (
+            <div key={row.id} className="flex items-baseline justify-between gap-4 py-1">
+              <dt className="text-[13px] text-app-text-secondary">{row.label}</dt>
+              <dd className="text-[13px] font-semibold text-app-text text-right tabular-nums">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {card.notes.map((note) => (
+        <div key={note} className="text-[12.5px] text-app-text-secondary leading-[18px] mt-2.5">{note}</div>
+      ))}
+      {card.action && inApp ? (
+        <Link href={inApp} className={actionClass}>{card.action.label}<ChevronRight size={15} /></Link>
+      ) : null}
+      {external ? (
+        <a href={external.url} target="_blank" rel="noopener noreferrer" className={actionClass}>{external.label}<ChevronRight size={15} /></a>
+      ) : null}
+    </div>
+  );
+}
+
 // ── Rate watch (Wave 2b) — Home Record Watch's free half ─────
 // One user-entered fact (the month the loan was recorded) held against
 // Freddie Mac's weekly PMMS average. Averages and deltas only — the
@@ -975,6 +1027,10 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
   // Rate watch, deed alerts and the property-tax check are the owner's, like
   // the exemption check. Older servers send no viewer and keep them for all.
   const ownerTools = !intelligence.viewer || intelligence.viewer.role === 'owner';
+  // The Home Money Check's cards: the property tax check takes its own place below, any other follows it.
+  const moneyCards = intelligence.money_cards ?? [];
+  const taxCheck = moneyCards.find((card) => card.id === 'property_tax_check');
+  const otherCards = moneyCards.filter((card) => card.id !== 'property_tax_check');
   // Set up but not verified (T1): the locks are the verify-by-mail step.
   const verifyByMail = intelligence.tier === 'T1' && homeId
     ? () => router.push(`/app/homes/${homeId}/verify-postcard?return=place`)
@@ -1068,9 +1124,24 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
             <ComingSoonRow icon={Landmark} title="Deed & lien alerts" sub="Know within days if anyone records against your home — only you can watch it" />
 
             <DetailSectionLabel>Property tax</DetailSectionLabel>
-            <ComingSoonRow icon={Landmark} title="Property tax check" sub="Your assessment vs nearby comps + how appeals work" />
+            {taxCheck ? (
+              <>
+                <MoneyCheckCard card={taxCheck} />
+                {taxCheck.source ? <SourceNote name={taxCheck.source} /> : null}
+              </>
+            ) : (
+              <ComingSoonRow icon={Landmark} title="Property tax check" sub="Your assessment vs nearby comps + how appeals work" />
+            )}
           </>
         ) : null}
+
+        {otherCards.map((card) => (
+          <div key={card.id}>
+            <DetailSectionLabel>{card.title}</DetailSectionLabel>
+            <MoneyCheckCard card={card} />
+            {card.source ? <SourceNote name={card.source} /> : null}
+          </div>
+        ))}
 
         <InfoNote>
           Everything here is informational, drawn from public data and your own entries. It isn&apos;t financial, tax, or legal advice, and amounts aren&apos;t guarantees.

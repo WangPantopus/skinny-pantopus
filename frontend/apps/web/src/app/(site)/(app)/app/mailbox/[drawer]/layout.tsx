@@ -12,6 +12,8 @@ import MailRow, { deliveryDayLabel } from '@/components/mailbox/MailRow';
 import BundlePieces from '@/components/mailbox/BundlePieces';
 import HomeLockedBox from '@/components/mailbox/HomeLockedBox';
 import WelcomePorch, { isSealedWelcome } from '@/components/mailbox/WelcomePorch';
+import CardTable from '@/components/mailbox/cards/CardTable';
+import { launchFeatures } from '@/lib/featureFlags';
 import { useMe } from '@/lib/me';
 import MailboxIllustration from '@/components/mailbox/MailboxIllustration';
 import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
@@ -365,7 +367,20 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
         {children}
       </div>
 
-      {showPorch && welcome ? (
+      {/* The welcome letter arrives on the table (design plan Part 10, launch key card_table): the cream envelope with
+          the red seal on slate; out of it, the letter opens. Closing leaves it sealed in Incoming, as the porch does. */}
+      {showPorch && welcome && launchFeatures.cardTable ? (
+        <CardTable
+          card={{ design: 'welcome-letter', number: null, caption: null, paper: '#f6efe0', table: '#3b4c6e', year: new Date(welcome.created_at || Date.now()).getFullYear(), sealed: false }}
+          note=""
+          fromName="Pantopus"
+          toName={me?.name || 'You'}
+          mailedOn={welcome.created_at}
+          closeLabel="Close"
+          onClose={closePorch}
+          letter={{ onOut: () => { closePorch(); router.push(`/app/mailbox/personal/${welcome.id}`); } }}
+        />
+      ) : showPorch && welcome ? (
         <WelcomePorch
           address={ownAddress}
           onOpen={() => { closePorch(); router.push(`/app/mailbox/personal/${welcome.id}`); }}

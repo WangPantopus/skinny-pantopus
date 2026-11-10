@@ -200,7 +200,7 @@ private fun PersonLook(
         CardComingOut(envelope, card, from)
     }
     LookSection("On the back") {
-        CardNoteSide(card, from, modifier = Modifier.padding(horizontal = Spacing.s3, vertical = Spacing.s2).rotate(1f))
+        CardNoteSide(card, from, modifier = Modifier.padding(vertical = Spacing.s2).rotate(1f))
     }
 }
 
@@ -316,7 +316,8 @@ private fun CardComingOut(
     var showBack by rememberSaveable { mutableStateOf(false) }
     // Each "Open it again" draws it coming out afresh; it doesn't play again when the screen comes back.
     var replays by remember { mutableIntStateOf(0) }
-    Box(modifier = Modifier.fillMaxWidth().padding(start = Spacing.s3, end = Spacing.s3, top = Spacing.s4).rotate(-1f)) {
+    // The card the desk's full width (the screen less 16 dp a side), as large as it will be in their hands.
+    Box(modifier = Modifier.fillMaxWidth().padding(top = Spacing.s4).rotate(-1f)) {
         key(replays) {
             HolidayCardOutOfEnvelope(
                 // On the morning it opens its seal is gone, so the envelope it leaves is torn open.
@@ -782,11 +783,11 @@ internal fun LookFooter(
 }
 
 /** Sealed until Christmas morning once it's in their mailbox. */
-private val HolidayCardPreview.sealed: Boolean
+internal val HolidayCardPreview.sealed: Boolean
     get() = piece.card?.sealed == true || piece.card?.arrival == "sealed_christmas"
 
 /** The card as the page they open it on shows it: its picture and printing, the postmark, and the note on its back. */
-private fun lookCard(
+internal fun lookCard(
     preview: HolidayCardPreview,
     design: HolidayCardDesign,
     year: Int,
@@ -808,6 +809,7 @@ private fun lookCard(
         number = card?.number ?: design.number,
         slug = card?.slug ?: design.slug,
         table = card?.table ?: design.table,
+        verse = (card?.verse ?: design.verse)?.takeIf { it.isNotBlank() },
     )
 }
 

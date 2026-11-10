@@ -125,6 +125,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
+    // MARK: - Background uploads
+
+    /// The system woke the app because a Moment's file finished going up while it was closed.
+    func application(
+        _: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard identifier == MomentsBackgroundUpload.identifier else {
+            completionHandler()
+            return
+        }
+        MomentsBackgroundUpload.shared.handleEvents(completion: completionHandler)
+    }
+
     func application(
         _: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: any Error
@@ -176,6 +191,13 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // tab's badge reads its count again.
         if ScreenStoreLive.isConnectionNotice(type) || MailBadgeStore.isMailNotice(type) {
             await MainActor.run { ScreenStoreLive.pushArrived(type: type) }
+        }
+        // "<name> added a Moment" while the app is open: the Moments tab's dot reads again. With
+        // Moments off for this account there is nothing to open: no banner.
+        if type == "moment_new" {
+            let isOn = await MainActor.run { MomentsFlags.shared.moments }
+            guard isOn else { return [] }
+            Task { @MainActor in await MomentsTabDot.shared.reread() }
         }
         // First-launch scope: a push for a feature hidden for the first
         // launch shows no banner while the app is open (its tap would land nowhere).

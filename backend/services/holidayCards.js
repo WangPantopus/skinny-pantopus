@@ -55,6 +55,20 @@ const COLLECTION_OF_DESIGN = new Map(COLLECTIONS.flatMap((c) => c.designs.map((d
 // 59–67 are the founder's nativity pictures (2026-11-08), each with its whole King James verse printed under the
 // painting, so the caption is the verse's reference (its book and numbers joined by a no-break space).
 // A number is never reused: every app picks the card's stamp from it.
+// The whole King James verse printed under each nativity picture (59–67), by its public page, as the apps show it
+// below the card in readable type ("Read the verse", design plan 6.2, 2026-11-09). The text is the NATIVITY kit's
+// nativity.json (KJV, public domain in the US; Project Gutenberg #10), word for word as printed on the picture.
+const VERSES = new Map([
+  ['isaiah-9-6', 'For unto us a child is born, unto us a son is given: and the government shall be upon his shoulder: and his name shall be called Wonderful, Counsellor, The mighty God, The everlasting Father, The Prince of Peace.'],
+  ['luke-2-7', 'And she brought forth her firstborn son, and wrapped him in swaddling clothes, and laid him in a manger; because there was no room for them in the inn.'],
+  ['john-3-16', 'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.'],
+  ['luke-2-10', 'And the angel said unto them, Fear not: for, behold, I bring you good tidings of great joy, which shall be to all people.'],
+  ['luke-2-14', 'Glory to God in the highest, and on earth peace, good will toward men.'],
+  ['matthew-2-2', 'Saying, Where is he that is born King of the Jews? for we have seen his star in the east, and are come to worship him.'],
+  ['matthew-2-11', 'And when they were come into the house, they saw the young child with Mary his mother, and fell down, and worshipped him: and when they had opened their treasures, they presented unto him gifts; gold, and frankincense and myrrh.'],
+  ['matthew-2-14', 'When he arose, he took the young child and his mother by night, and departed into Egypt.'],
+  ['john-8-12', 'Then spake Jesus again unto them, saying, I am the light of the world: he that followeth me shall not walk in darkness, but shall have the light of life.'],
+]);
 const DESIGNS = [
   ['Home for Christmas.', '#f7eee0', 1054, 'home-for-christmas', '#2c4071'],
   ['One more run?', '#f7efe1', 1054, 'one-more-run', '#3b4c6e'],
@@ -125,7 +139,11 @@ const DESIGNS = [
   ['John\u00a08:12 (KJV)', '#f7f0e2', 1022, 'john-8-12', '#6e4b30'],
 ].map(([caption, paper, height, slug, table], index) => {
   const id = designIdOf(index + 1);
-  return { id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height, slug, table };
+  return {
+    id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height, slug, table,
+    // Only the verse pictures carry it; apps read it when present (older apps ignore it).
+    ...(VERSES.has(slug) ? { verse: VERSES.get(slug) } : {}),
+  };
 });
 const DESIGN_BY_ID = new Map(DESIGNS.map((design) => [design.id, design]));
 
@@ -170,9 +188,12 @@ function isByLink(mail) {
 }
 
 /** What a send asked for, as one digest: the same request ID with other content asks for another card. */
-function requestDigest({ design, message, arrival, toUserId, toEmail }) {
-  return crypto.createHash('sha256')
-    .update(JSON.stringify([design, message, arrival, toUserId || null, toEmail || null])).digest('hex');
+function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null, media = null }) {
+  // A signed card's strokes count too, and a card's own photo and voice (their ids and the photo's description); a card
+  // without them has the digest it always had.
+  const parts = [design, message, arrival, toUserId || null, toEmail || null, ...(signature ? [signature] : []),
+    ...(media ? [{ media }] : [])];
+  return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 }
 
 /** Whether this card is still sealed: its note stays on the server until `sealed_until`. */
@@ -181,9 +202,56 @@ function isSealed(mail, now = new Date()) {
   return Boolean(until) && Date.parse(until) > now.getTime();
 }
 
+// The sender's own signature beside FROM (design plan 8.2, launch key card_table): their name signed with a finger,
+// kept as a few pen strokes in a 400 × 100 box (x to the right, y down, whole numbers; each stroke [x, y, x, y, ...],
+// a dot is one point). It is stored with the note in the card's private copy, never in the Mail row, so like the note
+// it waits while the card is sealed. Never logged, and never put in a share picture's name or a public page. Apps
+// that don't read it set the first name in the pen, as before.
+const SIGNATURE_BOX = { w: 400, h: 100 };
+const SIGNATURE_MAX_BYTES = 2048;
+const SIGNATURE_MAX_STROKES = 40;
+
+/**
+ * A signature as a send gives it, checked: { signature } (null when there is none), or { refusal: code } when it
+ * can't be kept: CARD_SIGNATURE_INVALID (not strokes in the box) or CARD_SIGNATURE_TOO_LONG (over 2 KB as stored).
+ */
+function cleanSignature(raw) {
+  if (raw === undefined || raw === null) return { signature: null };
+  const invalid = { refusal: 'CARD_SIGNATURE_INVALID' };
+  if (typeof raw !== 'object' || raw.w !== SIGNATURE_BOX.w || raw.h !== SIGNATURE_BOX.h) return invalid;
+  const { strokes } = raw;
+  if (!Array.isArray(strokes) || !strokes.length || strokes.length > SIGNATURE_MAX_STROKES) return invalid;
+  for (const stroke of strokes) {
+    if (!Array.isArray(stroke) || stroke.length < 2 || stroke.length % 2) return invalid;
+    for (let i = 0; i < stroke.length; i += 1) {
+      const v = stroke[i];
+      if (!Number.isInteger(v) || v < 0 || v > (i % 2 ? SIGNATURE_BOX.h : SIGNATURE_BOX.w)) return invalid;
+    }
+  }
+  const signature = { w: SIGNATURE_BOX.w, h: SIGNATURE_BOX.h, strokes: strokes.map((stroke) => [...stroke]) };
+  if (Buffer.byteLength(JSON.stringify(signature)) > SIGNATURE_MAX_BYTES) return { refusal: 'CARD_SIGNATURE_TOO_LONG' };
+  return { signature };
+}
+
+/** The signature kept in a card's private stored copy (the payload mailObjects.readPayload answers), or null. */
+function signatureOf(payload) {
+  const signature = payload?.body?.payload?.signature;
+  return signature && Array.isArray(signature.strokes) ? signature : null;
+}
+
+/**
+ * The photo and voice a card's private stored copy keeps (holiday_card_memories, services/holidayCardMedia): beside the
+ * note and the signature, never in the Mail row, so a sealed card shows nothing of them. { photo, voice } or null.
+ */
+function mediaOf(payload) {
+  const media = payload?.body?.payload?.media;
+  return media && (media.photo || media.voice) ? media : null;
+}
+
 /** A sealed card as the letter readers return it: the short note instead of its own, and no stored copy. */
 function sealedView(mail) {
-  const { object_payload: _payload, object: _object, ...rest } = mail;
+  const { object_payload: _payload, object: _object, card_signature: _signature, card_media: _media,
+    card_photo_covered: _covered, ...rest } = mail;
   return { ...rest, content: SEALED_NOTE, content_format: 'plain_text', content_text: SEALED_NOTE, attachments: [] };
 }
 
@@ -240,6 +308,7 @@ function cardView(mail, now = new Date()) {
   if (!isCard(mail)) return null;
   const card = mail.mail_extracted.card;
   const design = designById(card.design);
+  const sealed = isSealed(mail, now);
   return {
     design: card.design,
     number: design?.number ?? null,
@@ -254,7 +323,29 @@ function cardView(mail, now = new Date()) {
     year: card.year || SEASON.year,
     arrival: card.arrival || null,
     sealed_until: card.sealed_until || null,
-    sealed: isSealed(mail, now),
+    sealed,
+    // The whole verse printed on a nativity picture ("Read the verse"); like the picture, not before a seal lifts.
+    verse: (!sealed && design?.verse) || null,
+    // The sender's signature (8.2), when the reader read the card's stored copy: v2's object_payload, or the
+    // card_signature GET /api/mailbox/:id sets. Like the note, not before a seal lifts; null: set the typed name.
+    signature: (!sealed && (mail.card_signature || signatureOf(mail.object_payload))) || null,
+    ...mediaView(mail, sealed),
+  };
+}
+
+/**
+ * A card's photo and voice on a piece (contract section 5), when the reader read its stored copy (v2's object_payload,
+ * or the card_media GET /api/mailbox/:id sets): like the note, nothing of them before a seal lifts. A photo is covered
+ * for the reader unless the route found them the sender's connection (card_photo_covered false; section 10).
+ */
+function mediaView(mail, sealed) {
+  const media = sealed ? null : (mail.card_media || mediaOf(mail.object_payload));
+  const photo = media?.photo?.file_id ? media.photo : null;
+  const voice = media?.voice?.file_id ? media.voice : null;
+  return {
+    photo: photo ? { file_id: photo.file_id, width: photo.width ?? null, height: photo.height ?? null, alt: photo.alt || null,
+      covered: mail.card_photo_covered !== false } : null,
+    voice: voice ? { file_id: voice.file_id, duration_ms: voice.duration_ms ?? null } : null,
   };
 }
 
@@ -373,7 +464,9 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = 
     // The envelope as it reaches them: postmarked once the carrier has it (by email, the day it was sent).
     envelope: { from: senderName, postmarked_on: status === 'waiting' ? null : dayIn(mail.created_at, zone) },
     card: { design: view.design || null, number: view.number ?? null, caption: view.caption || null, paper: view.paper || null,
-      year: view.year || null, height: view.height ?? null, slug: view.slug || null, table: view.table || null },
+      year: view.year || null, height: view.height ?? null, slug: view.slug || null, table: view.table || null,
+      // The whole verse on a Christmas with Jesus Christ picture ("Read the verse"), not while it's sealed (cardView).
+      verse: view.verse || null },
   };
 }
 
@@ -427,6 +520,7 @@ async function sentLine(userId, now = new Date()) {
 
 module.exports = {
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
+  SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf, mediaOf, mediaView,
   designById, isCard, isByLink, cardLinkToken, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
   daysBetween, arrivalsFor,
   personDelivery, cardView, pickupAt, sentSummary, sentCards, sentStatus, sentPiece, sentTrail, sentLine,

@@ -181,7 +181,6 @@ struct HolidayCardLookStep: View {
             sectionLabel("On the back")
                 .padding(.top, Spacing.s6)
             backOnly
-                .frame(maxWidth: 300)
                 .rotationEffect(.degrees(1))
                 .frame(maxWidth: .infinity)
                 .padding(.top, 14)
@@ -204,7 +203,6 @@ struct HolidayCardLookStep: View {
         }
         // A fresh one plays the rise again.
         .id(replays)
-        .frame(maxWidth: 300)
         .rotationEffect(.degrees(-1))
         .frame(maxWidth: .infinity)
         .padding(.top, Spacing.s4)
@@ -402,7 +400,8 @@ private extension HolidayCardLookStep {
             sealed: false,
             sealedUntil: nil,
             sealedInDays: "",
-            sealedDayCount: 0
+            sealedDayCount: 0,
+            verse: design.verse
         )
     }
 }
@@ -445,7 +444,7 @@ struct HolidayCardLookFooter: View {
                     .isLink == true ? "Seal it and get the link" : "Seal and send",
                 isLoading: viewModel.sending
             ) {
-                if needsStamps { viewModel.showsStampBooks = true } else { Task { await viewModel.send() } }
+                if needsStamps { viewModel.showsStampBooks = true } else { viewModel.sealOrSend() }
             }
             .accessibilityIdentifier("sendCardLookSend")
         }

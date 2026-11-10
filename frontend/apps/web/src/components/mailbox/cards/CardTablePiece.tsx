@@ -10,11 +10,12 @@
 
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { MailItemV2, VaultFolder } from '@/types/mailbox';
 import type { MailActionName } from '@/lib/mailbox-api';
-import { useMailAction, useVaultFolders } from '@/lib/mailbox-queries';
+import { useCardArrivals, useHolidayCards, useMailAction, useVaultFolders } from '@/lib/mailbox-queries';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
@@ -22,6 +23,8 @@ import SenderSheet from '../SenderSheet';
 import { mailLoadMessage } from '../mailLoadMessage';
 import CardShareSheet from './CardShareSheet';
 import CardTable, { type TableMenuItem } from './CardTable';
+import { firstNameOf } from './cardArt';
+import { sendOneBackPath } from './sendOneBack';
 
 const DONE_WORDS: Partial<Record<MailActionName, string>> = {
   file: 'Filed in the Vault',
@@ -88,6 +91,18 @@ export default function CardTablePiece({
   const [asking, setAsking] = useState(false);
   const filed = piece.lifecycle === 'filed';
   const archived = Boolean(piece.archived) && !filed;
+  const router = useRouter();
+  const [blockedNow, setBlockedNow] = useState(false);
+
+  // Send one back (design plan Part 3): only while cards can be sent, never from a sealed card, and only when the
+  // server would take a card to them (its person check answers no when either has blocked the other or their account
+  // is gone). A new card to them, counted like any other.
+  const season = useHolidayCards();
+  const senderId = !card.sealed && !blockedNow && season.data?.open ? piece.sender_user_id ?? null : null;
+  const theirs = useCardArrivals(senderId);
+  const sendBack: TableMenuItem | null = senderId && theirs.isSuccess
+    ? { label: `Send ${firstNameOf(from)} a card`, onSelect: () => router.push(sendOneBackPath({ userId: senderId, name: from })) }
+    : null;
 
   const run = (name: MailActionName, folderId?: string, then?: () => void) => {
     action.mutate({ action: name, folderId }, {
@@ -127,6 +142,7 @@ export default function CardTablePiece({
     if (!yes) return;
     try {
       await api.blocks.blockUser(piece.sender_user_id);
+      setBlockedNow(true);
       toast.success(`${from} is blocked`);
     } catch (err) {
       toast.error(err instanceof Error ? `Couldn't block them: ${err.message}` : 'Couldn\'t block them. Check your connection and try again.');
@@ -140,6 +156,7 @@ export default function CardTablePiece({
     else items.push({ label: 'File in the Vault', onSelect: () => setSheet('vault') });
     items.push({ label: 'Shred', onSelect: () => { void shred(); } });
     if (!card.sealed) items.push({ label: 'Open it again', onSelect: () => setReplay((n) => n + 1) });
+    if (sendBack) items.push(sendBack);
     if (piece.sender_user_id) {
       items.push({ label: 'Report', onSelect: () => setSheet('report') });
       items.push({ label: 'Block', onSelect: () => { void block(); } });
@@ -147,7 +164,7 @@ export default function CardTablePiece({
     return items;
     // The menu follows the piece; its handlers read the latest piece through this same render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filed, archived, card.sealed, piece.sender_user_id, piece.recipient_home_id, from]);
+  }, [filed, archived, card.sealed, piece.sender_user_id, piece.recipient_home_id, from, sendBack?.label]);
 
   return (
     <CardTable
@@ -160,13 +177,14 @@ export default function CardTablePiece({
       replay={replay}
       paused={sheet !== null || asking}
       menu={menu}
+      sendBack={sendBack}
       onShare={() => setSheet('share')}
       onClose={onClose}
       overlay={(
         <>
           {sheet === 'share' ? (
             <CardShareSheet
-              details={{ card, note: piece.content || '', fromName: from, mailedOn: piece.postmark?.date || piece.created_at }}
+              details={{ card, note: piece.content || '', fromName: from, mailedOn: piece.postmark?.date || piece.created_at, signature: card.signature ?? null }}
               slug={card.slug}
               onClose={() => setSheet(null)}
             />

@@ -143,10 +143,10 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSLocationWhenInUseUsageDescription: "Pantopus uses your location to help find your address and show nearby activity."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Pantopus uses your location to help find your address and show nearby activity."
-        NSCameraUsageDescription: "Pantopus uses the camera for profile photos, photos of your mail and home, photos you post, and photos you send in chat."
-        NSPhotoLibraryUsageDescription: "Pantopus uses photos you choose for your profile, posts, home records and mail."
-        NSPhotoLibraryAddUsageDescription: "Pantopus saves images you choose to export, like a QR code, to your photo library."
-        NSMicrophoneUsageDescription: "Pantopus uses the microphone for voice messages in chat."
+        NSCameraUsageDescription: "Pantopus uses the camera for profile photos, photos of your mail and home, photos and videos you post, and photos you send in chat."
+        NSPhotoLibraryUsageDescription: "Pantopus uses photos you choose for your profile, posts, Moments, home records and mail."
+        NSPhotoLibraryAddUsageDescription: "Pantopus saves images you choose to export, like a QR code or your own Moment, to your photo library."
+        NSMicrophoneUsageDescription: "Pantopus uses the microphone for voice messages in chat and the sound of videos you post."
         NSFaceIDUsageDescription: "Pantopus uses Face ID to continue signed in after a reinstall, to unlock the app, and to confirm sensitive actions like payments and removing devices."
         UIBackgroundModes:
           - remote-notification

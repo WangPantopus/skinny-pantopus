@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -51,6 +52,8 @@ internal class CardRowArt private constructor(
     val postmark: Bitmap,
     val wax: Bitmap,
     val stamps: Map<MailStamp, Bitmap>,
+    /** The Christmas with Jesus Christ stamp (plan Part 7). */
+    val star: Bitmap,
 ) {
     companion object {
         private var kept = SoftReference<CardRowArt>(null)
@@ -71,6 +74,7 @@ internal class CardRowArt private constructor(
                             MailStamp.Peak to read(R.drawable.card_table_stamp_peak),
                             MailStamp.River to read(R.drawable.card_table_stamp_river),
                         ),
+                    star = read(R.drawable.card_table_stamp_star),
                 )
             synchronized(this) { kept = SoftReference(art) }
             return art
@@ -118,9 +122,10 @@ internal fun CardRowPostage(
     modifier: Modifier = Modifier,
 ) {
     val paints = remember { EnvelopePaints() }
+    val rowPostmarkInk = PantopusColors.tablePostmarkCream.toArgb()
     Canvas(modifier = modifier.size(width = 130.dp, height = 64.dp).clearAndSetSemantics {}) {
         val canvas = drawContext.canvas.nativeCanvas
-        val stamp = art.stamps[piece.stamp]
+        val stamp = piece.card?.let { cardStamp(art.stamps, art.star, piece.stamp, null, it.design) } ?: art.stamps[piece.stamp]
         val stampWidth = 42.dp.toPx()
         if (stamp != null) {
             val left = size.width - stampWidth
@@ -131,7 +136,8 @@ internal fun CardRowPostage(
             val width = stampWidth * 2.57f
             val left = size.width - stampWidth + stampWidth * 0.536f - width
             val year = piece.postmarkYear.toIntOrNull() ?: 0
-            drawEnvelopePostmark(canvas, art.postmark, left, 0f, width, piece.postmarkDay, year, paints)
+            // In cream on the row's dark red, so it reads there; the table's envelope keeps its black ink.
+            drawEnvelopePostmark(canvas, art.postmark, left, 0f, width, piece.postmarkDay, year, paints, ink = rowPostmarkInk)
         }
     }
 }
