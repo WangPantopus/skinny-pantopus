@@ -182,8 +182,8 @@ private const val ENVELOPE_REACH = 1.606f
 /** A second tap within this long, on the same spot, is a double-tap; one tap turns the card after it. */
 private const val DOUBLE_TAP_MS = 300L
 
-/** The small taps you can feel, firmest last. */
-internal enum class TableTap { Hold, Soft, Land, Crack, Refuse }
+/** The small taps you can feel, firmest last; [Tick] is the paper's light tick every 8% of a card's pull (plan 8.1). */
+internal enum class TableTap { Hold, Soft, Land, Crack, Refuse, Tick }
 
 /** What a finger is doing. */
 private enum class DragMode { None, Envelope, Pull, Turn, Tilt, Pan }
@@ -291,6 +291,9 @@ internal class CardTableState(
     private var lastTapY = 0f
     private var pendingTurn: Job? = null
     private var lastTouchMs = 0L
+
+    /** The notch of the card's pull last felt (plan 8.1); null until the first frame reads it. */
+    private var lastNotch: Int? = null
     private var frameLast = 0L
     private val wakeUps = Channel<Unit>(Channel.CONFLATED)
 
@@ -332,6 +335,7 @@ internal class CardTableState(
     /** "Open it again": the whole moment from the top. Nothing goes to the server. */
     fun openAgain() {
         resetZoom(immediate = true)
+        lastNotch = null
         for (spring in listOf(envelopeTurn, pull, lay, turn)) spring.jump(0f)
         step = TableStep.Front
         cracked = false
@@ -913,6 +917,7 @@ internal class CardTableState(
             if (spring.advance(steps, h)) moving = true
         }
         if (sending?.frame(dt, steps, h) == true) moving = true
+        tickAlongThePull()
         // Once it has cleared the envelope, the card is laid down in front of it.
         if (step == TableStep.Pulling && pull.x > 0.985f) {
             pull.jump(1f)
@@ -923,6 +928,24 @@ internal class CardTableState(
             moving = true
         }
         return first || moving || drag != null || drifting
+    }
+
+    /**
+     * Feel the paper (plan 8.1): a light tick every 8% of the card's way out of its envelope (received) or into it
+     * (sending), by finger or by itself. The first reading only sets where it is, so a card placed at once doesn't tick.
+     */
+    private fun tickAlongThePull() {
+        val travel =
+            when {
+                sending != null -> 1f - lay.x
+                step == TableStep.Flap || step == TableStep.Pulling || step == TableStep.Out ->
+                    ((pull.x - FLAP_OPEN) / (1f - FLAP_OPEN)).coerceIn(0f, 1f)
+                else -> 0f
+            }
+        val notch = (travel / PULL_TICK).toInt()
+        val last = lastNotch
+        lastNotch = notch
+        if (last != null && notch != last) onTap(TableTap.Tick)
     }
 
     private fun heldSpring(): TableSpring? =
@@ -1045,6 +1068,9 @@ internal class CardTableState(
 
     companion object {
         const val FLAP_OPEN = 0.3f
+
+        /** A tick every 8% of the card's pull. */
+        private const val PULL_TICK = 0.08f
         private const val TILT_REST = 0.004f
 
         private fun nowMs(): Long = System.nanoTime() / 1_000_000L
