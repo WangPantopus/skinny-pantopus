@@ -188,9 +188,10 @@ function isByLink(mail) {
 }
 
 /** What a send asked for, as one digest: the same request ID with other content asks for another card. */
-function requestDigest({ design, message, arrival, toUserId, toEmail }) {
-  return crypto.createHash('sha256')
-    .update(JSON.stringify([design, message, arrival, toUserId || null, toEmail || null])).digest('hex');
+function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null }) {
+  // A signed card's strokes count too; an unsigned card's digest is what it always was.
+  const parts = [design, message, arrival, toUserId || null, toEmail || null, ...(signature ? [signature] : [])];
+  return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 }
 
 /** Whether this card is still sealed: its note stays on the server until `sealed_until`. */
@@ -199,9 +200,46 @@ function isSealed(mail, now = new Date()) {
   return Boolean(until) && Date.parse(until) > now.getTime();
 }
 
+// The sender's own signature beside FROM (design plan 8.2, launch key card_table): their name signed with a finger,
+// kept as a few pen strokes in a 400 × 100 box (x to the right, y down, whole numbers; each stroke [x, y, x, y, ...],
+// a dot is one point). It is stored with the note in the card's private copy, never in the Mail row, so like the note
+// it waits while the card is sealed. Never logged, and never put in a share picture's name or a public page. Apps
+// that don't read it set the first name in the pen, as before.
+const SIGNATURE_BOX = { w: 400, h: 100 };
+const SIGNATURE_MAX_BYTES = 2048;
+const SIGNATURE_MAX_STROKES = 40;
+
+/**
+ * A signature as a send gives it, checked: { signature } (null when there is none), or { refusal: code } when it
+ * can't be kept: CARD_SIGNATURE_INVALID (not strokes in the box) or CARD_SIGNATURE_TOO_LONG (over 2 KB as stored).
+ */
+function cleanSignature(raw) {
+  if (raw === undefined || raw === null) return { signature: null };
+  const invalid = { refusal: 'CARD_SIGNATURE_INVALID' };
+  if (typeof raw !== 'object' || raw.w !== SIGNATURE_BOX.w || raw.h !== SIGNATURE_BOX.h) return invalid;
+  const { strokes } = raw;
+  if (!Array.isArray(strokes) || !strokes.length || strokes.length > SIGNATURE_MAX_STROKES) return invalid;
+  for (const stroke of strokes) {
+    if (!Array.isArray(stroke) || stroke.length < 2 || stroke.length % 2) return invalid;
+    for (let i = 0; i < stroke.length; i += 1) {
+      const v = stroke[i];
+      if (!Number.isInteger(v) || v < 0 || v > (i % 2 ? SIGNATURE_BOX.h : SIGNATURE_BOX.w)) return invalid;
+    }
+  }
+  const signature = { w: SIGNATURE_BOX.w, h: SIGNATURE_BOX.h, strokes: strokes.map((stroke) => [...stroke]) };
+  if (Buffer.byteLength(JSON.stringify(signature)) > SIGNATURE_MAX_BYTES) return { refusal: 'CARD_SIGNATURE_TOO_LONG' };
+  return { signature };
+}
+
+/** The signature kept in a card's private stored copy (the payload mailObjects.readPayload answers), or null. */
+function signatureOf(payload) {
+  const signature = payload?.body?.payload?.signature;
+  return signature && Array.isArray(signature.strokes) ? signature : null;
+}
+
 /** A sealed card as the letter readers return it: the short note instead of its own, and no stored copy. */
 function sealedView(mail) {
-  const { object_payload: _payload, object: _object, ...rest } = mail;
+  const { object_payload: _payload, object: _object, card_signature: _signature, ...rest } = mail;
   return { ...rest, content: SEALED_NOTE, content_format: 'plain_text', content_text: SEALED_NOTE, attachments: [] };
 }
 
@@ -276,6 +314,9 @@ function cardView(mail, now = new Date()) {
     sealed,
     // The whole verse printed on a nativity picture ("Read the verse"); like the picture, not before a seal lifts.
     verse: (!sealed && design?.verse) || null,
+    // The sender's signature (8.2), when the reader read the card's stored copy: v2's object_payload, or the
+    // card_signature GET /api/mailbox/:id sets. Like the note, not before a seal lifts; null: set the typed name.
+    signature: (!sealed && (mail.card_signature || signatureOf(mail.object_payload))) || null,
   };
 }
 
@@ -450,6 +491,7 @@ async function sentLine(userId, now = new Date()) {
 
 module.exports = {
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
+  SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf,
   designById, isCard, isByLink, cardLinkToken, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
   daysBetween, arrivalsFor,
   personDelivery, cardView, pickupAt, sentSummary, sentCards, sentStatus, sentPiece, sentTrail, sentLine,
