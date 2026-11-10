@@ -90,6 +90,8 @@ struct CardTableShareScene: View {
 
     @ViewBuilder
     private var objects: some View {
+        // The coordinates web draws (MCSRV's share-layout, plan 1.11), so all three apps match: the Story card 800 px
+        // of 1080 and the Post card 760, with nothing but the slip in Instagram's top 250 or bottom 340 px.
         switch format {
         case .story:
             if content.sealed {
@@ -97,17 +99,14 @@ struct CardTableShareScene: View {
                 sealedStamp(fontSize: 21, left: 96, top: 506)
                 slip(CardShareSlip(x: 122, y: 776, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5))
             } else if showsNote {
-                openEnvelope(width: 350, x: 96, y: 276, rotation: 5)
-                front(width: 330, x: 26, y: 118, rotation: -4.5)
-                back(width: 330, x: 184, y: 412, rotation: 3.5)
+                openEnvelope(width: 372, x: 84, y: 300, rotation: 4)
+                front(width: 360, x: 16, y: 138, rotation: -4)
+                back(width: 360, x: 164, y: 346, rotation: 3.2)
                 slip(CardShareSlip(x: 26, y: 806, rotation: -2.2, width: 250, height: 50, title: 12, line: 12.5))
             } else {
-                // The card 800 px wide of 1080, and nothing but the slip in Instagram's top 250 or bottom 340 px
-                // (the flap's tip at 250; the card lies a little over the pocket so its lowest corner clears the
-                // slip, at about 1540) (plan 1.11).
-                openEnvelope(width: 400 * 1.012, x: 68, y: 298, rotation: 3)
-                front(width: 400, x: 70, y: 282, rotation: -2)
-                slip(CardShareSlip(x: 122, y: 776, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5))
+                openEnvelope(width: 400 * 1.012, x: 68, y: 298, rotation: 2.4)
+                front(width: 400, x: 70, y: 302, rotation: -2.6)
+                slip(CardShareSlip(x: 122, y: 806, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5))
             }
         case .post:
             if content.sealed {
@@ -115,15 +114,14 @@ struct CardTableShareScene: View {
                 sealedStamp(fontSize: 18, left: 118, top: 352)
                 slip(CardShareSlip(x: 139, y: 606, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             } else if showsNote {
-                openEnvelope(width: 286, x: 127, y: 158, rotation: 2.5)
-                front(width: 258, x: 16, y: 112, rotation: -3.2)
-                back(width: 258, x: 266, y: 124, rotation: 2.8)
+                openEnvelope(width: 300, x: 120, y: 150, rotation: 2.5)
+                front(width: 272, x: 6, y: 104, rotation: -3.2)
+                back(width: 272, x: 262, y: 116, rotation: 2.8)
                 slip(CardShareSlip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             } else {
-                // The card 760 px wide of 1080 (plan 1.11).
-                openEnvelope(width: 380 * 1.012, x: 78, y: 116, rotation: 3)
-                front(width: 380, x: 80, y: 112, rotation: -2.6)
-                slip(CardShareSlip(x: 139, y: 606, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
+                openEnvelope(width: 380 * 1.012, x: 78, y: 112, rotation: 3)
+                front(width: 380, x: 80, y: 110, rotation: -2.6)
+                slip(CardShareSlip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             }
         case .link:
             // A sealed card never gives away its picture.

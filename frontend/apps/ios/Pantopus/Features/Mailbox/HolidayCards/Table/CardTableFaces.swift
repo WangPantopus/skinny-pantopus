@@ -37,12 +37,10 @@ enum CardTableType {
     }
 
     /// A Bible verse's reference ("John 3:16 (KJV)", the Christmas with Jesus Christ collection): it's set in the
-    /// card's serif, italic, so the colon reads (plan 1.12). Stored captions don't change.
+    /// card's serif, italic, so the colon reads (plan 1.12). Web's rule: it ends in chapter:verse, with an optional
+    /// "(KJV)". Stored captions don't change.
     static func isVerseReference(_ caption: String) -> Bool {
-        caption.range(
-            of: #"^([1-3][\s\u{00A0}])?[A-Z][a-z]+[\s\u{00A0}]\d{1,3}:\d{1,3}([-–]\d{1,3})?(\s\([A-Z]{2,5}\))?$"#,
-            options: .regularExpression
-        ) != nil
+        caption.range(of: #"[\s\u{00A0}]\d{1,3}:\d{1,3}([-–]\d{1,3})?(\s\(KJV\))?$"#, options: .regularExpression) != nil
     }
 
     /// The caption's type: the hand, or the serif italic for a verse's reference.
