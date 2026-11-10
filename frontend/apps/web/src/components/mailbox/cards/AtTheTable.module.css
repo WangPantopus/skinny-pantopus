@@ -1,0 +1,20 @@
+/* The send flow at the table (design plan Part 9): the chosen card's cloth, the window light and the dark edges, the
+   same layers the card table uses (CardTable.module.css), always dark whatever the page's own setting. */
+.cloth {
+  position: relative; margin-top: 12px; padding: 18px 0 28px; min-height: calc(100dvh - 190px); overflow: hidden;
+  background-size: cover; background-position: 50% 30%; background-blend-mode: multiply; color: #f6ecd9; color-scheme: dark;
+}
+.light {
+  position: absolute; inset: -40px; background-size: 100% 100%; mix-blend-mode: soft-light; opacity: 0.88; pointer-events: none;
+}
+.vignette {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 88% at 46% 32%, rgba(0, 0, 0, 0) 44%, rgba(6, 3, 4, 0.5) 100%);
+}
+.on { position: relative; }
+/* A cream slip: paper with its grain, a little turned, its shadow on the cloth. */
+.slip {
+  position: relative; margin: 0 auto; max-width: 420px; padding: 16px 16px 14px; color: #111827; background-color: #f6ecd9;
+  background-size: 260px; background-blend-mode: multiply; border-radius: 3px; transform: rotate(-0.6deg);
+  box-shadow: 0 14px 30px rgba(6, 3, 4, 0.42), inset 0 0 22px rgba(110, 80, 30, 0.16);
+}

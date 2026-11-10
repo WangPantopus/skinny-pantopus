@@ -20,6 +20,7 @@ import { CardLinkSignIn, CardLinkWords, LINK_PAGE_PANEL, LinkPageSignIn, LinkPag
 import CardLinkScene from './CardLinkScene';
 import CardFront from './CardFront';
 import CardBack from './CardBack';
+import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, ON_CLOTH_TEXT } from './AtTheTable';
 import CardFlip from './CardFlip';
 import { CardFromEnvelope, SealedNotice, useCardOpening } from './HolidayCardView';
 import { daysAway, longDay, SERIF } from './cardArt';
@@ -70,6 +71,7 @@ export default function LookItOver({
   toFirstName,
   byEmail,
   byLink = false,
+  onCloth = false,
 }: {
   preview: HolidayCardPreview;
   /** Their name as step 1 showed it, or the address typed for them. */
@@ -78,9 +80,12 @@ export default function LookItOver({
   /** Not to a person: by email, or (`byLink`) as a link. */
   byEmail: boolean;
   byLink?: boolean;
+  /** On the card's cloth (design plan Part 9): cream words and a glass button. */
+  onCloth?: boolean;
 }) {
   const { piece, email } = preview;
   const card = piece.card!;
+  const sectionLabel = onCloth ? 'text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-[#f6ecd9]/80' : label;
   const from = piece.sender_display || 'Someone';
   const first = toFirstName || toName;
   const sealed = card.sealed;
@@ -109,7 +114,7 @@ export default function LookItOver({
         type="button"
         data-testid="sendCardLookOnTable"
         onClick={() => setOnTable(true)}
-        className={`${button} border border-[#d6cbb6] bg-[#fffdf8] text-[#374151] hover:bg-[#f5efe3]`}
+        className={onCloth ? ON_CLOTH_BUTTON : `${button} border border-[#d6cbb6] bg-[#fffdf8] text-[#374151] hover:bg-[#f5efe3]`}
       >
         Open it the way they will
       </button>
@@ -141,17 +146,17 @@ export default function LookItOver({
   return (
     <div>
       <div className="px-4 pt-3.5">
-        <h2 className="text-[22px] font-normal leading-7 text-[#0f172a] [@media(prefers-color-scheme:dark)]:text-app-text" style={{ fontFamily: SERIF }}>
+        <h2 className={`text-[22px] font-normal leading-7 ${onCloth ? ON_CLOTH_TEXT : 'text-[#0f172a] [@media(prefers-color-scheme:dark)]:text-app-text'}`} style={{ fontFamily: SERIF }}>
           {byEmail ? 'This is what they will see' : `This is what ${toName} will see`}
         </h2>
-        <p className="mt-1 text-[14px] leading-5 text-[#4e5563] [@media(prefers-color-scheme:dark)]:text-app-text-secondary">{intro}</p>
+        <p className={`mt-1 text-[14px] leading-5 ${onCloth ? ON_CLOTH_MUTED : 'text-[#4e5563] [@media(prefers-color-scheme:dark)]:text-app-text-secondary'}`}>{intro}</p>
       </div>
 
       {byEmail ? (
         <>
           {email ? (
             <section aria-label="The email they get" data-testid="sendCardLookEmail" className="mx-3 mt-[18px]">
-              <h3 className={`${label} px-1`}>{sealed ? 'The email they get, now' : 'The email they get, right away'}</h3>
+              <h3 className={`${sectionLabel} px-1`}>{sealed ? 'The email they get, now' : 'The email they get, right away'}</h3>
               <div className="mt-2 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white text-[#111827] shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
                 <div className="border-b border-[#f3f4f6] px-3.5 py-2.5 text-[12px] leading-[17px] text-[#4e5563]">
                   <p className="truncate"><span className="font-semibold text-[#111827]">Pantopus</span> · to {toName}</p>
@@ -184,7 +189,7 @@ export default function LookItOver({
 
           {linkPage ? (
             <section aria-label="The page its link opens" data-testid="sendCardLookLinkPage" className="mx-3 mt-[26px]">
-              <h3 className={`${label} px-1`}>The page its link opens</h3>
+              <h3 className={`${sectionLabel} px-1`}>The page its link opens</h3>
               {launchFeatures.cardTable ? (
                 <div className="mt-2">
                   <CardLinkScene framed>
@@ -202,7 +207,7 @@ export default function LookItOver({
           ) : null}
 
           <section aria-label={byLink ? 'After they join' : 'After they join with that address'} className="mx-3 mt-[26px]">
-            <h3 className={`${label} px-1`}>{byLink ? 'After they join' : 'After they join with that address'}</h3>
+            <h3 className={`${sectionLabel} px-1`}>{byLink ? 'After they join' : 'After they join with that address'}</h3>
             <MailboxFrame day="In their Mailbox">
               <div role="img" aria-label={pieceSentence(piece, false)}>
                 <MailPiece item={piece} recipientName={addressee} opened={false} />
@@ -218,7 +223,7 @@ export default function LookItOver({
       ) : (
         <>
           <section aria-label={`In ${first}’s Mailbox`} className="mx-3 mt-[18px]">
-            <h3 className={`${label} px-1`}>In {first}’s Mailbox · {longDay(preview.arrives_on)}</h3>
+            <h3 className={`${sectionLabel} px-1`}>In {first}’s Mailbox · {longDay(preview.arrives_on)}</h3>
             <MailboxFrame day="Today">
               <div role="img" aria-label={`${pieceSentence(piece, false)}. Comes at ${MORNING}`} className="p-1">
                 <MailPiece item={piece} recipientName={addressee} opened={false} />
@@ -229,7 +234,7 @@ export default function LookItOver({
 
           {sealed ? (
             <section aria-label={`If ${first} taps it before Christmas`} className="mx-4 mt-7">
-              <h3 className={label}>If {first} taps it before Christmas</h3>
+              <h3 className={sectionLabel}>If {first} taps it before Christmas</h3>
               <SealedNotice
                 from={from}
                 day={longDay(preview.opens_on) || 'December 25'}
@@ -240,8 +245,8 @@ export default function LookItOver({
           ) : null}
 
           <section aria-label={sealed ? 'On Christmas morning' : `When ${first} opens it`} className="mx-4 mt-7">
-            <h3 className={label}>{sealed ? 'On Christmas morning' : `When ${first} opens it`}</h3>
-            <p className={`mt-1.5 ${body}`}>
+            <h3 className={sectionLabel}>{sealed ? 'On Christmas morning' : `When ${first} opens it`}</h3>
+            <p className={`mt-1.5 ${onCloth ? `text-[15px] leading-[22px] ${ON_CLOTH_TEXT}` : body}`}>
               {sealed
                 ? `The seal lifts at 7 a.m. where ${first} lives. The card slides out of the envelope picture side up.`
                 : `A Christmas card from ${from.replace(/\.$/, '')}. It slides out of the envelope picture side up.`}
@@ -282,7 +287,7 @@ export default function LookItOver({
           </section>
 
           <section aria-label="On the back" className="mx-4 mt-6">
-            <h3 className={label}>On the back</h3>
+            <h3 className={sectionLabel}>On the back</h3>
             <div className={launchFeatures.cardTable ? 'mt-3.5' : 'mx-auto mt-3.5 max-w-[300px]'}>
               <Back piece={piece} />
             </div>
