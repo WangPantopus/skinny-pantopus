@@ -182,10 +182,27 @@ function note(found) {
   return `By ${valueWords(found)} per square foot, this home is ${standing(found)} the typical similar home on its street. Similar homes are houses on the same street, within 25% of this home's living area${found.lots ? ', 50% of its lot size' : ''} and 15 years of its age, from ${found.publisher}'s records.${appeal} This is information, not tax advice.`;
 }
 
+const CHIP_TONES = { above: 'warning', near: 'neutral', below: 'success' };
+
+/**
+ * The money page's "Property tax check" card, in words the apps draw as they come (serializers/placeIntelligenceSerializer.js
+ * `money_cards`): the answer as a chip and one line, then the value card's rows and note.
+ */
+function card(found) {
+  return {
+    id: 'property_tax_check',
+    title: 'Property tax check',
+    chip: { tone: CHIP_TONES[found.stance], text: found.stance === 'near' ? 'Within 5%' : `${Math.abs(found.pct)}% ${found.stance}` },
+    lead: `The county values this home ${standing(found)} similar homes on its street, per square foot.`,
+    rows: rows(found),
+    notes: [note(found)],
+  };
+}
+
 /** One true line for someone who hasn't verified the address yet: how it compares only when it is above, and never a dollar figure. */
 function teaser(found) {
   if (found.stance === 'above') return `The county values this home ${found.pct}% above similar homes on its street, per square foot.`;
   return `We compared the county's value for this home with ${found.homes} similar homes on its street.`;
 }
 
-module.exports = { forHome, compare, rows, note, teaser };
+module.exports = { forHome, compare, rows, note, card, teaser };
