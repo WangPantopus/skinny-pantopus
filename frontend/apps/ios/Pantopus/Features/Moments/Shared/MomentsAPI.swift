@@ -139,7 +139,9 @@ enum MomentsAPI {
         }
         let status = response.response.statusCode
         guard (200..<300).contains(status) else {
-            throw MomentsFailure(status: status, body: response.data)
+            let failure = MomentsFailure(status: status, body: response.data)
+            if failure == .unavailable { flagWentOff() }
+            throw failure
         }
         if Response.self == EmptyResponse.self {
             // swiftlint:disable:next force_cast
@@ -150,6 +152,13 @@ enum MomentsAPI {
         } catch {
             throw MomentsFailure.other("Something went wrong loading this. Please try again.")
         }
+    }
+
+    /// The server says Moments are off for this account: the flag is read
+    /// again now, so the tab (and anything of Moments that's open) leaves at once.
+    private static func flagWentOff() {
+        guard case let .signedIn(user) = AuthManager.shared.state else { return }
+        Task { await MomentsFlags.shared.refresh(account: user.id, force: true) }
     }
 
     /// Sends `endpoint` for its effect alone.

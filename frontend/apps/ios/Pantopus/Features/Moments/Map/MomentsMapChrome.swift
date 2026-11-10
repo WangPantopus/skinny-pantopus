@@ -174,8 +174,8 @@ struct MomentsStrip: View {
                     if !viewModel.loaded, postings.isEmpty {
                         ForEach(0..<5, id: \.self) { _ in placeholderCell }
                     }
-                    ForEach(Array(rings.enumerated()), id: \.element.id) { index, ring in
-                        Button { actions.watch(rings, index, false) } label: { MomentStripFace(ring: ring) }
+                    ForEach(rings) { ring in
+                        Button { actions.watch(viewModel.watchQueue(from: ring), 0, false) } label: { MomentStripFace(ring: ring) }
                             .buttonStyle(.plain)
                             .accessibilityLabel(MomentsSpeech.label(for: ring))
                             .accessibilityIdentifier("moments.strip.ring.\(ring.id)")
@@ -207,7 +207,9 @@ struct MomentsStrip: View {
 
     @ViewBuilder
     private func header(_ rings: [MomentRingDTO]) -> some View {
-        let new = rings.filter(\.isNew)
+        let new = rings.filter { $0.isNew && !$0.mine }
+        let newPeople = MomentsMapViewModel.newPeople(in: rings)
+        let people = MomentsMapViewModel.people(in: rings)
         HStack(spacing: Spacing.s2) {
             if let focus = viewModel.focus {
                 VStack(alignment: .leading, spacing: 1) {
@@ -215,7 +217,7 @@ struct MomentsStrip: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(1)
-                    Text("\(rings.count) \(rings.count == 1 ? "person" : "people")" + (new.isEmpty ? "" : " · \(new.count) new"))
+                    Text("\(people) \(people == 1 ? "person" : "people")" + (newPeople == 0 ? "" : " · \(newPeople) new"))
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
@@ -223,7 +225,7 @@ struct MomentsStrip: View {
                 .accessibilityIdentifier("moments.strip.title")
                 .padding(.top, 2)
             } else {
-                Text(title(rings: rings, new: new.count))
+                Text(title(rings: rings, new: newPeople))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
@@ -259,17 +261,18 @@ struct MomentsStrip: View {
         if !viewModel.loaded { return "Moments near you" }
         if new > 0 { return "\(new) new near you" }
         if rings.isEmpty { return "Posting your Moment" }
-        return "All watched near you"
+        return "All caught up near you"
     }
 
     private func postingCell(_ posting: MomentPosting) -> some View {
         let failed = if case .failed = posting.phase { true } else { false }
+        let isLive = posting.phase == .live
         return Button {
             if failed { failedPosting = posting }
         } label: {
             VStack(spacing: Spacing.s1) {
                 MomentPostingRing(progress: posting.progress, avatar: me, asPin: false)
-                Text(failed ? "Try again" : "Posting")
+                Text(failed ? "Try again" : (isLive ? "You" : "Posting"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(failed ? Theme.Color.error : Theme.Color.primaryTint)
                     .lineLimit(1)

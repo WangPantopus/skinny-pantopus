@@ -20,6 +20,10 @@ struct MomentsComposer: View {
             Color.black.ignoresSafeArea()
             if model.draft != nil {
                 MomentsPostStage(model: model) { onClose() }
+            } else if model.gate != .open {
+                // Where you are first, then the 18+ question: nothing can be taken, picked or written before both.
+                MomentsComposeGate(model: model, onClose: close)
+                    .environment(\.colorScheme, .dark)
             } else {
                 Group {
                     switch model.mode {
@@ -184,5 +188,91 @@ struct MomentsAdultSheet: View {
         .background(Theme.Color.appSurface)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.adult")
+    }
+}
+
+/// Before the camera (the same on Android): location first, then the 18+
+/// question, which is its own sheet over this. The camera, the library and
+/// the text card wait behind both.
+struct MomentsComposeGate: View {
+    let model: MomentsComposerModel
+    let onClose: () -> Void
+    @State private var asking = false
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onClose) {
+                    Icon(.x, size: 26, color: .white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+                .accessibilityIdentifier("moments.camera.close")
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.s2)
+            .frame(height: 48)
+            Spacer(minLength: 0)
+            switch model.gate {
+            case .needsLocation:
+                locationCard
+            case .locating:
+                Text("Finding where you are…")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.8))
+            case .needsAdult, .open:
+                EmptyView()
+            }
+            Spacer(minLength: 0)
+        }
+        // Back from Settings with location allowed: carry on.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, model.gate == .needsLocation { Task { await model.recheckLocation() } }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("moments.gate")
+    }
+
+    private var locationCard: some View {
+        VStack(spacing: Spacing.s3) {
+            Icon(.mapPin, size: 34, color: Color.white.opacity(0.85))
+            Text("Turn on location")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+                .accessibilityAddTraits(.isHeader)
+            Text("A Moment pins where you are when you post it. Pantopus never shows your live location.")
+                .font(.system(size: 15))
+                .foregroundStyle(Color.white.opacity(0.78))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                if model.locationRefused {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                } else {
+                    asking = true
+                    Task {
+                        await model.allowLocation()
+                        asking = false
+                    }
+                }
+            } label: {
+                Text(model.locationRefused ? "Open Settings" : "Allow location")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(Capsule().fill(Theme.Color.primarySolid))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(asking)
+            .padding(.top, Spacing.s2)
+            .accessibilityIdentifier("moments.gate.allow")
+        }
+        .padding(.horizontal, Spacing.s8)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("moments.gate.location")
     }
 }

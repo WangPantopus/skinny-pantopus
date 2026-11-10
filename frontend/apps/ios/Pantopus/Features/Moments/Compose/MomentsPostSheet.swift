@@ -28,9 +28,11 @@ struct MomentsPostStage: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             VStack(spacing: 0) {
                 Spacer(minLength: 120)
+                // The sheet is as tall as what's in it, up to the room there is (less with the keyboard up).
                 MomentsPostSheet(model: model, onPosted: onPosted)
+                    .layoutPriority(1)
             }
-            .ignoresSafeArea(edges: .bottom)
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .onDisappear { player?.pause() }
     }
@@ -99,59 +101,37 @@ struct MomentsPostSheet: View {
     let model: MomentsComposerModel
     let onPosted: () -> Void
     @Environment(AuthManager.self) private var auth
+    @State private var optionsHeight: CGFloat = 520
 
     var body: some View {
-        @Bindable var model = model
         VStack(spacing: 0) {
             Capsule()
                 .fill(Theme.Color.appBorderStrong)
                 .frame(width: 36, height: 5)
                 .padding(.top, Spacing.s2)
+            // The options take their own height and scroll only when there's less room than that
+            // (a small phone, the at-home notice, the keyboard up).
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    MomentsPostMap(
-                        pin: model.pin,
-                        showArea: model.showArea,
-                        me: me,
-                        placeholder: model.locating == .unavailable ? "Location is off" : "Finding where you are…"
-                    )
-                    .padding(.top, 11)
-                    placeRow
-                        .padding(.top, 10)
-                    if model.pin == nil, model.locating == .unavailable {
-                        Text("Turn on location for Pantopus in Settings to post a Moment.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.Color.error)
-                            .padding(.horizontal, Spacing.s1)
-                            .accessibilityIdentifier("moments.post.locationOff")
-                    }
-                    if model.showsHomeNotice {
-                        homeNotice.padding(.top, Spacing.s2)
-                    }
-                    areaRow
-                        .padding(.top, Spacing.s2)
-                    label("How long").padding(.top, Spacing.s4)
-                    durations.padding(.top, Spacing.s2)
-                    label("Who sees it").padding(.top, 14)
-                    audience.padding(.top, Spacing.s2)
-                    if model.draft != .text {
-                        captionField(text: $model.caption).padding(.top, 14)
-                    }
-                    if let error = model.error {
-                        Text(error)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.Color.error)
-                            .padding(.top, Spacing.s3)
-                            .accessibilityIdentifier("moments.post.error")
-                    }
-                    postButton.padding(.top, 14)
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.bottom, Spacing.s6)
+                options
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { optionsHeight = $0 }
             }
+            .frame(maxHeight: optionsHeight)
             .scrollBounceBehavior(.basedOnSize)
+            // Post is always in reach: under the options, outside their scrolling, with what stopped it right above.
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                if let error = model.error {
+                    Text(error)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.Color.error)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("moments.post.error")
+                }
+                postButton
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.top, Spacing.s3)
+            .padding(.bottom, Spacing.s6)
         }
-        .fixedSize(horizontal: false, vertical: true)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous)
                 .fill(Theme.Color.appSurface)
@@ -161,6 +141,41 @@ struct MomentsPostSheet: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Post your Moment")
         .accessibilityIdentifier("moments.post")
+    }
+
+    private var options: some View {
+        @Bindable var model = model
+        return VStack(alignment: .leading, spacing: 0) {
+            MomentsPostMap(
+                pin: model.pin,
+                showArea: model.showArea,
+                me: me,
+                placeholder: model.locating == .unavailable ? "Location is off" : "Finding where you are…"
+            )
+            .padding(.top, 11)
+            placeRow
+                .padding(.top, 10)
+            if model.pin == nil, model.locating == .unavailable {
+                Text("Turn on location for Pantopus in Settings to post a Moment.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.error)
+                    .padding(.horizontal, Spacing.s1)
+                    .accessibilityIdentifier("moments.post.locationOff")
+            }
+            if model.showsHomeNotice {
+                homeNotice.padding(.top, Spacing.s2)
+            }
+            areaRow
+                .padding(.top, Spacing.s2)
+            label("How long").padding(.top, Spacing.s4)
+            durations.padding(.top, Spacing.s2)
+            label("Who sees it").padding(.top, 14)
+            audience.padding(.top, Spacing.s2)
+            if model.draft != .text {
+                captionField(text: $model.caption).padding(.top, 14)
+            }
+        }
+        .padding(.horizontal, Spacing.s4)
     }
 
     private var me: MomentAuthorDTO? {
@@ -220,7 +235,7 @@ struct MomentsPostSheet: View {
                 Text("Show the area instead")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.Color.appText)
-                Text("An approximate pin, about half a kilometer across")
+                Text("People see a pin within about half a mile, not the exact spot")
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }

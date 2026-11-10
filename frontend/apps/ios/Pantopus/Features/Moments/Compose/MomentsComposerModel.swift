@@ -38,10 +38,23 @@ final class MomentsComposerModel {
         case unavailable
     }
 
+    /// What stands before the camera: where you are first, then the 18+
+    /// question. Nothing can be taken, picked or written until both are settled.
+    enum Gate: Equatable {
+        case locating
+        case needsLocation
+        case needsAdult
+        case open
+    }
+
     var mode: Mode = .camera
     private(set) var draft: Draft?
     private(set) var locating: Locating = .locating
     private(set) var place: MomentPlacePreviewDTO?
+    /// The server has said what this spot reads as and whether the 18+ answer is on file (or couldn't be reached).
+    private(set) var previewSettled = false
+    /// Location was asked for here and didn't come: the card offers Settings.
+    private(set) var locationRefused = false
     /// The 18+ question before the first Moment, and its answer when it's no.
     var asksAdult = false
     var ageRefused = false
@@ -72,16 +85,48 @@ final class MomentsComposerModel {
     /// Where and when a library photo or video was taken.
     @ObservationIgnored private var capture: MediaCaptureLocation?
     @ObservationIgnored private var preparation: Task<(String, MomentPreparedMedia)?, Never>?
+    /// One id per text card sent to the Post sheet: tapping Post again after a lost answer returns the same Moment.
+    @ObservationIgnored private var textRequestId = UUID().uuidString
     private let location: any LocationProviding
+    private let defaults: UserDefaults
 
-    init(location: any LocationProviding = DeviceLocationProvider.shared) {
+    init(location: any LocationProviding = DeviceLocationProvider.shared, defaults: UserDefaults = .standard) {
         self.location = location
+        self.defaults = defaults
     }
 
     // MARK: - Opening
 
-    /// Finds where the Moment will pin and what that place reads as; asks the 18+ question once.
+    var gate: Gate {
+        switch locating {
+        case .locating: .locating
+        case .unavailable: .needsLocation
+        case .located: asksAdult ? .needsAdult : (previewSettled ? .open : .locating)
+        }
+    }
+
+    /// Finds where the Moment will pin and what that place reads as, then asks
+    /// the 18+ question once. Where location hasn't been allowed yet, the
+    /// card asks first (`allowLocation`).
     func start() async {
+        restoreChoices()
+        guard location.canLocateWithoutAsking else {
+            locating = .unavailable
+            return
+        }
+        await locate()
+    }
+
+    /// "Allow location" on the card: the system asks; a refusal leaves Settings.
+    func allowLocation() async {
+        await locate()
+        if locating == .unavailable { locationRefused = true }
+    }
+
+    /// Back from Settings: location may be allowed now.
+    func recheckLocation() async {
+        guard locating == .unavailable, location.canLocateWithoutAsking else { return }
+        locationRefused = false
         await locate()
     }
 
@@ -94,6 +139,7 @@ final class MomentsComposerModel {
         fix = (coordinate, Date())
         locating = .located
         await preview(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        previewSettled = true
     }
 
     private func preview(latitude: Double, longitude: Double) async {
@@ -195,6 +241,7 @@ final class MomentsComposerModel {
     /// P2's Next: the text card goes to the Post sheet.
     func finishText() {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        textRequestId = UUID().uuidString
         draft = .text
     }
 
@@ -262,8 +309,15 @@ final class MomentsComposerModel {
     var postLabel: String {
         "Post · shows for \(hours == 1 ? "1 hour" : "\(hours) hours")"
     }
+}
 
-    /// Posts: the Moment is made and its file goes up from the outbox; true when the composer can close.
+// MARK: - Posting
+
+extension MomentsComposerModel {
+    /// Posts. The Moment is made here, while the sheet is still up, so what
+    /// can stop it ("20 Moments today", an old location, no connection) shows
+    /// where the person can act; then the sheet closes and only the file goes
+    /// up in the background. True when the composer can close.
     func post() async -> Bool {
         guard canPost, let draft else { return false }
         isPosting = true
@@ -279,6 +333,15 @@ final class MomentsComposerModel {
         case .video: .video
         case .text: .text
         }
+        // A photo or video is made ready first: a Moment is never made for a file that can't be sent.
+        var prepared: (String, MomentPreparedMedia)?
+        if kind != .text {
+            guard let ready = await preparation?.value else {
+                if error == nil { error = "Couldn't get that ready to post. Try another one." }
+                return false
+            }
+            prepared = ready
+        }
         let body = MomentCreateBody(
             kind: kind,
             hours: hours,
@@ -287,20 +350,58 @@ final class MomentsComposerModel {
             caption: kind == .text || trimmedCaption.isEmpty ? nil : trimmedCaption,
             text: kind == .text ? text.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             background: kind == .text ? background : nil,
-            location: pinAt
+            location: pinAt,
+            // The outbox folder's id (or the text card's) names this Post tap: a retry returns the same Moment.
+            clientRequestId: (prepared?.0 ?? textRequestId).lowercased()
         )
-        if kind == .text {
-            guard let folder = try? MomentsUploader.newFolder() else { return false }
-            MomentsUploader.shared.post(body, media: nil, folderId: folder.id)
-            return true
-        }
-        guard let prepared = await preparation?.value else {
-            if error == nil { error = "Couldn't get that ready to post. Try another one." }
+        let created: MomentDTO
+        do {
+            created = try await MomentsAPI.send(MomentsEndpoints.create(body), as: MomentEnvelope.self).moment
+        } catch let failure as MomentsFailure {
+            if failure == .adultConfirmRequired { asksAdult = true } else { error = failure.message }
+            return false
+        } catch {
+            self.error = MomentsFailure.offline.message
             return false
         }
-        preparation = nil
-        MomentsUploader.shared.post(body, media: prepared.1, folderId: prepared.0)
+        saveChoices()
+        if let prepared {
+            preparation = nil
+            MomentsUploader.shared.upload(created, media: prepared.1, folderId: prepared.0)
+        } else {
+            MomentsUploader.shared.wentLive(created)
+        }
         return true
+    }
+
+    // MARK: - The last choices
+
+    /// The sheet opens with the last "How long" and "Who sees it" (kept on the
+    /// phone, per account). "Show the area instead" always starts off.
+    private func restoreChoices() {
+        guard let account = Self.account else { return }
+        let savedHours = defaults.integer(forKey: Self.hoursKey(account))
+        if [1, 6, 24, 48].contains(savedHours) { hours = savedHours }
+        if let saved = defaults.string(forKey: Self.audienceKey(account)).flatMap(MomentAudience.init(rawValue:)) { audience = saved }
+    }
+
+    private func saveChoices() {
+        guard let account = Self.account else { return }
+        defaults.set(hours, forKey: Self.hoursKey(account))
+        defaults.set(audience.rawValue, forKey: Self.audienceKey(account))
+    }
+
+    private static var account: String? {
+        guard case let .signedIn(user) = AuthManager.shared.state else { return nil }
+        return user.id
+    }
+
+    private static func hoursKey(_ account: String) -> String {
+        "pantopus.moments.lastHours.\(account)"
+    }
+
+    private static func audienceKey(_ account: String) -> String {
+        "pantopus.moments.lastAudience.\(account)"
     }
 
     /// The pin: where a library item was taken, else a fix at most four and a half minutes old.

@@ -39,12 +39,10 @@ final class MomentsVideoController {
         let item = AVPlayerItem(url: url)
         statusObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             guard item.status == .readyToPlay else { return }
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    guard let self, !self.isReady else { return }
-                    self.isReady = true
-                    self.onReady?()
-                }
+            Task { @MainActor [weak self] in
+                guard let self, !isReady else { return }
+                isReady = true
+                onReady?()
             }
         }
         endObserver = NotificationCenter.default.addObserver(
@@ -89,7 +87,8 @@ struct MomentsVideoSurface: UIViewRepresentable {
         let view = PlayerView()
         view.playerLayer.player = player
         view.playerLayer.videoGravity = .resizeAspectFill
-        view.backgroundColor = .black
+        // Clear until the first frame, so the poster under it shows instead of black.
+        view.backgroundColor = .clear
         return view
     }
 

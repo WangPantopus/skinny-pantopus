@@ -48,7 +48,9 @@ struct MomentsProgressBars: View {
 struct MomentsViewerHeader: View {
     let author: MomentAuthorDTO?
     let isMine: Bool
-    let meta: String
+    /// "Vancouver Community Library" and "2h ago · 22h left": the place is cut short before the times are.
+    let place: String
+    let times: String
     let isVideo: Bool
     let muted: Bool
     /// While typing a reply only close shows (board V4).
@@ -77,11 +79,18 @@ struct MomentsViewerHeader: View {
                             .accessibilityHidden(false)
                     }
                 }
-                Text(meta)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.white.opacity(0.88))
-                    .lineLimit(1)
-                    .accessibilityIdentifier("moments.viewer.meta")
+                HStack(spacing: 0) {
+                    Text(place)
+                        .lineLimit(1)
+                    Text(place.isEmpty || times.isEmpty ? times : " · \(times)")
+                        .lineLimit(1)
+                        .fixedSize()
+                        .layoutPriority(1)
+                }
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.white.opacity(0.88))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("moments.viewer.meta")
             }
             .foregroundStyle(.white)
             .shadow(color: .black.opacity(0.4), radius: 1, x: 0, y: 1)
@@ -308,5 +317,37 @@ struct MomentsToastView: View {
         .background(Capsule().fill(Color.black.opacity(0.72)))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("moments.viewer.toast")
+    }
+}
+
+/// The quick reaction just chosen, popping over the Moment: it grows, settles, drifts up and fades in about half a second.
+struct MomentsReactionPop: View {
+    let emoji: String
+    @State private var scale: CGFloat = 0.6
+    @State private var lift: CGFloat = 0
+    @State private var opacity: Double = 1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Text(emoji)
+            .font(.system(size: 96))
+            .scaleEffect(scale)
+            .offset(y: lift)
+            .opacity(opacity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onAppear {
+                guard !reduceMotion else {
+                    scale = 1
+                    withAnimation(.easeOut(duration: 0.3).delay(0.4)) { opacity = 0 }
+                    return
+                }
+                withAnimation(.spring(response: 0.22, dampingFraction: 0.5)) { scale = 1.2 }
+                withAnimation(.easeOut(duration: 0.18).delay(0.2)) { scale = 1 }
+                withAnimation(.easeIn(duration: 0.3).delay(0.3)) {
+                    lift = -70
+                    opacity = 0
+                }
+            }
     }
 }

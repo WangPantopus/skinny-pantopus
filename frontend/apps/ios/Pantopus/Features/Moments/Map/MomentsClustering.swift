@@ -32,6 +32,14 @@ struct MomentsCluster: Hashable, Identifiable {
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
+
+    /// The place most of its rings name ("Esther Short Park").
+    var placeName: String? {
+        let labels = rings.map(\.placeLabel).filter { !$0.isEmpty }
+        return labels.max { first, second in
+            labels.filter { $0 == first }.count < labels.filter { $0 == second }.count
+        }
+    }
 }
 
 /// One thing on the Moments map.
@@ -152,6 +160,7 @@ enum MomentsClustering {
         let lats = group.map(\.latitude)
         let lons = group.map(\.longitude)
         let ordered = group.sorted { first, second in
+            if first.mine != second.mine { return first.mine }
             if first.isNew != second.isNew { return first.isNew }
             return (first.newestAt ?? "") > (second.newestAt ?? "")
         }

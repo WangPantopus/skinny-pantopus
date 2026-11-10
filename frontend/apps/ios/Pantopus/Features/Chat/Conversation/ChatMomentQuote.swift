@@ -13,6 +13,7 @@ import SwiftUI
 
 /// The quote's words and picture.
 public struct ChatMomentQuote: Sendable, Hashable {
+    public let momentId: String
     public let label: String
     public let thumbURL: URL?
     public let kind: String
@@ -20,6 +21,7 @@ public struct ChatMomentQuote: Sendable, Hashable {
 
     init?(_ moment: ChatMomentRefDTO?, side: ChatMessageSide) {
         guard let moment else { return nil }
+        momentId = moment.id
         label = moment.ended ? "Moment ended" : (side == .outgoing ? "Replied to their Moment" : "Replied to your Moment")
         thumbURL = moment.thumbnail
         kind = moment.kind
@@ -31,19 +33,62 @@ public struct ChatMomentQuote: Sendable, Hashable {
 struct ChatMomentQuoteView: View {
     let quote: ChatMomentQuote
     let side: ChatMessageSide
+    @State private var watching: MomentsWatchRequest?
+    @State private var opening = false
+    @State private var note: String?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: side == .outgoing ? .trailing : .leading, spacing: Spacing.s1) {
-            Text(quote.label)
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(quote.ended ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
-            if !quote.ended {
-                ChatMomentThumbnail(url: quote.thumbURL, kind: quote.kind, width: 54, height: 72)
+        Button(action: open) {
+            VStack(alignment: side == .outgoing ? .trailing : .leading, spacing: Spacing.s1) {
+                Text(quote.label)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(quote.ended ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
+                if !quote.ended {
+                    ChatMomentThumbnail(url: quote.thumbURL, kind: quote.kind, width: 54, height: 72)
+                }
             }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // "Moment ended" opens nothing.
+        .disabled(quote.ended || opening)
+        .fullScreenCover(item: $watching) { request in
+            MomentsViewer(
+                request: request,
+                systemScheme: colorScheme,
+                onWatched: { _ in },
+                onHideAuthor: { _ in },
+                onShowAuthor: { _ in },
+                onClose: { watching = nil }
+            )
+        }
+        .alert(note ?? "", isPresented: Binding(get: { note != nil }, set: { if !$0 { note = nil } })) {
+            Button("OK", role: .cancel) {}
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(quote.label)
+        .accessibilityHint(quote.ended ? "" : "Opens the Moment")
+        .accessibilityAddTraits(quote.ended ? [] : .isButton)
         .accessibilityIdentifier("chat.momentQuote")
+    }
+
+    /// Opens the viewer on that one Moment (on your own, with Seen by).
+    private func open() {
+        guard !quote.ended, !opening else { return }
+        opening = true
+        Task {
+            defer { opening = false }
+            do {
+                let moment = try await MomentsAPI.send(MomentsEndpoints.moment(id: quote.momentId), as: MomentEnvelope.self).moment
+                var me: String?
+                if case let .signedIn(user) = AuthManager.shared.state { me = user.id }
+                let ring = MomentRingDTO(moment: moment, mine: moment.author.id == me)
+                watching = MomentsWatchRequest(rings: [ring], start: 0, newOnly: false)
+            } catch {
+                note = (error as? MomentsFailure)?.message ?? "This Moment isn't available."
+            }
+        }
     }
 }
 
@@ -65,6 +110,9 @@ struct ChatMomentThumbnail: View {
                     CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
                         if case let .success(image) = phase {
                             image.resizable().scaledToFill()
+                        } else {
+                            // Something to hold the loader: with nothing drawn here it never starts.
+                            Color.clear
                         }
                     }
                 }

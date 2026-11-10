@@ -28,7 +28,7 @@ struct MomentsTextCardEditor: View {
                 TextField(
                     "",
                     text: $model.text,
-                    prompt: Text("What's happening?").foregroundColor(Color.white.opacity(0.6)),
+                    prompt: Text("What's happening here?").foregroundColor(Color.white.opacity(0.6)),
                     axis: .vertical
                 )
                 .font(.system(size: 29, weight: .semibold))

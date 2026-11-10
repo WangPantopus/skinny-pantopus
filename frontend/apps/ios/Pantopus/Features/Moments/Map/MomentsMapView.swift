@@ -71,7 +71,25 @@ struct MomentsMapView: View {
             }
         }
         .onChange(of: viewModel.recenterRequest) { _, _ in recenter() }
-        .onChange(of: uploads.finished) { _, _ in Task { await viewModel.load() } }
+        .onChange(of: uploads.finished) { _, _ in
+            Task {
+                // The real ring first, then the posting ring makes way: nothing jumps.
+                await viewModel.load()
+                uploads.clearLive()
+            }
+        }
+        .overlay(alignment: .top) {
+            if let note = uploads.liveNote {
+                MomentsLiveNote(text: note)
+                    .padding(.top, 64)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(for: .seconds(4))
+                        uploads.liveNote = nil
+                    }
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: uploads.liveNote)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await viewModel.load() } }
         }
@@ -141,12 +159,7 @@ struct MomentsMapView: View {
     }
 
     private func open(_ ring: MomentRingDTO) {
-        let strip = viewModel.stripRings
-        if let index = strip.firstIndex(where: { $0.id == ring.id }) {
-            actions.watch(strip, index, false)
-        } else {
-            actions.watch([ring], 0, false)
-        }
+        actions.watch(viewModel.watchQueue(from: ring), 0, false)
     }
 
     /// Board M2: zoom into a crowded spot; the strip shows only it. More on one point than fit round it: the strip lists them.
@@ -224,17 +237,19 @@ private struct MomentsPostingPin: View {
     var body: some View {
         MomentPostingRing(progress: posting.progress, avatar: me)
             .overlay(alignment: .bottom) {
-                Text(label)
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(isFailed ? Theme.Color.error : Theme.Color.primaryTint)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, Spacing.s3)
-                    .frame(height: 26)
-                    .background(Capsule().fill(.regularMaterial))
-                    .shadow(color: .black.opacity(0.14), radius: 5, x: 0, y: 2)
-                    .offset(y: 31)
-                    .accessibilityIdentifier("moments.posting.label")
+                if let label {
+                    Text(label)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(isFailed ? Theme.Color.error : Theme.Color.primaryTint)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, Spacing.s3)
+                        .frame(height: 26)
+                        .background(Capsule().fill(.regularMaterial))
+                        .shadow(color: .black.opacity(0.14), radius: 5, x: 0, y: 2)
+                        .offset(y: 31)
+                        .accessibilityIdentifier("moments.posting.label")
+                }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spoken)
@@ -246,11 +261,13 @@ private struct MomentsPostingPin: View {
         return false
     }
 
-    private var label: String {
+    /// Nothing under the ring once it's live: the real ring is about to take its place.
+    private var label: String? {
         switch posting.phase {
         case .uploading: "Posting · \(Int((posting.progress * 100).rounded()))%"
         case .checking: "Posting · 100%"
         case .failed: "Didn't post"
+        case .live: nil
         }
     }
 
@@ -259,6 +276,7 @@ private struct MomentsPostingPin: View {
         case .uploading: "Your Moment is posting, \(Int((posting.progress * 100).rounded())) percent"
         case .checking: "Your Moment is almost posted"
         case let .failed(message): "Your Moment didn't post. \(message)"
+        case .live: "Your Moment is live"
         }
     }
 }
@@ -276,9 +294,33 @@ enum MomentsSpeech {
 
     /// "Esther Short Park: 5 people, 3 new".
     static func label(for cluster: MomentsCluster) -> String {
-        let place = cluster.rings.first?.placeLabel ?? ""
-        let new = cluster.rings.filter(\.isNew).count
-        let people = "\(cluster.rings.count) people" + (new > 0 ? ", \(new) new" : "")
+        let place = cluster.placeName ?? ""
+        let new = MomentsMapViewModel.newPeople(in: cluster.rings)
+        let count = MomentsMapViewModel.people(in: cluster.rings)
+        let people = "\(count) \(count == 1 ? "person" : "people")" + (new > 0 ? ", \(new) new" : "")
         return place.isEmpty ? people : "\(place): \(people)"
+    }
+}
+
+/// "Your Moment is live. It shows for 24 hours.", over the map for a few seconds.
+private struct MomentsLiveNote: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: Spacing.s2) {
+            Icon(.check, size: 16, strokeWidth: 2.75, color: Theme.Color.success)
+            Text(text)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, Spacing.s4)
+        .padding(.vertical, 10)
+        .momentsGlass(Capsule())
+        .padding(.horizontal, Spacing.s6)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.updatesFrequently)
+        .accessibilityIdentifier("moments.liveNote")
     }
 }

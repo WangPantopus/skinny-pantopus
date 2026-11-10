@@ -27,6 +27,7 @@ struct MomentsViewer: View {
     @State private var holdTask: Task<Void, Never>?
     /// The Home indicator's inset, measured by the stage (which ignores the keyboard).
     @State private var homeInset: CGFloat = 34
+    @Environment(\.scenePhase) private var scenePhase
     private let onHideAuthor: @MainActor (String) -> Void
     private let onShowAuthor: @MainActor (String) -> Void
     /// The phone's light or dark: Seen by follows it over the dark viewer.
@@ -83,19 +84,24 @@ struct MomentsViewer: View {
         }
         .onChange(of: showsReactions) { _, open in model.replying = open || replyFocused }
         .onChange(of: covered) { _, isCovered in model.covered = isCovered }
+        // Another app, a call or the notification shade: it waits, and picks up where it was.
+        .onChange(of: scenePhase, initial: true) { _, phase in model.away = phase != .active }
         .confirmationDialog("Moment options", isPresented: $showsMenu, titleVisibility: .hidden) { menu }
-        .confirmationDialog("Why are you reporting this Moment?", isPresented: $showsReport, titleVisibility: .visible) {
+        .confirmationDialog("Report this Moment?", isPresented: $showsReport, titleVisibility: .visible) {
             ForEach(Self.reportReasons, id: \.token) { reason in
                 Button(reason.label) { Task { await model.report(reason: reason.token) } }
+                    .accessibilityIdentifier("moments.report.\(reason.token)")
             }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Reports go to the Pantopus team. The person isn't told who reported.")
         }
         .alert("Block \(model.ring?.author.name ?? "")?", isPresented: $showsBlock) {
             Button("Block", role: .destructive) { Task { await model.blockAuthor(onHide: onHideAuthor) } }
                 .accessibilityIdentifier("moments.blockConfirm")
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("You won't see each other's Moments or posts. They aren't told.")
+            Text("You won't see each other's Moments or posts, and you can't message each other. They aren't told.")
         }
         .sheet(isPresented: $showsSeenBy) {
             MomentsSeenBySheet(model: model)
@@ -135,6 +141,11 @@ struct MomentsViewer: View {
                         MomentsCaptionPill(caption: caption).padding(.bottom, 63)
                     }
                 }
+                .overlay {
+                    if let pop = model.reactionPop {
+                        MomentsReactionPop(emoji: pop.emoji).id(pop.id)
+                    }
+                }
                 .contentShape(Rectangle())
                 .gesture(pressGesture(width: geo.size.width))
                 // VoiceOver can't tap a side: the same moves as actions.
@@ -148,7 +159,8 @@ struct MomentsViewer: View {
                 MomentsViewerHeader(
                     author: model.ring?.author,
                     isMine: model.isMine,
-                    meta: model.meta,
+                    place: model.metaPlace,
+                    times: model.metaTimes,
                     isVideo: model.moment?.kind == .video,
                     muted: model.muted,
                     compact: isReplying,
@@ -174,6 +186,9 @@ struct MomentsViewer: View {
             ZStack {
                 if let moment = model.moment, moment.kind == .text {
                     MomentsTextCard(text: moment.text ?? "", background: moment.background)
+                } else if let poster = model.poster {
+                    // A video getting ready: its first picture, not a spinner on black.
+                    Image(uiImage: poster).resizable().scaledToFill()
                 } else {
                     Color(white: 0.08)
                     ProgressView().tint(.white)
@@ -209,9 +224,16 @@ struct MomentsViewer: View {
                         .accessibilityIdentifier("moments.viewer.photo")
                 }
             case .video:
-                MomentsVideoSurface(player: model.video.player)
-                    .accessibilityLabel("\(moment.author.shortName)'s video")
-                    .accessibilityIdentifier("moments.viewer.video")
+                ZStack {
+                    Color.black
+                    if let poster = model.poster {
+                        Image(uiImage: poster).resizable().scaledToFill()
+                    }
+                    MomentsVideoSurface(player: model.video.player)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(moment.author.shortName)'s video")
+                .accessibilityIdentifier("moments.viewer.video")
             case .text:
                 MomentsTextCard(text: moment.text ?? "", background: moment.background)
                     .accessibilityElement(children: .combine)
@@ -234,6 +256,8 @@ struct MomentsViewer: View {
                     Task { await model.react(emoji) }
                     closeReply()
                 }
+                // A tap on a reaction while typing must reach it: the keyboard stays up until it has.
+                .keepsKeyboardOnTap()
                 Spacer(minLength: Spacing.s6)
                 if replyFocused, let name = model.ring?.author.shortName {
                     Text("\(name) gets your reply in Messages.")
@@ -251,6 +275,8 @@ struct MomentsViewer: View {
                     .transition(.opacity)
             }
             bottomBar
+                // Send is a composer's button: tapping it sends, it doesn't just close the keyboard.
+                .keepsKeyboardOnTap()
                 .padding(.horizontal, Spacing.s3)
                 // 14 pt off the screen's bottom, into the Home indicator's area as the boards draw it;
                 // over the keyboard while typing.

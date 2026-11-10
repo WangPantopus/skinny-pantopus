@@ -144,7 +144,7 @@ enum MomentsUploadBody {
             try part(handle, boundary: boundary, field: "poster", file: folder.appendingPathComponent(poster), mimeType: "image/jpeg")
         }
         for frame in media.frames {
-            try part(handle, boundary: boundary, field: "frames[]", file: folder.appendingPathComponent(frame), mimeType: "image/jpeg")
+            try part(handle, boundary: boundary, field: "frames", file: folder.appendingPathComponent(frame), mimeType: "image/jpeg")
         }
         try handle.write(contentsOf: Data("--\(boundary)--\r\n".utf8))
         return url

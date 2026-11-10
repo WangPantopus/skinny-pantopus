@@ -17,27 +17,16 @@ import UIKit
 @Observable
 @MainActor
 final class MomentsViewerModel {
-    enum Load: Equatable {
-        case loading
-        case ready
-        /// Ended or no longer visible: a line, then the next one.
-        case gone(String)
-        case failed(String)
-    }
-
-    /// A sentence over the viewer for a moment, with one optional action ("Undo").
-    struct Toast: Equatable {
-        let id = UUID()
-        let text: String
-        var action: String?
-    }
-
     private(set) var rings: [MomentRingDTO]
     private(set) var ringIndex: Int
     private(set) var momentIndex: Int
     private(set) var moment: MomentDTO?
     private(set) var load: Load = .loading
     private(set) var image: UIImage?
+    /// A video's first picture, under the player until its first frame.
+    private(set) var poster: UIImage?
+    /// The quick reaction just chosen, for the pop over the Moment.
+    private(set) var reactionPop: ReactionPop?
     /// How far the Moment showing has played, 0 to 1.
     private(set) var progress: Double = 0
     private(set) var myReaction: String?
@@ -63,6 +52,11 @@ final class MomentsViewerModel {
         didSet { applyPause() }
     }
 
+    /// The app left the screen (another app, a call, the notification shade): it picks up where it was.
+    var away = false {
+        didSet { applyPause() }
+    }
+
     let video = MomentsVideoController()
     let cache = MomentsViewerCache()
     let newOnly: Bool
@@ -82,34 +76,6 @@ final class MomentsViewerModel {
         momentIndex = startIndex(in: ringIndex)
         video.onProgress = { [weak self] fraction in self?.progress = fraction }
         video.onEnd = { [weak self] in self?.next() }
-    }
-
-    // MARK: - What shows
-
-    var ring: MomentRingDTO? {
-        rings.indices.contains(ringIndex) ? rings[ringIndex] : nil
-    }
-
-    var brief: MomentBriefDTO? {
-        guard let ring, ring.moments.indices.contains(momentIndex) else { return nil }
-        return ring.moments[momentIndex]
-    }
-
-    var isMine: Bool {
-        ring?.mine ?? false
-    }
-
-    var isPaused: Bool {
-        holding || replying || covered || load != .ready
-    }
-
-    /// "Vancouver Community Library · 2h ago · 22h left".
-    var meta: String {
-        guard let ring else { return "" }
-        let created = moment?.createdAtDate ?? brief.flatMap { MomentTime.parse($0.createdAt) }
-        let ends = moment?.expiresAtDate ?? brief?.expiresAtDate
-        let place = moment?.placeLabel ?? ring.placeLabel
-        return [place, MomentTime.ago(created), MomentTime.left(ends)].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     // MARK: - Playing
@@ -180,7 +146,17 @@ final class MomentsViewerModel {
         video.stop()
         progress = 0
         image = nil
+        poster = nil
+        reactionPop = nil
         guard let brief else { return close() }
+        // A Moment never plays after its end time, whatever was read earlier.
+        if let end = brief.expiresAtDate, end <= Date() {
+            cache.forget(brief.id)
+            moment = nil
+            viewers = nil
+            fail(brief.id, .ended)
+            return
+        }
         moment = cache.cached(brief.id)
         myReaction = moment?.myReaction
         viewers = nil
@@ -216,6 +192,12 @@ final class MomentsViewerModel {
             ready(detail.id)
         case .video:
             guard let url = detail.media else { throw MomentsFailure.notFound }
+            // The poster shows at once; the player draws over it from its first frame.
+            Task { [weak self] in
+                let picture = await self?.cache.poster(for: detail)
+                guard let self, brief?.id == detail.id else { return }
+                poster = picture
+            }
             if !muted { try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback) }
             video.isMuted = muted
             video.onReady = { [weak self] in
@@ -278,10 +260,10 @@ final class MomentsViewerModel {
         }
     }
 
-    /// About six seconds; a long text card a little longer (up to ten).
+    /// A photo shows for six seconds; a text card for 3 s plus 45 ms a character, between 6 and 12 (the same on Android).
     private func duration(of moment: MomentDTO) -> Double {
         guard moment.kind == .text, let text = moment.text else { return Self.photoSeconds }
-        return min(10, max(Self.photoSeconds, Double(text.count) / 18))
+        return min(12, max(Self.photoSeconds, 3 + 0.045 * Double(text.count)))
     }
 
     // MARK: - Counting and watching
@@ -338,6 +320,24 @@ final class MomentsViewerModel {
         toastAction?()
         toastAction = nil
         toast = nil
+        // Undo after the last ring was muted: nothing is left to play here; the map shows them again.
+        if rings.isEmpty { close() }
+    }
+
+    /// Nothing is left to play (the last person was muted or blocked): the
+    /// note, with its Undo, stays up for a few seconds before the viewer closes.
+    private func lingerThenClose() {
+        clock?.cancel()
+        loading?.cancel()
+        video.stop()
+        moment = nil
+        image = nil
+        poster = nil
+        load = .gone("")
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            self?.close()
+        }
     }
 }
 
@@ -350,6 +350,10 @@ extension MomentsViewerModel {
         let choice: String? = myReaction.flatMap(PostReactionEmoji.init(wire:)) == emoji ? nil : emoji.rawValue
         let before = myReaction
         myReaction = choice
+        if let choice {
+            reactionPop = ReactionPop(emoji: choice)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
         do {
             let reply: MomentReactionResponse = try await MomentsAPI.send(MomentsEndpoints.react(id: moment.id, emoji: choice))
             myReaction = reply.myReaction
@@ -378,7 +382,7 @@ extension MomentsViewerModel {
         guard let moment else { return }
         do {
             try await MomentsAPI.send(MomentsEndpoints.report(id: moment.id, reason: reason))
-            show(Toast(text: "Thanks for telling us. We'll take a look."))
+            show(Toast(text: "Thanks. The Pantopus team will take a look."))
         } catch {
             show(Toast(text: (error as? MomentsFailure)?.message ?? "Couldn't send the report. Try again."))
         }
@@ -420,7 +424,7 @@ extension MomentsViewerModel {
         let currentRingId = ring?.id
         let before = rings.prefix(ringIndex).filter { $0.author.id != id }.count
         rings.removeAll { $0.author.id == id }
-        guard !rings.isEmpty else { return close() }
+        guard !rings.isEmpty else { return lingerThenClose() }
         ringIndex = min(before, rings.count - 1)
         if ring?.id != currentRingId {
             momentIndex = startIndex(in: ringIndex)
@@ -443,6 +447,7 @@ extension MomentsViewerModel {
             return false
         } catch {}
         cache.forget(moment.id)
+        show(Toast(text: "Moment deleted"))
         rings[ringIndex].moments.removeAll { $0.id == moment.id }
         if rings[ringIndex].moments.isEmpty {
             rings.remove(at: ringIndex)

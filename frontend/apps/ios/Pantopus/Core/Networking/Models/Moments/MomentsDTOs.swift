@@ -117,6 +117,14 @@ public struct MomentBriefDTO: Codable, Sendable, Hashable, Identifiable {
     public var expiresAtDate: Date? {
         MomentTime.parse(expiresAt)
     }
+
+    public init(id: String, kind: MomentKind, createdAt: String, expiresAt: String, seen: Bool) {
+        self.id = id
+        self.kind = kind
+        self.createdAt = createdAt
+        self.expiresAt = expiresAt
+        self.seen = seen
+    }
 }
 
 /// One person's Moments at one spot: the ring on the map.
@@ -149,9 +157,34 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
         mine = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
     }
 
+    /// One Moment as a ring of its own: opened from a chat quote, with no map behind it.
+    public init(moment: MomentDTO, mine: Bool) {
+        id = "m_\(moment.id)"
+        author = moment.author
+        latitude = moment.latitude
+        longitude = moment.longitude
+        placeLabel = moment.placeLabel
+        let brief = MomentBriefDTO(
+            id: moment.id,
+            kind: moment.kind,
+            createdAt: moment.createdAt,
+            expiresAt: moment.expiresAt,
+            seen: moment.seen
+        )
+        moments = [brief]
+        newestAt = moment.createdAt
+        self.mine = mine
+    }
+
     /// Moments not watched yet (the server's `unseen_count`, kept current as you watch).
     public var unseenCount: Int {
         moments.filter { !$0.seen }.count
+    }
+
+    /// How the ring is drawn, per Moment: your own ring is never gray (the
+    /// server sends your own Moments as seen, since your views aren't counted).
+    public var ringSeen: [Bool] {
+        mine ? moments.map { _ in false } : moments.map(\.seen)
     }
 
     public var isNew: Bool {
@@ -418,11 +451,11 @@ enum MomentTime {
         return formatter.string(from: date)
     }
 
-    /// "2h ago", "35m ago", "now".
+    /// "2h ago", "35m ago", "just now".
     static func ago(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "" }
         let seconds = max(0, now.timeIntervalSince(date))
-        if seconds < 60 { return "now" }
+        if seconds < 60 { return "just now" }
         if seconds < 3600 { return "\(Int(seconds / 60))m ago" }
         if seconds < 86400 { return "\(Int(seconds / 3600))h ago" }
         return "\(Int(seconds / 86400))d ago"

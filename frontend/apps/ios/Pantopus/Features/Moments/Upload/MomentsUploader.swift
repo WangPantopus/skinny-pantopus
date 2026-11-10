@@ -2,12 +2,14 @@
 //  MomentsUploader.swift
 //  Pantopus
 //
-//  Posting a Moment keeps going after the Post sheet closes (board P5): the
-//  Moment is made, its file goes up with retries on a weak connection, and
-//  your ring on the map shows the progress ("Posting · 65%") until the
-//  Moment is live. Each one waits in its own outbox folder, so an upload the
-//  app was closed in the middle of picks up at the next launch (the server
-//  takes the same file again as a no-op). The files go once it's done.
+//  Posting a Moment keeps going after the Post sheet closes (board P5). The
+//  Moment itself is made while the sheet is still up (so "20 today" or "no
+//  connection" shows where the person can act); then its file goes up here
+//  with retries on a weak connection, and your ring on the map shows the
+//  progress ("Posting · 65%") until the Moment is live. Each one waits in its
+//  own outbox folder, so an upload the app was closed in the middle of picks
+//  up at the next launch (the server takes the same file again as a no-op).
+//  The files go once it's done.
 //
 
 import Foundation
@@ -21,6 +23,8 @@ struct MomentPosting: Identifiable, Equatable {
         case uploading
         /// The file is in; the picture check is running.
         case checking
+        /// Live: the ring stays where it is until the map has read the real one.
+        case live
         /// Stopped; Retry tries again.
         case failed(String)
     }
@@ -32,6 +36,8 @@ struct MomentPosting: Identifiable, Equatable {
     var longitude: Double
     var progress: Double
     var phase: Phase
+    /// How long it shows for, for "Your Moment is live. It shows for 24 hours."
+    var hours = 24
 }
 
 /// What a waiting upload needs after a relaunch.
@@ -42,6 +48,7 @@ private struct MomentOutboxManifest: Codable {
     let latitude: Double
     let longitude: Double
     let media: MomentPreparedMedia
+    var hours: Int?
 }
 
 @Observable
@@ -54,9 +61,11 @@ final class MomentsUploader {
     private(set) var finished = 0
     /// A sentence for the map after a Moment couldn't post or waits for review; the map clears it once shown.
     var notice: String?
+    /// "Your Moment is live. It shows for 24 hours.": the map shows it for a few seconds, then clears it.
+    var liveNote: String?
 
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
-    @ObservationIgnored private var drafts: [String: (body: MomentCreateBody, media: MomentPreparedMedia?)] = [:]
+    @ObservationIgnored private var media: [String: MomentPreparedMedia] = [:]
     @ObservationIgnored private var resumed = false
     private let logger = Logger(label: "app.pantopus.ios.MomentsUploader")
     /// Uploads get longer than the shared uploader's two minutes: a 50 MB video on a weak connection.
@@ -83,23 +92,34 @@ final class MomentsUploader {
         try? FileManager.default.removeItem(at: folder)
     }
 
-    /// Starts posting: `media` (made in `folder`) for a photo or video, nil for a text card.
-    func post(_ body: MomentCreateBody, media: MomentPreparedMedia?, folderId: String) {
+    /// A photo or video Moment was made (the Post sheet did that): its file, made in `folderId`, goes up from here.
+    func upload(_ moment: MomentDTO, media prepared: MomentPreparedMedia, folderId: String) {
         let posting = MomentPosting(
             id: folderId,
-            kind: body.kind,
-            momentId: nil,
-            latitude: body.location.latitude,
-            longitude: body.location.longitude,
+            kind: moment.kind,
+            momentId: moment.id,
+            // With "Show the area instead" the pin is the area's point.
+            latitude: moment.latitude,
+            longitude: moment.longitude,
             progress: 0,
-            phase: .uploading
+            phase: .uploading,
+            hours: moment.hours
         )
         postings.insert(posting, at: 0)
-        // The outbox folder's id names this Post tap to the server, so a retry returns the same Moment.
-        var body = body
-        body.clientRequestId = folderId.lowercased()
-        drafts[folderId] = (body, media)
+        media[folderId] = prepared
+        save(id: folderId, momentId: moment.id, media: prepared)
         run(folderId)
+    }
+
+    /// A text card is live the moment it's made: the map says so and reads its rings again.
+    func wentLive(_ moment: MomentDTO) {
+        announceLive(hours: moment.hours)
+        finished += 1
+    }
+
+    /// The map has read the rings again: the posting rings that went live make way for the real ones.
+    func clearLive() {
+        postings.removeAll { $0.phase == .live }
     }
 
     /// Retry after a failure.
@@ -125,7 +145,7 @@ final class MomentsUploader {
         }
     }
 
-    /// Makes the Moment (once), sends its file with retries, then waits for it to go live.
+    /// Sends the file with retries, then waits for the Moment to go live.
     private func carry(_ id: String) async {
         let background = UIApplication.shared.beginBackgroundTask(withName: "Moment upload")
         defer { UIApplication.shared.endBackgroundTask(background) }
@@ -151,30 +171,12 @@ final class MomentsUploader {
     }
 
     private func step(_ id: String) async throws {
-        guard let index = postings.firstIndex(where: { $0.id == id }) else { return }
-        var momentId = postings[index].momentId
-        if momentId == nil, let draft = drafts[id] {
-            let created: MomentEnvelope = try await MomentsAPI.send(MomentsEndpoints.create(draft.body))
-            momentId = created.moment.id
-            update(id) {
-                $0.momentId = created.moment.id
-                // With "Show the area instead" the pin is the area's point.
-                $0.latitude = created.moment.latitude
-                $0.longitude = created.moment.longitude
-            }
-            if let media = draft.media { save(id: id, momentId: created.moment.id, media: media) }
-            if created.moment.state == .live || draft.media == nil {
-                await settle(id, state: created.moment.state)
-                return
-            }
-        }
-        guard let momentId else { return }
-        let media = drafts[id]?.media ?? manifest(id)?.media
-        guard let media else {
+        guard let posting = postings.first(where: { $0.id == id }), let momentId = posting.momentId else { return }
+        guard let prepared = media[id] ?? manifest(id)?.media else {
             finish(id)
             return
         }
-        let uploaded = try await upload(id: id, momentId: momentId, media: media)
+        let uploaded = try await upload(id: id, momentId: momentId, media: prepared)
         await settle(id, state: uploaded.state, momentId: momentId)
     }
 
@@ -202,11 +204,11 @@ final class MomentsUploader {
         return try JSONDecoder().decode(MomentEnvelope.self, from: data).moment
     }
 
-    /// Live: the ring shows on the next read. Checking: waits for the picture
+    /// Live: the map says so and reads the ring. Checking: waits for the picture
     /// check (a minute at most). Held: says so.
-    private func settle(_ id: String, state: MomentState, momentId: String? = nil) async {
+    private func settle(_ id: String, state: MomentState, momentId: String) async {
         var state = state
-        if state == .checking, let momentId {
+        if state == .checking {
             update(id) { $0.phase = .checking }
             for _ in 0..<30 where state == .checking && !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
@@ -215,19 +217,37 @@ final class MomentsUploader {
                 }
             }
         }
+        let hours = postings.first { $0.id == id }?.hours ?? 24
         if state == .held {
             notice = "Your Moment is waiting for a quick review before it shows."
+            finish(id)
+        } else {
+            // The posting ring stays put until the map has the real ring (`clearLive`), so nothing jumps.
+            update(id) {
+                $0.phase = .live
+                $0.progress = 1
+            }
+            removeFiles(id)
+            if state == .live { announceLive(hours: hours) }
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(6))
+                self?.postings.removeAll { $0.id == id && $0.phase == .live }
+            }
         }
-        finish(id)
         finished += 1
+    }
+
+    private func announceLive(hours: Int) {
+        liveNote = "Your Moment is live. It shows for \(hours == 1 ? "1 hour" : "\(hours) hours")."
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     private func fail(_ id: String, _ failure: MomentsFailure) {
         logger.warning("Moment upload stopped: \(failure.message)")
         switch failure {
-        case .dailyLimit, .locationTooOld, .captureTooOld, .mediaTooLong, .mediaRejected, .unavailable, .ageNotEligible:
+        case .mediaTooLong, .mediaRejected, .unavailable, .ended, .notFound:
             // Trying again won't help: say why and let it go.
-            notice = failure.message
+            notice = failure == .ended || failure == .notFound ? "Your Moment ended before its file went up." : failure.message
             discard(id)
         default:
             update(id) { $0.phase = .failed(failure.message) }
@@ -236,7 +256,12 @@ final class MomentsUploader {
 
     private func finish(_ id: String) {
         postings.removeAll { $0.id == id }
-        drafts.removeValue(forKey: id)
+        removeFiles(id)
+    }
+
+    /// The upload's files and bookkeeping go; the posting ring is a separate matter.
+    private func removeFiles(_ id: String) {
+        media.removeValue(forKey: id)
         tasks.removeValue(forKey: id)
         if let folder = try? Self.outboxRoot().appendingPathComponent(id, isDirectory: true) {
             try? FileManager.default.removeItem(at: folder)
@@ -270,7 +295,8 @@ final class MomentsUploader {
                 latitude: saved.latitude,
                 longitude: saved.longitude,
                 progress: 0,
-                phase: .uploading
+                phase: .uploading,
+                hours: saved.hours ?? 24
             ))
             run(id)
         }
@@ -281,7 +307,13 @@ final class MomentsUploader {
               let posting = postings.first(where: { $0.id == id }),
               let folder = try? Self.outboxRoot().appendingPathComponent(id, isDirectory: true) else { return }
         let manifest = MomentOutboxManifest(
-            id: id, account: user.id, momentId: momentId, latitude: posting.latitude, longitude: posting.longitude, media: media
+            id: id,
+            account: user.id,
+            momentId: momentId,
+            latitude: posting.latitude,
+            longitude: posting.longitude,
+            media: media,
+            hours: posting.hours
         )
         guard let data = try? JSONEncoder().encode(manifest) else { return }
         try? data.write(
@@ -302,8 +334,9 @@ final class MomentsUploader {
             task.cancel()
         }
         tasks = [:]
-        drafts = [:]
+        media = [:]
         postings = []
+        liveNote = nil
         resumed = false
         if let root = try? Self.outboxRoot() { try? FileManager.default.removeItem(at: root) }
     }

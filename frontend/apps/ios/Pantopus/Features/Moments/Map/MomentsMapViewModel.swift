@@ -84,7 +84,9 @@ final class MomentsMapViewModel {
     @ObservationIgnored private var namedAt: CLLocation?
     /// Moments watched here since the last read, and people muted or blocked: the map shows them so at once.
     @ObservationIgnored private var watched: Set<String> = []
-    @ObservationIgnored private var hiddenAuthors: Set<String> = []
+    /// Hidden at once, by when: a read begun after that already has the server's answer, so the id is dropped then
+    /// (an unmute in Settings shows them again at the next read).
+    @ObservationIgnored private var hiddenAuthors: [String: Date] = [:]
     private let api: APIClient
     private let store: ScreenStore
     private let location: any LocationProviding
@@ -171,17 +173,23 @@ final class MomentsMapViewModel {
             guard !Task.isCancelled else { return }
             await self?.load()
         }
-        nameArea(at: region.center)
+        // The camera sits a little south of what it shows (the strip covers the bottom): name the part in view.
+        nameArea(at: CLLocationCoordinate2D(
+            latitude: region.center.latitude + region.span.latitudeDelta * 0.16,
+            longitude: region.center.longitude
+        ))
         if let focus, !visibleRings.contains(where: { focus.ringIds.contains($0.id) }) { self.focus = nil }
     }
 
     /// Reads the rings in view now (pull, a Moment posted, back from watching).
     func load() async {
         guard let box = viewport ?? centerBox else { return }
+        let started = Date()
         do {
             let reply: MomentsMapResponse = try await MomentsAPI.send(box.endpoint, api: api)
             guard !Task.isCancelled else { return }
             now = Date()
+            hiddenAuthors = hiddenAuthors.filter { $0.value > started }
             // What the server says is seen now wins; what was watched since stays watched.
             watched = watched.filter { id in reply.rings.contains { ring in ring.moments.contains { $0.id == id && !$0.seen } } }
             rings = reply.rings
@@ -216,7 +224,7 @@ final class MomentsMapViewModel {
     /// Every ring read, with what was watched or hidden since, and only Moments still running.
     var currentRings: [MomentRingDTO] {
         rings.compactMap { ring in
-            guard !hiddenAuthors.contains(ring.author.id) else { return nil }
+            guard hiddenAuthors[ring.author.id] == nil else { return nil }
             var ring = ring
             ring.moments = ring.moments.compactMap { moment in
                 if let end = moment.expiresAtDate, end <= now { return nil }
@@ -242,14 +250,35 @@ final class MomentsMapViewModel {
         MomentsClustering.markers(currentRings, span: span, mapPoints: mapPoints)
     }
 
-    /// The strip: the spot zoomed into (M2), or every ring in view; new ones first, then nearest.
+    /// The strip: the spot zoomed into (M2), or every ring in view; you first, then new ones, then nearest.
     var stripRings: [MomentRingDTO] {
         let shown = focus.map { focus in currentRings.filter { focus.ringIds.contains($0.id) } } ?? visibleRings
         let origin = distanceOrigin
         return shown.sorted { first, second in
+            if first.mine != second.mine { return first.mine }
             if first.isNew != second.isNew { return first.isNew }
             return origin.distance(from: first.location) < origin.distance(from: second.location)
         }
+    }
+
+    /// What plays after a tapped ring: that ring, then the others shown, new
+    /// before watched, nearest to the tapped one first.
+    func watchQueue(from tapped: MomentRingDTO) -> [MomentRingDTO] {
+        let origin = tapped.location
+        let others = stripRings.filter { $0.id != tapped.id }.sorted { first, second in
+            if first.isNew != second.isNew { return first.isNew }
+            return origin.distance(from: first.location) < origin.distance(from: second.location)
+        }
+        return [tapped] + others
+    }
+
+    /// "8 new near you" counts people with something new, never yourself.
+    nonisolated static func newPeople(in rings: [MomentRingDTO]) -> Int {
+        Set(rings.filter { $0.isNew && !$0.mine }.map(\.author.id)).count
+    }
+
+    nonisolated static func people(in rings: [MomentRingDTO]) -> Int {
+        Set(rings.map(\.author.id)).count
     }
 
     /// "Nearest first" from you when the map shows where you are, else from the map's middle.
@@ -269,10 +298,7 @@ final class MomentsMapViewModel {
 
     /// Board M2: the strip shows only this spot, and the pill takes you back.
     func focus(on cluster: MomentsCluster) {
-        let labels = cluster.rings.map(\.placeLabel).filter { !$0.isEmpty }
-        let title = labels.max { first, second in
-            labels.filter { $0 == first }.count < labels.filter { $0 == second }.count
-        } ?? areaName ?? "This spot"
+        let title = cluster.placeName ?? areaName ?? "This spot"
         focus = MomentsFocus(title: title, ringIds: Set(cluster.rings.map(\.id)), previousCamera: lastCamera)
     }
 
@@ -294,12 +320,12 @@ final class MomentsMapViewModel {
 
     /// A person muted or blocked: their rings go at once.
     func hide(authorId: String) {
-        hiddenAuthors.insert(authorId)
+        hiddenAuthors[authorId] = Date()
         now = Date()
     }
 
     func unhide(authorId: String) {
-        hiddenAuthors.remove(authorId)
+        hiddenAuthors.removeValue(forKey: authorId)
         now = Date()
     }
 

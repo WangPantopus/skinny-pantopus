@@ -127,7 +127,7 @@ struct MomentRingPin: View {
                 .fill(MomentsPalette.pinSurface)
                 .frame(width: 63, height: 63)
                 .offset(x: 0.5, y: 0.5)
-            MomentRingStroke(seen: ring.moments.map(\.seen), lineWidth: 3.5)
+            MomentRingStroke(seen: ring.ringSeen, lineWidth: 3.5)
                 .frame(width: 62, height: 62)
                 .offset(x: 1, y: 1)
             MomentAvatar(author: ring.author, size: 50)
@@ -167,14 +167,14 @@ struct MomentStripFace: View {
         VStack(spacing: Spacing.s1) {
             ZStack {
                 Circle().fill(MomentsPalette.pinSurface).frame(width: 55, height: 55)
-                MomentRingStroke(seen: ring.moments.map(\.seen), lineWidth: 3)
+                MomentRingStroke(seen: ring.ringSeen, lineWidth: 3)
                     .frame(width: 54.5, height: 54.5)
                 MomentAvatar(author: ring.author, size: 44)
             }
             .frame(width: 56, height: 56)
             Text(ring.mine ? "You" : ring.author.shortName)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(ring.isNew ? Theme.Color.appText : Theme.Color.appTextSecondary)
+                .foregroundStyle(ring.isNew || ring.mine ? Theme.Color.appText : Theme.Color.appTextSecondary)
                 .lineLimit(1)
                 .frame(maxWidth: 60)
         }
@@ -191,7 +191,7 @@ struct MomentClusterBubble: View {
 
     var body: some View {
         let shown = Array(rings.prefix(3))
-        let hasNew = rings.contains(where: \.isNew)
+        let hasNew = rings.contains { $0.isNew || $0.mine }
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 HStack(spacing: -12) {

@@ -69,6 +69,7 @@ struct MomentsCameraScreen: View {
         .ignoresSafeArea(edges: [.horizontal])
         .task {
             camera.onVideo = { url in
+                if recording { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
                 recording = false
                 clock?.cancel()
                 guard let url else { return }
@@ -196,6 +197,7 @@ struct MomentsCameraScreen: View {
     private func photo() {
         guard !capturing else { return }
         capturing = true
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         Task {
             let image = await camera.takePhoto(flash: flash)
             capturing = false
@@ -206,6 +208,7 @@ struct MomentsCameraScreen: View {
     private func startVideo() {
         recording = true
         elapsed = 0
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         camera.startVideo(flash: flash)
         let started = Date()
         clock = Task {

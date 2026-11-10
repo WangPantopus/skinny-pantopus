@@ -25,7 +25,14 @@ final class MomentsViewerCache {
 
     /// The Moment, with a fresh enough link to load its file.
     func detail(_ id: String) async throws -> MomentDTO {
-        if let saved = details[id], Date().timeIntervalSince(saved.readAt) < Self.linkLifetime { return saved.moment }
+        if let saved = details[id] {
+            // A copy read a minute ago can be of a Moment that has ended since: it never plays.
+            if let end = saved.moment.expiresAtDate, end <= Date() {
+                forget(id)
+                throw MomentsFailure.ended
+            }
+            if Date().timeIntervalSince(saved.readAt) < Self.linkLifetime { return saved.moment }
+        }
         let moment = try await MomentsAPI.send(MomentsEndpoints.moment(id: id), as: MomentEnvelope.self).moment
         details[id] = (moment, Date())
         return moment
@@ -47,17 +54,33 @@ final class MomentsViewerCache {
         return image
     }
 
-    /// Reads a Moment ahead (and its photo).
+    /// A video's first picture, shown at once under the player until its first frame.
+    func poster(for moment: MomentDTO) async -> UIImage? {
+        let key = "poster.\(moment.id)"
+        if let image = images[key] { return image }
+        guard let url = moment.poster, let (data, response) = try? await session.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode ?? 200 < 400, let image = UIImage(data: data) else { return nil }
+        images[key] = image
+        order.append(key)
+        return image
+    }
+
+    /// Reads a Moment ahead (and its photo, or its video's poster).
     func prefetch(_ id: String) {
         guard details[id] == nil else { return }
         Task { [weak self] in
             guard let self, let moment = try? await detail(id) else { return }
-            if moment.kind == .photo { _ = try? await picture(for: moment) }
+            switch moment.kind {
+            case .photo: _ = try? await picture(for: moment)
+            case .video: _ = await poster(for: moment)
+            case .text: break
+            }
         }
     }
 
     func forget(_ id: String) {
         details.removeValue(forKey: id)
         images.removeValue(forKey: id)
+        images.removeValue(forKey: "poster.\(id)")
     }
 }
