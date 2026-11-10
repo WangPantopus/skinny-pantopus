@@ -230,17 +230,23 @@ class MomentsPosting
             }
             // "Try again" replaces the job: follow the newest one until the upload is over.
             var waits = 0
-            while (true) {
+            var following = true
+            while (following) {
                 val job = jobs[momentId]
-                if (job != null) {
-                    job.join()
-                    if (jobs[momentId] === job || jobs[momentId] == null) break
-                } else if (media.containsKey(momentId) && stageOf(momentId) == MomentPosting.Stage.PREPARING && waits++ < PICKUP_WAITS) {
-                    // Between the note being read and the upload starting.
-                    delay(PICKUP_POLL_MS)
-                } else {
-                    break
-                }
+                following =
+                    when {
+                        job != null -> {
+                            job.join()
+                            val newest = jobs[momentId]
+                            newest != null && newest !== job
+                        }
+                        // Between the note being read and the upload starting.
+                        media.containsKey(momentId) && stageOf(momentId) == MomentPosting.Stage.PREPARING && waits++ < PICKUP_WAITS -> {
+                            delay(PICKUP_POLL_MS)
+                            true
+                        }
+                        else -> false
+                    }
             }
             return when {
                 stageOf(momentId) != MomentPosting.Stage.FAILED -> BackgroundUpload.DONE
@@ -340,17 +346,28 @@ class MomentsPosting
                         return
                     }
                     is NetworkResult.Failure -> {
-                        val error = result.error
                         attempt++
-                        if (!error.isRetryable() || attempt >= MAX_ATTEMPTS) {
-                            if (!error.isRetryable()) refused += momentId
-                            fail(momentId, error.postingMessage())
-                            return
-                        }
+                        if (gaveUp(momentId, result.error, attempt)) return
                         delay(BACKOFF_MS * (1L shl (attempt - 1)))
                     }
                 }
             }
+        }
+
+        /**
+         * After a refusal for good (too long, unreadable, ended) or the last try, the posting ring says what went wrong:
+         * true when the upload gave up.
+         */
+        private fun gaveUp(
+            momentId: String,
+            error: NetworkError,
+            attempt: Int,
+        ): Boolean {
+            val lasting = !error.isRetryable()
+            if (!lasting && attempt < MAX_ATTEMPTS) return false
+            if (lasting) refused += momentId
+            fail(momentId, error.postingMessage())
+            return true
         }
 
         /** The file is in: live now, or the picture check runs first (a few seconds), or a review holds it. */
