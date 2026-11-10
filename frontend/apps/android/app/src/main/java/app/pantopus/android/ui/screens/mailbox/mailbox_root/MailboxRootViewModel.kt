@@ -85,6 +85,8 @@ data class MailWelcome(
     val mailId: String,
     /** The person's verified address, for "Your first piece of mail at …". */
     val address: String?,
+    /** Their name, written on the letter's envelope on the table (plan Part 10). */
+    val toName: String? = null,
 )
 
 /** What the Mailbox's list shows for the open drawer and tab. */
@@ -581,7 +583,7 @@ class MailboxRootViewModel
                 loadedMail.firstOrNull { mail ->
                     !mail.row.viewed && isWelcomeLetter(mail.row) && mail.day?.isBefore(firstDay) == false
                 } ?: return
-            _welcome.value = MailWelcome(letter.row.id, book.ownAddress)
+            _welcome.value = MailWelcome(letter.row.id, book.ownAddress, book.personName)
         }
 
         private fun markLoadedMailViewed(mailId: String) {

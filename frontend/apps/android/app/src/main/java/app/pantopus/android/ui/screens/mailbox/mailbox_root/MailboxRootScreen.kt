@@ -66,7 +66,9 @@ import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.ceremonial_mail_open.MailWelcomePorch
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardRow
 import app.pantopus.android.ui.screens.mailbox.cards.TakeBackDialog
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardOnTable
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardSoundsSetting
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
 import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
@@ -79,6 +81,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import java.time.Year
 import java.time.ZoneId
 
 /**
@@ -234,28 +237,8 @@ fun MailboxRootScreen(
             DeliveryMoment(count = moment.count, cameWhen = moment.cameWhen, onDone = viewModel::deliveryMomentShown)
         }
     }
-    // The first day: once the delivery moment has played, Pantopus's sealed welcome letter waits on the porch.
-    val porch = welcome
-    if (porch != null && deliveryMoment == null) {
-        Dialog(
-            onDismissRequest = viewModel::welcomeDone,
-            properties = DialogProperties(decorFitsSystemWindows = false),
-        ) {
-            // Compose 1.7 measures non-default-width dialogs against the whole display, which can be taller than the
-            // window on Android 15: keep the window's constraints and stretch the window itself (as MediaViewerDialog).
-            val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-            SideEffect { window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT) }
-            MailWelcomePorch(
-                mailId = porch.mailId,
-                address = porch.address,
-                onOpen = {
-                    viewModel.welcomeDone()
-                    viewModel.openMail(porch.mailId)
-                },
-                onClose = viewModel::welcomeDone,
-            )
-        }
-    }
+    // The first day: once the delivery moment has played, Pantopus's sealed welcome letter waits.
+    WelcomeLetter(welcome.takeIf { deliveryMoment == null }, onDone = viewModel::welcomeDone, onOpen = viewModel::openMail)
     confirmTakeBack?.let { card ->
         TakeBackDialog(
             byEmail = card.byEmail,
@@ -776,3 +759,70 @@ private const val LOAD_MORE_AHEAD = 3
 
 /** Piece-shaped placeholders while the first page is read. */
 private const val SKELETON_PIECES = 3
+
+/** Pantopus's welcome letter as the table draws it (plan Part 10): a letter, from Pantopus, to them, on slate. */
+private fun welcomeOnTable(porch: MailWelcome): CardOnTable =
+    CardOnTable(
+        id = porch.mailId,
+        design = "pantopus-welcome-letter",
+        number = null,
+        slug = null,
+        table = null,
+        caption = "",
+        paper = null,
+        year = Year.now().value,
+        mailedOn = null,
+        note = "",
+        from = "Pantopus",
+        to = porch.toName?.takeIf { it.isNotBlank() },
+        sealed = false,
+        opensIn = null,
+        daysUntilOpen = null,
+        letter = true,
+    )
+
+/**
+ * Pantopus's sealed welcome letter on the first day ([porch]; null when there's none or the delivery moment still plays):
+ * on the table with the card table (plan Part 10), else on the porch.
+ */
+@Composable
+private fun WelcomeLetter(
+    porch: MailWelcome?,
+    onDone: () -> Unit,
+    onOpen: (mailId: String) -> Unit,
+) {
+    if (porch == null) return
+    if (LaunchFeatures.cardTable) {
+        // Plan Part 10: the welcome letter arrives on the table, in the cream envelope with the red seal, and opens with
+        // the same moves; out of its envelope it opens as the letter page. Close leaves it sealed in Me.
+        CardTableDialog(
+            card = remember(porch) { welcomeOnTable(porch) },
+            firstOpen = true,
+            onClose = onDone,
+            canShare = false,
+            onLetterOut = {
+                onDone()
+                onOpen(porch.mailId)
+            },
+        )
+    } else {
+        Dialog(
+            onDismissRequest = onDone,
+            properties = DialogProperties(decorFitsSystemWindows = false),
+        ) {
+            // Compose 1.7 measures non-default-width dialogs against the whole display, which can be taller than the
+            // window on Android 15: keep the window's constraints and stretch the window itself (as MediaViewerDialog).
+            val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+            SideEffect { window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT) }
+            MailWelcomePorch(
+                mailId = porch.mailId,
+                address = porch.address,
+                onOpen = {
+                    onDone()
+                    onOpen(porch.mailId)
+                },
+                onClose = onDone,
+            )
+        }
+    }
+}

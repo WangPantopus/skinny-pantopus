@@ -53,6 +53,8 @@ internal data class CardFaceWords(
     val from: String,
     /** Signed beside FROM (plan 8.2): drawn in place of the typed [from]; null or one it can't draw: [from] typed. */
     val signature: CardSignature? = null,
+    /** A letter folded in three (plan Part 10), its heading; both sides are the sheet. Null for a card. */
+    val letterTitle: String? = null,
 )
 
 /** The picture on a card, and how much of its edges to leave out (an older copy has its own border baked in). */
@@ -147,6 +149,7 @@ internal class CardFacePainter(
     private var edgeHeight = -1f
     private var edgeShaders: List<LinearGradient> = emptyList()
     private var noteCache: PenNote? = null
+    private val letterInk = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     private val signatureInk = CardSignatureInk.paint()
     private var signatureCache: Pair<CardSignature, Path>? = null
     private val verseType = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
@@ -159,6 +162,7 @@ internal class CardFacePainter(
         picture: CardPicture?,
         grain: Bitmap = art.paperHalf,
     ) {
+        face.letterTitle?.let { return drawLetter(canvas, width, face.paper, it, grain) }
         val u = width / 100f
         val restore = canvas.save()
         clipCard(canvas, width, u)
@@ -177,6 +181,7 @@ internal class CardFacePainter(
         face: CardFaceWords,
         grain: Bitmap = art.paper,
     ) {
+        face.letterTitle?.let { return drawLetter(canvas, width, face.paper, it, grain) }
         val u = width / 100f
         val restore = canvas.save()
         clipCard(canvas, width, u)
@@ -185,6 +190,36 @@ internal class CardFacePainter(
         drawNote(canvas, u, face)
         drawFrom(canvas, u, face.from, face.signature?.takeIf { it.drawable })
         drawFoot(canvas, u, face.year)
+        drawGrain(canvas, width, u, grain)
+        drawEdges(canvas, width, u)
+        canvas.restoreToCount(restore)
+    }
+
+    /** The welcome letter folded in three (plan Part 10): cream paper, its heading, a few lines of writing, the fold. */
+    private fun drawLetter(
+        canvas: Canvas,
+        width: Float,
+        paper: Int,
+        title: String,
+        grain: Bitmap,
+    ) {
+        val u = width / 100f
+        val restore = canvas.save()
+        clipCard(canvas, width, u)
+        canvas.drawColor(paper)
+        textStyle(Typeface.SERIF, u * LETTER_HEAD, PantopusColors.cardYearInk)
+        text.textAlign = Paint.Align.CENTER
+        canvas.drawText(title, u * 50f, u * LETTER_HEAD_Y, text)
+        letterInk.color = PantopusColors.cardRule.toArgb()
+        letterInk.strokeWidth = u * LETTER_LINE_WIDTH
+        LETTER_LINES.forEachIndexed { i, length ->
+            val y = u * (LETTER_FIRST_LINE + i * LETTER_LINE_STEP)
+            canvas.drawLine(u * LETTER_MARGIN, y, u * (LETTER_MARGIN + length), y, letterInk)
+        }
+        // The lower fold of the three, as a soft crease.
+        letterInk.color = PantopusColors.cardEdgeShade.toArgb()
+        letterInk.strokeWidth = u * LETTER_FOLD_WIDTH
+        canvas.drawLine(0f, u * LETTER_FOLD_Y, width, u * LETTER_FOLD_Y, letterInk)
         drawGrain(canvas, width, u, grain)
         drawEdges(canvas, width, u)
         canvas.restoreToCount(restore)
@@ -673,3 +708,16 @@ internal fun cardPostmarkDay(mailedOn: String?): String = HolidayCardTimes.postm
 
 /** The card's paper as a canvas colour. */
 internal fun cardPaperColor(paper: String?): Int = HolidayCardArt.paper(paper).toArgb()
+
+// The welcome letter's sheet (plan Part 10), in hundredths of the card's width.
+private const val LETTER_HEAD = 6f
+private const val LETTER_HEAD_Y = 20f
+private const val LETTER_MARGIN = 14f
+private const val LETTER_FIRST_LINE = 34f
+private const val LETTER_LINE_STEP = 8f
+private const val LETTER_LINE_WIDTH = 0.9f
+private const val LETTER_FOLD_Y = 80f
+private const val LETTER_FOLD_WIDTH = 0.6f
+
+/** Each line of writing's length: a short last line, like the end of a paragraph. */
+private val LETTER_LINES = floatArrayOf(72f, 68f, 70f, 64f, 71f, 40f)

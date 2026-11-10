@@ -42,10 +42,13 @@ internal enum class CardMood {
     Nostalgia,
     Reverence,
     Santa,
+
+    /** A letter (plan Part 10): no snow, no candle, no glint, the plain table. */
+    Letter,
     ;
 
     /** Snow falls outside the window for nostalgia and Santa. */
-    val snows: Boolean get() = this != Reverence
+    val snows: Boolean get() = this == Nostalgia || this == Santa
 
     companion object {
         fun of(
@@ -88,7 +91,11 @@ internal fun MoodLight(
         while (true) withFrameMillis { value = it }
     }
     if (!on) return
-    if (mood.snows) Snow(state, art) { clock } else Candlelight { clock }
+    when {
+        mood.snows -> Snow(state, art) { clock }
+        mood == CardMood.Reverence -> Candlelight { clock }
+        else -> Unit
+    }
 }
 
 /** 12 to 18 specks at a time, each 6 to 9 s down the window's light, 10% dark. */

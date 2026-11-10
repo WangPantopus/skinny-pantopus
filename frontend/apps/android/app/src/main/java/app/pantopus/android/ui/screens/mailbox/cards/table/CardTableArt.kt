@@ -121,14 +121,61 @@ internal class CardTableArt private constructor(
             synchronized(this) { kept = SoftReference(art) }
             return art
         }
+
+        private var keptLetter = SoftReference<CardTableArt>(null)
+
+        /** A letter's set (plan Part 10): the same envelope made in cream with the red seal; the rest is the card's. */
+        suspend fun loadLetter(context: Context): CardTableArt {
+            synchronized(this) { keptLetter.get() }?.let { return it }
+            val base = load(context)
+            val resources = context.applicationContext.resources
+            val read =
+                withContext(Dispatchers.IO) {
+                    coroutineScope {
+                        listOf(
+                            R.drawable.card_table_cream_env_front,
+                            R.drawable.card_table_cream_env_pocket,
+                            R.drawable.card_table_cream_env_inside,
+                            R.drawable.card_table_cream_flap_out,
+                            R.drawable.card_table_cream_flap_in,
+                            R.drawable.card_table_wax_red,
+                            R.drawable.card_table_wax_red_cracked,
+                        ).map { id -> async { BitmapFactory.decodeResource(resources, id).also { it.prepareToDraw() } } }
+                            .awaitAll()
+                    }
+                }
+            val art =
+                CardTableArt(
+                    front = read[0],
+                    pocket = read[1],
+                    inside = read[2],
+                    flapOut = read[3],
+                    flapIn = read[4],
+                    flapGold = base.flapGold,
+                    pocketShadow = base.pocketShadow,
+                    flapShadow = base.flapShadow,
+                    wax = read[5],
+                    waxCracked = read[6],
+                    postmark = base.postmark,
+                    light = base.light,
+                    grain = base.grain,
+                    cloth = base.cloth,
+                    stamps = base.stamps,
+                    star = base.star,
+                )
+            synchronized(this) { keptLetter = SoftReference(art) }
+            return art
+        }
     }
 }
 
 /** The table's art once it's read; null until then, and only the table's colour shows. */
 @Composable
-internal fun rememberCardTableArt(): CardTableArt? {
+internal fun rememberCardTableArt(letter: Boolean = false): CardTableArt? {
     val context = LocalContext.current
-    val art by produceState(initialValue = null as CardTableArt?, context) { value = CardTableArt.load(context) }
+    val art by produceState(initialValue = null as CardTableArt?, context, letter) {
+        value = if (letter) CardTableArt.loadLetter(context) else CardTableArt.load(context)
+    }
     return art
 }
 
