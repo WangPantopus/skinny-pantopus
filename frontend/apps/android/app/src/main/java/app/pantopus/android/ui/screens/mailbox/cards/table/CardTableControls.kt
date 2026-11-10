@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -151,6 +152,7 @@ internal fun CardTableControls(
         TopRow(state, top, hidden, canShare, menu.isNotEmpty(), onClose, onShare)
         if (state.menuOpen && menu.isNotEmpty()) MenuPanel(state, top, menu)
         TableToast(state, top)
+        if (state.verseOpen) VerseBookmark(state.card, bottom, onClose = { state.verseOpen = false })
     }
 }
 
@@ -308,10 +310,59 @@ private fun ActionBlock(
                     Text(action.title, style = tableQuietStyle)
                 }
             }
-            Text(state.hint, style = tableHintStyle, modifier = Modifier.heightIn(min = 16.dp).testTag("cardTableHint"))
+            HintSlot(state, away)
         }
     }
 }
+
+/**
+ * The hint under the button. A verse card has "Read the verse" in its place once the card lies out (plan 6.2), in one
+ * slot, so the card doesn't move when one replaces the other.
+ */
+@Composable
+private fun HintSlot(
+    state: CardTableState,
+    away: Boolean,
+) {
+    if (state.card.verse == null || state.sending != null) {
+        Text(state.hint, style = tableHintStyle, modifier = Modifier.heightIn(min = 16.dp).testTag("cardTableHint"))
+        return
+    }
+    Box(modifier = Modifier.heightIn(min = 44.dp), contentAlignment = Alignment.Center) {
+        val lying = state.step == TableStep.Out && !state.enlarged
+        if (!away && !state.card.sealed && lying) {
+            Box(
+                modifier =
+                    Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .clickable(role = Role.Button) {
+                            state.menuOpen = false
+                            state.verseOpen = true
+                        }.padding(horizontal = 16.dp)
+                        .testTag("cardTableReadVerse"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(READ_THE_VERSE, style = tableVerseLinkStyle)
+            }
+        } else {
+            Text(state.hint, style = tableHintStyle, modifier = Modifier.testTag("cardTableHint"))
+        }
+    }
+}
+
+internal const val READ_THE_VERSE = "Read the verse"
+
+/** "Read the verse" under the button: a link, white at 85%, underlined. */
+internal val tableVerseLinkStyle =
+    TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 1.35.em,
+        fontWeight = FontWeight.SemiBold,
+        color = PantopusColors.tableHint.copy(alpha = 0.85f),
+        textAlign = TextAlign.Center,
+        textDecoration = TextDecoration.Underline,
+    )
 
 @Composable
 private fun MenuPanel(

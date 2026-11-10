@@ -648,9 +648,9 @@ private fun CardShadows(
                 .pinned(g.cardWidth, g.cardHeight)
                 .graphicsLayer {
                     val off = (6f + state.lift * 26f) * g.density
-                    val scale = state.cardScale()
-                    translationX = state.cardX(g) + off * 0.45f - state.lightX.x * 10f * g.density
-                    translationY = state.cardY(g) + off - state.lightY.x * 10f * g.density
+                    val scale = state.cardScale() * state.zoom.size.x
+                    translationX = state.cardX(g) + state.zoom.dx.x + off * 0.45f - state.lightX.x * 10f * g.density
+                    translationY = state.cardY(g) + state.zoom.dy.x + off - state.lightY.x * 10f * g.density
                     rotationZ = state.cardTurnZ()
                     scaleX = scale * state.cardNarrow
                     scaleY = scale
@@ -664,9 +664,9 @@ private fun CardShadows(
                 .zIndex(19f)
                 .pinned(g.cardWidth, g.cardHeight)
                 .graphicsLayer {
-                    val scale = state.cardScale()
-                    translationX = state.cardX(g) + (1.5f - state.lightX.x * 2f) * g.density
-                    translationY = state.cardY(g) + (2.5f - state.lightY.x * 2f) * g.density
+                    val scale = state.cardScale() * state.zoom.size.x
+                    translationX = state.cardX(g) + state.zoom.dx.x + (1.5f - state.lightX.x * 2f) * g.density
+                    translationY = state.cardY(g) + state.zoom.dy.x + (2.5f - state.lightY.x * 2f) * g.density
                     rotationZ = state.cardTurnZ()
                     scaleX = scale * state.cardNarrow
                     scaleY = scale
@@ -695,9 +695,10 @@ private fun TableCardLayer(
                 .zIndex(if (out) 20f else 5f)
                 .pinned(g.cardWidth, g.cardHeight)
                 .graphicsLayer {
-                    val scale = state.cardScale()
-                    translationX = state.cardX(g)
-                    translationY = state.cardY(g)
+                    // Enlarged (plan 6.1): bigger around its middle, and moved around.
+                    val scale = state.cardScale() * state.zoom.size.x
+                    translationX = state.cardX(g) + state.zoom.dx.x
+                    translationY = state.cardY(g) + state.zoom.dy.x
                     rotationZ = state.cardTurnZ()
                     scaleX = scale
                     scaleY = scale

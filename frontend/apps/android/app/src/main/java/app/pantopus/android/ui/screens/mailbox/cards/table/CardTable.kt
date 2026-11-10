@@ -39,7 +39,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -128,7 +130,10 @@ private fun CardTable(
     state.onTap = { tap -> view.feel(tap) }
     LaunchedEffect(state) { state.run() }
     LaunchedEffect(message) { message?.let { state.toast = it } }
+    // Back brings an enlarged card back to its size first, closes the menu, and puts the verse's bookmark away.
+    BackHandler(enabled = state.enlarged) { state.resetZoom() }
     BackHandler(enabled = state.menuOpen) { state.menuOpen = false }
+    BackHandler(enabled = state.verseOpen) { state.verseOpen = false }
 
     // The sheet stands over the table, and the table rests under it.
     var sharing by rememberSaveable(card.id) { mutableStateOf(false) }
@@ -172,6 +177,8 @@ private fun CardTable(
         val geometry =
             rememberTableGeometry(card, constraints, safeTop, safeBottom, density, quietButton = sendBack != null, sending = calls != null)
         SideEffect { state.geometry = geometry }
+        // A new window size (the phone turned, a fold opened) brings an enlarged card back to its size.
+        LaunchedEffect(geometry) { state.resetZoom(immediate = true) }
         val step = state.step
         val primaryLabel = state.primaryLabel
         val showsTurnTip =
@@ -306,12 +313,21 @@ private fun rememberTableGeometry(
     val measurer = rememberTextMeasurer()
     val width = constraints.maxWidth
     val height = constraints.maxHeight
-    return remember(width, height, safeTop, safeBottom, density, card.fromFirst, card.sealed, quietButton, sending) {
+    val readsVerse = card.verse != null && !sending
+    return remember(width, height, safeTop, safeBottom, density, card.fromFirst, card.sealed, quietButton, sending, readsVerse) {
         with(density) {
             val textWidth = width - 32.dp.roundToPx()
             val hintWidth = Constraints(maxWidth = textWidth.coerceAtLeast(1))
             val hintHeight =
-                HINTS.maxOf { hint -> measurer.measure(hint, tableHintStyle, constraints = hintWidth).size.height }
+                HINTS.maxOf { hint -> measurer.measure(hint, tableHintStyle, constraints = hintWidth).size.height }.let { hints ->
+                    // A verse card's hint slot also holds "Read the verse", 44 dp to touch (plan 6.2).
+                    if (readsVerse) {
+                        val link = measurer.measure(READ_THE_VERSE, tableVerseLinkStyle).size.height + 12.dp.roundToPx()
+                        maxOf(hints, 44.dp.roundToPx(), link)
+                    } else {
+                        hints
+                    }
+                }
             val primaryHeight = measurer.measure("Take the card out", tablePrimaryStyle).size.height
             val pillHeight = max(48.dp.toPx(), primaryHeight + 12.dp.toPx())
             val quietHeight =
@@ -400,6 +416,13 @@ private fun Modifier.tableGestures(
                             awaitPointerEvent(PointerEventPass.Main)
                         }
                     if (event == null) continue
+                    // A second finger on the card lying out: pinch to enlarge it (plan 6.1), until a finger lifts.
+                    val fingers = event.changes.filter { it.pressed }
+                    if (fingers.size >= 2 && state.onPinchStart(fingers[0].x, fingers[0].y, fingers[1].x, fingers[1].y)) {
+                        event.changes.forEach { it.consume() }
+                        pinchUntilLifted(state)
+                        return@awaitEachGesture
+                    }
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (change.changedToUp() || !change.pressed) {
                         state.onUp(change.position.x, change.position.y)
@@ -411,6 +434,24 @@ private fun Modifier.tableGestures(
                 state.onUp(down.position.x, down.position.y)
             }
         }
+
+/** Follows two fingers until one lifts, then waits for the rest to lift, so the last one doesn't turn the card. */
+private suspend fun AwaitPointerEventScope.pinchUntilLifted(state: CardTableState) {
+    while (true) {
+        val event = awaitPointerEvent(PointerEventPass.Main)
+        val fingers = event.changes.filter { it.pressed }
+        event.changes.forEach { it.consume() }
+        if (fingers.size < 2) break
+        state.onPinch(fingers[0].x, fingers[0].y, fingers[1].x, fingers[1].y)
+    }
+    state.onPinchEnd()
+    while (currentEvent.changes.any { it.pressed }) {
+        awaitPointerEvent(PointerEventPass.Main).changes.forEach { it.consume() }
+    }
+}
+
+private val PointerInputChange.x: Float get() = position.x
+private val PointerInputChange.y: Float get() = position.y
 
 private const val HOLD_MS = 240L
 

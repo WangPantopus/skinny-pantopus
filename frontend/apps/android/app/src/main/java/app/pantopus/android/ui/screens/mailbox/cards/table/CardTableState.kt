@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import app.pantopus.android.ui.screens.mailbox.components.MailStamp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -54,6 +55,8 @@ data class CardOnTable(
     val opensIn: String?,
     /** Days until it opens, while it's sealed. */
     val daysUntilOpen: Int?,
+    /** The whole verse printed on a Christmas with Jesus Christ picture: "Read the verse" (plan 6.2). */
+    val verse: String? = null,
 ) {
     /** The first name, the only one a shared picture or the words on the table ever use. */
     val fromFirst: String = from.trim().substringBefore(' ').removeSuffix(",").ifEmpty { "Someone" }
@@ -143,8 +146,9 @@ internal class TableGeometry(
         val wide = width / d >= 600f
         val side = (if (width / d < 560f) 9f else 14f) * d
         // The open envelope lies lower than the card on a tight screen: its bottom (the card's top + 1.606 cw at the
-        // least peek) must clear the button too, so it's the envelope that limits the card there.
-        var cw = min(min(width - side * 2f, (if (wide) 560f else 470f) * d), room / ENVELOPE_REACH)
+        // least peek) must clear the button too, so it's the envelope that limits the card there. Tablets and wide
+        // windows go to 640 dp where the height allows (plan 6.3).
+        var cw = min(min(width - side * 2f, (if (wide) 640f else 470f) * d), room / ENVELOPE_REACH)
         var peek = room - cw * 1.2f
         val minPeek = cw * 0.13f
         val maxPeek = cw * 0.47f
@@ -175,11 +179,14 @@ internal class TableGeometry(
 /** From the card's top at its least peek to the open envelope's bottom, in card widths: flap 0.432 + pocket 1.174. */
 private const val ENVELOPE_REACH = 1.606f
 
+/** A second tap within this long, on the same spot, is a double-tap; one tap turns the card after it. */
+private const val DOUBLE_TAP_MS = 300L
+
 /** The small taps you can feel, firmest last. */
 internal enum class TableTap { Hold, Soft, Land, Crack, Refuse }
 
 /** What a finger is doing. */
-private enum class DragMode { None, Envelope, Pull, Turn, Tilt }
+private enum class DragMode { None, Envelope, Pull, Turn, Tilt, Pan }
 
 private class TableDrag(
     val x0: Float,
@@ -197,6 +204,10 @@ private class TableDrag(
     var mode: DragMode? = null
     var startX = x0
     var startY = y0
+
+    /** Where the enlarged card had been moved to when this drag began moving around it. */
+    var zoomX0 = 0f
+    var zoomY0 = 0f
 }
 
 /**
@@ -204,6 +215,8 @@ private class TableDrag(
  * target, and layers read the positions without recomposing. Everything the screen must keep across a turn of the
  * phone or the app being closed by the system is in [save].
  */
+// The moment's one model, as the sample has it; the enlarged card is its own class (TableZoom).
+@Suppress("LargeClass")
 @Stable
 internal class CardTableState(
     val card: CardOnTable,
@@ -220,7 +233,10 @@ internal class CardTableState(
     val lightX = TableSpring(40f, 11f)
     val lightY = TableSpring(40f, 11f)
     val drop = TableSpring(58f, 11.5f, start = 0f)
-    private val springs = listOf(envelopeTurn, pull, lay, turn, lightX, lightY, drop)
+
+    /** The card enlarged (plan 6.1). */
+    val zoom = TableZoom(reduceMotion, onEnlarged = { mark() }, wake = { wake() })
+    private val springs = listOf(envelopeTurn, pull, lay, turn, lightX, lightY, drop) + zoom.springs
 
     var geometry by mutableStateOf<TableGeometry?>(null)
 
@@ -245,6 +261,12 @@ internal class CardTableState(
     var backUp by mutableStateOf(false)
         private set
 
+    /** The card is enlarged: a drag moves around it, one tap does nothing, a double-tap or Back brings it back. */
+    val enlarged: Boolean get() = zoom.enlarged
+
+    /** "Read the verse" has the bookmark up over the table (plan 6.2). */
+    var verseOpen by mutableStateOf(false)
+
     /** Called the first time the card leaves its envelope on this visit: it's opened. */
     var onOpened: () -> Unit = {}
     var onTap: (TableTap) -> Unit = {}
@@ -259,6 +281,10 @@ internal class CardTableState(
     private var heldOnce = false
     private var openedReported = false
     private var drag: TableDrag? = null
+    private var lastTapMs = 0L
+    private var lastTapX = 0f
+    private var lastTapY = 0f
+    private var pendingTurn: Job? = null
     private var lastTouchMs = 0L
     private var frameLast = 0L
     private val wakeUps = Channel<Unit>(Channel.CONFLATED)
@@ -297,6 +323,7 @@ internal class CardTableState(
 
     /** "Open it again": the whole moment from the top. Nothing goes to the server. */
     fun openAgain() {
+        resetZoom(immediate = true)
         for (spring in listOf(envelopeTurn, pull, lay, turn)) spring.jump(0f)
         step = TableStep.Front
         cracked = false
@@ -357,6 +384,7 @@ internal class CardTableState(
                 nextPrimary = if (backUp) "Turn it back" else "Turn it over"
                 nextHint =
                     when {
+                        enlarged -> "double-tap to bring it back"
                         !turnedOnce -> "or swipe it"
                         !heldOnce && !sensorLive && !reduceMotion -> "press and hold, then move your finger: the light moves"
                         else -> ""
@@ -477,6 +505,8 @@ internal class CardTableState(
     }
 
     private fun turnCard(direction: Int = -1) {
+        pendingTurn?.cancel()
+        resetZoom()
         val next = ((turn.target / 180f).roundToInt() + direction) * 180f
         turn.target = next
         if (reduceMotion) turn.jump(next)
@@ -508,6 +538,7 @@ internal class CardTableState(
     fun onHold() {
         if (sending != null) return
         val current = drag ?: return
+        if (enlarged) return
         if (current.mode == null && step == TableStep.Out && !reduceMotion) {
             current.mode = DragMode.Tilt
             heldOnce = true
@@ -536,12 +567,16 @@ internal class CardTableState(
                     ?: dragModeFor(abs(x - current.x0) > abs(y - current.y0), y - current.y0)
             current.startX = x
             current.startY = y
+            current.zoomX0 = zoom.dx.target
+            current.zoomY0 = zoom.dy.target
         }
         val moment = sending
-        if (moment != null) {
-            if (current.mode == DragMode.Pull) moment.follow(y - current.y0, g)
-        } else if (!reduceMotion) {
-            follow(current, x, y, g)
+        when {
+            moment != null -> if (current.mode == DragMode.Pull) moment.follow(y - current.y0, g)
+            // Moving around the enlarged card, with animations off too.
+            current.mode == DragMode.Pan ->
+                zoom.set(g, zoom.size.target, current.zoomX0 + x - current.startX, current.zoomY0 + y - current.startY, immediate = true)
+            !reduceMotion -> follow(current, x, y, g)
         }
     }
 
@@ -557,7 +592,12 @@ internal class CardTableState(
                     horizontal && step == TableStep.Back -> DragMode.Envelope
                     else -> DragMode.None
                 }
-            TableStep.Out -> if (horizontal) DragMode.Turn else DragMode.Tilt
+            TableStep.Out ->
+                when {
+                    enlarged -> DragMode.Pan
+                    horizontal -> DragMode.Turn
+                    else -> DragMode.Tilt
+                }
             TableStep.Pulling -> DragMode.None
         }
 
@@ -700,7 +740,7 @@ internal class CardTableState(
             TableStep.Front, TableStep.Back, TableStep.Flap -> primary()
             TableStep.Out -> {
                 if (isOnCard(x, y)) {
-                    turnCard()
+                    tapCard(x, y)
                 } else {
                     controlsHidden = !controlsHidden
                 }
@@ -714,8 +754,84 @@ internal class CardTableState(
         y: Float,
     ): Boolean {
         val g = geometry ?: return false
-        return x > g.cardX && x < g.cardX + g.cardWidth && y > g.cardTop && y < g.cardTop + g.cardHeight
+        // Enlarged, it covers more of the table.
+        return zoom.covers(g, g.cardX + g.cardWidth / 2f, g.cardTop + g.cardHeight / 2f, x, y)
     }
+
+    /** A second tap soon after on the same spot enlarges it (or brings it back); one tap turns it, a moment later. */
+    private fun tapCard(
+        x: Float,
+        y: Float,
+    ) {
+        val g = geometry ?: return
+        val now = nowMs()
+        val twice = now - lastTapMs < DOUBLE_TAP_MS && hypot(x - lastTapX, y - lastTapY) < 44f * g.density
+        pendingTurn?.cancel()
+        if (twice) {
+            lastTapMs = 0L
+            toggleZoom(x, y)
+            return
+        }
+        lastTapMs = now
+        lastTapX = x
+        lastTapY = y
+        if (enlarged) return
+        pendingTurn =
+            scope.launch {
+                delay(DOUBLE_TAP_MS)
+                turnCard()
+            }
+    }
+
+    // ---- Enlarging the card (plan 6.1) ----
+
+    /** Pinching or double-tapping enlarges a card lying out on the table; not one being sealed. */
+    private val canEnlarge: Boolean get() = sending == null && step == TableStep.Out
+
+    /** Back to its size on the table. */
+    fun resetZoom(immediate: Boolean = false) = zoom.reset(immediate)
+
+    /** A double-tap: enlarged around that spot, or back to its size. */
+    private fun toggleZoom(
+        x: Float,
+        y: Float,
+    ) {
+        val g = geometry ?: return
+        when {
+            enlarged -> zoom.reset()
+            canEnlarge -> {
+                zoom.around(g, cardX(g) + g.cardWidth / 2f, cardY(g) + g.cardHeight / 2f, x, y)
+                onTap(TableTap.Soft)
+            }
+        }
+    }
+
+    /** A second finger on the card while it lies on the table: the pinch begins. False when it can't be enlarged. */
+    fun onPinchStart(
+        ax: Float,
+        ay: Float,
+        bx: Float,
+        by: Float,
+    ): Boolean {
+        if (!canEnlarge) return false
+        drag = null
+        pendingTurn?.cancel()
+        menuOpen = false
+        zoom.pinchStart(ax, ay, bx, by)
+        return true
+    }
+
+    fun onPinch(
+        ax: Float,
+        ay: Float,
+        bx: Float,
+        by: Float,
+    ) {
+        zoom.pinchTo(geometry, ax, ay, bx, by)
+        lastTouchMs = nowMs()
+    }
+
+    fun onPinchEnd() = zoom.pinchEnd()
 
     // ---- The phone's tilt ----
 

@@ -136,4 +136,5 @@ internal fun MailLetterCard.tableCard(
         sealed = sealed,
         opensIn = opensIn,
         daysUntilOpen = daysUntilOpen,
+        verse = verse,
     )
