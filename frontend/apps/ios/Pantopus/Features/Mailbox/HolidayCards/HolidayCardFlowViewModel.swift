@@ -124,7 +124,7 @@ final class HolidayCardFlowViewModel {
     private(set) var step: HolidayCardStep = .to
     private(set) var recipient: HolidayCardRecipient?
     var designId: String?
-    /// Pick a card's "See it larger" sheet: the picture shown large.
+    /// The card rack over Pick a card (plan Part 5): the picture it opened at, nil when it's closed.
     var largeDesign: HolidayCardDesign?
     var message = "" {
         didSet {

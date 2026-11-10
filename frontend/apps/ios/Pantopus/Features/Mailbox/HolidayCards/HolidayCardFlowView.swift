@@ -61,6 +61,11 @@ struct HolidayCardFlowView: View {
                 .scrollDismissesKeyboard(.interactively)
                 // Each step starts at its top (Look it over is long).
                 .onChange(of: viewModel.step) { scroller.scrollTo(Self.top, anchor: .top) }
+                // Back from the card rack on another card than the one tapped: the grid shows it, ticked.
+                .onChange(of: viewModel.largeDesign) { old, new in
+                    guard new == nil, viewModel.step == .pick, let id = viewModel.designId, id != old?.id else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) { scroller.scrollTo(id, anchor: .center) }
+                }
             }
             .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
                 footer
