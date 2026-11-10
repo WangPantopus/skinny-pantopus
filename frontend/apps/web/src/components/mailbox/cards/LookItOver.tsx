@@ -123,6 +123,7 @@ export default function LookItOver({
       mailedOn={piece.postmark?.date || piece.created_at}
       closeLabel="Back to Look it over"
       onClose={() => setOnTable(false)}
+      photoFrom={(fileId) => ({ own: fileId })}
     />
   ) : null;
   const openOnTable = launchFeatures.cardTable ? (

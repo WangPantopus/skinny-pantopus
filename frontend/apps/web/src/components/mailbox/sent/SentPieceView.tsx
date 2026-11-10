@@ -137,7 +137,8 @@ export default function SentPieceView({ id }: { id: string }) {
       {/* The same full-screen moment they have. Your own note is shown, so it opens as it did for them, seal or none. */}
       {onTable && card.design ? (
         <CardTable
-          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null }}
+          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null, photo: card.photo ?? null }}
+          photoFrom={(fileId) => ({ sent: piece.id, fileId })}
           note={piece.note}
           fromName={piece.envelope.from}
           toName={sentEnvelopeName(piece)}

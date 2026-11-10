@@ -14,7 +14,8 @@ import { createPortal } from 'react-dom';
 import { cardMood, cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, seededRandom, TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { cardPen } from './cardFont';
 import { playCardSound, preloadCardSounds } from './cardSounds';
-import type { CardSignature } from '@pantopus/api';
+import type { CardPhoto, CardSignature } from '@pantopus/api';
+import CardPrint, { type PrintSource } from './CardPrint';
 import { PaperBack, PaperFront } from './CardPaper';
 import { CardTableEngine, type TableState } from './cardTableEngine';
 import { useDarkPage } from './useDarkPage';
@@ -59,6 +60,8 @@ export type TableCard = {
   verse?: string | null;
   /** Signed beside FROM (design plan 8.2); like the note, not while it's sealed. */
   signature?: CardSignature | null;
+  /** The card's own photo (memories plan step 4); null while sealed. `covered` until the reader taps it. */
+  photo?: CardPhoto | null;
 };
 
 export type TableMenuItem = { label: string; onSelect: () => void };
@@ -145,6 +148,7 @@ export default function CardTable({
   onClose,
   overlay,
   letter = null,
+  photoFrom = null,
 }: {
   card: TableCard;
   /** The note. A sealed card's never reaches this far. */
@@ -174,6 +178,8 @@ export default function CardTable({
    * same moves, and the folded sheet that comes out opens the letter itself (`onOut`).
    */
   letter?: { onOut: () => void } | null;
+  /** Where the card's photo loads from: the reader's piece, the sender's Sent, or their own upload (Look it over). */
+  photoFrom?: ((fileId: string) => PrintSource) | null;
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<CardTableEngine | null>(null);
@@ -191,6 +197,8 @@ export default function CardTable({
   const from = firstNameOf(fromName);
   // The collection's mood (design plan Part 7): snow, candlelight or Santa's bounce. Off with Reduce Motion (CSS).
   const mood = cardMood(card.number, card.design);
+  // A photo from someone who isn't the reader's connection stays covered until it's tapped (memories contract 10).
+  const [uncovered, setUncovered] = useState(false);
   const isLetter = Boolean(letter);
   // The envelope's pictures: the cream set for a letter.
   const envArt = (name: string) => art(isLetter ? `cream-${name}` : name);
@@ -504,6 +512,31 @@ export default function CardTable({
               </PaperBack>
               </>)}
             </div>
+            {/* The card's own photo, a print lying beside it once the card is turned over (wave 4 drawing 3); it moves
+                with the card and never flips. A nostalgia card's print has the orange date. */}
+            {card.photo && !sealed && !isLetter && photoFrom ? (
+              <div
+                className={`${styles.print} ${turnedOver ? styles.printShown : ''}`}
+                // A portrait print lies narrower, so either kind keeps clear of the buttons under the card.
+                style={{ width: (card.photo.height ?? 3) > (card.photo.width ?? 4) ? '34%' : '44%' }}
+                aria-hidden={!turnedOver}
+                data-ui
+                data-testid="cardTablePrint"
+              >
+                <CardPrint
+                  source={photoFrom(card.photo.file_id)}
+                  width={card.photo.width}
+                  height={card.photo.height}
+                  alt={card.photo.alt}
+                  covered={card.photo.covered && !uncovered}
+                  fromName={fromName}
+                  onUncover={() => setUncovered(true)}
+                  datedOn={mood === 'nostalgia' ? mailedOn : null}
+                  tilt={4}
+                  className="w-full"
+                />
+              </div>
+            ) : null}
           </div>
           <div className={`${styles.layer} ${styles.lPocketShadow}`} data-el="lPocketShadow"><Art src={envArt('env-pocket-shadow.webp')} /></div>
           <div className={`${styles.layer} ${styles.lPocket}`} data-el="lPocket"><Art src={envArt('env-pocket.webp')} /></div>
