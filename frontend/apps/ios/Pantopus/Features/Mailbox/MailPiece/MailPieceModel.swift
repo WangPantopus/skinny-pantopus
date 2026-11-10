@@ -202,6 +202,17 @@ struct MailPieceModel: Identifiable, Hashable {
     /// Cancelled by the carrier's postmark. A card in its sender's Sent that
     /// still waits for the 7 a.m. pickup isn't yet.
     var isPostmarked = true
+    /// In its sender's Sent, a card the other person has (delivered or
+    /// claimed, not sealed): drawn taken out, as they see it (plan Part 4).
+    var cardIsWithThem = false
+
+    /// With `card_table` on, an opened card (or one they have, in Sent) is
+    /// drawn taken out of its envelope, its picture leaning over the top edge
+    /// (plan Part 4). Never a sealed one.
+    var showsCardTakenOut: Bool {
+        guard LaunchFeatures.cardTable, let card, !card.sealed else { return false }
+        return isOpened || cardIsWithThem
+    }
 
     /// One sentence: "Bill from Alder Creek Water, verified utility, sealed,
     /// $42.10 due Fri, Nov 7."

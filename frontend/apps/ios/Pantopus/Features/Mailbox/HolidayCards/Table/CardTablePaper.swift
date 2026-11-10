@@ -25,6 +25,8 @@ extension MailPaper {
     static let tableSheet = rgb(0x21, 0x1B, 0x19)
     static let tableWax = rgb(0x8B, 0x1D, 0x1D)
     static let tableGold = rgb(0xD8, 0xB7, 0x6F)
+    /// Under a card taken out of its envelope in the Mailbox (plan Part 4).
+    static let cardTakenOutShadow = rgb(40, 8, 6).opacity(0.45)
     /// The window's vignette at its darkest.
     static let tableVignette = rgb(6, 3, 4)
 
