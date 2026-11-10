@@ -138,7 +138,7 @@ private fun TableCloth(
 }
 
 /** [bitmap] centred and cut to cover [target], never stretched. */
-private fun drawCover(
+internal fun drawCover(
     canvas: Canvas,
     bitmap: Bitmap,
     target: RectF,
@@ -175,7 +175,7 @@ private fun EnvelopeShadow(
     )
 }
 
-private fun DrawScope.drawShadow(shadow: SoftShadow) {
+internal fun DrawScope.drawShadow(shadow: SoftShadow) {
     val pad = shadow.pad
     drawIntoCanvas { canvas ->
         canvas.nativeCanvas.drawBitmap(
@@ -787,18 +787,31 @@ private fun TurningLight(state: CardTableState) {
     )
 }
 
-/** The room's light over everything: the window's light, a vignette and a fine film grain. */
+/** The room's light over everything on the table, moving a little with the light's springs. */
 @Composable
 private fun TableLight(
     state: CardTableState,
     art: CardTableArt,
 ) {
+    RoomLight(art, Modifier.zIndex(30f), moveX = { state.lightX.x }, moveY = { state.lightY.x })
+}
+
+/**
+ * The room's light: the window's light, a vignette and a fine film grain, over the table or the card rack. [moveX] and
+ * [moveY] (about -1 to 1) slide the window's light; they're read while drawing, so a moving light doesn't recompose.
+ */
+@Composable
+internal fun RoomLight(
+    art: CardTableArt,
+    modifier: Modifier = Modifier,
+    moveX: () -> Float = { 0f },
+    moveY: () -> Float = { 0f },
+) {
     val density = LocalDensity.current.density
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
-                .zIndex(30f)
                 .drawWithCache {
                     val lightPaint = Paint(Paint.FILTER_BITMAP_FLAG)
                     softLight(lightPaint, strength = 0.88f)
@@ -829,8 +842,8 @@ private fun TableLight(
                     grain.alpha = (0.36f * 255f).toInt()
                     onDrawBehind {
                         val over = 40f * density
-                        val moveX = state.lightX.x * 22f * density
-                        val moveY = state.lightY.x * 22f * density
+                        val shiftX = moveX() * 22f * density
+                        val shiftY = moveY() * 22f * density
                         val grownX = (size.width + over * 2f) * 0.02f
                         val grownY = (size.height + over * 2f) * 0.02f
                         drawIntoCanvas { canvas ->
@@ -839,10 +852,10 @@ private fun TableLight(
                                 art.light,
                                 null,
                                 RectF(
-                                    -over - grownX + moveX,
-                                    -over - grownY + moveY,
-                                    size.width + over + grownX + moveX,
-                                    size.height + over + grownY + moveY,
+                                    -over - grownX + shiftX,
+                                    -over - grownY + shiftY,
+                                    size.width + over + grownX + shiftX,
+                                    size.height + over + grownY + shiftY,
                                 ),
                                 lightPaint,
                             )

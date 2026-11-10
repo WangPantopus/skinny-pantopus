@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -81,8 +80,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
@@ -91,6 +88,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.StampBalance
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardRack
 import app.pantopus.android.ui.screens.mailbox.components.MailKind
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceCard
@@ -419,7 +417,7 @@ private fun Hint(
 // ── Step 2: pick a card ──────────────────────────────────────
 
 /**
- * The pictures two across: a tap chooses one, a second tap shows it large ([onLarge]). With the server's collections, a
+ * The pictures two across: a tap opens it large on the card rack ([onLarge]), where it's chosen. With the server's collections, a
  * row of their names on one line that scrolls sideways, who the one shown is for, and its pictures. It opens on the
  * collection that holds the card already chosen (coming back from step 3), else the first; switching keeps the card
  * chosen. A server without collections: one grid of every picture. "Write on this card" is in [PickBar], pinned under it.
@@ -428,7 +426,6 @@ private fun Hint(
 internal fun PickStep(
     cards: HolidayCardsResponse,
     chosen: String?,
-    onChoose: (String) -> Unit,
     onLarge: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -457,7 +454,7 @@ internal fun PickStep(
                 designs = collection?.designs?.mapNotNull { cards.designOf(it) } ?: cards.designs,
                 label = collection?.name,
                 chosen = chosen,
-                onTap = { design -> if (design == chosen) onLarge(design) else onChoose(design) },
+                onTap = onLarge,
             )
         }
     }
@@ -465,7 +462,8 @@ internal fun PickStep(
 
 /**
  * Pick a card's bar, pinned above the bottom edge: the chosen picture small with its caption and "See it larger" (or how
- * to choose one), and "Write on this card", greyed until a picture is chosen. [large] is the picture shown large.
+ * to choose one), and "Write on this card", greyed until a picture is chosen. [large] is the picture open on the card
+ * rack, among the other cards of its collection.
  */
 @Composable
 internal fun PickBar(
@@ -527,13 +525,21 @@ internal fun PickBar(
         )
     }
     cards.designOf(large)?.let { design ->
-        LargeCard(
-            design = design,
+        val collection = cards.collections.firstOrNull { design.id in it.designs }
+        CardRack(
+            designs = collection?.designs?.mapNotNull { cards.designOf(it) } ?: cards.designs,
+            start = design.id,
+            collection = collection?.name,
             year = cards.year,
-            onClose = { onLarge(null) },
-            onChoose = {
-                onChoose(design.id)
+            onSeen = onChoose,
+            onClose = { seen ->
+                onChoose(seen)
                 onLarge(null)
+            },
+            onWrite = { seen ->
+                onChoose(seen)
+                onLarge(null)
+                onNext()
             },
         )
     }
@@ -726,40 +732,6 @@ private fun DesignTile(
             textAlign = TextAlign.Center,
             modifier = Modifier.heightIn(min = 36.dp),
         )
-    }
-}
-
-/** A picture large, as the card prints it, with Close and Choose this card. */
-@Composable
-private fun LargeCard(
-    design: HolidayCardDesign,
-    year: Int,
-    onClose: () -> Unit,
-    onChoose: () -> Unit,
-) {
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(
-            modifier = Modifier.padding(Spacing.s4).widthIn(max = 420.dp).testTag("sendCardLarge"),
-            verticalArrangement = Arrangement.spacedBy(Spacing.s3),
-        ) {
-            HolidayCardFront(
-                design = design.id,
-                caption = design.caption,
-                paper = design.paper,
-                year = year,
-                pictureHeight = design.height,
-                modifier = Modifier.shadow(16.dp, RoundedCornerShape(3.dp)).clip(RoundedCornerShape(3.dp)),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CardButton(
-                    "Close",
-                    onClick = onClose,
-                    kind = CardButtonKind.Paper,
-                    modifier = Modifier.weight(1f).testTag("sendCardLargeClose"),
-                )
-                CardButton("Choose this card", onClick = onChoose, modifier = Modifier.weight(1f).testTag("sendCardChooseThis"))
-            }
-        }
     }
 }
 

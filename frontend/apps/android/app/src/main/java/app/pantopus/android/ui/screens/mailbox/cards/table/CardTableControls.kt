@@ -184,9 +184,9 @@ private fun TopRow(
     }
 }
 
-/** A round glass button, 40 across, with room to tap around it. */
+/** A round glass button, 40 across, with room to tap around it (the table's and the card rack's). */
 @Composable
-private fun RoundButton(
+internal fun RoundButton(
     icon: PantopusIcon,
     words: String,
     tag: String,

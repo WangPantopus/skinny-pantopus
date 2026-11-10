@@ -84,7 +84,7 @@ fun SendCardScreen(
     val fromName by viewModel.fromName.collectAsStateWithLifecycle()
     val stampShort by viewModel.stampShort.collectAsStateWithLifecycle()
     var confirmTakeBack by rememberSaveable { mutableStateOf(false) }
-    // Pick a card's picture shown large ("See it larger", or a second tap on the chosen one).
+    // Pick a card's picture open large on the card rack (a tap on it, or "See it larger").
     var largeDesign by rememberSaveable { mutableStateOf<String?>(null) }
     // "Seal and send" on Look it over: the table, to seal it by hand (Part 2).
     var sealing by rememberSaveable { mutableStateOf(false) }
@@ -335,7 +335,7 @@ private fun Steps(
     val design = cards.designs.firstOrNull { it.id == form.design }
     when (form.step) {
         SendCardStep.To -> ToStep(form, viewModel)
-        SendCardStep.Pick -> PickStep(cards, form.design, onChoose = viewModel::chooseDesign, onLarge = onLarge)
+        SendCardStep.Pick -> PickStep(cards, form.design, onLarge = onLarge)
         SendCardStep.Write ->
             if (design != null) {
                 WriteStep(
