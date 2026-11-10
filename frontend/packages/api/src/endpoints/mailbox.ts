@@ -848,8 +848,12 @@ export interface SentPiece {
   /** Sent as a link anyone can open (launch key card_table). `to_name` is "them" until someone opens it. */
   by_link?: boolean;
   arrival: HolidayCardArrival | null;
-  /** To a person: before the 7 a.m. pickup, picked up (a Christmas-morning card on its way), in their mailbox. */
-  status: 'waiting' | 'picked_up' | 'delivered' | 'claimed' | 'expired' | 'email_waiting';
+  /**
+   * To a person: before the 7 a.m. pickup, picked up (a Christmas-morning card on its way), in their mailbox.
+   * 'not_delivered' (only when asked with include: 'not_delivered'): a card a block withdrew; say "Couldn't be delivered",
+   * never why or when.
+   */
+  status: 'waiting' | 'picked_up' | 'delivered' | 'claimed' | 'expired' | 'email_waiting' | 'not_delivered';
   arrives_at: string | null;
   arrives_on: string | null;
   opens_on: string | null;
@@ -872,7 +876,7 @@ export interface SentPiece {
 
 /** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */
 export interface SentTrailStep {
-  step: 'sealed' | 'emailed' | 'picked_up' | 'delivered' | 'opens' | 'joined' | 'returned';
+  step: 'sealed' | 'emailed' | 'picked_up' | 'delivered' | 'opens' | 'joined' | 'returned' | 'not_delivered';
   at?: string | null;
   on?: string | null;
   done: boolean;
@@ -886,13 +890,13 @@ export interface SentPieceDetail extends SentPiece {
 }
 
 /** GET /api/mailbox/sent: newest first, `limit` at a time (25 unless asked); `next` is the cursor for the page after. */
-export async function getSentCards(params?: { before?: string; limit?: number }): Promise<{ items: SentPiece[]; next: string | null }> {
+export async function getSentCards(params?: { before?: string; limit?: number; include?: 'not_delivered' }): Promise<{ items: SentPiece[]; next: string | null }> {
   return get<{ items: SentPiece[]; next: string | null }>('/api/mailbox/sent', params);
 }
 
-/** GET /api/mailbox/sent/:id (its sender only). */
-export async function getSentCard(id: string): Promise<{ item: SentPieceDetail }> {
-  return get<{ item: SentPieceDetail }>(`/api/mailbox/sent/${encodeURIComponent(id)}`);
+/** GET /api/mailbox/sent/:id (its sender only); `include: 'not_delivered'` also opens a card a block withdrew. */
+export async function getSentCard(id: string, params?: { include?: 'not_delivered' }): Promise<{ item: SentPieceDetail }> {
+  return get<{ item: SentPieceDetail }>(`/api/mailbox/sent/${encodeURIComponent(id)}`, params);
 }
 
 /** POST /api/mailbox/cards/shared (launch key card_table): which picture went where, for counts. The picture and note stay on the device. */
