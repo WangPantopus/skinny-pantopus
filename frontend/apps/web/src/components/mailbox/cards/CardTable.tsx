@@ -40,6 +40,19 @@ export type TableCard = {
 
 export type TableMenuItem = { label: string; onSelect: () => void };
 
+/** Sealing it by hand (design plan Part 2): the sender's own moment on the table, before the card goes. */
+export type SendMoment = {
+  /** Who it's for, as the words say it ("Maya"). */
+  firstName: string;
+  /** Several cards (a list): a stack of envelope edges shows behind the top one. */
+  count?: number;
+  /** The seal is pressed home: send it now. Answers whether it went, or the words saying why it didn't. */
+  onSeal: () => Promise<{ ok: true } | { ok: false; message: string | null }>;
+  /** Step 5, once the envelope has gone: the words at the top, and the line and buttons under the table. */
+  goneWords: string;
+  gone: ReactNode;
+};
+
 /** A failed picture tries again rather than showing broken: a weak connection is no reason to lose the envelope. */
 function retryImage(el: HTMLImageElement) {
   const src = el.getAttribute('src');
@@ -92,6 +105,7 @@ export default function CardTable({
   closeLabel = 'Back to the Mailbox',
   menu = [],
   sendBack = null,
+  sendMoment = null,
   onShare,
   onClose,
   overlay,
@@ -113,6 +127,8 @@ export default function CardTable({
   menu?: TableMenuItem[];
   /** Send one back (design plan Part 3): a quiet button under "Turn it back" once the card is turned over. */
   sendBack?: TableMenuItem | null;
+  /** Sealing it by hand instead of opening it. */
+  sendMoment?: SendMoment | null;
   onShare?: () => void;
   onClose: () => void;
   /** Sheets and dialogs that belong over the table. */
@@ -122,7 +138,11 @@ export default function CardTable({
   const engineRef = useRef<CardTableEngine | null>(null);
   const moreRef = useRef<HTMLButtonElement | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [ui, setUi] = useState<TableState>({ step: startOnTable && !card.sealed ? 'out' : 'front', backUp: false, turnedOnce: false, envTurnedOnce: false, heldOnce: false });
+  const [ui, setUi] = useState<TableState>({ step: startOnTable && !card.sealed ? 'out' : 'front', backUp: false, turnedOnce: false, envTurnedOnce: false, heldOnce: false, send: sendMoment ? 'ready' : null });
+  // Why the seal didn't take, in place of the words until the next press.
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const momentRef = useRef(sendMoment);
+  momentRef.current = sendMoment;
   const [menuOpen, setMenuOpen] = useState(false);
   const [controlsHidden, setControlsHidden] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -145,6 +165,7 @@ export default function CardTable({
     if (!mounted || !stage) return undefined;
     const engine = new CardTableEngine(stage, {
       sealed: card.sealed,
+      sending: Boolean(momentRef.current),
       wholeSrc: WAX_WHOLE,
       crackedSrc: WAX_CRACKED,
       callbacks: {
@@ -152,6 +173,16 @@ export default function CardTable({
         onRefused: () => say(daysWords(card.sealed_until).notYet),
         onTableTap: () => setControlsHidden((hidden) => !hidden),
         onPress: () => setMenuOpen(false),
+        // The card goes the moment the seal is on; one press sends one card (the engine takes no second press).
+        onSeal: () => {
+          const moment = momentRef.current;
+          if (!moment) return;
+          setRefusal(null);
+          void moment.onSeal().then((answer) => {
+            if (!answer.ok) setRefusal(answer.message);
+            engineRef.current?.sealResult(answer.ok);
+          }, () => engineRef.current?.sealResult(false));
+        },
       },
     });
     engineRef.current = engine;
@@ -168,7 +199,8 @@ export default function CardTable({
     const begin = () => {
       if (begun || engineRef.current !== engine) return;
       begun = true;
-      if (startOnTable && !card.sealed) engine.startOnTable();
+      if (momentRef.current) engine.startSending({ sealedMark: card.sealed });
+      else if (startOnTable && !card.sealed) engine.startOnTable();
       else engine.restart(true);
     };
     // The art and the card's picture are ready before the envelope arrives; after 5 seconds it comes anyway.
@@ -262,12 +294,29 @@ export default function CardTable({
 
   if (!mounted) return null;
 
-  const { step, backUp, turnedOnce, envTurnedOnce, heldOnce } = ui;
-  const { sealed } = card;
+  const { step, backUp, turnedOnce, envTurnedOnce, heldOnce, send } = ui;
+  // Sealing it, the card isn't sealed to the sender: only its envelope says so once it's addressed.
+  const sealed = card.sealed && !sendMoment;
   let words = '';
   let primary = '';
   let hint = '';
-  if (step === 'front') {
+  const reduce = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  if (sendMoment) {
+    if (send === 'ready') {
+      words = `For ${sendMoment.firstName}.`;
+      primary = reduce ? 'Seal and send' : 'Put it in the envelope';
+      hint = reduce ? '' : 'or push it up into the envelope';
+    } else if (send === 'in') {
+      primary = reduce ? 'Seal and send' : 'Close the flap';
+      hint = reduce ? '' : 'or pull the flap down';
+    } else if (send === 'seal') {
+      words = refusal ?? (reduce ? '' : 'Press and hold to seal it.');
+      primary = reduce ? 'Seal and send' : 'Seal it';
+      hint = reduce ? '' : 'or press and hold anywhere';
+    } else if (send === 'gone') {
+      words = sendMoment.goneWords;
+    }
+  } else if (step === 'front') {
     words = sealed ? `${from} sealed this card.` : `A Christmas card from ${from}.`;
     primary = 'Turn it over';
     hint = envTurnedOnce ? 'or swipe it' : 'or swipe it, the way you’d turn it in your hand';
@@ -282,12 +331,16 @@ export default function CardTable({
     if (!turnedOnce) hint = 'or swipe it';
     else if (!heldOnce && typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches) hint = 'press and hold, then move your finger: the light moves';
   }
-  const showTopRight = step === 'out' || (sealed && (step === 'back' || step === 'front'));
+  const showTopRight = !sendMoment && (step === 'out' || (sealed && (step === 'back' || step === 'front')));
+  // The button is there only when there's something to press: never while things move by themselves.
+  const sendButton = !sendMoment || send === 'ready' || send === 'in' || send === 'seal';
 
   // Read aloud as one sentence, as today's card is. The envelope reads as what it is.
   const caption = card.caption || 'A Christmas picture';
   const captionSentence = /[.!?]$/.test(caption) ? caption : `${caption}.`;
-  const spoken = step === 'out' && !sealed
+  const spoken = sendMoment
+    ? [words, send === 'addressed' ? `Addressed to ${toName}.` : '', send === 'sending' ? 'Sealing it.' : ''].filter(Boolean).join(' ')
+    : step === 'out' && !sealed
     ? `Card from ${fromName}: ${captionSentence} On the back: ${note}`
     : `Christmas card from ${fromName}${sealed ? ', sealed until Christmas morning' : ''}`;
   const day = postmarkDay(mailedOn || new Date().toISOString());
@@ -300,8 +353,9 @@ export default function CardTable({
         className={styles.stage}
         role="dialog"
         aria-modal="true"
-        aria-label={`Christmas card from ${fromName}`}
+        aria-label={sendMoment ? `Your card for ${sendMoment.firstName}` : `Christmas card from ${fromName}`}
         tabIndex={-1}
+        data-send={sendMoment ? '1' : undefined}
       >
         <div className={styles.safe} data-el="safe" />
         <div
@@ -355,8 +409,20 @@ export default function CardTable({
             <div className={styles.flapOut} data-el="flapOut">
               <Art src={art('env-flap-out.webp')} />
               <Art className={styles.seal} data-el="seal" src={WAX_WHOLE} />
+              {sendMoment ? (
+                <>
+                  <div className={styles.sealRing} />
+                  <div className={styles.press} data-el="press" />
+                </>
+              ) : null}
             </div>
           </div>
+          {sendMoment && (sendMoment.count ?? 1) > 1 ? (
+            <div className={`${styles.layer} ${styles.lStack}`} data-el="lStack">
+              <Art src={art('env-front.webp')} />
+              <Art src={art('env-front.webp')} />
+            </div>
+          ) : null}
           <div className={`${styles.layer} ${styles.lFront}`} data-el="lFront">
             <Art src={art('env-front.webp')} />
             <div className={styles.frontWords}>
@@ -370,7 +436,7 @@ export default function CardTable({
               </div>
               <div className={styles.fromName} style={{ fontFamily: PEN, fontSize: `calc(var(--ew) * ${fitOnEnvelope(fromName, 0.05, 0.62).toFixed(4)})` }}>{fromName}</div>
               <div className={styles.toName} style={{ fontFamily: PEN, fontSize: `calc(var(--ew) * ${fitOnEnvelope(toName, 0.094, 0.78).toFixed(4)})` }}>{toName}</div>
-              {sealed
+              {card.sealed
                 ? <div className={styles.sealedMark}>Do not open<br />until Christmas</div>
                 : <div className={styles.kind}>Christmas card</div>}
             </div>
@@ -410,8 +476,19 @@ export default function CardTable({
           <div className={`${styles.words} ${words && !toast ? '' : styles.hidden}`} data-el="words" aria-live="polite">{words}</div>
           <div className={`${styles.toast} ${toast ? styles.toastOn : ''}`} role="status">{toast}</div>
           <div className={styles.bottom} data-el="bottom">
-            <div className={`${styles.act} ${controlsHidden ? styles.hidden : ''}`} data-el="act">
-              <button type="button" className={styles.primary} data-ui onClick={() => engineRef.current?.primary()}>{primary || 'Turn it over'}</button>
+            {sendMoment && send === 'gone' ? <div className={styles.gone} data-ui data-testid="cardTableGone">{sendMoment.gone}</div> : null}
+            <div className={`${styles.act} ${controlsHidden || (sendMoment && send === 'gone') ? styles.hidden : ''}`} data-el="act" style={sendMoment && send === 'gone' ? { display: 'none' } : undefined}>
+              <button
+                type="button"
+                className={`${styles.primary} ${sendButton ? '' : styles.hidden}`}
+                data-ui
+                data-testid={sendMoment ? 'cardTableSendStep' : undefined}
+                aria-hidden={!sendButton}
+                tabIndex={sendButton ? 0 : -1}
+                onClick={() => { setRefusal(null); engineRef.current?.primary(); }}
+              >
+                {primary || 'Turn it over'}
+              </button>
               <div className={styles.hint}>{hint}</div>
               {/* Its room is kept while it can be offered, so the card never moves when it shows. */}
               {sendBack ? (
