@@ -115,7 +115,9 @@ class ChatListViewModel
                 repo.conversationsCopy()?.let { show(it, syncMutes = false, updateTotals = !known.initialized) }
             }
             subscribeToSockets()
-            fetch(force = false)
+            // A row quoting a Moment that was running when it was read is read again: a Moment ending changes no
+            // conversation, so the stored list would keep its picture (as iPhone's #3871).
+            fetch(force = allRows.any { it.momentReply?.ended == false })
         }
 
         /**

@@ -3353,9 +3353,13 @@ class ChatConversationViewModel
             val context = historyContext()
             val oldest = messages.minWithOrNull(messageOrder)
             changedDuringCatchUp.clear()
+            // A Moment ending, being deleted or a block changes no message, so the change log never brings it: while a held
+            // quote still reads as running, the window is read again instead, and each message takes the server's
+            // `moment` (Moments contract "Chat"; as iPhone's #3871).
+            val quotesRunning = messages.any { it.moment?.ended == false }
             catchUpJob =
                 viewModelScope.launch {
-                    if (contextMessageId == null && recoverChanges(context)) return@launch
+                    if (contextMessageId == null && !quotesRunning && recoverChanges(context)) return@launch
                     var before: String? = null
                     val authoritative = LinkedHashMap<String, ChatMessageDto>()
                     var firstPage: ChatMessagesResponse? = null
