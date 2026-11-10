@@ -178,7 +178,7 @@ struct MomentsStrip: View {
                     ForEach(viewModel.stripPeople) { person in
                         Button { actions.watch(viewModel.watchQueue(from: person), 0, false) } label: { MomentStripFace(ring: person.face) }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(MomentsSpeech.label(for: person.face))
+                            .accessibilityLabel(MomentsSpeech.label(for: person))
                             .accessibilityIdentifier("moments.strip.ring.\(person.face.id)")
                     }
                 }

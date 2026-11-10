@@ -85,17 +85,18 @@ struct MomentsMapView: View {
             }
         }
         .overlay(alignment: .top) {
-            if let note = uploads.liveNote {
-                MomentsLiveNote(text: note)
+            if let note = uploads.liveNote ?? uploads.plainNote {
+                MomentsLiveNote(text: note, confirms: uploads.liveNote != nil)
                     .padding(.top, 64)
                     .transition(.move(edge: .top).combined(with: .opacity))
-                    .task {
+                    .task(id: note) {
                         try? await Task.sleep(for: .seconds(4))
                         uploads.liveNote = nil
+                        uploads.plainNote = nil
                     }
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: uploads.liveNote)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: uploads.liveNote ?? uploads.plainNote)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await viewModel.load() } }
         }
@@ -343,6 +344,16 @@ private struct MomentsPostingPin: View {
 /// What VoiceOver reads for a ring or a bubble.
 enum MomentsSpeech {
     /// "Priya S., 3 Moments, new, at Vancouver Community Library, verified resident".
+    /// A face in the strip: as a ring, but someone at several spots reads "at 3 places".
+    static func label(for person: MomentsStripPerson) -> String {
+        guard person.rings.count > 1 else { return label(for: person.face) }
+        let face = person.face
+        var parts = [face.mine ? "Your Moments" : face.author.name, "\(face.moments.count) Moments", face.isNew ? "new" : "watched"]
+        parts.append("at \(person.rings.count) places")
+        if face.author.verified { parts.append("verified resident") }
+        return parts.joined(separator: ", ")
+    }
+
     static func label(for ring: MomentRingDTO) -> String {
         let count = ring.moments.count == 1 ? "1 Moment" : "\(ring.moments.count) Moments"
         var parts = [ring.mine ? "Your Moments" : ring.author.name, count, ring.isNew ? "new" : "watched"]
@@ -364,10 +375,12 @@ enum MomentsSpeech {
 /// "Your Moment is live. It shows for 24 hours.", over the map for a few seconds.
 private struct MomentsLiveNote: View {
     let text: String
+    /// The green check: something went through ("Your Moment is live"). Not for "This Moment has ended."
+    let confirms: Bool
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
-            Icon(.check, size: 16, strokeWidth: 2.75, color: Theme.Color.success)
+            if confirms { Icon(.check, size: 16, strokeWidth: 2.75, color: Theme.Color.success) }
             Text(text)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)

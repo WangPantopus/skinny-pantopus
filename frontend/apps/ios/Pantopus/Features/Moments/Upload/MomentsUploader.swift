@@ -66,6 +66,8 @@ final class MomentsUploader {
     var notice: String?
     /// "Your Moment is live. It shows for 24 hours.": the map shows it for a few seconds, then clears it.
     var liveNote: String?
+    /// A plain sentence for the same pill, without its check mark ("This Moment has ended." after a link to one).
+    var plainNote: String?
     /// Where the Moment that just went live is pinned: the map goes there when it's showing somewhere else.
     var liveSpot: CLLocationCoordinate2D?
 
@@ -383,6 +385,7 @@ final class MomentsUploader {
         pickedUp = []
         MomentsBackgroundUpload.shared.cancelAll()
         postings = []
+        plainNote = nil
         liveNote = nil
         liveSpot = nil
         resumed = false

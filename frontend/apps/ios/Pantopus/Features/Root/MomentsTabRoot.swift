@@ -112,8 +112,8 @@ public struct MomentsTabRoot: View {
                 watching = MomentsWatchRequest(rings: [ring], start: 0, newOnly: false)
             } catch {
                 let failure = error as? MomentsFailure
-                // The map's short note (the one that says "Your Moment is live").
-                MomentsUploader.shared.liveNote = failure == .ended || failure == .notFound
+                // The map's short note (the pill that says "Your Moment is live"), without its check mark.
+                MomentsUploader.shared.plainNote = failure == .ended || failure == .notFound
                     ? "This Moment has ended."
                     : failure?.message ?? "Couldn't open that Moment."
             }
