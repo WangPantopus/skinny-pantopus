@@ -17,7 +17,10 @@ struct HolidayCardFlowView: View {
     @State private var viewModel: HolidayCardFlowViewModel
     /// "See it in Sent" on a card just sent: its id; "See them in Sent" on a list: nil (Sent itself).
     private let onSeeInSent: ((String?) -> Void)?
+    /// Back out of the flow (before anything is sent).
     private let onClose: () -> Void
+    /// Done once it's sent ("Back to your mail", step 5's Done); `onClose` when nil.
+    private let onDone: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var phase
     private static let top = "sendCardTop"
@@ -33,10 +36,20 @@ struct HolidayCardFlowView: View {
         return "\(viewModel.step):\(sent):\(viewModel.listTakenBack.count):\(viewModel.backNote ?? "")"
     }
 
-    init(viewModel: HolidayCardFlowViewModel, onSeeInSent: ((String?) -> Void)? = nil, onClose: @escaping () -> Void) {
+    init(
+        viewModel: HolidayCardFlowViewModel,
+        onSeeInSent: ((String?) -> Void)? = nil,
+        onDone: (() -> Void)? = nil,
+        onClose: @escaping () -> Void
+    ) {
         _viewModel = State(initialValue: viewModel)
         self.onSeeInSent = onSeeInSent
+        self.onDone = onDone
         self.onClose = onClose
+    }
+
+    private var done: () -> Void {
+        onDone ?? onClose
     }
 
     var body: some View {
@@ -97,7 +110,7 @@ struct HolidayCardFlowView: View {
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         // Seal it by hand: the table over the flow, from Look it over until Done.
-        .modifier(CardTableSendCover(viewModel: viewModel, onDone: onClose))
+        .modifier(CardTableSendCover(viewModel: viewModel, onDone: done))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sendCard")
     }
@@ -201,7 +214,7 @@ struct HolidayCardFlowView: View {
                 viewModel: viewModel,
                 results: results,
                 cards: cards,
-                onDone: onClose,
+                onDone: done,
                 onSeeInSent: onSeeInSent.map { open in { open(nil) } }
             )
         } else if viewModel.step == .sent, let sent = viewModel.sent {
@@ -210,7 +223,7 @@ struct HolidayCardFlowView: View {
                 card: sent,
                 cards: cards,
                 title: sent.byLink ? "Your card" : "On its way",
-                onDone: onClose,
+                onDone: done,
                 onSeeInSent: onSeeInSent.map { open in { open(sent.id) } }
             )
         } else if let today = viewModel.today {

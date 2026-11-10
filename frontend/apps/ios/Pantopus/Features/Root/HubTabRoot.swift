@@ -3669,6 +3669,18 @@ public struct HubTabRoot: View {
                         NotificationCenter.default.post(name: .mailboxOpenSent, object: cardId)
                     }
                 },
+                onDone: {
+                    Task { @MainActor in
+                        // Sent from a card's page ("Send {first name} a card"): Done goes to the Mailbox, as on web,
+                        // not back to that card; Back before sending still returns to it.
+                        if toUserId != nil, path.routes.count >= 2,
+                           case .mailItemDetail = path.routes[path.routes.count - 2] {
+                            path.removeLast(2)
+                        } else {
+                            pop()
+                        }
+                    }
+                },
                 onClose: { Task { @MainActor in pop() } }
             )
         case let .mailSentCard(id):
