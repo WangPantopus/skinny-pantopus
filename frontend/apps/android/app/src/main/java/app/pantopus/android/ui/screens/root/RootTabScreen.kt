@@ -570,8 +570,14 @@ private object ChildRoutes {
     const val MAILBOX_SEARCH = "mailbox/search"
     const val MAILBOX_ITEM_DETAIL = "mailbox/item/{$MAILBOX_ITEM_DETAIL_MAIL_ID_KEY}"
 
-    /** Send a Christmas card, or today's card once it's sent (launch keys `holiday_cards` + `mailbox`). */
-    const val MAILBOX_CARDS = "mailbox/cards?${SendCardViewModel.SEND_CARD_DESIGN_KEY}={${SendCardViewModel.SEND_CARD_DESIGN_KEY}}"
+    /**
+     * Send a Christmas card, or today's card once it's sent (launch keys `holiday_cards` + `mailbox`), with a picture
+     * chosen (a public card page) or a person chosen ("Send Hazel a card" on a card they sent).
+     */
+    const val MAILBOX_CARDS =
+        "mailbox/cards?${SendCardViewModel.SEND_CARD_DESIGN_KEY}={${SendCardViewModel.SEND_CARD_DESIGN_KEY}}" +
+            "&${SendCardViewModel.SEND_CARD_TO_USER_KEY}={${SendCardViewModel.SEND_CARD_TO_USER_KEY}}" +
+            "&${SendCardViewModel.SEND_CARD_TO_NAME_KEY}={${SendCardViewModel.SEND_CARD_TO_NAME_KEY}}"
 
     /** A card the person sent, opened from Sent in the Mailbox (launch key `mailbox`). */
     const val MAILBOX_SENT_CARD = "mailbox/sent/{$MAIL_SENT_CARD_ID_KEY}"
@@ -1567,6 +1573,14 @@ private object ChildRoutes {
     /** The steps of sending a card, with [design] chosen when there is one. */
     fun mailboxCards(design: String?): String =
         if (design == null) "mailbox/cards" else "mailbox/cards?${SendCardViewModel.SEND_CARD_DESIGN_KEY}=$design"
+
+    /** The steps of sending a card to this person, from Pick a card ("Send Hazel a card"). */
+    fun mailboxCardsTo(
+        userId: String,
+        name: String,
+    ): String =
+        "mailbox/cards?${SendCardViewModel.SEND_CARD_TO_USER_KEY}=${java.net.URLEncoder.encode(userId, "UTF-8")}" +
+            "&${SendCardViewModel.SEND_CARD_TO_NAME_KEY}=${java.net.URLEncoder.encode(name, "UTF-8").replace("+", "%20")}"
 
     /** Build the concrete path for a public profile. */
     fun publicProfile(id: String): String = "users/$id"
@@ -5139,6 +5153,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 nullable = true
                                 defaultValue = null
                             },
+                            navArgument(SendCardViewModel.SEND_CARD_TO_USER_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument(SendCardViewModel.SEND_CARD_TO_NAME_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
                         ),
                 ) {
                     // Launch cut #12 (Christmas cards), with #10 (Mailbox).
@@ -5215,6 +5239,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenPiece = { pieceId -> navController.navigate(ChildRoutes.mailboxItemDetail(pieceId)) },
                         onStartVerify = { homeId, method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
+                        // A card's "Send Hazel a card": the send flow over the card, at Pick a card; Back returns to it.
+                        onSendCard =
+                            if (LaunchFeatures.holidayCards) {
+                                { userId, name -> navController.navigate(ChildRoutes.mailboxCardsTo(userId, name)) }
+                            } else {
+                                null
+                            },
                     )
                 }
                 composable(
