@@ -134,6 +134,14 @@
 /* The side clips and isolates its paper, as the sample's face does: without that, Safari shows the picture mirrored from behind. */
 .side { backface-visibility: hidden; -webkit-backface-visibility: hidden; overflow: hidden; isolation: isolate; border-radius: calc(var(--u) * 0.7); }
 .sideBack { transform: rotateY(180deg); }
+/* The card's own photo (memories plan step 4): a print over the card's lower right once it's turned over, clear of FROM
+   and its signature on the left and of the buttons under the card. */
+.print {
+  position: absolute; right: 1%; top: 72%; width: 44%; z-index: 7; container-type: inline-size; opacity: 0;
+  transform: translateY(4%); transition: opacity 0.45s ease, transform 0.45s ease; pointer-events: none;
+}
+.printShown { opacity: 1; transform: none; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .print { transition: none; } }
 .turnShade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 .sheen {
   position: absolute; inset: -30%; pointer-events: none; will-change: transform; mix-blend-mode: soft-light;

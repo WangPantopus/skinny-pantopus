@@ -87,8 +87,9 @@ export default function CardPrint({
           type="button"
           onClick={onUncover}
           data-testid="cardPrintCover"
-          className="flex w-full items-center justify-center bg-[#e7dfcd] px-4 text-center text-[#3a2f22] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
-          style={{ aspectRatio: ratio, fontFamily: SERIF, fontSize: 'clamp(13px, 4.2cqi, 17px)', lineHeight: 1.35 }}
+          className="flex w-full items-center justify-center px-4 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+          // Inline, so a surface's own button styles (the table's) never fade the words.
+          style={{ aspectRatio: ratio, background: '#e7dfcd', color: '#3a2f22', opacity: 1, fontFamily: SERIF, fontSize: 'clamp(13px, 7cqi, 18px)', lineHeight: 1.35 }}
         >
           Photo from {first}. Tap to show.
         </button>
