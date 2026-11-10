@@ -62,10 +62,11 @@ struct MomentsViewerHeader: View {
     var body: some View {
         HStack(spacing: 10) {
             Group {
-                if isMine {
-                    MomentSelfFace(author: author, size: 36)
-                } else if let author {
+                // Your own face is the one your ring shows on the map: your picture, else your initials.
+                if let author {
                     MomentAvatar(author: author, size: 36)
+                } else if isMine {
+                    MomentSelfFace(author: author, size: 36)
                 }
             }
             // Light fill and dark initials with a white edge, as the boards draw it over a dark picture.

@@ -6,6 +6,8 @@
 // tells React only when the words and buttons should change.
 // ============================================================
 
+import type { CardMood } from './cardArt';
+
 export type TableStep = 'front' | 'back' | 'flap' | 'pulling' | 'out';
 
 /**
@@ -40,6 +42,8 @@ export type TableCallbacks = {
   onPress: () => void;
   /** Sealing it by hand: the seal is pressed home. The host sends the card and answers with sealResult. */
   onSeal?: () => void;
+  /** A quiet paper sound (design plan 8.3): the card sliding, the seal pressing or breaking, the card set down. */
+  onSound?: (name: 'card-slide' | 'seal' | 'card-down') => void;
 };
 
 type Spring = { x: number; v: number; t: number; k: number; c: number };
@@ -154,11 +158,15 @@ export class CardTableEngine {
 
   /** When the seal went on: it stays in sight a moment before the envelope turns over, however fast the answer is. */
   private sealedAt = 0;
+  /** The last frame's card-out and laid-down amounts, for the sounds; unset until the first frame after a start. */
+  private heard: { out: number; lay: number } | null = null;
 
   private readonly elements = new Map<string, HTMLElement>();
 
-  constructor(root: HTMLElement, options: { sealed: boolean; crackedSrc: string; wholeSrc: string; callbacks: TableCallbacks; sending?: boolean }) {
+  constructor(root: HTMLElement, options: { sealed: boolean; crackedSrc: string; wholeSrc: string; callbacks: TableCallbacks; sending?: boolean; mood?: CardMood }) {
     this.root = root;
+    // Santa's cards land with a little more bounce (design plan Part 7): the same drop, less damped.
+    if (options.mood === 'santa') this.v.drop.c = 9.6;
     this.sending = Boolean(options.sending);
     this.sealed = this.sending ? false : options.sealed;
     this.crackedSrc = options.crackedSrc;
@@ -231,6 +239,7 @@ export class CardTableEngine {
     window.clearTimeout(this.flapTimer);
     this.step = 'front';
     this.setCracked(false);
+    this.heard = null;
     this.v.drop.x = animated && !reducedMotion() ? 1 : 0;
     this.v.drop.v = 0;
     this.v.drop.t = 0;
@@ -244,6 +253,7 @@ export class CardTableEngine {
   startOnTable() {
     const set = (key: SpringKey, x: number) => { this.v[key].x = x; this.v[key].t = x; this.v[key].v = 0; };
     set('drop', 0); set('envDeg', 180); set('pull', 1); set('lay', 1); set('deg', 0);
+    this.heard = null;
     this.step = 'out';
     this.envTurnedOnce = true;
     this.setCracked(true);
@@ -264,6 +274,7 @@ export class CardTableEngine {
     if (this.cracked) return;
     this.setCracked(true);
     tick(14);
+    this.callbacks.onSound?.('seal');
   }
 
   // ---- Enlarging the card (design plan 6.1) ----
@@ -325,6 +336,7 @@ export class CardTableEngine {
     this.clearSendTimers();
     this.sealedMark = options.sealedMark;
     set('drop', 0); set('envDeg', 180); set('pull', 1); set('lay', 1); set('deg', 180);
+    this.heard = null;
     this.step = 'out';
     this.envTurnedOnce = true;
     this.turnedOnce = true;
@@ -374,6 +386,7 @@ export class CardTableEngine {
     this.$('press').style.transform = '';
     this.$('press').style.opacity = '';
     tick(26);
+    this.callbacks.onSound?.('seal');
     this.sealedAt = performance.now();
     this.setSend('sending');
     this.callbacks.onSeal?.();
@@ -479,6 +492,7 @@ export class CardTableEngine {
         this.v.pull.x = 1; this.v.pull.t = 1; this.v.lay.x = 1; this.v.lay.t = 1;
         this.step = 'out';
         this.setCracked(true);
+        this.callbacks.onSound?.('seal');
         this.mark(); this.render();
         return;
       }
@@ -805,6 +819,17 @@ export class CardTableEngine {
 
   // ---- The picture of the moment ----
 
+  /** The sounds of the card moving: it slides past the envelope's mouth (out or in), and it's set down on the table. */
+  private listen(out: number, lay: number) {
+    const was = this.heard;
+    this.heard = { out, lay };
+    if (!was) return;
+    // A jump (Reduce Motion, or opening straight onto the table) isn't a slide.
+    const sliding = Math.abs(out - was.out) < 0.5;
+    if (sliding && ((was.out < 0.08 && out >= 0.08) || (was.out > 0.92 && out <= 0.92))) this.callbacks.onSound?.('card-slide');
+    if (was.lay < 0.9 && lay >= 0.9) this.callbacks.onSound?.('card-down');
+  }
+
   private render() {
     const { g, v } = this;
     if (!g) return;
@@ -816,6 +841,7 @@ export class CardTableEngine {
     const flapT = smooth(0, FLAP_OPEN, pull);
     const theta = 180 * flapT;
     const r = smooth(FLAP_OPEN, 1, pull); // the card coming out
+    this.listen(r, lay);
 
     // Envelope pose.
     const eRot = lerp(lerp(-1.1, 0.4, r), 1.5, lay);
@@ -900,7 +926,10 @@ export class CardTableEngine {
     }
 
     // Light, sheen, shading as the card turns.
-    this.$('light').style.transform = `translate(${tx * 22}px,${ty * 22}px) scale(1.04)`;
+    const light = `translate(${tx * 22}px,${ty * 22}px) scale(1.04)`;
+    this.$('light').style.transform = light;
+    // The snow's shadows fall through the window light, so they move with it (design plan Part 7).
+    this.$('snow').style.transform = light;
     const sinD = Math.abs(Math.sin((v.deg.x * Math.PI) / 180));
     const sheen = `translate(${(tx * 0.9 + (v.deg.x / 180) * 0.6) * 26}%,${ty * 16}%)`;
     this.$('sheenFront').style.transform = sheen;

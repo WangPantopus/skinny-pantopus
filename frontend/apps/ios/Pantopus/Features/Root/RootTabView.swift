@@ -101,6 +101,11 @@ public enum RootTab: Hashable, CaseIterable {
         }
     }
 
+    /// The Moments tab's badge is a dot with no number: something new near you.
+    var badgeIsDot: Bool {
+        self == .moments
+    }
+
     /// Where Pulse opens: its own tab, or Nearby's door while the Pulse
     /// redesign is off (launch cut #11), as on October 13.
     static var pulseHome: RootTab {
@@ -231,6 +236,8 @@ public struct RootTabView: View {
     @State private var plansFlags = PlansFlags.shared
     /// The Moments switch, read the same way.
     @State private var momentsFlags = MomentsFlags.shared
+    /// The dot on the Moments tab: someone near you added one since the tab was last open.
+    @State private var momentsDot = MomentsTabDot.shared
     /// The side menu's model, made once (a view model made in `body` can
     /// write observed state while the bar draws: the Xcode 16.4 render loop).
     @State private var drawerModel = NavigationDrawerViewModel(context: .personal(name: ""))
@@ -290,6 +297,7 @@ public struct RootTabView: View {
                 // The Moments tab goes with its switch; a reader on it lands on Pulse.
                 if !isOn, model.selected == .moments { model.selected = RootTab.pulseHome }
             }
+            .modifier(MomentsDotUpdates(account: signedInUserID, isOn: momentsFlags.moments, onTab: model.selected == .moments))
             .onChange(of: model.selected) { _, selected in
                 // A tab that isn't kept (Plans or Moments switched off, Mail
                 // without the Mailbox) lands on the nearest one that is.
@@ -450,6 +458,12 @@ public struct RootTabView: View {
             openPlans(.requests(planId: id))
         case .planNew:
             openPlans(nil)
+        // The Moments tab, and one Moment in the viewer over it (the "added a
+        // Moment" push). While the `moments` switch is off the link is dropped.
+        case .moments:
+            openMoments(nil)
+        case let .moment(id):
+            openMoments(id)
         case .resetPassword, .verifyEmail, .unknown:
             _ = router.consume()
         }
@@ -469,6 +483,18 @@ public struct RootTabView: View {
                 PlansNavigator.shared.pendingHost = PlansHostRequest(start: nil)
             }
             model.selected = .plans
+        }
+    }
+
+    /// Opens the Moments tab, and the viewer on one Moment when the link names it. The switch is read
+    /// first (a tap on a push can be the app's first moment after a cold start).
+    private func openMoments(_ id: String?) {
+        _ = router.consume()
+        Task { @MainActor in
+            await momentsFlags.refresh(account: signedInUserID)
+            guard momentsFlags.moments else { return }
+            if let id { MomentsNavigator.shared.pending = id }
+            model.selected = .moments
         }
     }
 
@@ -604,7 +630,7 @@ extension RootTabView {
                     RootTabBar(
                         tabs: onBar,
                         selected: model.barSelection,
-                        badges: [.mail: mailBadgeStore.unopened],
+                        badges: [.mail: mailBadgeStore.unopened, .moments: momentsDot.hasNew ? 1 : 0],
                         verticalEdge: verticalEdge,
                         onSelect: select
                     )
@@ -785,6 +811,33 @@ private struct InviteSheetToken: Identifiable, Equatable {
     var leaseInvitation = false
     var id: String {
         "\(leaseInvitation):\(token)"
+    }
+}
+
+/// Keeps the Moments tab's dot current: read at launch and when Moments turn on, when the app comes to the
+/// front, and every five minutes while it's open; gone while the tab is on screen. (A "moment_new" push and
+/// the viewer closing ask for a read themselves.)
+private struct MomentsDotUpdates: ViewModifier {
+    let account: String?
+    let isOn: Bool
+    let onTab: Bool
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: "\(account ?? "")|\(isOn)") {
+                while !Task.isCancelled {
+                    await MomentsTabDot.shared.refresh(account: account, isOn: isOn, force: true)
+                    try? await Task.sleep(for: .seconds(MomentsTabDot.rereadAfter))
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task { await MomentsTabDot.shared.refresh(account: account, isOn: isOn, force: true) }
+            }
+            .onChange(of: onTab, initial: true) { _, open in
+                if open { MomentsTabDot.shared.tabOpened(account: account) } else { MomentsTabDot.shared.tabLeft() }
+            }
     }
 }
 

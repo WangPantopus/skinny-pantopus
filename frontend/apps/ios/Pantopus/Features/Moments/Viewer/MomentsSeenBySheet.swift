@@ -18,7 +18,7 @@ struct MomentsSeenBySheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Seen by \(count)")
+                Text(count < 1 ? "No views yet" : "Seen by \(count)")
                     .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
@@ -96,7 +96,7 @@ struct MomentsSeenBySheet: View {
         VStack(spacing: 0) {
             Divider().overlay(Theme.Color.appBorder)
             if viewers.isEmpty {
-                Text(model.viewers == nil ? "" : "No views yet.")
+                Text(model.viewers == nil ? "" : "People who watch it show up here.")
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

@@ -173,23 +173,6 @@ public final class MultipartUploader: @unchecked Sendable {
         return try await session.upload(for: request, from: body, delegate: delegate)
     }
 
-    /// Upload a Moment's file to `POST /api/moments/:id/media` (Moments
-    /// contract, `backend/routes/moments.js`): `file`, and for a video its
-    /// `poster` and up to two `frames[]`, from a body assembled on disk (a
-    /// video can be 50 MB), with progress. Re-sending the same file is a
-    /// no-op on the server. The raw answer comes back so the Moments layer
-    /// reads its error codes.
-    @MainActor
-    func uploadMomentMedia(
-        momentId: String,
-        bodyFile: URL,
-        boundary: String,
-        progress: @escaping @Sendable (Double) -> Void
-    ) async throws -> (Data, HTTPURLResponse) {
-        let url = environment.apiBaseURL.appendingPathComponent("/api/moments/\(momentId)/media")
-        return try await performUpload(to: url, boundary: boundary, bodyFile: bodyFile, progress: progress)
-    }
-
     /// Upload a single file to `POST /api/files/upload`. Optional form
     /// fields are sent alongside the file. Token is read from
     /// `AuthManager.shared`; if nil, the request goes out without an

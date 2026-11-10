@@ -39,6 +39,11 @@
   font-size: 6.4cqw; line-height: 1; color: #1b2a5c; mix-blend-mode: multiply; min-width: 0; overflow: hidden; white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* A signature (design plan 8.2): a 4:1 box 48% of the card wide where the name starts, its line (y = 72) on the
+   baseline. The box has no height of its own, so FROM's baseline is its bottom edge. */
+.from .signed { position: relative; flex: none; width: 48cqw; height: 0; overflow: visible; }
+.signInk { position: absolute; left: 0; bottom: -3.36cqw; width: 48cqw; height: 12cqw; mix-blend-mode: multiply; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .foot {
   position: absolute; left: 0; right: 0; bottom: 3.2cqw; text-align: center; font: 1.9cqw/1 var(--card-serif);
   letter-spacing: 0.3em; color: #8a7f70;

@@ -41,6 +41,13 @@ sealed class PantopusRoute(
     data object Plans : PantopusRoute(path = "root/plans", label = "Plans", icon = PantopusIcon.Calendar)
 
     /**
+     * Moments — photos, short videos and text cards people post where they are, for 1 to 48 hours, on their own map
+     * (founder, 2026-11-08). A tab only while the `moments` switch is on for the person ([barTabs]), between Pulse and
+     * Plans, the other two map tabs.
+     */
+    data object Moments : PantopusRoute(path = "root/moments", label = "Moments", icon = PantopusIcon.CircleDashed)
+
+    /**
      * Mail — the digital mailbox, its own tab beside Messages (founder, 2026-10-26). While Mailbox is off for launch
      * (contract §9, 2026-10-09) this tab is Messages: the conversation list itself, with a chat bubble. Its path and
      * the `tab.mail` test tag stay, so links, saved state and UI tests keep working.
@@ -74,12 +81,12 @@ sealed class PantopusRoute(
 
     companion object {
         /**
-         * Bottom-bar destinations in display order, with every tab the app can show: Place · Today · Pulse · Plans ·
-         * Mail with the Pulse redesign on, and Place · Today · Nearby · Plans · Mail while it is off (launch cut 11;
-         * the October 13 bar with Plans added, 2026-10-17). Messages isn't on the bar (founder decision 2026-11-08):
-         * the chat button at the top right of every tab but Mail opens it. With Mailbox off, Mail is the conversation
-         * list itself, so it leaves the bar too. Plans shows only while its switch is on: read [barTabs] for what the
-         * bar draws.
+         * Bottom-bar destinations in display order, with every tab the app can show: Place · Today · Pulse · Moments ·
+         * Plans · Mail with the Pulse redesign on, and Place · Today · Nearby · Moments · Plans · Mail while it is off
+         * (launch cut 11; the October 13 bar with Plans added, 2026-10-17, and Moments, 2026-11-08). Messages isn't on
+         * the bar (founder decision 2026-11-08): the chat button at the top right of every tab but Mail opens it. With
+         * Mailbox off, Mail is the conversation list itself, so it leaves the bar too. Plans and Moments show only while
+         * their switches are on: read [barTabs] for what the bar draws.
          */
         val entries: List<PantopusRoute>
             get() {
@@ -94,11 +101,17 @@ sealed class PantopusRoute(
          * downstream callers crash with NPE. Deferring construction until
          * first access lets every `data object` finish initialising first.
          */
-        private val redesignTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Pulse, Plans, Mail) }
-        private val launchTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Nearby, Plans, Mail) }
+        private val redesignTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Pulse, Moments, Plans, Mail) }
+        private val launchTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Nearby, Moments, Plans, Mail) }
 
-        /** The tabs the bar draws: every [entries] tab while the `plans` switch is [plansOn], all but Plans while it is off. */
-        fun barTabs(plansOn: Boolean): List<PantopusRoute> = if (plansOn) entries else entries - Plans
+        /**
+         * The tabs the bar draws: the [entries] tabs, without Plans while the `plans` switch is off ([plansOn]) and
+         * without Moments while the `moments` switch is off ([momentsOn]).
+         */
+        fun barTabs(
+            plansOn: Boolean,
+            momentsOn: Boolean = false,
+        ): List<PantopusRoute> = entries.filter { (it != Plans || plansOn) && (it != Moments || momentsOn) }
 
         /** Every root destination, bar tabs first — for `fromPath` lookups off the bar. */
         val all: List<PantopusRoute>
@@ -122,6 +135,9 @@ sealed class PantopusRoute(
 
         /** Where a Plans entry point lands while the `plans` switch is off: Pulse, or Nearby with the Pulse redesign off. */
         val plansOffTab: PantopusRoute get() = if (LaunchFeatures.pulseRedesign) Pulse else Nearby
+
+        /** Where someone standing on Moments lands when its switch turns off: Pulse, as for Plans. */
+        val momentsOffTab: PantopusRoute get() = plansOffTab
 
         /**
          * The bar tab that owns [route]: bar tabs own themselves, the old Nearby door and the pillars behind it

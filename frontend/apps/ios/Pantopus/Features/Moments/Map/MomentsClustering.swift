@@ -90,7 +90,7 @@ enum MomentsClustering {
                 groups.append([ring])
             }
         }
-        mergeCrowded(&groups, degreesPerPoint: degreesPerPoint)
+        mergeCrowded(&groups, degreesPerPoint: degreesPerPoint, span: span)
         var singles: [MomentsMarker] = []
         var bubbles: [MomentsMarker] = []
         for group in groups {
@@ -119,15 +119,14 @@ enum MomentsClustering {
     }
 
     /// A bubble sits at the middle of its rings, which can land on another
-    /// bubble or ring: groups whose middles are too close merge, until none are.
-    private static func mergeCrowded(_ groups: inout [[MomentRingDTO]], degreesPerPoint: Double) {
+    /// bubble or ring: groups whose drawn shapes would overlap merge, until none do.
+    private static func mergeCrowded(_ groups: inout [[MomentRingDTO]], degreesPerPoint: Double, span: Double) {
         var merging = true
         while merging {
             merging = false
             search: for first in groups.indices {
                 for second in groups.indices where second > first {
-                    let gap = points(between: middle(of: groups[first]), and: middle(of: groups[second]), degreesPerPoint: degreesPerPoint)
-                    if gap < clusterPoints {
+                    if overlap(groups[first], groups[second], degreesPerPoint: degreesPerPoint, span: span) {
                         groups[first] += groups[second]
                         groups.remove(at: second)
                         merging = true
@@ -136,6 +135,40 @@ enum MomentsClustering {
                 }
             }
         }
+    }
+
+    /// Two pins overlap when their centers are closer than `clusterPoints`. A bubble is wider than a pin
+    /// (three faces and "+N" are about 136 pt) and a fan wider still, so with one of those it's the drawn
+    /// widths that decide, with the same 12 pt of give two pins get.
+    private static func overlap(_ first: [MomentRingDTO], _ second: [MomentRingDTO], degreesPerPoint: Double, span: Double) -> Bool {
+        let one = middle(of: first)
+        let other = middle(of: second)
+        if first.count == 1, second.count == 1 {
+            return points(between: one, and: other, degreesPerPoint: degreesPerPoint) < clusterPoints
+        }
+        let dy = abs(one.latitude - other.latitude) / degreesPerPoint
+        let dx = abs(one.longitude - other.longitude) * cos(one.latitude * .pi / 180) / degreesPerPoint
+        let reach = halfWidth(of: first, span: span) + halfWidth(of: second, span: span) - 12
+        let fans = isFan(first, span: span) || isFan(second, span: span)
+        return dx < reach && dy < (fans ? reach : clusterPoints)
+    }
+
+    /// Half the drawn width of a group's marker: a pin, a bubble by its faces, or a fan by its circle.
+    private static func halfWidth(of group: [MomentRingDTO], span: Double) -> Double {
+        if isFan(group, span: span) { return 36.0 + 6.0 * Double(group.count) + 32.0 }
+        switch group.count {
+        case ...1: return 32
+        case 2: return 37
+        case 3: return 49
+        default: return 68
+        }
+    }
+
+    private static func isFan(_ group: [MomentRingDTO], span: Double) -> Bool {
+        guard group.count > 1, group.count <= fanLimit, span < fanSpan else { return false }
+        let lats = group.map(\.latitude)
+        let lons = group.map(\.longitude)
+        return (lats.max() ?? 0) - (lats.min() ?? 0) < onePoint && (lons.max() ?? 0) - (lons.min() ?? 0) < onePoint
     }
 
     private static func middle(of group: [MomentRingDTO]) -> CLLocationCoordinate2D {

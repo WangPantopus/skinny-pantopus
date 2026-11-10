@@ -23,6 +23,57 @@
 .objects { z-index: 2; }
 .light { inset: -40px; z-index: 30; background-size: 100% 100%; mix-blend-mode: soft-light; opacity: 0.88; will-change: transform; }
 .vignette { z-index: 31; background: radial-gradient(120% 88% at 46% 40%, rgba(0, 0, 0, 0) 44%, rgba(6, 3, 4, 0.46) 100%); }
+
+/* The mood follows the card (design plan Part 7). Snow (nostalgia, Santa): specks of shadow falling through the window
+   light only: the layer is masked by the light and moves with it (the engine), and multiplies specks about 10% dark
+   onto everything under it (12%, which the light's soft edge thins). Each speck's column is the layer's height, so its
+   translateY is a share of the table's height. */
+.snow {
+  position: absolute; inset: -40px; z-index: 29; pointer-events: none; overflow: hidden; mix-blend-mode: multiply; will-change: transform;
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.speck { position: absolute; top: 0; height: 100%; width: var(--s); animation: snowFall 7s linear infinite; }
+.speck::before {
+  content: ''; position: absolute; left: 0; top: 0; width: var(--s); height: var(--s); border-radius: 50%;
+  background: rgba(24, 20, 30, 0.12); box-shadow: 0 0 calc(var(--s) * 0.5) rgba(24, 20, 30, 0.1);
+}
+@keyframes snowFall {
+  0% { transform: translate3d(0, -6%, 0); opacity: 0; }
+  12% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { transform: translate3d(var(--drift), 70%, 0); opacity: 0; }
+}
+/* Reverence: candlelight from the lower left, breathing very slowly (3-4 s, 85-100%), and one slow glint across the gold
+   lining as the flap opens. */
+.candle {
+  position: absolute; inset: 0; z-index: 28; pointer-events: none; mix-blend-mode: screen;
+  background: radial-gradient(85% 62% at 0% 100%, rgba(255, 164, 82, 0.26) 0%, rgba(255, 150, 70, 0.1) 46%, rgba(255, 140, 60, 0) 78%);
+  animation: candleBreath 3.6s ease-in-out infinite alternate;
+}
+@keyframes candleBreath { from { opacity: 0.85; } to { opacity: 1; } }
+.flapSweep {
+  position: absolute; inset: -20% -60%; pointer-events: none; transform: translateX(-75%);
+  background: linear-gradient(105deg, rgba(255, 236, 180, 0) 43%, rgba(255, 244, 206, 0.95) 50%, rgba(255, 236, 180, 0) 57%);
+  animation: goldSweep 2.8s ease-in-out 0.3s 1 both;
+}
+@keyframes goldSweep { from { transform: translateX(-75%); } to { transform: translateX(75%); } }
+/* The welcome letter (design plan Part 10): a cream sheet folded in three, its heading and a few lines. */
+.letterSheet {
+  container-type: inline-size; overflow: hidden; border-radius: 2px; background: #f6efe0 url('/holiday-cards/table/paper.webp');
+  background-size: 60cqw; background-blend-mode: multiply; box-shadow: inset 0 0 2.6cqw rgba(110, 80, 30, 0.2);
+}
+.letterHead { position: absolute; left: 10cqw; right: 10cqw; top: 11cqw; font: 600 6.6cqw/1.15 var(--serif); color: #2a1a12; }
+.letterLines { position: absolute; left: 10cqw; right: 10cqw; top: 26cqw; display: flex; flex-direction: column; gap: 4.6cqw; }
+.letterLines i { display: block; height: 1.2cqw; border-radius: 1cqw; background: rgba(42, 26, 18, 0.16); }
+.letterLines i:nth-child(3n) { width: 68%; }
+.letterFold {
+  position: absolute; left: 0; right: 0; top: 40%; height: 2.4cqw;
+  background: linear-gradient(to bottom, rgba(60, 40, 20, 0.08), rgba(255, 255, 255, 0.22) 55%, rgba(60, 40, 20, 0.05));
+}
+@media (prefers-reduced-motion: reduce) {
+  .speck, .flapSweep { display: none; }
+  .candle { animation: none; opacity: 0.92; }
+}
 .grain { z-index: 32; background-size: 128px 128px; opacity: 0.36; mix-blend-mode: overlay; }
 
 .layer { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; will-change: transform; }
@@ -64,6 +115,10 @@
   position: absolute; left: 6.8%; bottom: 5.4%; font: 600 calc(var(--ew) * 0.0235) / 1 var(--serif); letter-spacing: 0.2em; color: var(--gold);
   text-transform: uppercase;
 }
+/* The welcome letter's cream envelope (design plan Part 10): the names in the pen's ink, the label in the seal's red. */
+.stage[data-mood='letter'] .toName { color: #1b2a5c; text-shadow: none; mix-blend-mode: multiply; }
+.stage[data-mood='letter'] .fromName { color: #2c3a64; mix-blend-mode: multiply; }
+.stage[data-mood='letter'] .kind { color: #8b1d1d; }
 .sealedMark {
   position: absolute; left: 50%; top: 74%; transform: translate(-50%, -50%) rotate(-7deg); border: calc(var(--ew) * 0.007) double #ecd7a4;
   padding: calc(var(--ew) * 0.018) calc(var(--ew) * 0.03); font: 700 calc(var(--ew) * 0.04) / 1.18 var(--serif); letter-spacing: 0.11em;
@@ -117,6 +172,7 @@
   text-decoration: underline; text-decoration-color: rgba(246, 236, 217, 0.35); text-underline-offset: 0.25em; transition: opacity 0.35s ease;
 }
 .stage .quiet:hover { color: var(--cream); }
+.quietRow { display: flex; flex-wrap: wrap; justify-content: center; column-gap: 0.25rem; transition: opacity 0.35s ease; }
 .toast {
   position: absolute; z-index: 60; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 62px); transform: translateX(-50%); width: max-content;
   max-width: 86%; padding: 9px 15px; border-radius: 14px; background: rgba(24, 18, 16, 0.88); font-size: 0.84375rem; line-height: 1.35; color: var(--cream);

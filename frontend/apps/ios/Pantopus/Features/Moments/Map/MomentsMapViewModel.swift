@@ -31,6 +31,19 @@ struct MomentsViewport: Equatable {
     }
 }
 
+extension MomentsViewport {
+    /// About two miles around a point: the map's first read, and the box the tab's dot counts in.
+    init(around center: UserCoordinate) {
+        self.init(
+            south: center.latitude - 0.015,
+            west: center.longitude - 0.02,
+            north: center.latitude + 0.015,
+            east: center.longitude + 0.02,
+            zoom: 14
+        )
+    }
+}
+
 /// Board M2: a crowded spot, zoomed in.
 struct MomentsFocus: Equatable {
     /// "Esther Short Park".
@@ -38,6 +51,25 @@ struct MomentsFocus: Equatable {
     let ringIds: Set<String>
     /// Where the map was before, for the back pill.
     let previousCamera: MapCamera?
+}
+
+/// One face in the strip: a person, with every spot they have a Moment at.
+struct MomentsStripPerson: Identifiable {
+    /// Their spots, nearest first: the order they play in.
+    let rings: [MomentRingDTO]
+    /// What the face draws: one ring with all their Moments, so its segments and its "new" count every spot.
+    let face: MomentRingDTO
+
+    var id: String {
+        face.author.id
+    }
+
+    init?(rings: [MomentRingDTO]) {
+        guard var face = rings.first else { return nil }
+        face.moments = rings.flatMap(\.moments)
+        self.rings = rings
+        self.face = face
+    }
 }
 
 @Observable
@@ -76,8 +108,9 @@ final class MomentsMapViewModel {
     /// Where the camera last settled.
     @ObservationIgnored private(set) var lastRegion: MKCoordinateRegion?
     @ObservationIgnored private(set) var lastCamera: MapCamera?
-    /// The map's height on screen, so rings join bubbles at the same distance on every phone.
-    var mapPoints = 800.0
+    /// The height on screen of the part of the map `cameraChanged` is told about, so rings join bubbles at
+    /// the same distance on every phone.
+    var mapPoints = 600.0
 
     private var span = 0.025
     @ObservationIgnored private var viewport: MomentsViewport?
@@ -194,11 +227,7 @@ final class MomentsMapViewModel {
             guard !Task.isCancelled else { return }
             await self?.load()
         }
-        // The camera sits a little south of what it shows (the strip covers the bottom): name the part in view.
-        nameArea(at: CLLocationCoordinate2D(
-            latitude: region.center.latitude + region.span.latitudeDelta * 0.16,
-            longitude: region.center.longitude
-        ))
+        nameArea(at: region.center)
         if let focus, !visibleRings.contains(where: { focus.ringIds.contains($0.id) }) { self.focus = nil }
     }
 
@@ -230,14 +259,7 @@ final class MomentsMapViewModel {
 
     /// About two miles around the center, before the camera reports its box.
     private var centerBox: MomentsViewport? {
-        guard let center else { return nil }
-        return MomentsViewport(
-            south: center.latitude - 0.015,
-            west: center.longitude - 0.02,
-            north: center.latitude + 0.015,
-            east: center.longitude + 0.02,
-            zoom: 14
-        )
+        center.map { MomentsViewport(around: $0) }
     }
 
     // MARK: - What shows
@@ -280,6 +302,29 @@ final class MomentsMapViewModel {
             if first.isNew != second.isNew { return first.isNew }
             return origin.distance(from: first.location) < origin.distance(from: second.location)
         }
+    }
+
+    /// The strip's faces: one per person, in the strip's order. Someone with Moments at several spots is one
+    /// face, and their spots play one after another, nearest first.
+    var stripPeople: [MomentsStripPerson] {
+        let origin = distanceOrigin
+        var order: [String] = []
+        var spots: [String: [MomentRingDTO]] = [:]
+        for ring in stripRings {
+            if spots[ring.author.id] == nil { order.append(ring.author.id) }
+            spots[ring.author.id, default: []].append(ring)
+        }
+        return order.compactMap { author in
+            let rings = (spots[author] ?? []).sorted { origin.distance(from: $0.location) < origin.distance(from: $1.location) }
+            return MomentsStripPerson(rings: rings)
+        }
+    }
+
+    /// What plays after a tapped face: that person's spots, then the others as after a tapped ring.
+    func watchQueue(from person: MomentsStripPerson) -> [MomentRingDTO] {
+        guard let first = person.rings.first else { return [] }
+        let theirs = Set(person.rings.map(\.id))
+        return person.rings + watchQueue(from: first).filter { !theirs.contains($0.id) }
     }
 
     /// What plays after a tapped ring: that ring, then the others shown, new
@@ -376,7 +421,7 @@ final class MomentsMapViewModel {
         return neighborhood
     }
 
-    private static func homeCoordinate(store: ScreenStore) async -> UserCoordinate? {
+    static func homeCoordinate(store: ScreenStore) async -> UserCoordinate? {
         guard let homes = try? await HomesStoreReads.myHomes(store: store).value.homes else { return nil }
         return homes.lazy.compactMap(\.location).first.map {
             UserCoordinate(latitude: $0.latitude, longitude: $0.longitude, accuracyMeters: 50)

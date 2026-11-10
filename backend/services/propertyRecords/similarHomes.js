@@ -12,9 +12,14 @@
  *             market value or one fixed share of it (data/valuePractice.js): a capped or town-set assessment differs
  *             between neighbors because the law says so, which is no finding.
  *
- * Only counts and per-square-foot figures leave this file: the typical similar house, the range and how many there
- * were. Never a neighbor's address or value. A record taken down at someone's request, a restricted one and a fact its
- * county withholds are left out, as on every other screen.
+ * Only counts and per-square-foot figures leave this file for a screen: the typical similar house, the range and how
+ * many there were. Never a neighbor's address or value. A record taken down at someone's request, a restricted one and
+ * a fact its county withholds are left out, as on every other screen.
+ *
+ * One exception, decided by the founder on November 10, 2026: the appeal packet's PDF (services/appealPacket.js), for
+ * the home's confirmed owner who bought it, lists each similar house by parcel number, living area, year built and
+ * county value (`{ list: true }`), because a review board asks for specific homes and these are the county's public
+ * record. Never a street address or an owner's name, and never on a screen or in an API answer.
  *
  * Off until the founder turns it on for a live county, in that environment's switch file (router.js, `similar_homes`):
  * one command, no release, and off again the same way. It answers null rather than wait or fail.
@@ -82,9 +87,11 @@ function similarTo(own, basis, query) {
  * @param {object[]} street The release's records on its street
  * @param {object} query    The home's parsed address with its ZIP and town
  * @param {string} state
+ * @param {object} [options]
+ * @param {boolean} [options.list]  For the appeal packet's PDF only: also the houses themselves (see the note above)
  * @returns {object|null}
  */
-function compare(own, street, query, state) {
+function compare(own, street, query, state, { list = false } = {}) {
   if (own.kind !== 'property' || !own.facts || !Number.isInteger(own.facts.year_built)) return null;
   const basis = basisOf(own.facts, state);
   if (!basis) return null;
@@ -113,10 +120,19 @@ function compare(own, street, query, state) {
     high_per_sqft: Math.round(perSqft[perSqft.length - 1]),
     pct,
     stance,
+    ...(list ? {
+      list: homes.map(({ facts }) => ({
+        parcel_number: typeof facts.parcel_number === 'string' && facts.parcel_number.trim() ? facts.parcel_number.trim() : null,
+        size_sqft: Math.round(facts[basis.size]),
+        year_built: facts.year_built,
+        value: Math.round(facts[basis.value]),
+        per_sqft: Math.round(facts[basis.value] / facts[basis.size]),
+      })),
+    } : {}),
   };
 }
 
-async function read(home, copy) {
+async function read(home, copy, options) {
   const fips = copy.jurisdiction;
   const state = stateCode(home.state);
   const parsed = parse(home.address, home.address2, { state, zip: home.zipcode });
@@ -135,7 +151,7 @@ async function read(home, copy) {
     .filter((record) => !hidden.size || !record.address || !hidden.has(suppressionHash(suppressions.salt, fips, { ...record.address, unit: record.address.unit || '' })))
     .map((record) => (withheld && record.facts ? { ...record, facts: Object.fromEntries(Object.entries(record.facts).filter(([name]) => !withheld.has(name))) } : record));
   const mine = shown.find((record) => record.id === own.id);
-  const found = mine ? compare(mine, shown, query, state) : null;
+  const found = mine ? compare(mine, shown, query, state, options) : null;
   return found ? { ...found, publisher: county.publisher, as_of: county.as_of } : null;
 }
 
@@ -144,14 +160,15 @@ async function read(home, copy) {
  * the copy isn't one house's own record, too few houses are like it, or the index can't be read in time.
  * @param {object} home  The Home's row: address, address2, city, state, zipcode
  * @param {object|null} copy  Its served copy
+ * @param {object} [options]  `{ list: true }` for the appeal packet's PDF only (see the note at the top)
  * @returns {Promise<object|null>}
  */
-async function forHome(home, copy) {
+async function forHome(home, copy, options) {
   if (!config.enabled() || !home || !copy || copy.match !== 'exact' || copy.subject?.kind !== 'property') return null;
   if (!router.similarHomesFor(copy.jurisdiction)) return null;
   let timer;
   const late = new Promise((resolve) => { timer = setTimeout(() => resolve(null), SCREEN_WAIT_MS); });
-  const answer = read(home, copy).catch((err) => {
+  const answer = read(home, copy, options).catch((err) => {
     if (!(err instanceof reader.StorageUnavailable)) logger.warn('property_records.similar_homes_failed', { fips: copy.jurisdiction, error: err.name });
     return null;
   });

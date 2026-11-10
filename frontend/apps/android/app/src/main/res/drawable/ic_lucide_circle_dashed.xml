@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lucide "circle-dashed": the Moments tab (Pantopus Moments brief, 2026-11-08; SF Symbol `circle.dashed` on iPhone).
+  Eight strokes around a 10-unit circle, as in Lucide's SVG. Black, so the icon tint takes over.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group>
+        <path
+            android:pathData="M10.1,2.182a10,10 0,0 1,3.8 0"
+            android:strokeWidth="2"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M13.9,21.818a10,10 0,0 1,-3.8 0"
+            android:strokeWidth="2"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M17.609,3.721a10,10 0,0 1,2.69 2.7"
+            android:strokeWidth="2"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M2.182,13.9a10,10 0,0 1,0 -3.8"
+            android:strokeWidth="2"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M20.279,17.609a10,10 0,0 1,-2.7 2.69"
+            android:strokeWidth="2"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M21.818,10.1a10,10 0,0 1,0 3.8"
+            android:strokeWidth="2"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M3.721,6.391a10,10 0,0 1,2.7 -2.69"
+            android:strokeWidth="2"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M6.391,20.279a10,10 0,0 1,-2.69 -2.7"
+            android:strokeWidth="2"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

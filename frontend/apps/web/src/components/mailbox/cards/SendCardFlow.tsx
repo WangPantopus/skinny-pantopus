@@ -15,7 +15,7 @@ import { PostageLine, StampChip, StampSheet, useStamps, type Stamps } from './St
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
+import type { CardSignature, HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
 import { ChevronLeft, Check, Link2, Loader2, Mail, Search, Send, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
@@ -27,6 +27,8 @@ import MailPiece from '../MailPiece';
 import { mailLoadMessage } from '../mailLoadMessage';
 import CardFront from './CardFront';
 import CardBack, { BACK_TEXT, RULED } from './CardBack';
+import { SignaturePad } from './cardSignature';
+import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, Slip, StepsAtTable } from './AtTheTable';
 import CardFlip from './CardFlip';
 import CardLinkActions from './CardLinkActions';
 import LookItOver from './LookItOver';
@@ -82,6 +84,24 @@ function sendMessage(error: MailboxApiError | null, byEmail = false): string {
 }
 
 const letters = (text: string) => [...text].length;
+
+type ContactsManager = { select: (properties: string[], options?: { multiple?: boolean }) => Promise<{ email?: string[] }[]> };
+
+/** The browser's contact picker (Chrome on Android today), or null where there's none. */
+function contactPicker(): ContactsManager | null {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined' || !('ContactsManager' in window)) return null;
+  return (navigator as Navigator & { contacts?: ContactsManager }).contacts ?? null;
+}
+
+/** One address the person picks from their contacts, or null if they back out. Nothing is read or kept beyond it. */
+async function pickContactEmail(): Promise<string | null> {
+  try {
+    const [contact] = (await contactPicker()?.select(['email'], { multiple: false })) ?? [];
+    return contact?.email?.find((address) => address.includes('@'))?.trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 function firstName(name: string): string {
   return name.split(/\s+/)[0] || name;
@@ -276,7 +296,21 @@ function ToStep({
           setByEmail(false);
         }}
       >
-        <label htmlFor="card-email" className="text-[14px] font-semibold">Their email address</label>
+        <div className="flex items-end justify-between gap-2">
+          <label htmlFor="card-email" className="text-[14px] font-semibold">Their email address</label>
+          {/* The browser's own contact picker (design plan 11.7), only where there is one: it hands over the one
+              address chosen, asks for no permission, and nothing is kept. */}
+          {launchFeatures.cardTable && contactPicker() ? (
+            <button
+              type="button"
+              data-testid="sendCardContacts"
+              onClick={() => { void pickContactEmail().then((picked) => { if (picked) setEmail(picked); }); }}
+              className="min-h-[44px] px-1 text-[14px] font-semibold text-[#8b1d1d] underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+            >
+              Choose from contacts
+            </button>
+          ) : null}
+        </div>
         <input
           id="card-email"
           type="email"
@@ -365,15 +399,21 @@ function ToStep({
           </ul>
         )}
       </div>
+      {/* Sending to someone not on Pantopus already invites them (design plan 11.6): said once, above both ways. */}
+      {launchFeatures.cardTable ? (
+        <p data-testid="sendCardInviteLine" className={`mt-5 text-center text-[14px] leading-5 ${muted}`}>They don&rsquo;t need Pantopus yet. They join to open it.</p>
+      ) : null}
       <button
         type="button"
         data-testid="sendCardByEmail"
         onClick={() => setByEmail(true)}
         disabled={many && full}
-        className="mt-5 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] disabled:opacity-50"
+        className={`${launchFeatures.cardTable ? 'mt-1.5' : 'mt-5'} flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] disabled:opacity-50`}
       >
         <Mail className="h-[18px] w-[18px]" aria-hidden />
-        {many ? 'Not on Pantopus? Add their email' : 'Not on Pantopus? Send it to their email'}
+        {many
+          ? (launchFeatures.cardTable ? 'Not on Pantopus yet? Add their email' : 'Not on Pantopus? Add their email')
+          : (launchFeatures.cardTable ? 'Not on Pantopus yet? Send it to their email' : 'Not on Pantopus? Send it to their email')}
       </button>
       {launchFeatures.cardTable && !listed.length ? (
         <div className="mt-2.5 text-center">
@@ -620,6 +660,10 @@ function WriteStep({
   limit,
   message,
   onMessage,
+  signature,
+  onSignature,
+  canSign,
+  onCloth = false,
   onNext,
 }: {
   design: HolidayCardDesign;
@@ -629,18 +673,28 @@ function WriteStep({
   limit: number;
   message: string;
   onMessage: (text: string) => void;
+  /** Signed beside FROM (design plan 8.2), or null for the typed first name. */
+  signature: CardSignature | null;
+  onSignature: (signature: CardSignature | null) => void;
+  /** The server keeps signatures (GET /cards `signature`, launch key card_table). */
+  canSign: boolean;
+  /** On the card's cloth (design plan Part 9): cream words and glass buttons. */
+  onCloth?: boolean;
   onNext: () => void;
 }) {
+  const ghost = onCloth ? ON_CLOTH_BUTTON : 'inline-flex min-h-[40px] items-center rounded-full border border-[#d6cbb6] bg-[#fffdf8] px-3.5 text-[14px] font-semibold text-[#374151] hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]';
+  const quiet = onCloth ? ON_CLOTH_MUTED : muted;
   const [showBack, setShowBack] = useState(true);
+  const [signing, setSigning] = useState(false);
   const count = letters(message);
   return (
     <div className="mt-3 px-4">
       <CardFlip
-        className="mx-auto max-w-[420px]"
+        className={`mx-auto max-w-[420px] ${onCloth ? 'drop-shadow-[0_18px_28px_rgba(6,3,4,0.5)]' : ''}`}
         showBack={showBack}
         front={<CardFront design={design.id} caption={design.caption} paper={design.paper} year={year} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]" />}
         back={(
-          <CardBack number={design.number} paper={design.paper} fromName={fromName} year={year} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]">
+          <CardBack number={design.number} paper={design.paper} fromName={fromName} year={year} signature={signature} className="rounded-[3px] shadow-[0_12px_26px_rgba(60,40,10,0.24)]">
             <label htmlFor="card-note" className="sr-only">Your note on the back of the card</label>
             <textarea
               id="card-note"
@@ -659,15 +713,37 @@ function WriteStep({
           type="button"
           onClick={() => setShowBack((back) => !back)}
           aria-pressed={!showBack}
-          className="inline-flex min-h-[40px] items-center rounded-full border border-[#d6cbb6] bg-[#fffdf8] px-3.5 text-[14px] font-semibold text-[#374151] hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+          className={ghost}
         >
           {showBack ? 'Turn it over' : 'Back to writing'}
         </button>
-        <span aria-live="polite" className={`text-[13px] ${count >= limit ? 'font-semibold text-[#8b1d1d]' : muted}`}>{count} of {limit} letters</span>
+        <span aria-live="polite" className={`text-[13px] ${count >= limit ? `font-semibold ${onCloth ? 'text-[#ffb4a8]' : 'text-[#8b1d1d]'}` : quiet}`}>{count} of {limit} letters</span>
       </div>
+      {canSign ? (
+        <div className="mx-auto mt-2 flex max-w-[420px] items-center gap-2">
+          <button
+            type="button"
+            data-testid="sendCardSign"
+            onClick={() => { setShowBack(true); setSigning(true); }}
+            className={ghost}
+          >
+            {signature ? 'Sign again' : 'Sign your name'}
+          </button>
+          <span className={`text-[13px] ${quiet}`}>{signature ? 'Signed beside FROM.' : `Or leave ${firstName(fromName)} typed.`}</span>
+        </div>
+      ) : null}
+      {signing ? (
+        <SignaturePad
+          initial={signature}
+          wax={WAX}
+          onDone={(signed) => { onSignature(signed); setSigning(false); }}
+          onTyped={() => { onSignature(null); setSigning(false); }}
+          onClose={() => setSigning(false)}
+        />
+      ) : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
         <button type="button" disabled={!message.trim()} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Seal it</button>
-        {!message.trim() ? <p className={`mt-2 text-center text-[13px] ${muted}`}>Write a few words on the back first.</p> : null}
+        {!message.trim() ? <p className={`mt-2 text-center text-[13px] ${quiet}`}>Write a few words on the back first.</p> : null}
       </div>
     </div>
   );
@@ -746,6 +822,7 @@ function SealStep({
   onSend,
   stamps = null,
   onGetStamps,
+  onCloth = false,
 }: {
   cards: HolidayCards;
   to: Recipient;
@@ -766,6 +843,8 @@ function SealStep({
   /** Digital stamps (postage on), for when this step seals and sends itself. */
   stamps?: Stamps | null;
   onGetStamps?: () => void;
+  /** On the card's cloth (design plan Part 9): the choices on a cream slip. */
+  onCloth?: boolean;
 }) {
   const needsStamps = sendsHere && stamps?.balance?.available === 0;
   const preview = {
@@ -782,36 +861,42 @@ function SealStep({
         <MailPiece item={preview} recipientName={envelopeName(to)} opened={false} />
       </div>
       {to.kind === 'list' ? (
-        <p className={`mx-auto mt-3 max-w-[420px] text-center text-[14px] leading-5 ${muted}`}>One envelope for each of the {to.entries.length} people.</p>
+        <p className={`mx-auto mt-3 max-w-[420px] text-center text-[14px] leading-5 ${onCloth ? ON_CLOTH_MUTED : muted}`}>One envelope for each of the {to.entries.length} people.</p>
       ) : null}
-      <fieldset className="mx-auto mt-6 max-w-[420px]">
-        <legend className="text-[16px] font-semibold">When should it arrive?</legend>
-        <div className="mt-2.5 space-y-2.5">
-          {options.map((option) => {
-            const choice = arrivalChoice(option, cards, to, theirDay);
-            const checked = arrival === option;
-            return (
-              <label
-                key={option}
-                className="flex cursor-pointer items-start gap-3 rounded-xl bg-[#fffdf8] p-3.5 text-[#111827]"
-                style={{ border: checked ? `2px solid ${WAX}` : '1px solid #e3d8c3' }}
-              >
-                <input type="radio" name="arrival" value={option} checked={checked} onChange={() => onArrival(option)} className="mt-1 h-4 w-4 accent-[#8b1d1d]" />
-                <span>
-                  <span className="block text-[15px] font-semibold leading-5">{choice.title}</span>
-                  <span className="block text-[13px] leading-[18px] text-[#4e5563]">{choice.detail}</span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
+      {(() => {
+        const choices = (
+        <fieldset className={onCloth ? '' : 'mx-auto mt-6 max-w-[420px]'}>
+          <legend className="text-[16px] font-semibold">When should it arrive?</legend>
+          <div className="mt-2.5 space-y-2.5">
+            {options.map((option) => {
+              const choice = arrivalChoice(option, cards, to, theirDay);
+              const checked = arrival === option;
+              return (
+                <label
+                  key={option}
+                  className="flex cursor-pointer items-start gap-3 rounded-xl bg-[#fffdf8] p-3.5 text-[#111827]"
+                  style={{ border: checked ? `2px solid ${WAX}` : '1px solid #e3d8c3' }}
+                >
+                  <input type="radio" name="arrival" value={option} checked={checked} onChange={() => onArrival(option)} className="mt-1 h-4 w-4 accent-[#8b1d1d]" />
+                  <span>
+                    <span className="block text-[15px] font-semibold leading-5">{choice.title}</span>
+                    <span className="block text-[13px] leading-[18px] text-[#4e5563]">{choice.detail}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+        );
+        // On the cloth, the same three choices lie on a cream slip (design plan Part 9).
+        return onCloth ? <div className="mt-6"><Slip>{choices}</Slip></div> : choices;
+      })()}
       <p className="mx-auto mt-3.5 max-w-[420px] rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
         {/* Before it's sent we don't know their clock; the sent card says the time on this one. */}
         {takeBackBefore(to)}
       </p>
       {sendsHere && stamps ? <div className="mx-auto mt-3 max-w-[420px]"><PostageLine stamps={stamps} design={design.id} /></div> : null}
-      {error ? <p role="alert" className="mx-auto mt-3 max-w-[420px] text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
+      {error ? <p role="alert" className={`mx-auto mt-3 max-w-[420px] text-[14px] font-medium ${onCloth ? 'text-[#ffb4a8]' : 'text-[#a81a1a]'}`}>{error}</p> : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
         <button
           type="button"
@@ -841,6 +926,7 @@ function LookStep({
   design = '',
   onGetStamps,
   onSealOnTable,
+  onCloth = false,
 }: {
   preview: HolidayCardPreview;
   to: Recipient;
@@ -853,17 +939,19 @@ function LookStep({
   onGetStamps?: () => void;
   /** Seal it by hand on the table (design plan Part 2, launch key card_table) instead of sending it from here. */
   onSealOnTable?: () => void;
+  /** On the card's cloth (design plan Part 9). */
+  onCloth?: boolean;
 }) {
   const needsStamps = stamps?.balance?.available === 0;
   return (
     <div data-testid="sendCardLook">
-      <LookItOver preview={preview} toName={envelopeName(to)} toFirstName={to.kind === 'person' ? firstName(to.name) : ''} byEmail={to.kind !== 'person'} byLink={to.kind === 'link'} />
+      <LookItOver onCloth={onCloth} preview={preview} toName={envelopeName(to)} toFirstName={to.kind === 'person' ? firstName(to.name) : ''} byEmail={to.kind !== 'person'} byLink={to.kind === 'link'} />
       <div className="mx-auto mt-7 max-w-[420px] px-4 pb-4">
         <p className="rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
           {takeBackBefore(to)}
         </p>
         {stamps ? <div className="mt-3"><PostageLine stamps={stamps} design={design} /></div> : null}
-        {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
+        {error ? <p role="alert" className={`mt-3 text-[14px] font-medium ${onCloth ? 'text-[#ffb4a8]' : 'text-[#a81a1a]'}`}>{error}</p> : null}
         <button type="button" data-testid="sendCardLookSend" disabled={sending} onClick={needsStamps ? onGetStamps : onSealOnTable ?? onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
           {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
           {needsStamps ? 'Get stamps to send' : sendWords(to)}
@@ -905,6 +993,7 @@ function ListLookStep({
   design,
   onGetStamps,
   onSealOnTable,
+  onCloth = false,
 }: {
   look: HolidayCardListPreview;
   entries: ListEntry[];
@@ -917,6 +1006,8 @@ function ListLookStep({
   onGetStamps: () => void;
   /** Seal them by hand on the table (design plan Part 2): the moment plays once for the whole list. */
   onSealOnTable?: () => void;
+  /** On the card's cloth (design plan Part 9). */
+  onCloth?: boolean;
 }) {
   const byId = new Map(entries.map((entry) => [idOf(entry), entry]));
   const ready = look.recipients.filter((line) => line.status === 'ready');
@@ -926,11 +1017,11 @@ function ListLookStep({
   return (
     <div data-testid="sendCardLook">
       {look.piece && first ? (
-        <LookItOver preview={look as HolidayCardPreview} toName={entryName(first)} toFirstName={first.kind === 'person' ? firstName(first.name) : ''} byEmail={first.kind !== 'person'} />
+        <LookItOver onCloth={onCloth} preview={look as HolidayCardPreview} toName={entryName(first)} toFirstName={first.kind === 'person' ? firstName(first.name) : ''} byEmail={first.kind !== 'person'} />
       ) : null}
       <div className="mx-auto mt-7 max-w-[420px] px-4 pb-4">
         <section aria-label="Who it’s going to" data-testid="sendCardListLook">
-          <h2 className="text-[16px] font-semibold">Going to {ready.length} {ready.length === 1 ? 'person' : 'people'}</h2>
+          <h2 className={`text-[16px] font-semibold ${onCloth ? 'text-[#f6ecd9]' : ''}`}>Going to {ready.length} {ready.length === 1 ? 'person' : 'people'}</h2>
           <ul className="mt-2 divide-y divide-[#e7dcc6] overflow-hidden rounded-xl border border-[#e3d8c3] bg-[#fffdf8] text-[#111827]">
             {look.recipients.map((line) => {
               const entry = byId.get(line.request_id);
@@ -951,8 +1042,8 @@ function ListLookStep({
           {takeBackBefore({ kind: 'list', entries })}
         </p>
         {stamps && look.needed ? <div className="mt-3"><PostageLine stamps={stamps} design={design} count={look.needed} /></div> : null}
-        {!look.needed ? <p className={`mt-3 text-center text-[14px] ${muted}`}>None of these cards can go now.</p> : null}
-        {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
+        {!look.needed ? <p className={`mt-3 text-center text-[14px] ${onCloth ? ON_CLOTH_MUTED : muted}`}>None of these cards can go now.</p> : null}
+        {error ? <p role="alert" className={`mt-3 text-[14px] font-medium ${onCloth ? 'text-[#ffb4a8]' : 'text-[#a81a1a]'}`}>{error}</p> : null}
         <button type="button" data-testid="sendCardLookSend" disabled={sending || !look.needed} onClick={needsStamps ? onGetStamps : onSealOnTable ?? onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
           {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
           {needsStamps ? 'Get stamps to send' : sending ? `Sending ${cards}…` : `Seal and send ${cards}`}
@@ -1174,6 +1265,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
   const theirs = useCardArrivals(to?.kind === 'person' ? to.userId : null);
   const [designId, setDesignId] = useState<string | null>(launchFeatures.cardTable ? chosenDesign : null);
   const [message, setMessage] = useState('');
+  // Signed beside FROM (design plan 8.2); null: the first name typed in the pen, as before.
+  const [signature, setSignature] = useState<CardSignature | null>(null);
   const [arrival, setArrival] = useState<HolidayCardArrival | null>(null);
   const [sent, setSent] = useState<SentHolidayCard | null>(null);
   // A card by link, just sent: its link, to copy and share.
@@ -1283,6 +1376,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
         to: entry.kind === 'person' ? { user_id: entry.userId } : { email: entry.email.trim() },
         request_id: listId(entry),
       })),
+      ...(signature ? { signature } : {}),
     };
   };
 
@@ -1296,6 +1390,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
       to: to.kind === 'person' ? { user_id: to.userId } : to.kind === 'email' ? { email: to.email } : { link: true as const },
       request_id: requestId.current,
       ...(data?.postage_enabled ? { use_stamp: true } : {}),
+      ...(signature ? { signature } : {}),
     };
   };
 
@@ -1307,7 +1402,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     listIds.current = new Map();
     setSent(null);
     setSentLink(null);
-    setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null); setLookUnavailable(false);
+    setTo(null); setDesignId(null); setMessage(''); setSignature(null); setArrival(null); setLook(null); setLookUnavailable(false);
     setListed([]); setListLook(null); setListSent(null); setListError(null); setListTakenBack(new Set()); setListTakeBackError(null);
     setStep('to');
   };
@@ -1433,6 +1528,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     const piece = to.kind === 'list' ? listLook?.piece : look?.piece;
     const card: TableCard | null = piece?.card ?? (design ? {
       design: design.id, number: design.number, caption: design.caption, paper: design.paper, table: design.table ?? null, year: data.year, sealed: false,
+      signature,
     } : null);
     if (!card) return;
     setLinkSaid(null);
@@ -1605,6 +1701,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     );
   }
 
+  // Write on the back, Seal it for the day and Look it over lie on the card's cloth (design plan Part 9, card_table).
+  const atTable = launchFeatures.cardTable && Boolean(design) && (step === 'write' || step === 'seal' || step === 'look');
+
   return (
     <div className={`${page} pb-6`}>
       <div className="mx-auto w-full max-w-[560px]">
@@ -1647,6 +1746,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           onNext={() => setStep('write')}
         />
       ) : null}
+      {/* From Write on the back onward, you are at the table (design plan Part 9): the chosen card's cloth. */}
+      <StepsAtTable on={atTable} table={design?.table}>
       {step === 'write' && design ? (
         <WriteStep
           design={design}
@@ -1656,6 +1757,10 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           limit={data.message_limit}
           message={message}
           onMessage={setMessage}
+          signature={signature}
+          onSignature={setSignature}
+          canSign={launchFeatures.cardTable && Boolean(data.signature)}
+          onCloth={atTable}
           onNext={() => { setStep('seal'); setLookUnavailable(false); if (to?.kind === 'person') void theirs.refetch(); }}
         />
       ) : null}
@@ -1677,6 +1782,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           onSend={doSend}
           stamps={data.postage_enabled ? stamps : null}
           onGetStamps={() => setStampSheet(true)}
+          onCloth={atTable}
         />
       ) : null}
       {step === 'look' && look && to ? (
@@ -1690,6 +1796,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           design={design?.id ?? ''}
           onGetStamps={() => setStampSheet(true)}
           onSealOnTable={launchFeatures.cardTable ? openSealing : undefined}
+          onCloth={atTable}
         />
       ) : null}
       {step === 'look' && listLook && to?.kind === 'list' ? (
@@ -1708,8 +1815,10 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
             setStampSheet(true);
           }}
           onSealOnTable={launchFeatures.cardTable ? openSealing : undefined}
+          onCloth={atTable}
         />
       ) : null}
+      </StepsAtTable>
       {step === 'sent' && listSent && to?.kind === 'list' ? (
         <SentList
           results={listSent}
@@ -1780,7 +1889,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           }}
           overlay={sealShare && sent ? (
             <CardShareSheet
-              details={{ card: { ...sealing.card, sealed: sent.arrival === 'sealed_christmas' }, note: sealing.note, fromName: sealing.fromName, mailedOn: sent.sent_at }}
+              details={{ card: { ...sealing.card, sealed: sent.arrival === 'sealed_christmas' }, note: sealing.note, fromName: sealing.fromName, mailedOn: sent.sent_at, signature: sealing.card.signature ?? null }}
               slug={data.designs.find((d) => d.id === sealing.card.design)?.slug}
               mine
               onClose={() => setSealShare(false)}

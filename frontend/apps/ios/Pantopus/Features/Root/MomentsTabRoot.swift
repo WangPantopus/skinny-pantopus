@@ -25,6 +25,19 @@ struct MomentsWatchRequest: Identifiable {
     let newOnly: Bool
 }
 
+/// Hand-off into the Moments tab from outside it: the "added a Moment" push and its link
+/// (`/app/moments/<id>`). `MomentsTabRoot` plays it.
+@Observable
+@MainActor
+final class MomentsNavigator {
+    static let shared = MomentsNavigator()
+
+    /// A Moment to play once the Moments tab shows.
+    var pending: String?
+
+    private init() {}
+}
+
 /// Posting, from + or "Add a Moment".
 struct MomentsComposeRequest: Identifiable {
     let id = UUID()
@@ -36,6 +49,7 @@ public struct MomentsTabRoot: View {
     @State private var watching: MomentsWatchRequest?
     @State private var composing: MomentsComposeRequest?
     @State private var showsAreaPicker = false
+    @State private var navigator = MomentsNavigator.shared
     /// The phone's light or dark, for the sheets over the always-dark viewer.
     @Environment(\.colorScheme) private var colorScheme
 
@@ -61,6 +75,8 @@ public struct MomentsTabRoot: View {
                 onClose: {
                     watching = nil
                     Task { await map.load() }
+                    // A Moment opened from a push while another tab was up: what was watched is no longer new.
+                    Task { await MomentsTabDot.shared.reread() }
                 }
             )
         }
@@ -73,6 +89,33 @@ public struct MomentsTabRoot: View {
                 watching = nil
                 composing = nil
                 showsAreaPicker = false
+                navigator.pending = nil
+            }
+        }
+        .onChange(of: navigator.pending, initial: true) { _, _ in playLinked() }
+        // A link that came while a Moment was being written waits for the composer to close.
+        .onChange(of: composing == nil) { _, _ in playLinked() }
+    }
+
+    /// A Moment named by a link (the "added a Moment" push): the viewer opens on that one, as from a chat
+    /// quote. Ended, or not yours to see: the map, with a line saying so.
+    private func playLinked() {
+        guard flags.moments, composing == nil, let id = navigator.pending else { return }
+        navigator.pending = nil
+        showsAreaPicker = false
+        Task {
+            do {
+                let moment = try await MomentsAPI.send(MomentsEndpoints.moment(id: id), as: MomentEnvelope.self).moment
+                var me: String?
+                if case let .signedIn(user) = AuthManager.shared.state { me = user.id }
+                let ring = MomentRingDTO(moment: moment, mine: moment.author.id == me)
+                watching = MomentsWatchRequest(rings: [ring], start: 0, newOnly: false)
+            } catch {
+                let failure = error as? MomentsFailure
+                // The map's short note (the pill that says "Your Moment is live"), without its check mark.
+                MomentsUploader.shared.plainNote = failure == .ended || failure == .notFound
+                    ? "This Moment has ended."
+                    : failure?.message ?? "Couldn't open that Moment."
             }
         }
     }

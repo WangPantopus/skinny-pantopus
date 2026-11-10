@@ -83,6 +83,18 @@ data class ConversationRowContent(
     /** Backing gig for gig-room rows — plumbs the A15 pinned context strip. */
     val gigId: String? = null,
     val lastMessageAt: String? = null,
+    /** The last message replies to a Moment (board N3): its line and its small picture. */
+    val momentReply: ConversationMomentReply? = null,
+)
+
+/** "Replied to your Moment" over a conversation's preview, with the Moment's picture at the row's end (board N3). */
+@Immutable
+data class ConversationMomentReply(
+    val momentId: String,
+    val label: String,
+    /** Null for a text card and once the Moment ended. */
+    val thumbUrl: String?,
+    val ended: Boolean,
 )
 
 /** Filter-tab entry the view renders. */
