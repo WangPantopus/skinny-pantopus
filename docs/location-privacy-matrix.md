@@ -205,7 +205,8 @@ taken. Others see only what the author chose on the Post sheet, which shows the 
   `MAX_DISPLAY_OFFSET_DEGREES` on whole neighborhood cells, then keeps the Moments whose displayed point is in view.
 - **Files carry no location:** photo EXIF and video location tags are removed on upload (`photoMetadata.js`,
   `videoMetadata.js`); files sit in private storage behind 15-minute signed links and are deleted 7 days after the
-  Moment ends (sooner when its author deletes it) unless a report holds them.
+  Moment ends (sooner when its author deletes it) unless a report holds them. Deleting the account deletes all of
+  its Moment files at once (`DELETE /api/users/account`, `momentMedia.removeAccountFiles`).
 - **Kept out of the generic surfaces:** `distribution_targets` is empty, `visibility` is `private`, they're off
   profiles, and `feedService.onlyShownPosts` and `readAccess.canReadPost` refuse `is_story` rows, so no feed, posts
   map layer, profile list or post route shows one, its author's included.

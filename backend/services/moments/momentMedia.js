@@ -124,6 +124,30 @@ async function folderKeys(bucket, authorId, momentId) {
   return (data || []).filter((entry) => entry?.name && entry.id).map((entry) => `${folder}/${entry.name}`);
 }
 
+/**
+ * Deletes every Moment file of an account that was just deleted (DELETE /api/users/account): its Moments went with
+ * the account, so nothing else would find their files again. Answers how many files it removed; throws when storage
+ * can't be read.
+ */
+async function removeAccountFiles(authorId) {
+  if (!UUID.test(String(authorId))) return 0;
+  const folder = `${PREFIX}${String(authorId).toLowerCase()}`;
+  const name = await privateBucket();
+  let removed = 0;
+  // A page of the account's Moment folders at a time: an emptied folder leaves the listing, so each round reads the
+  // first page again, and stops when a round removes nothing.
+  for (let round = 0; round < 50; round += 1) {
+    const { data, error } = await db.storage.from(name).list(folder, { limit: 100 });
+    if (error) throw failure('Moments storage could not be listed.');
+    const momentIds = (data || []).map((entry) => entry?.name).filter((entry) => UUID.test(String(entry)));
+    if (!momentIds.length) break;
+    const keys = (await Promise.all(momentIds.map((momentId) => folderKeys(name, authorId, momentId)))).flat();
+    if (!keys.length || !(await removeKeys(name, keys))) break;
+    removed += keys.length;
+  }
+  return removed;
+}
+
 // ─── Reading a video ─────────────────────────────────────────────────────────
 
 function unreadableVideo(detail) {
@@ -250,6 +274,7 @@ async function download(bucket, key) {
 module.exports = {
   LINK_SECONDS, STORAGE_CONTRACT, MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, MAX_STILL_BYTES, MAX_VIDEO_MS, VIDEO_MS_TOLERANCE,
   PHOTO_TYPES, VIDEO_TYPES,
-  failure, privateBucket, sha256, keyFor, isMomentKey, put, signedLinks, removeKeys, mediaKeys, folderKeys, download,
+  failure, privateBucket, sha256, keyFor, isMomentKey, put, signedLinks, removeKeys, mediaKeys, folderKeys,
+  removeAccountFiles, download,
   videoFacts, jpegFacts, photoFacts, thumbnail, checkImage,
 };

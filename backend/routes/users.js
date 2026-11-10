@@ -5984,6 +5984,15 @@ router.delete('/account', verifyToken, requireStepUp('delete_account'), requireS
       retryAuthUserDeletion(userId);
     }
 
+    // ── 6. Moments: the person's private photo and video files ───
+    // Their Moments went with the User row (Post rows cascade), so nothing else would find these files again
+    // (services/moments/momentMedia.js). In the background: the account is already deleted, and its answer
+    // doesn't wait for storage or change with it.
+    Promise.resolve()
+      .then(() => require('../services/moments/momentMedia').removeAccountFiles(userId))
+      .then((count) => { if (count) logger.info('Account deletion removed Moment files', { userId, count }); })
+      .catch((err) => logger.warn('Account deletion left Moment files', { userId, error: err.message }));
+
     logger.info('Account deleted successfully', { userId });
     res.json({ message: 'Account deleted successfully' });
   } catch (err) {
