@@ -18,7 +18,7 @@ const MESSAGES = {
   OWNER_INVITE_AUTHORITY_REQUIRED: 'Only current verified owners can invite co-owners.',
   IDENTITY_CONFIRMATION_REQUIRED: 'Identity confirmation is required before this claim can join the household.',
   MEMBERSHIP_RENEWAL_REQUIRED: 'This membership needs a new review before it can be restored.',
-  OWNERSHIP_REVIEW_REQUIRED: 'This ownership history needs a separate ownership review.',
+  OWNERSHIP_REVIEW_REQUIRED: 'This person has an owner record on this home that this invitation can\'t change.',
   PROPOSED_ROLE_FORBIDDEN: 'That role exceeds the permitted authority or age limit.',
   PERMISSION_DELEGATION_FORBIDDEN: 'You cannot grant permissions that you do not hold.',
 };
