@@ -75,14 +75,27 @@ struct CardTableLayout: Equatable {
         // when there's room; at the largest text sizes the words get their own glass instead.)
         let laidReach: CGFloat = 1.012 * (512 + 1392) / 1200
         let shutRoom = height - safeTop - bottom - 88
-        var cardWidth = min(width - side * 2, Self.cardCap(width: width))
-        cardWidth = max(0, min(cardWidth, room / laidReach, shutRoom / (1.012 * 1392 / 1200)))
+        let widest = min(width - side * 2, Self.cardCap(width: width))
+        let shutLimit = shutRoom / (1.012 * 1392 / 1200)
+        var cardWidth = max(0, min(widest, room / laidReach, shutLimit))
+        // A tall wide page (the open Duo upright and flat, about 669 × 951) would give a card of only about 440 that
+        // way. There the envelope lies with its body wholly behind the card and its open flap running up past the top
+        // of the screen, so only the card and 13% of flap above it need the room: about 570-600 (plan 6.4).
+        let flapRunsOff = width >= 560 && height > width && cardWidth < widest
+        if flapRunsOff {
+            cardWidth = max(0, min(widest, room / 1.33, shutLimit))
+        }
         var peek = room - cardWidth * 1.2
         let minPeek = cardWidth * 0.13
         let maxPeek = cardWidth * 0.47
         peek = min(max(peek, minPeek), maxPeek)
         let spare = max(0, room - cardWidth * 1.2 - peek)
         let cardTop = topGap + spare * 0.46 + peek
+        if flapRunsOff {
+            // The flap's tip is 0.406 card widths above the card when the body ends at the card's lower edge; the rest
+            // of the flap runs off the top. Where the room is enough for the whole envelope, this is where it was.
+            peek = max(peek, laidReach * cardWidth - cardWidth * 1.2)
+        }
         let envelopeWidth = cardWidth * 1.012
         let envelopeHeight = envelopeWidth * 1392 / 1200
         let flapDepth = envelopeWidth * 512 / 1200

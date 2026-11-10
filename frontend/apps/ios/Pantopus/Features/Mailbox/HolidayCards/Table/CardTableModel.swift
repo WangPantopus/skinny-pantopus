@@ -211,7 +211,7 @@ final class CardTableModel {
         self.startsOnTable = startsOnTable && !content.sealed
         // Santa's envelope lands with a little more bounce (plan Part 7).
         if CardTableMood(number: content.number) == .santa {
-            springs.drop = CardTableSpring(1, k: 58, c: 7.5)
+            springs.drop = CardTableSpring(1, k: 58, c: 9.6)
         }
         ticker.onTick = { [weak self] in self?.frame(at: $0) }
     }
