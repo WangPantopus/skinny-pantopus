@@ -91,6 +91,7 @@ export default function CardTable({
   paused = false,
   closeLabel = 'Back to the Mailbox',
   menu = [],
+  sendBack = null,
   onShare,
   onClose,
   overlay,
@@ -110,6 +111,8 @@ export default function CardTable({
   paused?: boolean;
   closeLabel?: string;
   menu?: TableMenuItem[];
+  /** Send one back (design plan Part 3): a quiet button under "Turn it back" once the card is turned over. */
+  sendBack?: TableMenuItem | null;
   onShare?: () => void;
   onClose: () => void;
   /** Sheets and dialogs that belong over the table. */
@@ -410,6 +413,20 @@ export default function CardTable({
             <div className={`${styles.act} ${controlsHidden ? styles.hidden : ''}`} data-el="act">
               <button type="button" className={styles.primary} data-ui onClick={() => engineRef.current?.primary()}>{primary || 'Turn it over'}</button>
               <div className={styles.hint}>{hint}</div>
+              {/* Its room is kept while it can be offered, so the card never moves when it shows. */}
+              {sendBack ? (
+                <button
+                  type="button"
+                  className={`${styles.quiet} ${step === 'out' && backUp ? '' : styles.hidden}`}
+                  data-ui
+                  data-testid="cardTableSendBack"
+                  aria-hidden={!(step === 'out' && backUp)}
+                  tabIndex={step === 'out' && backUp ? 0 : -1}
+                  onClick={() => { setMenuOpen(false); sendBack.onSelect(); }}
+                >
+                  {sendBack.label}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
