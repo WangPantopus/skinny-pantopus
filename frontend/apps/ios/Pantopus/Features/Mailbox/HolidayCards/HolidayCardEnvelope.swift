@@ -51,11 +51,24 @@ struct HolidayCardEnvelopePiece: View {
                 .offset(x: geo.size.width * 0.38, y: 72)
 
                 if model.card?.sealed == true {
-                    sealMark
-                        .frame(width: 58, height: 58)
-                        .frame(maxHeight: .infinity, alignment: .bottomLeading)
-                        .padding(.leading, Spacing.s3)
-                        .padding(.bottom, Spacing.s2)
+                    // The wax seal and its words, as on Android (plan 1.5).
+                    HStack(spacing: 10) {
+                        sealMark
+                            .frame(width: 58, height: 58)
+                        if LaunchFeatures.cardTable {
+                            Text("Do not open until Christmas")
+                                .font(.system(size: 11, weight: .semibold, design: .serif))
+                                .tracking(1.1)
+                                .textCase(.uppercase)
+                                .foregroundStyle(MailPaper.cardEnvelopeLabel)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                    }
+                    .frame(maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(.leading, Spacing.s3)
+                    .padding(.trailing, Spacing.s4)
+                    .padding(.bottom, Spacing.s2)
                 } else {
                     Text("Christmas card")
                         .font(.system(size: 11, weight: .semibold))

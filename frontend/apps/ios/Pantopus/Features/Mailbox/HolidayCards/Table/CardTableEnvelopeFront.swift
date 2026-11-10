@@ -106,17 +106,25 @@ struct CardTableEnvelopeFront: View, Equatable {
 
 /// The inked postmark on an envelope: the art's rings and wavy lines, with the real mailed day printed over them.
 enum CardTableInkedPostmark {
-    static func draw(_ postmark: UIImage, in context: GraphicsContext, box: CGRect, day: String?, year: Int) {
-        context.draw(Image(uiImage: postmark), in: box)
+    /// `ink`: the postmark in another ink (the Mailbox row's cream, so it reads on the dark red); nil keeps the art's black.
+    static func draw(_ postmark: UIImage, in context: GraphicsContext, box: CGRect, day: String?, year: Int, ink: Color? = nil) {
+        if let ink {
+            context.drawLayer { layer in
+                layer.clipToLayer { mask in mask.draw(Image(uiImage: postmark), in: box) }
+                layer.fill(Path(box), with: .color(ink))
+            }
+        } else {
+            context.draw(Image(uiImage: postmark), in: box)
+        }
         func line(_ text: String, x: CGFloat, y: CGFloat, size: CGFloat, tracking: CGFloat) {
-            var ink = context
-            ink.translateBy(x: box.minX + box.width * x, y: box.minY + box.height * y)
-            ink.rotate(by: .degrees(7))
-            ink.drawText(
+            var stamp = context
+            stamp.translateBy(x: box.minX + box.width * x, y: box.minY + box.height * y)
+            stamp.rotate(by: .degrees(7))
+            stamp.drawText(
                 Text(text)
                     .font(.custom("Georgia-Bold", fixedSize: box.width * size))
                     .tracking(box.width * tracking)
-                    .foregroundColor(MailPaper.tablePostmarkInk),
+                    .foregroundColor(ink ?? MailPaper.tablePostmarkInk),
                 centeredOn: 0,
                 baseline: 0
             )

@@ -68,6 +68,8 @@ struct HolidayCardFlowView: View {
         }
         .background(HolidayCardDesk.background(scheme).ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        // Full screen, like the other flows: no tab bar in any step or on the confirmation (founder, 11-09).
+        .hidesTabBar()
         .task { await viewModel.load() }
         // Digital stamps: the balance after each step, card and take-back; StoreKit purchases finished on open and resume.
         .task(id: postageOn) {
@@ -143,7 +145,8 @@ struct HolidayCardFlowView: View {
         return viewModel.recipient
     }
 
-    /// What's pinned under the page: Look it over's footer (a list's, or one card's), or step 1's button on with a list.
+    /// What's pinned under the page: Look it over's footer (a list's, or one card's), step 1's button on with a list,
+    /// or Pick a card's bar.
     @ViewBuilder
     private var footer: some View {
         if viewModel.cards != nil, viewModel.step == .look, let entries = viewModel.recipient?.entries, let look = viewModel.listPreview {
@@ -152,6 +155,8 @@ struct HolidayCardFlowView: View {
             HolidayCardLookFooter(viewModel: viewModel, byEmail: recipient.isEmail)
         } else if viewModel.step == .to, viewModel.cards?.open == true, viewModel.maxRecipients > 1, !viewModel.listed.isEmpty {
             HolidayCardListContinueBar(viewModel: viewModel)
+        } else if viewModel.step == .pick, let cards = viewModel.cards, cards.open, viewModel.today == nil {
+            HolidayCardPickBar(viewModel: viewModel, cards: cards)
         }
     }
 
