@@ -7,9 +7,11 @@
 //  fog, wind and storms follow the reported weather and the time of day at
 //  this address. The numbers sit on top, read exactly as before.
 //
-//  Motion is decoration, so it stops for Reduce Motion, Low Power Mode,
-//  an inactive app and a card scrolled out of view; the still picture
-//  carries the same scene. Parity twin of Android's `TodaySky.kt`.
+//  Motion is decoration, so it stops for Reduce Motion, an inactive app
+//  and a card scrolled out of view; the still picture carries the same
+//  scene. It keeps moving in Low Power Mode: rain held in mid-air reads as
+//  a stuck screen, and the card draws at 30 frames a second at most.
+//  Parity twin of Android's `TodaySky.kt`.
 //
 
 import SwiftUI
@@ -37,7 +39,6 @@ struct TodaySkyHero: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
     @State private var onScreen = true
     @State private var appeared = false
     /// The forecast hour slid to, an index into the hours ahead; nil is now.
@@ -52,7 +53,7 @@ struct TodaySkyHero: View {
     @State private var restHeight: CGFloat = 0
 
     private var animating: Bool {
-        !reduceMotion && !lowPower && scenePhase == .active && onScreen && appeared
+        !reduceMotion && scenePhase == .active && onScreen && appeared
     }
 
     var body: some View {
@@ -129,9 +130,6 @@ struct TodaySkyHero: View {
         }
         .onChange(of: data) { shownAt = .now }
         .onDisappear { appeared = false }
-        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
-            lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        }
         .modifier(ScrollVisibility(onScreen: $onScreen))
         .onGeometryChange(for: CGFloat.self) { max(0, -$0.frame(in: .scrollView).minY).rounded() } action: { hidden = $0 }
         // A container, so the bins button keeps its own identifier.

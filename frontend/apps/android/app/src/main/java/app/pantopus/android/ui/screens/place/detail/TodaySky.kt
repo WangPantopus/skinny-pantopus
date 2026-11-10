@@ -83,9 +83,11 @@ import kotlin.math.roundToInt
  * this address. The numbers sit on top, read exactly as before.
  *
  * Motion is decoration, so it stops when animations are removed in the
- * system settings, in battery saver, while the app is in the background
- * and while the card is scrolled away; the still picture is the same
- * scene. Parity twin of iOS `TodaySky.swift`.
+ * system settings, while the app is in the background and while the card
+ * is scrolled away; the still picture is the same scene. It keeps moving
+ * in battery saver: rain held in mid-air reads as a stuck screen, and the
+ * card draws at 30 frames a second at most. Parity twin of iOS
+ * `TodaySky.swift`.
  */
 
 /** The "Now" reading drawn over the living sky. Touch and hold, then slide, to see the hours ahead (`TodaySkyScrub.kt`). */

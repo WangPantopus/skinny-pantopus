@@ -415,7 +415,10 @@ private fun SunTimes(
     }
 }
 
-/** True when animations are removed in the system settings or battery saver is on. */
+/**
+ * True when animations are removed in the system settings. Battery saver doesn't count: iOS keeps
+ * Today moving in Low Power Mode, and rain held in mid-air reads as a stuck screen.
+ */
 @Composable
 fun rememberMotionReduced(): Boolean {
     val context = LocalContext.current
@@ -425,8 +428,7 @@ fun rememberMotionReduced(): Boolean {
             android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
             1f,
         )
-    val power = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
-    return scale == 0f || power?.isPowerSaveMode == true
+    return scale == 0f
 }
 
 @Composable
