@@ -77,6 +77,27 @@ object HolidayCardArt {
     /** The caption's hand: Nothing You Could Do (SIL Open Font License, `assets/licenses`). */
     val captionHand = FontFamily(Font(R.font.nothing_you_could_do))
 
+    /** Christmas with Jesus Christ: pictures 59–67, each with its whole verse printed under the painting. */
+    private val VERSE_NUMBERS = 59..67
+
+    /**
+     * Whether a card's caption is a verse's reference ("John 3:16 (KJV)"), set in the card's serif italic rather than the
+     * pen, so its colon reads. The stored caption stays as it is.
+     */
+    fun captionIsVerse(
+        number: Int,
+        caption: String,
+    ): Boolean = number in VERSE_NUMBERS || VERSE_REFERENCE.containsMatchIn(caption)
+
+    /** A caption ending in `<chapter>:<verse>`, with "(KJV)" or not: as the web tells a verse's reference. */
+    private val VERSE_REFERENCE = Regex("""\d+:\d+(\s*\(KJV\))?\s*$""")
+
+    /** [captionIsVerse] for a design id ("christmas-2026-61"). */
+    fun captionIsVerse(
+        design: String,
+        caption: String,
+    ): Boolean = captionIsVerse(design.substringAfterLast('-').toIntOrNull() ?: 0, caption)
+
     /**
      * The picture for [design], for every place a card shows: the app's own for the pictures it carries, else the
      * website's, kept on the phone once loaded so it shows again without the network. Null for a design id that isn't

@@ -84,6 +84,8 @@ fun SendCardScreen(
     val fromName by viewModel.fromName.collectAsStateWithLifecycle()
     val stampShort by viewModel.stampShort.collectAsStateWithLifecycle()
     var confirmTakeBack by rememberSaveable { mutableStateOf(false) }
+    // Pick a card's picture shown large ("See it larger", or a second tap on the chosen one).
+    var largeDesign by rememberSaveable { mutableStateOf<String?>(null) }
     // A card on a sent list, asked about before it's taken back.
     var listTakeBack by remember { mutableStateOf<SentHolidayCard?>(null) }
     val back = { if (!viewModel.back()) onClose() }
@@ -161,6 +163,7 @@ fun SendCardScreen(
                             stamps = stamps?.balance,
                             onGetStamps = getStamps,
                             onTakeBackFromList = { listTakeBack = it },
+                            onLarge = { largeDesign = it },
                         )
                     }
             }
@@ -178,6 +181,15 @@ fun SendCardScreen(
             )
         } else if (form.step == SendCardStep.To && listGrowing) {
             ListContinueBar(form, onContinue = viewModel::continueWithList)
+        } else if (onSteps && form.step == SendCardStep.Pick && season != null) {
+            PickBar(
+                cards = season,
+                chosen = form.design,
+                large = largeDesign,
+                onLarge = { largeDesign = it },
+                onChoose = viewModel::chooseDesign,
+                onNext = viewModel::next,
+            )
         } else if (onSteps && form.step == SendCardStep.Look && form.preview != null) {
             LookFooter(
                 byEmail = form.to is CardRecipient.Email,
@@ -270,6 +282,8 @@ private fun Steps(
     onGetStamps: () -> Unit,
     /** A card on a sent list: "Take it back" (asked first). */
     onTakeBackFromList: (SentHolidayCard) -> Unit,
+    /** Pick a card: show this picture large. */
+    onLarge: (String) -> Unit,
 ) {
     val backNote = form.backNote(postage = cards.postageEnabled)
     if (backNote != null && form.step == SendCardStep.To) {
@@ -295,7 +309,7 @@ private fun Steps(
     val design = cards.designs.firstOrNull { it.id == form.design }
     when (form.step) {
         SendCardStep.To -> ToStep(form, viewModel)
-        SendCardStep.Pick -> PickStep(cards, form.design, onChoose = viewModel::chooseDesign, onNext = viewModel::next)
+        SendCardStep.Pick -> PickStep(cards, form.design, onChoose = viewModel::chooseDesign, onLarge = onLarge)
         SendCardStep.Write ->
             if (design != null) {
                 WriteStep(

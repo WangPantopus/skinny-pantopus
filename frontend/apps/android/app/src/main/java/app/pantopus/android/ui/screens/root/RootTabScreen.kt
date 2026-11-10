@@ -2371,10 +2371,11 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
 private val TAB_BAR_STAYS_ROUTES = setOf(ChildRoutes.MAILBOX_ITEM_DETAIL, PantopusRoute.Plans.path)
 
 /**
- * Screens with no tab bar, as on iPhone: a conversation has the whole window (founder request 2026-11-06), and its
- * Back returns to the screen underneath, where the bar is.
+ * Screens with no tab bar, as on iPhone: a conversation has the whole window (founder request 2026-11-06), and so does
+ * sending a Christmas card, all five steps and the card sent (founder, 2026-11-09). Back returns to the screen
+ * underneath, where the bar is.
  */
-private val NO_TAB_BAR_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION)
+private val NO_TAB_BAR_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION, ChildRoutes.MAILBOX_CARDS)
 
 /** Where the first-run notices may show: nothing else is asking there. */
 private val NOTICE_ROUTES = setOf(PantopusRoute.Place.path, PantopusRoute.Today.path)
@@ -3056,11 +3057,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             },
             bottomBar = bottomBar@{
                 if (!showsTabBar) {
-                    // The chat's composer color runs on under the system navigation area.
+                    // The chat's composer color, or the card desk, runs on under the system navigation area.
+                    val onCardDesk = backStackEntry?.destination?.route == ChildRoutes.MAILBOX_CARDS
+                    val under = if (onCardDesk) PantopusColors.cardDesk else PantopusColors.appSurface
                     Spacer(
                         Modifier
                             .fillMaxWidth()
-                            .background(PantopusColors.appSurface)
+                            .background(under)
                             .navigationBarsPadding(),
                     )
                     return@bottomBar

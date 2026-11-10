@@ -108,7 +108,9 @@ internal fun CardTableBack(
                 .background(HolidayCardArt.paper(paper))
                 .drawBehind {
                     val face = painter ?: return@drawBehind
-                    drawIntoCanvas { face.drawBack(it.nativeCanvas, size.width, words) }
+                    // Off the table there's no lamp to brighten it: the grain at a quarter keeps the back bright cream.
+                    val grain = art?.paperQuarter ?: return@drawBehind
+                    drawIntoCanvas { face.drawBack(it.nativeCanvas, size.width, words, grain) }
                 },
     ) {
         if (writing != null) {
