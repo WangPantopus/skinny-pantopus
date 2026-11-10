@@ -232,26 +232,51 @@ fun FeedMapSection(
             when (val current = state) {
                 FeedMapUiState.Loading -> LoadingCard()
                 is FeedMapUiState.Error -> ErrorCard(current.message, viewModel::refresh)
-                is FeedMapUiState.Loaded -> {
-                    val selected = current.entities.firstOrNull { it.id == current.selectedId }
-                    val clusterPosts = current.clusterPosts
-                    when {
-                        selected != null -> PreviewCard(selected) { onOpenPost(selected.id) }
-                        clusterPosts.isNotEmpty() ->
-                            ClusterPostsCard(
-                                posts = clusterPosts,
-                                onOpenPost = onOpenPost,
-                                onClose = { viewModel.selectEntity(null) },
-                            )
-                        current.isEmpty ->
-                            EmptyCard(
-                                hasHint = current.nearestActivityCenter != null && searchText.isBlank(),
-                                searching = searchText.isNotBlank(),
-                                onJump = viewModel::jumpToNearestActivity,
-                            )
-                        else -> Unit
-                    }
-                }
+                is FeedMapUiState.Loaded -> LoadedCards(current, searchText, viewModel, onOpenPost)
+            }
+        }
+    }
+}
+
+/**
+ * The card under a loaded map: a pin's preview, a cluster's posts, Connections' posts with no place (their bar,
+ * or their list), or the empty card.
+ */
+@Composable
+private fun LoadedCards(
+    current: FeedMapUiState.Loaded,
+    searchText: String,
+    viewModel: FeedMapViewModel,
+    onOpenPost: (String) -> Unit,
+) {
+    val selected = current.entities.firstOrNull { it.id == current.selectedId }
+    val clusterPosts = current.clusterPosts
+    when {
+        selected != null -> PreviewCard(selected) { onOpenPost(selected.id) }
+        clusterPosts.isNotEmpty() ->
+            ClusterPostsCard(
+                posts = clusterPosts,
+                onOpenPost = onOpenPost,
+                onClose = { viewModel.selectEntity(null) },
+            )
+        current.showsUnplaced ->
+            PostListCard(
+                title = current.unplacedLabel,
+                footnote = if (current.unplacedMore) "The newest ${current.unplacedPosts.size}. List has them all." else null,
+                posts = current.unplacedPosts,
+                tag = "pulseMapNoPlace",
+                onOpenPost = onOpenPost,
+                onClose = { viewModel.selectEntity(null) },
+            )
+        else -> {
+            if (current.unplacedPosts.isNotEmpty()) UnplacedBar(current.unplacedLabel, viewModel::showUnplacedPosts)
+            if (current.isEmpty) {
+                if (current.unplacedPosts.isNotEmpty()) Box(Modifier.size(Spacing.s2))
+                EmptyCard(
+                    hasHint = current.nearestActivityCenter != null && searchText.isBlank(),
+                    searching = searchText.isNotBlank(),
+                    onJump = viewModel::jumpToNearestActivity,
+                )
             }
         }
     }
@@ -772,6 +797,53 @@ private fun PreviewCard(
 }
 
 /**
+ * Connections' posts with no place have no pin: this bar counts them and
+ * opens them as a list, so the map holds every post the list does. Kept to
+ * the start, clear of the compose button.
+ */
+@Composable
+private fun UnplacedBar(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth().padding(end = 72.dp)) {
+        Row(
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(Radii.pill))
+                    .background(PantopusColors.appSurface)
+                    .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                    .clickable(onClickLabel = "Show them as a list", onClick = onClick)
+                    .heightIn(min = 40.dp)
+                    .padding(horizontal = Spacing.s3)
+                    .testTag("pulseMapNoPlaceBar"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
+            PantopusIconImage(
+                icon = PantopusIcon.MapPinOff,
+                contentDescription = null,
+                size = 16.dp,
+                tint = PantopusColors.primary600,
+            )
+            Text(
+                label,
+                style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                color = PantopusColors.appText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            PantopusIconImage(
+                icon = PantopusIcon.ChevronRight,
+                contentDescription = null,
+                size = 14.dp,
+                tint = PantopusColors.appTextMuted,
+            )
+        }
+    }
+}
+
+/**
  * The posts of a tapped cluster that zooming can't split, in the preview
  * card's slot. Each row opens its post, as the preview card does.
  */
@@ -781,11 +853,34 @@ private fun ClusterPostsCard(
     onOpenPost: (String) -> Unit,
     onClose: () -> Unit,
 ) {
-    CardSurface(tag = "pulseMapClusterCard") {
+    PostListCard(
+        title = if (posts.size == 1) "1 post in this area" else "${posts.size} posts in this area",
+        posts = posts,
+        tag = "pulseMapCluster",
+        onOpenPost = onOpenPost,
+        onClose = onClose,
+    )
+}
+
+/**
+ * A card listing posts, each opening its post: a tapped cluster's, or
+ * Connections' posts with no place. [tag] prefixes its test tags (`…Card`,
+ * `…Row_<post>`, `…CardClose`).
+ */
+@Composable
+private fun PostListCard(
+    title: String,
+    posts: List<ExploreEntity>,
+    tag: String,
+    onOpenPost: (String) -> Unit,
+    onClose: () -> Unit,
+    footnote: String? = null,
+) {
+    CardSurface(tag = "${tag}Card") {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (posts.size == 1) "1 post in this area" else "${posts.size} posts in this area",
+                    title,
                     modifier = Modifier.weight(1f).semantics { heading() },
                     style = PantopusTextStyle.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold),
                     color = PantopusColors.appText,
@@ -798,7 +893,7 @@ private fun ClusterPostsCard(
                             .size(40.dp)
                             .clip(CircleShape)
                             .clickable(onClick = onClose)
-                            .testTag("pulseMapClusterCardClose")
+                            .testTag("${tag}CardClose")
                             .semantics { contentDescription = "Close" },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -820,13 +915,21 @@ private fun ClusterPostsCard(
                                 .fillMaxWidth()
                                 .clickable { onOpenPost(post.id) }
                                 .padding(vertical = Spacing.s2)
-                                .testTag("pulseMapClusterRow_${post.id}"),
+                                .testTag("${tag}Row_${post.id}"),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
                     ) {
                         PostSummary(post)
                     }
                 }
+            }
+            footnote?.let {
+                Text(
+                    it,
+                    modifier = Modifier.padding(top = Spacing.s2),
+                    style = PantopusTextStyle.caption.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                    color = PantopusColors.appTextSecondary,
+                )
             }
         }
     }

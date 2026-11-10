@@ -117,8 +117,11 @@ fun SendCardScreen(
             title = page.title(form),
             step = form.step.takeIf { page == SendCardPage.Steps },
             onBack = back,
-            stamps = stamps?.balance,
-            onStamps = getStamps,
+        )
+        StampChip(
+            stamps?.balance,
+            onOpen = getStamps,
+            modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s1),
         )
         Column(
             modifier =
@@ -380,8 +383,6 @@ private fun StepHeader(
     title: String,
     step: SendCardStep?,
     onBack: () -> Unit,
-    stamps: StampBalance? = null,
-    onStamps: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = Spacing.s1, end = 14.dp),
@@ -404,11 +405,6 @@ private fun StepHeader(
             modifier = Modifier.weight(1f).semantics { heading() },
         )
         val index = step?.let { SendCardStep.steps.indexOf(it) } ?: -1
-        StampChip(
-            stamps,
-            onOpen = onStamps,
-            modifier = Modifier.padding(start = Spacing.s2, end = if (index >= 0) Spacing.s2 else Spacing.s0),
-        )
         if (index >= 0) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),

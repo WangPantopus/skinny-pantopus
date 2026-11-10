@@ -2053,42 +2053,41 @@ router.get('/map', verifyToken, async (req, res) => {
       : ['posts'];
 
     const results = [];
+    const postMarker = (post) => ({
+      layer_type: 'post',
+      id: post.id,
+      latitude: post.latitude,
+      longitude: post.longitude,
+      title: post.title || null,
+      post_type: post.post_type,
+      post_as: post.post_as || 'personal',
+      audience: post.audience || 'nearby',
+      content: post.content,
+      location_name: post.location_name,
+      location_basis: post.location_basis || null,
+      photo_taken_at: post.photo_taken_at || null,
+      home_address: post.home?.address || null,
+      like_count: post.like_count || 0,
+      comment_count: post.comment_count || 0,
+      userHasLiked: !!post.userHasLiked,
+      userHasSaved: !!post.userHasSaved,
+      created_at: post.created_at,
+      creator: post.creator,
+    });
+    // Connections' posts with no place: the Connections list holds them, so its map lists them beside the pins
+    // (feedService.getUnplacedConnectionPosts), whatever area the map shows.
+    let unplaced = null;
 
     // ── Posts layer ──
     if (enabledLayers.includes('posts')) {
       try {
-        const mapPosts = await feedService.getMapFeed({
-          userId,
-          surface: surface || 'place',
-          south: s,
-          west: w,
-          north: n,
-          east: e,
-          postType: postType || null,
-          limit: lim,
-        });
-
-        mapPosts.forEach((post) => results.push({
-          layer_type: 'post',
-          id: post.id,
-          latitude: post.latitude,
-          longitude: post.longitude,
-          title: post.title || null,
-          post_type: post.post_type,
-          post_as: post.post_as || 'personal',
-          audience: post.audience || 'nearby',
-          content: post.content,
-          location_name: post.location_name,
-          location_basis: post.location_basis || null,
-          photo_taken_at: post.photo_taken_at || null,
-          home_address: post.home?.address || null,
-          like_count: post.like_count || 0,
-          comment_count: post.comment_count || 0,
-          userHasLiked: !!post.userHasLiked,
-          userHasSaved: !!post.userHasSaved,
-          created_at: post.created_at,
-          creator: post.creator,
-        }));
+        const query = { userId, surface: surface || 'place', postType: postType || null };
+        const [mapPosts, unplacedPosts] = await Promise.all([
+          feedService.getMapFeed({ ...query, south: s, west: w, north: n, east: e, limit: lim }),
+          query.surface === 'connections' ? feedService.getUnplacedConnectionPosts(query) : null,
+        ]);
+        mapPosts.forEach((post) => results.push(postMarker(post)));
+        unplaced = unplacedPosts;
       } catch (error) {
         logger.error('Error fetching map posts', { error: error.message, userId, surface });
         if (enabledLayers.filter(Boolean).every(layer => layer === 'posts')) throw error;
@@ -2205,7 +2204,14 @@ router.get('/map', verifyToken, async (req, res) => {
       zoom_level: zoomLevel,
     });
 
-    res.json({ markers: results, nearest_activity_center });
+    res.json({
+      markers: results,
+      nearest_activity_center,
+      ...(unplaced ? {
+        unplaced_posts: unplaced.posts.map((post) => ({ ...postMarker(post), latitude: null, longitude: null })),
+        unplaced_more: unplaced.hasMore,
+      } : {}),
+    });
   } catch (err) {
     const elapsed = Number(process.hrtime.bigint() - startTime) / 1e6;
     logger.error('Map fetch error', {

@@ -20,6 +20,14 @@ data class PostsMapResponse(
      * client can offer to jump to (`backend/routes/posts.js:1854`).
      */
     @Json(name = "nearest_activity_center") val nearestActivityCenter: PostsMapCenterDto? = null,
+    /**
+     * Connections only: the posts its list holds that show no point, so no
+     * pin, newest first, whatever area the map shows
+     * (`backend/services/feedService.js` getUnplacedConnectionPosts).
+     */
+    @Json(name = "unplaced_posts") val unplacedPosts: List<PostsMapMarkerDto> = emptyList(),
+    /** More posts with no place than [unplacedPosts] holds. */
+    @Json(name = "unplaced_more") val unplacedMore: Boolean = false,
 )
 
 /** Fallback coordinate for an empty viewport. */

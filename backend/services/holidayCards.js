@@ -28,9 +28,12 @@ const MORNING_HOUR = 7;
 const designIdOf = (number) => `christmas-2026-${String(number).padStart(2, '0')}`;
 
 // The collections "Pick a card" shows, in this order, each with its pictures (by number) in grid order (founder,
-// 2026-10-31; Christmas with Santa 2026-11-07; The First Christmas 2026-11-08). A picture can move to another
-// collection; its number stays.
+// 2026-10-31; Christmas with Santa 2026-11-07; the nativity pictures 2026-11-08, renamed Christmas with Jesus Christ
+// and moved to the front the same day). A picture can move to another collection; its number stays. The collection's
+// id stays first-christmas: nothing but this list reads it.
 const COLLECTIONS = [
+  ['first-christmas', 'Christmas with Jesus Christ', 'For the faithful, and anyone who loves the Christmas story.',
+    [59, 60, 61, 62, 63, 64, 65, 66, 67]],
   ['as-a-kid', 'Christmas as a Kid', 'For families with kids, and anyone who misses being one.',
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]],
   ['with-friends', 'Christmas with Friends', 'For the friends who feel like family.', [18, 19, 20, 21, 22, 26, 31]],
@@ -42,8 +45,6 @@ const COLLECTIONS = [
     [44, 45, 46, 47, 48, 49]],
   ['with-santa', 'Christmas with Santa', 'For anyone who still believes, and anyone who used to.',
     [50, 51, 52, 53, 54, 55, 56, 57, 58]],
-  ['first-christmas', 'The First Christmas', 'For the faithful, and anyone who loves the Christmas story.',
-    [59, 60, 61, 62, 63, 64, 65, 66, 67]],
 ].map(([id, name, line, numbers]) => ({ id, name, line, designs: numbers.map(designIdOf) }));
 const COLLECTION_OF_DESIGN = new Map(COLLECTIONS.flatMap((c) => c.designs.map((design) => [design, c.id])));
 
