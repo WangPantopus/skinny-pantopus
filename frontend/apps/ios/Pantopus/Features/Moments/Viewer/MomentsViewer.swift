@@ -48,6 +48,21 @@ struct MomentsViewer: View {
         self.onClose = onClose
     }
 
+    /// How far the viewer has been dragged down, never negative.
+    private var dragDown: CGFloat { max(dragOffset.height, 0) }
+
+    /// The viewer shrinks a little as it's dragged down.
+    private var dragScale: CGFloat {
+        let travel: CGFloat = min(dragDown, 400)
+        return 1 - travel / 2400
+    }
+
+    /// The black behind the viewer fades as it's dragged down.
+    private var backdropOpacity: Double {
+        let travel: CGFloat = min(dragDown, 300)
+        return 1 - Double(travel) / 600
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             GeometryReader { geo in stage(geo) }
@@ -55,8 +70,8 @@ struct MomentsViewer: View {
             bottomColumn
         }
         .offset(y: max(0, dragOffset.height))
-        .scaleEffect(1 - min(max(dragOffset.height, 0), 400) / 2400)
-        .background(Color.black.opacity(1 - min(max(dragOffset.height, 0), 300) / 600).ignoresSafeArea())
+        .scaleEffect(dragScale)
+        .background(Color.black.opacity(backdropOpacity).ignoresSafeArea())
         .preferredColorScheme(.dark)
         .task { model.start() }
         .onDisappear { model.stop() }
