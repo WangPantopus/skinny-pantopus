@@ -98,7 +98,7 @@ struct MomentsViewer: View {
         } message: {
             Text("Reports go to the Pantopus team. The person isn't told who reported.")
         }
-        .alert("Block \(model.ring?.author.name ?? "")?", isPresented: $showsBlock) {
+        .alert("Block \(model.ring?.author.shortName ?? "")?", isPresented: $showsBlock) {
             Button("Block", role: .destructive) { Task { await model.blockAuthor(onHide: onHideAuthor) } }
                 .accessibilityIdentifier("moments.blockConfirm")
             Button("Cancel", role: .cancel) {}
