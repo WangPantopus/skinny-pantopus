@@ -795,11 +795,11 @@ function WriteStep({
                   width={photo.ref?.width}
                   height={photo.ref?.height}
                   alt={photoAlt}
-                  uploading={photo.status === 'uploading' ? photo.progress : null}
+                  uploading={photo.status === 'uploading'}
                   className="w-full"
                 />
                 <p aria-live="polite" className={`mt-2 text-[13px] ${quiet}`}>
-                  {photo.status === 'uploading' ? `Uploading… ${Math.round(photo.progress * 100)}%` : photo.status === 'ready' ? 'Added.' : ''}
+                  {photo.status === 'uploading' ? 'Uploading…' : photo.status === 'ready' ? 'Added.' : ''}
                 </p>
               </div>
               <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
@@ -1481,7 +1481,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
       return { status: 'uploading', progress: 0, file, localUrl: URL.createObjectURL(file), ref: null, error: null };
     });
     const mine = (draft: PhotoDraft | null) => Boolean(draft && draft.file === file);
-    mailbox.uploadHolidayCardMedia('photo', file, { onProgress: (fraction) => setPhoto((d) => (mine(d) ? { ...d!, progress: fraction } : d)) })
+    mailbox.uploadHolidayCardMedia('photo', file)
       .then(({ media }) => setPhoto((d) => (mine(d) ? { ...d!, status: 'ready', progress: 1, ref: media } : d)))
       // The API client's error carries the server's words (`data.error`), or none when the network failed.
       .catch((error: { data?: { error?: string } }) => setPhoto((d) => (mine(d)

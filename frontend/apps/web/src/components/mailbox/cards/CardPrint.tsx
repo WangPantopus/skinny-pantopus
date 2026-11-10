@@ -50,7 +50,7 @@ export default function CardPrint({
   covered = false,
   fromName = '',
   onUncover,
-  uploading = null,
+  uploading = false,
   tilt = -3,
   className = '',
 }: {
@@ -66,8 +66,8 @@ export default function CardPrint({
   covered?: boolean;
   fromName?: string;
   onUncover?: () => void;
-  /** Uploading: how far (0..1). */
-  uploading?: number | null;
+  /** Uploading: a bar runs along the print until it's stored. */
+  uploading?: boolean;
   tilt?: number;
   className?: string;
 }) {
@@ -117,8 +117,8 @@ export default function CardPrint({
           ) : null}
         </div>
       )}
-      {uploading !== null ? (
-        <span aria-hidden className="absolute bottom-0 left-0 h-[5px] bg-[#8b1d1d]" style={{ width: `${Math.round(uploading * 100)}%` }} />
+      {uploading ? (
+        <span aria-hidden className="absolute bottom-0 left-0 h-[5px] w-full animate-pulse bg-[#8b1d1d] motion-reduce:animate-none" />
       ) : null}
     </figure>
   );

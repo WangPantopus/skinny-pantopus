@@ -706,14 +706,13 @@ export interface CardVoice { file_id: string; duration_ms: number | null }
  * chosen. 201 { media, expires_at }; refusals CARD_PHOTO_UNREADABLE / NOT_STILL / TOO_LARGE, CARD_VOICE_* (as words).
  */
 export async function uploadHolidayCardMedia(kind: 'photo' | 'voice', file: File | Blob,
-  options: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {}): Promise<{ media: CardMediaRef; expires_at: string }> {
+  options: { signal?: AbortSignal } = {}): Promise<{ media: CardMediaRef; expires_at: string }> {
   const form = new FormData();
   form.append('kind', kind);
   form.append('file', file, kind === 'voice' ? 'greeting.m4a' : 'photo.jpg');
+  // The client is fetch-based (no upload progress): callers show "Uploading…" until it answers.
   const response = await apiClient.post<{ media: CardMediaRef; expires_at: string }>('/api/mailbox/cards/media', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     signal: options.signal,
-    onUploadProgress: (event) => { if (event.total) options.onProgress?.(Math.min(1, event.loaded / event.total)); },
   });
   return response.data;
 }
