@@ -530,7 +530,8 @@ fun MomentsViewerScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().testTag("moments.viewer.replyHint"),
                     )
-                    Spacer(Modifier.height(12.dp))
+                    // The reply row keeps 10 dp of its own above the box: 12 dp from the line to the box in all.
+                    Spacer(Modifier.height(2.dp))
                 } else {
                     Spacer(Modifier.height(Spacing.s6))
                 }
