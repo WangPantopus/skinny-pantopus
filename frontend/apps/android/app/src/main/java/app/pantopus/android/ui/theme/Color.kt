@@ -673,6 +673,10 @@ object PantopusColors {
     /** Secondary text on the stage: white at 88% (the "place · 2h ago · 4h left" line). */
     val momentOnStageSecondary = Color(0xE0FFFFFF)
 
+    /** The viewer's … menu sits on the dark stage (REVIEW LA6): a dark surface, and a red that reads on it (5:1). */
+    val momentMenuSurface = Color(0xFF26292E)
+    val momentMenuDanger = Color(0xFFFF6B6B)
+
     /** Text card backgrounds: each a 160° gradient from the first color to the second (boards V3 and P2). */
     val momentCardTealTop = Color(0xFF0F766E)
     val momentCardTealBottom = Color(0xFF115E59)

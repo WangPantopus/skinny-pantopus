@@ -521,7 +521,8 @@ fun MomentsViewerScreen(
                     },
                 )
                 if (typing) {
-                    Spacer(Modifier.height(Spacing.s16))
+                    // Within reach of the thumb (REVIEW L3): the reactions, 14 dp, the line, 12 dp, the box.
+                    Spacer(Modifier.height(14.dp))
                     Text(
                         text = "${ring?.ring?.author?.firstName ?: ring?.ring?.author?.name ?: "They"} gets your reply in Messages.",
                         color = Color.White.copy(alpha = 0.78f),
@@ -529,7 +530,7 @@ fun MomentsViewerScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().testTag("moments.viewer.replyHint"),
                     )
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
                 } else {
                     Spacer(Modifier.height(Spacing.s6))
                 }
@@ -934,27 +935,38 @@ private fun ViewerHeader(
                     width = if (showsSound) 40.dp else 44.dp,
                     modifier = Modifier.testTag("moments.viewer.more"),
                 )
+                // On the dark stage the menu is dark too (REVIEW LA6), not a light popup over the Moment.
                 DropdownMenu(
                     expanded = menuOpen,
                     onDismissRequest = onDismissMenu,
+                    containerColor = PantopusColors.momentMenuSurface,
                     modifier = Modifier.semantics { testTagsAsResourceId = true },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Report") },
-                        leadingIcon = { PantopusIconImage(icon = PantopusIcon.Flag, contentDescription = null, size = 18.dp) },
+                        text = { Text("Report", color = Color.White) },
+                        leadingIcon = {
+                            PantopusIconImage(icon = PantopusIcon.Flag, contentDescription = null, size = 18.dp, tint = Color.White)
+                        },
                         onClick = onReport,
                         modifier = Modifier.testTag("moments.menu.report"),
                     )
                     DropdownMenuItem(
-                        text = { Text("Mute this person's Moments") },
-                        leadingIcon = { PantopusIconImage(icon = PantopusIcon.BellOff, contentDescription = null, size = 18.dp) },
+                        text = { Text("Mute this person's Moments", color = Color.White) },
+                        leadingIcon = {
+                            PantopusIconImage(icon = PantopusIcon.BellOff, contentDescription = null, size = 18.dp, tint = Color.White)
+                        },
                         onClick = onMute,
                         modifier = Modifier.testTag("moments.menu.mute"),
                     )
                     DropdownMenuItem(
-                        text = { Text("Block", color = PantopusColors.error) },
+                        text = { Text("Block", color = PantopusColors.momentMenuDanger) },
                         leadingIcon = {
-                            PantopusIconImage(icon = PantopusIcon.Ban, contentDescription = null, size = 18.dp, tint = PantopusColors.error)
+                            PantopusIconImage(
+                                icon = PantopusIcon.Ban,
+                                contentDescription = null,
+                                size = 18.dp,
+                                tint = PantopusColors.momentMenuDanger,
+                            )
                         },
                         onClick = onBlock,
                         modifier = Modifier.testTag("moments.menu.block"),
