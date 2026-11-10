@@ -296,8 +296,9 @@ final class HolidayCardFlowViewModel {
         if case .loaded = state { return }
         state = .loading
         await fetch()
-        // Chosen on a card's table: straight to Pick a card while sending is open and today's card is free.
-        if let chosen = chosenAtStart, let cards, cards.open, cards.today == nil {
+        // Chosen on a card's table: straight to Pick a card while sending is open and today's card is free, or with
+        // stamp books on, where a card uses a stamp instead (as web does).
+        if let chosen = chosenAtStart, let cards, cards.open, HolidayCardWords.today(cards) == nil {
             chosenAtStart = nil
             choose(chosen)
         }
