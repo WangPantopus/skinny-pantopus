@@ -28,11 +28,29 @@ export const TABLE_ART = '/holiday-cards/table/';
 /** The serif the card on the table prints in. */
 export const PAPER_SERIF = 'ui-serif, "New York", Georgia, "Times New Roman", serif';
 
-/** The small stamp a card carries, by its picture's number: the same in every app. */
+/** The picture's number, from the card or its design id ("christmas-2026-61"). */
+function pictureNumber(number: number | null | undefined, design?: string | null): number {
+  const picture = number ?? Number(String(design || '').split('-').pop());
+  return Number.isInteger(picture) && picture > 0 ? picture : 1;
+}
+
+/**
+ * Each collection's mood on the table (design plan Part 7), by the picture's number, the same in every app:
+ * Christmas with Jesus Christ (59-67) is reverence, Christmas with Santa (50-58) is Santa, every other is nostalgia.
+ */
+export type CardMood = 'nostalgia' | 'reverence' | 'santa';
+export function cardMood(number: number | null | undefined, design?: string | null): CardMood {
+  const picture = pictureNumber(number, design);
+  if (picture >= 59 && picture <= 67) return 'reverence';
+  if (picture >= 50 && picture <= 58) return 'santa';
+  return 'nostalgia';
+}
+
+/** The small stamp a card carries, by its picture's number: the same in every app. Reverence cards carry the star. */
 export function cardStampFile(number: number | null | undefined, design: string): string {
-  const picture = number ?? Number(design.split('-').pop());
+  if (cardMood(number, design) === 'reverence') return `${TABLE_ART}stamp-star.webp`;
   const stamps = ['fir', 'peak', 'river'];
-  return `${TABLE_ART}stamp-${stamps[((Number.isInteger(picture) && picture > 0 ? picture : 1) - 1) % 3]}.webp`;
+  return `${TABLE_ART}stamp-${stamps[(pictureNumber(number, design) - 1) % 3]}.webp`;
 }
 
 /** The one shared grey cloth is multiplied by this colour to make a picture's table. */

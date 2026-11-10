@@ -9,9 +9,9 @@
 // nothing about the server: reading it marks nothing.
 // ============================================================
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, TABLE_ART, tableEdge, tableTint } from './cardArt';
+import { cardMood, cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, seededRandom, TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { cardPen } from './cardFont';
 import { PaperBack, PaperFront } from './CardPaper';
 import { CardTableEngine, type TableState } from './cardTableEngine';
@@ -26,6 +26,19 @@ const WAX_CRACKED = art('wax-gold-cracked.webp');
 const ALL_ART = ['env-front.webp', 'env-pocket.webp', 'env-flap-out.webp', 'env-flap-in.webp', 'env-inside.webp', 'env-flap-gold.webp',
   'env-pocket-shadow.webp', 'env-flap-shadow.webp', 'wax-gold.webp', 'wax-gold-cracked.webp', 'postmark-blank.webp', 'table-cloth.webp',
   'light.webp', 'grain.png', 'paper.webp'].map(art);
+
+// Snow outside the window (design plan Part 7, nostalgia and Santa): soft specks of shadow drifting down through the
+// patch of window light only, 12-18 in it at a time, 6-9 s each, 10% dark. Fixed, so every visit looks the same.
+const SNOW = (() => {
+  const random = seededRandom(1225);
+  return Array.from({ length: 18 }, () => ({
+    left: 8 + random() * 80,
+    size: 4 + random() * 5,
+    seconds: 6 + random() * 3,
+    delay: -random() * 9,
+    drift: (random() - 0.5) * 36,
+  }));
+})();
 
 export type TableCard = {
   design: string;
@@ -150,6 +163,8 @@ export default function CardTable({
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef(0);
   const from = firstNameOf(fromName);
+  // The collection's mood (design plan Part 7): snow, candlelight or Santa's bounce. Off with Reduce Motion (CSS).
+  const mood = cardMood(card.number, card.design);
   const days = daysWords(card.sealed_until);
 
   const say = useCallback((text: string) => {
@@ -168,6 +183,7 @@ export default function CardTable({
     const engine = new CardTableEngine(stage, {
       sealed: card.sealed,
       sending: Boolean(momentRef.current),
+      mood,
       wholeSrc: WAX_WHOLE,
       crackedSrc: WAX_CRACKED,
       callbacks: {
@@ -374,6 +390,7 @@ export default function CardTable({
         aria-label={sendMoment ? `Your card for ${sendMoment.firstName}` : `Christmas card from ${fromName}`}
         tabIndex={-1}
         data-send={sendMoment ? '1' : undefined}
+        data-mood={mood}
       >
         <div className={styles.safe} data-el="safe" />
         <div
@@ -389,6 +406,8 @@ export default function CardTable({
               <Art src={art('env-flap-in.webp')} />
               <div className={styles.flapGold} style={{ WebkitMaskImage: `url(${art('env-flap-gold.webp')})`, maskImage: `url(${art('env-flap-gold.webp')})` }}>
                 <div className={styles.flapGlint} data-el="flapGlint" />
+                {/* Reverence: one slow glint crosses the gold when the flap opens (this side shows from then on). */}
+                {mood === 'reverence' ? <div className={styles.flapSweep} /> : null}
               </div>
             </div>
           </div>
@@ -459,6 +478,17 @@ export default function CardTable({
                 : <div className={styles.kind}>Christmas card</div>}
             </div>
           </div>
+        </div>
+        {mood === 'reverence' ? <div className={styles.candle} /> : null}
+        <div className={styles.snow} data-el="snow" style={{ WebkitMaskImage: `url(${art('light.webp')})`, maskImage: `url(${art('light.webp')})` }}>
+          {mood !== 'reverence' ? SNOW.map((speck, i) => (
+            <i
+              key={i}
+              className={styles.speck}
+              style={{ left: `${speck.left.toFixed(2)}%`, '--s': `${speck.size.toFixed(1)}px`, '--drift': `${speck.drift.toFixed(1)}px`,
+                animationDuration: `${speck.seconds.toFixed(2)}s`, animationDelay: `${speck.delay.toFixed(2)}s` } as CSSProperties}
+            />
+          )) : null}
         </div>
         <div className={styles.light} data-el="light" style={{ backgroundImage: `url(${art('light.webp')})` }} />
         <div className={styles.vignette} />

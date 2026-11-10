@@ -23,6 +23,44 @@
 .objects { z-index: 2; }
 .light { inset: -40px; z-index: 30; background-size: 100% 100%; mix-blend-mode: soft-light; opacity: 0.88; will-change: transform; }
 .vignette { z-index: 31; background: radial-gradient(120% 88% at 46% 40%, rgba(0, 0, 0, 0) 44%, rgba(6, 3, 4, 0.46) 100%); }
+
+/* The mood follows the card (design plan Part 7). Snow (nostalgia, Santa): specks of shadow falling through the window
+   light only: the layer is masked by the light and moves with it (the engine), and multiplies specks about 10% dark
+   onto everything under it (12%, which the light's soft edge thins). Each speck's column is the layer's height, so its
+   translateY is a share of the table's height. */
+.snow {
+  position: absolute; inset: -40px; z-index: 29; pointer-events: none; overflow: hidden; mix-blend-mode: multiply; will-change: transform;
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.speck { position: absolute; top: 0; height: 100%; width: var(--s); animation: snowFall 7s linear infinite; }
+.speck::before {
+  content: ''; position: absolute; left: 0; top: 0; width: var(--s); height: var(--s); border-radius: 50%;
+  background: rgba(24, 20, 30, 0.12); box-shadow: 0 0 calc(var(--s) * 0.5) rgba(24, 20, 30, 0.1);
+}
+@keyframes snowFall {
+  0% { transform: translate3d(0, -6%, 0); opacity: 0; }
+  12% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { transform: translate3d(var(--drift), 70%, 0); opacity: 0; }
+}
+/* Reverence: candlelight from the lower left, breathing very slowly (3-4 s, 85-100%), and one slow glint across the gold
+   lining as the flap opens. */
+.candle {
+  position: absolute; inset: 0; z-index: 28; pointer-events: none; mix-blend-mode: screen;
+  background: radial-gradient(85% 62% at 0% 100%, rgba(255, 164, 82, 0.26) 0%, rgba(255, 150, 70, 0.1) 46%, rgba(255, 140, 60, 0) 78%);
+  animation: candleBreath 3.6s ease-in-out infinite alternate;
+}
+@keyframes candleBreath { from { opacity: 0.85; } to { opacity: 1; } }
+.flapSweep {
+  position: absolute; inset: -20% -60%; pointer-events: none; transform: translateX(-75%);
+  background: linear-gradient(105deg, rgba(255, 236, 180, 0) 43%, rgba(255, 244, 206, 0.95) 50%, rgba(255, 236, 180, 0) 57%);
+  animation: goldSweep 2.8s ease-in-out 0.3s 1 both;
+}
+@keyframes goldSweep { from { transform: translateX(-75%); } to { transform: translateX(75%); } }
+@media (prefers-reduced-motion: reduce) {
+  .speck, .flapSweep { display: none; }
+  .candle { animation: none; opacity: 0.92; }
+}
 .grain { z-index: 32; background-size: 128px 128px; opacity: 0.36; mix-blend-mode: overlay; }
 
 .layer { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; will-change: transform; }
