@@ -3058,8 +3058,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             bottomBar = bottomBar@{
                 if (!showsTabBar) {
                     // The chat's composer color, or the card desk, runs on under the system navigation area.
-                    val under =
-                        if (backStackEntry?.destination?.route == ChildRoutes.MAILBOX_CARDS) PantopusColors.cardDesk else PantopusColors.appSurface
+                    val onCardDesk = backStackEntry?.destination?.route == ChildRoutes.MAILBOX_CARDS
+                    val under = if (onCardDesk) PantopusColors.cardDesk else PantopusColors.appSurface
                     Spacer(
                         Modifier
                             .fillMaxWidth()
