@@ -116,11 +116,12 @@ struct CardTableControls: View {
             .multilineTextAlignment(.center)
             .foregroundStyle(MailPaper.tableCreamSoft)
             .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 1)
-            // At the largest sizes it can run over the mail, so it gets its own glass, as the hint does.
-            .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 12 : 0)
-            .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 6 : 0)
+            // At the largest sizes it can run over the mail, so it gets its own glass, as the hint does; so does
+            // sealing's, which shows over the open flap.
+            .padding(.horizontal, wordsOnGlass ? 12 : 0)
+            .padding(.vertical, wordsOnGlass ? 6 : 0)
             .background {
-                if dynamicTypeSize.isAccessibilitySize, model.words != nil {
+                if wordsOnGlass, model.words != nil {
                     CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
@@ -133,6 +134,10 @@ struct CardTableControls: View {
             .allowsHitTesting(false)
             .accessibilityHidden(model.words == nil)
             .accessibilityIdentifier("cardTableWords")
+    }
+
+    private var wordsOnGlass: Bool {
+        dynamicTypeSize.isAccessibilitySize || model.sending != nil
     }
 
     private var toast: some View {
