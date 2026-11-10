@@ -103,9 +103,10 @@ struct CardTableShareScene: View {
                 slip(CardShareSlip(x: 26, y: 806, rotation: -2.2, width: 250, height: 50, title: 12, line: 12.5))
             } else {
                 // The card 800 px wide of 1080, and nothing but the slip in Instagram's top 250 or bottom 340 px
-                // (the flap's tip at 250, the card's lowest corner at 1580) (plan 1.11).
+                // (the flap's tip at 250; the card lies a little over the pocket so its lowest corner clears the
+                // slip, at about 1540) (plan 1.11).
                 openEnvelope(width: 400 * 1.012, x: 68, y: 298, rotation: 3)
-                front(width: 400, x: 70, y: 302, rotation: -2)
+                front(width: 400, x: 70, y: 282, rotation: -2)
                 slip(CardShareSlip(x: 122, y: 776, rotation: -1.6, width: 296, height: 54, title: 13.5, line: 13.5))
             }
         case .post:

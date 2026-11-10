@@ -61,10 +61,10 @@ struct CardTableLayout: Equatable {
         let side: CGFloat = width < 560 ? 9 : 14
         // Laid down, the envelope reaches from the flap's tip (`cardTop − peek`) down 1.606 card widths
         // (flap and body), lower than the card itself while the peek is under 0.406. Shut, it sits at least
-        // 88 pt below the safe area and under the words. If the screen is too short for either, the card shrinks.
+        // 88 pt below the safe area. If the screen is too short for either, the card shrinks. (Under the words
+        // when there's room; at the largest text sizes the words get their own glass instead.)
         let laidReach: CGFloat = 1.012 * (512 + 1392) / 1200
-        let shutTop = max(88, wordsBottom - safeTop + 8)
-        let shutRoom = height - safeTop - bottom - shutTop
+        let shutRoom = height - safeTop - bottom - 88
         var cardWidth = min(width - side * 2, width < 560 ? 470 : 560)
         cardWidth = max(0, min(cardWidth, room / laidReach, shutRoom / (1.012 * 1392 / 1200)))
         var peek = room - cardWidth * 1.2
@@ -77,7 +77,7 @@ struct CardTableLayout: Equatable {
         let envelopeHeight = envelopeWidth * 1392 / 1200
         let flapDepth = envelopeWidth * 512 / 1200
         let free = height - safeTop - bottom
-        let envelopeTop = safeTop + max(shutTop, (free - envelopeHeight) * 0.56)
+        let envelopeTop = safeTop + max(88, min(max((free - envelopeHeight) * 0.56, wordsBottom - safeTop + 8), free - envelopeHeight))
         let envelopeTopOut = min(height - envelopeHeight * 0.5, cardWidth * 1.2 * 0.8 + 8)
         self.cardWidth = cardWidth
         cardHeight = cardWidth * 1.2
