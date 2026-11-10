@@ -15,6 +15,7 @@ const processExpiredClaimWindows = require('../jobs/processClaimWindows');
 const processPendingTransfers = require('../jobs/processPendingTransfers');
 const retryCaptureFailures = require('../jobs/retryCaptureFailures');
 const reconcileMailPieces = require('../jobs/reconcileMailPieces');
+const cardMediaCleanup = require('../jobs/cardMediaCleanup');
 const authorizeUpcomingGigs = require('../jobs/authorizeUpcomingGigs');
 const expireUncapturedAuthorizations = require('../jobs/expireUncapturedAuthorizations');
 const { checkAndAlertStuckPayments } = require('./paymentOps');
@@ -155,6 +156,7 @@ router.post('/jobs/check-stuck-payments', jobEndpoint('checkAndAlertStuckPayment
 
 // ─── Mail ───
 router.post('/jobs/reconcile-mail-pieces', jobEndpoint('reconcileMailPieces', reconcileMailPieces));
+router.post('/jobs/card-media-cleanup', jobEndpoint('cardMediaCleanup', cardMediaCleanup));
 
 // ─── Data integrity / GDPR jobs ───
 router.post('/jobs/cleanup-ghost-businesses', jobEndpoint('cleanupGhostBusinesses', cleanupGhostBusinesses));
