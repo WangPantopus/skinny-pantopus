@@ -83,10 +83,84 @@ struct HolidayCardPaperButton: View {
 struct HolidayCardRow: View {
     let cards: HolidayCardsResponse
     let onOpen: () -> Void
+    @State private var stamps = MailStampStore()
+    @State private var showsStampBooks = false
+    @Environment(\.scenePhase) private var phase
 
     var body: some View {
+        Group {
+            if cards.postageEnabled { promotion } else { legacyRow }
+        }
+        .task(id: "\(cards.postageEnabled)-\(cards.stamps?.available ?? 0)") {
+            if cards.postageEnabled { await stamps.refresh() }
+        }
+        .onChange(of: phase) {
+            if phase == .active, cards.postageEnabled { Task { await stamps.refresh() } }
+        }
+        .sheet(isPresented: $showsStampBooks) {
+            StampBooksSheet(store: stamps)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .task { await stamps.recover()
+                    await stamps.watch()
+                }
+        }
+    }
+
+    private var promotion: some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            HStack(alignment: .center, spacing: Spacing.s3) {
+                VStack(alignment: .leading, spacing: Spacing.s1) {
+                    Text("CHRISTMAS CARDS")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundStyle(MailPaper.wax)
+                    Text("Make their Christmas personal.")
+                        .font(.system(size: 23, weight: .semibold, design: .serif))
+                        .foregroundStyle(MailPaper.cardText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                thumbs(HolidayCardPicture.fan)
+            }
+            Text("Pick a festive design, add your words, and send a digital card they can keep.")
+                .font(.system(size: 14))
+                .foregroundStyle(MailPaper.cardTextSoft)
+                .fixedSize(horizontal: false, vertical: true)
+            if let free = stamps.balance?.freeRemaining ?? cards.stamps?.freeRemaining,
+               let paid = stamps.balance?.paidRemaining ?? cards.stamps?.paidRemaining {
+                Text(stampBalanceLabel(free: free, paid: paid))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(MailPaper.cardText)
+            }
+            Text("Free cards first. Then 1 stamp per recipient.")
+                .font(.system(size: 12.5))
+                .foregroundStyle(MailPaper.cardTextMuted)
+            VStack(spacing: Spacing.s2) {
+                HolidayCardWaxButton(title: stamps.balance?.salesOpen == false ? "View stamp books" : "Buy stamp books") {
+                    showsStampBooks = true
+                }
+                .accessibilityIdentifier("mailBuyStampBooks")
+                HolidayCardPaperButton(title: "Create a Christmas card", fullWidth: true, action: onOpen)
+                    .accessibilityIdentifier("mailHolidayCardRow")
+            }
+            Text(stamps.balance?.salesOpen == false ? "Use your stamps until December 31."
+                : stamps.products.first.map { "Stamp books from \($0.displayPrice) · One-time purchase" }
+                ?? "Books of 5, 20 or 50 stamps · No subscription")
+                .font(.system(size: 12.5))
+                .foregroundStyle(MailPaper.cardTextMuted)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+        }
+        .padding(Spacing.s4)
+        .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
+            .strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
+    }
+
+    private var legacyRow: some View {
         let today = HolidayCardWords.today(cards)
-        Button(action: onOpen) {
+        return Button(action: onOpen) {
             HStack(spacing: Spacing.s3) {
                 thumbs(today.flatMap(\.design).map { [$0] } ?? HolidayCardPicture.fan)
                 VStack(alignment: .leading, spacing: 2) {
@@ -129,5 +203,49 @@ struct HolidayCardRow: View {
         }
         .frame(width: 62, height: 54, alignment: .topLeading)
         .accessibilityHidden(true)
+    }
+}
+
+/// Keep free cards distinct from paid credits wherever books are offered.
+func stampBalanceLabel(free: Int, paid: Int) -> String {
+    "\(free) free \(free == 1 ? "card" : "cards") · \(max(0, paid)) paid \(paid == 1 ? "stamp" : "stamps")"
+}
+
+/// A visible buying action below the step heading, with an explicit free/paid balance.
+struct StampChip: View {
+    let store: MailStampStore
+    let onOpen: () -> Void
+
+    var body: some View {
+        if let balance = store.balance {
+            Button(action: onOpen) {
+                HStack(spacing: Spacing.s3) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(balance.freeRemaining) free \(balance.freeRemaining == 1 ? "card" : "cards")")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(MailPaper.cardText)
+                        Text("\(max(0, balance.paidRemaining)) paid \(balance.paidRemaining == 1 ? "stamp" : "stamps") · 1 stamp = 1 card")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(MailPaper.cardTextMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(balance.salesOpen == false ? "View stamps" : "Buy stamps")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(MailPaper.waxText)
+                        .padding(.horizontal, Spacing.s3)
+                        .frame(minHeight: 44)
+                        .background(MailPaper.wax, in: RoundedRectangle(cornerRadius: Radii.md))
+                }
+                .padding(Spacing.s3)
+                .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg))
+                .overlay(RoundedRectangle(cornerRadius: Radii.lg).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(stampBalanceLabel(free: balance.freeRemaining, paid: balance.paidRemaining)
+                + (balance.salesOpen == false ? ". View stamp books" : ". Buy stamp books"))
+            .accessibilityIdentifier("stampChip")
+        }
     }
 }

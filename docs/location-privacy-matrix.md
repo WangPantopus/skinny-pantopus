@@ -380,6 +380,12 @@ a post's stored point:
   block and politics filters), measured from the viewport center to displayed
   points and searched within ±0.1°, ±1° and ±10°, then anywhere
   (`feedService.findNearestMapPost`). Moving the map to it shows that post's pin.
+- **Posts with no place (`unplaced_posts`, Connections only).** The posts the
+  Connections list holds that show this viewer no point (none stored, or a
+  place only their author sees) have no pin, so the map lists them apart,
+  newest first, whatever the viewport: at most 50, with `unplaced_more` when
+  there are more (`feedService.getUnplacedConnectionPosts`). They carry the
+  pins' fields with `latitude` and `longitude` null.
 - `find_nearest_activity_center` has no post branch since
   `20261013052405_nearest_activity_without_posts.sql`; it still serves gigs,
   businesses and listings.

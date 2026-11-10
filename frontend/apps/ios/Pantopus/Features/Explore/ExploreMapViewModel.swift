@@ -547,6 +547,27 @@ public final class ExploreMapViewModel {
 
     /// Post rail-card lead — "Asked 2h ago" style, falling back to the
     /// post type when the timestamp is unusable.
+    /// A Connections post with no place, as a row of the Pulse map's list of
+    /// them: no pin, so its coordinate is never read and it says "No place"
+    /// where a pin's row gives its distance.
+    static func unplacedPostEntity(_ marker: PostsMapMarkerDTO) -> ExploreEntity {
+        ExploreEntity(
+            id: marker.id,
+            kind: .post,
+            state: .confirmed,
+            latitude: 0,
+            longitude: 0,
+            title: marker.title ?? marker.content ?? "Post",
+            metaLead: postMetaLead(marker),
+            distanceLabel: "No place",
+            distanceMiles: 0,
+            badge: nil,
+            sourceId: marker.id,
+            verified: false,
+            openNow: true
+        )
+    }
+
     private static func postMetaLead(_ marker: PostsMapMarkerDTO) -> String {
         let kind = (marker.postType ?? "post").replacingOccurrences(of: "_", with: " ").capitalized
         guard let createdAt = marker.createdAt else { return kind }
