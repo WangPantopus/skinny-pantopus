@@ -70,13 +70,13 @@ struct MessagesButton: View {
             } label: {
                 Group {
                     if floating {
-                        Icon(.messageCircle, size: 21, color: Theme.Color.appText)
+                        MessagesGlyph(unread: rootTabs.messagesBadge > 0)
                             .frame(width: Spacing.s12, height: Spacing.s12)
                             .background(Circle().fill(.regularMaterial))
                             .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
                             .contentShape(Circle())
                     } else {
-                        Icon(.messageCircle, size: 21, color: Theme.Color.appText)
+                        MessagesGlyph(unread: rootTabs.messagesBadge > 0)
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }

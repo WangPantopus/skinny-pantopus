@@ -65,6 +65,10 @@
         android:theme="@style/Theme.Pantopus"
         tools:targetApi="31">
 
+        <meta-data
+            android:name="com.google.android.gms.wallet.api.enabled"
+            android:value="true" />
+
         <!-- singleTask: the browser OAuth redirect (pantopus://auth/callback)
              must return to the RUNNING instance via onNewIntent instead of
              stacking a second MainActivity and rebuilding the Compose tree.

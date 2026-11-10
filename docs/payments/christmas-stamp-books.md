@@ -59,6 +59,62 @@ These are repeatable consumable books. The apps display native localized prices.
 
 Checkout currently accepts card payments. Credit is verified through Stripe and the signed webhook even if the buyer closes the return tab, following [Stripe's fulfillment model](https://docs.stripe.com/checkout/fulfillment?ui=full-page). Refunds, including partial refunds, revoke the entire book; use full-book refunds operationally.
 
+### Wallets for Stripe payments (Apple Pay and Google Pay)
+
+Christmas stamps use StoreKit on iOS and Google Play Billing on Android. The
+wallet settings below apply to the existing Stripe payments for services,
+invoices and other eligible purchases, and to web checkout. They do not replace
+native in-app purchases.
+
+The native apps share their Stripe PaymentSheet configuration across checkout
+and saving a payment method. iOS declares `merchant.com.pantopus` in both
+`project.yml` and `Pantopus.entitlements` and passes it to PaymentSheet. Android
+declares `com.google.android.gms.wallet.api.enabled` and supplies Google Pay with
+US/USD configuration. Its wallet environment follows the effective Stripe SDK
+publishable key: test keys use Test, live keys use Production. Unsupported devices
+retain card entry. A wallet is offered only when Stripe and the device consider
+it available; this is not an always-visible button.
+
+Founder console steps before the wallet-enabled native release:
+
+1. **Stripe → Settings → Payment methods:** enable Google Pay in the configuration
+   used by Pantopus; keep Apple Pay enabled. Check test and live modes separately.
+   **Payment method domains:** register and verify `pantopus.com` and
+   `www.pantopus.com` for embedded web payments, plus `staging.pantopus.com` in the
+   staging/test configuration. Stripe-hosted Checkout manages its own domain.
+   Follow [Stripe's domain instructions](https://docs.stripe.com/payments/payment-methods/pmd-registration).
+2. **Apple Developer → Identifiers → Merchant IDs:** reuse the existing
+   **Pantopus Payments / `merchant.com.pantopus`**. In Stripe's **iOS certificates**
+   settings, download Stripe's CSR. Use that CSR to create an **Apple Pay Payment
+   Processing Certificate** for this merchant in Apple Developer, then upload the
+   resulting certificate back to Stripe. Do not substitute a locally generated
+   CSR or an Apple Pay Merchant Identity certificate. See
+   [Stripe's certificate workflow](https://support.stripe.com/questions/enable-apple-pay-on-your-stripe-account).
+   Stripe handles Apple Pay web merchant validation for its web integration;
+   separate direct Apple Pay web integration is not required here.
+3. **Apple Developer → Identifiers → App IDs → `com.pantopus.app`:** enable Apple
+   Pay Payment Processing and assign `merchant.com.pantopus`. Regenerate the
+   app's development and App Store provisioning profiles with this entitlement
+   and update the existing match signing repository before triggering CI.
+   CI uses readonly match; an old profile cannot sign the new entitlement.
+   Keep the notification/widget target profiles and other capabilities intact.
+4. **Google Pay & Wallet Console:** check the Android integration for
+   `com.pantopus.app`, with Stripe as the payment gateway. Complete any required
+   production-access review for the actual Play-signed app. Use the Play App
+   Signing certificate fingerprint, not the upload/debug key. Follow
+   [Google's production-access checklist](https://developers.google.com/pay/api/android/guides/test-and-deploy/request-prod-access).
+   This console is separate from the Play merchant payments profile used for
+   stamp books.
+5. On physical iOS/Android devices, verify the wallet appears in the relevant
+   Stripe checkout, cancellation returns to the app, a successful test payment
+   settles once, and the app shows the saved server result after relaunch. Check
+   normal card fallback on devices without a wallet. Use Stripe test keys first;
+   only the founder runs the live charge/refund. Simulator builds cannot prove
+   wallet availability or live processing.
+
+Do not turn on stamp sales merely because wallets work. Complete the distinct
+store product, receipt verification, review and rollout steps below.
+
 ### 3. Apple: iOS purchases and App Review
 
 1. In **App Store Connect → Business**, have the Account Holder complete the Paid Apps Agreement and required banking/tax details. The agreement must be active for review purchases to work. In **Apps → Pantopus → Monetization → In-App Purchases → +**, create the three records above with type **Consumable**. Add their localization, US base price, intended storefront availability and review screenshot. Apple describes [product creation](https://developer.apple.com/help/app-store-connect/manage-in-app-purchases/create-consumable-or-non-consumable-in-app-purchases) and [review prerequisites](https://developer.apple.com/help/app-review/before-submitting-for-review/configure-in-app-purchases/).
@@ -70,7 +126,16 @@ Checkout currently accepts card payments. Credit is verified through Stripe and 
 
 This PR uses transaction lookup and periodic refund reconciliation. It does not expose an App Store Server Notifications endpoint; do not put the Stripe URL into Apple's notification fields.
 
+On iOS 18 and later, **Stamp books → App Store purchase help** lists verified, unrevoked stamp purchases for the current Pantopus account and opens Apple's refund-request sheet. Finished consumables are included only for this history; fulfillment continues to process `Transaction.unfinished` and use the server's unique receipt ledger. Older iOS versions retain the Apple purchase-support link. Submitting a request is not approval and must not deduct stamps locally. In Sandbox, test an approved refund and a declined request using [Apple's refund-testing instructions](https://developer.apple.com/documentation/storekit/testing-refund-requests), then check the server balance and relaunch/recovery for a single deduction.
+
 ### 4. Google Play: Android purchases
+
+If Play says the app needs the `BILLING` permission before products can be
+created, upload a newer signed app bundle through the existing internal-track
+release process first. The current stamp implementation includes Play Billing
+and the merged release manifest must contain `com.android.vending.BILLING`.
+An older uploaded bundle can block the console even when the current source
+already has the permission. The founder performs the store upload.
 
 1. In the existing Play Console account, complete the payments profile. Open Pantopus → **Monetize with Play → Products → One-time products** and create the three products above. For each, create one **Buy** purchase option (for example, purchase option ID `standard`), set US/local prices and availability, and activate the option. Keep the option backward compatible; leave multi-quantity purchases disabled. Do not use Rent, subscriptions, pre-orders or extra offers for this launch. See the [current one-time product console flow](https://support.google.com/googleplay/android-developer/answer/16430488?hl=en).
 2. In the existing Google Cloud project, enable **Google Play Developer API** and create a server service account. In **Play Console → Users and permissions**, invite its email and limit app access to Pantopus. Grant the billing permissions **View financial data, orders, and cancellation survey responses** and **Manage orders and subscriptions**, as specified in [Google's API setup](https://developers.google.com/android-publisher/getting_started). A general Cloud IAM role alone does not grant Play access.
@@ -108,6 +173,30 @@ Release sequence:
 For each provider, acceptance must show: all three correct books; one payment grants exactly one book; retry does not duplicate; cancellation/pending does not credit; interrupted confirmation recovers; the other account cannot redeem the receipt; a consumed book can be repurchased; web/iOS/Android show the same saved balance; a refund after spending creates the expected debt; receiving and replying remain free. No new unit tests are needed for this operational acceptance matrix.
 
 ## Validation record
+
+Wallet follow-up on November 8, 2026, from master `9fc7ba405d`:
+
+- Android `ktlintCheck`, `detekt` and debug build passed. The merged manifest
+  contains Billing and Google Wallet API metadata. On the emulator against the
+  isolated local API/database and Stripe test keys, the actual Stripe card sheet
+  opened, canceled and reopened. The account and unchanged payment-method state
+  survived a cold relaunch. Google Pay was unavailable on that emulator.
+- iOS simulator build, focused strict SwiftLint and SwiftFormat checks passed.
+  The ad-hoc signed simulator app signed in against the same local API/database,
+  displayed Apple Pay alongside card entry in Stripe's test sheet, opened the
+  simulated Apple Pay sheet and returned to Stripe on cancellation. Sign-in
+  survived a cold relaunch. No payment was confirmed.
+- Console setup was checked: Stripe lists the processing certificate for
+  `merchant.com.pantopus`, expiring December 7, 2028; the app identifier has Apple
+  Pay enabled with that merchant; both production web domains are enabled in
+  Stripe. Apple Pay and Google Pay are enabled in the live payment-method
+  configuration. These observations do not prove a successful wallet payment.
+- The three Apple consumables were saved as US-only drafts with the catalog
+  prices above. They are not approved products. Play's payments profile exists,
+  but its product screen requires a newer Billing-enabled bundle before product
+  creation. Native store purchases, receipt credentials, refreshed signing
+  profiles, review, physical-device payments and public stamp rollout remain
+  release prerequisites.
 
 Local validation on November 7, 2026, using isolated Supabase/API and synthetic sender/recipient accounts:
 

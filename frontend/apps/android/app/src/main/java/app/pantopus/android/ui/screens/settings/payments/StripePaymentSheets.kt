@@ -39,6 +39,7 @@ object StripePaymentSheets {
         configurePublishableKey(context, publishableKey)
         return PaymentSheet.Configuration(
             merchantDisplayName = MERCHANT_DISPLAY_NAME,
+            googlePay = googlePayConfiguration(context),
             customer =
                 PaymentSheet.CustomerConfiguration(
                     id = customerId,
@@ -68,6 +69,25 @@ object StripePaymentSheets {
         return PaymentSheet.Configuration(
             merchantDisplayName = MERCHANT_DISPLAY_NAME,
             customer = customer,
+            googlePay = googlePayConfiguration(context),
+        )
+    }
+
+    // Use the SDK's effective key (including a key returned by the backend),
+    // so sandbox card flows never open a production Google Pay sheet.
+    private fun googlePayConfiguration(context: Context): PaymentSheet.GooglePayConfiguration? {
+        val key = runCatching { PaymentConfiguration.getInstance(context).publishableKey }.getOrNull() ?: return null
+        if (key.contains("REPLACE_ME")) return null
+        val environment =
+            when {
+                key.startsWith("pk_live_") -> PaymentSheet.GooglePayConfiguration.Environment.Production
+                key.startsWith("pk_test_") -> PaymentSheet.GooglePayConfiguration.Environment.Test
+                else -> return null
+            }
+        return PaymentSheet.GooglePayConfiguration(
+            environment = environment,
+            countryCode = "US",
+            currencyCode = "USD",
         )
     }
 

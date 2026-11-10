@@ -17,49 +17,6 @@ import CoreLocation
 import Foundation
 import Observation
 
-/// Which half of the feed header's List / Map toggle is active.
-public enum FeedViewMode: String, Sendable, Hashable, CaseIterable {
-    case list
-    case map
-
-    /// Segment label.
-    public var label: String {
-        switch self {
-        case .list: "List"
-        case .map: "Map"
-        }
-    }
-
-    /// Segment glyph.
-    public var icon: PantopusIcon {
-        switch self {
-        case .list: .list
-        case .map: .map
-        }
-    }
-}
-
-/// The two request dimensions the map mode re-fetches on: which feed
-/// surface is active (`place` / `connections`) and which chip-row intent
-/// is selected. Used as the `.task(id:)` key so a change re-requests the
-/// current viewport.
-public struct FeedMapQuery: Sendable, Hashable {
-    public let surface: FeedSurface
-    public let postType: String?
-
-    public init(surface: FeedSurface, postType: String?) {
-        self.surface = surface
-        self.postType = postType
-    }
-}
-
-/// Render state for the Pulse map mode.
-public enum FeedMapState: Sendable {
-    case loading
-    case loaded(FeedMapLoaded)
-    case error(message: String)
-}
-
 /// Pulse map-mode view model.
 @Observable
 @MainActor
@@ -95,6 +52,8 @@ public final class FeedMapViewModel {
     private var query: FeedMapQuery
     private var searchText = ""
     private var allEntities: [ExploreEntity] = []
+    /// Connections' posts with no place (no pin), newest first.
+    private var allUnplaced: [ExploreEntity] = []
     private var searchableTextById: [String: String] = [:]
     private var userCoordinate: UserCoordinate?
     /// The chosen area the camera last moved to; another pick moves it again.
@@ -429,12 +388,9 @@ public final class FeedMapViewModel {
                 allEntities = ExploreMapViewModel.projectMarkers(response.markers, anchor: anchor)
                     .filter { $0.kind == .post }
                     .sorted { $0.distanceMiles < $1.distanceMiles }
-                searchableTextById = response.markers.reduce(into: [:]) { index, marker in
-                    let authorName = marker.creator?.displayName ?? marker.creator?.name
-                        ?? marker.creator?.handle ?? marker.creator?.username
-                    index[marker.id] = [marker.title, marker.content, authorName]
-                        .compactMap { $0 }.joined(separator: "\n").lowercased()
-                }
+                let unplacedMarkers = response.unplacedPosts ?? []
+                allUnplaced = unplacedMarkers.map(ExploreMapViewModel.unplacedPostEntity)
+                searchableTextById = Self.searchableText(response.markers + unplacedMarkers)
                 let entities = matchingEntities
                 let hint = response.nearestActivityCenter.map {
                     FeedMapRegion(
@@ -444,11 +400,7 @@ public final class FeedMapViewModel {
                         longitudeDelta: target.longitudeDelta
                     )
                 }
-                let now = Date()
-                var pinStyles: [String: FeedMapPinStyle] = [:]
-                for marker in response.markers where marker.layerType == "post" {
-                    pinStyles[marker.id] = FeedMapPinStyle.of(marker, now: now)
-                }
+                let pinStyles = Self.pinStyles(response.markers + unplacedMarkers, now: Date())
                 fetchedRegion = target
                 state = .loaded(FeedMapLoaded(
                     entities: entities,
@@ -459,7 +411,9 @@ public final class FeedMapViewModel {
                     userCoordinate: userCoordinate,
                     selectedId: nil,
                     nearestActivityCenter: hint,
-                    pinStyles: pinStyles
+                    pinStyles: pinStyles,
+                    unplacedPosts: matchingUnplaced,
+                    unplacedMore: response.unplacedMore ?? false
                 ))
             } catch {
                 guard !Task.isCancelled else { return }
@@ -485,11 +439,41 @@ extension FeedMapViewModel {
                 entities: entities,
                 radiusDegrees: clusterRadius(latitudeDelta: clusterLatitudeDelta ?? region.latitudeDelta)
             ),
-            selectedId: nil
+            selectedId: nil,
+            unplacedPosts: matchingUnplaced
         ))
     }
 
     private var matchingEntities: [ExploreEntity] {
         allEntities.filter { searchText.isEmpty || searchableTextById[$0.id]?.contains(searchText) == true }
+    }
+
+    private var matchingUnplaced: [ExploreEntity] {
+        allUnplaced.filter { searchText.isEmpty || searchableTextById[$0.id]?.contains(searchText) == true }
+    }
+
+    /// Lists Connections' posts with no place in the preview card's place.
+    public func showUnplacedPosts() {
+        guard case let .loaded(loaded) = state, !loaded.unplacedPosts.isEmpty else { return }
+        state = .loaded(loaded.with(selectedId: nil, showsUnplaced: true))
+    }
+
+    /// Each marker's title, words and author, lowercased, by id: what the map's search matches.
+    private static func searchableText(_ markers: [PostsMapMarkerDTO]) -> [String: String] {
+        markers.reduce(into: [:]) { index, marker in
+            let authorName = marker.creator?.displayName ?? marker.creator?.name
+                ?? marker.creator?.handle ?? marker.creator?.username
+            index[marker.id] = [marker.title, marker.content, authorName]
+                .compactMap { $0 }.joined(separator: "\n").lowercased()
+        }
+    }
+
+    /// Each post marker's pin style, by post id.
+    private static func pinStyles(_ markers: [PostsMapMarkerDTO], now: Date) -> [String: FeedMapPinStyle] {
+        var styles: [String: FeedMapPinStyle] = [:]
+        for marker in markers where marker.layerType == "post" {
+            styles[marker.id] = FeedMapPinStyle.of(marker, now: now)
+        }
+        return styles
     }
 }

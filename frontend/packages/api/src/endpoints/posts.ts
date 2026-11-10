@@ -155,7 +155,8 @@ export interface MapMarker {
   userHasLiked?: boolean;
   userHasSaved?: boolean;
   created_at?: string;
-  creator?: { id: string; username: string; name?: string; profile_picture_url?: string };
+  // The map serves the author as the public identity (displayName, handle); older shapes carry name and username.
+  creator?: { id: string; username?: string; name?: string; displayName?: string; handle?: string; profile_picture_url?: string };
   // Business fields
   business_name?: string;
   category?: string;
@@ -192,7 +193,14 @@ export async function getMapMarkers(params: {
   postType?: PostType;
   limit?: number;
   layers?: string; // comma-separated: posts,businesses,homes,plans
-}): Promise<{ markers: MapMarker[]; nearest_activity_center?: { latitude: number; longitude: number } | null }> {
+}): Promise<{
+  markers: MapMarker[];
+  nearest_activity_center?: { latitude: number; longitude: number } | null;
+  /** Connections only: the posts its list holds that show no point (their latitude and longitude are null), newest first. */
+  unplaced_posts?: MapMarker[];
+  /** More posts with no place than `unplaced_posts` holds. */
+  unplaced_more?: boolean;
+}> {
   return get('/api/posts/map', params);
 }
 

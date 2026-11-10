@@ -456,13 +456,13 @@ struct FeedMapView: View {
         }
     }
 
-    /// Whether a card (loading, error, preview, cluster list, empty) shows at the bottom.
+    /// Whether a card (loading, error, preview, cluster list, posts with no place, empty) shows at the bottom.
     private var showsStatusCard: Bool {
         switch viewModel.state {
         case .loading, .error:
             true
         case let .loaded(loaded):
-            viewModel.selectedEntity != nil || !loaded.clusterPosts.isEmpty || loaded.isEmpty
+            viewModel.selectedEntity != nil || !loaded.clusterPosts.isEmpty || loaded.showsUnplaced || loaded.isEmpty
         }
     }
 
@@ -493,11 +493,53 @@ struct FeedMapView: View {
                 previewCard(selected)
             } else if !loaded.clusterPosts.isEmpty {
                 clusterCard(loaded.clusterPosts)
-            } else if loaded.isEmpty {
-                emptyCard(hasHint: loaded.nearestActivityCenter != nil && searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    .isEmpty)
+            } else if loaded.showsUnplaced {
+                unplacedCard(loaded)
+            } else if loaded.isEmpty || !loaded.unplacedPosts.isEmpty {
+                VStack(spacing: Spacing.s2) {
+                    if !loaded.unplacedPosts.isEmpty {
+                        unplacedBar(loaded.unplacedLabel)
+                            .padding(.bottom, loaded.isEmpty ? Spacing.s0 : Spacing.s4)
+                    }
+                    if loaded.isEmpty {
+                        emptyCard(hasHint: loaded.nearestActivityCenter != nil && searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty)
+                    }
+                }
             }
         }
+    }
+
+    /// Connections' posts with no place have no pin: this bar counts them and
+    /// opens them as a list, so the map holds every post the list does. Kept
+    /// to the leading side, clear of the compose button.
+    private func unplacedBar(_ label: String) -> some View {
+        HStack {
+            Button {
+                viewModel.showUnplacedPosts()
+            } label: {
+                HStack(spacing: Spacing.s2) {
+                    Icon(.mapPinOff, size: 16, color: Theme.Color.primaryInk)
+                    Text(label)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appText)
+                        .lineLimit(1)
+                    Icon(.chevronRight, size: 14, color: Theme.Color.appTextMuted)
+                }
+                .padding(.horizontal, Spacing.s3)
+                .frame(minHeight: 40)
+                .background(Theme.Color.appSurface)
+                .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: 1))
+                .clipShape(Capsule())
+                .shadow(color: .black.opacity(0.10), radius: 4, x: 0, y: 4)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows them as a list")
+            .accessibilityIdentifier("pulseMapNoPlaceBar")
+            Spacer(minLength: 52 + Spacing.s4)
+        }
+        .padding(.leading, Spacing.s4)
     }
 
     private var loadingCard: some View {
@@ -635,9 +677,30 @@ struct FeedMapView: View {
     /// The posts of a tapped cluster that zooming can't split, in the preview
     /// card's slot. Each row opens its post, as the preview card does.
     private func clusterCard(_ posts: [ExploreEntity]) -> some View {
+        postListCard(
+            title: posts.count == 1 ? "1 post in this area" : "\(posts.count) posts in this area",
+            posts: posts,
+            id: "pulseMapCluster"
+        )
+    }
+
+    /// Connections' posts with no place, newest first, in the cluster list's card.
+    private func unplacedCard(_ loaded: FeedMapLoaded) -> some View {
+        postListCard(
+            title: loaded.unplacedLabel,
+            footnote: loaded.unplacedMore ? "The newest \(loaded.unplacedPosts.count). List has them all." : nil,
+            posts: loaded.unplacedPosts,
+            id: "pulseMapNoPlace"
+        )
+    }
+
+    /// A card listing posts, each opening its post: a tapped cluster's, or the
+    /// posts with no place. `id` prefixes its identifiers (`…Card`, `…Row_<post>`,
+    /// `…CardClose`).
+    private func postListCard(title: String, footnote: String? = nil, posts: [ExploreEntity], id: String) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             HStack(spacing: Spacing.s2) {
-                Text(posts.count == 1 ? "1 post in this area" : "\(posts.count) posts in this area")
+                Text(title)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
@@ -653,15 +716,21 @@ struct FeedMapView: View {
                 // Into the card's padding, so the X lines up with the rows' chevrons.
                 .padding(.trailing, -Spacing.s3)
                 .accessibilityLabel("Close")
-                .accessibilityIdentifier("pulseMapClusterCardClose")
+                .accessibilityIdentifier("\(id)CardClose")
             }
             ScrollView {
-                clusterRows(posts)
+                clusterRows(posts, id: id)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { clusterRowsHeight = $0 }
             }
             // Just tall enough for the rows, up to about three and a half; a longer list scrolls.
             .frame(height: min(clusterRowsHeight, 212))
             .scrollBounceBehavior(.basedOnSize)
+            if let footnote {
+                Text(footnote)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .padding(.top, Spacing.s2)
+            }
         }
         .padding(Spacing.s3)
         .frame(maxWidth: .infinity)
@@ -675,10 +744,10 @@ struct FeedMapView: View {
         .padding(.horizontal, Spacing.s4)
         .padding(.bottom, Spacing.s4)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("pulseMapClusterCard")
+        .accessibilityIdentifier("\(id)Card")
     }
 
-    private func clusterRows(_ posts: [ExploreEntity]) -> some View {
+    private func clusterRows(_ posts: [ExploreEntity], id: String) -> some View {
         VStack(spacing: Spacing.s0) {
             ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
                 if index > 0 {
@@ -692,7 +761,7 @@ struct FeedMapView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("pulseMapClusterRow_\(post.id)")
+                .accessibilityIdentifier("\(id)Row_\(post.id)")
             }
         }
     }
