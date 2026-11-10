@@ -236,8 +236,8 @@ internal class CardTableState(
     /** The mood the card's picture sets (plan Part 7). */
     val mood = CardMood.of(card.number, card.design)
 
-    /** Santa's envelope lands with a little more bounce. */
-    val drop = TableSpring(58f, if (mood == CardMood.Santa) 7f else 11.5f, start = 0f)
+    /** Santa's envelope lands with a little more bounce (damping 9.6, as web's same spring). */
+    val drop = TableSpring(58f, if (mood == CardMood.Santa) 9.6f else 11.5f, start = 0f)
 
     /** The card enlarged (plan 6.1). */
     val zoom = TableZoom(reduceMotion, onEnlarged = { mark() }, wake = { wake() })
