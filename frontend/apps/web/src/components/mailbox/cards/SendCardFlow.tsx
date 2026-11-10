@@ -85,6 +85,24 @@ function sendMessage(error: MailboxApiError | null, byEmail = false): string {
 
 const letters = (text: string) => [...text].length;
 
+type ContactsManager = { select: (properties: string[], options?: { multiple?: boolean }) => Promise<{ email?: string[] }[]> };
+
+/** The browser's contact picker (Chrome on Android today), or null where there's none. */
+function contactPicker(): ContactsManager | null {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined' || !('ContactsManager' in window)) return null;
+  return (navigator as Navigator & { contacts?: ContactsManager }).contacts ?? null;
+}
+
+/** One address the person picks from their contacts, or null if they back out. Nothing is read or kept beyond it. */
+async function pickContactEmail(): Promise<string | null> {
+  try {
+    const [contact] = (await contactPicker()?.select(['email'], { multiple: false })) ?? [];
+    return contact?.email?.find((address) => address.includes('@'))?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function firstName(name: string): string {
   return name.split(/\s+/)[0] || name;
 }
@@ -278,7 +296,21 @@ function ToStep({
           setByEmail(false);
         }}
       >
-        <label htmlFor="card-email" className="text-[14px] font-semibold">Their email address</label>
+        <div className="flex items-end justify-between gap-2">
+          <label htmlFor="card-email" className="text-[14px] font-semibold">Their email address</label>
+          {/* The browser's own contact picker (design plan 11.7), only where there is one: it hands over the one
+              address chosen, asks for no permission, and nothing is kept. */}
+          {launchFeatures.cardTable && contactPicker() ? (
+            <button
+              type="button"
+              data-testid="sendCardContacts"
+              onClick={() => { void pickContactEmail().then((picked) => { if (picked) setEmail(picked); }); }}
+              className="min-h-[44px] px-1 text-[14px] font-semibold text-[#8b1d1d] underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+            >
+              Choose from contacts
+            </button>
+          ) : null}
+        </div>
         <input
           id="card-email"
           type="email"
@@ -367,15 +399,21 @@ function ToStep({
           </ul>
         )}
       </div>
+      {/* Sending to someone not on Pantopus already invites them (design plan 11.6): said once, above both ways. */}
+      {launchFeatures.cardTable ? (
+        <p data-testid="sendCardInviteLine" className={`mt-5 text-center text-[14px] leading-5 ${muted}`}>They don&rsquo;t need Pantopus yet. They join to open it.</p>
+      ) : null}
       <button
         type="button"
         data-testid="sendCardByEmail"
         onClick={() => setByEmail(true)}
         disabled={many && full}
-        className="mt-5 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] disabled:opacity-50"
+        className={`${launchFeatures.cardTable ? 'mt-1.5' : 'mt-5'} flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] disabled:opacity-50`}
       >
         <Mail className="h-[18px] w-[18px]" aria-hidden />
-        {many ? 'Not on Pantopus? Add their email' : 'Not on Pantopus? Send it to their email'}
+        {many
+          ? (launchFeatures.cardTable ? 'Not on Pantopus yet? Add their email' : 'Not on Pantopus? Add their email')
+          : (launchFeatures.cardTable ? 'Not on Pantopus yet? Send it to their email' : 'Not on Pantopus? Send it to their email')}
       </button>
       {launchFeatures.cardTable && !listed.length ? (
         <div className="mt-2.5 text-center">
