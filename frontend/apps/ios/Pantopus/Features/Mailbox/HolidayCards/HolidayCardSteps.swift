@@ -543,6 +543,7 @@ struct HolidayCardWriteStep: View {
                 onTyped: { viewModel.signature = nil }
             )
             .presentationDetents([.medium, .large])
+            .presentationBackground(MailPaper.cardPaper(nil))
         }
     }
 

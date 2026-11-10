@@ -154,11 +154,16 @@ struct CardTableSignPad: View {
                     .foregroundStyle(MailPaper.cardText)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button("Close") { dismiss() }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(MailPaper.cardText)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("cardSignClose")
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Close")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(MailPaper.cardText)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("cardSignClose")
             }
             Text("Sign with your finger. It goes beside FROM, in the card's ink.")
                 .font(.system(size: 14))
@@ -185,14 +190,17 @@ struct CardTableSignPad: View {
                 .opacity(hasInk ? 1 : 0.5)
                 .accessibilityIdentifier("cardSignClear")
                 if initial != nil {
-                    Button("Use my typed name") {
+                    Button {
                         onTyped()
                         dismiss()
+                    } label: {
+                        Text("Use my typed name")
+                            .font(.system(size: 15, weight: .semibold))
+                            .underline()
+                            .foregroundStyle(MailPaper.cardText)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
-                    .font(.system(size: 15, weight: .semibold))
-                    .underline()
-                    .foregroundStyle(MailPaper.cardText)
-                    .frame(minHeight: 44)
                     .accessibilityIdentifier("cardSignTyped")
                 }
                 Spacer(minLength: 0)
@@ -219,7 +227,7 @@ struct CardTableSignPad: View {
         }
         .padding(Spacing.s4)
         .frame(maxWidth: 560)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(MailPaper.cardPaper(nil).ignoresSafeArea())
         .onAppear {
             guard !loaded else { return }
