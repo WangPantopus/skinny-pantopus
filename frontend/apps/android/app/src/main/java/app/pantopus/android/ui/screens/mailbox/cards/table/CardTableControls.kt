@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -66,6 +67,22 @@ data class CardTableMenuItem(
     val onClick: () -> Unit,
 )
 
+/** "Send Hazel a card": the quiet second button under the main one, once the card has been turned over. */
+data class CardTableSendBack(
+    val title: String,
+    val onClick: () -> Unit,
+)
+
+/** The quiet button's words: the cream of the words at the top, a little smaller than the main button. */
+internal val tableQuietStyle =
+    TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 1.35.em,
+        fontWeight = FontWeight.Medium,
+        color = PantopusColors.tableCreamSoft,
+        textAlign = TextAlign.Center,
+    )
+
 /** The words at the top of the table: the sample's italic serif. */
 internal val tableWordsStyle =
     TextStyle(
@@ -79,12 +96,12 @@ internal val tableWordsStyle =
         shadow = Shadow(PantopusColors.tableNight.copy(alpha = 0.35f), Offset(0f, 3f), blurRadius = 16f),
     )
 
-/** The hint under the button. */
+/** The hint under the button, in white at 70% so it reads on the dark cloth. */
 internal val tableHintStyle =
     TextStyle(
         fontSize = 12.5.sp,
         lineHeight = 1.35.em,
-        color = PantopusColors.tableCreamFaint,
+        color = PantopusColors.tableHint,
         textAlign = TextAlign.Center,
     )
 
@@ -112,17 +129,30 @@ internal fun CardTableControls(
     showsTurnTip: Boolean,
     onClose: () -> Unit,
     onShare: () -> Unit,
+    sendBack: CardTableSendBack? = null,
+    /** The sender's quiet buttons once their card is gone. */
+    gone: List<CardTableSendBack> = emptyList(),
 ) {
     val top = insets.calculateTopPadding()
     val bottom = insets.calculateBottomPadding()
     val hidden = state.controlsHidden && !touchExploring
+    // The quiet buttons under the main one: the sender's once their card is gone, or the reader's "Send … a card" once
+    // the card has been turned over (not on a sealed card).
+    val moment = state.sending
+    val quiet =
+        when {
+            moment != null -> if (moment.step == SendStep.Gone) gone else emptyList()
+            sendBack != null && state.sendBackShows -> listOf(sendBack)
+            else -> emptyList()
+        }
     Box(modifier = Modifier.fillMaxSize()) {
         Words(state, top)
-        ActionBlock(state, hidden, bottom)
+        ActionBlock(state, hidden, bottom, quiet)
         if (showsTurnTip) TurnTip()
         TopRow(state, top, hidden, canShare, menu.isNotEmpty(), onClose, onShare)
         if (state.menuOpen && menu.isNotEmpty()) MenuPanel(state, top, menu)
         TableToast(state, top)
+        if (state.verseOpen) VerseBookmark(state.card, bottom, onClose = { state.verseOpen = false })
     }
 }
 
@@ -156,9 +186,9 @@ private fun TopRow(
     }
 }
 
-/** A round glass button, 40 across, with room to tap around it. */
+/** A round glass button, 40 across, with room to tap around it (the table's and the card rack's). */
 @Composable
-private fun RoundButton(
+internal fun RoundButton(
     icon: PantopusIcon,
     words: String,
     tag: String,
@@ -199,7 +229,10 @@ private fun Words(
     state: CardTableState,
     top: Dp,
 ) {
-    val shows by remember(state) { derivedStateOf { state.pull.x <= 0.02f && state.step != TableStep.Pulling } }
+    // The sender's words stay while their card is on the table; a reader's go while the card comes out.
+    val shows by remember(state) {
+        derivedStateOf { state.sending != null || (state.pull.x <= 0.02f && state.step != TableStep.Pulling) }
+    }
     val fade by animateFloatAsState(if (shows && state.words.isNotEmpty()) 1f else 0f, tween(400), label = "tableWords")
     val words = state.words
     if (words.isEmpty() && fade == 0f) return
@@ -221,6 +254,7 @@ private fun ActionBlock(
     state: CardTableState,
     hidden: Boolean,
     bottom: Dp,
+    quiet: List<CardTableSendBack>,
 ) {
     val away = hidden || state.step == TableStep.Pulling
     val fade by animateFloatAsState(if (away) 0f else 1f, tween(350), label = "tableAct")
@@ -256,10 +290,79 @@ private fun ActionBlock(
                     Text(state.primaryLabel, style = tablePrimaryStyle)
                 }
             }
-            Text(state.hint, style = tableHintStyle, modifier = Modifier.heightIn(min = 16.dp).testTag("cardTableHint"))
+            quiet.forEachIndexed { index, action ->
+                Box(
+                    modifier =
+                        Modifier
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(22.dp))
+                            .then(
+                                if (away) {
+                                    Modifier
+                                } else {
+                                    Modifier.clickable(role = Role.Button, onClick = action.onClick)
+                                },
+                            ).heightIn(min = 44.dp)
+                            .padding(horizontal = 16.dp)
+                            .testTag(if (state.sending == null) "cardTableSendBack" else "cardTableGone.$index"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(action.title, style = tableQuietStyle)
+                }
+            }
+            HintSlot(state, away)
         }
     }
 }
+
+/**
+ * The hint under the button. A verse card has "Read the verse" in its place once the card lies out (plan 6.2), in one
+ * slot, so the card doesn't move when one replaces the other.
+ */
+@Composable
+private fun HintSlot(
+    state: CardTableState,
+    away: Boolean,
+) {
+    if (state.card.verse == null || state.sending != null) {
+        Text(state.hint, style = tableHintStyle, modifier = Modifier.heightIn(min = 16.dp).testTag("cardTableHint"))
+        return
+    }
+    Box(modifier = Modifier.heightIn(min = 44.dp), contentAlignment = Alignment.Center) {
+        val lying = state.step == TableStep.Out && !state.enlarged
+        if (!away && !state.card.sealed && lying) {
+            Box(
+                modifier =
+                    Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .clickable(role = Role.Button) {
+                            state.menuOpen = false
+                            state.verseOpen = true
+                        }.padding(horizontal = 16.dp)
+                        .testTag("cardTableReadVerse"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(READ_THE_VERSE, style = tableVerseLinkStyle)
+            }
+        } else {
+            Text(state.hint, style = tableHintStyle, modifier = Modifier.testTag("cardTableHint"))
+        }
+    }
+}
+
+internal const val READ_THE_VERSE = "Read the verse"
+
+/** "Read the verse" under the button: a link, white at 85%, underlined. */
+internal val tableVerseLinkStyle =
+    TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 1.35.em,
+        fontWeight = FontWeight.SemiBold,
+        color = PantopusColors.tableHint.copy(alpha = 0.85f),
+        textAlign = TextAlign.Center,
+        textDecoration = TextDecoration.Underline,
+    )
 
 @Composable
 private fun MenuPanel(

@@ -899,6 +899,40 @@ Decided November 1 (section 0). Four sessions built it in parallel on November 1
   - At Android's font scale 2.0, the two-letter initials on Pulse cards overflow their circle in every feed.
 - [ ] Not checked: physical phones, production with real accounts, store builds, and screen readers speaking aloud (their reading order and labels were checked instead).
 
+## Home Money Check (added November 9)
+
+Tells a verified homeowner whether their home costs more than it should, from records Pantopus holds. The plan is the [build plan](https://claude.ai/artifact/YB4JHYrY5WzjyQSxZfx5gU): five steps, the founder's own steps and the sizing of the other four moves.
+
+**Made by the founder on November 9.**
+
+- [x] Build the Home Money Check, starting with steps 1 and 2 ("Yes, start 1 and 2"), then: "keep going until you finish all of the work related to the improvements, no need to stop, we want to launch it", handing off to a new session when one fills up.
+
+**Built (each off until a county is switched on).**
+
+- [x] Similar homes (server): a confirmed owner's value card shows the county's value per square foot beside up to ten similar houses on the street; an owner who hasn't verified yet gets one true line on the locked Your home card. [#3837](https://github.com/WangPantopus/skinny-pantopus/pull/3837), merged November 10 and released; checked on web, iPhone and Android.
+- [x] The Property tax check card on the money page, web, iPhone and Android, sent by the server as `money_cards` so a later check needs no app release. [#3839](https://github.com/WangPantopus/skinny-pantopus/pull/3839), merged November 10; checked on web, iPhone and Android. The phones show it from the first store build cut after that; until then they show the same figures in the value card on Your home.
+- [x] A yearly notice when the county values a home above similar homes, and how the state reviews a value (Washington, Texas, Florida). [#3840](https://github.com/WangPantopus/skinny-pantopus/pull/3840). The weekly job is registered beside the rate watch; whether the production worker runs these weekly jobs wasn't visible from here.
+- [x] The home insurance check (step 5). Send a photo of the policy's renewal page to Pantopus AI on a phone: the reminder it drafts now also keeps the premium for the term, the term before when the page prints it, the day the term starts and the insurer's name, and never the policy number. The money page then shows a Home insurance card with the two terms side by side (web, iPhone and Android, with no app release), and a policy's first reminder comes 45 days before it ends. This card needs no county: it shows for any confirmed owner who saved a policy. An owner with no policy on file sees a short starting card only where a county is switched on. [#3843](https://github.com/WangPantopus/skinny-pantopus/pull/3843), merged November 10; checked on web, iPhone and Android with made-up policy pages.
+- [x] The appeal packet's document (step 4, first part), off behind its own switch. For a confirmed owner whose home the county values above similar homes: an "Appeal packet" card on the money page that opens a web page, and a two-page PDF to file oneself (the home in the county's records, the comparison, how the state reviews a value with its official page, the steps, a blank worksheet). It names no other home, takes no payment yet and says on every page that Pantopus doesn't file for anyone. [#3844](https://github.com/WangPantopus/skinny-pantopus/pull/3844); checked on the web (card, page, download) and the card on iPhone and Android.
+
+**Measured on live releases:** Clark County, WA: 156,087 houses, 64% get a comparison, 19% of those above similar homes. Dallas County, TX: 561,002 houses, 85%, 23% above. Alachua County, FL: 71,134 houses, 62%, 18% above.
+
+**Yours to do.**
+
+- [ ] Switch it on for a county, staging first: `gh workflow run property-index.yml -f action=similar-homes -f county=53011 -f mode=live -f target=staging`, then `-f target=production`. `-f mode=off` takes it away within about a minute.
+- [ ] Show the locked line and the card to about twenty homeowners who have never heard of Pantopus before the packet is built (the plan's test).
+- [ ] Decide the appeal packet's price, and whether it may list the similar homes by parcel number. Today nothing names a neighbor's home.
+- [ ] Switch the packet on for a county only after those decisions and the lawyer's read: `gh workflow run property-index.yml -f action=appeal-packet -f county=53011 -f mode=live -f target=staging`. It shows only where similar homes are on too, and while it has no price it is free.
+- [ ] Turn on real Stripe payments in production before anything is sold; it is in test mode.
+- [ ] Have a lawyer read the card's and the packet's wording.
+- [ ] Choose an insurance quote partner. The insurance check is built and names no insurer and no partner; a "get quotes" link waits for this.
+
+**Not built yet.**
+
+- [ ] Paying for the appeal packet, and listing the similar homes in it: wait on the price, payments and parcel decisions above.
+- [ ] A Today card. The apps accept only the Today kinds they know, so a new kind needs iPhone and Android code and store builds; the yearly notice already tells the owner. Say if you want it.
+- [ ] Recording a packet purchase needs one new table, which needs your yes.
+
 ## Background backlog
 
 The September acceptance backlog ([REMAINING_WORK](docs/REMAINING_WORK_2026-09-11.md)) is background; its row IDs are handy names, not a process. The launch streams verify their areas end to end, and L4 runs the final release-candidate sweep on iOS, Android and the web before the pilot.

@@ -185,3 +185,26 @@
   .gone { animation: goneFade 0.4s ease both; }
   @keyframes goneFade { from { opacity: 0; } to { opacity: 1; } }
 }
+
+/* Read the verse (design plan 6.2): a cream bookmark with a red ribbon slides up over the table. */
+.hintSlot { min-height: 2.75rem; display: flex; align-items: center; justify-content: center; }
+.stage .verseLink {
+  min-height: 2.75rem; padding: 0 1rem; font-weight: 600; font-size: 0.875rem; color: rgba(255, 255, 255, 0.85);
+  text-decoration: underline; text-decoration-color: rgba(255, 255, 255, 0.4); text-underline-offset: 0.25em;
+}
+.bookmarkShade { position: absolute; inset: 0; z-index: 70; display: flex; align-items: flex-end; justify-content: center; background: rgba(8, 5, 4, 0.42); animation: shadeIn 0.3s ease both; }
+.bookmark {
+  position: relative; width: min(100%, 520px); max-height: 82%; overflow-y: auto; margin: 0 max(10px, env(safe-area-inset-left, 0px));
+  padding: 62px 28px calc(env(safe-area-inset-bottom, 0px) + 20px); border-radius: 18px 18px 0 0; text-align: center; color: #2a1a12;
+  background: #f6ecd9 url('/holiday-cards/table/paper.webp'); background-size: 260px; background-blend-mode: multiply;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45); animation: bookmarkUp 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both; user-select: text; -webkit-user-select: text;
+}
+.ribbon { position: absolute; top: 0; right: 30px; width: 22px; height: 54px; background: #8b1d1d; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
+.bookmarkVerse { margin: 0; font: 1.1875rem/1.55 var(--serif); text-wrap: pretty; }
+.bookmarkRef { margin: 14px 0 0; font: italic 0.9375rem/1.3 var(--serif); color: #6a5f52; }
+.stage .bookmarkClose { margin-top: 18px; min-height: 2.75rem; padding: 0 1.5rem; border-radius: 1.375rem; background: #2a1a12; color: #f6ecd9; font-weight: 600; }
+@keyframes bookmarkUp { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes shadeIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .bookmark { animation: shadeIn 0.25s ease both; }
+}

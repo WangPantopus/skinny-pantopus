@@ -104,7 +104,7 @@ Every nudge card carries a secondary action, "Fewer like this": `POST /api/ai/nu
 | `lost_found_match` | A found post and a lost post (or a `missing_pet` heads-up) look like the same animal or item (§6.2) | Both authors, each only if they can read the other post | `post_reply` on the other post |
 | `question_answered` | An open question the person asked has 2 or more replies, or one reply older than 12 hours, and isn't solved. At most once per question every 48 hours. | The author | `post_solve`, and `post_reply` (a thanks) |
 | `home_overdue` | Weekly, on Monday at the brief time: tasks overdue or unassigned where the person can edit tasks | The person | `home_task_update` per task: done, a new date, assign. Up to 3 items. |
-| `home_paperwork` | A warranty, policy or lease date is 30 days away, then 7 days away. Sources: `HomeAsset.warranty_expires_at`, and tasks whose `details.origin` is `document` (§7.1) | Owners and admins | `home_task` (call, renew) |
+| `home_paperwork` | A warranty, policy or lease date is 30 days away (45 for a policy, from November 10; none for a policy whose next term is already on file), then 7 days away. Sources: `HomeAsset.warranty_expires_at`, and tasks whose `details.origin` is `document` (§7.1) | Owners and admins | `home_task` (call, renew) |
 | `radon_follow_up` | A radon result at or above 4.0 pCi/L with no retest or mitigation task; or "not sure yet" past its date. Facts only, no medical advice. | People who can create tasks in that home | A high result: `home_task` (retest, get quotes). A test past its date: `home_task_update` on that test's task (Mark done, Move to Saturday, and I'll do it when no one has it). As built: the test is already on the list, so the person finishes or moves it rather than adding a second task (decision D5, October 22). |
 
 **These are not nudges.** They are ordinary Plans notifications, not capped. They use the existing plan links and Plans quiet hours:
@@ -215,7 +215,7 @@ Advice only; it never blocks. When the person taps **Post** on a new Nearby post
   - Offered only where the person has `home.edit` and the home's systems section is unlocked.
   - Lines: System, Installed, From (the document and page).
   - Done: "Saved", with a link to `pantopus://place/<homeId>/your-home`.
-- **Dated reminders** use `home_task` with `details: { origin: "document", kind: "warranty"|"policy"|"lease", ends_on, name }`. That is how `home_paperwork` finds them.
+- **Dated reminders** use `home_task` with `details: { origin: "document", kind: "warranty"|"policy"|"lease", ends_on, name }`. That is how `home_paperwork` finds them. From November 10 (the Home Money Check's insurance card, `services/homeInsuranceCheck.js`), a policy on the home may also carry `starts_on`, `insurer`, `premium: { amount_cents, period: "year"|"six_months"|"month" }` and `last_premium` (the term before, only when the same page prints it): typed fields, the only amounts kept from a paper, and never a policy number.
   - The key is `origin`, not `source`. The task SQL (`mutate_home_record`) refuses `details.source`, because it marks tasks made from mail.
   - `draft_home_task` now sends `visibility`: the value the server would choose itself, the home's default when the person and the assignee can see tasks at that level, otherwise `members`. The card shows "Seen by" when it isn't the household. (#2507)
 - **Appliances.** `POST /api/homes/:id/assets` now needs `assets.manage` and validates its fields (#2499); `GET` needs `assets.view` (#2519).

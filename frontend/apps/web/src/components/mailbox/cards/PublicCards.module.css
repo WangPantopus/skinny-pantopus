@@ -27,6 +27,7 @@
 .words { width: 100%; text-align: center; }
 .caption { margin: 0; font-size: 1.875rem; line-height: 1.25; color: #fbf1dc; text-wrap: balance; overflow-wrap: anywhere; }
 .verse { font-family: ui-serif, "New York", Georgia, "Times New Roman", serif; font-style: italic; }
+.verseText { margin: 0.75rem auto 0; max-width: 34rem; font: 1.1875rem/1.5 ui-serif, "New York", Georgia, "Times New Roman", serif; color: #fbf1dc; text-wrap: pretty; }
 .line { margin: 0.5rem 0 0; font: 1.0625rem/1.35 var(--serif); color: var(--cream-soft); }
 .actions { width: 100%; max-width: 26.25rem; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
 .page .primary {

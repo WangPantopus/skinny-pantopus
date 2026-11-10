@@ -25,6 +25,8 @@ export type TableState = {
   heldOnce: boolean;
   /** Sealing it by hand: where it is. Null when receiving. */
   send: SendStep | null;
+  /** The card is enlarged (pinch or double-tap, design plan 6.1). */
+  enlarged?: boolean;
 };
 
 export type TableCallbacks = {
@@ -41,11 +43,11 @@ export type TableCallbacks = {
 };
 
 type Spring = { x: number; v: number; t: number; k: number; c: number };
-type SpringKey = 'envDeg' | 'pull' | 'lay' | 'deg' | 'tx' | 'ty' | 'drop';
+type SpringKey = 'envDeg' | 'pull' | 'lay' | 'deg' | 'tx' | 'ty' | 'drop' | 'zs' | 'zx' | 'zy';
 type Drag = {
   id: number; x0: number; y0: number; t0: number; lx: number; ly: number; lt: number; vx: number; vy: number;
-  mode: null | 'env' | 'pull' | 'turn' | 'tilt' | 'none' | 'push' | 'shut' | 'press';
-  env0: number; pull0: number; deg0: number; lay0: number; xs?: number; ys?: number; holdTimer?: number;
+  mode: null | 'env' | 'pull' | 'turn' | 'tilt' | 'none' | 'push' | 'shut' | 'press' | 'pan';
+  env0: number; pull0: number; deg0: number; lay0: number; xs?: number; ys?: number; holdTimer?: number; zx0?: number; zy0?: number;
 };
 type Geometry = {
   w: number; h: number; cw: number; ch: number; ew: number; eh: number; fd: number; cardTop: number; envTopFinal: number;
@@ -94,7 +96,20 @@ export class CardTableEngine {
     tx: { x: 0, v: 0, t: 0, k: 40, c: 11 }, // the light
     ty: { x: 0, v: 0, t: 0, k: 40, c: 11 },
     drop: { x: 1, v: 0, t: 0, k: 58, c: 11.5 }, // the envelope arriving on the table
+    zs: { x: 1, v: 0, t: 1, k: 150, c: 24 }, // the card enlarged (design plan 6.1): 1 to 3
+    zx: { x: 0, v: 0, t: 0, k: 150, c: 24 }, // and moved around while it's enlarged
+    zy: { x: 0, v: 0, t: 0, k: 150, c: 24 },
   };
+
+  /** Two fingers on the card: where the pinch began. */
+  private pinch: { ids: [number, number]; d0: number; s0: number; mx0: number; my0: number; x0: number; y0: number } | null = null;
+
+  private readonly pointers = new Map<number, { x: number; y: number }>();
+
+  /** A tap on the card waits this long for a second one (a double-tap enlarges it) before it turns the card. */
+  private tapTimer = 0;
+
+  private lastTap = { t: 0, x: 0, y: 0 };
 
   private step: TableStep = 'front';
 
@@ -164,6 +179,7 @@ export class CardTableEngine {
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
     window.clearTimeout(this.flapTimer);
+    window.clearTimeout(this.tapTimer);
     this.clearSendTimers();
     if (this.dragging?.holdTimer) window.clearTimeout(this.dragging.holdTimer);
     this.root.removeEventListener('pointerdown', this.onDown);
@@ -199,6 +215,7 @@ export class CardTableEngine {
       envTurnedOnce: this.envTurnedOnce,
       heldOnce: this.heldOnce,
       send: this.send,
+      enlarged: this.v.zs.t > 1.02,
     };
   }
 
@@ -247,6 +264,45 @@ export class CardTableEngine {
     if (this.cracked) return;
     this.setCracked(true);
     tick(14);
+  }
+
+  // ---- Enlarging the card (design plan 6.1) ----
+
+  /** The card is enlarged: a drag moves around it instead of turning it. */
+  get enlarged() {
+    return this.v.zs.t > 1.02;
+  }
+
+  private setZoom(scale: number, x: number, y: number, immediate = false) {
+    const g = this.g;
+    const s = clamp(scale, 1, 3);
+    // It never moves so far that the card leaves its own place on the table.
+    const mx = g ? (g.cw * (s - 1)) / 2 : 0;
+    const my = g ? (g.ch * (s - 1)) / 2 : 0;
+    const zx = clamp(x, -mx, mx);
+    const zy = clamp(y, -my, my);
+    const set = (key: 'zs' | 'zx' | 'zy', value: number) => {
+      this.v[key].t = value;
+      if (immediate || reducedMotion()) { this.v[key].x = value; this.v[key].v = 0; }
+    };
+    set('zs', s); set('zx', zx); set('zy', zy);
+    this.mark();
+    this.wake();
+  }
+
+  /** Back to its size on the table. */
+  resetZoom(immediate = false) {
+    if (this.v.zs.t === 1 && this.v.zx.t === 0 && this.v.zy.t === 0) return;
+    this.setZoom(1, 0, 0, immediate);
+  }
+
+  /** Double-tap (or double-click): enlarge it 2.4x around that spot, or back again. */
+  private toggleZoom(px: number, py: number) {
+    if (this.enlarged) { this.resetZoom(); return; }
+    const r = this.$('card').getBoundingClientRect();
+    const s = 2.4;
+    this.setZoom(s, (r.left + r.width / 2 - px) * (s - 1), (r.top + r.height / 2 - py) * (s - 1));
+    tick(6);
   }
 
   // ---- Sealing it by hand (design plan Part 2) ----
@@ -455,6 +511,7 @@ export class CardTableEngine {
   }
 
   private turnCard(dir = -1) {
+    this.resetZoom();
     this.v.deg.t = (Math.round(this.v.deg.t / 180) + (dir < 0 ? -1 : 1)) * 180;
     if (reducedMotion()) this.v.deg.x = this.v.deg.t;
     this.turnedOnce = true;
@@ -466,7 +523,8 @@ export class CardTableEngine {
 
   // ---- Layout: design.md section 2 ----
 
-  private readonly onResize = () => { this.layout(); this.render(); };
+  // A new window size brings an enlarged card back to its size; the controls changing height only lays it out again.
+  private readonly onResize = () => { this.resetZoom(true); this.layout(); this.render(); };
 
   layout() {
     const stage = this.root;
@@ -480,7 +538,8 @@ export class CardTableEngine {
     const room = h - topGap - bottom;
     const side = w < 560 ? 9 : 14;
     // Phones: nearly as wide as the screen. Tablets and wide windows cap the card on a big table.
-    let cw = Math.min(w - side * 2, w < 760 ? 470 : 560);
+    // Tablets and wide windows go to 640 where the height allows (design plan 6.3); the room below keeps it in.
+    let cw = Math.min(w - side * 2, w < 760 ? 470 : 640);
     let peek = room - cw * 1.2;
     const minPeek = cw * 0.13;
     const maxPeek = cw * 0.47;
@@ -537,6 +596,20 @@ export class CardTableEngine {
 
   private readonly onDown = (e: PointerEvent) => {
     if ((e.target as Element).closest?.('[data-ui]')) return;
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // A second finger on the card while it lies on the table: pinch to enlarge it (design plan 6.1).
+    if (!this.sending && this.step === 'out' && this.pointers.size === 2 && !reducedMotion()) {
+      const [a, b] = [...this.pointers.entries()];
+      if (this.dragging?.holdTimer) window.clearTimeout(this.dragging.holdTimer);
+      this.dragging = null;
+      window.clearTimeout(this.tapTimer);
+      this.pinch = {
+        ids: [a[0], b[0]], d0: Math.max(1, Math.hypot(a[1].x - b[1].x, a[1].y - b[1].y)), s0: this.v.zs.t,
+        mx0: (a[1].x + b[1].x) / 2, my0: (a[1].y + b[1].y) / 2, x0: this.v.zx.t, y0: this.v.zy.t,
+      };
+      try { this.root.setPointerCapture?.(e.pointerId); } catch { /* not a live pointer */ }
+      return;
+    }
     this.callbacks.onPress();
     this.root.setPointerCapture?.(e.pointerId);
     const now = performance.now();
@@ -554,7 +627,7 @@ export class CardTableEngine {
     }
     // Hold still for a moment on the card: the finger moves the light instead.
     drag.holdTimer = window.setTimeout(() => {
-      if (this.dragging === drag && !drag.mode && this.step === 'out' && !reducedMotion()) {
+      if (this.dragging === drag && !drag.mode && this.step === 'out' && !this.enlarged && !reducedMotion()) {
         drag.mode = 'tilt';
         this.heldOnce = true;
         tick(5);
@@ -565,6 +638,19 @@ export class CardTableEngine {
   };
 
   private readonly onMove = (e: PointerEvent) => {
+    if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = this.pinch;
+    if (p && p.ids.includes(e.pointerId)) {
+      const a = this.pointers.get(p.ids[0]);
+      const b = this.pointers.get(p.ids[1]);
+      if (a && b) {
+        const scale = p.s0 * (Math.hypot(a.x - b.x, a.y - b.y) / p.d0);
+        this.setZoom(scale, p.x0 + ((a.x + b.x) / 2 - p.mx0), p.y0 + ((a.y + b.y) / 2 - p.my0), true);
+        this.lastTouch = performance.now();
+        this.render();
+      }
+      return;
+    }
     const d = this.dragging;
     if (!d || e.pointerId !== d.id || !this.g) return;
     const dx = e.clientX - d.x0;
@@ -583,6 +669,7 @@ export class CardTableEngine {
       else if (this.sending) d.mode = this.send === 'ready' && !horizontal && dy < 0 ? 'push' : this.send === 'in' && !horizontal && dy > 0 ? 'shut' : 'none';
       else if (this.step === 'front') d.mode = horizontal ? 'env' : 'none';
       else if (this.step === 'back' || this.step === 'flap') d.mode = !horizontal && dy < 0 ? 'pull' : (horizontal && this.step === 'back' ? 'env' : 'none');
+      else if (this.step === 'out' && this.enlarged) { d.mode = 'pan'; d.zx0 = this.v.zx.t; d.zy0 = this.v.zy.t; }
       else if (this.step === 'out') d.mode = horizontal ? 'turn' : 'tilt';
       else d.mode = 'none';
       d.xs = e.clientX; d.ys = e.clientY;
@@ -600,6 +687,9 @@ export class CardTableEngine {
     } else if (d.mode === 'turn') {
       v.deg.x = d.deg0 + ((e.clientX - (d.xs ?? 0)) / (g.cw * 0.86)) * 180;
       v.deg.t = v.deg.x; v.deg.v = 0;
+    } else if (d.mode === 'pan') {
+      // Moving around the enlarged card.
+      this.setZoom(v.zs.t, (d.zx0 ?? 0) + (e.clientX - (d.xs ?? 0)), (d.zy0 ?? 0) + (e.clientY - (d.ys ?? 0)), true);
     } else if (d.mode === 'push') {
       // Pushing the card up off the table, toward the envelope's open top.
       const up = (d.ys ?? 0) - e.clientY;
@@ -617,6 +707,14 @@ export class CardTableEngine {
   };
 
   private readonly onUp = (e: PointerEvent) => {
+    this.pointers.delete(e.pointerId);
+    if (this.pinch && this.pinch.ids.includes(e.pointerId)) {
+      this.pinch = null;
+      // Hardly enlarged: back to its size.
+      if (this.v.zs.t < 1.08) this.resetZoom();
+      this.dragging = null;
+      return;
+    }
     const d = this.dragging;
     if (!d || e.pointerId !== d.id || !this.g) return;
     this.dragging = null;
@@ -670,8 +768,16 @@ export class CardTableEngine {
     if (this.step === 'out') {
       const r = this.$('card').getBoundingClientRect();
       const inCard = e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
-      if (inCard) this.turnCard();
-      else this.callbacks.onTableTap();
+      if (inCard) {
+        // A second tap soon after on the same spot enlarges it (or brings it back); one tap turns it, a moment later.
+        const now = performance.now();
+        const twice = now - this.lastTap.t < 330 && Math.hypot(e.clientX - this.lastTap.x, e.clientY - this.lastTap.y) < 44;
+        window.clearTimeout(this.tapTimer);
+        if (twice && !reducedMotion()) { this.lastTap.t = 0; this.toggleZoom(e.clientX, e.clientY); return; }
+        this.lastTap = { t: now, x: e.clientX, y: e.clientY };
+        if (this.enlarged) return;
+        this.tapTimer = window.setTimeout(() => this.turnCard(), 300);
+      } else this.callbacks.onTableTap();
       return;
     }
     if (this.step === 'front' || this.step === 'back') { this.primary(); return; }
@@ -774,7 +880,9 @@ export class CardTableEngine {
     const out = r >= 0.999;
     card.style.zIndex = out ? '20' : '5';
     card.style.transform = `translate3d(${cx}px,${cy + yFix}px,0) rotate(${cRot}deg) scale(${cs})`;
-    this.$('flip').style.transform = `rotateX(${-ty * 2.6}deg) rotateY(${v.deg.x + tx * 3.2}deg)`;
+    const zoom = v.zs.x > 1.0005 || Math.abs(v.zx.x) > 0.1 || Math.abs(v.zy.x) > 0.1
+      ? `translate(${v.zx.x.toFixed(1)}px,${v.zy.x.toFixed(1)}px) scale(${v.zs.x.toFixed(4)}) ` : '';
+    this.$('flip').style.transform = `${zoom}rotateX(${-ty * 2.6}deg) rotateY(${v.deg.x + tx * 3.2}deg)`;
 
     // The card's shadows grow as it lifts off the paper.
     const lift = (1 - lay) * r;

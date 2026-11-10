@@ -364,8 +364,9 @@ struct HolidayCardPickStep: View {
 
     private func tile(_ design: HolidayCardDesign) -> some View {
         let selected = design.id == viewModel.designId
+        // Every picture opens large first, at the card rack (plan Part 5); ✕ there chooses the last one seen.
         return Button {
-            if selected { viewModel.largeDesign = design } else { viewModel.designId = design.id }
+            viewModel.largeDesign = design
         } label: {
             VStack(spacing: 6) {
                 HolidayCardPictureView(design: design.id, paper: design.paper, height: design.height, thumb: true)
@@ -396,7 +397,7 @@ struct HolidayCardPickStep: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(design.caption)
-        .accessibilityHint(selected ? "Shows it larger." : "Chooses this card.")
+        .accessibilityHint("Shows it large.")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("sendCardDesign.\(design.id)")
     }
@@ -452,43 +453,16 @@ struct HolidayCardPickBar: View {
         .overlay(alignment: .top) {
             Rectangle().fill(MailPaper.cardRowLine).frame(height: 1)
         }
-        .sheet(item: $viewModel.largeDesign) { design in
-            largeCard(design)
+        // The card rack: the pictures at full size on the table's cloth (plan Part 5).
+        .fullScreenCover(item: $viewModel.largeDesign) { design in
+            HolidayCardRack(viewModel: viewModel, cards: cards, start: design)
         }
-    }
-
-    /// The picture large, to choose it or close.
-    private func largeCard(_ design: HolidayCardDesign) -> some View {
-        VStack(spacing: Spacing.s4) {
-            HolidayCardFront(design: design.id, caption: design.caption, paper: design.paper, height: design.height, year: cards.year)
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-                .shadow(color: MailPaper.cardShadow.opacity(0.3), radius: 18, x: 0, y: 12)
-                .frame(maxWidth: 420)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(design.caption)
-            HStack(spacing: 10) {
-                HolidayCardPaperButton(title: "Close", fullWidth: true) { viewModel.largeDesign = nil }
-                    .accessibilityIdentifier("sendCardLargeClose")
-                HolidayCardWaxButton(title: "Choose this card") {
-                    viewModel.designId = design.id
-                    viewModel.largeDesign = nil
-                }
-                .accessibilityIdentifier("sendCardChooseThis")
-            }
-            .frame(maxWidth: 420)
-        }
-        .padding(Spacing.s4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(HolidayCardDesk.background(scheme))
-        .presentationDragIndicator(.visible)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("sendCardLarge")
     }
 }
 
-private extension HolidayCardsResponse {
+extension HolidayCardsResponse {
     /// The collections in the row, in the server's order: those with a picture.
-    var pickableCollections: [HolidayCardCollection] {
+    fileprivate var pickableCollections: [HolidayCardCollection] {
         collections.filter { !designs(in: $0).isEmpty }
     }
 

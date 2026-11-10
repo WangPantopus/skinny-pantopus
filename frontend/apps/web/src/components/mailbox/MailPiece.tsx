@@ -222,13 +222,15 @@ export type MailPieceProps = {
   opened: boolean;
   /** 1 = fresh; lower = older read mail. */
   fade?: number;
+  /** A card in Sent that the other person has: drawn as taken out of its envelope, "To {first name}". */
+  sentTo?: string | null;
 };
 
 /**
  * The drawing alone; the row around it gives it a name (pieceSentence), so
  * the drawing itself is hidden from screen readers.
  */
-export default function MailPiece({ item, recipientName, recipientLine, opened, fade = 1 }: MailPieceProps) {
+export default function MailPiece({ item, recipientName, recipientLine, opened, fade = 1, sentTo = null }: MailPieceProps) {
   const kind = pieceKind(item);
   const trust = pieceTrust(item);
   const from = item.sender_display || 'Unknown sender';
@@ -261,6 +263,33 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
             {recipientLine ? <div className="truncate">{recipientLine}</div> : null}
           </div>
           {postDate ? <div className="absolute bottom-2 left-3"><Postmark town={town} date={postDate} size={40} lines={false} /></div> : null}
+        </div>
+      </div>
+    );
+  } else if (item.card && launchFeatures.cardTable && torn) {
+    // An opened card shows its picture (design plan Part 4): the whole card, taken out, leans over the envelope's top
+    // edge; who it's from (in Sent: to), its caption and the day beside it. The envelope keeps its red paper and height.
+    const pen = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
+    const [month = '', date = ''] = postDate.split(' ');
+    const who = ((sentTo ?? from).trim().split(/\s+/)[0]) || (sentTo ? 'them' : 'Someone');
+    body = (
+      <div
+        className="relative h-[150px] rounded-md"
+        style={{ backgroundColor: '#9f2f28', backgroundImage: `url(${TABLE_ART}env-front.webp)`, backgroundSize: 'cover', backgroundPosition: '50% 12%', boxShadow: SHADOW }}
+      >
+        <div
+          className="absolute -top-[14px] left-4 w-[125px] -rotate-3 rounded-[2px]"
+          style={{ aspectRatio: '5 / 6', backgroundColor: item.card.paper || '#f7f0e2', boxShadow: '0 6px 14px rgba(40, 8, 6, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3)' }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={cardPicture(item.card.design, 'thumb')} alt="" className="absolute left-[2px] right-[2px] top-[2px] h-[86%] w-[calc(100%-4px)] rounded-[1px] object-cover" />
+        </div>
+        <div className="absolute left-[158px] right-3 top-[18px] text-[#f4e2bf]">
+          <div className="truncate text-[22px] leading-[26px]" style={{ fontFamily: pen }}>{sentTo ? 'To' : 'From'} {who}</div>
+          <div className="mt-1 line-clamp-2 text-[15px] italic leading-[19px] text-[#fbeed2]" style={{ fontFamily: SERIF }}>{item.card.caption || 'A Christmas card'}</div>
+          <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#d8b76f]" style={{ fontFamily: SERIF }}>
+            {month} {date} · {sentTo ? 'Delivered' : 'Opened'}
+          </div>
         </div>
       </div>
     );
@@ -462,9 +491,10 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
     <div
       aria-hidden="true"
       className="relative w-full [@media(prefers-color-scheme:dark)]:brightness-[0.94]"
-      style={{ paddingTop: torn ? 14 : 0, opacity: fade }}
+      // A Christmas card on the table's paper keeps its red, opened or not (design plan 1.4 and Part 4).
+      style={{ paddingTop: torn ? 14 : 0, opacity: item.card && launchFeatures.cardTable ? 1 : fade }}
     >
-      {torn && item.card ? (
+      {torn && item.card && launchFeatures.cardTable ? null : torn && item.card ? (
         // The card's picture peeking out of its torn envelope.
         <div
           className="absolute left-5 right-5 top-0 h-[30px] rounded-[2px] border border-[#e7dcc6]"

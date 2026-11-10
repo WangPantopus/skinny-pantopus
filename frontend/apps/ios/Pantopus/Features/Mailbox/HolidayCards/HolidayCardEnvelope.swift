@@ -6,7 +6,9 @@
 //  a red envelope addressed in cream ink, its stamp cancelled by the
 //  postmark; the "Do not open until Christmas" seal while it's sealed,
 //  "Christmas card" otherwise; and once opened, the card's picture peeking
-//  out of the torn top. A sealed card never shows torn.
+//  out of the torn top. A sealed card never shows torn. With `card_table`
+//  an opened card is drawn taken out instead (plan Part 4,
+//  `HolidayCardTakenOut`).
 //
 
 import SwiftUI
@@ -16,6 +18,14 @@ struct HolidayCardEnvelopePiece: View {
     let model: MailPieceModel
 
     var body: some View {
+        if model.showsCardTakenOut, let card = model.card {
+            HolidayCardTakenOut(model: model, card: card)
+        } else {
+            envelope
+        }
+    }
+
+    private var envelope: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: Spacing.s0) {
@@ -176,5 +186,99 @@ struct HolidayCardPeek: View {
         .overlay(RoundedRectangle(cornerRadius: 2, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
         .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 1)
         .accessibilityHidden(true)
+    }
+}
+
+/// An opened card on the table's paper (plan Part 4): the envelope keeps its red paper and height, untorn, and the
+/// whole card, taken out, leans 14 pt over its top edge, turned 3 degrees; beside it who it's from in the pen, its
+/// caption and the day. In Sent, a card the other person has, "To" them. As web draws it.
+struct HolidayCardTakenOut: View {
+    let model: MailPieceModel
+    let card: MailCard
+
+    var body: some View {
+        // The card lies over the paper, not in it: the paper clips to its edge and the card leans past it.
+        words
+            .frame(maxWidth: .infinity, minHeight: 150, maxHeight: 150, alignment: .topLeading)
+            .background {
+                if let paper = CardTableSmallArt.shared.envelopePaper {
+                    Image(uiImage: paper)
+                        .resizable()
+                        .scaledToFill()
+                        .clipped()
+                }
+            }
+            .mailPaper(MailPaper.cardEnvelope, edge: MailPaper.cardSealInk.opacity(0.35), radius: 6, torn: false)
+            .overlay(alignment: .topLeading) {
+                takenOutCard
+                    .rotationEffect(.degrees(-3))
+                    .offset(x: Spacing.s4, y: -14)
+            }
+            .task(id: card.design) { await CardTableSmallArt.shared.load() }
+    }
+
+    /// Who, the caption and the day, beside the card.
+    private var words: some View {
+        VStack(alignment: .leading, spacing: Spacing.s0) {
+            Text(who)
+                .font(Font(CardTableType.pen(22)))
+                .foregroundStyle(MailPaper.tableFromName)
+                .lineLimit(1)
+                .frame(height: 26, alignment: .leading)
+            Text(card.caption ?? "A Christmas card")
+                .font(.system(size: 15, design: .serif).italic())
+                .foregroundStyle(MailPaper.tableToName)
+                .lineLimit(2)
+                .lineSpacing(2)
+                .padding(.top, Spacing.s1)
+            Text(dayLine)
+                .font(.system(size: 11, weight: .semibold, design: .serif))
+                .tracking(1.1)
+                .textCase(.uppercase)
+                .foregroundStyle(MailPaper.tableGold)
+                .lineLimit(1)
+                .padding(.top, Spacing.s2)
+        }
+        .padding(.leading, 158)
+        .padding(.trailing, Spacing.s3)
+        .padding(.top, 18)
+    }
+
+    /// The card's paper with its picture over the top 86%, 125 by 150 (5:6).
+    private var takenOutCard: some View {
+        ZStack(alignment: .top) {
+            MailPaper.cardPaper(card.paper)
+            HolidayCardPictureImage(design: card.design, thumb: true) { image in
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    MailPaper.cardPaper(card.paper)
+                }
+            }
+            .frame(width: 121, height: 129)
+            .clipShape(RoundedRectangle(cornerRadius: 1, style: .continuous))
+            .padding(.top, 2)
+        }
+        .frame(width: 125, height: 150)
+        .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+        .shadow(color: MailPaper.cardTakenOutShadow, radius: 7, x: 0, y: 6)
+        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+        .accessibilityHidden(true)
+    }
+
+    /// "From Nora", or in Sent "To Nora".
+    private var who: String {
+        model.cardIsWithThem
+            ? "To \(HolidayCardWords.firstName(model.to))"
+            : "From \(HolidayCardWords.firstName(model.from))"
+    }
+
+    /// "Nov 10 · Opened" (by the postmark's day); in Sent, "Nov 10 · Delivered".
+    private var dayLine: String {
+        let day = model.postmarkDate.isEmpty ? nil : model.postmarkDate
+        let what = model.cardIsWithThem ? "Delivered" : "Opened"
+        return [day, what].compactMap { $0 }.joined(separator: " · ")
     }
 }

@@ -2066,8 +2066,8 @@ router.get('/cards/designs', (req, res) => {
   return res.json({
     year: holidayCards.SEASON.year,
     collections: holidayCards.COLLECTIONS,
-    designs: holidayCards.DESIGNS.map(({ id, number, slug, caption, paper, collection, table }) =>
-      ({ id, number, slug, caption, paper, collection, table })),
+    designs: holidayCards.DESIGNS.map(({ id, number, slug, caption, paper, collection, table, verse }) =>
+      ({ id, number, slug, caption, paper, collection, table, ...(verse ? { verse } : {}) })),
   });
 });
 

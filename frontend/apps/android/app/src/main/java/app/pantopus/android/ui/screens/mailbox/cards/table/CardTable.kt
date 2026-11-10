@@ -39,7 +39,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -73,7 +75,7 @@ import kotlin.math.max
  * word from the screen under the table (an action's result), shown as the table's own toast.
  */
 @Composable
-fun CardTableDialog(
+internal fun CardTableDialog(
     card: CardOnTable,
     firstOpen: Boolean,
     onClose: () -> Unit,
@@ -84,11 +86,27 @@ fun CardTableDialog(
     mine: Boolean = false,
     /** Look it over shows a card that hasn't been mailed: there's nothing to share yet. */
     canShare: Boolean = true,
+    /** "Send Hazel a card" under the main button once the card has been turned over; null when it can't go. */
+    sendBack: CardTableSendBack? = null,
+    /** The sender sealing their own card by hand (Part 2): who it's for, and the send at the seal. */
+    sending: CardTableSendingCalls? = null,
+    /** How the send went, once it's asked. */
+    sealAnswer: SealAnswer? = null,
+    /** The quiet buttons under "Done" once the sent card is gone ("Take it back"); "Share this card" is added. */
+    goneActions: List<CardTableSendBack> = emptyList(),
 ) {
     FullScreenWindow(onDismissRequest = onClose) {
-        CardTable(card, firstOpen, onClose, onOpened, menu, message, mine, canShare)
+        val sender = TableSending(sending, sealAnswer, goneActions)
+        CardTable(card, firstOpen, onClose, onOpened, menu, message, mine, canShare, sendBack, sender)
     }
 }
+
+/** What the sender's table needs: [calls] null for a card being received. */
+private class TableSending(
+    val calls: CardTableSendingCalls?,
+    val answer: SealAnswer?,
+    val goneActions: List<CardTableSendBack>,
+)
 
 @Composable
 private fun CardTable(
@@ -100,21 +118,22 @@ private fun CardTable(
     message: String?,
     mine: Boolean,
     canShare: Boolean,
+    sendBack: CardTableSendBack?,
+    sending: TableSending,
 ) {
     val reduceMotion = rememberReduceMotion()
-    val scope = rememberCoroutineScope()
-    val state =
-        rememberSaveable(
-            card.id,
-            card.sealed,
-            saver = CardTableState.saver { saved -> CardTableState(card, reduceMotion, scope, saved, firstOpen) },
-        ) { CardTableState(card, reduceMotion, scope, null, firstOpen) }
+    val calls = sending.calls
+    val state = rememberTableState(card, firstOpen, calls)
+    SendingAnswers(state, sending.answer, onClose)
     val view = LocalView.current
     state.onOpened = onOpened
     state.onTap = { tap -> view.feel(tap) }
     LaunchedEffect(state) { state.run() }
     LaunchedEffect(message) { message?.let { state.toast = it } }
+    // Back brings an enlarged card back to its size first, closes the menu, and puts the verse's bookmark away.
+    BackHandler(enabled = state.enlarged) { state.resetZoom() }
     BackHandler(enabled = state.menuOpen) { state.menuOpen = false }
+    BackHandler(enabled = state.verseOpen) { state.verseOpen = false }
 
     // The sheet stands over the table, and the table rests under it.
     var sharing by rememberSaveable(card.id) { mutableStateOf(false) }
@@ -155,8 +174,11 @@ private fun CardTable(
         val density = LocalDensity.current
         val safeTop = WindowInsets.safeDrawing.getTop(density).toFloat()
         val safeBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
-        val geometry = rememberTableGeometry(card, constraints, safeTop, safeBottom, density)
+        val geometry =
+            rememberTableGeometry(card, constraints, safeTop, safeBottom, density, quietButton = sendBack != null, sending = calls != null)
         SideEffect { state.geometry = geometry }
+        // A new window size (the phone turned, a fold opened) brings an enlarged card back to its size.
+        LaunchedEffect(geometry) { state.resetZoom(immediate = true) }
         val step = state.step
         val primaryLabel = state.primaryLabel
         val showsTurnTip =
@@ -174,7 +196,7 @@ private fun CardTable(
                         .graphicsLayer { alpha = fade.value }
                         .tableGestures(state, geometry)
                         .clearAndSetSemantics {
-                            contentDescription = sceneWords(card, step)
+                            contentDescription = state.sending?.sceneWords ?: sceneWords(card, step)
                             if (step == TableStep.Out) {
                                 onClick(label = primaryLabel) {
                                     state.primary()
@@ -190,6 +212,8 @@ private fun CardTable(
                 PaddingValues(top = safeTop.toDp(), bottom = safeBottom.toDp())
             }
         val allItems = rememberMenu(menu, state)
+        // Once the sent card is gone: Take it back, and Share this card.
+        val gone = remember(sending.goneActions) { sending.goneActions + CardTableSendBack("Share this card") { sharing = true } }
         CardTableControls(
             state = state,
             insets = insets,
@@ -199,9 +223,49 @@ private fun CardTable(
             showsTurnTip = showsTurnTip,
             onClose = onClose,
             onShare = { sharing = true },
+            sendBack = sendBack,
+            gone = gone,
         )
     }
-    if (sharing) CardShareSheet(card, mine, onClose = { sharing = false })
+    if (sharing) CardShareSheet(card, mine || calls != null, onClose = { sharing = false })
+}
+
+/** The table's state: a reader's is kept across a turn of the phone; the sender's moment starts afresh each time. */
+@Composable
+private fun rememberTableState(
+    card: CardOnTable,
+    firstOpen: Boolean,
+    calls: CardTableSendingCalls?,
+): CardTableState {
+    val reduceMotion = rememberReduceMotion()
+    val scope = rememberCoroutineScope()
+    // Nothing is sent before the seal, so nothing of the sender's moment needs keeping.
+    if (calls != null) {
+        return remember(card.id) { CardTableState(card, reduceMotion, scope, null, firstOpen = false, sendingCalls = calls) }
+    }
+    return rememberSaveable(
+        card.id,
+        card.sealed,
+        saver = CardTableState.saver { saved -> CardTableState(card, reduceMotion, scope, saved, firstOpen) },
+    ) { CardTableState(card, reduceMotion, scope, null, firstOpen) }
+}
+
+/** The sender's moment hears how the send went, and "Done" closes the table. */
+@Composable
+private fun SendingAnswers(
+    state: CardTableState,
+    answer: SealAnswer?,
+    onDone: () -> Unit,
+) {
+    val moment = state.sending ?: return
+    moment.onDone = onDone
+    LaunchedEffect(moment, answer) {
+        when (answer) {
+            is SealAnswer.Took -> moment.took(answer)
+            is SealAnswer.Refused -> moment.refused(answer.message)
+            null -> Unit
+        }
+    }
 }
 
 /** The screen's own actions and, once the card is on the table, "Open it again". */
@@ -210,7 +274,8 @@ private fun rememberMenu(
     menu: List<CardTableMenuItem>,
     state: CardTableState,
 ): List<CardTableMenuItem> {
-    val onTable = state.step == TableStep.Out
+    // Not on the sender's own table: there's nothing to open again.
+    val onTable = state.step == TableStep.Out && state.sending == null
     return remember(menu, onTable, state) {
         val again = CardTableMenuItem("Open it again", "cardTableOpenAgain") { state.openAgain() }
         if (onTable && !state.card.sealed) menu + again else menu
@@ -230,7 +295,10 @@ private fun PictureProblem(
     }
 }
 
-/** The moment fitted to this screen, with room held for the largest words and hint at this text size. */
+/**
+ * The moment fitted to this screen, with room held for the largest words and hint at this text size, and for the quiet
+ * second button when there is one ([quietButton]).
+ */
 @Composable
 private fun rememberTableGeometry(
     card: CardOnTable,
@@ -238,33 +306,65 @@ private fun rememberTableGeometry(
     safeTop: Float,
     safeBottom: Float,
     density: Density,
+    quietButton: Boolean,
+    /** The sender's moment: its words stay over the open envelope, so the table starts below them. */
+    sending: Boolean = false,
 ): TableGeometry {
     val measurer = rememberTextMeasurer()
     val width = constraints.maxWidth
     val height = constraints.maxHeight
-    return remember(width, height, safeTop, safeBottom, density, card.fromFirst, card.sealed) {
+    val readsVerse = card.verse != null && !sending
+    return remember(width, height, safeTop, safeBottom, density, card.fromFirst, card.sealed, quietButton, sending, readsVerse) {
         with(density) {
             val textWidth = width - 32.dp.roundToPx()
             val hintWidth = Constraints(maxWidth = textWidth.coerceAtLeast(1))
             val hintHeight =
-                HINTS.maxOf { hint -> measurer.measure(hint, tableHintStyle, constraints = hintWidth).size.height }
+                HINTS.maxOf { hint -> measurer.measure(hint, tableHintStyle, constraints = hintWidth).size.height }.let { hints ->
+                    // A verse card's hint slot also holds "Read the verse", 44 dp to touch (plan 6.2).
+                    if (readsVerse) {
+                        val link = measurer.measure(READ_THE_VERSE, tableVerseLinkStyle).size.height + 12.dp.roundToPx()
+                        maxOf(hints, 44.dp.roundToPx(), link)
+                    } else {
+                        hints
+                    }
+                }
             val primaryHeight = measurer.measure("Take the card out", tablePrimaryStyle).size.height
             val pillHeight = max(48.dp.toPx(), primaryHeight + 12.dp.toPx())
-            val bottomRoom = safeBottom + 8.dp.toPx() + hintHeight + 2.dp.toPx() + pillHeight + 8.dp.toPx()
+            val quietHeight =
+                if (quietButton && !card.sealed) {
+                    max(48.dp.toPx(), measurer.measure("Send ${card.fromFirst} a card", tableQuietStyle).size.height + 12.dp.toPx()) +
+                        2.dp.toPx()
+                } else {
+                    0f
+                }
+            // The button starts at least 12 dp below the lowest edge of paper, wherever the light has drifted it and with
+            // its small turn ([PAPER_SWAY]); on a short screen the card shrinks.
+            val gap = 12.dp.toPx() + PAPER_SWAY.dp.toPx()
+            val bottomRoom = safeBottom + 8.dp.toPx() + hintHeight + 2.dp.toPx() + quietHeight + pillHeight + gap
             val wordsWidth = Constraints(maxWidth = (width - 48.dp.roundToPx()).coerceAtLeast(1))
             val longestWords = if (card.sealed) "It opens Christmas morning, in 56 days." else "A Christmas card from ${card.fromFirst}."
             val wordsHeight = measurer.measure(longestWords, tableWordsStyle, constraints = wordsWidth).size.height
+            val wordsBottom = safeTop + 54.dp.toPx() + wordsHeight + 8.dp.toPx()
+            // Sending, the words ("For Hazel.", or why the seal didn't take) show over the open flap: start below them.
+            val sendingWords =
+                if (sending) measurer.measure(SENDING_LONGEST_WORDS, tableWordsStyle, constraints = wordsWidth).size.height else 0
             TableGeometry(
                 width = width.toFloat(),
                 height = height.toFloat(),
-                safeTop = safeTop,
+                safeTop = if (sending) safeTop + 54.dp.toPx() + sendingWords + 4.dp.toPx() else safeTop,
                 bottomRoom = bottomRoom,
                 density = this.density,
-                wordsBottom = safeTop + 54.dp.toPx() + wordsHeight + 8.dp.toPx(),
+                wordsBottom = wordsBottom,
             )
         }
     }
 }
+
+/** How far the card's lowest edge can move: the light moves it 5.5 dp, and its 1° turn lowers a corner about 3.5. */
+private const val PAPER_SWAY = 9
+
+/** Room held for the sender's longest words over the open envelope: a refusal at the seal, in two lines. */
+private const val SENDING_LONGEST_WORDS = "You’ve sent today’s card. You can send another tomorrow."
 
 private val HINTS =
     listOf(
@@ -316,6 +416,13 @@ private fun Modifier.tableGestures(
                             awaitPointerEvent(PointerEventPass.Main)
                         }
                     if (event == null) continue
+                    // A second finger on the card lying out: pinch to enlarge it (plan 6.1), until a finger lifts.
+                    val fingers = event.changes.filter { it.pressed }
+                    if (fingers.size >= 2 && state.onPinchStart(fingers[0].x, fingers[0].y, fingers[1].x, fingers[1].y)) {
+                        event.changes.forEach { it.consume() }
+                        pinchUntilLifted(state)
+                        return@awaitEachGesture
+                    }
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (change.changedToUp() || !change.pressed) {
                         state.onUp(change.position.x, change.position.y)
@@ -327,6 +434,24 @@ private fun Modifier.tableGestures(
                 state.onUp(down.position.x, down.position.y)
             }
         }
+
+/** Follows two fingers until one lifts, then waits for the rest to lift, so the last one doesn't turn the card. */
+private suspend fun AwaitPointerEventScope.pinchUntilLifted(state: CardTableState) {
+    while (true) {
+        val event = awaitPointerEvent(PointerEventPass.Main)
+        val fingers = event.changes.filter { it.pressed }
+        event.changes.forEach { it.consume() }
+        if (fingers.size < 2) break
+        state.onPinch(fingers[0].x, fingers[0].y, fingers[1].x, fingers[1].y)
+    }
+    state.onPinchEnd()
+    while (currentEvent.changes.any { it.pressed }) {
+        awaitPointerEvent(PointerEventPass.Main).changes.forEach { it.consume() }
+    }
+}
+
+private val PointerInputChange.x: Float get() = position.x
+private val PointerInputChange.y: Float get() = position.y
 
 private const val HOLD_MS = 240L
 

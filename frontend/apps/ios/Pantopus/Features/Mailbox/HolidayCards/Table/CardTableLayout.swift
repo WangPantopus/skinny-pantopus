@@ -19,6 +19,8 @@ struct CardTableLayout: Equatable {
     let width: CGFloat
     let height: CGFloat
     let safeTop: CGFloat
+    /// What the buttons take at the bottom, with the safe area.
+    let bottomControls: CGFloat
     /// The card.
     let cardWidth: CGFloat
     let cardHeight: CGFloat
@@ -40,6 +42,13 @@ struct CardTableLayout: Equatable {
     /// Laid down behind the card.
     let envelopeTopFinal: CGFloat
 
+    /// The widest the card gets in this much width: 470 on a phone, 560 from 560 wide, growing to 640 on tablets and
+    /// wide windows (plan 6.3), so the open Duo upright gets one card about 600 wide (plan 6.4). The height can make it
+    /// smaller.
+    static func cardCap(width: CGFloat) -> CGFloat {
+        width < 560 ? 470 : min(640, max(560, (width * 0.9).rounded()))
+    }
+
     /// - Parameters:
     ///   - screen: the whole screen.
     ///   - trailingStrip: the system strip down one side (the closed Duo's), to keep clear of.
@@ -49,6 +58,7 @@ struct CardTableLayout: Equatable {
     init(screen: CGSize, trailingStrip: CGFloat, safeTop: CGFloat, bottomControls: CGFloat, wordsBottom: CGFloat) {
         self.screen = screen
         self.safeTop = safeTop
+        self.bottomControls = bottomControls
         let width = screen.width - trailingStrip
         let height = screen.height
         self.width = width
@@ -65,7 +75,7 @@ struct CardTableLayout: Equatable {
         // when there's room; at the largest text sizes the words get their own glass instead.)
         let laidReach: CGFloat = 1.012 * (512 + 1392) / 1200
         let shutRoom = height - safeTop - bottom - 88
-        var cardWidth = min(width - side * 2, width < 560 ? 470 : 560)
+        var cardWidth = min(width - side * 2, Self.cardCap(width: width))
         cardWidth = max(0, min(cardWidth, room / laidReach, shutRoom / (1.012 * 1392 / 1200)))
         var peek = room - cardWidth * 1.2
         let minPeek = cardWidth * 0.13
@@ -101,7 +111,8 @@ enum CardTableFold: Equatable {
     case single
     /// Open sideways: the hinge runs down the screen, at this x. Half closed is `halfClosed`.
     case sideways(hingeX: CGFloat, halfClosed: Bool)
-    /// Upright: the hinge runs across the screen, at this y.
+    /// Upright: the hinge runs across the screen, at this y. Only half closed (tabletop): flat, the fold reader says
+    /// `single` (plan 6.4).
     case upright(hingeY: CGFloat, halfClosed: Bool)
 
     var isSpread: Bool {
@@ -115,16 +126,18 @@ enum CardTableFold: Equatable {
         }
     }
 
-    /// The two pages and the flap above them, for this fold on a screen this wide.
-    func pages(screen: CGSize) -> CardTablePages? {
+    /// The two pages and the flap above them, for this fold on a screen this wide. `bottomRoom`: when a button can
+    /// show under the open card, the pages end this far above the bottom (the buttons start 12 pt below the paper).
+    func pages(screen: CGSize, bottomRoom: CGFloat? = nil) -> CardTablePages? {
         switch self {
         case .single:
             return nil
         case let .sideways(hingeX, _):
             // Each page is as big as the whole card on an iPhone, from just under the top.
-            let width: CGFloat = 391
+            var width: CGFloat = 391
+            let top = min(100, max(0, screen.height - width * 1.2 - 100))
+            if let bottomRoom { width = min(width, max(200, (screen.height - top - bottomRoom) / 1.2)) }
             let height = width * 1.2
-            let top = min(100, max(0, screen.height - height - 100))
             return CardTablePages(
                 pictureFrame: CGRect(x: hingeX - width, y: top, width: width, height: height),
                 noteFrame: CGRect(x: hingeX, y: top, width: width, height: height),
@@ -134,10 +147,13 @@ enum CardTableFold: Equatable {
                 flapTop: 9
             )
         case let .upright(hingeY, _):
-            // Each page near the hinge, about 366 wide, in the middle of the screen.
-            let width: CGFloat = 366
+            // Half closed (tabletop; flat it's one card): each page about 366 wide in the middle of the screen, the
+            // picture standing on the top half and the note lying on the bottom one, meeting at the hinge with no gap
+            // so it reads as one folded card; the crease is shaded (plan 6.5).
+            let gap: CGFloat = 0
+            var width: CGFloat = 366
+            if let bottomRoom { width = min(width, max(200, (screen.height - hingeY - gap - bottomRoom) / 1.2)) }
             let height = width * 1.2
-            let gap: CGFloat = 8.5
             let x = (screen.width - width) / 2
             return CardTablePages(
                 pictureFrame: CGRect(x: x, y: hingeY - gap - height, width: width, height: height),

@@ -17,6 +17,7 @@
 //   - propertyRecordsDaily       → daily at 00:20 UTC (county lookups, vendor calls)
 //   - recomputeUtilityScores     → every 15 minutes (Social Layer)
 //   - monthlyReceiptJob          → 1st of month at 9:00 AM PT (17:00 UTC)
+//   - propertyTaxWatch           → Fridays at 02:20 UTC (the Home Money Check's yearly watch)
 //   - authRegistryPrune          → hourly at :50 (persistent login)
 //   - nearbyNudges               → hourly at :27 (AI assistant phase 2)
 //   - assistantPickupRules       → hourly at :12 (AI assistant phase 3 standing rules)
@@ -96,6 +97,7 @@ const mailDeletedPurge = require('./mailDeletedPurge');
 // Home intelligence jobs
 const nfipTractWarm = require('./nfipTractWarm');
 const rateWatchEvaluate = require('./rateWatchEvaluate');
+const propertyTaxWatch = require('./propertyTaxWatch');
 // Monthly receipt
 const monthlyReceiptJob = require('./monthlyReceiptJob');
 // Neighborhood density
@@ -713,6 +715,14 @@ function startJobs(options = {}) {
   // so one weekly evaluation sees each fresh reading. Alerts are
   // idempotent via claim-before-send on the watch row.
   scheduleCron('0 2 * * 5', wrapJob('rateWatchEvaluate', rateWatchEvaluate), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Property tax watch (the Home Money Check's yearly watch) ───
+  // Runs Fridays at 02:20 UTC, after the rate watch. One notice for each
+  // year of county values, kept to one by the notification's own key.
+  scheduleCron('20 2 * * 5', wrapJob('propertyTaxWatch', propertyTaxWatch), {
     scheduled: true,
     timezone: 'UTC',
   });

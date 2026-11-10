@@ -13,7 +13,8 @@ import SwiftUI
 /// A finger on the table.
 struct CardTableDrag {
     enum Mode {
-        case envelope, pull, turn, tilt, none
+        /// `pan`: moving around the enlarged card; `pinch`: a second finger came, so this one does nothing.
+        case envelope, pull, turn, tilt, pan, pinch, none
     }
 
     let startX: CGFloat
@@ -31,12 +32,17 @@ struct CardTableDrag {
     let envelopeAtStart: Double
     let pullAtStart: Double
     let cardAtStart: Double
+    var zoomOffsetAtStart: CGSize = .zero
     var holdTimer: Task<Void, Never>?
 }
 
 extension CardTableModel {
     /// The finger came down or moved, in the table's coordinates.
     func fingerMoved(to point: CGPoint, layout: CardTableLayout) {
+        if sending != nil {
+            sendingFingerMoved(to: point, layout: layout)
+            return
+        }
         let now = CACurrentMediaTime()
         lastTouch = now
         guard var finger = drag else {
@@ -64,7 +70,13 @@ extension CardTableModel {
                     finger.mode = horizontal && step == .back ? .envelope : CardTableDrag.Mode.none
                 }
             case .out:
-                finger.mode = fold.isSpread ? .tilt : (horizontal ? .turn : .tilt)
+                // Enlarged, a finger moves around the card instead of turning it (plan 6.1).
+                if isZoomed {
+                    finger.mode = .pan
+                    finger.zoomOffsetAtStart = zoomOffset
+                } else {
+                    finger.mode = fold.isSpread ? .tilt : (horizontal ? .turn : .tilt)
+                }
             case .pulling:
                 finger.mode = CardTableDrag.Mode.none
             }
@@ -102,6 +114,12 @@ extension CardTableModel {
 
     /// What the finger is doing to the mail right now.
     private func follow(_ finger: CardTableDrag, to point: CGPoint, layout: CardTableLayout) {
+        // Moving around an enlarged card is the finger's own movement, so it follows even with Reduce Motion.
+        if finger.mode == .pan {
+            let moved = CGSize(width: point.x - finger.modeStartX, height: point.y - finger.modeStartY)
+            pan(from: finger.zoomOffsetAtStart, by: moved, layout: layout)
+            return
+        }
         // With Reduce Motion nothing follows the finger: on lifting it, a swipe does what the button does.
         guard !reduceMotion else { return }
         switch finger.mode {
@@ -126,20 +144,24 @@ extension CardTableModel {
         case .tilt:
             springs.lightX.t = min(1, max(-1, point.x / layout.screen.width * 2 - 1)) * 1.1
             springs.lightY.t = min(1, max(-1, point.y / layout.screen.height * 2 - 1)) * 1.1
-        case .none?, nil:
+        case .pan, .pinch, .none?, nil:
             break
         }
     }
 
     /// The finger lifted: a tap, or where the flick sends the mail.
     func fingerLifted(at point: CGPoint, layout: CardTableLayout, isOnCard: Bool) {
+        if sending != nil {
+            sendingFingerLifted(at: point, layout: layout)
+            return
+        }
         guard let finger = drag else { return }
         drag = nil
         finger.holdTimer?.cancel()
         let now = CACurrentMediaTime()
         lastTouch = now
         if finger.mode == nil, now - finger.startTime < 0.32 {
-            tap(isOnCard: isOnCard)
+            tap(isOnCard: isOnCard, at: point, layout: layout)
             return
         }
         if reduceMotion {
@@ -150,7 +172,7 @@ extension CardTableModel {
         case .envelope: settleEnvelope(finger, layout: layout)
         case .pull: settlePull(finger, layout: layout)
         case .turn: settleCard(finger, layout: layout)
-        case .tilt, .none?, nil: break
+        case .tilt, .pan, .pinch, .none?, nil: break
         }
         wake()
     }
@@ -218,12 +240,12 @@ extension CardTableModel {
             if content.sealed { resist() } else { primary() }
         case .turn:
             turnCard()
-        case .tilt, .none?, nil:
+        case .tilt, .pan, .pinch, .none?, nil:
             break
         }
     }
 
-    private func tap(isOnCard: Bool) {
+    private func tap(isOnCard: Bool, at point: CGPoint, layout: CardTableLayout) {
         switch step {
         case .front, .back:
             primary()
@@ -233,7 +255,7 @@ extension CardTableModel {
             break
         case .out:
             if isOnCard, !fold.isSpread {
-                turnCard()
+                tapCard(at: point, layout: layout)
             } else {
                 controlsHidden.toggle()
             }

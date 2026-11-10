@@ -141,6 +141,9 @@ public struct HolidayCardDesign: Decodable, Sendable, Hashable, Identifiable {
     /// Its public page's name, and the colour of its table (`card_table`); older servers don't send them.
     public let slug: String?
     public let table: String?
+    /// A Christmas with Jesus Christ picture's whole verse, in the KJV words its caption names ("For unto us a child
+    /// is born…"); nil for every other picture and from older servers (`card_table`, plan 6.2).
+    public let verse: String?
 }
 
 /// A collection of the season's pictures ("Christmas with Friends"): who
@@ -563,9 +566,12 @@ public struct MailCard: Decodable, Sendable, Hashable {
     /// Its public page's name, and the colour of its table (`card_table`).
     public let slug: String?
     public let table: String?
+    /// A Christmas with Jesus Christ picture's whole verse ("Read the verse", plan 6.2); none while it's sealed, nor
+    /// from older servers.
+    public let verse: String?
 
     private enum CodingKeys: String, CodingKey {
-        case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table
+        case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table, verse
         case sealedUntil = "sealed_until"
     }
 
@@ -583,6 +589,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         self.sealed = sealed
         slug = design.slug
         table = design.table
+        verse = sealed ? nil : design.verse
     }
 
     private init(copying card: MailCard, sealed: Bool) {
@@ -598,6 +605,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         self.sealed = sealed
         slug = card.slug
         table = card.table
+        verse = card.verse
     }
 
     /// The same card on the morning its seal lifts.
@@ -619,5 +627,6 @@ public struct MailCard: Decodable, Sendable, Hashable {
         sealed = (try? c.decodeIfPresent(Bool.self, forKey: .sealed)) ?? false
         slug = try? c.decodeIfPresent(String.self, forKey: .slug)
         table = try? c.decodeIfPresent(String.self, forKey: .table)
+        verse = try? c.decodeIfPresent(String.self, forKey: .verse)
     }
 }

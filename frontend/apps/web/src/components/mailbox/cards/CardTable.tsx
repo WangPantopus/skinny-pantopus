@@ -36,6 +36,8 @@ export type TableCard = {
   year: number;
   sealed: boolean;
   sealed_until?: string | null;
+  /** The whole verse printed on a Christmas with Jesus Christ picture: "Read the verse" (design plan 6.2). */
+  verse?: string | null;
 };
 
 export type TableMenuItem = { label: string; onSelect: () => void };
@@ -228,7 +230,11 @@ export default function CardTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
-  useEffect(() => { engineRef.current?.setPaused(paused); }, [paused]);
+  // Read the verse (design plan 6.2): the bookmark over the table.
+  const [verseOpen, setVerseOpen] = useState(false);
+  const verseCloseRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => { if (verseOpen) verseCloseRef.current?.focus(); }, [verseOpen]);
+  useEffect(() => { engineRef.current?.setPaused(paused || verseOpen); }, [paused, verseOpen]);
 
   // "Open it again".
   const playedRef = useRef(replay);
@@ -258,7 +264,14 @@ export default function CardTable({
       const active = document.activeElement;
       const here = !active || active === document.body || Boolean(stage?.contains(active));
       if (!here) return;
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && verseOpen) {
+        event.preventDefault();
+        setVerseOpen(false);
+      } else if (event.key === 'Escape' && ui.enlarged) {
+        // An enlarged card comes back to its size first.
+        event.preventDefault();
+        engineRef.current?.resetZoom();
+      } else if (event.key === 'Escape') {
         event.preventDefault();
         if (menuOpen) { setMenuOpen(false); moreRef.current?.focus(); } else onClose();
       } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -280,7 +293,7 @@ export default function CardTable({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [mounted, paused, menuOpen, onClose, ui.step]);
+  }, [mounted, paused, menuOpen, onClose, ui.step, ui.enlarged, verseOpen]);
 
   // Focus comes to the table as it opens, and goes back where it was when it closes.
   useEffect(() => {
@@ -331,6 +344,11 @@ export default function CardTable({
     if (!turnedOnce) hint = 'or swipe it';
     else if (!heldOnce && typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches) hint = 'press and hold, then move your finger: the light moves';
   }
+  // Enlarged (design plan 6.1): how to bring it back. A verse card on the table offers its verse in place of the hint.
+  if (!sendMoment && step === 'out' && ui.enlarged) {
+    hint = typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches ? 'double-tap to bring it back' : 'double-click to bring it back';
+  }
+  const readVerse = !sendMoment && !sealed && step === 'out' && !ui.enlarged && Boolean(card.verse);
   const showTopRight = !sendMoment && (step === 'out' || (sealed && (step === 'back' || step === 'front')));
   // The button is there only when there's something to press: never while things move by themselves.
   const sendButton = !sendMoment || send === 'ready' || send === 'in' || send === 'seal';
@@ -475,6 +493,23 @@ export default function CardTable({
           ) : null}
           <div className={`${styles.words} ${words && !toast ? '' : styles.hidden}`} data-el="words" aria-live="polite">{words}</div>
           <div className={`${styles.toast} ${toast ? styles.toastOn : ''}`} role="status">{toast}</div>
+          {verseOpen && card.verse ? (
+            <div className={styles.bookmarkShade} data-ui onClick={() => setVerseOpen(false)}>
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="cardTableVerseRef"
+                className={styles.bookmark}
+                data-testid="cardTableVerse"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <span className={styles.ribbon} aria-hidden="true" />
+                <p className={styles.bookmarkVerse}>{card.verse}</p>
+                <p id="cardTableVerseRef" className={styles.bookmarkRef}>{card.caption}</p>
+                <button ref={verseCloseRef} type="button" className={styles.bookmarkClose} data-testid="cardTableVerseClose" onClick={() => setVerseOpen(false)}>Close</button>
+              </section>
+            </div>
+          ) : null}
           <div className={styles.bottom} data-el="bottom">
             {sendMoment && send === 'gone' ? <div className={styles.gone} data-ui data-testid="cardTableGone">{sendMoment.gone}</div> : null}
             <div className={`${styles.act} ${controlsHidden || (sendMoment && send === 'gone') ? styles.hidden : ''}`} data-el="act" style={sendMoment && send === 'gone' ? { display: 'none' } : undefined}>
@@ -489,7 +524,17 @@ export default function CardTable({
               >
                 {primary || 'Turn it over'}
               </button>
-              <div className={styles.hint}>{hint}</div>
+              {/* A verse card: the hint becomes "Read the verse" once the card lies on the table (design plan 6.2). */}
+              {card.verse && !sendMoment ? (
+                // One slot for both, so the card doesn't move when one replaces the other.
+                <div className={styles.hintSlot}>
+                  {readVerse ? (
+                    <button type="button" className={styles.verseLink} data-ui data-testid="cardTableReadVerse" onClick={() => { setMenuOpen(false); setVerseOpen(true); }}>
+                      Read the verse
+                    </button>
+                  ) : <div className={styles.hint}>{hint}</div>}
+                </div>
+              ) : <div className={styles.hint}>{hint}</div>}
               {/* Its room is kept while it can be offered, so the card never moves when it shows. */}
               {sendBack ? (
                 <button

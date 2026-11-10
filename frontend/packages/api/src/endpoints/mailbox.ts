@@ -627,6 +627,8 @@ export interface HolidayCardDesign {
   slug?: string | null;
   /** The colour of the cloth it lies on (launch key card_table). */
   table?: string | null;
+  /** The whole verse printed on a Christmas with Jesus Christ picture ("Read the verse"); only those nine have it. */
+  verse?: string | null;
 }
 
 /** A collection "Pick a card" shows: its name, who it's for, and its pictures in grid order. */
@@ -845,7 +847,9 @@ export interface SentPiece {
     height?: number | null;
     /** Its public page, and the colour of the cloth it lies on (launch key card_table). */
     slug?: string | null;
-    table?: string | null };
+    table?: string | null;
+    /** The whole verse on a Christmas with Jesus Christ picture ("Read the verse"); not while it's sealed. */
+    verse?: string | null };
 }
 
 /** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */

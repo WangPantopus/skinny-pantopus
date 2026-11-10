@@ -26,6 +26,8 @@ struct CardTableControls: View {
     /// Top and sides of the safe area, and how much the words and buttons take (measured by the screen).
     let safeArea: EdgeInsets
     let contentWidth: CGFloat
+    /// The room the words at the top have above the buttons; at the largest sizes longer words scroll in it.
+    var wordsMaxHeight: CGFloat = .infinity
     /// What ✕ says it does.
     let closeLabel: String
     let shareLabel: String
@@ -49,7 +51,15 @@ struct CardTableControls: View {
                 menu
             }
             toast
+            if model.showsVerse, let verse = model.content.verse {
+                CardTableVerseBookmark(verse: verse, reference: model.content.caption, bottomInset: safeArea.bottom) {
+                    model.showsVerse = false
+                }
+                .transition(.opacity)
+                .zIndex(40)
+            }
         }
+        .animation(.easeInOut(duration: 0.3), value: model.showsVerse)
         .environment(\.colorScheme, .dark)
     }
 
@@ -110,29 +120,43 @@ struct CardTableControls: View {
     // MARK: Words
 
     private var words: some View {
+        ViewThatFits(in: .vertical) {
+            wordsText
+            ScrollView { wordsText }
+        }
+        .frame(maxHeight: max(60, wordsMaxHeight), alignment: .top)
+        .padding(.leading, 24)
+        .padding(.top, safeArea.top + 54)
+        .opacity(model.wordsShow ? 1 : 0)
+        .animation(.easeInOut(duration: 0.4), value: model.wordsShow)
+        // Only scrolling needs the finger (at the largest sizes); otherwise it passes through to the mail.
+        .allowsHitTesting(dynamicTypeSize.isAccessibilitySize && model.wordsShow)
+        .accessibilityHidden(model.words == nil)
+        .accessibilityIdentifier("cardTableWords")
+    }
+
+    private var wordsText: some View {
         Text(model.words ?? " ")
             .font(.system(size: wordsSize, design: .serif).italic())
             .lineSpacing(wordsSize * 0.3 * 0.5)
             .multilineTextAlignment(.center)
             .foregroundStyle(MailPaper.tableCreamSoft)
             .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 1)
-            // At the largest sizes it can run over the mail, so it gets its own glass, as the hint does.
-            .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 12 : 0)
-            .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 6 : 0)
+            // At the largest sizes it can run over the mail, so it gets its own glass, as the hint does; so does
+            // sealing's, which shows over the open flap.
+            .padding(.horizontal, wordsOnGlass ? 12 : 0)
+            .padding(.vertical, wordsOnGlass ? 6 : 0)
             .background {
-                if dynamicTypeSize.isAccessibilitySize, model.words != nil {
+                if wordsOnGlass, model.words != nil {
                     CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
             .frame(width: max(0, contentWidth - 48))
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.leading, 24)
-            .padding(.top, safeArea.top + 54)
-            .opacity(model.wordsShow ? 1 : 0)
-            .animation(.easeInOut(duration: 0.4), value: model.wordsShow)
-            .allowsHitTesting(false)
-            .accessibilityHidden(model.words == nil)
-            .accessibilityIdentifier("cardTableWords")
+    }
+
+    private var wordsOnGlass: Bool {
+        dynamicTypeSize.isAccessibilitySize || model.sending != nil
     }
 
     private var toast: some View {
@@ -160,7 +184,12 @@ struct CardTableControls: View {
             title: model.primaryTitle,
             hint: model.hint,
             primarySize: primarySize,
-            hintSize: hintSize
+            hintSize: hintSize,
+            secondaries: model.secondaries,
+            reservesSecondary: model.reservesSecondary,
+            hintAction: model.readsVerse ? { model.showsVerse = true } : nil,
+            // Over an enlarged card the hint needs its glass to read.
+            hintOnGlass: model.isZoomed
         ) { model.primary() }
             .frame(width: max(0, contentWidth - 32))
             .padding(.leading, 16)
@@ -178,6 +207,13 @@ struct CardTableAct: View {
     let hint: String
     let primarySize: CGFloat
     let hintSize: CGFloat
+    /// The quiet buttons under the main one (Send {first name} a card; Take it back · Share this card).
+    var secondaries: [CardTableMenuItem] = []
+    /// Keep its room while it's hidden, so the card doesn't move when it comes.
+    var reservesSecondary = false
+    /// The hint is a link ("Read the verse", plan 6.2).
+    var hintAction: (() -> Void)?
+    var hintOnGlass = false
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -199,22 +235,76 @@ struct CardTableAct: View {
             .disabled(title == nil)
             .accessibilityHidden(title == nil)
             .accessibilityIdentifier("cardTablePrimary")
-            Text(hint.isEmpty ? " " : hint)
-                .font(.system(size: hintSize))
-                .multilineTextAlignment(.center)
-                // White at 70%, so it reads on every cloth (plan 1.8).
-                .foregroundStyle(dynamicTypeSize.isAccessibilitySize ? MailPaper.tableCream : Color.white.opacity(0.7))
-                // At the largest sizes it runs over the mail, so it gets its own glass.
-                .padding(.horizontal, dynamicTypeSize.isAccessibilitySize && !hint.isEmpty ? 12 : 0)
-                .background {
-                    if dynamicTypeSize.isAccessibilitySize, !hint.isEmpty {
-                        CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
+            if let hintAction {
+                // The link keeps the hint's height, so nothing moves; its finger area reaches 12 pt further.
+                Button(action: hintAction) {
+                    hintText
+                        .underline(color: MailPaper.tableCream.opacity(0.45))
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -12)
                 }
-                .accessibilityHidden(hint.isEmpty)
-                .accessibilityIdentifier("cardTableHint")
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("cardTableReadVerse")
+            } else {
+                hintText
+                    .accessibilityHidden(hint.isEmpty)
+                    .accessibilityIdentifier("cardTableHint")
+            }
+            // The quiet buttons sit under the hint, so the hint stays with the main button.
+            if !secondaries.isEmpty || reservesSecondary {
+                // Side by side, or one under the other when they don't fit (the largest text).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 4) { quietButtons }
+                    VStack(spacing: 0) { quietButtons }
+                }
+                .frame(minHeight: 44)
+                .opacity(secondaries.isEmpty ? 0 : 1)
+                .animation(.easeInOut(duration: 0.3), value: secondaries.isEmpty)
+            }
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+private extension CardTableAct {
+    var onGlass: Bool {
+        dynamicTypeSize.isAccessibilitySize || hintOnGlass
+    }
+
+    var hintText: some View {
+        Text(hint.isEmpty ? " " : hint)
+            .font(.system(size: hintSize))
+            .multilineTextAlignment(.center)
+            // White at 70%, so it reads on every cloth (plan 1.8); a link in cream.
+            .foregroundStyle(
+                dynamicTypeSize.isAccessibilitySize || hintAction != nil ? MailPaper.tableCream : Color.white.opacity(0.7)
+            )
+            // At the largest sizes it runs over the mail, so it gets its own glass.
+            .padding(.horizontal, onGlass && !hint.isEmpty ? 12 : 0)
+            .padding(.vertical, hintOnGlass && !hint.isEmpty ? 4 : 0)
+            .background {
+                if onGlass, !hint.isEmpty {
+                    CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+    }
+
+    var quietButtons: some View {
+        ForEach(secondaries) { item in
+            Button(action: item.action) {
+                Text(item.title)
+                    .font(.system(size: primarySize, weight: .medium))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(MailPaper.tableCream)
+                    .underline(color: MailPaper.tableCream.opacity(0.4))
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(item.identifier)
+        }
     }
 }
 

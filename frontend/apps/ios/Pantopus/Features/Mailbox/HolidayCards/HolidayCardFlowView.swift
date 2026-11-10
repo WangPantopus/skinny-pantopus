@@ -17,7 +17,10 @@ struct HolidayCardFlowView: View {
     @State private var viewModel: HolidayCardFlowViewModel
     /// "See it in Sent" on a card just sent: its id; "See them in Sent" on a list: nil (Sent itself).
     private let onSeeInSent: ((String?) -> Void)?
+    /// Back out of the flow (before anything is sent).
     private let onClose: () -> Void
+    /// Done once it's sent ("Back to your mail", step 5's Done); `onClose` when nil.
+    private let onDone: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var phase
     private static let top = "sendCardTop"
@@ -33,10 +36,20 @@ struct HolidayCardFlowView: View {
         return "\(viewModel.step):\(sent):\(viewModel.listTakenBack.count):\(viewModel.backNote ?? "")"
     }
 
-    init(viewModel: HolidayCardFlowViewModel, onSeeInSent: ((String?) -> Void)? = nil, onClose: @escaping () -> Void) {
+    init(
+        viewModel: HolidayCardFlowViewModel,
+        onSeeInSent: ((String?) -> Void)? = nil,
+        onDone: (() -> Void)? = nil,
+        onClose: @escaping () -> Void
+    ) {
         _viewModel = State(initialValue: viewModel)
         self.onSeeInSent = onSeeInSent
+        self.onDone = onDone
         self.onClose = onClose
+    }
+
+    private var done: () -> Void {
+        onDone ?? onClose
     }
 
     var body: some View {
@@ -61,6 +74,11 @@ struct HolidayCardFlowView: View {
                 .scrollDismissesKeyboard(.interactively)
                 // Each step starts at its top (Look it over is long).
                 .onChange(of: viewModel.step) { scroller.scrollTo(Self.top, anchor: .top) }
+                // Back from the card rack on another card than the one tapped: the grid shows it, ticked.
+                .onChange(of: viewModel.largeDesign) { old, new in
+                    guard new == nil, viewModel.step == .pick, let id = viewModel.designId, id != old?.id else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) { scroller.scrollTo(id, anchor: .center) }
+                }
             }
             .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
                 footer
@@ -81,12 +99,18 @@ struct HolidayCardFlowView: View {
             if postageOn { await viewModel.stamps.refresh() }
         }
         .onChange(of: phase) { if phase == .active, postageOn { Task { await viewModel.stamps.recover() } } }
-        .sheet(isPresented: $viewModel.showsStampBooks) {
+        // While the sealing table is up, it shows the stamp books itself, over the table.
+        .sheet(isPresented: Binding(
+            get: { viewModel.showsStampBooks && !viewModel.sealsAtTable },
+            set: { viewModel.showsStampBooks = $0 }
+        )) {
             StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Seal it by hand: the table over the flow, from Look it over until Done.
+        .modifier(CardTableSendCover(viewModel: viewModel, onDone: done))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sendCard")
     }
@@ -190,7 +214,7 @@ struct HolidayCardFlowView: View {
                 viewModel: viewModel,
                 results: results,
                 cards: cards,
-                onDone: onClose,
+                onDone: done,
                 onSeeInSent: onSeeInSent.map { open in { open(nil) } }
             )
         } else if viewModel.step == .sent, let sent = viewModel.sent {
@@ -199,7 +223,7 @@ struct HolidayCardFlowView: View {
                 card: sent,
                 cards: cards,
                 title: sent.byLink ? "Your card" : "On its way",
-                onDone: onClose,
+                onDone: done,
                 onSeeInSent: onSeeInSent.map { open in { open(sent.id) } }
             )
         } else if let today = viewModel.today {

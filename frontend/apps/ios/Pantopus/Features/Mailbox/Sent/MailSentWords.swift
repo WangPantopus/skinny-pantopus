@@ -173,7 +173,8 @@ extension MailPieceModel {
             paper: piece.card.paper ?? "",
             height: piece.card.height,
             slug: piece.card.slug,
-            table: piece.card.table
+            table: piece.card.table,
+            verse: nil
         )
         return MailPieceModel(
             id: piece.id,
@@ -195,7 +196,8 @@ extension MailPieceModel {
             peekLine: nil,
             meta: MailPieceMeta(parts: [], due: nil, dueIsSettled: false),
             card: piece.isLetter ? nil : MailCard(design: design, year: piece.card.year, sealed: piece.sealed),
-            isPostmarked: posted != nil
+            isPostmarked: posted != nil,
+            cardIsWithThem: !piece.isLetter && !piece.sealed && (piece.status == .delivered || piece.status == .claimed)
         )
     }
 }

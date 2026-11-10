@@ -32,6 +32,7 @@ import CardLinkActions from './CardLinkActions';
 import LookItOver from './LookItOver';
 import CardTable, { type SendMoment, type TableCard } from './CardTable';
 import CardShareSheet from './CardShareSheet';
+import CardRack from './CardRack';
 import { askTakeBack } from './takeBack';
 import { chosenPersonFor } from './sendOneBack';
 import { cardPicture, clockTime, firstNameOf, SERIF, shortDay, WAX } from './cardArt';
@@ -415,6 +416,8 @@ function PickStep({
   onNext: () => void;
 }) {
   const [large, setLarge] = useState<HolidayCardDesign | null>(null);
+  // The card rack (launch key card_table, design plan Part 5): the picture it's open at.
+  const [rack, setRack] = useState<string | null>(null);
   const byId = useMemo(() => new Map(designs.map((design) => [design.id, design])), [designs]);
   const shelves = useMemo(() => collections.filter((c) => c.designs.some((id) => byId.has(id))), [collections, byId]);
   // The collection that holds the chosen card (coming back from step 3), else the first. Switching keeps the card.
@@ -473,7 +476,7 @@ function PickStep({
             aria-checked={selected}
             aria-label={design.caption}
             data-testid={`sendCardDesign.${design.id}`}
-            onClick={() => (selected ? setLarge(design) : onChoose(design.id))}
+            onClick={() => (launchFeatures.cardTable ? setRack(design.id) : selected ? setLarge(design) : onChoose(design.id))}
             className="group flex flex-col items-center gap-1.5 rounded-lg p-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
           >
             <span
@@ -551,7 +554,7 @@ function PickStep({
                 <button
                   type="button"
                   data-testid="sendCardSeeLarger"
-                  onClick={() => setLarge(picked)}
+                  onClick={() => setRack(picked.id)}
                   className="flex min-h-[44px] flex-shrink-0 items-center rounded-xl border border-[#d6cbb6] bg-[#fffdf8] px-3.5 text-[14px] font-semibold text-[#374151] transition hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
                 >
                   See it larger
@@ -574,6 +577,16 @@ function PickStep({
         </div>
       )}
 
+      {rack ? (
+        <CardRack
+          designs={grid}
+          collectionName={shown?.name ?? null}
+          start={rack}
+          year={year}
+          onClose={(lastSeen) => { onChoose(lastSeen); setRack(null); }}
+          onWrite={(id) => { onChoose(id); setRack(null); onNext(); }}
+        />
+      ) : null}
       {large ? (
         <div role="dialog" aria-modal="true" aria-label={large.caption} data-testid="sendCardLarge" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4" onClick={() => setLarge(null)}>
           <div style={{ width: 'min(420px, calc((100vh - 120px) * 0.72), 100%)' }} onClick={(event) => event.stopPropagation()}>

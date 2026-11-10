@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.SentCard
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -292,7 +293,7 @@ object MailSentWords {
     ): MailSentRow =
         MailSentRow(
             card = card,
-            envelope = envelope(card),
+            envelope = envelope(card).takenOutOnceTheyHaveIt(card),
             title = title(card),
             line = line(card, zone),
             day = HolidayCardTimes.parse(card.sentAt)?.atZone(zone)?.toLocalDate(),
@@ -356,6 +357,18 @@ object MailSentWords {
             ChronoUnit.DAYS.between(day, today) in 2..6 -> day.format(weekday)
             else -> day.format(longDay)
         }
+
+    /**
+     * In the list, a card the other person has (delivered, or a link or email they claimed, not sealed) is drawn taken
+     * out of its envelope, "To {first name}", as their Mailbox shows it opened (plan Part 4, launch key `card_table`).
+     */
+    private fun MailPieceModel.takenOutOnceTheyHaveIt(card: SentCard): MailPieceModel {
+        val face = this.card ?: return this
+        val theyHaveIt = !card.sealed && (card.status == "delivered" || card.status == "claimed")
+        if (!LaunchFeatures.cardTable || !theyHaveIt) return this
+        val first = card.toName?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: "them"
+        return copy(opened = true, card = face.copy(caption = card.card?.caption, paper = card.card?.paper, sentTo = first))
+    }
 
     /**
      * The envelope as they got it: their name only (never an address), whole (never torn or opened), postmarked by
