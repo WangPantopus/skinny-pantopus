@@ -132,4 +132,16 @@ async function isAtHome(userId, latitude, longitude) {
   });
 }
 
-module.exports = { labelsAt, pickedLabel, isAtHome, FALLBACK_LABEL, AT_HOME_M };
+/**
+ * What kind of name `label` is among a point's labels: 'place' (a venue), 'street', 'town', or 'none' when nobody
+ * could name the spot. The push says "At" a place, "On" a street and "In" a town.
+ */
+function labelKind(labels, label) {
+  if (!label || label === FALLBACK_LABEL) return 'none';
+  const key = (labels?.places || []).find((place) => place.label === label)?.key;
+  if (key === 'street' || key === 'town') return key;
+  if (key === 'auto') return 'none';
+  return label === labels?.area_label ? 'town' : 'place';
+}
+
+module.exports = { labelsAt, pickedLabel, labelKind, isAtHome, FALLBACK_LABEL, AT_HOME_M };

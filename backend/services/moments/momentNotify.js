@@ -3,10 +3,12 @@
 // bell after the Moment ends. It says who and where in the words everyone reads on the ring (a place, a street's name
 // or a town, never an address), and carries no picture, caption or card text.
 //
-// Who gets it: an accepted connection with Moments on, no block either way, who hasn't muted the author (everywhere or
-// in Moments), with push on, the "Moments from your connections" switch on
-// (UserNotificationPreferences.moments_enabled) and outside their quiet hours right now. A push that can't go now is
-// dropped, not held: by the time quiet hours end the Moment may be over.
+// Who gets it: an accepted connection with Moments on and an app that has them (it asked for Moments in the last 30
+// days: UserFeedPreference.moments_app_seen_at, so nobody on an older app gets a push that opens nothing), no block
+// either way, who hasn't muted the author (everywhere or in Moments), with push on, the "Moments from your
+// connections" switch on (UserNotificationPreferences.moments_enabled) and outside their quiet hours right now: their
+// own when they set them, else only 10 PM to 7 AM (evenings are when Moments happen; nobody gets this at 2 AM). A push
+// that can't go now is dropped, not held: by the time quiet hours end the Moment may be over.
 //
 // Not too many: one author notifies at most once in 6 hours (three Moments in an hour are one push), and a person gets
 // at most 5 of these in 24 hours. No table of its own: the Moment that notified carries
@@ -34,6 +36,30 @@ const MAX_RECIPIENTS = 5000;
 // The notifying Moments of the last day the cap looks at; past this many it counts the newest.
 const MAX_RECENT = 2000;
 const SENT_AT = 'post_metadata->moment->notify->>sent_at';
+// Quiet for this push when the person set no quiet hours of their own: 10 PM to 7 AM, in minutes of their day.
+const NIGHT = { start: 22 * 60, end: 7 * 60 };
+// An app with Moments asked for them this recently; and how often that is written per person.
+const APP_SEEN_MS = 30 * DAY_MS;
+const APP_SEEN_WRITE_MS = DAY_MS;
+const appSeen = new Map();
+
+/**
+ * Remembers that this person's app has Moments (it called a Moments route): UserFeedPreference.moments_app_seen_at,
+ * written at most once a day per person from each server process. On its own; a failed write is tried again later.
+ */
+function rememberApp(userId) {
+  const now = Date.now();
+  if (!userId || now - (appSeen.get(userId) || 0) < APP_SEEN_WRITE_MS) return;
+  appSeen.set(userId, now);
+  if (appSeen.size > 50000) appSeen.delete(appSeen.keys().next().value);
+  Promise.resolve(supabaseAdmin.from('UserFeedPreference')
+    .upsert({ user_id: userId, moments_app_seen_at: new Date(now).toISOString() }, { onConflict: 'user_id' }))
+    .then(({ error }) => { if (error) throw new Error(error.message); })
+    .catch((error) => {
+      appSeen.delete(userId);
+      logger.warn('moments.app_seen_failed', { userId, error: error.message });
+    });
+}
 
 function chunks(list, size = IDS_PER_READ) {
   const out = [];
@@ -123,7 +149,8 @@ async function recipientsOf(row, authorId) {
   const { getFlag, _flagAllowsUser } = require('../featureFlagService');
   const { blockedUserIds } = require('../blockService');
   const heldPushes = require('../heldPushes');
-  const skipped = { blocked: [], muted: [], moments_off: [], push_off: [], switch_off: [], quiet_hours: [], daily_cap: [] };
+  const { inQuietHours } = require('../plans/planNotifications');
+  const skipped = { blocked: [], muted: [], moments_off: [], no_moments_app: [], push_off: [], switch_off: [], quiet_hours: [], daily_cap: [] };
   let left = (await connectionIds(authorId)).slice(0, MAX_RECIPIENTS);
   const connections = left.length;
   const drop = (reason, isOut) => {
@@ -136,7 +163,7 @@ async function recipientsOf(row, authorId) {
   const blocked = new Set([...await blockedUserIds(authorId)].map(String));
   drop('blocked', (id) => blocked.has(id));
 
-  const [flag, people, mutes, global, own] = await Promise.all([
+  const [flag, people, mutes, global, own, apps] = await Promise.all([
     getFlag('moments'),
     Promise.all(chunks(left).map((ids) => rowsOf(supabaseAdmin.from('User').select('id, role').in('id', ids), 'people'))),
     Promise.all(chunks(left).map((ids) => rowsOf(supabaseAdmin.from('PostMute').select('user_id')
@@ -144,12 +171,16 @@ async function recipientsOf(row, authorId) {
     Promise.all(chunks(left).map((ids) => rowsOf(supabaseAdmin.from('MailPreferences').select('user_id, push_notifications')
       .in('user_id', ids), 'push settings'))),
     Promise.all(chunks(left).map((ids) => rowsOf(supabaseAdmin.from('UserNotificationPreferences')
-      .select('user_id, moments_enabled').in('user_id', ids), 'notification settings'))),
+      .select('user_id, moments_enabled, quiet_hours_start_local, quiet_hours_end_local').in('user_id', ids), 'notification settings'))),
+    Promise.all(chunks(left).map((ids) => rowsOf(supabaseAdmin.from('UserFeedPreference').select('user_id')
+      .in('user_id', ids).gt('moments_app_seen_at', new Date(Date.now() - APP_SEEN_MS).toISOString()), 'apps with Moments'))),
   ]);
   const muted = new Set(mutes.flat().map((mute) => String(mute.user_id)));
   drop('muted', (id) => muted.has(id));
   const roles = new Map(people.flat().map((person) => [String(person.id), person]));
   drop('moments_off', (id) => !roles.has(id) || !_flagAllowsUser(flag, roles.get(id)));
+  const hasApp = new Set(apps.flat().map((seen) => String(seen.user_id)));
+  drop('no_moments_app', (id) => !hasApp.has(id));
   // No saved row means on, for push as a whole (notificationService.pushSwitchOn) and for this switch.
   const pushOff = new Set(global.flat().filter((prefs) => prefs.push_notifications === false).map((prefs) => String(prefs.user_id)));
   drop('push_off', (id) => pushOff.has(id));
@@ -161,15 +192,20 @@ async function recipientsOf(row, authorId) {
     drop('daily_cap', (id) => capped.has(id));
   }
 
-  // Quiet hours are each person's own (else 9 PM to 8 AM), in their own time zone, or the Moment's when theirs isn't
-  // known (connections mostly live near each other). One that can't be read counts as quiet: no push rather than one
-  // at night.
+  // Quiet hours: the person's own when they set them (a start and an end that differ), else NIGHT; in their own time
+  // zone, or the Moment's when theirs isn't known (connections mostly live near each other). One that can't be read
+  // counts as quiet: no push rather than one at night.
+  const hhmm = (value) => String(value || '').slice(0, 5);
+  const setOwn = new Set(own.flat().filter((prefs) => hhmm(prefs.quiet_hours_start_local) && hhmm(prefs.quiet_hours_end_local)
+    && hhmm(prefs.quiet_hours_start_local) !== hhmm(prefs.quiet_hours_end_local)).map((prefs) => String(prefs.user_id)));
   const fallbackTz = timezoneFromCoordinates(row.latitude, row.longitude, 'UTC');
   const quiet = new Set();
   for (const ids of chunks(left, CHECKS_AT_ONCE)) {
     await Promise.all(ids.map(async (id) => {
       try {
-        if ((await heldPushes.pushWindow(id, { fallbackTz })).until) quiet.add(id);
+        // ownOnly: their own hours decide when they have some; it also answers their time zone.
+        const window = await heldPushes.pushWindow(id, { fallbackTz, ownOnly: true });
+        if (setOwn.has(id) ? window.until : inQuietHours({ tz: window.timeZone, ...NIGHT })) quiet.add(id);
       } catch (_) {
         quiet.add(id);
       }
@@ -179,13 +215,15 @@ async function recipientsOf(row, authorId) {
   return { connections, recipients: left, skipped };
 }
 
-/** The push's words for a Moment and its author (CONTRACT "Push"). */
+/** The push's words for a Moment and its author (CONTRACT "Push"): "At" a place, "On" a street, "In" a town. */
 function pushText(row, author) {
   const m = store.meta(row);
   const place = String(row.location_name || '').trim();
+  const kind = m.show_area || m.at_home ? 'town' : m.label_kind || 'place';
+  const word = { place: 'At', street: 'On', town: 'In' }[kind];
   return {
     title: `${author.first_name} added a Moment`,
-    body: place ? `${m.show_area || m.at_home ? 'In' : 'At'} ${place}` : 'Tap to watch it.',
+    body: place && word ? `${word} ${place}` : 'Tap to watch it.',
   };
 }
 
@@ -231,4 +269,4 @@ async function notifyConnections(row) {
   }
 }
 
-module.exports = { notifyConnections, pushText, AUTHOR_QUIET_MS, DAILY_CAP };
+module.exports = { notifyConnections, rememberApp, pushText, AUTHOR_QUIET_MS, DAILY_CAP };

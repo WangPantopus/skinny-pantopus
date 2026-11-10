@@ -203,9 +203,10 @@ taken. Others see only what the author chose on the Post sheet, which shows the 
   (`places` on `POST /api/moments/place-preview`: the places at or within about 100 m, then the street's name
   without a number, then the town). Posting sends back only a key from that list (`place_key`); the server works
   the list out again for the Moment's own point, and an area or at-home Moment says the town whatever was picked.
-- **The push to connections says no more than the ring:** "Priya added a Moment" / "At Esther Short Park" (an area
-  or at-home Moment: "In Vancouver, WA"), the same label everyone reads, with no picture, caption or card text
-  (`backend/services/moments/momentNotify.js`). It goes only to accepted connections who could open the Moment.
+- **The push to connections says no more than the ring:** "Priya added a Moment" / "At Esther Short Park" ("On" a
+  street's name, "In" a town; an area or at-home Moment always says the town), the same label everyone reads, with
+  no picture, caption or card text (`backend/services/moments/momentNotify.js`). It goes only to accepted
+  connections who could open the Moment and whose app has Moments.
 - **Rings group by what viewers see:** an exact pin's ring is its 0.005° cell, an area pin's ring its displayed
   point, so grouping never places an area Moment more precisely than its own point.
 - **Map queries filter on displayed points:** `GET /api/moments/map` reads stored points in a box widened by

@@ -27,6 +27,12 @@ const { REPORT_REASONS, filePostReport } = require('../services/postReportServic
 
 const router = express.Router();
 router.use(verifyToken, requireFeatureFlag('moments', { error: "Moments aren't available.", code: 'MOMENTS_UNAVAILABLE' }));
+// Only an app that has Moments asks here: remembered once a day per person, so the push about a connection's Moment
+// goes to people it can open for (services/moments/momentNotify.js). Never slows or fails the request.
+router.use((req, res, next) => {
+  momentNotify.rememberApp(req.user.id);
+  next();
+});
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // How long the upload's answer waits for the picture check; past it the answer says `checking` and the check finishes
@@ -154,6 +160,7 @@ router.post('/', createLimiter, async (req, res) => {
     ]);
     // The name the author picked for this point, worked out again here; an area or at-home Moment says the town.
     const labels = { ...found, place_label: momentPlace.pickedLabel(found, body.place_key) || found.place_label };
+    const shown = body.show_area || atHome ? labels.area_label : labels.place_label;
     const { row, created } = await store.insertMoment(store.newMomentRow({
       userId: req.user.id,
       accountType: req.user.accountType,
@@ -167,6 +174,7 @@ router.post('/', createLimiter, async (req, res) => {
       background: body.background || 'teal',
       location: body.location,
       labels,
+      labelKind: momentPlace.labelKind(found, shown),
     }), id);
     logger.info('moments.created', { momentId: row.id, kind: body.kind, hours: body.hours, audience: body.audience });
     res.status(201).json({ moment: await oneMoment(row, req.user.id) });

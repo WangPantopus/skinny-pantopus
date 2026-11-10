@@ -2,7 +2,8 @@
 // or a text card, pinned where it was posted, for 1, 6, 24 or 48 hours. Each one is a Post row with is_story = true and
 // story_expires_at, and its own details in post_metadata.moment:
 //   { v: 1, kind, hours, background, show_area, at_home, location_source,
-//     state: 'uploading' | 'checking' | 'live', media: {...} | null, check: {...} | null, purged_at }
+//     state: 'uploading' | 'checking' | 'live', media: {...} | null, check: {...} | null, purged_at,
+//     label_kind, notify: { sent_at } | { skipped } (services/moments/momentNotify.js) }
 // Its place label is location_name (what everyone reads), its audience Post.audience ('nearby' | 'connections').
 // The row is private (visibility 'private', no distribution targets, off profiles), and every other post path leaves
 // it out (feedService.onlyShownPosts, readAccess.canReadPost, profiles): this module is its only reader. Every read here
@@ -434,7 +435,7 @@ async function viewersOf(row) {
 
 /** The Post row a new Moment is stored as. */
 function newMomentRow({ userId, accountType, kind, hours, audience, showArea, atHome, caption, text, background,
-  location, labels, createdAt }) {
+  location, labels, labelKind = null, createdAt }) {
   const now = createdAt ? new Date(createdAt) : new Date();
   const live = kind === 'text';
   return {
@@ -473,6 +474,8 @@ function newMomentRow({ userId, accountType, kind, hours, audience, showArea, at
         background: kind === 'text' ? background : null,
         show_area: Boolean(showArea),
         at_home: Boolean(atHome),
+        // What the place label names ('place' | 'street' | 'town' | 'none'), for the push's "At", "On" or "In".
+        ...(labelKind ? { label_kind: labelKind } : {}),
         location_source: location.source,
         state: live ? 'live' : 'uploading',
         media: null,
