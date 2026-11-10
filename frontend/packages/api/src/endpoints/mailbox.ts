@@ -627,6 +627,8 @@ export interface HolidayCardDesign {
   slug?: string | null;
   /** The colour of the cloth it lies on (launch key card_table). */
   table?: string | null;
+  /** The whole verse printed on a Christmas with Jesus Christ picture ("Read the verse"); only those nine have it. */
+  verse?: string | null;
 }
 
 /** A collection "Pick a card" shows: its name, who it's for, and its pictures in grid order. */
