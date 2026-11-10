@@ -22,6 +22,8 @@ final class MomentsCameraController: NSObject, @unchecked Sendable {
     private let movieOutput = AVCaptureMovieFileOutput()
     private var videoInput: AVCaptureDeviceInput?
     private var photoContinuation: CheckedContinuation<UIImage?, Never>?
+    /// The finger lifted before the recording had begun: it stops as soon as it starts.
+    private var stopRequested = false
     /// A video finished: by the finger lifting, or at 30 seconds.
     var onVideo: (@MainActor (URL?) -> Void)?
 
@@ -103,6 +105,7 @@ final class MomentsCameraController: NSObject, @unchecked Sendable {
     func startVideo(flash: Bool) {
         queue.async { [self] in
             guard !movieOutput.isRecording else { return }
+            stopRequested = false
             torch(flash)
             upright(movieOutput.connection(with: .video))
             let url = FileManager.default.temporaryDirectory.appendingPathComponent("moment-\(UUID().uuidString).mov")
@@ -112,6 +115,7 @@ final class MomentsCameraController: NSObject, @unchecked Sendable {
 
     func stopVideo() {
         queue.async { [self] in
+            stopRequested = true
             if movieOutput.isRecording { movieOutput.stopRecording() }
         }
     }
@@ -139,6 +143,13 @@ extension MomentsCameraController: AVCapturePhotoCaptureDelegate, AVCaptureFileO
         queue.async { [self] in
             photoContinuation?.resume(returning: image)
             photoContinuation = nil
+        }
+    }
+
+    func fileOutput(_: AVCaptureFileOutput, didStartRecordingTo _: URL, from _: [AVCaptureConnection]) {
+        // Let go in the instant before the recording began: stop it now, not at 30 seconds.
+        queue.async { [self] in
+            if stopRequested, movieOutput.isRecording { movieOutput.stopRecording() }
         }
     }
 

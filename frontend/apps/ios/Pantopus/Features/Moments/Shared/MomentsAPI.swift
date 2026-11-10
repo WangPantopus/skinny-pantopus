@@ -112,7 +112,8 @@ enum MomentsFailure: Error, Equatable {
         case 404: return .notFound
         case 410: return .ended
         case 413, 415: return .mediaRejected
-        case 429: return .dailyLimit
+        // The 20-a-day limit comes with its code; a bare 429 is the server's rate limit.
+        case 429: return .other("That was a lot at once. Wait a minute and try again.")
         case 500...: return .offline
         default:
             // A sentence from the server reads as is; a machine word ("Forbidden") doesn't.
