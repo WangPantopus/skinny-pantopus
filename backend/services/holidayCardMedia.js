@@ -35,8 +35,9 @@ const DRAFT_MS = 72 * 60 * 60 * 1000;
 const PHOTO_QUALITY = 80;
 // A phone's 48-megapixel photo fits; anything larger is refused before it's decoded (a HEIC has its own cap).
 const MAX_INPUT_PIXELS = 64 * 1024 * 1024;
-// Voice is built in its own step (contract section 3); until then its controls stay off.
-const VOICE_SHIPPED = false;
+// Voice ships with the founder's no-converter choice (contract section 3, November 3): AAC-LC in MP4, checked by
+// services/cardVoice. Its controls follow the launch key like the photo's.
+const VOICE_SHIPPED = true;
 
 const FILE_SELECT = 'id, user_id, file_path, file_size, mime_type, file_context, is_deleted, created_at, metadata';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
