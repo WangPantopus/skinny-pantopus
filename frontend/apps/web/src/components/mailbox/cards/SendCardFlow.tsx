@@ -955,6 +955,7 @@ function ListLookStep({
   design,
   onGetStamps,
   onSealOnTable,
+  onCloth = false,
 }: {
   look: HolidayCardListPreview;
   entries: ListEntry[];
@@ -967,6 +968,8 @@ function ListLookStep({
   onGetStamps: () => void;
   /** Seal them by hand on the table (design plan Part 2): the moment plays once for the whole list. */
   onSealOnTable?: () => void;
+  /** On the card's cloth (design plan Part 9). */
+  onCloth?: boolean;
 }) {
   const byId = new Map(entries.map((entry) => [idOf(entry), entry]));
   const ready = look.recipients.filter((line) => line.status === 'ready');
@@ -976,11 +979,11 @@ function ListLookStep({
   return (
     <div data-testid="sendCardLook">
       {look.piece && first ? (
-        <LookItOver preview={look as HolidayCardPreview} toName={entryName(first)} toFirstName={first.kind === 'person' ? firstName(first.name) : ''} byEmail={first.kind !== 'person'} />
+        <LookItOver onCloth={onCloth} preview={look as HolidayCardPreview} toName={entryName(first)} toFirstName={first.kind === 'person' ? firstName(first.name) : ''} byEmail={first.kind !== 'person'} />
       ) : null}
       <div className="mx-auto mt-7 max-w-[420px] px-4 pb-4">
         <section aria-label="Who it’s going to" data-testid="sendCardListLook">
-          <h2 className="text-[16px] font-semibold">Going to {ready.length} {ready.length === 1 ? 'person' : 'people'}</h2>
+          <h2 className={`text-[16px] font-semibold ${onCloth ? 'text-[#f6ecd9]' : ''}`}>Going to {ready.length} {ready.length === 1 ? 'person' : 'people'}</h2>
           <ul className="mt-2 divide-y divide-[#e7dcc6] overflow-hidden rounded-xl border border-[#e3d8c3] bg-[#fffdf8] text-[#111827]">
             {look.recipients.map((line) => {
               const entry = byId.get(line.request_id);
@@ -1001,8 +1004,8 @@ function ListLookStep({
           {takeBackBefore({ kind: 'list', entries })}
         </p>
         {stamps && look.needed ? <div className="mt-3"><PostageLine stamps={stamps} design={design} count={look.needed} /></div> : null}
-        {!look.needed ? <p className={`mt-3 text-center text-[14px] ${muted}`}>None of these cards can go now.</p> : null}
-        {error ? <p role="alert" className="mt-3 text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
+        {!look.needed ? <p className={`mt-3 text-center text-[14px] ${onCloth ? ON_CLOTH_MUTED : muted}`}>None of these cards can go now.</p> : null}
+        {error ? <p role="alert" className={`mt-3 text-[14px] font-medium ${onCloth ? 'text-[#ffb4a8]' : 'text-[#a81a1a]'}`}>{error}</p> : null}
         <button type="button" data-testid="sendCardLookSend" disabled={sending || !look.needed} onClick={needsStamps ? onGetStamps : onSealOnTable ?? onSend} className={`${primary} mt-5`} style={{ backgroundColor: WAX }}>
           {sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
           {needsStamps ? 'Get stamps to send' : sending ? `Sending ${cards}…` : `Seal and send ${cards}`}
@@ -1774,6 +1777,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
             setStampSheet(true);
           }}
           onSealOnTable={launchFeatures.cardTable ? openSealing : undefined}
+          onCloth={atTable}
         />
       ) : null}
       </StepsAtTable>
