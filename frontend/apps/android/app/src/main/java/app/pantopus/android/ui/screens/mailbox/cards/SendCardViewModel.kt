@@ -755,10 +755,6 @@ class SendCardViewModel
                     }
             }
 
-        /**
-         * The flow as it was saved with the screen: the same step, or the step before it when that step needs what isn't
-         * saved (step 5 is read again from step 4; a card just sent shows as today's card).
-         */
         /** "Send Hazel a card" on a card she sent names her (on first opening only), and the flow opens at Pick a card. */
         private fun sendBackPerson(): CardRecipient.Person? {
             if (saved.get<String>(KEY_STEP) != null) return null
@@ -776,6 +772,10 @@ class SendCardViewModel
                 else -> SendCardStep.To
             }
 
+        /**
+         * The flow as it was saved with the screen: the same step, or the step before it when that step needs what isn't
+         * saved (step 5 is read again from step 4; a card just sent shows as today's card).
+         */
         private fun restoredForm(): SendCardForm {
             val email = saved.get<String>(KEY_EMAIL).orEmpty()
             val list = saved.get<String>(KEY_LIST)?.let(::readList)
