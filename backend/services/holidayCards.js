@@ -188,9 +188,11 @@ function isByLink(mail) {
 }
 
 /** What a send asked for, as one digest: the same request ID with other content asks for another card. */
-function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null }) {
-  // A signed card's strokes count too; an unsigned card's digest is what it always was.
-  const parts = [design, message, arrival, toUserId || null, toEmail || null, ...(signature ? [signature] : [])];
+function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null, media = null }) {
+  // A signed card's strokes count too, and a card's own photo and voice (their ids and the photo's description); a card
+  // without them has the digest it always had.
+  const parts = [design, message, arrival, toUserId || null, toEmail || null, ...(signature ? [signature] : []),
+    ...(media ? [{ media }] : [])];
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 }
 
@@ -237,9 +239,19 @@ function signatureOf(payload) {
   return signature && Array.isArray(signature.strokes) ? signature : null;
 }
 
+/**
+ * The photo and voice a card's private stored copy keeps (holiday_card_memories, services/holidayCardMedia): beside the
+ * note and the signature, never in the Mail row, so a sealed card shows nothing of them. { photo, voice } or null.
+ */
+function mediaOf(payload) {
+  const media = payload?.body?.payload?.media;
+  return media && (media.photo || media.voice) ? media : null;
+}
+
 /** A sealed card as the letter readers return it: the short note instead of its own, and no stored copy. */
 function sealedView(mail) {
-  const { object_payload: _payload, object: _object, card_signature: _signature, ...rest } = mail;
+  const { object_payload: _payload, object: _object, card_signature: _signature, card_media: _media,
+    card_photo_covered: _covered, ...rest } = mail;
   return { ...rest, content: SEALED_NOTE, content_format: 'plain_text', content_text: SEALED_NOTE, attachments: [] };
 }
 
@@ -317,6 +329,23 @@ function cardView(mail, now = new Date()) {
     // The sender's signature (8.2), when the reader read the card's stored copy: v2's object_payload, or the
     // card_signature GET /api/mailbox/:id sets. Like the note, not before a seal lifts; null: set the typed name.
     signature: (!sealed && (mail.card_signature || signatureOf(mail.object_payload))) || null,
+    ...mediaView(mail, sealed),
+  };
+}
+
+/**
+ * A card's photo and voice on a piece (contract section 5), when the reader read its stored copy (v2's object_payload,
+ * or the card_media GET /api/mailbox/:id sets): like the note, nothing of them before a seal lifts. A photo is covered
+ * for the reader unless the route found them the sender's connection (card_photo_covered false; section 10).
+ */
+function mediaView(mail, sealed) {
+  const media = sealed ? null : (mail.card_media || mediaOf(mail.object_payload));
+  const photo = media?.photo?.file_id ? media.photo : null;
+  const voice = media?.voice?.file_id ? media.voice : null;
+  return {
+    photo: photo ? { file_id: photo.file_id, width: photo.width ?? null, height: photo.height ?? null, alt: photo.alt || null,
+      covered: mail.card_photo_covered !== false } : null,
+    voice: voice ? { file_id: voice.file_id, duration_ms: voice.duration_ms ?? null } : null,
   };
 }
 
@@ -491,7 +520,7 @@ async function sentLine(userId, now = new Date()) {
 
 module.exports = {
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
-  SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf,
+  SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf, mediaOf, mediaView,
   designById, isCard, isByLink, cardLinkToken, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
   daysBetween, arrivalsFor,
   personDelivery, cardView, pickupAt, sentSummary, sentCards, sentStatus, sentPiece, sentTrail, sentLine,
