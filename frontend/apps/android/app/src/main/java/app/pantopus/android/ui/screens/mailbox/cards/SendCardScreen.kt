@@ -90,11 +90,12 @@ fun SendCardScreen(
     var sealing by rememberSaveable { mutableStateOf(false) }
     // A card on a sent list, asked about before it's taken back.
     var listTakeBack by remember { mutableStateOf<SentHolidayCard?>(null) }
-    val back = { if (!viewModel.back()) onClose() }
-    BackHandler(onBack = back)
-
     val season = cards
     val page = SendCardPage.of(season, form)
+    // Back walks the steps only while they show: on today's card (or done for the year) it closes at once, even when
+    // "Send Hazel a card" opened the steps at Pick a card underneath.
+    val back = { if (page != SendCardPage.Steps || !viewModel.back()) onClose() }
+    BackHandler(onBack = back)
     val scroll = rememberScrollState()
     LaunchedEffect(form.step) { scroll.scrollTo(0) }
     // Digital stamps (postage on): the balance after each step, card and take-back, and on coming back (Google Play
