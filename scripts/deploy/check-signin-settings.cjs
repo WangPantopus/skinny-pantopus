@@ -92,6 +92,9 @@ async function check({ env = process.env, projectYml, fetchImpl } = {}) {
     if (!(error instanceof Unreadable)) throw error;
     return { result: 'unreadable', appIds, message: `The sign-in settings couldn't be read: ${error.message}.` };
   }
+  if (!settings || typeof settings !== 'object') {
+    return { result: 'unreadable', appIds, message: "The sign-in settings couldn't be read: Supabase's answer wasn't a settings object." };
+  }
   const problems = findProblems({ settings, appIds });
   return problems.length
     ? { result: 'mismatch', appIds, message: problems.join(' ') }
@@ -99,7 +102,9 @@ async function check({ env = process.env, projectYml, fetchImpl } = {}) {
 }
 
 async function main() {
-  const outcome = await check();
+  // Anything unexpected is reported as "couldn't be read" rather than ending without a result, which the
+  // reporting job would take for "not run".
+  const outcome = await check().catch((error) => ({ result: 'unreadable', message: `The check stopped early (${error.name}).` }));
   // One line each: deploy-backend.yml hands them to the job that reports the result.
   if (process.env.GITHUB_OUTPUT) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `result=${outcome.result}\nmessage=${outcome.message.replace(/\s+/g, ' ')}\n`);
