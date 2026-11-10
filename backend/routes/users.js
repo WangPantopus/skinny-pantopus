@@ -6012,6 +6012,9 @@ const reportUserSchema = Joi.object({
     .valid('spam', 'harassment', 'inappropriate', 'misinformation', 'safety', 'other')
     .required(),
   details: Joi.string().max(1000).optional(),
+  // "Report this card" (launch key holiday_card_memories; services/cardReports): the card the reporter received from
+  // this person, shared with Pantopus admins for review, that card only. With the key off it reports the person alone.
+  mail_id: Joi.string().uuid().optional(),
 });
 
 function isUserReportTableMissing(error) {
@@ -6052,6 +6055,27 @@ router.post('/:userId/report', verifyToken, validate(reportUserSchema), async (r
     // PostgreSQL accepts UUID aliases such as uppercase or unhyphenated input.
     if (targetUser.id === reporterId) {
       return res.status(400).json({ error: 'You cannot report yourself' });
+    }
+
+    if (req.body.mail_id && require('../services/holidayCardMedia').memoriesOn()) {
+      try {
+        const filed = await require('../services/cardReports').reportCard({
+          reporterId, reportedId: targetUser.id, mailId: req.body.mail_id, reason, details });
+        if (filed.created) {
+          require('../services/adminAlerts').notifyReportToReview({ kind: 'card', reason, reportId: filed.reportId }).catch(() => {});
+        }
+        return res.json({
+          message: filed.created
+            ? 'Card reported. We will review it shortly.'
+            : 'Card already reported. We will review it shortly.',
+          already_reported: !filed.created,
+          shared_card: true,
+        });
+      } catch (cardErr) {
+        if (cardErr.code === 'CARD_NOT_FOUND') return res.status(404).json({ error: cardErr.message, code: cardErr.code });
+        logger.error('Card report error', { reporterId, error: cardErr.message });
+        return res.status(503).json({ error: 'Couldn’t send your report just now. Try again in a moment.', code: 'REPORT_UNAVAILABLE' });
+      }
     }
 
     // Preserve legacy random-ID reports, including duplicate rows and their review state.
