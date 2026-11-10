@@ -23,7 +23,8 @@ import CardFlip from '../cards/CardFlip';
 import CardShareSheet from '../cards/CardShareSheet';
 import CardTable from '../cards/CardTable';
 import { askTakeBack, takeBackMessage } from '../cards/takeBack';
-import { shortDay, WAX } from '../cards/cardArt';
+import { cardMood, shortDay, WAX } from '../cards/cardArt';
+import CardPrint from '../cards/CardPrint';
 import CardLinkActions from '../cards/CardLinkActions';
 import { linkOpened, sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, trailLabel, trailWhen } from './sentWords';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -193,6 +194,19 @@ export default function SentPieceView({ id }: { id: string }) {
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
                 <div className={`mx-auto w-full md:max-w-none ${launchFeatures.cardTable ? '' : 'max-w-[300px]'}`}>
                   {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
+                  {card.photo ? (
+                    // Their own photo (memories plan step 4), never covered: from their own card's route.
+                    <div className="-mt-3 ml-[6%] w-[48%] [container-type:inline-size]" data-testid="mailSentPhoto">
+                      <CardPrint
+                        source={{ sent: piece.id, fileId: card.photo.file_id }}
+                        width={card.photo.width}
+                        height={card.photo.height}
+                        alt={card.photo.alt}
+                        datedOn={cardMood(card.number, card.design) === 'nostalgia' ? (piece.envelope.postmarked_on ?? piece.sent_at) : null}
+                        className="w-full"
+                      />
+                    </div>
+                  ) : null}
                   {front && launchFeatures.cardTable ? (
                     <div className="mt-4 flex flex-wrap justify-center gap-2">
                       <button

@@ -15,7 +15,8 @@ import { PostageLine, StampChip, StampSheet, useStamps, type Stamps } from './St
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { CardSignature, HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
+import { mailbox } from '@pantopus/api';
+import type { CardMediaRef, CardSignature, HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
 import { ChevronLeft, Check, Link2, Loader2, Mail, Search, Send, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
@@ -28,6 +29,7 @@ import { mailLoadMessage } from '../mailLoadMessage';
 import CardFront from './CardFront';
 import CardBack, { BACK_TEXT, RULED } from './CardBack';
 import { SignaturePad } from './cardSignature';
+import CardPrint from './CardPrint';
 import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, Slip, StepsAtTable } from './AtTheTable';
 import CardFlip from './CardFlip';
 import CardLinkActions from './CardLinkActions';
@@ -652,6 +654,16 @@ function PickStep({
 
 // ── Step 3: write on the back ────────────────────────────────
 
+/** The card's own photo while it's written: the chosen file, its upload, and the server's reference once stored. */
+type PhotoDraft = {
+  status: 'uploading' | 'ready' | 'failed';
+  progress: number;
+  file: File;
+  localUrl: string | null;
+  ref: CardMediaRef | null;
+  error: string | null;
+};
+
 function WriteStep({
   design,
   year,
@@ -663,6 +675,13 @@ function WriteStep({
   signature,
   onSignature,
   canSign,
+  photo = null,
+  photoAlt = '',
+  onPhotoAlt,
+  canAddPhoto = false,
+  onAddPhoto,
+  onRemovePhoto,
+  onRetryPhoto,
   onCloth = false,
   onNext,
 }: {
@@ -678,6 +697,15 @@ function WriteStep({
   onSignature: (signature: CardSignature | null) => void;
   /** The server keeps signatures (GET /cards `signature`, launch key card_table). */
   canSign: boolean;
+  /** The card's own photo (memories plan step 4, launch key holiday_card_memories): uploading, ready or failed. */
+  photo?: PhotoDraft | null;
+  photoAlt?: string;
+  onPhotoAlt?: (text: string) => void;
+  /** GET /cards says a photo can go on this card now. */
+  canAddPhoto?: boolean;
+  onAddPhoto?: (file: File) => void;
+  onRemovePhoto?: () => void;
+  onRetryPhoto?: () => void;
   /** On the card's cloth (design plan Part 9): cream words and glass buttons. */
   onCloth?: boolean;
   onNext: () => void;
@@ -686,7 +714,12 @@ function WriteStep({
   const quiet = onCloth ? ON_CLOTH_MUTED : muted;
   const [showBack, setShowBack] = useState(true);
   const [signing, setSigning] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
   const count = letters(message);
+  // Seal it waits until the photo is uploaded; a failed one is tried again or removed, never dropped.
+  const photoWait = photo && photo.status !== 'ready'
+    ? (photo.status === 'failed' ? 'The photo didn’t upload. Try again, or remove it.' : 'Waiting for the photo to finish uploading.')
+    : null;
   return (
     <div className="mt-3 px-4">
       <CardFlip
@@ -741,9 +774,68 @@ function WriteStep({
           onClose={() => setSigning(false)}
         />
       ) : null}
+      {canAddPhoto ? (
+        <div className="mx-auto mt-4 max-w-[420px]" data-testid="sendCardPhoto">
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden
+            data-testid="sendCardPhotoInput"
+            onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) onAddPhoto?.(file); }}
+          />
+          {photo ? (
+            <div className="flex items-start gap-4">
+              <div className="w-[46%] shrink-0 [container-type:inline-size]">
+                <CardPrint
+                  source={photo.ref ? { own: photo.ref.file_id } : null}
+                  localUrl={photo.localUrl}
+                  width={photo.ref?.width}
+                  height={photo.ref?.height}
+                  alt={photoAlt}
+                  uploading={photo.status === 'uploading'}
+                  className="w-full"
+                />
+                <p aria-live="polite" className={`mt-2 text-[13px] ${quiet}`}>
+                  {photo.status === 'uploading' ? 'Uploading…' : photo.status === 'ready' ? 'Added.' : ''}
+                </p>
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-2">
+                {photo.status === 'failed' ? (
+                  <>
+                    <p role="alert" className={`text-[13px] font-semibold ${onCloth ? 'text-[#ffb4a8]' : 'text-[#8b1d1d]'}`}>{photo.error}</p>
+                    <button type="button" data-testid="sendCardPhotoRetry" onClick={onRetryPhoto} className={ghost}>Try again</button>
+                  </>
+                ) : (
+                  <button type="button" data-testid="sendCardPhotoReplace" onClick={() => photoInput.current?.click()} className={ghost}>Replace</button>
+                )}
+                <button type="button" data-testid="sendCardPhotoRemove" onClick={onRemovePhoto} className={ghost}>Remove</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" data-testid="sendCardAddPhoto" onClick={() => photoInput.current?.click()} className={ghost}>Add a photo</button>
+          )}
+          {photo ? (
+            <label className={`mt-3 block text-[13px] ${quiet}`}>
+              Describe the photo (optional, for screen readers)
+              <input
+                type="text"
+                value={photoAlt}
+                maxLength={200}
+                onChange={(event) => onPhotoAlt?.(event.target.value)}
+                data-testid="sendCardPhotoAlt"
+                className="mt-1 block w-full rounded-lg border border-[#d6cbb6] bg-[#fffdf8] px-3 py-2 text-[14px] text-[#1f2937] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+              />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
-        <button type="button" disabled={!message.trim()} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Seal it</button>
-        {!message.trim() ? <p className={`mt-2 text-center text-[13px] ${quiet}`}>Write a few words on the back first.</p> : null}
+        <button type="button" disabled={!message.trim() || Boolean(photoWait)} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Seal it</button>
+        {!message.trim() ? <p className={`mt-2 text-center text-[13px] ${quiet}`}>Write a few words on the back first.</p>
+          : photoWait ? <p className={`mt-2 text-center text-[13px] ${quiet}`}>{photoWait}</p> : null}
       </div>
     </div>
   );
@@ -1267,6 +1359,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
   const [message, setMessage] = useState('');
   // Signed beside FROM (design plan 8.2); null: the first name typed in the pen, as before.
   const [signature, setSignature] = useState<CardSignature | null>(null);
+  // The card's own photo (memories plan step 4): uploaded as soon as it's chosen.
+  const [photo, setPhoto] = useState<PhotoDraft | null>(null);
+  const [photoAlt, setPhotoAlt] = useState('');
   const [arrival, setArrival] = useState<HolidayCardArrival | null>(null);
   const [sent, setSent] = useState<SentHolidayCard | null>(null);
   // A card by link, just sent: its link, to copy and share.
@@ -1380,6 +1475,24 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     };
   };
 
+  const uploadPhoto = (file: File) => {
+    setPhoto((before) => {
+      if (before?.localUrl) URL.revokeObjectURL(before.localUrl);
+      return { status: 'uploading', progress: 0, file, localUrl: URL.createObjectURL(file), ref: null, error: null };
+    });
+    const mine = (draft: PhotoDraft | null) => Boolean(draft && draft.file === file);
+    mailbox.uploadHolidayCardMedia('photo', file)
+      .then(({ media }) => setPhoto((d) => (mine(d) ? { ...d!, status: 'ready', progress: 1, ref: media } : d)))
+      // The API client's error carries the server's words (`data.error`), or none when the network failed.
+      .catch((error: { data?: { error?: string } }) => setPhoto((d) => (mine(d)
+        ? { ...d!, status: 'failed', error: error?.data?.error || 'The photo didn’t upload. Check your connection.' } : d)));
+  };
+  const removePhoto = () => {
+    setPhoto((before) => { if (before?.localUrl) URL.revokeObjectURL(before.localUrl); return null; });
+    setPhotoAlt('');
+  };
+  const photoReady = photo?.status === 'ready' && photo.ref ? photo.ref : null;
+
   const cardToSend = () => {
     if (!to || to.kind === 'list' || !design || !arrival) return null;
     requestId.current ??= crypto.randomUUID();
@@ -1391,6 +1504,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
       request_id: requestId.current,
       ...(data?.postage_enabled ? { use_stamp: true } : {}),
       ...(signature ? { signature } : {}),
+      ...(photoReady ? { photo: photoReady.file_id, ...(photoAlt.trim() ? { photo_alt: photoAlt.trim() } : {}) } : {}),
     };
   };
 
@@ -1402,7 +1516,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     listIds.current = new Map();
     setSent(null);
     setSentLink(null);
-    setTo(null); setDesignId(null); setMessage(''); setSignature(null); setArrival(null); setLook(null); setLookUnavailable(false);
+    setTo(null); setDesignId(null); setMessage(''); setSignature(null); removePhoto(); setArrival(null); setLook(null); setLookUnavailable(false);
     setListed([]); setListLook(null); setListSent(null); setListError(null); setListTakenBack(new Set()); setListTakeBackError(null);
     setStep('to');
   };
@@ -1760,6 +1874,14 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           signature={signature}
           onSignature={setSignature}
           canSign={launchFeatures.cardTable && Boolean(data.signature)}
+          // A card's own photo (memories plan step 4): one card to one person; a list goes without.
+          canAddPhoto={launchFeatures.holidayCardMemories && Boolean(data.media?.photo.usable) && to?.kind !== 'list'}
+          photo={photo}
+          photoAlt={photoAlt}
+          onPhotoAlt={setPhotoAlt}
+          onAddPhoto={uploadPhoto}
+          onRemovePhoto={removePhoto}
+          onRetryPhoto={() => { if (photo) uploadPhoto(photo.file); }}
           onCloth={atTable}
           onNext={() => { setStep('seal'); setLookUnavailable(false); if (to?.kind === 'person') void theirs.refetch(); }}
         />

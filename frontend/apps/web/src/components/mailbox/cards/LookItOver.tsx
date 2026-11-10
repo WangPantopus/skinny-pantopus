@@ -23,7 +23,8 @@ import CardBack from './CardBack';
 import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, ON_CLOTH_TEXT } from './AtTheTable';
 import CardFlip from './CardFlip';
 import { CardFromEnvelope, SealedNotice, useCardOpening } from './HolidayCardView';
-import { daysAway, longDay, SERIF } from './cardArt';
+import { cardMood, daysAway, longDay, SERIF } from './cardArt';
+import CardPrint from './CardPrint';
 import CardTable from './CardTable';
 import { launchFeatures } from '@/lib/featureFlags';
 
@@ -47,15 +48,31 @@ function MailboxFrame({ day, children }: { day: string; children: ReactNode }) {
   );
 }
 
-/** The back on its own, the size of the picture side (the flip lays it there). */
+/** The back on its own, the size of the picture side (the flip lays it there), and their own photo as a print beside it. */
 function Back({ piece }: { piece: MailItemV2 }) {
   const card = piece.card!;
+  const photo = card.photo ?? null;
   return (
-    <CardFlip
-      showBack
-      front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />}
-      back={<CardBack number={card.number} paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} signature={card.signature ?? null} className={shadow} />}
-    />
+    <>
+      <CardFlip
+        showBack
+        front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />}
+        back={<CardBack number={card.number} paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} signature={card.signature ?? null} className={shadow} />}
+      />
+      {photo ? (
+        // Their own photo (memories plan step 4): never covered here, loaded from their own upload.
+        <div className="-mt-4 ml-[6%] w-[48%] [container-type:inline-size]" data-testid="sendCardLookPhoto">
+          <CardPrint
+            source={{ own: photo.file_id }}
+            width={photo.width}
+            height={photo.height}
+            alt={photo.alt}
+            datedOn={cardMood(card.number, card.design) === 'nostalgia' ? (piece.postmark?.date || piece.created_at) : null}
+            className="w-full"
+          />
+        </div>
+      ) : null}
+    </>
   );
 }
 
