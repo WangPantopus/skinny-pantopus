@@ -909,11 +909,11 @@ Tells a verified homeowner whether their home costs more than it should, from re
 
 **Built (each off until a county is switched on).**
 
-- [ ] Similar homes (server): a confirmed owner's value card shows the county's value per square foot beside up to ten similar houses on the street; an owner who hasn't verified yet gets one true line on the locked Your home card. [#3837](https://github.com/WangPantopus/skinny-pantopus/pull/3837).
-- [ ] The Property tax check card on the money page, web, iPhone and Android, sent by the server as `money_cards` so a later check needs no app release. [#3839](https://github.com/WangPantopus/skinny-pantopus/pull/3839). The phones show it from the first store build cut after it merges.
-- [ ] A yearly notice when the county values a home above similar homes, and how the state reviews a value (Washington, Texas, Florida). [#3840](https://github.com/WangPantopus/skinny-pantopus/pull/3840).
+- [x] Similar homes (server): a confirmed owner's value card shows the county's value per square foot beside up to ten similar houses on the street; an owner who hasn't verified yet gets one true line on the locked Your home card. [#3837](https://github.com/WangPantopus/skinny-pantopus/pull/3837), merged November 10 and released; checked on web, iPhone and Android.
+- [x] The Property tax check card on the money page, web, iPhone and Android, sent by the server as `money_cards` so a later check needs no app release. [#3839](https://github.com/WangPantopus/skinny-pantopus/pull/3839), merged November 10; checked on web, iPhone and Android. The phones show it from the first store build cut after that; until then they show the same figures in the value card on Your home.
+- [x] A yearly notice when the county values a home above similar homes, and how the state reviews a value (Washington, Texas, Florida). [#3840](https://github.com/WangPantopus/skinny-pantopus/pull/3840). The weekly job is registered beside the rate watch; whether the production worker runs these weekly jobs wasn't visible from here.
 
-**Measured on Clark County's live release:** 156,087 houses, 100,383 (64%) get a comparison; 19% of those are above similar homes, 57% within 5%, 23% below.
+**Measured on live releases:** Clark County, WA: 156,087 houses, 64% get a comparison, 19% of those above similar homes. Dallas County, TX: 561,002 houses, 85%, 23% above. Alachua County, FL: 71,134 houses, 62%, 18% above.
 
 **Yours to do.**
 
