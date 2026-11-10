@@ -1281,6 +1281,26 @@ export interface PlaceViewer {
 }
 
 /**
+ * One card of the Home Money Check on the money page, in words the apps draw as
+ * they come: the server writes every line, so a new check needs no app release.
+ * Only a Home's confirmed owner gets them.
+ */
+export interface PlaceMoneyCard {
+  /** `property_tax_check` today; an id an app doesn't know is still drawn. */
+  id: string;
+  title: string;
+  /** The answer at a glance. */
+  chip: { tone: 'warning' | 'success' | 'neutral'; text: string } | null;
+  lead: string | null;
+  rows: { id: string; label: string; value: string }[];
+  notes: string[];
+  /** Where the figures come from, with their date. */
+  source: string | null;
+  /** One next step: an https page, or an app link in the words notifications use (`/place?section=money`). */
+  action: { label: string; url: string } | null;
+}
+
+/**
  * GET /place/intelligence (and /place/preview at T0) — grouped
  * section envelopes for an address. `region_supported: false` drives
  * the "coming to your region" state for non-US addresses.
@@ -1292,6 +1312,8 @@ export interface PlaceIntelligence {
   verify_available?: boolean;
   /** Who is looking, on a Home's Place. Sections that don't apply to the role are left out. Omitted by older servers. */
   viewer?: PlaceViewer;
+  /** The Home Money Check's cards for the money page, the confirmed owner's. Omitted when there are none and by older servers. */
+  money_cards?: PlaceMoneyCard[];
   /** The Home's move-in date (YYYY-MM-DD) for the movers card; null without household access. Omitted by older servers and off a Home. */
   move_in_date?: string | null;
   region_supported: boolean;

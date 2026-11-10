@@ -51,8 +51,15 @@ export function activeMobileTab(pathname: string): Tab['key'] | null {
 // A conversation has the whole window on a phone (founder, 2026-11-06), a
 // person's, a group's or the assistant's: leaving it brings the bar back on the
 // screen underneath. The Messages list keeps the bar, with no tab lit.
-export function hidesMobileTabs(pathname: string): boolean {
+export function isConversation(pathname: string): boolean {
   return pathname.startsWith('/app/chat/');
+}
+
+// Sending a Christmas card is a full-screen flow on a phone too (launch key
+// card_table): its steps and the "on its way" page have no bar (design plan 1.3,
+// founder 2026-11-09). Back leaves it.
+export function hidesMobileTabs(pathname: string): boolean {
+  return isConversation(pathname) || (launchFeatures.cardTable && pathname === '/app/mailbox/cards');
 }
 
 export default function MobileTabBar({ unreadMail = 0 }: { unreadMail?: number }) {

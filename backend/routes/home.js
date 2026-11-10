@@ -46,6 +46,7 @@ const propertyIntelligenceService = require('../services/ai/propertyIntelligence
 const homeRecords = require('../services/propertyRecords/homeRecord');
 const householdFacts = require('../services/householdFacts');
 const countyLinks = require('../config/countyLinks');
+const appealPacket = require('../services/appealPacket');
 const floorPlans = require('../services/propertyRecords/floorPlans');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { encodeGeohash } = require('../utils/geohash');
@@ -5737,6 +5738,73 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
     if (err.code?.startsWith('HOME_DASHBOARD_')) return intelligenceAuthority.sendError(res, err);
     logger.error('Property value error', { error: err.message, homeId: req.params.id });
     res.status(503).json({ error: 'Current property information could not be loaded. Please retry.', code: 'HOME_PROPERTY_UNAVAILABLE' });
+  }
+});
+
+/**
+ * The Home Money Check's appeal packet (services/appealPacket.js): for the Home's confirmed owner, where the county is
+ * on the switch file's appeal_packet list and values the home above similar homes. Off everywhere until then. It is
+ * bought once for a Home and a county value year, on the web.
+ *
+ * GET  /api/homes/:id/appeal-packet            what the packet holds, its price and whether this person has bought it;
+ *                                              { available: false } to anyone else
+ * POST /api/homes/:id/appeal-packet/checkout   a Stripe Checkout page for it ({ request_id })
+ * POST /api/homes/:id/appeal-packet/confirm    back from that page ({ reference }): record it once Stripe says it was paid
+ * GET  /api/homes/:id/appeal-packet/pdf        the packet, for the person who bought it
+ */
+const appealPacketError = (res, err, homeId) => {
+  if (err.code?.startsWith('APPEAL_PACKET_') && err.status) return res.status(err.status).json({ error: err.message, code: err.code });
+  logger.error('Appeal packet error', { error: err.message, homeId });
+  return res.status(503).json({ error: 'The packet could not be loaded. Please retry.', code: 'APPEAL_PACKET_UNAVAILABLE' });
+};
+const NO_APPEAL_PACKET = { error: 'There is no packet for this home.', code: 'APPEAL_PACKET_NONE' };
+
+router.get('/:id/appeal-packet', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const packet = await appealPacket.forOwner(req.params.id, req.user.id);
+    if (!packet.ok) return res.json({ available: false });
+    return res.json({ ...appealPacket.summary(packet), purchased: await appealPacket.purchased(packet, req.user.id) });
+  } catch (err) {
+    return appealPacketError(res, err, req.params.id);
+  }
+});
+
+router.post('/:id/appeal-packet/checkout', verifyToken, validate(Joi.object({ request_id: Joi.string().uuid().required() })), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const packet = await appealPacket.forOwner(req.params.id, req.user.id);
+    if (!packet.ok) return res.status(404).json(NO_APPEAL_PACKET);
+    return res.json(await appealPacket.checkout(packet, req.user.id, req.body.request_id));
+  } catch (err) {
+    return appealPacketError(res, err, req.params.id);
+  }
+});
+
+router.post('/:id/appeal-packet/confirm', verifyToken, validate(Joi.object({ reference: Joi.string().max(300).required() })), async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const bought = await appealPacket.confirm(req.body.reference, req.user.id);
+    if (bought.home_id !== req.params.id) return res.status(403).json({ error: 'This purchase is for another home.', code: 'APPEAL_PACKET_NOT_YOURS' });
+    const packet = await appealPacket.forOwner(req.params.id, req.user.id);
+    if (!packet.ok) return res.json({ available: false });
+    return res.json({ ...appealPacket.summary(packet), purchased: await appealPacket.purchased(packet, req.user.id) });
+  } catch (err) {
+    return appealPacketError(res, err, req.params.id);
+  }
+});
+
+router.get('/:id/appeal-packet/pdf', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const packet = await appealPacket.forOwner(req.params.id, req.user.id, { list: true });
+    if (!packet.ok) return res.status(404).json(NO_APPEAL_PACKET);
+    if (!(await appealPacket.purchased(packet, req.user.id))) return res.status(402).json({ error: 'Buy the packet to download it.', code: 'APPEAL_PACKET_UNPAID' });
+    const file = await appealPacket.pdf(packet);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${appealPacket.summary(packet).file_name}"`, 'Content-Length': String(file.length) });
+    return res.send(file);
+  } catch (err) {
+    return appealPacketError(res, err, req.params.id);
   }
 });
 

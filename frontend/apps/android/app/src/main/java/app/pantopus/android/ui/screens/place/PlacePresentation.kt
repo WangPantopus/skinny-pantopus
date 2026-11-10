@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.place.ExemptionFilingStatus
 import app.pantopus.android.data.api.models.place.FloodRiskLevel
 import app.pantopus.android.data.api.models.place.GoodDayVerdict
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlaceMoneyCard
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
@@ -84,6 +85,16 @@ val PlaceIntelligence.valueAccess: PlaceValueAccess
 /** Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check. */
 val PlaceIntelligence.ownerTools: Boolean
     get() = viewer == null || viewer.role == "owner"
+
+/** The Home Money Check's property tax card, which takes the place of the "How appeals work" note. */
+val PlaceIntelligence.propertyTaxCheck: PlaceMoneyCard?
+    get() = moneyCards?.firstOrNull { it.id == PROPERTY_TAX_CHECK }
+
+/** Any other card of the Home Money Check, each under its own title. */
+val PlaceIntelligence.otherMoneyCards: List<PlaceMoneyCard>
+    get() = moneyCards.orEmpty().filter { it.id != PROPERTY_TAX_CHECK }
+
+private const val PROPERTY_TAX_CHECK = "property_tax_check"
 
 /** Set up but not verified (T1): every lock is the verify-by-mail step, never another claim. */
 val PlaceIntelligence.verifiesFirst: Boolean

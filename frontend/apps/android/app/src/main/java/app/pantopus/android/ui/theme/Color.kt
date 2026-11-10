@@ -359,6 +359,9 @@ object PantopusColors {
     val tableCreamSoft = Color(0xBDF6ECD9)
     val tableCreamFaint = Color(0x80F6ECD9)
 
+    /** The hint under the table's button: white at 70%. */
+    val tableHint = Color(0xB3FFFFFF)
+
     /** The round and pill buttons' glass: `rgb(24 18 16 / 36%)`, edged cream at 16%. */
     val tableGlass = Color(0x5C181210)
     val tableGlassLine = Color(0x29F6ECD9)
@@ -387,6 +390,9 @@ object PantopusColors {
 
     /** The day printed on the envelope's postmark: `rgb(19 13 15 / 80%)`. */
     val tablePostmarkDay = Color(0xCC130D0F)
+
+    /** A Mailbox row's postmark: the table's cream at 60%, so it reads on the envelope's dark red. */
+    val tablePostmarkCream = Color(0x99F6ECD9)
 
     /** The back of the card: the pen `#1B2A5C`, its rules `rgb(74 84 118 / 20%)`, FROM `#6A5F52`, the foot `#8A7F70`. */
     val tablePen = Color(0xFF1B2A5C)

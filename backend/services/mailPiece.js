@@ -83,8 +83,10 @@ function summaryOf(mail) {
 function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   if (!mail) return mail;
   const posted = mail.created_at || mail.delivered_at;
+  // card_signature only carries a card's signature to cardView (GET /api/mailbox/:id); apps read it under card.
+  const { card_signature: _signature, ...rest } = mail;
   return {
-    ...mail,
+    ...rest,
     kind: kindOf(mail),
     from_pantopus: fromPantopus(mail),
     postmark: { town: postmarkTown(mail), date: posted ? localDate(new Date(posted), timeZone) : null },

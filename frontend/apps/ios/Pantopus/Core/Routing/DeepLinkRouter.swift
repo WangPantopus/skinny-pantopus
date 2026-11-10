@@ -38,6 +38,11 @@ final class DeepLinkRouter {
         case pulse
         /// `/plans`: the Plans tab, while the `plans` switch is on.
         case plans
+        /// `/moments`: the Moments tab, while the `moments` switch is on.
+        case moments
+        /// `/moments/:id` — one Moment (the "added a Moment" push). Opens the
+        /// Moments tab and plays it; dropped while the `moments` flag is off.
+        case moment(id: String)
         case notifications
         case supportTrain(id: String)
         /// `pantopus://support-trains/:id/manage` — A13.13 organizer
@@ -597,6 +602,10 @@ final class DeepLinkRouter {
             // The October 13 app (launch cut #11 off) had no `/pulse` link.
             guard segments.count == 1, firstSegment == "nearby" || LaunchFeatures.pulseRedesign else { return .unknown(url) }
             return .pulse
+        case "moments", "moment":
+            // `/moments` (the tab) and `/moments/:id` (that Moment in the viewer).
+            guard let id = segments.dropFirst().first, !id.isEmpty else { return .moments }
+            return .moment(id: id)
         case "plans", "plan":
             // `/plans` (the tab), `/plans/new`, `/plans/:id`, `/plans/:id/requests`.
             guard let id = segments.dropFirst().first, !id.isEmpty else { return .plans }

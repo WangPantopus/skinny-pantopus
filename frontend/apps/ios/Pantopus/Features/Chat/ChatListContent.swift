@@ -93,6 +93,8 @@ public struct ConversationRowContent: Identifiable, Sendable, Hashable {
     public let storageKey: String
     /// Whether the user muted notifications for this conversation.
     public let isMuted: Bool
+    /// The last message replied to a Moment (board N3).
+    public let momentReply: ConversationMomentReply?
 
     public init(
         id: String,
@@ -110,7 +112,8 @@ public struct ConversationRowContent: Identifiable, Sendable, Hashable {
         topics: [ConversationRowTopic] = [],
         gigId: String? = nil,
         storageKey: String,
-        isMuted: Bool = false
+        isMuted: Bool = false,
+        momentReply: ConversationMomentReply? = nil
     ) {
         self.id = id
         self.variant = variant
@@ -128,6 +131,28 @@ public struct ConversationRowContent: Identifiable, Sendable, Hashable {
         self.gigId = gigId
         self.storageKey = storageKey
         self.isMuted = isMuted
+        self.momentReply = momentReply
+    }
+}
+
+/// A row whose last message replied to a Moment: "Replied to your Moment"
+/// (someone replied to yours) or "Replied to their Moment" (you replied),
+/// with the Moment's small picture while it runs.
+public struct ConversationMomentReply: Sendable, Hashable {
+    public let label: String
+    public let thumbURL: URL?
+    public let kind: String
+    public let ended: Bool
+    /// A text card's color name.
+    public let background: String?
+
+    init?(_ moment: ChatMomentRefDTO?) {
+        guard let moment else { return nil }
+        label = moment.fromMe == true ? "Replied to their Moment" : "Replied to your Moment"
+        thumbURL = moment.thumbnail
+        kind = moment.kind
+        ended = moment.ended
+        background = moment.ended ? nil : moment.background
     }
 }
 

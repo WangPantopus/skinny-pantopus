@@ -446,7 +446,8 @@ public enum HubRoute: Hashable {
     /// Send a Christmas card, or today's card once it's sent (`holiday_cards`):
     /// the row at the top of Me in the Mailbox, or a public card page's link
     /// with that picture chosen.
-    case christmasCards(design: String? = nil)
+    /// The send flow; `design` chosen (from a public card page), or a person chosen (`toUserId`, from a card's table).
+    case christmasCards(design: String? = nil, toUserId: String? = nil, toName: String? = nil)
     /// A card in Sent (`mailbox`): what they got, its trail, and Take it back.
     case mailSentCard(id: String)
     /// Family Mail Party — household co-opening (discover / join / start /
@@ -1574,7 +1575,7 @@ public struct HubTabRoot: View {
         case .feed, .post, .gig, .listing, .hubToday, .conversation,
              .invite, .joinInvite, .monthlyReceipt, .resetPassword, .verifyEmail, .unknown, .home,
              .creatorInbox, .fanInbox, .creatorAudienceMembers,
-             .plans, .plan, .planRequests, .planNew:
+             .plans, .plan, .planRequests, .planNew, .moments, .moment:
             return false
         // `/nearby` opens "Verified homes nearby" here while the Pulse redesign
         // is off (founder decision 2026-11-07); with it on, the Pulse tab takes it.
@@ -2577,7 +2578,10 @@ public struct HubTabRoot: View {
                 },
                 onPay: { invoiceId in Task { @MainActor in push(.invoiceDetail(invoiceId: invoiceId)) } },
                 onOpenMail: { pieceId in Task { @MainActor in push(.mailItemDetail(mailId: pieceId)) } },
-                onVerifyHome: { homeId in showVerifyHome(homeId) }
+                onVerifyHome: { homeId in showVerifyHome(homeId) },
+                onSendCard: { userId, name in
+                    Task { @MainActor in push(.christmasCards(toUserId: userId, toName: name)) }
+                }
             )
             // A link that swaps one open letter for another gets a fresh page,
             // not the first letter's view model.
@@ -3640,12 +3644,18 @@ public struct HubTabRoot: View {
                     }
                 }
             )
+            // The welcome moment is full screen: no tab bar (founder, 11-09).
+            .hidesTabBar()
         case .mailRoutingQueue:
             MailRoutingQueueView { Task { @MainActor in pop() } }
-        case let .christmasCards(design):
+        case let .christmasCards(design, toUserId, toName):
             HolidayCardFlowView(
                 viewModel: mailScreenModels.model(for: route) {
-                    HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName, designId: design)
+                    HolidayCardFlowViewModel(
+                        fromName: MailPieceRecipient.personName,
+                        designId: design,
+                        to: toUserId.map { ($0, toName ?? "") }
+                    )
                 },
                 onSeeInSent: { cardId in
                     Task { @MainActor in
@@ -3657,6 +3667,18 @@ public struct HubTabRoot: View {
                         // Back to the Mailbox, which shows Sent and the card (a list: Sent itself).
                         pop()
                         NotificationCenter.default.post(name: .mailboxOpenSent, object: cardId)
+                    }
+                },
+                onDone: {
+                    Task { @MainActor in
+                        // Sent from a card's page ("Send {first name} a card"): Done goes to the Mailbox, as on web,
+                        // not back to that card; Back before sending still returns to it.
+                        if toUserId != nil, path.routes.count >= 2,
+                           case .mailItemDetail = path.routes[path.routes.count - 2] {
+                            path.removeLast(2)
+                        } else {
+                            pop()
+                        }
                     }
                 },
                 onClose: { Task { @MainActor in pop() } }

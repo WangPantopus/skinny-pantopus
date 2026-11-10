@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -118,6 +119,7 @@ internal fun CardRowPostage(
     modifier: Modifier = Modifier,
 ) {
     val paints = remember { EnvelopePaints() }
+    val rowPostmarkInk = PantopusColors.tablePostmarkCream.toArgb()
     Canvas(modifier = modifier.size(width = 130.dp, height = 64.dp).clearAndSetSemantics {}) {
         val canvas = drawContext.canvas.nativeCanvas
         val stamp = art.stamps[piece.stamp]
@@ -131,7 +133,8 @@ internal fun CardRowPostage(
             val width = stampWidth * 2.57f
             val left = size.width - stampWidth + stampWidth * 0.536f - width
             val year = piece.postmarkYear.toIntOrNull() ?: 0
-            drawEnvelopePostmark(canvas, art.postmark, left, 0f, width, piece.postmarkDay, year, paints)
+            // In cream on the row's dark red, so it reads there; the table's envelope keeps its black ink.
+            drawEnvelopePostmark(canvas, art.postmark, left, 0f, width, piece.postmarkDay, year, paints, ink = rowPostmarkInk)
         }
     }
 }

@@ -7,7 +7,8 @@
 // enclosed, each opening from a fresh short-lived link.
 // ============================================================
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { launchFeatures } from '@/lib/featureFlags';
 import { FileText, Paperclip, Sparkles } from 'lucide-react';
 import type { BookletItem, MailItemV2 } from '@/types/mailbox';
 import { getEnclosureLink, MailboxApiError } from '@/lib/mailbox-api';
@@ -90,6 +91,17 @@ function EnclosureRow({ itemId, enclosure }: { itemId: string; enclosure: Enclos
 
 /** "Pantopus read this for you", clipped to the letter. */
 export function SummaryNote({ summary, isBill }: { summary: NonNullable<MailItemV2['summary']>; isBill: boolean }) {
+  // Letters (design plan Part 10, launch key card_table): the note gives the letter the screen. Two lines, then More.
+  const short = launchFeatures.cardTable;
+  const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const textRef = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (el && short && !open) setClipped(el.scrollHeight > el.clientHeight + 1);
+  }, [short, open, summary.text]);
+  const folded = short && !open;
+  const hasMore = short && (clipped || Boolean(summary.key_facts?.length));
   return (
     <section aria-label="Pantopus read this for you" className="relative z-10 mx-1 rounded-2xl border border-app-border bg-app-surface px-4 pb-3.5 pt-4 shadow-md">
       <svg width="22" height="48" viewBox="0 0 22 48" aria-hidden="true" className="absolute -top-4 left-6">
@@ -99,8 +111,18 @@ export function SummaryNote({ summary, isBill }: { summary: NonNullable<MailItem
         <Sparkles className="h-[15px] w-[15px]" aria-hidden />
         Pantopus read this for you
       </p>
-      <p className="mt-1.5 text-[15px] leading-[22px] text-app-text">{summary.text}</p>
-      {summary.key_facts?.length ? (
+      <p ref={textRef} className={`mt-1.5 text-[15px] leading-[22px] text-app-text ${folded ? 'line-clamp-2' : ''}`}>{summary.text}</p>
+      {folded && hasMore ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-expanded={false}
+          className="mt-1 min-h-[44px] text-sm font-semibold text-primary-700 underline underline-offset-4 hover:text-primary-800"
+        >
+          More
+        </button>
+      ) : null}
+      {!folded && summary.key_facts?.length ? (
         <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
           {summary.key_facts.map((fact) => (
             <div key={`${fact.label}-${fact.value}`} className="contents">
@@ -110,9 +132,11 @@ export function SummaryNote({ summary, isBill }: { summary: NonNullable<MailItem
           ))}
         </dl>
       ) : null}
-      <p className="mt-2.5 text-xs text-app-text-secondary">
-        {isBill ? 'Read from the letter below. Check the amount before you pay.' : 'Read from the letter below.'}
-      </p>
+      {!folded ? (
+        <p className="mt-2.5 text-xs text-app-text-secondary">
+          {isBill ? 'Read from the letter below. Check the amount before you pay.' : 'Read from the letter below.'}
+        </p>
+      ) : null}
     </section>
   );
 }

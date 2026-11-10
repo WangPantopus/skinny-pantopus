@@ -109,6 +109,8 @@ data class MailCard(
     val slug: String? = null,
     /** The picture's table colour, a colour like `#3b4c6e` (launch key `card_table`). */
     val table: String? = null,
+    /** The whole verse printed on a Christmas with Jesus Christ picture, once it isn't sealed ("Read the verse"). */
+    val verse: String? = null,
 )
 
 /**

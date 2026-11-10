@@ -7,6 +7,7 @@ import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -23,11 +24,23 @@ internal class EnvelopePaints {
     val bitmap = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     val text = Paint(Paint.ANTI_ALIAS_FLAG)
     val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val tinted = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private var tint = 0
+
+    /** Art drawn in one [ink], keeping its own shape and shading of alpha. */
+    fun inked(ink: Int): Paint {
+        if (tinted.colorFilter == null || tint != ink) {
+            tint = ink
+            tinted.colorFilter = PorterDuffColorFilter(ink, PorterDuff.Mode.SRC_IN)
+        }
+        return tinted
+    }
 }
 
 /**
  * The postmark art with the real day it was mailed printed over it: its place on the art's own width and height, in
- * dark ink, turned as the ring is. Without a day (it hasn't been mailed), the ring stays empty.
+ * dark ink, turned as the ring is. Without a day (it hasn't been mailed), the ring stays empty. [ink], when given, inks
+ * the ring and the day in that colour instead (a Mailbox row's cream, so it reads on the dark red).
  */
 internal fun drawEnvelopePostmark(
     canvas: Canvas,
@@ -38,9 +51,11 @@ internal fun drawEnvelopePostmark(
     day: String,
     year: Int,
     paints: EnvelopePaints,
+    ink: Int? = null,
 ) {
     val height = width * postmark.height / postmark.width
-    canvas.drawBitmap(postmark, null, RectF(left, top, left + width, top + height), paints.bitmap)
+    val ring = if (ink == null) paints.bitmap else paints.inked(ink)
+    canvas.drawBitmap(postmark, null, RectF(left, top, left + width, top + height), ring)
     if (day.isEmpty()) return
 
     fun print(
@@ -57,7 +72,7 @@ internal fun drawEnvelopePostmark(
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = width * size
         paint.letterSpacing = spacing / size
-        paint.color = PantopusColors.tablePostmarkDay.toArgb()
+        paint.color = ink ?: PantopusColors.tablePostmarkDay.toArgb()
         val atX = left + width * x
         val atY = top + height * y
         val saved = canvas.save()

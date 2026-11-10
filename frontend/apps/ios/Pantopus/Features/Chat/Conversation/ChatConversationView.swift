@@ -3605,6 +3605,10 @@ private struct ChatBubbleRow: View {
                     label.padding(.bottom, 2)
                 }
             }
+            if let quote = content.momentQuote {
+                ChatMomentQuoteView(quote: quote, side: content.side)
+                    .padding(.bottom, Spacing.s1)
+            }
             bubbleBody
                 // A15 `.reaction` — pills float over the bubble's bottom
                 // edge: leading corner for outgoing, trailing for

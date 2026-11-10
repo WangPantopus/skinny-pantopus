@@ -94,7 +94,9 @@ struct CardTableFrontPage: View {
             paper: paper,
             caption: caption ?? "",
             year: year,
-            mailedOn: mailedOn
+            mailedOn: mailedOn,
+            // Off the table the grain is lighter (multiply 25%), as on the back (plan 1.9).
+            grainOpacity: 0.25
         )
         .equatable()
         .aspectRatio(CardTableShape.aspect, contentMode: .fit)
@@ -129,7 +131,9 @@ struct CardTableRowPostage: View {
                         in: context,
                         box: CGRect(origin: .zero, size: size),
                         day: model.postmarkDate,
-                        year: model.card?.year ?? 2026
+                        year: model.card?.year ?? 2026,
+                        // Cream ink at 60% on the Mailbox row, so it reads on the dark red; the table keeps black (plan 1.6).
+                        ink: MailPaper.cardEnvelopeInk.opacity(0.6)
                     )
                 }
                 .frame(width: 92, height: 92 * 365 / 622)

@@ -135,8 +135,15 @@ data class MailPieceModel(
     val card: MailPieceCard? = null,
 )
 
-/** A Christmas card on a piece: its picture, and whether it's sealed until Christmas morning (never drawn torn then). */
+/**
+ * A Christmas card on a piece: its picture, and whether it's sealed until Christmas morning (never drawn opened then).
+ * Opened (launch key `card_table`), the row shows the whole card taken out, with its [caption] on its [paper]; in Sent,
+ * once the other person has it, [sentTo] is their first name (plan Part 4).
+ */
 data class MailPieceCard(
     val design: String,
     val sealed: Boolean,
+    val caption: String? = null,
+    val paper: String? = null,
+    val sentTo: String? = null,
 )

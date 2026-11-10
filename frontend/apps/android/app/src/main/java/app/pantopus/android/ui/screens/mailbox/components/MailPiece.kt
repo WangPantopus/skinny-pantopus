@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,6 +29,7 @@ import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -66,12 +68,14 @@ import app.pantopus.android.ui.components.Postmark
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardArt
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardRowPostage
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardRowSeal
+import app.pantopus.android.ui.screens.mailbox.cards.table.cardPen
 import app.pantopus.android.ui.screens.mailbox.cards.table.drawCardRowPaper
 import app.pantopus.android.ui.screens.mailbox.cards.table.rememberCardRowArt
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusMark
 import coil.compose.AsyncImage
+import java.util.Locale
 
 /**
  * One piece of mail, drawn as the thing it is (Mail tab drawings, `MailPiece` and `Parts`): a cream envelope for a
@@ -175,6 +179,7 @@ private fun CardOpening(
     val context = LocalContext.current
     LaunchedEffect(card.design) { HolidayCardArt.loadAhead(context, card.design) }
     if (!piece.opened || card.sealed) return ChristmasEnvelope(piece, card)
+    if (LaunchFeatures.cardTable) return CardTakenOut(piece, card)
     Box(modifier = Modifier.fillMaxWidth()) {
         val shape = RoundedCornerShape(2.dp)
         Box(
@@ -200,6 +205,97 @@ private fun CardOpening(
         Box(modifier = Modifier.padding(top = 14.dp).clip(TornTop)) { ChristmasEnvelope(piece, card) }
     }
 }
+
+/**
+ * An opened card on the table's paper (plan Part 4, launch key `card_table`): the whole card, taken out, leans over the
+ * top edge of its red envelope, turned a little; beside it in cream, who it's from (in Sent, once they have it: to), its
+ * caption and the day. The row keeps its height and its red paper; the torn edge goes.
+ */
+@Composable
+private fun CardTakenOut(
+    piece: MailPieceModel,
+    card: MailPieceCard,
+) {
+    val rowArt = rememberCardRowArt()
+    val envelopeShape = RoundedCornerShape(6.dp)
+    val cardShape = RoundedCornerShape(2.dp)
+    val who = (card.sentTo ?: piece.from).trim().substringBefore(' ').ifEmpty { if (card.sentTo != null) "them" else "Someone" }
+    val done = if (card.sentTo != null) "Delivered" else "Opened"
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier =
+                Modifier
+                    .padding(top = 14.dp)
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .shadow(3.dp, envelopeShape)
+                    .clip(envelopeShape)
+                    .background(PantopusColors.cardEnvelope)
+                    .drawBehind { rowArt?.let { drawCardRowPaper(it) } },
+        ) {
+            Column(modifier = Modifier.padding(start = 158.dp, end = 12.dp, top = 18.dp)) {
+                Text(
+                    "${if (card.sentTo != null) "To" else "From"} $who",
+                    style = takenOutWhoStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    card.caption?.takeIf { it.isNotBlank() } ?: "A Christmas card",
+                    style = takenOutCaptionStyle,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(
+                    listOf(piece.postmarkDay, done).filter { it.isNotBlank() }.joinToString(" · ").uppercase(Locale.US),
+                    style = takenOutDayStyle,
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+        Box(
+            modifier =
+                Modifier
+                    .padding(start = 16.dp)
+                    .size(width = 125.dp, height = 150.dp)
+                    .rotate(-3f)
+                    .shadow(6.dp, cardShape)
+                    .clip(cardShape)
+                    .background(HolidayCardArt.paper(card.paper)),
+        ) {
+            AsyncImage(
+                model = HolidayCardArt.picture(card.design, thumb = true),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.padding(2.dp).fillMaxWidth().fillMaxHeight(0.86f).clip(RoundedCornerShape(1.dp)),
+            )
+        }
+    }
+}
+
+private val takenOutWhoStyle =
+    TextStyle(fontFamily = cardPen, fontSize = 22.sp, lineHeight = 26.sp, color = PantopusColors.tableEnvelopeFrom)
+
+private val takenOutCaptionStyle =
+    TextStyle(
+        fontFamily = FontFamily.Serif,
+        fontStyle = FontStyle.Italic,
+        fontSize = 15.sp,
+        lineHeight = 19.sp,
+        color = PantopusColors.tableEnvelopeTo,
+    )
+
+private val takenOutDayStyle =
+    TextStyle(
+        fontFamily = FontFamily.Serif,
+        fontSize = 11.sp,
+        lineHeight = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.1.em,
+        color = PantopusColors.tableGold,
+    )
 
 /** The envelope's top edge torn open, as the drawing's ragged clip. */
 private object TornTop : Shape {

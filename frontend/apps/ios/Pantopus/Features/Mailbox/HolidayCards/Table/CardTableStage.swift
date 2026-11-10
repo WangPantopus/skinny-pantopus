@@ -18,7 +18,7 @@ struct CardTableStage: View {
     let layout: CardTableLayout
 
     var body: some View {
-        let pages = model.fold.pages(screen: layout.screen)
+        let pages = model.fold.pages(screen: layout.screen, bottomRoom: model.pagesBottomRoom(layout))
         let pose = CardTablePose(springs: model.springs, layout: layout, pages: pages)
         let content = model.content
         let ready = model.isReady
@@ -27,6 +27,10 @@ struct CardTableStage: View {
             if ready {
                 envelopeBack(pose)
                 cardLayer(pose)
+                    .frame(width: layout.screen.width, height: layout.screen.height, alignment: .topLeading)
+                    // Enlarged (plan 6.1), from the card's middle; the light over it keeps moving.
+                    .scaleEffect(model.zoom, anchor: zoomAnchor(pose))
+                    .offset(model.zoomOffset)
                     .zIndex(pose.cardIsOut && pose.showsCard ? 20 : (pose.showsCard ? 5 : -1))
                 envelopeFront(pose)
                     .zIndex(10)
@@ -46,6 +50,15 @@ struct CardTableStage: View {
         .frame(width: layout.screen.width, height: layout.screen.height, alignment: .topLeading)
         .clipped()
         .allowsHitTesting(false)
+    }
+
+    /// The card's middle, as a point of the screen.
+    private func zoomAnchor(_ pose: CardTablePose) -> UnitPoint {
+        guard layout.screen.width > 0, layout.screen.height > 0 else { return .center }
+        return UnitPoint(
+            x: (pose.cardX + layout.cardWidth / 2) / layout.screen.width,
+            y: (pose.cardY + layout.cardHeight / 2) / layout.screen.height
+        )
     }
 
     // MARK: The table and its light
@@ -154,12 +167,20 @@ struct CardTableStage: View {
             Image(uiImage: art.flapOut)
                 .resizable()
                 .frame(width: width, height: depth)
+            if model.sending != nil, !model.sealShown {
+                CardTableSealSpot(width: sealWidth, press: model.sealPress)
+                    .offset(x: width * 0.36, y: depth * 0.71)
+            }
             Image(uiImage: model.cracked ? art.waxCracked : art.wax)
                 .resizable()
                 .frame(width: sealWidth, height: sealWidth * 546 / 540)
                 .rotationEffect(.degrees(model.cracked ? 2.5 : 0))
                 .offset(y: model.cracked ? -sealWidth * 0.01 : 0)
                 .animation(.easeInOut(duration: 0.16), value: model.cracked)
+                // Sealing by hand: it's pressed on, and a refused seal lifts off.
+                .scaleEffect(model.sealShown ? 1 : 1.18)
+                .opacity(model.sealShown ? 1 : 0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.62), value: model.sealShown)
                 .offset(x: width * 0.36, y: depth * 0.71)
         }
         .frame(width: width, height: depth, alignment: .topLeading)
@@ -174,6 +195,7 @@ struct CardTableStage: View {
 
     private func envelopeFront(_ pose: CardTablePose) -> some View {
         let content = model.content
+        let setup = model.sendingSetup
         return CardTableEnvelopeFront(
             paper: art.envelopeFront,
             stamp: art.stamp(number: content.number),
@@ -182,9 +204,25 @@ struct CardTableStage: View {
             toName: content.toName,
             mailedOn: content.mailedOn,
             year: content.year,
-            sealed: content.sealed
+            sealed: setup?.sealedForChristmas ?? content.sealed,
+            reveal: model.addressing
         )
         .equatable()
+        // To several people: a stack of envelopes under the top one.
+        .background {
+            if let setup, setup.count > 1 {
+                ZStack {
+                    Image(uiImage: art.envelopeFront).resizable()
+                        .rotationEffect(.degrees(3.2))
+                        .offset(x: layout.envelopeWidth * 0.03, y: layout.envelopeWidth * 0.035)
+                    Image(uiImage: art.envelopeFront).resizable()
+                        .rotationEffect(.degrees(-2.4))
+                        .offset(x: -layout.envelopeWidth * 0.02, y: layout.envelopeWidth * 0.022)
+                }
+                .brightness(-0.12)
+                .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 4)
+            }
+        }
         .frame(width: layout.envelopeWidth, height: layout.envelopeHeight)
         .projectionEffect(pose.envelopeSettled ? ProjectionTransform() : .cardTableTurn(
             rotateY: pose.envelopeAngle,
@@ -326,5 +364,33 @@ private struct CardTableCardView: View {
         .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
         .clipShape(RoundedRectangle(cornerRadius: cardWidth * 0.007, style: .continuous))
         .compositingGroup()
+    }
+}
+
+/// Where the seal goes while a card is sealed by hand: a soft gold ring, and the stamp head's round shadow growing
+/// over it while the finger holds.
+private struct CardTableSealSpot: View {
+    let width: CGFloat
+    let press: Double
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(MailPaper.tableGold.opacity(0.55 + 0.35 * press), lineWidth: width * 0.035)
+                .shadow(color: MailPaper.tableGold.opacity(0.7), radius: width * 0.12)
+                .padding(width * 0.08)
+            Circle()
+                .fill(RadialGradient(
+                    colors: [.black.opacity(0.5), .black.opacity(0.28), .clear],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: width * 0.5
+                ))
+                .scaleEffect(0.35 + 0.75 * press)
+                .opacity(press > 0 ? 0.35 + 0.65 * press : 0)
+        }
+        .frame(width: width, height: width * 546 / 540)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

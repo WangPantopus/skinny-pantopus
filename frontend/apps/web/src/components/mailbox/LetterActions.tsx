@@ -34,7 +34,11 @@ const DONE_WORDS: Record<MailActionName, string> = {
   acknowledge: 'Acknowledged',
 };
 
-export default function LetterActions({ piece }: { piece: MailItemV2 }) {
+/**
+ * `atEnd`: at the end of the letter, in its flow (design plan Part 10, D3: the letter gets the screen), instead of a
+ * bar pinned over it.
+ */
+export default function LetterActions({ piece, atEnd = false }: { piece: MailItemV2; atEnd?: boolean }) {
   const action = useMailAction(piece.id);
   const [error, setError] = useState<string | null>(null);
   const [confirmShred, setConfirmShred] = useState(false);
@@ -98,7 +102,7 @@ export default function LetterActions({ piece }: { piece: MailItemV2 }) {
   const secondary = 'flex min-h-[48px] flex-col items-center justify-center gap-1 rounded-xl border border-app-border bg-app-surface px-2 py-1.5 text-xs font-semibold text-app-text-strong transition hover:bg-app-hover disabled:opacity-60';
 
   return (
-    <div ref={groupRef} tabIndex={-1} className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 border-t border-app-border bg-app/95 px-4 pb-4 pt-3 backdrop-blur focus:outline-none md:bottom-0" aria-label="What to do with this mail" role="group">
+    <div ref={groupRef} tabIndex={-1} className={atEnd ? 'mx-auto w-full max-w-2xl border-t border-app-border px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4 focus:outline-none' : 'sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 border-t border-app-border bg-app/95 px-4 pb-4 pt-3 backdrop-blur focus:outline-none md:bottom-0'} aria-label="What to do with this mail" role="group">
       <div className="mx-auto max-w-2xl space-y-2">
         {error ? <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 

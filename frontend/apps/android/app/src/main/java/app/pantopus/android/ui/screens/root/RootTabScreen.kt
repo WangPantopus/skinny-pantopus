@@ -578,8 +578,14 @@ private object ChildRoutes {
     const val MAILBOX_SEARCH = "mailbox/search"
     const val MAILBOX_ITEM_DETAIL = "mailbox/item/{$MAILBOX_ITEM_DETAIL_MAIL_ID_KEY}"
 
-    /** Send a Christmas card, or today's card once it's sent (launch keys `holiday_cards` + `mailbox`). */
-    const val MAILBOX_CARDS = "mailbox/cards?${SendCardViewModel.SEND_CARD_DESIGN_KEY}={${SendCardViewModel.SEND_CARD_DESIGN_KEY}}"
+    /**
+     * Send a Christmas card, or today's card once it's sent (launch keys `holiday_cards` + `mailbox`), with a picture
+     * chosen (a public card page) or a person chosen ("Send Hazel a card" on a card they sent).
+     */
+    const val MAILBOX_CARDS =
+        "mailbox/cards?${SendCardViewModel.SEND_CARD_DESIGN_KEY}={${SendCardViewModel.SEND_CARD_DESIGN_KEY}}" +
+            "&${SendCardViewModel.SEND_CARD_TO_USER_KEY}={${SendCardViewModel.SEND_CARD_TO_USER_KEY}}" +
+            "&${SendCardViewModel.SEND_CARD_TO_NAME_KEY}={${SendCardViewModel.SEND_CARD_TO_NAME_KEY}}"
 
     /** A card the person sent, opened from Sent in the Mailbox (launch key `mailbox`). */
     const val MAILBOX_SENT_CARD = "mailbox/sent/{$MAIL_SENT_CARD_ID_KEY}"
@@ -1576,6 +1582,14 @@ private object ChildRoutes {
     fun mailboxCards(design: String?): String =
         if (design == null) "mailbox/cards" else "mailbox/cards?${SendCardViewModel.SEND_CARD_DESIGN_KEY}=$design"
 
+    /** The steps of sending a card to this person, from Pick a card ("Send Hazel a card"). */
+    fun mailboxCardsTo(
+        userId: String,
+        name: String,
+    ): String =
+        "mailbox/cards?${SendCardViewModel.SEND_CARD_TO_USER_KEY}=${java.net.URLEncoder.encode(userId, "UTF-8")}" +
+            "&${SendCardViewModel.SEND_CARD_TO_NAME_KEY}=${java.net.URLEncoder.encode(name, "UTF-8").replace("+", "%20")}"
+
     /** Build the concrete path for a public profile. */
     fun publicProfile(id: String): String = "users/$id"
 
@@ -2379,10 +2393,11 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
 private val TAB_BAR_STAYS_ROUTES = setOf(ChildRoutes.MAILBOX_ITEM_DETAIL, PantopusRoute.Plans.path, PantopusRoute.Moments.path)
 
 /**
- * Screens with no tab bar, as on iPhone: a conversation has the whole window (founder request 2026-11-06), and its
- * Back returns to the screen underneath, where the bar is. So do the Moments viewer and camera (boards V1 to P4).
+ * Screens with no tab bar, as on iPhone: a conversation has the whole window (founder request 2026-11-06), and so does
+ * sending a Christmas card, all five steps and the card sent (founder, 2026-11-09), and the Moments viewer and camera
+ * (boards V1 to P4). Back returns to the screen underneath, where the bar is.
  */
-private val NO_TAB_BAR_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION) + MomentsRoutes.fullScreen
+private val NO_TAB_BAR_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION, ChildRoutes.MAILBOX_CARDS) + MomentsRoutes.fullScreen
 
 /** Where the first-run notices may show: nothing else is asking there. */
 private val NOTICE_ROUTES = setOf(PantopusRoute.Place.path, PantopusRoute.Today.path)
@@ -3111,13 +3126,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             },
             bottomBar = bottomBar@{
                 if (!showsTabBar) {
-                    // The chat's composer color runs on under the system navigation area; under the Moments viewer and
-                    // camera, the stage's black does.
-                    val stage = backStackEntry?.destination?.route in MomentsRoutes.fullScreen
+                    // The chat's composer color, or the card desk, runs on under the system navigation area; under the
+                    // Moments viewer and camera, the stage's black does.
+                    val under =
+                        when (backStackEntry?.destination?.route) {
+                            in MomentsRoutes.fullScreen -> PantopusColors.momentStage
+                            ChildRoutes.MAILBOX_CARDS -> PantopusColors.cardDesk
+                            else -> PantopusColors.appSurface
+                        }
                     Spacer(
                         Modifier
                             .fillMaxWidth()
-                            .background(if (stage) PantopusColors.momentStage else PantopusColors.appSurface)
+                            .background(under)
                             .navigationBarsPadding(),
                     )
                     return@bottomBar
@@ -5213,6 +5233,16 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 nullable = true
                                 defaultValue = null
                             },
+                            navArgument(SendCardViewModel.SEND_CARD_TO_USER_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument(SendCardViewModel.SEND_CARD_TO_NAME_KEY) {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
                         ),
                 ) {
                     // Launch cut #12 (Christmas cards), with #10 (Mailbox).
@@ -5289,6 +5319,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenPiece = { pieceId -> navController.navigate(ChildRoutes.mailboxItemDetail(pieceId)) },
                         onStartVerify = { homeId, method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
+                        // A card's "Send Hazel a card": the send flow over the card, at Pick a card; Back returns to it.
+                        onSendCard =
+                            if (LaunchFeatures.holidayCards) {
+                                { userId, name -> navController.navigate(ChildRoutes.mailboxCardsTo(userId, name)) }
+                            } else {
+                                null
+                            },
                     )
                 }
                 composable(
