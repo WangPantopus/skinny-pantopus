@@ -27,6 +27,8 @@ public struct MailDayView: View {
     @State private var viewModel: MailDayViewModel
     /// The "Needs a call" piece whose "Other…" choices are showing.
     @State private var otherChoicesItemId: String?
+    /// Christmas cards' paper sounds (plan 8.3), kept on this phone.
+    @State private var cardSounds = CardTableSounds.isOn
     private let onClose: @MainActor () -> Void
     /// Nil while there is no history screen or setup flow to open: the
     /// "See full history" link and the setup nudges are then hidden instead
@@ -312,6 +314,9 @@ public struct MailDayView: View {
         case let .loaded(form):
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 deliveryTimeCard(form)
+                if LaunchFeatures.cardTable {
+                    cardSoundsCard
+                }
             }
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s3)
@@ -351,6 +356,36 @@ public struct MailDayView: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .padding(.bottom, Spacing.s2)
             settingsSwitchRow(.enabled, form: form, showsDivider: false)
+        }
+    }
+
+    /// Christmas cards: the table's three quiet paper sounds (plan 8.3). Kept on this phone only, no server setting;
+    /// it changes at once.
+    private var cardSoundsCard: some View {
+        MailDaySettingsCard(title: "Christmas cards") {
+            Toggle(isOn: Binding(
+                get: { cardSounds },
+                set: { on in
+                    CardTableSounds.isOn = on
+                    cardSounds = on
+                }
+            )) {
+                VStack(alignment: .leading, spacing: Spacing.s1) {
+                    Text("Card sounds")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.Color.appText)
+                    Text(
+                        "Quiet paper sounds as a card slides, its seal breaks and it's set down, when your ringer is on. "
+                            + "On this phone only."
+                    )
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(Theme.Color.primary600)
+            .padding(.vertical, 7)
+            .accessibilityIdentifier("mailDaySettingsToggle_cardSounds")
         }
     }
 
