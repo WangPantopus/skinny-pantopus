@@ -12,7 +12,7 @@ import { BadgeProvider, useBadges } from '@/contexts/BadgeContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { useDesktopNotifications } from '@/hooks/useDesktopNotifications';
 import { NavIcons, HomeIcons, BusinessIcons } from '@/lib/icons';
-import MobileTabBar, { hidesMobileTabs } from '@/components/MobileTabBar';
+import MobileTabBar, { hidesMobileTabs, isConversation } from '@/components/MobileTabBar';
 import { PantopusMark } from '@/components/brand/PantopusMark';
 import UnifiedFAB, { routeHasFab } from '@/components/UnifiedFAB';
 import dynamic from 'next/dynamic';
@@ -287,7 +287,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const showMobileTabs = isMobile && !isBusinessContext && !hidesMobileTabs(pathname);
   // A conversation on a phone is exactly the window the browser shows: only its
   // thread scrolls, so the page can't slide its header under the top bar.
-  const fillsWindow = isMobile && hidesMobileTabs(pathname);
+  const fillsWindow = isMobile && isConversation(pathname);
 
   const currentTab = searchParams.get('tab') || 'overview';
 

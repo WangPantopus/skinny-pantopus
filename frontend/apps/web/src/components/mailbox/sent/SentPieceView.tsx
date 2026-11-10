@@ -190,7 +190,7 @@ export default function SentPieceView({ id }: { id: string }) {
             ) : <section aria-label="The card you sent" className="[grid-area:card]">
               <h3 className={label}>The card you sent</h3>
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
-                <div className="mx-auto w-full max-w-[300px] md:max-w-none">
+                <div className={`mx-auto w-full md:max-w-none ${launchFeatures.cardTable ? '' : 'max-w-[300px]'}`}>
                   {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
                   {front && launchFeatures.cardTable ? (
                     <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -226,7 +226,7 @@ export default function SentPieceView({ id }: { id: string }) {
                   ) : null}
                 </div>
                 {front ? (
-                  <div className="mx-auto w-full max-w-[300px] md:max-w-none">
+                  <div className={`mx-auto w-full md:max-w-none ${launchFeatures.cardTable ? '' : 'max-w-[300px]'}`}>
                     <CardFlip showBack front={front} back={back} />
                   </div>
                 ) : null}

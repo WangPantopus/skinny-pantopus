@@ -246,7 +246,7 @@ export default function LookItOver({
                 ? `The seal lifts at 7 a.m. where ${first} lives. The card slides out of the envelope picture side up.`
                 : `A Christmas card from ${from.replace(/\.$/, '')}. It slides out of the envelope picture side up.`}
             </p>
-            <div className="mx-auto mt-4 max-w-[300px]">
+            <div className={launchFeatures.cardTable ? 'mt-4' : 'mx-auto mt-4 max-w-[300px]'}>
               <CardFromEnvelope piece={unsealed} recipientName={addressee} opening={stage === 'opening'} plays={plays} showBack={showBack}>
                 <div className="mt-[18px] flex flex-wrap items-center justify-center gap-2">
                   <button
@@ -283,7 +283,7 @@ export default function LookItOver({
 
           <section aria-label="On the back" className="mx-4 mt-6">
             <h3 className={label}>On the back</h3>
-            <div className="mx-auto mt-3.5 max-w-[300px]">
+            <div className={launchFeatures.cardTable ? 'mt-3.5' : 'mx-auto mt-3.5 max-w-[300px]'}>
               <Back piece={piece} />
             </div>
           </section>
