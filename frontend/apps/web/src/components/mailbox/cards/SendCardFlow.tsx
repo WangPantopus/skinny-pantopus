@@ -31,6 +31,7 @@ import CardFlip from './CardFlip';
 import CardLinkActions from './CardLinkActions';
 import LookItOver from './LookItOver';
 import { askTakeBack } from './takeBack';
+import { chosenPersonFor } from './sendOneBack';
 import { cardPicture, clockTime, SERIF, shortDay, WAX } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
@@ -1125,9 +1126,11 @@ function SentCard({
 
 // ── The flow ─────────────────────────────────────────────────
 
-export default function SendCardFlow({ chosenDesign = null }: {
+export default function SendCardFlow({ chosenDesign = null, chosenPerson = null }: {
   /** The picture a public card page sent them here with (launch key card_table). */
   chosenDesign?: string | null;
+  /** Send one back (launch key card_table): the person a card on the table sent them here for. */
+  chosenPerson?: string | null;
 }) {
   const router = useRouter();
   const cards = useHolidayCards();
@@ -1204,6 +1207,18 @@ export default function SendCardFlow({ chosenDesign = null }: {
     setTo(listed.length === 1 ? listed[0] : { kind: 'list', entries: listed });
     setStep('pick');
   };
+
+  // Send one back: that person is already chosen and the flow opens at Pick a card, unless today's card has gone and
+  // there are no stamps to send another (then this page shows today's card, as it always does). Once, as it opens.
+  const choseOnce = useRef(false);
+  useEffect(() => {
+    if (choseOnce.current || !launchFeatures.cardTable || !data) return;
+    choseOnce.current = true;
+    const person = chosenPersonFor(chosenPerson);
+    if (!person || !data.open) return;
+    setTo({ kind: 'person', userId: person.userId, name: person.name });
+    if (!(today && !data.postage_enabled)) setStep('pick');
+  }, [data, chosenPerson, today]);
 
   // Each step starts at its heading, for keyboards and screen readers.
   useEffect(() => { headingRef.current?.focus(); }, [step]);
