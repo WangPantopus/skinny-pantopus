@@ -460,6 +460,13 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
     case planStudy = "plan-study"
     /// The outlined location arrow (Plans: "Show my location", Directions).
     case locationArrow = "location-arrow"
+    /// Moments: the tab, the empty map's mark.
+    case circleDashed = "circle-dashed"
+    /// Moments: a video's sound on, and off.
+    case volume2 = "volume-2"
+    case volumeX = "volume-x"
+    /// Moments' camera: the front or back camera.
+    case switchCamera = "switch-camera"
 
     /// SF Symbol name used to render this icon. Chosen for closest visual
     /// parity with the Lucide source; designers can later swap the
@@ -835,6 +842,10 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
         case .planWalk: "cup.and.saucer"
         case .planStudy: "book"
         case .locationArrow: "location"
+        case .circleDashed: "circle.dashed"
+        case .volume2: "speaker.wave.2"
+        case .volumeX: "speaker.slash"
+        case .switchCamera: "arrow.triangle.2.circlepath.camera"
         }
     }
 }

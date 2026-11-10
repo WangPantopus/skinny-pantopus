@@ -525,7 +525,10 @@ public final class ChatListViewModel {
             topics: original.topics,
             gigId: original.gigId,
             storageKey: original.storageKey,
-            isMuted: original.isMuted
+            isMuted: original.isMuted,
+            // A newer message took the row's last line: the Moment it named was the older one's
+            // (the next read of the list says whether the new one names a Moment too).
+            momentReply: isLatest ? nil : original.momentReply
         )
         allRows[index] = updated
         serverTotalUnread = max(0, serverTotalUnread + nextUnread - original.unread)
