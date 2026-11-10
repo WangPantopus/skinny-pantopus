@@ -60,8 +60,10 @@ enum MomentsMediaExport {
     /// "+45.6237-122.6812/"), for a library video Photos has no place for.
     static func location(of url: URL) async -> (latitude: Double, longitude: Double)? {
         guard let items = try? await AVURLAsset(url: url).load(.metadata) else { return nil }
+        // An iPhone's tag, then the one Android cameras write.
         let tagged = AVMetadataItem.metadataItems(from: items, filteredByIdentifier: .commonIdentifierLocation)
             + AVMetadataItem.metadataItems(from: items, filteredByIdentifier: .quickTimeMetadataLocationISO6709)
+            + AVMetadataItem.metadataItems(from: items, filteredByIdentifier: .quickTimeUserDataLocationISO6709)
         for item in tagged {
             if let text = try? await item.load(.stringValue), let point = coordinate(iso6709: text) { return point }
         }

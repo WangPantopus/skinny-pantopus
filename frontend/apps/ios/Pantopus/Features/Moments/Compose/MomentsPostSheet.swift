@@ -220,7 +220,8 @@ struct MomentsPostSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("This is your home. People will see the pin on it.")
                     .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(Theme.Color.warningDeep)
+                    // The label ink: darker in light, lighter in dark, so it reads on the amber card in both.
+                    .foregroundStyle(Theme.Color.warning)
                 Text("Turn on Show the area instead to show only the area.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appTextSecondary)
