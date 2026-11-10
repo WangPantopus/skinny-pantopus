@@ -108,14 +108,14 @@ internal fun LookStep(
                 fontFamily = FontFamily.Serif,
                 fontSize = 22.sp,
                 lineHeight = 28.sp,
-                color = PantopusColors.cardTextStrong,
+                color = DeskInk.strong,
                 modifier = Modifier.semantics { heading() },
             )
             Text(
                 lookIntro(to, preview),
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
-                color = PantopusColors.cardTextQuiet,
+                color = DeskInk.quiet,
                 modifier = Modifier.padding(top = Spacing.s1),
             )
         }
@@ -195,7 +195,7 @@ private fun PersonLook(
             },
             fontSize = 15.sp,
             lineHeight = 22.sp,
-            color = PantopusColors.cardTextBody,
+            color = DeskInk.body,
         )
         CardComingOut(envelope, card, from)
     }
@@ -456,7 +456,7 @@ private fun LookSection(
             lineHeight = 16.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.06.em,
-            color = PantopusColors.cardSectionInk,
+            color = DeskInk.section,
             modifier =
                 Modifier
                     // The headings line up with the desk's text, whatever the section's own inset.

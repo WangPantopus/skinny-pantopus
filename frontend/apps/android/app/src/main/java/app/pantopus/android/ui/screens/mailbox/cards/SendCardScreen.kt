@@ -339,41 +339,47 @@ private fun Steps(
         SendCardStep.Pick -> PickStep(cards, form.design, onLarge = onLarge)
         SendCardStep.Write ->
             if (design != null) {
-                WriteStep(
-                    design = design,
-                    year = cards.year,
-                    fromName = fromName,
-                    to = to,
-                    limit = cards.messageLimit,
-                    message = form.message,
-                    onMessage = viewModel::onMessageChange,
-                    onNext = viewModel::next,
-                    signature = form.signature,
-                    canSign = LaunchFeatures.cardTable && cards.signature != null,
-                    onSignature = viewModel::onSignature,
-                )
+                StepsAtTable(LaunchFeatures.cardTable, design.table) {
+                    WriteStep(
+                        design = design,
+                        year = cards.year,
+                        fromName = fromName,
+                        to = to,
+                        limit = cards.messageLimit,
+                        message = form.message,
+                        onMessage = viewModel::onMessageChange,
+                        onNext = viewModel::next,
+                        signature = form.signature,
+                        canSign = LaunchFeatures.cardTable && cards.signature != null,
+                        onSignature = viewModel::onSignature,
+                    )
+                }
             }
         SendCardStep.Seal ->
             if (design != null && to != null) {
-                SealStep(
-                    cards,
-                    to,
-                    design,
-                    fromName,
-                    form,
-                    onArrival = viewModel::chooseArrival,
-                    onLook = viewModel::look,
-                    onSend = viewModel::send,
-                    stamps = stamps,
-                    onGetStamps = onGetStamps,
-                )
+                StepsAtTable(LaunchFeatures.cardTable, design.table) {
+                    SealStep(
+                        cards,
+                        to,
+                        design,
+                        fromName,
+                        form,
+                        onArrival = viewModel::chooseArrival,
+                        onLook = viewModel::look,
+                        onSend = viewModel::send,
+                        stamps = stamps,
+                        onGetStamps = onGetStamps,
+                    )
+                }
             }
         SendCardStep.Look -> {
             val preview = form.preview
             val listLook = form.listPreview
-            when {
-                to is CardRecipient.Several && design != null && listLook != null -> ListLookStep(cards, form, design, listLook)
-                design != null && to != null && preview != null -> LookStep(cards, to, design, preview)
+            StepsAtTable(LaunchFeatures.cardTable && design != null, design?.table) {
+                when {
+                    to is CardRecipient.Several && design != null && listLook != null -> ListLookStep(cards, form, design, listLook)
+                    design != null && to != null && preview != null -> LookStep(cards, to, design, preview)
+                }
             }
         }
         SendCardStep.Sent ->
