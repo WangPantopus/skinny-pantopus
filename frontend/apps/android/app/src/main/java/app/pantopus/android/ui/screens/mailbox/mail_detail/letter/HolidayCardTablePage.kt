@@ -60,13 +60,7 @@ internal fun HolidayCardTablePage(
     val sendCard = actions.onSendCard
     LaunchedEffect(person, sendCard != null) { if (person != null && sendCard != null) senderActions.checkSendBack(person) }
     val canSendBack by senderActions.canSendBack.collectAsStateWithLifecycle()
-    val fromName = letter.fromName.trim()
-    val sendBack =
-        if (person != null && sendCard != null && canSendBack && !card.sealed && fromName.isNotEmpty()) {
-            CardTableSendBack("Send ${fromName.substringBefore(' ')} a card") { sendCard(person, fromName) }
-        } else {
-            null
-        }
+    val sendBack = sendBackAction(person, letter.fromName, sendCard.takeIf { canSendBack && !card.sealed })
     val menu =
         buildList {
             sendBack?.let { add(CardTableMenuItem(it.title, "cardTableMenuSendBack", it.onClick)) }
@@ -103,6 +97,17 @@ internal fun HolidayCardTablePage(
             viewModel = senderActions,
         )
     }
+}
+
+/** "Send Hazel a card", when there's a person to send one to and a way to; null otherwise. */
+private fun sendBackAction(
+    person: String?,
+    fromName: String,
+    sendCard: ((userId: String, name: String) -> Unit)?,
+): CardTableSendBack? {
+    val name = fromName.trim()
+    if (person == null || sendCard == null || name.isEmpty()) return null
+    return CardTableSendBack("Send ${name.substringBefore(' ')} a card") { sendCard(person, name) }
 }
 
 /** The card as the table draws it, with the names on its envelope. */

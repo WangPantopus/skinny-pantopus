@@ -759,14 +759,27 @@ class SendCardViewModel
          * The flow as it was saved with the screen: the same step, or the step before it when that step needs what isn't
          * saved (step 5 is read again from step 4; a card just sent shows as today's card).
          */
+        /** "Send Hazel a card" on a card she sent names her (on first opening only), and the flow opens at Pick a card. */
+        private fun sendBackPerson(): CardRecipient.Person? {
+            if (saved.get<String>(KEY_STEP) != null) return null
+            val userId = saved.get<String>(SEND_CARD_TO_USER_KEY)?.takeIf { it.isNotBlank() } ?: return null
+            return CardRecipient.Person(userId, saved.get<String>(SEND_CARD_TO_NAME_KEY).orEmpty())
+        }
+
+        /** The step saved with the screen (step 5 is read again from step 4); none saved: the first, or [opensAtPick]. */
+        private fun savedStep(opensAtPick: Boolean): SendCardStep =
+            when (saved.get<String>(KEY_STEP)) {
+                null -> if (opensAtPick) SendCardStep.Pick else SendCardStep.To
+                SendCardStep.Pick.name -> SendCardStep.Pick
+                SendCardStep.Write.name -> SendCardStep.Write
+                SendCardStep.Seal.name, SendCardStep.Look.name -> SendCardStep.Seal
+                else -> SendCardStep.To
+            }
+
         private fun restoredForm(): SendCardForm {
             val email = saved.get<String>(KEY_EMAIL).orEmpty()
             val list = saved.get<String>(KEY_LIST)?.let(::readList)
-            // "Send Hazel a card" on a card she sent names her, and the flow opens at Pick a card.
-            val sendBack =
-                saved.get<String>(SEND_CARD_TO_USER_KEY)?.takeIf { it.isNotBlank() && saved.get<String>(KEY_STEP) == null }?.let {
-                    CardRecipient.Person(it, saved.get<String>(SEND_CARD_TO_NAME_KEY).orEmpty())
-                }
+            val sendBack = sendBackPerson()
             val to =
                 sendBack
                     ?: saved.get<String>(KEY_TO_USER)?.let { CardRecipient.Person(it, saved.get<String>(KEY_TO_NAME).orEmpty()) }
@@ -776,14 +789,7 @@ class SendCardViewModel
             // "Send this card to someone" on a public card page names the picture.
             val design = saved.get<String>(KEY_DESIGN) ?: saved.get<String>(SEND_CARD_DESIGN_KEY)?.takeIf { LaunchFeatures.cardTable }
             val message = saved.get<String>(KEY_MESSAGE).orEmpty()
-            val step =
-                when (saved.get<String>(KEY_STEP)) {
-                    null -> if (sendBack != null) SendCardStep.Pick else SendCardStep.To
-                    SendCardStep.Pick.name -> SendCardStep.Pick
-                    SendCardStep.Write.name -> SendCardStep.Write
-                    SendCardStep.Seal.name, SendCardStep.Look.name -> SendCardStep.Seal
-                    else -> SendCardStep.To
-                }
+            val step = savedStep(opensAtPick = sendBack != null)
             val reachable =
                 when {
                     to == null -> SendCardStep.To
