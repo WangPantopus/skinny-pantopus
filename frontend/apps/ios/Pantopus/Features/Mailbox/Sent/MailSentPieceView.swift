@@ -347,7 +347,7 @@ private extension MailSentPieceView {
         switch step.step {
         case "sealed": MailPaper.wax
         case "delivered", "joined", "opens": Theme.Color.success
-        case "returned": Theme.Color.appTextMuted
+        case "returned", "not_delivered": Theme.Color.appTextMuted
         default: Theme.Color.appTextStrong
         }
     }
