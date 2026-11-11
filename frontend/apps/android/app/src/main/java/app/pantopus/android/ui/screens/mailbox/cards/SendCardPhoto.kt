@@ -200,12 +200,16 @@ internal fun sealWaits(
         else -> null
     }
 
-/** The photo picker (the system's own: no permission) and [WritePhoto], under the note. */
+/**
+ * The photo picker (the system's own: no permission) and [WritePhoto], under the note. [buyStamp]: no bought stamp is
+ * left, so "Add a photo" (and Replace) opens the stamp books instead of the picker.
+ */
 @Composable
 internal fun PhotoUnderTheNote(
     photo: CardPhotoDraft?,
     fromName: String,
     calls: CardPhotoCalls,
+    buyStamp: (() -> Unit)?,
     beforePick: () -> Unit,
 ) {
     val picker =
@@ -217,13 +221,26 @@ internal fun PhotoUnderTheNote(
         fromFirst = fromName.trim().substringBefore(' '),
         onPick = {
             beforePick()
-            picker.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-            )
+            if (buyStamp != null) {
+                buyStamp()
+            } else {
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }
         },
         onRetry = calls.onRetry,
         onRemove = calls.onRemove,
         onAlt = calls.onAlt,
+    )
+}
+
+/** Under "Add a photo" and "Record a greeting" while no bought stamp is left (`media.bought_stamp` "buy"). */
+@Composable
+internal fun MediaNeedsBoughtStamp() {
+    Text(
+        "Photos and voice greetings go on cards sent with a bought stamp.",
+        fontSize = 13.sp,
+        color = DeskInk.quiet,
+        modifier = Modifier.padding(top = Spacing.s2).testTag("sendCardMediaNeedsStamp"),
     )
 }
 
@@ -247,7 +264,8 @@ internal class CardVoiceCalls(
  * "Record a greeting" under the note (memories plan step 7, wave 4 drawings 1 and 2): the microphone is asked for only
  * on this tap; it records up to 60 seconds and stops when the app goes to the background (keeping what it has, never
  * resuming by itself). Then the cassette (a gift tag for Christmas with Jesus Christ) to listen to, with its upload,
- * Record again (or Try again) and Remove. Refused, the card can still go with its note.
+ * Record again (or Try again) and Remove. Refused, the card can still go with its note. [buyStamp]: no bought stamp is
+ * left, so the tap opens the stamp books instead (and asks nothing).
  */
 @Composable
 internal fun VoiceUnderTheNote(
@@ -256,6 +274,7 @@ internal fun VoiceUnderTheNote(
     fromFirst: String,
     gift: Boolean,
     calls: CardVoiceCalls,
+    buyStamp: (() -> Unit)?,
     beforeRecord: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -288,7 +307,11 @@ internal fun VoiceUnderTheNote(
     val record = {
         beforeRecord()
         val has = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        if (has) begin() else asker.launch(Manifest.permission.RECORD_AUDIO)
+        when {
+            buyStamp != null -> buyStamp()
+            has -> begin()
+            else -> asker.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
     when {
         recorder.recording -> Recording(recorder)
