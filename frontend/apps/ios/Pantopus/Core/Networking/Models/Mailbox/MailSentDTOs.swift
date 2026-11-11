@@ -40,7 +40,8 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
     /// Where a sent card is: `waiting` (to a person, before the 7 a.m.
     /// pickup), `picked_up` (picked up, arrives on Christmas morning),
     /// `delivered` (in their mailbox); by email `email_waiting`, `claimed`
-    /// (they joined and have it) or `expired` (not opened in 90 days).
+    /// (they joined and have it) or `expired` (not opened in 90 days); with the card memories,
+    /// `not_delivered` (a block withdrew it before delivery; never why or when).
     public enum Status: String, Sendable, Hashable {
         case waiting
         case pickedUp = "picked_up"
@@ -48,6 +49,7 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
         case emailWaiting = "email_waiting"
         case claimed
         case expired
+        case notDelivered = "not_delivered"
     }
 
     public let id: String
