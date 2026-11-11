@@ -3,7 +3,9 @@
 // address. A Moment shown as an area, and one posted at the author's own home, says only the town: a place's or a
 // street's name would give the spot away. The Post sheet asks first (POST /api/moments/place-preview), so the author
 // sees the words before posting, and may pick another of the names that fit the spot (`places`): the server makes that
-// list and takes back only a key from it, so nobody writes a place's name themselves.
+// list and takes back only a key from it, so nobody writes a place's name themselves. The Post sheet's place picker
+// (the Pulse composer's, around the Moment's pin) may also name a venue a little farther off, the coffee shop or the
+// stadium the photo was taken in: the app sends only the venue's id, and venueNear finds it again near the pin.
 
 const crypto = require('crypto');
 const supabaseAdmin = require('../../config/supabaseAdmin');
@@ -21,6 +23,9 @@ const RIGHT_AT_VENUE_M = 10;
 // town; this many at most.
 const PICK_VENUE_M = 100;
 const MAX_PLACES = 6;
+// The place picker's venues: this far from the pin at most (a venue whose outline holds the pin is 0 m away). The pin
+// moves to the venue, so it stays in the same part of town as the photo.
+const PICK_PLACE_M = 1500;
 // The Post sheet's home notice: a pin this close to a home the person lives at.
 const AT_HOME_M = 60;
 const VENUE_WAIT_MS = 2500;
@@ -116,6 +121,17 @@ function pickedLabel(labels, key) {
   return (labels?.places || []).find((place) => place.key === key)?.label || null;
 }
 
+/**
+ * The venue the place picker listed as `venueId` (an `osm:` id) when it is within PICK_PLACE_M of the pin:
+ * { latitude, longitude, label } at the venue's point, or null. Never throws (a lookup that fails is null).
+ */
+async function venueNear(venueId, latitude, longitude) {
+  const venue = await settle(venues.venueNear({ placeId: venueId, latitude, longitude, maxDistance: PICK_PLACE_M }),
+    'venue');
+  if (!venue?.name || !Number.isFinite(venue.center?.lat) || !Number.isFinite(venue.center?.lng)) return null;
+  return { latitude: venue.center.lat, longitude: venue.center.lng, label: String(venue.name).slice(0, 80) };
+}
+
 /** Whether the point is within AT_HOME_M of a home the person lives at (householdHomeIds; fails closed to false). */
 async function isAtHome(userId, latitude, longitude) {
   const { householdHomeIds } = require('../../utils/homeMailAccess');
@@ -144,4 +160,4 @@ function labelKind(labels, label) {
   return label === labels?.area_label ? 'town' : 'place';
 }
 
-module.exports = { labelsAt, pickedLabel, labelKind, isAtHome, FALLBACK_LABEL, AT_HOME_M };
+module.exports = { labelsAt, pickedLabel, labelKind, isAtHome, venueNear, FALLBACK_LABEL, AT_HOME_M, PICK_PLACE_M };

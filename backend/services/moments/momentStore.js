@@ -3,7 +3,9 @@
 // story_expires_at, and its own details in post_metadata.moment:
 //   { v: 1, kind, hours, background, show_area, at_home, location_source,
 //     state: 'uploading' | 'checking' | 'live', media: {...} | null, check: {...} | null, purged_at,
-//     label_kind, notify: { sent_at } | { skipped } (services/moments/momentNotify.js) }
+//     label_kind, notify: { sent_at } | { skipped } (services/moments/momentNotify.js),
+//     taken_at (a photo or video from the album taken more than a day before it was posted: everyone reads when),
+//     venue_id (the venue the author picked in the place picker, its `osm:` id) }
 // Its place label is location_name (what everyone reads), its audience Post.audience ('nearby' | 'connections').
 // The row is private (visibility 'private', no distribution targets, off profiles), and every other post path leaves
 // it out (feedService.onlyShownPosts, readAccess.canReadPost, profiles): this module is its only reader. Every read here
@@ -25,7 +27,11 @@ const AUDIENCES = ['nearby', 'connections'];
 const DAILY_LIMIT = 20;
 const HOUR_MS = 60 * 60 * 1000;
 const FIX_MAX_AGE_MS = 5 * 60 * 1000;
-const CAPTURE_MAX_AGE_MS = 24 * HOUR_MS;
+// Any photo or video in the album may be a Moment (founder, 2026-11-11). One taken more than this before it's posted
+// says when it was taken ("Taken Oct 3"), so an old photo is never read as something happening now.
+const TAKEN_SHOWN_AFTER_MS = 24 * HOUR_MS;
+// A camera whose clock was never set says 1970 or so: that time isn't shown.
+const EARLIEST_TAKEN_MS = Date.UTC(2000, 0, 1);
 // A phone's clock may run a little ahead of the server's.
 const CLOCK_SKEW_MS = 2 * 60 * 1000;
 const MAX_RINGS = 300;
@@ -227,6 +233,7 @@ function serializeMoment(row, { author, viewerId, seen = false, myReaction = nul
     created_at: row.created_at,
     expires_at: row.story_expires_at,
     hours: m.hours,
+    taken_at: m.kind === 'text' ? null : (m.taken_at || null),
     seen: own ? true : Boolean(seen),
     my_reaction: own ? null : myReaction,
     viewer_count: own ? Number(row.view_count) || 0 : null,
@@ -453,7 +460,7 @@ async function viewersOf(row) {
 
 /** The Post row a new Moment is stored as. */
 function newMomentRow({ userId, accountType, kind, hours, audience, showArea, atHome, caption, text, background,
-  location, labels, labelKind = null, createdAt }) {
+  location, labels, labelKind = null, createdAt, takenAt = null, venueId = null }) {
   const now = createdAt ? new Date(createdAt) : new Date();
   const live = kind === 'text';
   return {
@@ -494,6 +501,8 @@ function newMomentRow({ userId, accountType, kind, hours, audience, showArea, at
         at_home: Boolean(atHome),
         // What the place label names ('place' | 'street' | 'town' | 'none'), for the push's "At", "On" or "In".
         ...(labelKind ? { label_kind: labelKind } : {}),
+        ...(takenAt && kind !== 'text' ? { taken_at: takenAt } : {}),
+        ...(venueId ? { venue_id: venueId } : {}),
         location_source: location.source,
         state: live ? 'live' : 'uploading',
         media: null,
@@ -504,8 +513,18 @@ function newMomentRow({ userId, accountType, kind, hours, audience, showArea, at
 }
 
 /**
- * Checks the posting rules for `user` (CONTRACT POST /api/moments): the one-time 18+ confirmation, a fresh GPS fix or
- * a library item from the last 24 hours, and 20 Moments a day. Throws the error the apps handle.
+ * When a photo or video was taken, as everyone reads it ("Taken Oct 3"), or null: only for one taken more than
+ * TAKEN_SHOWN_AFTER_MS before `now`, and never for a time that can't be right (before 2000, or ahead of the clock).
+ */
+function takenAtShown(value, now = Date.now()) {
+  const taken = Date.parse(value || '');
+  if (!Number.isFinite(taken) || taken < EARLIEST_TAKEN_MS || taken > now + CLOCK_SKEW_MS) return null;
+  return now - taken > TAKEN_SHOWN_AFTER_MS ? new Date(taken).toISOString() : null;
+}
+
+/**
+ * Checks the posting rules for `user` (CONTRACT POST /api/moments): the one-time 18+ confirmation, a fresh GPS fix
+ * (an album item pins where it was taken, from any time), and 20 Moments a day. Throws the error the apps handle.
  */
 async function checkPostingRules(user, { kind, location }) {
   const now = Date.now();
@@ -514,12 +533,8 @@ async function checkPostingRules(user, { kind, location }) {
     if (!Number.isFinite(fixAt) || fixAt > now + CLOCK_SKEW_MS || now - fixAt > FIX_MAX_AGE_MS) {
       throw fail(422, 'LOCATION_TOO_OLD', 'Your location is out of date. Wait a moment for a new fix and try again.');
     }
-  } else {
-    if (kind === 'text') throw fail(400, 'MOMENT_INVALID', 'A text card pins where you are.');
-    const takenAt = Date.parse(location.taken_at);
-    if (!Number.isFinite(takenAt) || takenAt > now + CLOCK_SKEW_MS || now - takenAt > CAPTURE_MAX_AGE_MS) {
-      throw fail(422, 'CAPTURE_TOO_OLD', 'Only photos and videos from the last 24 hours can be Moments.');
-    }
+  } else if (kind === 'text') {
+    throw fail(400, 'MOMENT_INVALID', 'A text card pins where you are.');
   }
   const { adultStatus } = require('../adultAttestation');
   const adult = await adultStatus(user.id);
@@ -661,6 +676,6 @@ module.exports = {
   KINDS, HOURS, BACKGROUNDS, AUDIENCES, DAILY_LIMIT, HOUR_MS, MOMENT_SELECT,
   fail, meta, hasEnded, momentState, displayedPoint, viewerContext, canSee, loadAuthors, loadMoment,
   serializeMoments, openMoment, mapRings, unseenPeople, wentLiveAt, ownMoments, viewersOf,
-  newMomentRow, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
+  newMomentRow, takenAtShown, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
   filesHeld, purgeFiles, deleteMoment,
 };
