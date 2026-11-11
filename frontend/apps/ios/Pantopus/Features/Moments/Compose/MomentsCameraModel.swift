@@ -88,6 +88,8 @@ final class MomentsCameraModel {
     }
 
     func startVideo() {
+        // A press after a fold, while the recording that began before it goes on, doesn't start a second one.
+        guard !recording else { return }
         recording = true
         elapsed = 0
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()

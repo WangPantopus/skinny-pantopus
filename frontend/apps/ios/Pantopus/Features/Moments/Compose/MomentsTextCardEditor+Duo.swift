@@ -131,7 +131,19 @@ extension MomentsTextCardEditor {
         let scale = width / 217
         return ZStack {
             LinearGradient(colors: [colors.top, colors.bottom], startPoint: UnitPoint(x: 0.33, y: 0), endPoint: UnitPoint(x: 0.67, y: 1))
+            // A vertical field is taller than its lines and keeps them at its top: it gets the words' own height
+            // (a hidden copy measures it at the same width), so the card centers them as the posted card does.
             field(size: 16 * scale, lineSpacing: 1.4 * scale, lines: 14)
+                .frame(height: wideWordsHeight > 0 ? wideWordsHeight : nil)
+                .background(alignment: .top) {
+                    Text(model.text.isEmpty ? "What's happening here?" : model.text)
+                        .font(.system(size: 16 * scale, weight: .semibold))
+                        .lineSpacing(1.4 * scale)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .hidden()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { wideWordsHeight = $0 }
+                }
                 .padding(.horizontal, 18 * scale)
                 .padding(.vertical, 20 * scale)
         }

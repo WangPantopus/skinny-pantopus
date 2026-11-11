@@ -15,6 +15,8 @@ struct MomentsTextCardEditor: View {
     let model: MomentsComposerModel
     let onClose: () -> Void
     @FocusState var focused: Bool
+    /// Open sideways (board O8): the words' own height in the card, which the field is given so the card centers them.
+    @State var wideWordsHeight: CGFloat = 0
     @Environment(\.momentsDuoScreen) var duo
 
     var body: some View {
