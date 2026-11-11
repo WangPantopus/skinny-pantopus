@@ -39,9 +39,11 @@ final class MomentsNavigator {
     private init() {}
 }
 
-/// Posting, from + or "Add a Moment".
+/// Posting, from + or "Add a Moment". What's being written is held here, above the composer's cover: on the
+/// iPhone Duo a fold can build the composer again, and it picks up where it was.
 struct MomentsComposeRequest: Identifiable {
     let id = UUID()
+    let model: MomentsComposerModel
 }
 
 public struct MomentsTabRoot: View {
@@ -85,13 +87,14 @@ public struct MomentsTabRoot: View {
                 onClose: viewerHooks.onClose
             )
         }
-        .fullScreenCover(item: $composing) { _ in
-            MomentsComposer { composing = nil }
+        .fullScreenCover(item: $composing) { request in
+            MomentsComposer(model: request.model) { composing = nil }
         }
         .onChange(of: flags.moments) { _, isOn in
             // Moments switched off: nothing of Moments is left open (the bar drops this tab).
             if !isOn {
                 endWatching()
+                composing?.model.abandon()
                 composing = nil
                 showsAreaPicker = false
                 navigator.pending = nil
@@ -166,7 +169,7 @@ public struct MomentsTabRoot: View {
                 guard !rings.isEmpty else { return }
                 watch(MomentsWatchRequest(rings: rings, start: start, newOnly: newOnly))
             },
-            compose: { composing = MomentsComposeRequest() },
+            compose: { composing = MomentsComposeRequest(model: MomentsComposerModel()) },
             areaPicker: { showsAreaPicker = true }
         )
     }

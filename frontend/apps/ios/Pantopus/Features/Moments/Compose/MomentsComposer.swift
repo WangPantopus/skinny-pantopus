@@ -6,15 +6,25 @@
 //  first, Library (the last 24 hours) and Text beside it, then the Post
 //  sheet. Before the first Moment it asks once whether you're 18 or older.
 //  The camera, library and text card are dark; the Post sheet follows the
-//  phone's light or dark.
+//  phone's light or dark. On the iPhone Duo each takes the layout for how the
+//  Duo is held (the founder's Duo boards C6–C8, O7–O9, B2, U3); what's being
+//  written lives in the model, which the Moments tab holds, so a fold keeps it.
 //
 
 import SwiftUI
 
 struct MomentsComposer: View {
+    /// Held by the Moments tab, above this cover: on the iPhone Duo a fold can build the composer again.
+    let model: MomentsComposerModel
     let onClose: @MainActor () -> Void
-    @State private var model = MomentsComposerModel()
     @State private var asksDiscard = false
+    /// How the iPhone Duo is held, as this cover reads it; until then, as the Moments tab read it.
+    @State private var ownScreen: MomentsDuoScreen?
+    @Environment(\.momentsDuoScreen) private var openerScreen
+
+    private var duo: MomentsDuoScreen {
+        ownScreen ?? openerScreen
+    }
 
     var body: some View {
         ZStack {
@@ -36,7 +46,18 @@ struct MomentsComposer: View {
                 .environment(\.colorScheme, .dark)
             }
         }
-        .task { await model.start() }
+        // The screens inside know how the Duo is held from their first frame.
+        .environment(\.momentsDuoScreen, duo)
+        // Its own task, which a screen going away (a fold) never cancels; it runs once.
+        .onAppear { Task { await model.start() } }
+        // The camera runs only while it's what's showing; a fold doesn't stop it, closing does.
+        .onChange(of: model.wantsCamera, initial: true) { _, wants in
+            if wants {
+                Task { await model.camera.start() }
+            } else {
+                model.camera.stop()
+            }
+        }
         .sheet(isPresented: Binding(get: { model.asksAdult }, set: { model.asksAdult = $0 })) {
             MomentsAdultSheet(model: model, onDecline: close)
                 .presentationDetents([.height(300)])
@@ -56,6 +77,12 @@ struct MomentsComposer: View {
         } message: {
             Text("What you wrote won't be saved.")
         }
+        // A fold or a turn switches layouts at once.
+        .readsMomentsDuoScreen(Binding(get: { duo }, set: { screen in
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { ownScreen = screen }
+        }))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.compose")
     }
@@ -94,26 +121,42 @@ struct MomentsComposerTopBar<Trailing: View>: View {
             .accessibilityLabel("Close")
             .accessibilityIdentifier("moments.camera.close")
             Spacer(minLength: Spacing.s2)
-            HStack(spacing: 6) {
-                Icon(.mapPin, size: onCard ? 15 : 16, strokeWidth: 2.2, color: .white)
-                Text(place)
-                    .font(.system(size: onCard ? 13.5 : 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-            }
-            .padding(.leading, onCard ? 9 : 10)
-            .padding(.trailing, onCard ? 12 : 14)
-            .frame(height: onCard ? 34 : 36)
-            .background(Capsule().fill(Color.black.opacity(onCard ? 0.22 : 0.42)))
-            .background(Capsule().fill(.ultraThinMaterial).opacity(onCard ? 0 : 1))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("This Moment will pin at \(place == "Your home" ? "your home" : place)")
-            .accessibilityIdentifier("moments.camera.place")
+            MomentsPlaceChip(place: place, style: onCard ? .onCard : .overPicture)
             Spacer(minLength: Spacing.s2)
             trailing()
         }
         .padding(.horizontal, Spacing.s2)
         .frame(height: 48)
+    }
+}
+
+/// "pins at" the place: over the camera's picture, on the text card (P2's smaller, lighter chip), or on black beside
+/// the text card on the open iPhone Duo (board O8).
+struct MomentsPlaceChip: View {
+    enum Style {
+        case overPicture, onCard, onBlack
+    }
+
+    let place: String
+    var style: Style = .overPicture
+
+    var body: some View {
+        let small = style != .overPicture
+        HStack(spacing: 6) {
+            Icon(.mapPin, size: small ? 15 : 16, strokeWidth: 2.2, color: .white)
+            Text(place)
+                .font(.system(size: small ? 13.5 : 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .padding(.leading, small ? 9 : 10)
+        .padding(.trailing, small ? 12 : 14)
+        .frame(height: small ? 34 : 36)
+        .background(Capsule().fill(style == .onBlack ? Color.white.opacity(0.14) : Color.black.opacity(small ? 0.22 : 0.42)))
+        .background(Capsule().fill(.ultraThinMaterial).opacity(small ? 0 : 1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("This Moment will pin at \(place == "Your home" ? "your home" : place)")
+        .accessibilityIdentifier("moments.camera.place")
     }
 }
 

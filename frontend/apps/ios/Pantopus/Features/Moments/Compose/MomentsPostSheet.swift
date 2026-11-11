@@ -6,7 +6,8 @@
 //  the pin on a small map and the place others will read, "Show the area
 //  instead", how long (1h · 6h · 24h · 48h), who sees it (Everyone nearby ·
 //  My connections), the caption, and Post. At your own home the amber note
-//  says so first.
+//  says so first. On the iPhone Duo the stage takes the Duo's layouts
+//  (`MomentsPostStage+Duo.swift`).
 //
 
 import AVFoundation
@@ -16,9 +17,24 @@ import SwiftUI
 struct MomentsPostStage: View {
     let model: MomentsComposerModel
     let onPosted: () -> Void
-    @State private var player: AVPlayer?
+    @State var player: AVPlayer?
+    @Environment(\.momentsDuoScreen) var duo
 
     var body: some View {
+        Group {
+            switch duo.pose {
+            case .phone: phoneStage
+            case .closed: closedStage
+            case .wide: wideStage
+            case .upright, .table: uprightStage
+            }
+        }
+        // A fold can take the stage away and bring it back: the looping video carries on.
+        .onAppear { player?.play() }
+        .onDisappear { player?.pause() }
+    }
+
+    private var phoneStage: some View {
         ZStack(alignment: .top) {
             retakeButton
                 .padding(.leading, Spacing.s3)
@@ -41,11 +57,15 @@ struct MomentsPostStage: View {
                 .clipped()
                 .ignoresSafeArea()
         }
-        .onDisappear { player?.pause() }
+    }
+
+    /// The Post sheet, or on the open Duo the options as a card (board O9); closed, its map is smaller (board C8).
+    func sheet(asCard: Bool = false, mapHeight: CGFloat = 150) -> some View {
+        MomentsPostSheet(model: model, asCard: asCard, mapHeight: mapHeight, onPosted: onPosted)
     }
 
     @ViewBuilder
-    private var backdrop: some View {
+    var backdrop: some View {
         switch model.draft {
         case let .photo(image):
             Image(uiImage: image)
@@ -54,18 +74,8 @@ struct MomentsPostStage: View {
                 .overlay(Color.black.opacity(0.3))
                 .accessibilityLabel("The photo you're posting")
         case let .video(url):
-            MomentsVideoSurface(player: player ?? AVPlayer())
+            videoSurface(url: url)
                 .overlay(Color.black.opacity(0.3))
-                .onAppear {
-                    let looping = AVPlayer(url: url)
-                    looping.isMuted = true
-                    looping.play()
-                    player = looping
-                }
-                .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { _ in
-                    player?.seek(to: .zero)
-                    player?.play()
-                }
                 .accessibilityLabel("The video you're posting")
         case .text:
             let colors = MomentsPalette.card(model.background)
@@ -85,7 +95,22 @@ struct MomentsPostStage: View {
         }
     }
 
-    private var retakeButton: some View {
+    /// The video, muted, looping.
+    func videoSurface(url: URL) -> some View {
+        MomentsVideoSurface(player: player ?? AVPlayer())
+            .onAppear {
+                let looping = AVPlayer(url: url)
+                looping.isMuted = true
+                looping.play()
+                player = looping
+            }
+            .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { _ in
+                player?.seek(to: .zero)
+                player?.play()
+            }
+    }
+
+    var retakeButton: some View {
         let isText = model.draft == .text
         return Button { model.retake() } label: {
             HStack(spacing: Spacing.s1) {
@@ -106,17 +131,22 @@ struct MomentsPostStage: View {
 
 struct MomentsPostSheet: View {
     let model: MomentsComposerModel
+    /// On the open iPhone Duo, a card beside the picture (board O9): no grabber, every corner rounded.
+    var asCard = false
+    /// The small map: 150 pt; closed on the Duo, 110 (board C8).
+    var mapHeight: CGFloat = 150
     let onPosted: () -> Void
     @Environment(AuthManager.self) private var auth
     @State private var optionsHeight: CGFloat = 520
-    @State private var picksPlace = false
 
     var body: some View {
         VStack(spacing: 0) {
-            Capsule()
-                .fill(Theme.Color.appBorderStrong)
-                .frame(width: 36, height: 5)
-                .padding(.top, Spacing.s2)
+            if !asCard {
+                Capsule()
+                    .fill(Theme.Color.appBorderStrong)
+                    .frame(width: 36, height: 5)
+                    .padding(.top, Spacing.s2)
+            }
             // The options take their own height and scroll only when there's less room than that
             // (a small phone, the at-home notice, the keyboard up).
             ScrollView {
@@ -140,17 +170,20 @@ struct MomentsPostSheet: View {
             .padding(.top, Spacing.s3)
             .padding(.bottom, Spacing.s6)
         }
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous)
-                .fill(Theme.Color.appSurface)
-                .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: -6)
-                .ignoresSafeArea(edges: .bottom)
-        )
+        // As a card, the stage gives it its frame and its rounded background.
+        .background {
+            if !asCard {
+                UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous)
+                    .fill(Theme.Color.appSurface)
+                    .shadow(color: .black.opacity(0.3), radius: 12, x: 0, y: -6)
+                    .ignoresSafeArea(edges: .bottom)
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Post your Moment")
         .accessibilityIdentifier("moments.post")
-        .sheet(isPresented: $picksPlace) {
-            MomentsPlacePicker(model: model) { picksPlace = false }
+        .sheet(isPresented: Binding(get: { model.picksPlace }, set: { model.picksPlace = $0 })) {
+            MomentsPlacePicker(model: model) { model.picksPlace = false }
                 .presentationDetents([.medium])
                 .presentationBackground(Theme.Color.appSurface)
         }
@@ -163,9 +196,10 @@ struct MomentsPostSheet: View {
                 pin: model.pin,
                 showArea: model.showArea,
                 me: me,
-                placeholder: model.locating == .unavailable ? "Location is off" : "Finding where you are…"
+                placeholder: model.locating == .unavailable ? "Location is off" : "Finding where you are…",
+                height: mapHeight
             )
-            .padding(.top, 11)
+            .padding(.top, asCard ? 16 : 11)
             placeRow
                 .padding(.top, 10)
             if model.pin == nil, model.locating == .unavailable {
@@ -202,7 +236,7 @@ struct MomentsPostSheet: View {
             placeLine(canChange: false)
                 .accessibilityElement(children: .combine)
         } else {
-            Button { picksPlace = true } label: { placeLine(canChange: true).contentShape(Rectangle()) }
+            Button { model.picksPlace = true } label: { placeLine(canChange: true).contentShape(Rectangle()) }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .combine)
                 .accessibilityHint("Picks another name for this place")
@@ -390,6 +424,7 @@ private struct MomentsPostMap: View {
     let me: MomentAuthorDTO?
     /// What shows while there's no pin.
     let placeholder: String
+    var height: CGFloat = 150
 
     var body: some View {
         Group {
@@ -413,7 +448,7 @@ private struct MomentsPostMap: View {
                     .overlay(Text(placeholder).font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary))
             }
         }
-        .frame(height: 150)
+        .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.Color.appBorder, lineWidth: 1))
         .allowsHitTesting(false)
