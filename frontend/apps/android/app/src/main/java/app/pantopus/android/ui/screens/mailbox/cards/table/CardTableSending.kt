@@ -184,6 +184,7 @@ internal class SendingMoment(
         refusedWords = null
         step = SendStep.Sealing
         table.onTap(TableTap.Crack)
+        table.onSound(TableSound.Seal)
         changed()
         calls.onSeal()
     }
@@ -326,6 +327,7 @@ internal class SendingMoment(
         sealedAtMs = nowMs()
         step = SendStep.Sealing
         table.onTap(TableTap.Crack)
+        table.onSound(TableSound.Seal)
         changed()
         calls.onSeal()
     }

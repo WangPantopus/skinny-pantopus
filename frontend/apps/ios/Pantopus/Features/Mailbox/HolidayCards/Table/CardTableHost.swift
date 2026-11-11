@@ -32,6 +32,7 @@ extension CardTableContent {
             .flatMap { MailDates.parse($0) }
             .map { MailDates.daysBetween(now, $0, calendar: .current) } ?? 0
         verse = card.card.sealed ? nil : card.card.verse
+        signature = card.card.sealed ? nil : card.card.signature
     }
 }
 
@@ -53,6 +54,7 @@ extension CardTableContent {
         sealedUntil = nil
         sealedInDays = ""
         sealedDayCount = 0
+        signature = piece.card.signature
     }
 }
 

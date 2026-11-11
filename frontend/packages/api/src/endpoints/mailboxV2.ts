@@ -142,6 +142,9 @@ export interface MailCard {
   /** Its public page, /cards/<slug>, and the colour of the cloth it lies on (launch key card_table). */
   slug?: string | null;
   table?: string | null;
+  /** The card's own photo and voice (launch key holiday_card_memories) on an opened piece and Look it over; null while sealed. */
+  photo?: { file_id: string; width: number | null; height: number | null; alt: string | null; covered: boolean } | null;
+  voice?: { file_id: string; duration_ms: number | null } | null;
 }
 
 export interface MailPackage {

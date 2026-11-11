@@ -359,7 +359,8 @@ private struct CardTableCardView: View {
                 note: content.note,
                 fromName: content.firstName,
                 year: content.year,
-                number: content.number
+                number: content.number,
+                signature: content.signature
             )
             .equatable()
         }

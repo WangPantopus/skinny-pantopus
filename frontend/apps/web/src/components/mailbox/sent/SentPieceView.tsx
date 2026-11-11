@@ -23,7 +23,9 @@ import CardFlip from '../cards/CardFlip';
 import CardShareSheet from '../cards/CardShareSheet';
 import CardTable from '../cards/CardTable';
 import { askTakeBack, takeBackMessage } from '../cards/takeBack';
-import { shortDay, WAX } from '../cards/cardArt';
+import { cardMood, shortDay, WAX } from '../cards/cardArt';
+import CardPrint from '../cards/CardPrint';
+import CardGreeting from '../cards/CardGreeting';
 import CardLinkActions from '../cards/CardLinkActions';
 import { linkOpened, sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, trailLabel, trailWhen } from './sentWords';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -136,7 +138,8 @@ export default function SentPieceView({ id }: { id: string }) {
       {/* The same full-screen moment they have. Your own note is shown, so it opens as it did for them, seal or none. */}
       {onTable && card.design ? (
         <CardTable
-          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null }}
+          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null, photo: card.photo ?? null, voice: card.voice ?? null }}
+          mediaFrom={(fileId) => ({ sent: piece.id, fileId })}
           note={piece.note}
           fromName={piece.envelope.from}
           toName={sentEnvelopeName(piece)}
@@ -193,6 +196,34 @@ export default function SentPieceView({ id }: { id: string }) {
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
                 <div className={`mx-auto w-full md:max-w-none ${launchFeatures.cardTable ? '' : 'max-w-[300px]'}`}>
                   {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
+                  {card.photo || card.voice ? (
+                    // Their own photo and voice greeting (memories plan steps 4 and 7), never covered: from their own card's route.
+                    <div className={`-mt-3 flex items-start gap-[4%] px-[4%] ${card.photo ? 'justify-between' : 'justify-end'}`}>
+                      {card.photo ? (
+                        <div className="w-[48%] [container-type:inline-size]" data-testid="mailSentPhoto">
+                          <CardPrint
+                            source={{ sent: piece.id, fileId: card.photo.file_id }}
+                            width={card.photo.width}
+                            height={card.photo.height}
+                            alt={card.photo.alt}
+                            datedOn={cardMood(card.number, card.design) === 'nostalgia' ? (piece.envelope.postmarked_on ?? piece.sent_at) : null}
+                            className="w-full"
+                          />
+                        </div>
+                      ) : null}
+                      {card.voice ? (
+                        <div className="mt-[7%] w-[44%]" data-testid="mailSentVoice">
+                          <CardGreeting
+                            source={{ sent: piece.id, fileId: card.voice.file_id }}
+                            durationMs={card.voice.duration_ms}
+                            forName={first}
+                            fromName={piece.envelope.from}
+                            gift={cardMood(card.number, card.design) === 'reverence'}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {front && launchFeatures.cardTable ? (
                     <div className="mt-4 flex flex-wrap justify-center gap-2">
                       <button

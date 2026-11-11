@@ -95,7 +95,8 @@ struct CardTableLetterHost: View {
 
     init(onOpen: @escaping () -> Void, onClose: @escaping () -> Void) {
         let year = Calendar.current.component(.year, from: Date())
-        let model = CardTableModel(content: CardTableContent(welcomeLetterTo: MailPieceRecipient.personName, year: year), startsOnTable: false)
+        let content = CardTableContent(welcomeLetterTo: MailPieceRecipient.personName, year: year)
+        let model = CardTableModel(content: content, startsOnTable: false)
         model.onLetterOut = onOpen
         _model = State(initialValue: model)
         self.onClose = onClose
@@ -104,5 +105,25 @@ struct CardTableLetterHost: View {
     var body: some View {
         CardTableScreen(model: model, menuItems: [], closeLabel: "Back to the Mailbox", canShare: false, onClose: onClose)
             .toolbar(.hidden, for: .navigationBar)
+    }
+}
+
+extension CardTableModel {
+    /// The letter is out: a moment to see it, then the letter page (plan Part 10).
+    func letterIsOut() {
+        letterOutTask?.cancel()
+        letterOutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: self?.reduceMotion == true ? 300_000_000 : 1_100_000_000)
+            guard let self, !Task.isCancelled else { return }
+            openLetter()
+        }
+    }
+
+    /// "Read the letter", or a moment after it's out.
+    func openLetter() {
+        letterOutTask?.cancel()
+        guard let onLetterOut else { return }
+        self.onLetterOut = nil
+        onLetterOut()
     }
 }

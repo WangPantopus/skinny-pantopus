@@ -197,6 +197,7 @@ struct CardTableShareScene: View {
                 fromName: content.firstName,
                 year: content.year,
                 number: content.number,
+                signature: content.signature,
                 grainOpacity: 0.7
             )
         }

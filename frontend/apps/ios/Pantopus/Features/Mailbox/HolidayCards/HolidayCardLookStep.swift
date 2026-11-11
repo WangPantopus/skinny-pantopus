@@ -14,6 +14,8 @@
 //  the card will really carry (`POST /api/mailbox/cards/preview`).
 //
 
+// swiftlint:disable file_length
+
 import SwiftUI
 
 struct HolidayCardLookStep: View {
@@ -331,7 +333,12 @@ struct HolidayCardLookStep: View {
 
     /// The back with the note and who it's from.
     private var back: some View {
-        HolidayCardBack(paper: card?.paper ?? design.paper, fromName: from, year: card?.year ?? cards.year) { width in
+        HolidayCardBack(
+            paper: card?.paper ?? design.paper,
+            fromName: from,
+            year: card?.year ?? cards.year,
+            signature: card?.signature
+        ) { width in
             HolidayCardReadNote(text: note, number: design.number, cardWidth: width)
         }
         .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
@@ -401,7 +408,8 @@ private extension HolidayCardLookStep {
             sealedUntil: nil,
             sealedInDays: "",
             sealedDayCount: 0,
-            verse: design.verse
+            verse: design.verse,
+            signature: card?.signature
         )
     }
 }

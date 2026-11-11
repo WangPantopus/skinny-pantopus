@@ -128,6 +128,7 @@ extension CardTableModel {
         sealPress = 0
         sealShown = true
         haptics.tap(.firm)
+        sounds.play(.seal)
         wake()
         let sealedAt = CACurrentMediaTime()
         Task { @MainActor [weak self] in

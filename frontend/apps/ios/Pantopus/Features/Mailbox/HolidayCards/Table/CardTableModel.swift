@@ -38,6 +38,9 @@ struct CardTableContent: Equatable {
     /// A Christmas with Jesus Christ card's whole verse, for "Read the verse" (plan 6.2); nil for the rest, while
     /// it's sealed, and in Sent (the server doesn't send it there).
     var verse: String?
+    /// The sender's signature beside FROM (plan 8.2), drawn in place of the typed first name; nil while sealed and when
+    /// unsigned.
+    var signature: CardSignature?
     /// A letter, not a card (plan Part 10, the welcome letter): the cream envelope with the red seal on slate, the same
     /// moves, and a folded sheet inside that opens the letter page.
     var isLetter = false
@@ -145,7 +148,7 @@ final class CardTableModel {
 
     /// The letter is out: open the letter page (set by whoever shows a letter on the table).
     @ObservationIgnored var onLetterOut: (() -> Void)?
-    @ObservationIgnored private var letterOutTask: Task<Void, Never>?
+    @ObservationIgnored var letterOutTask: Task<Void, Never>?
     /// The seal has broken.
     var cracked = false
     /// Tapping the table hides or shows the controls.
@@ -216,6 +219,12 @@ final class CardTableModel {
     @ObservationIgnored var driftEnabled = true
     /// Called when the seal cracks, the card lands, and so on.
     @ObservationIgnored let haptics = CardTableHaptics()
+    /// The light ticks along a card's pull and the three paper sounds (plan Part 8, `CardTableSounds.swift`).
+    @ObservationIgnored let paperTicks = CardTablePaperTicks()
+    @ObservationIgnored let sounds = CardTableSounds()
+    /// The card's way out of its envelope (0 in, 1 out) and how far it's laid down, as last heard; nil until the first
+    /// frame, so a card that starts on the table neither ticks nor sounds.
+    @ObservationIgnored private var heard: (travel: Double, lay: Double)?
 
     /// - Parameter startsOnTable: it's been opened before, so the card is already out.
     init(content: CardTableContent, startsOnTable: Bool) {
@@ -223,7 +232,7 @@ final class CardTableModel {
         self.startsOnTable = startsOnTable && !content.sealed
         // Santa's envelope lands with a little more bounce (plan Part 7).
         if CardTableMood(number: content.number) == .santa {
-            springs.drop = CardTableSpring(1, k: 58, c: 7.5)
+            springs.drop = CardTableSpring(1, k: 58, c: 9.6)
         }
         ticker.onTick = { [weak self] in self?.frame(at: $0) }
     }
@@ -231,23 +240,6 @@ final class CardTableModel {
     /// The card's mood (plan Part 7), from its collection.
     var mood: CardTableMood {
         content.isLetter ? .letter : CardTableMood(number: content.number)
-    }
-
-    private func letterIsOut() {
-        letterOutTask?.cancel()
-        letterOutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: self?.reduceMotion == true ? 300_000_000 : 1_100_000_000)
-            guard let self, !Task.isCancelled else { return }
-            openLetter()
-        }
-    }
-
-    /// "Read the letter", or a moment after it's out.
-    func openLetter() {
-        letterOutTask?.cancel()
-        guard let onLetterOut else { return }
-        self.onLetterOut = nil
-        onLetterOut()
     }
 
     /// The moods' snow, breathing candle and glint run: not with Reduce Motion or Low Power Mode.
@@ -268,6 +260,7 @@ final class CardTableModel {
         guard !isReady else { return }
         // The cloth shows as soon as there's art; the picture has a little time to come first.
         art = await CardTableArt.load(letter: content.isLetter)
+        sounds.preload()
         picture = content.isLetter ? nil : await CardTablePicture.load(content.design)
         begin()
     }
@@ -465,7 +458,26 @@ final class CardTableModel {
             didCardLand()
             moving = true
         }
+        listen()
         if !moving, drag == nil, !drifts { ticker.stop() }
+    }
+
+    /// Feel and hear the paper (plan 8.1, 8.3), by finger or by itself: a light tick every 8% of the card's way out of
+    /// its envelope or into it, the slide as it starts to leave or go back in, and the card set down. A jump (Reduce
+    /// Motion, opening straight onto the table) is neither a pull nor a slide.
+    private func listen() {
+        let travel = min(1, max(0, (springs.pull.x - Self.flapOpen) / (1 - Self.flapOpen)))
+        let lay = springs.lay.x
+        defer { heard = (travel, lay) }
+        guard let was = heard else { return }
+        let notch = Int(travel / 0.08)
+        let wasNotch = Int(was.travel / 0.08)
+        let sliding = abs(travel - was.travel) < 0.5
+        if sliding, notch != wasNotch { paperTicks.tick() }
+        if sliding, (was.travel < 0.08 && travel >= 0.08) || (was.travel > 0.92 && travel <= 0.92) {
+            sounds.play(.slide)
+        }
+        if was.lay < 0.9, lay >= 0.9 { sounds.play(.down) }
     }
 }
 

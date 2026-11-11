@@ -53,6 +53,9 @@ export function sentStatusLine(piece: SentPiece): string {
       return piece.kind === 'letter' ? 'They claimed your letter' : 'They joined Pantopus and have it';
     case 'expired':
       return piece.kind === 'letter' ? 'The claim link expired' : 'They didn’t open the email in 90 days';
+    case 'not_delivered':
+      // Never why, nor when (memories contract section 8).
+      return 'Couldn’t be delivered';
     default:
       return '';
   }
@@ -125,6 +128,7 @@ export function trailLabel(step: SentTrailStep, piece: SentPiece): string {
   let label: string;
   switch (step.step) {
     case 'sealed': label = 'Sealed by you'; break;
+    case 'not_delivered': return 'Couldn’t be delivered';
     case 'emailed': label = `${piece.kind === 'letter' ? 'Sent' : 'Emailed'} to ${piece.status === 'claimed' ? 'them' : piece.to_name || 'them'}`; break;
     case 'picked_up': label = 'Picked up by the carrier'; break;
     case 'delivered':

@@ -20,6 +20,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,10 +35,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -63,6 +66,7 @@ import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.screens.ceremonial_mail_open.MailWelcomePorch
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardRow
 import app.pantopus.android.ui.screens.mailbox.cards.TakeBackDialog
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardSoundsSetting
 import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
@@ -743,7 +747,28 @@ private fun MailboxMenu(
         entry("Home records", "homeRecords", onOpenRecords)
         entry("Stamps", "stamps", onOpenStamps)
         entry("Hold my mail", "vacationHold", onOpenVacationHold)
+        // The card table's quiet paper sounds (plan 8.3): on by default, kept on this phone only.
+        if (LaunchFeatures.cardTable) CardSoundsItem()
     }
+}
+
+/** "Card sounds", switched right here in the menu; the menu stays open to show it changed. */
+@Composable
+private fun CardSoundsItem() {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(CardSoundsSetting.isOn(context)) }
+    DropdownMenuItem(
+        text = { Text("Card sounds", color = PantopusColors.appText) },
+        trailingIcon = { Switch(checked = on, onCheckedChange = null) },
+        onClick = {
+            on = !on
+            CardSoundsSetting.set(context, on)
+        },
+        modifier =
+            Modifier
+                .semantics { stateDescription = if (on) "On" else "Off" }
+                .testTag("mailboxRootSettings.cardSounds"),
+    )
 }
 
 /** The next page is read this many items before the end of the list. */

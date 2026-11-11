@@ -59,6 +59,8 @@ type Geometry = {
 };
 
 const FLAP_OPEN = 0.3;
+/** The table's room at each side of the card for its photo and greeting to lie beside it, rather than under it. */
+const MEDIA_BESIDE = 176;
 /** The press that seals it, in milliseconds. */
 const SEAL_HOLD = 600;
 /** The gold seal stays in sight this long before the envelope turns over. */
@@ -163,8 +165,12 @@ export class CardTableEngine {
 
   private readonly elements = new Map<string, HTMLElement>();
 
-  constructor(root: HTMLElement, options: { sealed: boolean; crackedSrc: string; wholeSrc: string; callbacks: TableCallbacks; sending?: boolean; mood?: CardMood }) {
+  /** The card brings its own photo or voice greeting (memories plan steps 4 and 7): room is kept for them on the table. */
+  private readonly media: boolean;
+
+  constructor(root: HTMLElement, options: { sealed: boolean; crackedSrc: string; wholeSrc: string; callbacks: TableCallbacks; sending?: boolean; mood?: CardMood; media?: boolean }) {
     this.root = root;
+    this.media = Boolean(options.media);
     // Santa's cards land with a little more bounce (design plan Part 7): the same drop, less damped.
     if (options.mood === 'santa') this.v.drop.c = 9.6;
     this.sending = Boolean(options.sending);
@@ -549,18 +555,33 @@ export class CardTableEngine {
     const safeTop = probe.height;
     const bottom = this.$('bottom').getBoundingClientRect().height + 8;
     const topGap = safeTop + 6;
-    const room = h - topGap - bottom;
     const side = w < 560 ? 9 : 14;
-    // Phones: nearly as wide as the screen. Tablets and wide windows cap the card on a big table.
-    // Tablets and wide windows go to 640 where the height allows (design plan 6.3); the room below keeps it in.
-    let cw = Math.min(w - side * 2, w < 760 ? 470 : 640);
-    let peek = room - cw * 1.2;
-    const minPeek = cw * 0.13;
-    const maxPeek = cw * 0.47;
-    if (peek < minPeek) { cw = Math.min(cw, room / (1.2 + 0.13)); peek = cw * 0.13; }
-    peek = Math.min(peek, maxPeek);
-    const spare = Math.max(0, room - cw * 1.2 - peek);
-    const cardTop = topGap + spare * 0.46 + peek;
+    const fit = (below: number) => {
+      const room = h - topGap - below;
+      // Phones: nearly as wide as the screen. Tablets and wide windows cap the card on a big table.
+      // Tablets and wide windows go to 640 where the height allows (design plan 6.3); the room below keeps it in.
+      let cw = Math.min(w - side * 2, w < 760 ? 470 : 640);
+      let peek = room - cw * 1.2;
+      const minPeek = cw * 0.13;
+      const maxPeek = cw * 0.47;
+      if (peek < minPeek) { cw = Math.min(cw, room / (1.2 + 0.13)); peek = cw * 0.13; }
+      peek = Math.min(peek, maxPeek);
+      const spare = Math.max(0, room - cw * 1.2 - peek);
+      return { cw, peek, cardTop: topGap + spare * 0.46 + peek };
+    };
+    let { cw, peek, cardTop } = fit(bottom);
+    // The card's own photo and greeting lie beside it where the table has room at its sides (wave 4 drawing 3), else
+    // under it, a little over its bottom edge: then the card keeps that much room free above the buttons.
+    let media: 'beside' | 'below' | '' = '';
+    let mediaRoom = 0;
+    if (this.media) {
+      if ((w - cw) / 2 >= MEDIA_BESIDE) media = 'beside';
+      else {
+        media = 'below';
+        mediaRoom = Math.round(clamp(w * 0.34, 112, 176));
+        ({ cw, peek, cardTop } = fit(bottom + mediaRoom));
+      }
+    }
     const ew = cw * 1.012;
     const eh = (ew * 1392) / 1200;
     const fd = (ew * 512) / 1200;
@@ -576,6 +597,15 @@ export class CardTableEngine {
       envYOpen: Math.max(envY, safeTop + fd * 0.9 + 4), envTopOut, cardTopOut: envTopOut - cw * 1.2 * 1.02 - 8,
     };
     stage.style.setProperty('--ew', `${ew}px`);
+    // Where the card lies once it's out, for what lies beside or under it (CardTable's media layer).
+    if (this.media) {
+      stage.dataset.media = media;
+      stage.style.setProperty('--card-x', `${(w - cw) / 2}px`);
+      stage.style.setProperty('--card-top', `${cardTop}px`);
+      stage.style.setProperty('--card-w', `${cw}px`);
+      stage.style.setProperty('--card-h', `${cw * 1.2}px`);
+      stage.style.setProperty('--media-room', `${mediaRoom}px`);
+    }
     this.$('card').style.setProperty('--u', `${cw / 100}px`);
     for (const id of LAYERS) {
       const el = this.$(id);

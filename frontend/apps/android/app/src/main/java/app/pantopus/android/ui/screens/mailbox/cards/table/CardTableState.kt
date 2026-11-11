@@ -280,6 +280,10 @@ internal class CardTableState(
     var onOpened: () -> Unit = {}
     var onTap: (TableTap) -> Unit = {}
 
+    /** A quiet paper sound (plan 8.3); [CardSounds] decides whether it's heard. */
+    var onSound: (TableSound) -> Unit = {}
+    private val soundCues = TableSoundCues { onSound(it) }
+
     /** The reader has turned the card over at least once (the quiet "Send … a card" shows from then). */
     var turnedOnce by mutableStateOf(false)
         private set
@@ -340,6 +344,7 @@ internal class CardTableState(
     fun openAgain() {
         resetZoom(immediate = true)
         lastNotch = null
+        soundCues.reset()
         for (spring in listOf(envelopeTurn, pull, lay, turn)) spring.jump(0f)
         step = TableStep.Front
         cracked = false
@@ -429,6 +434,7 @@ internal class CardTableState(
         if (cracked) return
         cracked = true
         onTap(TableTap.Crack)
+        onSound(TableSound.Seal)
     }
 
     private fun openFlap() {
@@ -922,6 +928,7 @@ internal class CardTableState(
         }
         if (sending?.frame(dt, steps, h) == true) moving = true
         tickAlongThePull()
+        soundCues.listen(((pull.x - FLAP_OPEN) / (1f - FLAP_OPEN)).coerceIn(0f, 1f), lay.x)
         // Once it has cleared the envelope, the card is laid down in front of it.
         if (step == TableStep.Pulling && pull.x > 0.985f) {
             pull.jump(1f)

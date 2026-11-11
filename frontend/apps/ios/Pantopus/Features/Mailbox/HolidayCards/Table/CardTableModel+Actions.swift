@@ -64,6 +64,7 @@ extension CardTableModel {
         guard !cracked else { return }
         cracked = true
         haptics.tap(.firm)
+        sounds.play(.seal)
     }
 
     /// Reverence: one slow glint crosses the gold lining once it's in view (plan Part 7): the flap left open, or the

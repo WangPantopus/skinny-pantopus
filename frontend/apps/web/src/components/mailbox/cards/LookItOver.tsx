@@ -23,7 +23,9 @@ import CardBack from './CardBack';
 import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, ON_CLOTH_TEXT } from './AtTheTable';
 import CardFlip from './CardFlip';
 import { CardFromEnvelope, SealedNotice, useCardOpening } from './HolidayCardView';
-import { daysAway, longDay, SERIF } from './cardArt';
+import { cardMood, daysAway, longDay, SERIF } from './cardArt';
+import CardPrint from './CardPrint';
+import CardGreeting from './CardGreeting';
 import CardTable from './CardTable';
 import { launchFeatures } from '@/lib/featureFlags';
 
@@ -47,15 +49,50 @@ function MailboxFrame({ day, children }: { day: string; children: ReactNode }) {
   );
 }
 
-/** The back on its own, the size of the picture side (the flip lays it there). */
-function Back({ piece }: { piece: MailItemV2 }) {
+/**
+ * The back on its own, the size of the picture side (the flip lays it there), and their own photo as a print and voice
+ * greeting as a cassette (a gift tag for Christmas with Jesus Christ) beside it, never covered, from their own uploads.
+ */
+function Back({ piece, forName }: { piece: MailItemV2; forName: string }) {
   const card = piece.card!;
+  const photo = card.photo ?? null;
+  const voice = card.voice ?? null;
+  const mood = cardMood(card.number, card.design);
   return (
-    <CardFlip
-      showBack
-      front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />}
-      back={<CardBack number={card.number} paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} signature={card.signature ?? null} className={shadow} />}
-    />
+    <>
+      <CardFlip
+        showBack
+        front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />}
+        back={<CardBack number={card.number} paper={card.paper} fromName={piece.sender_display || 'Someone'} year={card.year} message={piece.content || ''} signature={card.signature ?? null} className={shadow} />}
+      />
+      {photo || voice ? (
+        <div className={`-mt-4 flex items-start gap-[4%] px-[4%] ${photo ? 'justify-between' : 'justify-end'}`}>
+          {photo ? (
+            <div className="w-[48%] [container-type:inline-size]" data-testid="sendCardLookPhoto">
+              <CardPrint
+                source={{ own: photo.file_id }}
+                width={photo.width}
+                height={photo.height}
+                alt={photo.alt}
+                datedOn={mood === 'nostalgia' ? (piece.postmark?.date || piece.created_at) : null}
+                className="w-full"
+              />
+            </div>
+          ) : null}
+          {voice ? (
+            <div className="mt-[7%] w-[44%]" data-testid="sendCardLookVoice">
+              <CardGreeting
+                source={{ own: voice.file_id }}
+                durationMs={voice.duration_ms}
+                forName={forName}
+                fromName={piece.sender_display || 'you'}
+                gift={mood === 'reverence'}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -106,6 +143,7 @@ export default function LookItOver({
       mailedOn={piece.postmark?.date || piece.created_at}
       closeLabel="Back to Look it over"
       onClose={() => setOnTable(false)}
+      mediaFrom={(fileId) => ({ own: fileId })}
     />
   ) : null;
   const openOnTable = launchFeatures.cardTable ? (
@@ -214,7 +252,7 @@ export default function LookItOver({
               </div>
               <div className="mt-4 grid grid-cols-2 items-start gap-3">
                 <CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className={shadow} />
-                <Back piece={piece} />
+                <Back piece={piece} forName={first} />
               </div>
               {openOnTable}
             </MailboxFrame>
@@ -289,7 +327,7 @@ export default function LookItOver({
           <section aria-label="On the back" className="mx-4 mt-6">
             <h3 className={sectionLabel}>On the back</h3>
             <div className={launchFeatures.cardTable ? 'mt-3.5' : 'mx-auto mt-3.5 max-w-[300px]'}>
-              <Back piece={piece} />
+              <Back piece={piece} forName={first} />
             </div>
           </section>
         </>

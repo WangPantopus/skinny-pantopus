@@ -65,9 +65,12 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// How many one card can go to at once: 20 with digital stamps on (a
     /// list, `POST /api/mailbox/cards/batch`), else 1.
     public let maxRecipients: Int
+    /// The server keeps a signature beside FROM (`card_table`, plan 8.2): its box and the most bytes it takes. Nil
+    /// from older servers and with the key off: no signing, the typed first name as before.
+    public let signature: HolidayCardSignatureSpec?
 
     private enum CodingKeys: String, CodingKey {
-        case open, holiday, year, designs, collections, arrivals, today, stamps
+        case open, holiday, year, designs, collections, arrivals, today, stamps, signature
         case maxRecipients = "max_recipients"
         case postageEnabled = "postage_enabled"
         case closesOn = "closes_on"
@@ -101,6 +104,43 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         timeZone = try? c.decodeIfPresent(String.self, forKey: .timeZone)
         today = try? c.decodeIfPresent(SentHolidayCard.self, forKey: .today)
         maxRecipients = max(1, (try? c.decodeIfPresent(Int.self, forKey: .maxRecipients)) ?? 1)
+        signature = try? c.decodeIfPresent(HolidayCardSignatureSpec.self, forKey: .signature)
+    }
+}
+
+/// `signature` on `GET /api/mailbox/cards`: the box a signature is drawn in (400 × 100) and the most bytes it can take
+/// as compact JSON (2048).
+public struct HolidayCardSignatureSpec: Decodable, Sendable, Hashable {
+    public let width: Int
+    public let height: Int
+    public let maxBytes: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case width = "w"
+        case height = "h"
+        case maxBytes = "max_bytes"
+    }
+}
+
+/// The sender's own signature beside FROM (`card_table`, plan 8.2): 1 to 40 pen strokes in a `width` × `height`
+/// (400 × 100) box, each a flat list of whole-number x, y pairs. Sent with the card, kept with its note (never on
+/// the Mail row), and back as `card.signature` on the opened card, Look it over and Sent's detail; nil while sealed
+/// for the reader and when unsigned. The sender's own data: never logged, never in a share picture's file name.
+public struct CardSignature: Codable, Sendable, Hashable {
+    public let width: Int
+    public let height: Int
+    public let strokes: [[Int]]
+
+    private enum CodingKeys: String, CodingKey {
+        case width = "w"
+        case height = "h"
+        case strokes
+    }
+
+    public init(width: Int, height: Int, strokes: [[Int]]) {
+        self.width = width
+        self.height = height
+        self.strokes = strokes
     }
 }
 
@@ -252,9 +292,11 @@ public struct SendHolidayCardBody: Encodable, Sendable {
     /// answers a repeat with the card it stored, never a second one.
     public let requestId: String?
     public let useStamp: Bool?
+    /// Signed beside FROM (plan 8.2); left out when they keep their typed name.
+    public let signature: CardSignature?
 
     private enum CodingKeys: String, CodingKey {
-        case design, message, arrival, to
+        case design, message, arrival, to, signature
         case requestId = "request_id"
         case useStamp = "use_stamp"
     }
@@ -287,7 +329,8 @@ public struct SendHolidayCardBody: Encodable, Sendable {
         arrival: HolidayCardArrival,
         to: Recipient,
         requestId: String? = nil,
-        useStamp: Bool? = nil
+        useStamp: Bool? = nil,
+        signature: CardSignature? = nil
     ) {
         self.design = design
         self.message = message
@@ -295,6 +338,7 @@ public struct SendHolidayCardBody: Encodable, Sendable {
         self.to = to
         self.requestId = requestId
         self.useStamp = useStamp
+        self.signature = signature
     }
 }
 
@@ -309,6 +353,8 @@ public struct SendHolidayCardListBody: Encodable, Sendable {
     public let arrival: String
     public let useStamp = true
     public let recipients: [Recipient]
+    /// One signature for the whole list, as one note (plan 8.2).
+    public let signature: CardSignature?
 
     public struct Recipient: Encodable, Sendable {
         public let to: SendHolidayCardBody.Recipient
@@ -321,15 +367,22 @@ public struct SendHolidayCardListBody: Encodable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case design, message, arrival, recipients
+        case design, message, arrival, recipients, signature
         case useStamp = "use_stamp"
     }
 
-    public init(design: String, message: String, arrival: HolidayCardArrival, recipients: [Recipient]) {
+    public init(
+        design: String,
+        message: String,
+        arrival: HolidayCardArrival,
+        recipients: [Recipient],
+        signature: CardSignature? = nil
+    ) {
         self.design = design
         self.message = message
         self.arrival = arrival.rawValue
         self.recipients = recipients
+        self.signature = signature
     }
 }
 
@@ -569,9 +622,11 @@ public struct MailCard: Decodable, Sendable, Hashable {
     /// A Christmas with Jesus Christ picture's whole verse ("Read the verse", plan 6.2); none while it's sealed, nor
     /// from older servers.
     public let verse: String?
+    /// The sender's signature beside FROM (plan 8.2); nil while sealed, unsigned, and from older servers.
+    public let signature: CardSignature?
 
     private enum CodingKeys: String, CodingKey {
-        case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table, verse
+        case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table, verse, signature
         case sealedUntil = "sealed_until"
     }
 
@@ -590,6 +645,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         slug = design.slug
         table = design.table
         verse = sealed ? nil : design.verse
+        signature = nil
     }
 
     private init(copying card: MailCard, sealed: Bool) {
@@ -606,6 +662,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         slug = card.slug
         table = card.table
         verse = card.verse
+        signature = card.signature
     }
 
     /// The same card on the morning its seal lifts.
@@ -628,5 +685,6 @@ public struct MailCard: Decodable, Sendable, Hashable {
         slug = try? c.decodeIfPresent(String.self, forKey: .slug)
         table = try? c.decodeIfPresent(String.self, forKey: .table)
         verse = try? c.decodeIfPresent(String.self, forKey: .verse)
+        signature = try? c.decodeIfPresent(CardSignature.self, forKey: .signature)
     }
 }
