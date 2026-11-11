@@ -87,6 +87,9 @@ final class HolidayCardAttachments {
                 photo?.upload = made.data
                 photo?.mimeType = "image/jpeg"
                 photo?.preview = made.image
+            } else {
+                // A moving picture's first frame, while the server says why it can't go.
+                photo?.preview = UIImage(data: data)
             }
             upload()
         }

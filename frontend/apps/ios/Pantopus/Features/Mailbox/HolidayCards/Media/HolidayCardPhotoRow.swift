@@ -44,6 +44,7 @@ struct HolidayCardPhotoRow: View {
                     .accessibilityIdentifier("sendCardAddPhoto")
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .photosPicker(isPresented: $picking, selection: $picked, matching: .images, preferredItemEncoding: .current)
         .onChange(of: picked) { _, item in
             guard let item else { return }
