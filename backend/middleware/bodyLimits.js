@@ -96,6 +96,11 @@ function accessToken(req) {
 
 async function bodyLimits(req, res, next) {
   if (isRead(req)) return next();
+  // Express 5 leaves req.body undefined when nothing reads a body: none was sent, or its
+  // Content-Type is one no parser takes. Handlers destructure req.body, so that threw and
+  // answered 500 for the client's mistake. An empty object lets each route's own validation
+  // answer 400. A parser that does read a body (JSON here, multipart or raw later) replaces it.
+  if (req.body === undefined) req.body = {};
   const isJson = Boolean(req.is('application/json'));
   if (!isJson) {
     if (!req.is('application/x-www-form-urlencoded')) return next(); // multipart and others read their own

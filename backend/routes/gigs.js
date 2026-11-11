@@ -1522,7 +1522,9 @@ router.get('/user/me', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { status } = req.query;
 
-    let query = supabase
+    // The service client: the anon role lost table reads on September 30, so the anon
+    // client answered "permission denied" here. The owner filter is this query's own.
+    let query = supabaseAdmin
       .from('Gig')
       .select(GIG_LIST)
       .eq('user_id', userId)
@@ -1554,7 +1556,8 @@ router.get('/assignments/me', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const { data: assignments, error } = await supabase
+    // The service client, for the same reason as GET /user/me above.
+    const { data: assignments, error } = await supabaseAdmin
       .from('Assignment')
       .select(
         `
@@ -6195,7 +6198,7 @@ router.get('/:gigId/change-orders', verifyToken, async (req, res) => {
       .from('Gig')
       .select('id, user_id, accepted_by')
       .eq('id', gigId)
-      .single();
+      .maybeSingle(); // a task that doesn't exist is the 404 below, not a server fault
 
     if (gigFetchErr) {
       return res.status(500).json({ error: 'Failed to fetch gig' });
