@@ -233,11 +233,17 @@ internal fun PhotoUnderTheNote(
     )
 }
 
+/**
+ * Why a photo or voice greeting waits (founder 2026-11-11: say plainly it's because the stamps are free): under the two
+ * buttons, and on the stamp books when they open for them.
+ */
+internal const val MEDIA_NEEDS_BOUGHT_STAMP = "Free stamps send your card and note. A photo or voice greeting needs a bought stamp."
+
 /** Under "Add a photo" and "Record a greeting" while no bought stamp is left (`media.bought_stamp` "buy"). */
 @Composable
 internal fun MediaNeedsBoughtStamp() {
     Text(
-        "Photos and voice greetings go on cards sent with a bought stamp.",
+        MEDIA_NEEDS_BOUGHT_STAMP,
         fontSize = 13.sp,
         color = DeskInk.quiet,
         modifier = Modifier.padding(top = Spacing.s2).testTag("sendCardMediaNeedsStamp"),

@@ -306,6 +306,8 @@ internal fun StampBooksSheet(
     onDismiss: () -> Unit,
     /** Opened for a list whose cards need more stamps than are left. */
     short: StampShort? = null,
+    /** Opened for the card's photo or voice greeting, which need a bought stamp: the sheet says so first. */
+    forMedia: Boolean = false,
 ) {
     val activity = LocalContext.current.activity()
     val balance = model.balance
@@ -358,6 +360,16 @@ internal fun StampBooksSheet(
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.cardWax,
                     modifier = Modifier.testTag("stampBooksShort"),
+                )
+            }
+            if (forMedia) {
+                Text(
+                    MEDIA_NEEDS_BOUGHT_STAMP,
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.cardWax,
+                    modifier = Modifier.testTag("stampBooksMediaReason"),
                 )
             }
             balance?.let { have ->
