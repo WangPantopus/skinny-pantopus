@@ -6,6 +6,8 @@
 //     label_kind, notify: { sent_at } | { skipped } (services/moments/momentNotify.js),
 //     taken_at (a photo or video from the album taken more than a day before it was posted: everyone reads when),
 //     venue_id (the venue the author picked in the place picker, its `osm:` id) }
+// A Moment with no location (location_source 'none', founder 2026-11-11) has no point and no place: it goes to the
+// author's connections only, never on the map; they find it in the map's row of faces (GET /map `unplaced`).
 // Its place label is location_name (what everyone reads), its audience Post.audience ('nearby' | 'connections').
 // The row is private (visibility 'private', no distribution targets, off profiles), and every other post path leaves
 // it out (feedService.onlyShownPosts, readAccess.canReadPost, profiles): this module is its only reader. Every read here
@@ -87,13 +89,21 @@ function momentState(row, now = Date.now()) {
 // The point everyone sees, the author included: the exact pin, or the approximate grid point (docs/location-privacy-
 // matrix.md, approx_area) for a Moment shown as an area.
 function displayedPoint(row) {
+  if (!hasPlace(row)) return { latitude: null, longitude: null };
   const point = { latitude: row.latitude, longitude: row.longitude };
   if (meta(row).show_area) applyLocationPrecision(point, 'approx_area', false, { setUnlockedFlag: false, stripAddress: false });
   return point;
 }
 
-// One ring per person per spot (CONTRACT Ring.id): an exact pin's 0.005° cell, an area pin's displayed point.
+/** Whether the Moment has a point (one posted with no location has none). */
+function hasPlace(row) {
+  return row.latitude != null && row.longitude != null;
+}
+
+// One ring per person per spot (CONTRACT Ring.id): an exact pin's 0.005° cell, an area pin's displayed point; one
+// ring per person for the Moments with no location.
 function ringKey(row, point) {
+  if (!hasPlace(row)) return `u_${row.user_id}_none`;
   if (meta(row).show_area) {
     return `u_${row.user_id}_a_${Math.round(point.latitude * 1000)}_${Math.round(point.longitude * 1000)}`;
   }
@@ -225,9 +235,10 @@ function serializeMoment(row, { author, viewerId, seen = false, myReaction = nul
     width: stored?.width ?? null,
     height: stored?.height ?? null,
     duration_ms: stored?.duration_ms ?? null,
-    place_label: row.location_name,
+    place_label: row.location_name || null,
     latitude: point.latitude,
     longitude: point.longitude,
+    no_location: !hasPlace(row),
     show_area: Boolean(m.show_area),
     audience: row.audience === 'connections' ? 'connections' : 'nearby',
     created_at: row.created_at,
@@ -356,10 +367,63 @@ async function shownInBox(viewerId, { south, west, north, east }) {
   return shown;
 }
 
+/** The people `viewerId` is connected to (accepted connections), as ids. */
+async function connectionIds(viewerId) {
+  const { data, error } = await supabaseAdmin.from('Relationship').select('requester_id, addressee_id')
+    .eq('status', 'accepted').or(`requester_id.eq.${viewerId},addressee_id.eq.${viewerId}`).limit(5000);
+  if (error) throw new Error(`Failed to load connections: ${error.message}`);
+  return [...new Set((data || []).map((r) => String(r.requester_id === viewerId ? r.addressee_id : r.requester_id)))];
+}
+
+/**
+ * The live Moments with no location that `viewerId` may see: their connections' and their own, whatever the map shows
+ * (blocks, mutes and reports apply), newest first, as [{ row, point }] with an empty point.
+ */
+async function shownUnplaced(viewerId) {
+  const people = [String(viewerId), ...await connectionIds(viewerId)];
+  const nowIso = new Date().toISOString();
+  const rows = (await readInBatches(people, (batch) => supabaseAdmin.from('Post').select(MOMENT_SELECT)
+    .eq('is_story', true)
+    .in('user_id', batch)
+    .is('latitude', null)
+    .gt('story_expires_at', nowIso)
+    .is('archived_at', null)
+    .eq('moderation_state', 'live')
+    .eq('post_metadata->moment->>state', 'live')
+    .limit(MAX_MAP_ROWS), 'unplaced Moments')).filter((row) => momentState(row) === 'live');
+  if (!rows.length) return [];
+  const [ctx, reported] = await Promise.all([viewerContext(viewerId, rows.map((r) => r.user_id)), reportedIds(viewerId)]);
+  return rows.filter((row) => canSee(row, ctx) && !reported.has(row.id))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+    .map((row) => ({ row, point: { latitude: null, longitude: null } }));
+}
+
 /** Live Moments in view as rings (CONTRACT GET /api/moments/map), newest first. */
 async function mapRings(viewerId, box) {
+  return ringsOf(viewerId, await shownInBox(viewerId, box));
+}
+
+/**
+ * shownUnplaced, or none when it can't be read: the Moments with no location never stop the map or the tab's dot
+ * from working.
+ */
+async function unplacedOrNone(viewerId) {
+  try {
+    return await shownUnplaced(viewerId);
+  } catch (error) {
+    logger.warn('moments.unplaced_read_failed', { error: error.message });
+    return [];
+  }
+}
+
+/** The Moments with no location the viewer may see, one ring per person (CONTRACT GET /map `unplaced`). */
+async function unplacedRings(viewerId) {
+  return ringsOf(viewerId, await unplacedOrNone(viewerId));
+}
+
+async function ringsOf(viewerId, shown) {
   const groups = new Map();
-  for (const { row, point } of await shownInBox(viewerId, box)) {
+  for (const { row, point } of shown) {
     const key = ringKey(row, point);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({ row, point });
@@ -379,9 +443,11 @@ async function mapRings(viewerId, box) {
     return {
       id: key,
       author: authors.get(String(newest.row.user_id)),
-      latitude: newest.point.latitude,
-      longitude: newest.point.longitude,
-      place_label: newest.row.location_name,
+      // A ring of Moments with no location has no point at all (apps put it in the row of faces, never on the map).
+      ...(newest.point.latitude == null
+        ? { no_location: true }
+        : { latitude: newest.point.latitude, longitude: newest.point.longitude }),
+      place_label: newest.row.location_name || null,
       moments,
       unseen_count: moments.filter((m) => !m.seen).length,
       newest_at: newest.row.created_at,
@@ -399,9 +465,15 @@ function wentLiveAt(row) {
 /**
  * How many people have something new for `viewerId` in the box (CONTRACT GET /api/moments/unseen): a live Moment the
  * viewer may see and hasn't watched, that went live after `since` (a time in ms; none: any). Never the viewer's own.
+ * Moments with no location count only for an app that shows them (`includeUnplaced`, contract v3.4): an older app's
+ * dot never lights for something it can't show.
  */
-async function unseenPeople(viewerId, box, since = null) {
-  const fresh = (await shownInBox(viewerId, box)).map(({ row }) => row)
+async function unseenPeople(viewerId, box, since = null, { includeUnplaced = false } = {}) {
+  const [inBox, unplaced] = await Promise.all([
+    shownInBox(viewerId, box),
+    includeUnplaced ? unplacedOrNone(viewerId) : [],
+  ]);
+  const fresh = [...inBox, ...unplaced].map(({ row }) => row)
     .filter((row) => row.user_id !== viewerId && (since == null || wentLiveAt(row) > since));
   if (!fresh.length) return 0;
   const watched = new Set((await readInBatches(fresh.map((row) => row.id), (batch) => supabaseAdmin.from('PostView')
@@ -472,12 +544,12 @@ function newMomentRow({ userId, accountType, kind, hours, audience, showArea, at
     post_type: 'general',
     post_format: 'standard',
     visibility: 'private',
-    location_precision: showArea ? 'approx_area' : 'exact_place',
-    latitude: location.latitude,
-    longitude: location.longitude,
-    effective_latitude: location.latitude,
-    effective_longitude: location.longitude,
-    location_name: showArea || atHome ? labels.area_label : labels.place_label,
+    location_precision: location.source === 'none' ? 'none' : showArea ? 'approx_area' : 'exact_place',
+    latitude: location.latitude ?? null,
+    longitude: location.longitude ?? null,
+    effective_latitude: location.latitude ?? null,
+    effective_longitude: location.longitude ?? null,
+    location_name: location.source === 'none' ? null : showArea || atHome ? labels.area_label : labels.place_label,
     location_address: null,
     post_as: 'personal',
     audience,
@@ -524,7 +596,8 @@ function takenAtShown(value, now = Date.now()) {
 
 /**
  * Checks the posting rules for `user` (CONTRACT POST /api/moments): the one-time 18+ confirmation, a fresh GPS fix
- * (an album item pins where it was taken, from any time), and 20 Moments a day. Throws the error the apps handle.
+ * (an album item pins where it was taken, from any time; a Moment with no location needs a connection), and 20
+ * Moments a day. Throws the error the apps handle.
  */
 async function checkPostingRules(user, { kind, location }) {
   const now = Date.now();
@@ -533,8 +606,11 @@ async function checkPostingRules(user, { kind, location }) {
     if (!Number.isFinite(fixAt) || fixAt > now + CLOCK_SKEW_MS || now - fixAt > FIX_MAX_AGE_MS) {
       throw fail(422, 'LOCATION_TOO_OLD', 'Your location is out of date. Wait a moment for a new fix and try again.');
     }
-  } else if (kind === 'text') {
-    throw fail(400, 'MOMENT_INVALID', 'A text card pins where you are.');
+  } else if (location.source === 'capture') {
+    if (kind === 'text') throw fail(400, 'MOMENT_INVALID', 'A text card pins where you are.');
+  } else if (!(await connectionIds(user.id)).length) {
+    // No location: only connections see it, so it needs one.
+    throw fail(422, 'NO_CONNECTIONS', 'A Moment with no location goes only to your connections. Add a connection first.');
   }
   const { adultStatus } = require('../adultAttestation');
   const adult = await adultStatus(user.id);
@@ -675,7 +751,7 @@ async function deleteMoment(row) {
 module.exports = {
   KINDS, HOURS, BACKGROUNDS, AUDIENCES, DAILY_LIMIT, HOUR_MS, MOMENT_SELECT,
   fail, meta, hasEnded, momentState, displayedPoint, viewerContext, canSee, loadAuthors, loadMoment,
-  serializeMoments, openMoment, mapRings, unseenPeople, wentLiveAt, ownMoments, viewersOf,
+  serializeMoments, openMoment, mapRings, unplacedRings, connectionIds, unseenPeople, wentLiveAt, ownMoments, viewersOf,
   newMomentRow, takenAtShown, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
   filesHeld, purgeFiles, deleteMoment,
 };
