@@ -442,6 +442,31 @@ async function unplacedRings(viewerId) {
   return ringsOf(viewerId, await unplacedOrNone(viewerId));
 }
 
+// A ring on the map can show a small picture of its newest Moment in its pin (founder, 2026-11-11): the photo's or
+// video's small thumbnail (the one made for the chat quote), or a text card's background. Rings with no location have
+// none (they are never on the map), and a link that can't be signed only costs the picture, never the map.
+const thumbKeyOf = ({ row, point }) => (point.latitude == null ? null : meta(row).media?.thumb_key || null);
+
+async function previewLinks(newest) {
+  const keys = newest.map(thumbKeyOf).filter(Boolean);
+  if (!keys.length) return new Map();
+  try {
+    return await media.signedLinks(undefined, keys);
+  } catch (error) {
+    logger.warn('moments.map.preview_links_failed', { error: error.message });
+    return new Map();
+  }
+}
+
+function previewOf(newest, thumbs) {
+  if (newest.point.latitude == null) return null;
+  const m = meta(newest.row);
+  if (m.kind === 'text') return { moment_id: newest.row.id, kind: 'text', thumb_url: null, background: m.background || 'teal' };
+  const key = thumbKeyOf(newest);
+  const link = key ? thumbs.get(key) || null : null;
+  return link ? { moment_id: newest.row.id, kind: m.kind, thumb_url: link, background: null } : null;
+}
+
 async function ringsOf(viewerId, shown) {
   const groups = new Map();
   for (const { row, point } of shown) {
@@ -454,9 +479,10 @@ async function ringsOf(viewerId, shown) {
     members.sort((a, b) => Date.parse(a.row.created_at) - Date.parse(b.row.created_at));
     return { key, members, newest: members[members.length - 1] };
   }).sort((a, b) => Date.parse(b.newest.row.created_at) - Date.parse(a.newest.row.created_at)).slice(0, MAX_RINGS);
-  const [authors, marks] = await Promise.all([
+  const [authors, marks, thumbs] = await Promise.all([
     loadAuthors(kept.map(({ newest }) => newest.row.user_id)),
     viewerMarks(viewerId, kept.flatMap(({ members }) => members.map(({ row }) => row.id))),
+    previewLinks(kept.map(({ newest }) => newest)),
   ]);
   return kept.map(({ key, members, newest }) => {
     const mine = newest.row.user_id === viewerId;
@@ -464,6 +490,7 @@ async function ringsOf(viewerId, shown) {
     return {
       id: key,
       author: authors.get(String(newest.row.user_id)),
+      preview: previewOf(newest, thumbs),
       // A ring of Moments with no location has no point at all (apps put it in the row of faces, never on the map).
       ...(newest.point.latitude == null
         ? { no_location: true }
