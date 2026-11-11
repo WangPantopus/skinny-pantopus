@@ -19,8 +19,8 @@ enum MomentsFailure: Error, Equatable {
     case ageNotEligible
     /// 422: the location fix is older than five minutes.
     case locationTooOld
-    /// 422: the library photo or video is older than 24 hours.
-    case captureTooOld
+    /// 422: the place picked in the place picker is too far from the pin (contract v3.3).
+    case placeNotNearby
     /// 429: 20 Moments today.
     case dailyLimit
     /// 422: a video over 30 seconds.
@@ -46,7 +46,7 @@ enum MomentsFailure: Error, Equatable {
         case .adultConfirmRequired: "Moments are for people 18 and older."
         case .ageNotEligible: "Moments are for people 18 and older."
         case .locationTooOld: "Your location is out of date. Try again where you are."
-        case .captureTooOld: "Choose a photo or video from the last 24 hours."
+        case .placeNotNearby: "That place is too far from this Moment's pin. Pick one nearby."
         case .dailyLimit: "You've posted 20 Moments today. Try again tomorrow."
         case .mediaTooLong: "Videos can be up to 30 seconds."
         case .ended: "This Moment has ended."
@@ -93,7 +93,7 @@ enum MomentsFailure: Error, Equatable {
         "ADULT_CONFIRM_REQUIRED": .adultConfirmRequired,
         "AGE_NOT_ELIGIBLE": .ageNotEligible,
         "LOCATION_TOO_OLD": .locationTooOld,
-        "CAPTURE_TOO_OLD": .captureTooOld,
+        "PLACE_NOT_NEARBY": .placeNotNearby,
         "MOMENTS_DAILY_LIMIT": .dailyLimit,
         "MEDIA_TOO_LONG": .mediaTooLong,
         "MOMENT_ENDED": .ended,

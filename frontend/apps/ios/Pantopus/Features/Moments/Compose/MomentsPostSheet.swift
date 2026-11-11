@@ -182,10 +182,18 @@ struct MomentsPostSheet: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Post your Moment")
         .accessibilityIdentifier("moments.post")
-        .sheet(isPresented: Binding(get: { model.picksPlace }, set: { model.picksPlace = $0 })) {
-            MomentsPlacePicker(model: model) { model.picksPlace = false }
-                .presentationDetents([.medium])
-                .presentationBackground(Theme.Color.appSurface)
+        // One sheet for both: the short list of names (when more than one fits) and the place picker it can open,
+        // which is the Pulse composer's around the pin, with only venues within reach of it.
+        .sheet(isPresented: Binding(get: { model.picksPlace || model.findsPlace }, set: { if !$0 { model.closePlaceSheets() } })) {
+            Group {
+                if model.findsPlace, let anchor = model.placePickerAnchor {
+                    placeFinder(anchor: anchor)
+                } else {
+                    MomentsPlacePicker(model: model) { model.picksPlace = false }
+                }
+            }
+            .presentationDetents(model.findsPlace ? [.large] : [.medium])
+            .presentationBackground(Theme.Color.appSurface)
         }
     }
 
@@ -202,6 +210,9 @@ struct MomentsPostSheet: View {
             .padding(.top, asCard ? 16 : 11)
             placeRow
                 .padding(.top, 10)
+            if let taken = model.takenLine {
+                takenRow(taken).padding(.top, 2)
+            }
             if model.pin == nil, model.locating == .unavailable {
                 Text("Turn on location for Pantopus in Settings to post a Moment.")
                     .font(.system(size: 13))
@@ -228,46 +239,6 @@ struct MomentsPostSheet: View {
     private var me: MomentAuthorDTO? {
         guard case let .signedIn(user) = auth.state else { return nil }
         return MomentAuthorDTO(me: user)
-    }
-
-    /// The place row; a button with a chevron when more than one name fits the pin.
-    @ViewBuilder private var placeRow: some View {
-        if model.placeChoices.isEmpty {
-            placeLine(canChange: false)
-                .accessibilityElement(children: .combine)
-        } else {
-            Button { model.picksPlace = true } label: { placeLine(canChange: true).contentShape(Rectangle()) }
-                .buttonStyle(.plain)
-                .accessibilityElement(children: .combine)
-                .accessibilityHint("Picks another name for this place")
-                .accessibilityIdentifier("moments.post.placeChange")
-        }
-    }
-
-    private func placeLine(canChange: Bool) -> some View {
-        HStack(spacing: Spacing.s2) {
-            Icon(
-                model.place?.atHome == true && !model.showArea ? .home : .mapPin,
-                size: 18,
-                strokeWidth: 2.2,
-                color: Theme.Color.primaryTint
-            )
-            Text(model.placeLine)
-                .font(.system(size: 15.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.appText)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("moments.post.place")
-            Text(model.showArea ? "Area only" : "Exact spot")
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-            if canChange {
-                Icon(.chevronRight, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextMuted)
-                    .accessibilityHidden(true)
-            }
-        }
-        .padding(.horizontal, Spacing.s1)
-        .frame(minHeight: canChange ? 44 : 32)
     }
 
     private var homeNotice: some View {

@@ -220,6 +220,9 @@ public struct MomentDTO: Decodable, Sendable, Hashable, Identifiable {
     public let viewerCount: Int?
     /// Only for the author: each emoji and how many chose it, most used first.
     public let reactionCounts: [MomentReactionCount]?
+    /// When the photo or video was taken, only when that was more than a day before it was posted (contract v3.3):
+    /// the viewer says "Taken Oct 3" so an old photo never reads as now. Nil otherwise and from an older server.
+    public let takenAt: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, author, kind, state, caption, text, background, width, height, latitude, longitude, audience, hours, seen
@@ -233,6 +236,7 @@ public struct MomentDTO: Decodable, Sendable, Hashable, Identifiable {
         case myReaction = "my_reaction"
         case viewerCount = "viewer_count"
         case reactionCounts = "reaction_counts"
+        case takenAt = "taken_at"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -261,6 +265,7 @@ public struct MomentDTO: Decodable, Sendable, Hashable, Identifiable {
         myReaction = try c.decodeIfPresent(String.self, forKey: .myReaction)
         viewerCount = try c.decodeIfPresent(Int.self, forKey: .viewerCount)
         reactionCounts = try? c.decodeIfPresent([MomentReactionCount].self, forKey: .reactionCounts)
+        takenAt = try? c.decodeIfPresent(String.self, forKey: .takenAt)
     }
 
     public var media: URL? {
@@ -321,9 +326,12 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
     public let adultConfirmed: Bool?
     /// The names that fit an exact pin here, the automatic one first; empty from a server before contract v3.
     public let places: [MomentPlaceChoiceDTO]
+    /// How far from the pin the place picker's venues may be (contract v3.3, 1500 m); nil from an older server.
+    public let pickWithinM: Double?
 
     private enum CodingKeys: String, CodingKey {
         case places
+        case pickWithinM = "pick_within_m"
         case placeLabel = "place_label"
         case areaLabel = "area_label"
         case atHome = "at_home"
@@ -339,6 +347,7 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
         // One odd entry doesn't cost the whole preview: the list is then left out.
         places = (try? c.decodeIfPresent([MomentPlaceChoiceDTO].self, forKey: .places))?
             .filter { !$0.key.isEmpty && !$0.label.isEmpty } ?? []
+        pickWithinM = try? c.decodeIfPresent(Double.self, forKey: .pickWithinM)
     }
 }
 
@@ -442,52 +451,17 @@ public struct MomentCreateBody: Encodable, Sendable, Hashable {
     public var clientRequestId: String?
     /// The place name the person picked (a key from place-preview's `places`); left out for the automatic one.
     public var placeKey: String?
+    /// When an album photo or video pinned where you are (its file doesn't say where) was taken (contract v3.3).
+    public var takenAt: String?
+    /// A venue picked in the place picker around the pin (its `osm:` id, contract v3.3): the Moment pins there.
+    public var venueId: String?
 
     private enum CodingKeys: String, CodingKey {
         case kind, hours, audience, caption, text, background, location
         case showArea = "show_area"
         case clientRequestId = "client_request_id"
         case placeKey = "place_key"
-    }
-}
-
-// MARK: - Times
-
-/// ISO 8601 times from the Moments API, with or without fractional seconds.
-enum MomentTime {
-    static func parse(_ raw: String?) -> Date? {
-        guard let raw, !raw.isEmpty else { return nil }
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: raw) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: raw)
-    }
-
-    static func string(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
-    }
-
-    /// "2h ago", "35m ago", "just now".
-    static func ago(_ date: Date?, now: Date = Date()) -> String {
-        guard let date else { return "" }
-        let seconds = max(0, now.timeIntervalSince(date))
-        if seconds < 60 { return "just now" }
-        if seconds < 3600 { return "\(Int(seconds / 60))m ago" }
-        if seconds < 86400 { return "\(Int(seconds / 3600))h ago" }
-        return "\(Int(seconds / 86400))d ago"
-    }
-
-    /// "24h left", "35m left", "1m left": rounded up, so a Moment just posted for 24 hours says 24, and never under a minute.
-    static func left(_ date: Date?, now: Date = Date()) -> String {
-        guard let date else { return "" }
-        let seconds = max(0, date.timeIntervalSince(now))
-        // Whole minutes first, so the last half minute before an hour reads "1h left", never "60m left".
-        let minutes = max(1, Int((seconds / 60).rounded(.up)))
-        if minutes >= 60 { return "\(Int((Double(minutes) / 60).rounded(.up)))h left" }
-        return "\(minutes)m left"
+        case takenAt = "taken_at"
+        case venueId = "venue_id"
     }
 }

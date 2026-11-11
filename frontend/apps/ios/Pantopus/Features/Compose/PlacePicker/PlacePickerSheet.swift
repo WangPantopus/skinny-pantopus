@@ -26,6 +26,9 @@ public struct PlacePickerSheet: View {
     private let onSelect: (PostPlaceTag) -> Void
     private let onRemove: () -> Void
     private let onDismiss: () -> Void
+    private var anchorChips = true
+    private var showsLocality = true
+    private var placeFilter: (GeoPlace) -> Bool = { _ in true }
 
     /// - Parameter mediaLocation: capture location of the composer's
     ///   first geotagged attachment. Non-nil renders the "Photo
@@ -44,6 +47,19 @@ public struct PlacePickerSheet: View {
         self.onSelect = onSelect
         self.onRemove = onRemove
         self.onDismiss = onDismiss
+    }
+
+    /// Moments (2026-11-11): around a Moment's pin, no "Near me" chip or town row, only what `placeFilter` keeps.
+    public init(
+        currentTag: PostPlaceTag?,
+        anchoredAt pin: MediaCaptureLocation,
+        placeFilter: @escaping (GeoPlace) -> Bool,
+        onSelect: @escaping (PostPlaceTag) -> Void,
+        onRemove: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.init(currentTag: currentTag, mediaLocation: pin, onSelect: onSelect, onRemove: onRemove, onDismiss: onDismiss)
+        (anchorChips, showsLocality, self.placeFilter) = (false, false, placeFilter)
     }
 
     /// Test / preview seam — accept a pre-built view-model.
@@ -65,8 +81,8 @@ public struct PlacePickerSheet: View {
         VStack(spacing: Spacing.s0) {
             header
             searchField
-            if viewModel.hasMediaAnchor {
-                anchorChips
+            if viewModel.hasMediaAnchor, anchorChips {
+                anchorChipsRow
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.s2) {
@@ -138,7 +154,7 @@ public struct PlacePickerSheet: View {
     /// search proximity on the media's capture point; "Near me" on the
     /// device fix (falling back to the search-only hint when no fix
     /// resolves, while this chip row stays live).
-    private var anchorChips: some View {
+    private var anchorChipsRow: some View {
         HStack(spacing: Spacing.s2) {
             anchorChip(.media, label: "Photo location", identifier: "placePickerAnchorPhoto")
             anchorChip(.current, label: "Near me", identifier: "placePickerAnchorCurrent")
@@ -187,12 +203,12 @@ public struct PlacePickerSheet: View {
         case .loading:
             skeletonRows
         case let .loaded(nearby, locality):
-            nearbySection(nearby: nearby, locality: locality)
-        case let .searchResults(places):
+            nearbySection(nearby: nearby.filter(placeFilter), locality: showsLocality ? locality : nil)
+        case let .searchResults(places) where places.contains(where: placeFilter):
             sectionHeader("Results")
-            listCard(places)
+            listCard(places.filter(placeFilter))
             attributionFooter
-        case .empty:
+        case .searchResults, .empty:
             EmptyState(
                 icon: .searchX,
                 headline: "No places found",

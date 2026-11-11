@@ -162,6 +162,31 @@ struct MomentsViewerHeader: View {
     }
 }
 
+/// "Taken Oct 3" under the header, on a small dark pill: when an old photo or video was taken.
+struct MomentsTakenPill: View {
+    let taken: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Icon(.calendar, size: 13, strokeWidth: 2.2, color: .white)
+            Text(taken)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.black.opacity(0.48)))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Under the name: the header's leading inset, the 36 pt face and its 10 pt gap.
+        .padding(.leading, 58)
+        .padding(.top, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(taken)
+        .accessibilityIdentifier("moments.viewer.taken")
+    }
+}
+
 /// The caption line over a photo or video.
 struct MomentsCaptionPill: View {
     let caption: String

@@ -32,9 +32,9 @@ final class MomentsCameraModel {
     private(set) var recording = false
     private(set) var elapsed: Double = 0
     private(set) var capturing = false
-    /// The library button's picture: the newest of the last 24 hours, when the library is open to Pantopus.
+    /// The library button's picture: the newest photo or video, when the library is open to Pantopus.
     private(set) var newest: UIImage?
-    /// Board O7's row: the newest four of the last 24 hours; nil until read.
+    /// Board O7's row: the newest four photos and videos; nil until read.
     private(set) var recents: [MomentsRecentItem]?
     /// The library is open to Pantopus (all of it, or the photos picked).
     private(set) var libraryAllowed = false
@@ -121,7 +121,7 @@ final class MomentsCameraModel {
         onVideo?(url)
     }
 
-    /// Board O7: the newest four of the last 24 hours, only where the library is already open to Pantopus (See all
+    /// Board O7: the newest four photos and videos, only where the library is already open to Pantopus (See all
     /// opens the library, which asks).
     func loadRecents() async {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -131,7 +131,7 @@ final class MomentsCameraModel {
             return
         }
         var items: [MomentsRecentItem] = []
-        for asset in MomentsLibraryLoader.recentAssets().prefix(4) {
+        for asset in MomentsLibraryLoader.newestAssets(4) {
             await items.append(MomentsRecentItem(asset: asset, thumbnail: MomentsLibraryLoader.thumbnail(for: asset, side: 300)))
         }
         recents = items
