@@ -110,8 +110,9 @@ struct HolidayCardMediaRow: View {
         return .own(fileId: stored.fileId)
     }
 
-    /// The server's words for the rule, under the buttons and on the stamp books opened for it.
-    static let needsStampLine = "Photos and voice greetings go on cards sent with a bought stamp."
+    /// The rule in the founder's words (2026-11-11), so people know it's because the stamps are free: under the
+    /// buttons, on the stamp books opened for it, by the postage, and on Seal it for the day after a refusal.
+    static let needsStampLine = "Free stamps send your card and note. A photo or voice greeting needs a bought stamp."
 
     /// The picker, or the stamp books while no bought stamp is left.
     private func pickPhoto() {

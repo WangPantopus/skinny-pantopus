@@ -440,6 +440,8 @@ final class HolidayCardFlowViewModel {
     @discardableResult
     private func needsBoughtStamp(_ error: any Error) async -> Bool {
         guard Self.refusalCode(error) == "CARD_MEDIA_NEEDS_STAMP" else { return false }
+        // Seal it for the day says it in the app's words, whatever an older server says, and clears it once bought.
+        if previewError != nil { previewError = HolidayCardMediaRow.needsStampLine }
         openStampsForMedia()
         await stamps.refresh()
         await rereadCards()
