@@ -189,7 +189,13 @@ async function lastRoundAt({ userId, homeIds, now = new Date() }) {
     .order('delivered_at', { ascending: false })
     .limit(1);
   if (error) throw new Error(error.message);
-  return latest?.length ? new Date(latest[0].delivered_at) : null;
+  if (!latest?.length) return null;
+  // The database keeps microseconds (delivered_at defaults to now()) and a Date keeps milliseconds. Callers count what
+  // was "delivered by the round", so a time with digits past the millisecond is rounded up: rounded down, the piece
+  // that made the round fell just after it and was left out of its own count.
+  const at = new Date(latest[0].delivered_at);
+  const pastMillisecond = /\.\d{3}(\d+)/.exec(String(latest[0].delivered_at));
+  return pastMillisecond && Number(pastMillisecond[1]) > 0 ? new Date(at.getTime() + 1) : at;
 }
 
 /**
