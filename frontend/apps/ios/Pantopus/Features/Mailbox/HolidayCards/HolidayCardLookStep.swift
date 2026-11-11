@@ -380,13 +380,15 @@ private extension HolidayCardLookStep {
     /// The sender's own photo beside the card, never covered (memories plan step 4).
     @ViewBuilder
     var ownMedia: some View {
-        if let photo = card?.photo {
+        if card?.photo != nil || card?.voice != nil {
             CardMediaBeside(
-                photo: photo,
-                source: .own(fileId: photo.fileId),
+                photo: card?.photo,
+                voice: card?.voice,
+                from: .own,
                 number: card?.number ?? design.number,
                 day: preview.piece.item.postmark?.date ?? preview.piece.item.createdAt,
-                fromName: from
+                fromName: from,
+                forName: recipient.envelopeName
             )
             .padding(.top, -Spacing.s4)
             .accessibilityIdentifier("sendCardLookPhoto")
@@ -429,6 +431,7 @@ private extension HolidayCardLookStep {
             verse: design.verse,
             signature: card?.signature,
             photo: card?.photo,
+            voice: card?.voice,
             mediaFrom: .own
         )
     }

@@ -34,6 +34,7 @@ extension CardTableContent {
         verse = card.card.sealed ? nil : card.card.verse
         signature = card.card.sealed ? nil : card.card.signature
         photo = card.card.sealed ? nil : card.card.photo
+        voice = card.card.sealed ? nil : card.card.voice
         mediaFrom = .piece(mailId: letter.piece.id)
     }
 }
@@ -59,6 +60,7 @@ extension CardTableContent {
         signature = piece.card.signature
         // Your own photo: never covered here.
         photo = piece.card.photo.map { CardPhoto(fileId: $0.fileId, width: $0.width, height: $0.height, alt: $0.alt) }
+        voice = piece.card.voice
         mediaFrom = .sent(cardId: piece.id)
     }
 }
