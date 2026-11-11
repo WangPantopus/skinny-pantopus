@@ -9,6 +9,7 @@ import VisibilityChip from '../VisibilityChip';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage } from '../share/shareFailure';
+import IssuedShareLink from '../share/IssuedShareLink';
 import { launchFeatures } from '@/lib/featureFlags';
 
 // "expires in 23h" / "expires in 2d 4h" for a share link's end time.
@@ -118,6 +119,8 @@ export default function DocsCard({
   }, [homeId]);
   useEffect(() => { void loadLinks(); }, [loadLinks]);
 
+  // A new link, kept on screen until it is closed: it can't be read again.
+  const [issued, setIssued] = useState<{ url: string; title: string } | null>(null);
   const handleShare = async (doc: Record<string, any>) => {
     try {
       const res = await api.homeIam.createScopedGrant(homeId, {
@@ -126,8 +129,10 @@ export default function DocsCard({
         permission_scope: 'view',
       });
       const shareUrl = `${window.location.origin}/shared/${encodeURIComponent(res.token)}`;
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success('Share link copied to clipboard!');
+      setIssued({ url: shareUrl, title: doc.title || 'this document' });
+      // Best effort: a browser may refuse the clipboard here, and the link stays on screen either way.
+      try { await navigator.clipboard.writeText(shareUrl); toast.success('Share link copied to clipboard!'); }
+      catch { /* shown on screen */ }
     } catch (err: unknown) {
       toast.error(failureMessage(err, 'Failed to create share link'));
     } finally {
@@ -161,6 +166,15 @@ export default function DocsCard({
           <h2 className="text-lg font-semibold text-app-text flex items-center gap-2"><Folder className="w-5 h-5" /> Documents</h2>
         </div>
       </div>
+
+      {issued && (
+        <IssuedShareLink
+          url={issued.url}
+          title={`Share link for “${issued.title}”`}
+          note="Send it now. It’s shown only this once: to send it later, stop sharing and create a new link."
+          onDone={() => setIssued(null)}
+        />
+      )}
 
       {DOC_FOLDERS.map((folder) => {
         const docs = grouped[folder.key];
@@ -250,6 +264,7 @@ export default function DocsCard({
         <div className="bg-app-surface rounded-xl border border-app-border p-8 text-center">
           <div className="mb-2"><FolderOpen className="w-8 h-8 mx-auto text-app-text-muted" /></div>
           <p className="text-sm text-app-text-secondary">No documents uploaded yet</p>
+          <p className="text-xs text-app-text-muted mt-1">Documents added in the Pantopus app on your phone show up here</p>
         </div>
       )}
     </div>
