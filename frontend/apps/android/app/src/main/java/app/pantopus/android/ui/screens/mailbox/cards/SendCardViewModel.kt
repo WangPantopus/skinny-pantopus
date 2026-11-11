@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.mailbox.cards
 
-import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -161,6 +160,8 @@ data class SendCardForm(
     val signature: CardSignature? = null,
     /** The card's own photo (memories plan step 4): uploading, stored, or refused; its stored file is saved with the screen. */
     val photo: CardPhotoDraft? = null,
+    /** The card's voice greeting (memories plan step 7): uploading, stored, or refused; its stored file is saved too. */
+    val voice: CardVoiceDraft? = null,
     val arrival: String? = null,
     /** When a card to the person chosen can come, by their clock; null until read (the sender's next morning stands in). */
     val theirs: HolidayCardArrivalsFor? = null,
@@ -224,6 +225,9 @@ data class SendCardForm(
     /** What step 1 says about a card taken back, if anything; with digital stamps on ([postage]), its stamp came back. */
     fun backNote(postage: Boolean): String? = takenBackNote ?: (if (postage) TOOK_BACK_STAMP else TOOK_BACK).takeIf { tookBack }
 
+    /** The photo and the greeting, where there are any, are uploaded: "Seal it" can go on. */
+    val mediaReady: Boolean get() = photo?.ready != false && voice?.ready != false
+
     /** This form with its card's request ID, made now if it has none yet. */
     fun withRequestId(): SendCardForm = if (requestId != null) this else copy(requestId = UUID.randomUUID().toString())
 }
@@ -251,6 +255,26 @@ data class CardPhotoDraft(
 
     /** The description as it goes: trimmed, or null when there's none. */
     val sentAlt: String? get() = alt.trim().takeIf { it.isNotEmpty() && stored != null }
+}
+
+/**
+ * The card's voice greeting while the card is written (memories plan step 7): recorded on this phone ([local], never
+ * kept after a relaunch), uploading, stored ([stored], with the length the server measured) or refused ([failed]).
+ */
+data class CardVoiceDraft(
+    val local: File? = null,
+    /** How long it ran here; the server's length once it's stored. */
+    val durationMs: Long? = null,
+    val stored: CardMediaFile? = null,
+    val progress: Float = 0f,
+    val failed: String? = null,
+) {
+    val ready: Boolean get() = stored != null
+    val uploading: Boolean get() = stored == null && failed == null
+    val fileId: String? get() = stored?.fileId
+
+    /** The length to show: the server's once stored. */
+    val lengthMs: Long? get() = stored?.durationMs ?: durationMs
 }
 
 /** The longest photo description the server takes. */
@@ -295,6 +319,9 @@ class SendCardViewModel
 
         private val _form = MutableStateFlow(restoredForm())
         val form: StateFlow<SendCardForm> = _form.asStateFlow()
+
+        /** The card's own photo and greeting while it's written (memories plan steps 4 and 7). */
+        val drafts = SendCardMedia(viewModelScope, media, _form) { error, doing -> sendMessage(error, doing) }
 
         /** "Send another card" under a card just sent (digital stamps on): a new card from the first step. */
         fun startAnotherCard() {
@@ -436,73 +463,6 @@ class SendCardViewModel
             _form.update { it.copy(signature = signature?.takeIf { s -> s.drawable }) }
         }
 
-        private var photoJob: Job? = null
-
-        /**
-         * "Add a photo" or "Replace" (memories plan step 4): the picked photo, prepared on the phone (upright, at most
-         * 1600 px, no EXIF), uploads at once with its progress. A failure keeps the note and says why.
-         */
-        fun addPhoto(uri: Uri) {
-            photoJob?.cancel()
-            val before = _form.value.photo
-            media.forget(before?.local)
-            _form.update { it.copy(photo = CardPhotoDraft(alt = before?.alt.orEmpty())) }
-            photoJob =
-                viewModelScope.launch {
-                    val prepared = media.preparePhoto(uri)
-                    if (prepared == null) {
-                        _form.update {
-                            it.copy(photo = it.photo?.copy(failed = "We couldn’t read this photo. Try another one."))
-                        }
-                        return@launch
-                    }
-                    _form.update {
-                        it.copy(photo = it.photo?.copy(local = prepared.file, width = prepared.width, height = prepared.height))
-                    }
-                    uploadPhoto(prepared.file)
-                }
-        }
-
-        /** "Try again" after a failed upload: the same prepared photo. */
-        fun retryPhoto() {
-            val local = _form.value.photo?.local ?: return
-            photoJob?.cancel()
-            _form.update { it.copy(photo = it.photo?.copy(failed = null, progress = 0f)) }
-            photoJob = viewModelScope.launch { uploadPhoto(local) }
-        }
-
-        private suspend fun uploadPhoto(file: File) {
-            val result =
-                media.upload("photo", file, "image/jpeg") { done ->
-                    _form.update { form -> if (form.photo?.local == file) form.copy(photo = form.photo.copy(progress = done)) else form }
-                }
-            _form.update { form ->
-                val photo = form.photo?.takeIf { it.local == file } ?: return@update form
-                when (result) {
-                    is NetworkResult.Success ->
-                        form.copy(
-                            photo = photo.copy(stored = result.data, progress = 1f, width = result.data.width, height = result.data.height),
-                        )
-                    is NetworkResult.Failure ->
-                        form.copy(photo = photo.copy(failed = sendMessage(result.error, doing = "upload your photo")))
-                }
-            }
-        }
-
-        /** "Remove": the card goes without a photo, on purpose. */
-        fun removePhoto() {
-            photoJob?.cancel()
-            media.forget(_form.value.photo?.local)
-            _form.update { it.copy(photo = null) }
-        }
-
-        /** The photo's description for screen readers, cut at [PHOTO_ALT_LIMIT] letters. */
-        fun onPhotoAlt(text: String) {
-            // One line, as the server keeps it (it folds spaces): a return in the keyboard doesn't break it.
-            val line = text.replace(Regex("\\s*[\\r\\n]+\\s*"), " ")
-            _form.update { it.copy(photo = it.photo?.copy(alt = line.takeLetters(PHOTO_ALT_LIMIT))) }
-        }
-
         /** When a card to the person chosen can come, by their clock. A failure keeps the sender's next morning. */
         private fun readTheirs() {
             val person = _form.value.to as? CardRecipient.Person ?: return
@@ -529,7 +489,7 @@ class SendCardViewModel
             _form.update { form ->
                 when {
                     form.step == SendCardStep.Pick && form.design != null -> form.copy(step = SendCardStep.Write)
-                    form.step == SendCardStep.Write && form.message.isNotBlank() && form.photo?.ready != false ->
+                    form.step == SendCardStep.Write && form.message.isNotBlank() && form.mediaReady ->
                         form.copy(step = SendCardStep.Seal, lookUnavailable = false)
                     else -> form
                 }
@@ -708,6 +668,7 @@ class SendCardViewModel
                         signature = form.signature,
                         photo = form.photo?.fileId,
                         photoAlt = form.photo?.sentAlt,
+                        voice = form.voice?.fileId,
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
@@ -727,17 +688,21 @@ class SendCardViewModel
                 val same = it.step == SendCardStep.Seal && it.to == asked.to && it.design == asked.design && it.arrival == asked.arrival
                 when {
                     // Back, or another choice, while it was read: only an answer for what's chosen now counts.
-                    !same || it.message != asked.message || it.signature != asked.signature || it.photo != asked.photo ->
+                    !same || it.message != asked.message || it.signature != asked.signature || it.photo != asked.photo ||
+                        it.voice != asked.voice ->
                         it.copy(previewing = false)
                     look is CardLook.Shown ->
                         it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
                     look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
+                    // A photo or greeting with no bought stamp left: the stamp books open over step 4 (below).
+                    look is CardLook.Failed && look.error.wantsStamps(cards.value) -> it.copy(previewing = false)
                     look is CardLook.Failed ->
                         it.copy(previewing = false, sealError = sendMessage(look.error, doing = "show how your card will look"))
                     else -> it
                 }
             }
             if ((look as? CardLook.Failed)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
+            if ((look as? CardLook.Failed)?.error?.wantsStamps(cards.value) == true) _stampsNeeded.tryEmit(Unit)
         }
 
         /**
@@ -761,6 +726,7 @@ class SendCardViewModel
                         signature = form.signature,
                         photo = form.photo?.fileId,
                         photoAlt = form.photo?.sentAlt,
+                        voice = form.voice?.fileId,
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
@@ -768,8 +734,9 @@ class SendCardViewModel
                         toLink = to is CardRecipient.Link,
                     )
                 if (result is NetworkResult.Failure && wentEarlier(result.error)) return@launch
-                // The stamps ran out meanwhile (another device sent a card): the stamp books open; the card stays as it is.
-                if ((result as? NetworkResult.Failure)?.error?.serverCode() == STAMPS_REQUIRED) {
+                // The stamps ran out meanwhile (another device sent a card), or a photo or greeting has no bought stamp left:
+                // the stamp books open; the card, its photo and its greeting stay as they are.
+                if ((result as? NetworkResult.Failure)?.error?.wantsStamps(cards.value) == true) {
                     _form.update { it.copy(sending = false) }
                     _stampsNeeded.tryEmit(Unit)
                     return@launch
@@ -910,6 +877,14 @@ class SendCardViewModel
             val message = saved.get<String>(KEY_MESSAGE).orEmpty()
             val signature = saved.get<String>(KEY_SIGNATURE)?.let(CardSignatureJson::fromJson)
             val photo = saved.get<String>(KEY_PHOTO)?.let { readPhoto(it, saved.get<String>(KEY_PHOTO_ALT).orEmpty()) }
+            val voice =
+                saved.get<String>(KEY_VOICE)?.let { json ->
+                    runCatching {
+                        val kept = JSONObject(json)
+                        val ms = kept.optLong("ms").takeIf { it > 0 }
+                        CardVoiceDraft(stored = CardMediaFile(kept.getString("id"), "voice", durationMs = ms), progress = 1f)
+                    }.getOrNull()
+                }
             val step = savedStep(opensAtPick = sendBack != null)
             val reachable =
                 when {
@@ -927,6 +902,7 @@ class SendCardViewModel
                 message = message,
                 signature = signature,
                 photo = photo,
+                voice = voice,
                 arrival = saved.get<String>(KEY_ARRIVAL),
                 requestId = saved.get<String>(KEY_REQUEST_ID),
                 listed = list?.first.orEmpty(),
@@ -1005,6 +981,10 @@ class SendCardViewModel
                     JSONObject().put("id", it.fileId).put("w", it.width ?: 0).put("h", it.height ?: 0).toString()
                 }
             saved[KEY_PHOTO_ALT] = form.photo?.alt?.takeIf { form.step != SendCardStep.Sent && form.photo.ready }
+            saved[KEY_VOICE] =
+                form.voice?.stored?.takeIf { form.step != SendCardStep.Sent }?.let {
+                    JSONObject().put("id", it.fileId).put("ms", it.durationMs ?: 0L).toString()
+                }
             saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_REQUEST_ID] = form.requestId.takeIf { form.step != SendCardStep.Sent }
         }
@@ -1053,6 +1033,7 @@ class SendCardViewModel
             private const val KEY_SIGNATURE = "sendCard.signature"
             private const val KEY_PHOTO = "sendCard.photo"
             private const val KEY_PHOTO_ALT = "sendCard.photoAlt"
+            private const val KEY_VOICE = "sendCard.voice"
             private const val KEY_ARRIVAL = "sendCard.arrival"
             private const val KEY_REQUEST_ID = "sendCard.requestId"
             private const val KEY_TO_LIST = "sendCard.toList"
@@ -1076,6 +1057,14 @@ private fun NetworkError.serverCode(): String? {
         } ?: return null
     return runCatching { JSONObject(body).optString("code") }.getOrNull()?.takeIf { it.isNotBlank() }
 }
+
+/**
+ * A refusal the stamp books answer (stamp books on for this person): 402 `STAMPS_REQUIRED` (none left), or 402
+ * `CARD_MEDIA_NEEDS_STAMP` (a photo or voice greeting goes only with a bought stamp, and none is left). With stamp books
+ * off, the server's sentence shows instead.
+ */
+private fun NetworkError.wantsStamps(cards: HolidayCardsResponse?): Boolean =
+    cards?.postageEnabled == true && serverCode().let { it == "STAMPS_REQUIRED" || it == "CARD_MEDIA_NEEDS_STAMP" }
 
 /** `needed` and `available` from a list's 402 `STAMPS_REQUIRED` answer. */
 private fun NetworkError.stampCounts(): Pair<Int?, Int?> {

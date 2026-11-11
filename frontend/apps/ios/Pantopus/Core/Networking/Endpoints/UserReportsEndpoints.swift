@@ -23,13 +23,21 @@ public enum UserReportsEndpoints {
 
 /// `POST /api/users/:userId/report` body. `reason` is one of the Joi-valid
 /// keys (`spam · harassment · inappropriate · misinformation · safety ·
-/// other`); `details` is capped server-side at 1 000 chars.
+/// other`); `details` is capped server-side at 1 000 chars. `mailId` ("Report this card", launch key
+/// `holiday_card_memories`): the card received from this person, shared with Pantopus admins for review, that card only.
 public struct UserReportBody: Encodable, Sendable {
     public let reason: String
     public let details: String?
+    public let mailId: String?
 
-    public init(reason: String, details: String?) {
+    private enum CodingKeys: String, CodingKey {
+        case reason, details
+        case mailId = "mail_id"
+    }
+
+    public init(reason: String, details: String?, mailId: String? = nil) {
         self.reason = reason
         self.details = details
+        self.mailId = mailId
     }
 }

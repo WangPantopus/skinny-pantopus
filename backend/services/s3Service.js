@@ -84,9 +84,9 @@ function cacheControl(key) {
   return key.startsWith('chat/') ? PRIVATE_IMMUTABLE : PUBLIC_IMMUTABLE;
 }
 
-async function uploadToS3(buffer, key, contentType, objectMetadata, { contentLength, abortSignal } = {}) {
+async function uploadToS3(buffer, key, contentType, objectMetadata, { contentLength, abortSignal, bucket = S3_BUCKET } = {}) {
   const cmd = new PutObjectCommand(
-    buildPutObjectParams({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: contentType,
+    buildPutObjectParams({ Bucket: bucket, Key: key, Body: buffer, ContentType: contentType,
       CacheControl: cacheControl(key),
       ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       ...(objectMetadata ? { Metadata: objectMetadata } : {}) })
@@ -393,9 +393,9 @@ async function uploadGeneral(buffer, originalFilename, userId, folder, mimeType)
   return uploadToS3(buffer, key, mimeType);
 }
 
-async function deleteFromS3(key) {
+async function deleteFromS3(key, bucket = S3_BUCKET) {
   try {
-    await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+    await s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     logger.info('S3 delete success', { key });
     return true;
   } catch (err) {
@@ -411,11 +411,11 @@ async function deleteFromS3(key) {
 }
 
 /** Keys under `prefix` last written before `before` (epoch ms), at most `limit` of them. */
-async function listKeysWrittenBefore(prefix, before, limit = 1000) {
+async function listKeysWrittenBefore(prefix, before, limit = 1000, bucket = S3_BUCKET) {
   const keys = [];
   let token;
   do {
-    const page = await s3Client.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: prefix, ContinuationToken: token }));
+    const page = await s3Client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
     for (const object of page.Contents || []) {
       if (object.LastModified && object.LastModified.getTime() < before) keys.push(object.Key);
     }

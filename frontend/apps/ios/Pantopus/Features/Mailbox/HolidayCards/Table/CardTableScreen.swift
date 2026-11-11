@@ -46,7 +46,9 @@ struct CardTableScreen: View {
                 screen: screen,
                 trailingStrip: strip,
                 safeTop: insets.top,
-                bottomControls: actHeight + insets.bottom + 8,
+                // The card's own photo keeps room under the card on a phone (memories plan step 4).
+                bottomControls: actHeight + insets.bottom + 8
+                    + CardTableMediaLayer.room(for: model.content, screen: screen, strip: strip, fold: fold),
                 wordsBottom: insets.top + 54 + wordsHeight
             )
             ZStack(alignment: .topLeading) {
@@ -66,6 +68,8 @@ struct CardTableScreen: View {
                                 }
                             }
                         }
+                    CardTableMediaLayer(model: model, layout: layout)
+                        .frame(width: screen.width, height: screen.height, alignment: .topLeading)
                 }
                 CardTableControls(
                     model: model,

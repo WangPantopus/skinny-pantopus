@@ -146,6 +146,13 @@ extension CardTableModel {
         }
     }
 
+    /// "With it: a photo and a voice greeting, 5 seconds." (memories plan steps 4 and 7).
+    static func withIt(_ content: CardTableContent) -> String {
+        let voice = content.voice.map { "a voice greeting, \(HolidayCardGreetingWords.spoken($0.durationMs))" }
+        let things = [content.photo == nil ? nil : "a photo", voice].compactMap { $0 }
+        return things.isEmpty ? "" : " With it: \(things.joined(separator: " and "))."
+    }
+
     /// What VoiceOver reads for what's on the table.
     var spokenLabel: String {
         if let sending { return sendingSpoken(sending) }
@@ -157,6 +164,7 @@ extension CardTableModel {
             "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")"
         case .out:
             "Card from \(content.firstName): \(HolidayCardWords.captionSentence(content.caption)) On the back: \(content.note)"
+                + Self.withIt(content)
         }
     }
 

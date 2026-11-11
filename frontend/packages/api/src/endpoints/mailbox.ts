@@ -736,7 +736,16 @@ export async function getHolidayCardMediaBlob(
 
 export interface HolidayCards {
   /** Which of a card's own photo and voice can be added now (launch key holiday_card_memories), and their limits. */
-  media?: { photo: { usable: boolean; max_bytes: number; long_side: number }; voice: { usable: boolean; max_seconds: number; max_bytes: number } };
+  media?: {
+    photo: { usable: boolean; max_bytes: number; long_side: number };
+    voice: { usable: boolean; max_seconds: number; max_bytes: number };
+    /**
+     * They go only on a card sent with a bought stamp (founder 2026-11-11), while photos are usable: 'ready' (one is left;
+     * the card spends it), 'buy' (none: say so, and the buttons open the stamp books) or 'unavailable' (none, and none can
+     * be bought: don't offer them). `remaining` is null when the balance couldn't be read.
+     */
+    bought_stamp?: { required: boolean; remaining: number | null; state: 'ready' | 'buy' | 'unavailable' };
+  };
   postage_enabled?: boolean;
   /** The server keeps a signature beside FROM: its box and most bytes. Absent: set the typed name. */
   signature?: { w: number; h: number; max_bytes: number };

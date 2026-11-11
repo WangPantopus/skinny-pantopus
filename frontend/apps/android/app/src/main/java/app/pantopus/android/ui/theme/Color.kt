@@ -440,6 +440,24 @@ object PantopusColors {
     /** A refusal said on the card's cloth (plan Part 9 steps): a light red `#FFB4A8` that reads on the dark cloth. */
     val tableAlert = Color(0xFFFFB4A8)
 
+    /**
+     * A card's voice greeting (memories plan step 7, wave 4 drawings 2-4), as the web draws it: the cassette's shell
+     * `#3A3431` to `#211D1B`, its cream label `#F3EAD7` with a red rule `#C98B84`, the reels' window `#141110` and the
+     * reels `#E9E1CF`; the gift tag `#EFE6D3`, its hole `#4A3423`, its small words `#6B5640` and its string `#8A6A45`;
+     * the dark pill under it, `rgb(16 12 10 / 72%)`.
+     */
+    val cardTapeShell = Color(0xFF3A3431)
+    val cardTapeShellDark = Color(0xFF211D1B)
+    val cardTapeLabel = Color(0xFFF3EAD7)
+    val cardTapeRule = Color(0xFFC98B84)
+    val cardTapeWindow = Color(0xFF141110)
+    val cardTapeReel = Color(0xFFE9E1CF)
+    val cardTagPaper = Color(0xFFEFE6D3)
+    val cardTagHole = Color(0xFF4A3423)
+    val cardTagWords = Color(0xFF6B5640)
+    val cardTagString = Color(0xFF8A6A45)
+    val cardTapePill = Color(0xB8100C0A)
+
     // Ballot illustration — mirrors iOS `Ballot/*` in the asset catalog.
 
     /**

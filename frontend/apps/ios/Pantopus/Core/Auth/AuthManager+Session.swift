@@ -639,6 +639,8 @@ extension AuthManager {
         ChatLocalStore.shared.clear()
         // A Christmas card's own photos and voice greetings this account opened or added.
         HolidayCardMediaStore.shared.clear()
+        // And the card this account was writing (kept across the system closing the app).
+        HolidayCardDraftStore.clear()
         // A Moment still posting was this account's: it stops and its files go.
         MomentsUploader.shared.reset()
         // And the files opened from its chats, with the copies of photos it sent the assistant,

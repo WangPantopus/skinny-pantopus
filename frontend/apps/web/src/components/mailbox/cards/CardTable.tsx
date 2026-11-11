@@ -202,6 +202,9 @@ export default function CardTable({
   const mood = cardMood(card.number, card.design);
   // A photo from someone who isn't the reader's connection stays covered until it's tapped (memories contract 10).
   const [uncovered, setUncovered] = useState(false);
+  // The photo is fetched only once the card has been turned over, as on the phones: nothing at open or after a reload,
+  // and it stays once fetched (turning back or enlarging doesn't fetch it again).
+  const [mediaSeen, setMediaSeen] = useState(false);
   const isLetter = Boolean(letter);
   // The card's own photo and voice greeting lie on the table beside it once it's turned over (wave 4 drawings 3 and 4).
   const photo = !isLetter && !card.sealed && !sendMoment && mediaFrom ? card.photo ?? null : null;
@@ -459,6 +462,7 @@ export default function CardTable({
   const [month, date] = day.split(' ');
   // Shown once it's turned over, and not while it's enlarged (it would lie over them).
   const mediaShown = hasMedia && turnedOver && !ui.enlarged;
+  if (mediaShown && !mediaSeen) setMediaSeen(true);
 
   return createPortal(
     <>
@@ -584,7 +588,7 @@ export default function CardTable({
                 data-testid="cardTablePrint"
               >
                 <CardPrint
-                  source={mediaFrom!(photo.file_id)}
+                  source={mediaSeen ? mediaFrom!(photo.file_id) : null}
                   width={photo.width}
                   height={photo.height}
                   alt={photo.alt}

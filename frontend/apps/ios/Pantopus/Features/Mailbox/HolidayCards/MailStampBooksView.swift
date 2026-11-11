@@ -186,6 +186,8 @@ struct StampPostageLine: View {
     let design: String
     /// The cards on a list, one stamp each.
     var count = 1
+    /// The card carries a photo or greeting: it goes only with a bought stamp, even while free cards are left.
+    var media = false
 
     var body: some View {
         if let balance = store.balance {
@@ -205,7 +207,7 @@ struct StampPostageLine: View {
                         .foregroundStyle(MailPaper.cardFooter)
                     Text(count > 1 ? listLine(balance) : line(balance))
                         .font(.system(size: 14))
-                        .foregroundStyle(balance.available < count ? MailPaper.wax : MailPaper.cardText)
+                        .foregroundStyle(isShort(balance) ? MailPaper.wax : MailPaper.cardText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -220,7 +222,16 @@ struct StampPostageLine: View {
         }
     }
 
+    private func isShort(_ balance: StampBalance) -> Bool {
+        balance.available < count || (media && balance.paidRemaining < 1)
+    }
+
     private func line(_ balance: StampBalance) -> String {
+        if media {
+            let paid = max(0, balance.paidRemaining)
+            if paid == 0 { return HolidayCardMediaRow.needsStampLine }
+            return "1 bought stamp, for the photo or greeting (\(plural(paid - 1, "bought stamp")) left after this)."
+        }
         if balance.available == 0 { return "No stamps left. Get a stamp book to send this card." }
         if balance.freeRemaining > 1 { return "Free: uses 1 of your free cards (\(balance.freeRemaining - 1) left after this)." }
         if balance.freeRemaining == 1 { return "Free: this is your last free card." }
@@ -280,6 +291,8 @@ struct StampBooksSheet: View {
     let store: MailStampStore
     /// Opened for a list whose cards need more stamps than are left.
     var short: StampShort?
+    /// Opened for a card's photo or greeting, which go only with a bought stamp.
+    var forMedia = false
     @Environment(\.dismiss) private var dismiss
 
     private static let finePrint = "Digital delivery only. Christmas cards can be sent until December 31; "
@@ -290,9 +303,11 @@ struct StampBooksSheet: View {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: Spacing.s1) {
+                        // Wraps to a second line on a narrow screen (the closed Duo) instead of being cut short.
                         Text("Christmas stamp books")
                             .font(.system(size: 28, design: .serif))
                             .foregroundStyle(MailPaper.cardText)
+                            .fixedSize(horizontal: false, vertical: true)
                             .accessibilityAddTraits(.isHeader)
                         Text("Send a little Christmas joy to everyone on your list. One stamp sends one digital card to one person.")
                             .font(.system(size: 15))
@@ -313,6 +328,13 @@ struct StampBooksSheet: View {
                         .foregroundStyle(MailPaper.wax)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("stampBooksShort")
+                }
+                if forMedia {
+                    Text(HolidayCardMediaRow.needsStampLine)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(MailPaper.wax)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("stampBooksForMedia")
                 }
                 if let have = haveLine {
                     Text(have)

@@ -16,12 +16,17 @@ public enum MailSentEndpoints {
     public static func sent(before: String? = nil, limit: Int = 25) -> Endpoint {
         var query = ["limit": String(limit)]
         if let before { query["before"] = before }
+        if LaunchFeatures.holidayCardMemories { query["include"] = "not_delivered" }
         return Endpoint(method: .get, path: "/api/mailbox/sent", query: query)
     }
 
     /// `GET /api/mailbox/sent/:id` — route `backend/routes/mailbox.js`: the
     /// card with its note and trail, for its sender only.
     public static func piece(id: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/mailbox/sent/\(id)")
+        Endpoint(
+            method: .get,
+            path: "/api/mailbox/sent/\(id)",
+            query: LaunchFeatures.holidayCardMemories ? ["include": "not_delivered"] : [:]
+        )
     }
 }

@@ -91,6 +91,12 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
     const { reports: _reports, ...extracted } = rest.mail_extracted;
     rest.mail_extracted = extracted;
   }
+  // The mark that a card carries its own photo or voice (it spent a bought stamp) is the server's alone: a sealed card
+  // never says what's inside.
+  if (rest.mail_extracted?.card?.media_stamp !== undefined) {
+    const { media_stamp: _mediaStamp, ...card } = rest.mail_extracted.card;
+    rest.mail_extracted = { ...rest.mail_extracted, card };
+  }
   return {
     ...rest,
     kind: kindOf(mail),

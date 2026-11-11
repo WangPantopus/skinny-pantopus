@@ -185,11 +185,13 @@ function Booklet({ credits }: { credits: number }) {
  * The stamp books: what's left, the three books, and what a stamp does. `short`: opened for a list whose cards need more
  * stamps than are left.
  */
-export function StampSheet({ open, onClose, stamps, short = null, overTable = false }: {
+export function StampSheet({ open, onClose, stamps, short = null, reason = null, overTable = false }: {
   open: boolean;
   onClose: () => void;
   stamps: Stamps;
   short?: { cards: number; missing: number } | null;
+  /** Why it opened, when free stamps don't cover this card (a photo or voice needs a bought one). */
+  reason?: string | null;
   /** Opened while sealing a card on the table: drawn above it. */
   overTable?: boolean;
 }) {
@@ -218,6 +220,9 @@ export function StampSheet({ open, onClose, stamps, short = null, overTable = fa
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
+        {reason ? (
+          <p data-testid="stampSheetReason" className="mt-3 text-[15px] font-semibold leading-5" style={{ color: WAX }}>{reason}</p>
+        ) : null}
         {short && short.missing > 0 ? (
           <p data-testid="stampSheetShort" className="mt-3 text-[15px] font-semibold leading-5" style={{ color: WAX }}>
             These {short.cards} cards need {plural(short.missing, "more stamp", "more stamps")}.

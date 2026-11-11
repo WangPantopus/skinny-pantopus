@@ -35,7 +35,19 @@ final class HolidayCardAttachments {
         var token = UUID()
     }
 
+    /// The card's own voice greeting (memories plan step 7): uploaded as soon as the recording stops.
+    struct Voice {
+        var status: PhotoStatus
+        /// This phone's recording: sent (and kept to try again) and played by Listen, never written to disk.
+        var upload: Data
+        var stored: CardVoice?
+        var token = UUID()
+    }
+
     private(set) var photo: Photo?
+    private(set) var voice: Voice?
+    /// Records the greeting; what it records goes up at once.
+    let recorder = HolidayCardVoiceRecorder()
     /// "Describe the photo (optional, for screen readers)", up to 200 letters.
     var photoAlt = "" {
         didSet {
@@ -48,26 +60,84 @@ final class HolidayCardAttachments {
     @ObservationIgnored private var uploadTask: Task<Void, Never>?
     @ObservationIgnored private let uploader: MultipartUploader
 
+    @ObservationIgnored private var voiceTask: Task<Void, Never>?
+
     init(uploader: MultipartUploader = .shared) {
         self.uploader = uploader
+        recorder.onRecorded = { [weak self] data in self?.addVoice(data) }
     }
 
     // MARK: What a send carries
 
     /// The uploaded photo and its description, for Look it over and the send.
     var pick: HolidayCardMediaPick {
-        guard let stored = photo?.stored, photo?.status == .ready else { return .none }
-        let alt = photoAlt.trimmingCharacters(in: .whitespacesAndNewlines)
-        return HolidayCardMediaPick(photo: stored.fileId, photoAlt: alt.isEmpty ? nil : alt)
+        var pick = HolidayCardMediaPick()
+        if let stored = photo?.stored, photo?.status == .ready {
+            let alt = photoAlt.trimmingCharacters(in: .whitespacesAndNewlines)
+            pick.photo = stored.fileId
+            pick.photoAlt = alt.isEmpty ? nil : alt
+        }
+        if let stored = voice?.stored, voice?.status == .ready { pick.voice = stored.fileId }
+        return pick
     }
 
     /// Why Seal it waits, or nil when it can go.
     var wait: String? {
-        guard let photo else { return nil }
-        switch photo.status {
-        case .ready: return nil
+        switch photo?.status {
         case .uploading: return "Waiting for the photo to finish uploading."
         case .failed: return "The photo didn’t upload. Try again, or remove it."
+        case .ready, nil: break
+        }
+        if recorder.recording { return "Stop the recording first." }
+        switch voice?.status {
+        case .uploading: return "Waiting for the greeting to finish uploading."
+        case .failed: return "The greeting didn’t upload. Try again, or remove it."
+        case .ready, nil: return nil
+        }
+    }
+
+    // MARK: The greeting
+
+    /// A recording that just stopped: uploaded at once, as AAC in MP4.
+    func addVoice(_ data: Data) {
+        voiceTask?.cancel()
+        voice = Voice(status: .uploading, upload: data)
+        uploadVoice()
+    }
+
+    func retryVoice() {
+        guard voice != nil else { return }
+        voice?.status = .uploading
+        uploadVoice()
+    }
+
+    func removeVoice() {
+        if recorder.recording { recorder.stop() }
+        voiceTask?.cancel()
+        voiceTask = nil
+        voice = nil
+    }
+
+    private func uploadVoice() {
+        guard var voice else { return }
+        voice.token = UUID()
+        self.voice = voice
+        let token = voice.token
+        let file = MultipartFile(fieldName: "file", filename: "greeting.m4a", mimeType: "audio/mp4", data: voice.upload)
+        let uploader = uploader
+        voiceTask = Task { [weak self] in
+            do {
+                let answer = try await uploader.uploadHolidayCardMedia(kind: "voice", file: file)
+                guard !Task.isCancelled, let self, self.voice?.token == token else { return }
+                self.voice?.stored = CardVoice(fileId: answer.media.fileId, durationMs: answer.media.durationMs)
+                self.voice?.status = .ready
+                HolidayCardMediaStore.shared.keep(voice.upload, for: answer.media.fileId)
+            } catch {
+                guard !Task.isCancelled, let self, self.voice?.token == token else { return }
+                self.voice?.status = .failed(
+                    HolidayCardFlowViewModel.refusal(error, fallback: "The greeting didn’t upload. Check your connection.")
+                )
+            }
         }
     }
 
@@ -109,9 +179,21 @@ final class HolidayCardAttachments {
         photoAlt = ""
     }
 
+    /// A draft brought back after the app was closed: its stored photo and greeting, by reference only. Nothing of their
+    /// bytes is on this phone any more, so the print and Listen read them from the uploader's own route.
+    func restore(photo stored: CardPhoto?, alt: String, voice storedVoice: CardVoice?) {
+        uploadTask?.cancel()
+        voiceTask?.cancel()
+        photo = stored.map { Photo(status: .ready, upload: Data(), mimeType: "image/jpeg", progress: 1, stored: $0) }
+        photoAlt = stored == nil ? "" : alt
+        voice = storedVoice.map { Voice(status: .ready, upload: Data(), stored: $0) }
+    }
+
     /// The card went or was started over: everything goes.
     func reset() {
         remove()
+        removeVoice()
+        recorder.clearRefused()
     }
 
     private func upload() {

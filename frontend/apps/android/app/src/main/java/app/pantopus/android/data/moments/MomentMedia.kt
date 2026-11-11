@@ -87,7 +87,7 @@ object MomentMedia {
     /** Videos run up to 30 seconds (the server answers `MEDIA_TOO_LONG` past that). */
     const val MAX_VIDEO_MS = 30_000L
 
-    /** A library item counts when it was taken in the last 24 hours. */
+    /** What the camera and the library leave in the working folder goes after a day (see [folder]). */
     const val LIBRARY_WINDOW_MS = 24 * 60 * 60 * 1000L
 
     private const val PHOTO_LONG_EDGE = 2048

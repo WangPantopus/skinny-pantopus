@@ -207,11 +207,18 @@ final class HolidayCardFlowViewModel {
     let stamps = MailStampStore()
     /// The stamp books sheet is up (the header's count, "Get stamps to send", or a send the server refused for a stamp).
     var showsStampBooks = false {
-        didSet { if !showsStampBooks { stampShort = nil } }
+        didSet {
+            if !showsStampBooks {
+                stampShort = nil
+                stampsForMedia = false
+            }
+        }
     }
 
     /// The stamp books opened for a list whose cards need more stamps than are left.
     var stampShort: StampShort?
+    /// The stamp books opened for the card's photo or greeting, which go only with a bought stamp.
+    var stampsForMedia = false
 
     // A list (digital stamps on): who's on it, a request ID for each (kept
     // for the whole card, so every look and retry of the list finds the
@@ -249,12 +256,17 @@ final class HolidayCardFlowViewModel {
 
     /// The person "Send {first name} a card" chose on a card's table (plan Part 3): the flow opens at Pick a card.
     @ObservationIgnored private var chosenAtStart: HolidayCardRecipient?
+    /// Opened for someone or for a picture on purpose (send one back, a card's link): no draft comes back.
+    @ObservationIgnored private let openedOnPurpose: Bool
+    /// The kept draft was looked for once the cards loaded; only then is the card kept as it changes.
+    @ObservationIgnored private var draftRead = false
 
     init(api: APIClient = .shared, fromName: String, designId: String? = nil, to person: (id: String, name: String)? = nil) {
         self.api = api
         self.fromName = fromName
         self.designId = designId
         chosenAtStart = person.map { .person(userId: $0.id, name: $0.name) }
+        openedOnPurpose = designId != nil || person != nil
     }
 
     // MARK: - Reading
@@ -314,6 +326,7 @@ final class HolidayCardFlowViewModel {
             chosenAtStart = nil
             choose(chosen)
         }
+        restoreDraftOnce()
         await readOwnName()
     }
 
@@ -329,6 +342,7 @@ final class HolidayCardFlowViewModel {
     func retry() async {
         state = .loading
         await fetch()
+        restoreDraftOnce()
     }
 
     private func fetch() async {
@@ -400,6 +414,7 @@ final class HolidayCardFlowViewModel {
         }
         requestId = requestId ?? UUID().uuidString.lowercased()
         guard let body = sendBody else { return }
+        saveDraft()
         previewing = true
         previewError = nil
         defer { previewing = false }
@@ -415,7 +430,30 @@ final class HolidayCardFlowViewModel {
                 return
             }
             previewError = Self.refusal(error, fallback: "Couldn’t show your card just now. Try again in a moment.")
+            await needsBoughtStamp(error)
         }
+    }
+
+    /// No bought stamp for the card's photo or greeting (402 `CARD_MEDIA_NEEDS_STAMP` at Look it over or the seal):
+    /// the stamp books open, saying why (over the table when sealing by hand), and the card, note, photo and greeting
+    /// stay as they are. True when it was that.
+    @discardableResult
+    private func needsBoughtStamp(_ error: any Error) async -> Bool {
+        guard Self.refusalCode(error) == "CARD_MEDIA_NEEDS_STAMP" else { return false }
+        // Seal it for the day says it in the app's words, whatever an older server says, and clears it once bought.
+        if previewError != nil { previewError = HolidayCardMediaRow.needsStampLine }
+        openStampsForMedia()
+        await stamps.refresh()
+        await rereadCards()
+        return true
+    }
+
+    /// The season's answer again, keeping what's shown when it can't be read: after stamps were bought, a photo and
+    /// a greeting can go without leaving the step.
+    func rereadCards() async {
+        guard let response: HolidayCardsResponse = try? await api.request(HolidayCardEndpoints.cards()) else { return }
+        state = .loaded(response)
+        if response.mediaStamp == .ready, previewError == HolidayCardMediaRow.needsStampLine { previewError = nil }
     }
 
     /// When a card to the person chosen can come, by their clock. A failure
@@ -488,8 +526,14 @@ final class HolidayCardFlowViewModel {
 
     /// The photo the card carries: one person's card only (a list goes without), and only while the server takes one.
     var mediaPick: HolidayCardMediaPick {
-        guard recipient?.entries == nil, cards?.takesPhoto == true else { return .none }
+        guard recipient?.entries == nil, cards?.takesMemories == true else { return .none }
         return attachments.pick
+    }
+
+    /// Who a greeting is for, on its label ("For Maya"): the person, or "you" for an address or a link.
+    var greetingFor: String {
+        if case let .person(_, name) = recipient { return name }
+        return "you"
     }
 
     /// "Seal and send", from "Look it over" (or from step 4 when the look
@@ -500,6 +544,8 @@ final class HolidayCardFlowViewModel {
         guard !sending else { return }
         requestId = requestId ?? UUID().uuidString.lowercased()
         guard let body = sendBody else { return }
+        // Kept before the answer comes: a retry after the app was closed finds the card it stored.
+        saveDraft()
         sending = true
         sendError = nil
         if step == .seal { previewError = nil }
@@ -511,6 +557,7 @@ final class HolidayCardFlowViewModel {
             sentLink = response.link
             step = .sent
             tookBack = false
+            HolidayCardDraftStore.clear()
         } catch {
             if await wentEarlier(error) { return }
             // The stamps ran out meanwhile (another device sent a card): the stamp books open; the card stays as it is.
@@ -519,6 +566,8 @@ final class HolidayCardFlowViewModel {
                 await stamps.refresh()
                 return
             }
+            // Its photo or greeting needs a bought stamp and none is left: the same, saying why.
+            if await needsBoughtStamp(error) { return }
             let sentence = Self.refusal(error, fallback: "Couldn’t send your card just now. Try again in a moment.")
             let closed = Self.refusalCode(error) == "CARD_ARRIVAL_CLOSED"
             guard closed || step == .seal else {
@@ -566,6 +615,7 @@ final class HolidayCardFlowViewModel {
     /// Everything written goes, and the next card starts on step 1 with a
     /// request ID of its own.
     func startOver() {
+        HolidayCardDraftStore.clear()
         requestId = nil
         listIds = [:]
         listed = []
@@ -596,6 +646,7 @@ final class HolidayCardFlowViewModel {
         case "CARD_REQUEST_SENT":
             guard let card = Self.storedCard(error) else { return false }
             requestId = nil
+            HolidayCardDraftStore.clear()
             sent = card
             preview = nil
             tookBack = false
@@ -701,6 +752,7 @@ extension HolidayCardFlowViewModel {
     /// season closed, say) stays on step 4.
     private func lookOverList() async {
         guard let body = listBody() else { return }
+        saveDraft()
         previewing = true
         previewError = nil
         defer { previewing = false }
@@ -720,6 +772,7 @@ extension HolidayCardFlowViewModel {
     /// these cards need.
     func sendList() async {
         guard !sending, let body = listBody() else { return }
+        saveDraft()
         sending = true
         sendError = nil
         defer { sending = false }
@@ -729,6 +782,7 @@ extension HolidayCardFlowViewModel {
             listPreview = nil
             tookBack = false
             step = .sent
+            HolidayCardDraftStore.clear()
         } catch {
             guard Self.refusalCode(error) == "STAMPS_REQUIRED" else {
                 sendError = Self.refusal(error, fallback: "Couldn’t send your cards just now. Try again in a moment.")
@@ -762,6 +816,78 @@ extension HolidayCardFlowViewModel {
         } catch {
             listTakeBackError = (card.id, Self.refusal(error, fallback: "Couldn’t take your card back just now. Try again in a moment."))
         }
+    }
+}
+
+// MARK: - The draft (memories plan section 2 "Drafts")
+
+extension HolidayCardFlowViewModel {
+    /// The account whose draft this is.
+    private var draftUser: String? {
+        if case let .signedIn(user) = AuthManager.shared.state { return user.id }
+        return nil
+    }
+
+    /// The card as it would be kept now: nil when there's nothing to keep (nothing chosen or written yet, or it went).
+    /// An upload is kept by reference once it's stored; one still uploading or refused is not.
+    var draft: HolidayCardDraft? {
+        guard let user = draftUser, step != .sent, sent == nil, listResults == nil,
+              recipient != nil || designId != nil || !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        let photo = attachments.photo
+        let voice = attachments.voice
+        return HolidayCardDraft(
+            user: user,
+            step: (step == .look ? HolidayCardStep.seal : step).rawValue,
+            to: recipient.map(HolidayCardDraft.Recipient.init),
+            designId: designId,
+            message: message,
+            signature: signature,
+            photo: photo?.status == .ready ? photo?.stored : nil,
+            photoAlt: photo?.status == .ready ? attachments.photoAlt : "",
+            voice: voice?.status == .ready ? voice?.stored : nil,
+            arrival: arrival?.rawValue,
+            requestId: requestId,
+            listIds: listIds
+        )
+    }
+
+    /// Kept as it changes, and gone once there's nothing to keep.
+    func saveDraft() {
+        guard draftRead else { return }
+        if let draft { HolidayCardDraftStore.save(draft) } else { HolidayCardDraftStore.clear() }
+    }
+
+    /// The card being written, back after the system closed the app: once, when the cards first load, while sending is
+    /// open. Look it over comes back as Seal it for the day, which looks again; the request ID comes back with it, so
+    /// a send whose answer was lost finds the card it stored.
+    private func restoreDraftOnce() {
+        guard !draftRead, let cards else { return }
+        draftRead = true
+        guard !openedOnPurpose, cards.open, let user = draftUser, let kept = HolidayCardDraftStore.read(user: user) else { return }
+        if let to = kept.to?.recipient {
+            recipient = to
+            listed = to.entries ?? (to.isLink ? [] : [to])
+        }
+        let designHere = kept.designId.map { id in cards.designs.contains { $0.id == id } } ?? false
+        if designHere { designId = kept.designId }
+        message = String(kept.message.prefix(cards.messageLimit))
+        signature = kept.signature
+        attachments.restore(photo: kept.photo, alt: kept.photoAlt, voice: kept.voice)
+        arrival = kept.arrival.flatMap(HolidayCardArrival.init(rawValue:))
+        requestId = kept.requestId
+        listIds = kept.listIds
+        if recipient == nil {
+            step = .to
+        } else if !designHere {
+            step = .pick
+        } else {
+            let keptStep = HolidayCardStep(rawValue: kept.step) ?? .write
+            step = keptStep == .look || keptStep == .sent ? .seal : keptStep
+        }
+        guard recipient != nil else { return }
+        readTheirs()
+        if arrival.map({ !arrivals.contains($0) }) ?? true { arrival = arrivals.first }
     }
 }
 

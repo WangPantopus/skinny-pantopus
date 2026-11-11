@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.mailbox.MailDetail
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailEnclosure
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardTimes
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardGreetingVoice
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardPrintPhoto
 import app.pantopus.android.ui.screens.mailbox.components.MailAddressBook
 import app.pantopus.android.ui.screens.mailbox.components.MailKind
@@ -71,6 +72,8 @@ data class MailLetterCard(
     val signature: CardSignature? = null,
     /** The card's own photo (memories plan step 4): null while it's sealed and for a card without one. */
     val photo: CardPrintPhoto? = null,
+    /** Its voice greeting (memories plan step 7): null while it's sealed and for a card without one. */
+    val voice: CardGreetingVoice? = null,
 )
 
 /**
@@ -195,6 +198,7 @@ data class MailLetter(
                 signature = card.signature?.takeIf { !card.sealed && it.drawable },
                 // Its own photo, read through this piece's route (memories plan); covered as the server says.
                 photo = card.photo?.takeIf { !card.sealed }?.let { CardPrintPhoto.received(detail.id, it) },
+                voice = card.voice?.takeIf { !card.sealed }?.let { CardGreetingVoice.received(detail.id, it) },
             )
         }
 

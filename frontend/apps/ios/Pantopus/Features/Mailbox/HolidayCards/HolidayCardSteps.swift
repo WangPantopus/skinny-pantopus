@@ -566,9 +566,20 @@ struct HolidayCardWriteStep: View {
                     .foregroundStyle(count >= cards.messageLimit ? MailPaper.wax : HolidayCardDesk.muted(scheme))
                     .accessibilityIdentifier("sendCardCount")
             }
-            // The card's own photo (memories plan step 4): one person's card only, while the server takes one.
-            if viewModel.attachments.photo != nil || (cards.takesPhoto && viewModel.recipient?.entries == nil) {
-                HolidayCardPhotoRow(attachments: viewModel.attachments)
+            // The card's own photo and greeting (memories plan steps 4 and 7): one person's card only, while the server
+            // takes them.
+            let onePerson = viewModel.recipient?.entries == nil
+            let attachments = viewModel.attachments
+            if attachments.photo != nil || attachments.voice != nil || attachments.recorder.recording
+                || (onePerson && (cards.takesPhoto || cards.takesVoice)) {
+                HolidayCardMediaRow(
+                    attachments: attachments,
+                    takesPhoto: onePerson && cards.takesPhoto,
+                    takesVoice: onePerson && cards.takesVoice,
+                    forName: viewModel.greetingFor,
+                    gift: CardTableMood(number: design.number) == .reverence,
+                    needsStamp: cards.mediaStamp == .buy
+                ) { viewModel.openStampsForMedia() }
             }
             if cards.signature != nil {
                 signRow

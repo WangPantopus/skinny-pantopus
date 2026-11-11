@@ -96,6 +96,19 @@ final class RootTabContainerController: UIViewController {
     /// Between `viewWillAppear` and `viewDidDisappear`: tab switches then
     /// tell the tabs they appear and disappear.
     private var isShowing = false
+    /// From `viewWillAppear` until just after `viewDidAppear`: the container
+    /// itself is still coming on screen (the app's first screen, or the tabs
+    /// again as a full-screen cover closes).
+    private var isAppearing = false
+    /// Another tab picked while the container was still coming on screen, as
+    /// a notification or link that opens the app does, shown once it's up.
+    /// Switched to in the middle of the container's own appearing, the tab's
+    /// NavigationStack never appeared for UIKit, which then gave its screens
+    /// no safe area: Pantopus AI or Today opened from a notification ran under
+    /// the status bar and the Home indicator, with Back out of reach.
+    private var tabPickedWhileAppearing: RootTab?
+    /// Builds a tab's root, from the last update (`RootTabContainer.makeRoot`).
+    private var makeRoot: (@MainActor (RootTab) -> AnyView)?
 
     /// The selected tab's hosting controller (`ScreenStoreLive`, the payment presenters).
     var selectedViewController: UIViewController? {
@@ -125,12 +138,15 @@ final class RootTabContainerController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         isShowing = true
+        isAppearing = true
         selectedViewController?.beginAppearanceTransition(true, animated: animated)
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         selectedViewController?.endAppearanceTransition()
+        // After UIKit has finished the appearing, not in the middle of it.
+        Task { @MainActor [weak self] in self?.showTabPickedWhileAppearing() }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -142,6 +158,8 @@ final class RootTabContainerController: UIViewController {
         super.viewDidDisappear(animated)
         isShowing = false
         selectedViewController?.endAppearanceTransition()
+        // An appearing that never finished (a cover's close called off).
+        showTabPickedWhileAppearing()
     }
 
     func update(
@@ -149,8 +167,9 @@ final class RootTabContainerController: UIViewController {
         selected: RootTab,
         barSpace: RootTabBarSpace,
         environment: RootTabEnvironment,
-        makeRoot: @MainActor (RootTab) -> AnyView
+        makeRoot: @escaping @MainActor (RootTab) -> AnyView
     ) {
+        self.makeRoot = makeRoot
         // A tab that left the bar (Plans switched off) goes with its screens.
         for tab in hosts.keys where !tabs.contains(tab) {
             remove(tab)
@@ -167,8 +186,25 @@ final class RootTabContainerController: UIViewController {
             applyBarInset()
         }
         let shown = tabs.contains(selected) ? selected : tabs.first
+        // While the container is still coming on screen, another tab waits
+        // for it (`tabPickedWhileAppearing`).
+        if isAppearing, selectedTab != nil {
+            tabPickedWhileAppearing = shown == selectedTab ? nil : shown
+            return
+        }
+        tabPickedWhileAppearing = nil
         guard let shown, shown != selectedTab else { return }
         show(shown, environment: environment, makeRoot: makeRoot)
+    }
+
+    /// The container is up, or went away before it was: the tab picked while
+    /// it was coming on screen shows now.
+    private func showTabPickedWhileAppearing() {
+        isAppearing = false
+        guard let tab = tabPickedWhileAppearing else { return }
+        tabPickedWhileAppearing = nil
+        guard tab != selectedTab, let environment, let makeRoot else { return }
+        show(tab, environment: environment, makeRoot: makeRoot)
     }
 
     /// Tapping the selected tab again takes its stack back to its root, as the

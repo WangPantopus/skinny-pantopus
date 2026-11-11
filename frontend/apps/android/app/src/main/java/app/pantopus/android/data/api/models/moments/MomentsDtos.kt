@@ -6,7 +6,7 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.ToJson
 
 /*
- * Pantopus Moments (contract v3.1, `~/pantopus-moments/coord/CONTRACT.md`, owned by the server session). Every route
+ * Pantopus Moments (contract v3.3, `~/pantopus-moments/coord/CONTRACT.md`, owned by the server session). Every route
  * answers 404 `MOMENTS_UNAVAILABLE` while the `moments` flag is off for the caller.
  */
 
@@ -90,6 +90,12 @@ data class MomentDto(
     /** Author only. */
     @Json(name = "viewer_count") val viewerCount: Int? = null,
     @Json(name = "reaction_counts") val reactionCounts: List<MomentReactionCountDto>? = null,
+    /**
+     * When the photo or video was taken, set only when that was more than a day before it was posted (contract v3.3):
+     * the viewer says "Taken Oct 3" so an old photo never reads as now. Null for anything newer, text cards, and from a
+     * server without it.
+     */
+    @Json(name = "taken_at") val takenAt: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -134,6 +140,8 @@ data class MomentPlacePreviewDto(
      * within about 100 m, the street's name and the town. Null from a server without it; one entry: nothing to pick.
      */
     val places: List<MomentPlaceChoiceDto>? = null,
+    /** How far from the pin the place picker's venues may be (contract v3.3, 1500 m); null from an older server. */
+    @Json(name = "pick_within_m") val pickWithinM: Int? = null,
 )
 
 /** One name the Post sheet offers for the pin: [key] goes back as `place_key`, never the words. */
@@ -149,8 +157,8 @@ data class MomentAdultConfirmResponse(
 )
 
 /**
- * Where a Moment pins: `gps` (the phone's fix, at most 5 minutes old, with [fixAt]) or `capture` (where a library
- * item was taken, in the last 24 hours, with [takenAt]).
+ * Where a Moment pins: `gps` (the phone's fix, at most 5 minutes old, with [fixAt]) or `capture` (where an album item
+ * was taken, from any time, with [takenAt]).
  */
 @JsonClass(generateAdapter = true)
 data class MomentLocationBody(
@@ -175,6 +183,10 @@ data class CreateMomentBody(
     @Json(name = "client_request_id") val clientRequestId: String? = null,
     /** The name picked on the Post sheet (a key from place-preview's `places`); left out for the automatic one. */
     @Json(name = "place_key") val placeKey: String? = null,
+    /** When an album photo or video pinned where you are (its file doesn't say where) was taken (contract v3.3). */
+    @Json(name = "taken_at") val takenAt: String? = null,
+    /** A venue picked in the place picker around the pin (its `osm:` id, contract v3.3): the Moment pins there. */
+    @Json(name = "venue_id") val venueId: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

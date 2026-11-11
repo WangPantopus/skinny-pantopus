@@ -61,6 +61,13 @@ extension MomentsViewerModel {
         return moment?.placeLabel ?? ring.placeLabel
     }
 
+    /// "Taken Oct 3": a photo or video taken more than a day before it was posted (contract v3.3), shown under the
+    /// header so an old photo never reads as now.
+    var metaTaken: String? {
+        guard load == .ready else { return nil }
+        return MomentTime.taken(moment?.takenAt)
+    }
+
     /// "2h ago · 22h left": always shown whole, while a long place name is cut short.
     var metaTimes: String {
         guard ring != nil else { return "" }

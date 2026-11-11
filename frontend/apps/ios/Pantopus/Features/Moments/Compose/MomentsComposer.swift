@@ -3,7 +3,7 @@
 //  Pantopus
 //
 //  Posting a Moment, full screen over the map (boards P1–P4): the camera
-//  first, Library (the last 24 hours) and Text beside it, then the Post
+//  first, Library (any photo or video) and Text beside it, then the Post
 //  sheet. Before the first Moment it asks once whether you're 18 or older.
 //  The camera, library and text card are dark; the Post sheet follows the
 //  phone's light or dark. On the iPhone Duo each takes the layout for how the
