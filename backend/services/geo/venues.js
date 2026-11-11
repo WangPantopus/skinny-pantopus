@@ -582,6 +582,30 @@ async function searchVenues({ q, latitude, longitude, limit = SEARCH_LIMIT }) {
   return { places: rows.map(toPlace), attribution: rows.length ? ATTRIBUTION : null };
 }
 
+/**
+ * One venue the picker listed (`placeId`, an `osm:` id from nearby or search around this same point), seen from the
+ * point, when it is within `maxDistance` of it; else null. It reads what nearby and search read: the index where the
+ * point is surely in the US, else Overpass's cached answers for the point's area and whatever the index holds around
+ * it. Lets a caller take a venue by its id alone, so nobody writes a place's name or point themselves.
+ *
+ * @returns {Promise<object|null>} a row in the GeoPlace shape (toPlace)
+ */
+async function venueNear({ placeId, latitude, longitude, maxDistance }) {
+  if (typeof placeId !== 'string' || !/^osm:(node|way|relation)\/\d+$/.test(placeId)) return null;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !(maxDistance > 0)) return null;
+  let records = isSurelyInUS(latitude, longitude) ? await indexRecords(latitude, longitude, maxDistance) : null;
+  if (!records) {
+    const cell = encodeGeohash(latitude, longitude, CELL_PRECISION);
+    const cached = await Promise.all(RADII_M.map(async (radius) => {
+      const row = await placeSectionCache.readRow(overpassKey(cell, radius), SECTION_ID);
+      return row && Array.isArray(row.payload) ? row.payload : [];
+    }));
+    records = [...cached.flat(), ...(await indexRecords(latitude, longitude, maxDistance) || [])];
+  }
+  const row = ranked(records.filter((record) => record.id === placeId), latitude, longitude, maxDistance)[0];
+  return row ? toPlace(row) : null;
+}
+
 module.exports = {
-  venuesNear, searchVenues, categoryOf, toRecords, overpassQuery, ATTRIBUTION,
+  venuesNear, searchVenues, venueNear, categoryOf, toRecords, overpassQuery, ATTRIBUTION,
 };
