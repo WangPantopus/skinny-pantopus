@@ -866,6 +866,33 @@ Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`
   - [ ] Worth a thought, not needed: cards by email keep today's limits (3 new addresses a week, the same address once in 30 days). Links have only the one-card-a-day limit.
 - [ ] After the store release, not before (agents): add `/cards/*` to `apple-app-site-association` and Android's link filters, so a shared card link opens the app. Older apps would open a page they don't know.
 
+## Mail and card design (added November 11)
+
+The founder approved the [design plan](docs/product/mail-cards-design-plan-2026-11-09.md) and its eight decisions on
+November 9, Part 11 (sharing) on November 10, and the photo-and-voice drawings on November 10. Built in four waves by
+Opus 5.5 sessions under one coordinator; the written three-app check of each wave, with every PR, is in
+[mail-cards-build-checks-2026-11-11.md](docs/product/mail-cards-build-checks-2026-11-11.md).
+
+- [x] Wave 1, behind `card_table`: quick fixes, send one back, sealing a card by hand.
+- [x] Wave 2, behind `card_table`: the card rack, enlarge and Read the verse, the Duo upright, opened cards show their
+  picture in the Mailbox and Sent; the verse text on the nine nativity designs is in production.
+- [x] Wave 3, behind `card_table`: the mood follows the card (star stamp, candlelight, snow), taps you feel, signing with
+  a finger, quiet paper sounds with a "Card sounds" switch, the welcome letter on the table, the send flow at the table
+ ; the signature field is in production.
+- [x] Part 11: Share this card, the Open card picture, Share all, the invitation words on "Who it's for", Choose from
+  contacts. Not built: 11.8 (D9), a card to someone new free of the one-card-a-day rule, until the
+  founder decides.
+- [x] Wave 4, behind `holiday_card_memories` (off): a card's own photo and voice greeting, Report this card, Block,
+  Sent's "Couldn't be delivered" (founder's choice B), drafts, and the founder's November 11 rule that a photo or voice
+  greeting goes only on a card sent with a bought stamp. Server parts are in production with the key off.
+- [x] Storage (founder, November 11): CloudFront no longer serves `holiday-card-media/` or `ai-chat/` from the uploads
+  bucket. Still reachable by link and left for later: `chat/` and `ownership-evidence/`.
+- [ ] Founder: new iOS and Android store builds from master (they carry waves 1-4 and Part 11).
+- [ ] Founder, when photo and voice should go live: someone works the web Reports queue; switch `holiday_card_memories`
+  on for backend and worker, web and the app builds; stamp books must be on (photo and voice need a bought stamp).
+- [ ] Not verified anywhere: real phones (taps felt, sounds heard, real microphones, a real store purchase) and screen
+  readers speaking aloud.
+
 ## Profiles (added November 1)
 
 Decided November 1 (section 0). Four sessions built it in parallel on November 1, one each for the server, iPhone, Android and web, from the drawings and the build plan. There is no on/off key. The server is in production and the web has the new profiles now; phones get them with the next store builds.
