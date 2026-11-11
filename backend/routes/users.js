@@ -4977,11 +4977,14 @@ const oauthProbesInFlight = new Map();
  * redirectTo, which could otherwise make the Auth server refuse and switch
  * the provider off for all sign-ins. Starts that arrive together share one
  * probe.
+ *
+ * Resolves to `{ ok, publicOrigin }`: whether the provider is set up, and the
+ * Auth server's public address (authServerPublicOrigin) when it is.
  */
-async function isOAuthProviderAvailable(provider, authorizeUrl) {
+async function checkOAuthProvider(provider, authorizeUrl) {
   const cached = oauthProviderProbes.get(provider);
   if (cached && Date.now() - cached.at < (cached.ok ? OAUTH_PROBE_OK_TTL_MS : OAUTH_PROBE_FAIL_TTL_MS)) {
-    return cached.ok;
+    return cached;
   }
   let probe = oauthProbesInFlight.get(provider);
   if (!probe) {
@@ -5005,12 +5008,12 @@ async function probeOAuthProvider(provider, authorizeUrl) {
     // Unreachable Auth server: the browser flow would fail too. Not cached,
     // so the next tap tries again.
     logger.warn('OAuth provider probe failed', { provider, error: err.message });
-    return false;
+    return { ok: false, publicOrigin: null };
   }
   if (response.status >= 500) {
     // A struggling Auth server isn't a provider setting: not cached either.
     logger.warn('OAuth provider probe failed', { provider, status: response.status });
-    return false;
+    return { ok: false, publicOrigin: null };
   }
   const location = response.headers.get('location') || '';
   const ok = response.status >= 300 && response.status < 400
@@ -5018,8 +5021,38 @@ async function probeOAuthProvider(provider, authorizeUrl) {
   if (!ok) {
     logger.warn('OAuth provider unavailable on the Auth server', { provider, status: response.status });
   }
-  oauthProviderProbes.set(provider, { ok, at: Date.now() });
-  return ok;
+  const result = { ok, at: Date.now(), publicOrigin: ok ? authServerPublicOrigin(location) : null };
+  oauthProviderProbes.set(provider, result);
+  return result;
+}
+
+/**
+ * The Auth server's address as people should see it: the origin of the
+ * callback it hands the provider (`redirect_uri` on the provider's address).
+ * With a Supabase custom domain switched on (production: auth.pantopus.com),
+ * Supabase advertises that domain there while SUPABASE_URL keeps the
+ * project's <ref>.supabase.co address. Without one it is SUPABASE_URL's own
+ * origin. Null when the provider's address carries no such callback.
+ */
+function authServerPublicOrigin(providerLocation) {
+  try {
+    const callback = new URL(new URL(providerLocation).searchParams.get('redirect_uri'));
+    return callback.protocol === 'https:' && callback.pathname === '/auth/v1/callback' ? callback.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The iPhone's sign-in sheet ("… Wants to Use <domain> to Sign In") and the
+ * browser's address bar name the address the sign-in link opens, so the link
+ * opens on the Auth server's public address. Both addresses reach the same
+ * Auth server; the path and query stay as auth-js built them.
+ */
+function onPublicOrigin(authorizeUrl, publicOrigin) {
+  if (!publicOrigin) return authorizeUrl;
+  const url = new URL(authorizeUrl);
+  return url.origin === publicOrigin ? authorizeUrl : `${publicOrigin}${url.pathname}${url.search}`;
 }
 
 // Expo Go builds sign in through exp:// and exps:// links, which any app or host can answer. Only a local server
@@ -5121,14 +5154,15 @@ router.get('/oauth/:provider', oauthLimiter, async (req, res) => {
       return res.status(500).json({ error: 'Failed to initiate OAuth login' });
     }
 
-    if (!(await isOAuthProviderAvailable(provider, data.url))) {
+    const probe = await checkOAuthProvider(provider, data.url);
+    if (!probe.ok) {
       return res.status(503).json({
         error: `${OAUTH_PROVIDER_LABELS[provider]} sign-in isn't available right now. Please use your email instead.`,
         code: 'OAUTH_PROVIDER_UNAVAILABLE',
       });
     }
 
-    res.json({ url: data.url });
+    res.json({ url: onPublicOrigin(data.url, probe.publicOrigin) });
   } catch (err) {
     logger.error('OAuth error', { provider, error: err.message });
     res.status(500).json({ error: 'Failed to initiate OAuth login' });
