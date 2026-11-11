@@ -136,10 +136,12 @@ import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentFace
 import app.pantopus.android.ui.screens.moments.components.MomentHaptics
 import app.pantopus.android.ui.screens.moments.components.MomentImages
+import app.pantopus.android.ui.screens.moments.components.MomentTakenPill
 import app.pantopus.android.ui.screens.moments.components.MomentVerifiedCheck
 import app.pantopus.android.ui.screens.moments.components.StageKeyboardResize
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
 import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
+import app.pantopus.android.ui.screens.moments.components.takenLabel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -493,6 +495,10 @@ fun MomentsViewerScreen(
                     confirmingBlock = true
                 },
             )
+            // A photo or video taken more than a day before it was posted says when (contract v3.3), under the name.
+            takenLabel(moment?.takenAt)?.takeIf { state.load is ViewerLoad.Ready }?.let { taken ->
+                MomentTakenPill(label = taken, modifier = Modifier.padding(start = 58.dp, top = 2.dp))
+            }
         }
 
         // While typing or choosing a reaction, the Moment dims and the quick reactions come up (board V4).
