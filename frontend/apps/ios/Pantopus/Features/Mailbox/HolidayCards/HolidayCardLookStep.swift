@@ -427,7 +427,9 @@ private extension HolidayCardLookStep {
             sealedInDays: "",
             sealedDayCount: 0,
             verse: design.verse,
-            signature: card?.signature
+            signature: card?.signature,
+            photo: card?.photo,
+            mediaFrom: .own
         )
     }
 }

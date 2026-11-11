@@ -157,6 +157,7 @@ extension CardTableModel {
             "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")"
         case .out:
             "Card from \(content.firstName): \(HolidayCardWords.captionSentence(content.caption)) On the back: \(content.note)"
+                + (content.photo == nil ? "" : " With it: a photo.")
         }
     }
 

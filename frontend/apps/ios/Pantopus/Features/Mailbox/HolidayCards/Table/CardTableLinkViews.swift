@@ -267,7 +267,13 @@ struct CardTablePreviewCover: ViewModifier {
     func body(content view: Content) -> some View {
         view
             .onChange(of: content) { _, new in
-                present(new.map { Item(model: CardTableModel(content: $0, startsOnTable: false)) })
+                present(new.map { content in
+                    let model = CardTableModel(content: content, startsOnTable: false)
+                    // Share this card comes under the buttons once it's out; with a photo lying under the card, that
+                    // room is kept from the start so the photo never meets the buttons (memories plan step 4).
+                    model.reservesSecondary = isSender && content.photo != nil
+                    return Item(model: model)
+                })
             }
             .fullScreenCover(item: $item, onDismiss: { content = nil }, content: { item in
                 table(item)
