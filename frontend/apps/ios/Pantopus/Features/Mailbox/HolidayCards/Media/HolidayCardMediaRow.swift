@@ -95,9 +95,19 @@ struct HolidayCardMediaRow: View {
                 attachments.add(data)
             }
         }
-        .onAppear { listen.set(source: nil, local: attachments.voice?.upload) }
-        .onChange(of: attachments.voice?.upload) { _, data in listen.set(source: nil, local: data) }
+        .onAppear { listen.set(source: listenSource, local: listenBytes) }
+        .onChange(of: attachments.voice?.upload) { listen.set(source: listenSource, local: listenBytes) }
         .onDisappear { listen.stop() }
+    }
+
+    /// The greeting just recorded plays from this phone; one a draft brought back plays from the uploader's own route.
+    private var listenBytes: Data? {
+        attachments.voice.flatMap { $0.upload.isEmpty ? nil : $0.upload }
+    }
+
+    private var listenSource: CardMediaSource? {
+        guard listenBytes == nil, let stored = attachments.voice?.stored else { return nil }
+        return .own(fileId: stored.fileId)
     }
 
     /// The server's words for the rule, under the buttons and on the stamp books opened for it.
