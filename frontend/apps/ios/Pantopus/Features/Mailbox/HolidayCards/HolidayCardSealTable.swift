@@ -215,7 +215,7 @@ struct CardTableSendPage: View {
             get: { viewModel.showsStampBooks && viewModel.sealsAtTable },
             set: { viewModel.showsStampBooks = $0 }
         )) {
-            StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort)
+            StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort, forMedia: viewModel.stampsForMedia)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
