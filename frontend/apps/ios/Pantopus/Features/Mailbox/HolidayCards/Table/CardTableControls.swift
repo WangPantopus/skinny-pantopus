@@ -73,8 +73,11 @@ struct CardTableControls: View {
                 if let onShare {
                     CardTableRoundButton(icon: .share, label: shareLabel, identifier: "cardTableShare", action: onShare)
                 }
-                CardTableRoundButton(icon: .moreHorizontal, label: "More", identifier: "cardTableMore") {
-                    model.menuOpen.toggle()
+                // Nothing to put in it: a letter has no menu (plan Part 10).
+                if !menuItems.isEmpty {
+                    CardTableRoundButton(icon: .moreHorizontal, label: "More", identifier: "cardTableMore") {
+                        model.menuOpen.toggle()
+                    }
                 }
             }
         }
