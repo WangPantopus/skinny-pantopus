@@ -143,7 +143,7 @@ struct MomentsPlaceChip: View {
     var body: some View {
         let small = style != .overPicture
         HStack(spacing: 6) {
-            Icon(.mapPin, size: small ? 15 : 16, strokeWidth: 2.2, color: .white)
+            Icon(place == "No location" ? .mapPinOff : .mapPin, size: small ? 15 : 16, strokeWidth: 2.2, color: .white)
             Text(place)
                 .font(.system(size: small ? 13.5 : 14, weight: .semibold))
                 .foregroundStyle(.white)
@@ -155,7 +155,9 @@ struct MomentsPlaceChip: View {
         .background(Capsule().fill(style == .onBlack ? Color.white.opacity(0.14) : Color.black.opacity(small ? 0.22 : 0.42)))
         .background(Capsule().fill(.ultraThinMaterial).opacity(small ? 0 : 1))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("This Moment will pin at \(place == "Your home" ? "your home" : place)")
+        .accessibilityLabel(place == "No location"
+            ? "This Moment has no location. Only your connections see it."
+            : "This Moment will pin at \(place == "Your home" ? "your home" : place)")
         .accessibilityIdentifier("moments.camera.place")
     }
 }
@@ -331,6 +333,31 @@ struct MomentsComposeGate: View {
             .disabled(asking)
             .padding(.top, Spacing.s2)
             .accessibilityIdentifier("moments.gate.allow")
+            // Founder 2026-11-11: post anyway, with no location (connections only, not on the map).
+            Button {
+                asking = true
+                Task {
+                    await model.continueWithoutLocation()
+                    asking = false
+                }
+            } label: {
+                Text("Post with no location")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(asking)
+            .accessibilityIdentifier("moments.gate.noLocation")
+            if let error = model.error {
+                Text(error)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("moments.gate.error")
+            }
         }
         .padding(.horizontal, Spacing.s8)
         .accessibilityElement(children: .contain)

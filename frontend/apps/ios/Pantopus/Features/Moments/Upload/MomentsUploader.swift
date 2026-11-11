@@ -41,6 +41,8 @@ struct MomentPosting: Identifiable, Equatable {
     var phase: Phase
     /// How long it shows for, for "Your Moment is live. It shows for 24 hours."
     var hours = 24
+    /// Posted with no location: only the strip shows it while it posts, never the map (contract v3.4).
+    var noLocation = false
 }
 
 /// What a waiting upload needs after a relaunch.
@@ -52,6 +54,7 @@ private struct MomentOutboxManifest: Codable {
     let longitude: Double
     let media: MomentPreparedMedia
     var hours: Int?
+    var noLocation: Bool?
 }
 
 @Observable
@@ -105,7 +108,8 @@ final class MomentsUploader {
             longitude: moment.longitude,
             progress: 0,
             phase: .uploading,
-            hours: moment.hours
+            hours: moment.hours,
+            noLocation: moment.noLocation
         )
         postings.insert(posting, at: 0)
         media[folderId] = prepared
@@ -115,7 +119,8 @@ final class MomentsUploader {
 
     /// A text card is live the moment it's made: the map says so and reads its rings again.
     func wentLive(_ moment: MomentDTO) {
-        liveSpot = CLLocationCoordinate2D(latitude: moment.latitude, longitude: moment.longitude)
+        // A Moment with no location has no spot to bring into view.
+        if !moment.noLocation { liveSpot = CLLocationCoordinate2D(latitude: moment.latitude, longitude: moment.longitude) }
         announceLive(hours: moment.hours)
         finished += 1
     }
@@ -274,7 +279,7 @@ final class MomentsUploader {
             }
             removeFiles(id)
             if state == .live {
-                if let posting = postings.first(where: { $0.id == id }) {
+                if let posting = postings.first(where: { $0.id == id }), !posting.noLocation {
                     liveSpot = CLLocationCoordinate2D(latitude: posting.latitude, longitude: posting.longitude)
                 }
                 announceLive(hours: hours)
@@ -353,7 +358,8 @@ final class MomentsUploader {
                 longitude: saved.longitude,
                 progress: 0,
                 phase: .uploading,
-                hours: saved.hours ?? 24
+                hours: saved.hours ?? 24,
+                noLocation: saved.noLocation ?? false
             ))
             pickedUp.insert(id)
             run(id)
@@ -371,7 +377,8 @@ final class MomentsUploader {
             latitude: posting.latitude,
             longitude: posting.longitude,
             media: media,
-            hours: posting.hours
+            hours: posting.hours,
+            noLocation: posting.noLocation
         )
         guard let data = try? JSONEncoder().encode(manifest) else { return }
         try? data.write(

@@ -22,6 +22,10 @@ public enum MomentsEndpoints {
         Endpoint(method: .post, path: "/api/moments/place-preview", body: MomentsPlacePreviewBody(latitude: latitude, longitude: longitude))
     }
 
+    /// `POST /api/moments/place-preview` with no point (location off, contract v3.4): only the 18+ state and
+    /// `has_connections`. Route `backend/routes/moments.js` (place-preview).
+    public static let postingPreview = Endpoint(method: .post, path: "/api/moments/place-preview", body: MomentsEmptyBody())
+
     /// `POST /api/moments/adult-confirm` — the one-time "I'm 18 or older"
     /// (shared with Pulse's). Route `backend/routes/moments.js` (adult-confirm).
     public static let adultConfirm = Endpoint(method: .post, path: "/api/moments/adult-confirm")
@@ -57,7 +61,9 @@ public enum MomentsEndpoints {
             "south": coordinate(south),
             "west": coordinate(west),
             "north": coordinate(north),
-            "east": coordinate(east)
+            "east": coordinate(east),
+            // This app shows Moments with no location (in the strip), so they light the dot too (contract v3.4).
+            "include_unplaced": "true"
         ]
         if let since { query["since"] = ISO8601DateFormatter().string(from: since) }
         return Endpoint(method: .get, path: "/api/moments/unseen", query: query, cachePolicy: .reloadIgnoringLocalCacheData)
@@ -135,6 +141,8 @@ private struct MomentsPlacePreviewBody: Encodable {
     let latitude: Double
     let longitude: Double
 }
+
+private struct MomentsEmptyBody: Encodable {}
 
 private struct MomentsReactionBody: Encodable {
     let emoji: String?

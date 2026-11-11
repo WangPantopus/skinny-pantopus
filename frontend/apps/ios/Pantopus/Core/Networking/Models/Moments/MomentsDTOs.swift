@@ -138,19 +138,24 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
     public var moments: [MomentBriefDTO]
     public let newestAt: String?
     public let mine: Bool
+    /// Moments posted with no location (contract v3.4, `GET /map` `unplaced`): in the strip, never on the map.
+    public let noLocation: Bool
 
     private enum CodingKeys: String, CodingKey {
         case id, author, latitude, longitude, moments, mine
         case placeLabel = "place_label"
         case newestAt = "newest_at"
+        case noLocation = "no_location"
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         author = try c.decode(MomentAuthorDTO.self, forKey: .author)
-        latitude = try c.decode(Double.self, forKey: .latitude)
-        longitude = try c.decode(Double.self, forKey: .longitude)
+        noLocation = try c.decodeIfPresent(Bool.self, forKey: .noLocation) ?? false
+        // A ring with no location has no point (the keys are left out).
+        latitude = try noLocation ? 0 : c.decode(Double.self, forKey: .latitude)
+        longitude = try noLocation ? 0 : c.decode(Double.self, forKey: .longitude)
         placeLabel = try c.decodeIfPresent(String.self, forKey: .placeLabel) ?? ""
         moments = try c.decodeIfPresent([MomentBriefDTO].self, forKey: .moments) ?? []
         newestAt = try c.decodeIfPresent(String.self, forKey: .newestAt)
@@ -163,6 +168,7 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
         author = moment.author
         latitude = moment.latitude
         longitude = moment.longitude
+        noLocation = moment.noLocation
         placeLabel = moment.placeLabel
         let brief = MomentBriefDTO(
             id: moment.id,
@@ -223,6 +229,8 @@ public struct MomentDTO: Decodable, Sendable, Hashable, Identifiable {
     /// When the photo or video was taken, only when that was more than a day before it was posted (contract v3.3):
     /// the viewer says "Taken Oct 3" so an old photo never reads as now. Nil otherwise and from an older server.
     public let takenAt: String?
+    /// Posted with no location (contract v3.4): no point or place, connections only.
+    public let noLocation: Bool
 
     private enum CodingKeys: String, CodingKey {
         case id, author, kind, state, caption, text, background, width, height, latitude, longitude, audience, hours, seen
@@ -237,6 +245,7 @@ public struct MomentDTO: Decodable, Sendable, Hashable, Identifiable {
         case viewerCount = "viewer_count"
         case reactionCounts = "reaction_counts"
         case takenAt = "taken_at"
+        case noLocation = "no_location"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -266,6 +275,7 @@ public struct MomentDTO: Decodable, Sendable, Hashable, Identifiable {
         viewerCount = try c.decodeIfPresent(Int.self, forKey: .viewerCount)
         reactionCounts = try? c.decodeIfPresent([MomentReactionCount].self, forKey: .reactionCounts)
         takenAt = try? c.decodeIfPresent(String.self, forKey: .takenAt)
+        noLocation = (try? c.decodeIfPresent(Bool.self, forKey: .noLocation)) ?? false
     }
 
     public var media: URL? {
@@ -295,6 +305,18 @@ public struct MomentReactionCount: Decodable, Sendable, Hashable {
 
 public struct MomentsMapResponse: Decodable, Sendable {
     public let rings: [MomentRingDTO]
+    /// Connections' (and your own) Moments with no location, one ring per person, whatever the area (contract v3.4).
+    public let unplaced: [MomentRingDTO]
+
+    private enum CodingKeys: String, CodingKey {
+        case rings, unplaced
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rings = try c.decode([MomentRingDTO].self, forKey: .rings)
+        unplaced = (try? c.decodeIfPresent([MomentRingDTO].self, forKey: .unplaced)) ?? []
+    }
 }
 
 /// `GET /api/moments/unseen`: people with something new in the box.
@@ -328,10 +350,13 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
     public let places: [MomentPlaceChoiceDTO]
     /// How far from the pin the place picker's venues may be (contract v3.3, 1500 m); nil from an older server.
     public let pickWithinM: Double?
+    /// Whether you have a connection (contract v3.4): a Moment with no location needs one. Nil from an older server.
+    public let hasConnections: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case places
         case pickWithinM = "pick_within_m"
+        case hasConnections = "has_connections"
         case placeLabel = "place_label"
         case areaLabel = "area_label"
         case atHome = "at_home"
@@ -348,6 +373,7 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
         places = (try? c.decodeIfPresent([MomentPlaceChoiceDTO].self, forKey: .places))?
             .filter { !$0.key.isEmpty && !$0.label.isEmpty } ?? []
         pickWithinM = try? c.decodeIfPresent(Double.self, forKey: .pickWithinM)
+        hasConnections = try? c.decodeIfPresent(Bool.self, forKey: .hasConnections)
     }
 }
 
@@ -405,8 +431,12 @@ public struct MomentReplyResponse: Decodable, Sendable {
 /// photo or video was taken (in the last 24 hours).
 public struct MomentLocationBody: Encodable, Sendable, Hashable {
     public enum Source: String, Encodable, Sendable {
-        case gps, capture
+        /// `none`: no location (contract v3.4): connections only, no point.
+        case gps, capture, none
     }
+
+    /// A Moment with no location.
+    public static let noLocation = MomentLocationBody(source: .none, latitude: 0, longitude: 0, at: Date())
 
     public let source: Source
     public let latitude: Double
@@ -430,6 +460,7 @@ public struct MomentLocationBody: Encodable, Sendable, Hashable {
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(source, forKey: .source)
+        guard source != .none else { return }
         try c.encode(latitude, forKey: .latitude)
         try c.encode(longitude, forKey: .longitude)
         try c.encode(MomentTime.string(at), forKey: source == .gps ? .fixAt : .takenAt)
