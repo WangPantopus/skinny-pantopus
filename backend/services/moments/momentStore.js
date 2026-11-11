@@ -403,9 +403,22 @@ async function mapRings(viewerId, box) {
   return ringsOf(viewerId, await shownInBox(viewerId, box));
 }
 
+/**
+ * shownUnplaced, or none when it can't be read: the Moments with no location never stop the map or the tab's dot
+ * from working.
+ */
+async function unplacedOrNone(viewerId) {
+  try {
+    return await shownUnplaced(viewerId);
+  } catch (error) {
+    logger.warn('moments.unplaced_read_failed', { error: error.message });
+    return [];
+  }
+}
+
 /** The Moments with no location the viewer may see, one ring per person (CONTRACT GET /map `unplaced`). */
 async function unplacedRings(viewerId) {
-  return ringsOf(viewerId, await shownUnplaced(viewerId));
+  return ringsOf(viewerId, await unplacedOrNone(viewerId));
 }
 
 async function ringsOf(viewerId, shown) {
@@ -452,9 +465,14 @@ function wentLiveAt(row) {
 /**
  * How many people have something new for `viewerId` in the box (CONTRACT GET /api/moments/unseen): a live Moment the
  * viewer may see and hasn't watched, that went live after `since` (a time in ms; none: any). Never the viewer's own.
+ * Moments with no location count only for an app that shows them (`includeUnplaced`, contract v3.4): an older app's
+ * dot never lights for something it can't show.
  */
-async function unseenPeople(viewerId, box, since = null) {
-  const [inBox, unplaced] = await Promise.all([shownInBox(viewerId, box), shownUnplaced(viewerId)]);
+async function unseenPeople(viewerId, box, since = null, { includeUnplaced = false } = {}) {
+  const [inBox, unplaced] = await Promise.all([
+    shownInBox(viewerId, box),
+    includeUnplaced ? unplacedOrNone(viewerId) : [],
+  ]);
   const fresh = [...inBox, ...unplaced].map(({ row }) => row)
     .filter((row) => row.user_id !== viewerId && (since == null || wentLiveAt(row) > since));
   if (!fresh.length) return 0;

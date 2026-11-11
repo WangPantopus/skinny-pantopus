@@ -108,7 +108,11 @@ router.post('/place-preview', actionLimiter, async (req, res) => {
       placed ? momentPlace.labelsAt(at.latitude, at.longitude) : { place_label: null, area_label: null, places: [] },
       placed ? momentPlace.isAtHome(req.user.id, at.latitude, at.longitude) : false,
       adultStatus(req.user.id),
-      store.connectionIds(req.user.id),
+      // Never in the way of the place's words: a failed read leaves `has_connections` out.
+      store.connectionIds(req.user.id).catch((error) => {
+        logger.warn('moments.connections_read_failed', { error: error.message });
+        return null;
+      }),
     ]);
     // pick_within_m: how far from the pin the place picker's venues may be (POST / takes a venue_id within it).
     res.json({
@@ -116,7 +120,7 @@ router.post('/place-preview', actionLimiter, async (req, res) => {
       at_home: atHome,
       adult_confirmed: Boolean(adult.attestedAt) && !adult.ineligible,
       pick_within_m: momentPlace.PICK_PLACE_M,
-      has_connections: connections.length > 0,
+      ...(connections ? { has_connections: connections.length > 0 } : {}),
     });
   } catch (error) {
     sendError(res, error, 'place_preview');
@@ -322,9 +326,13 @@ router.get('/map', async (req, res) => {
  */
 router.get('/unseen', async (req, res) => {
   try {
-    const { since, ...box } = parseBody(mapSchema.keys({ since: Joi.string().isoDate() }), req.query);
+    const { since, include_unplaced: includeUnplaced, ...box } = parseBody(mapSchema.keys({
+      since: Joi.string().isoDate(),
+      // Apps that show Moments with no location (contract v3.4) ask for them to count; older ones don't.
+      include_unplaced: Joi.boolean().default(false),
+    }), req.query);
     if (box.south >= box.north || box.west >= box.east) throw store.fail(400, 'MOMENT_INVALID', 'Send a map area with south < north and west < east.');
-    res.json({ count: await store.unseenPeople(req.user.id, box, since ? Date.parse(since) : null) });
+    res.json({ count: await store.unseenPeople(req.user.id, box, since ? Date.parse(since) : null, { includeUnplaced }) });
   } catch (error) {
     sendError(res, error, 'unseen');
   }
