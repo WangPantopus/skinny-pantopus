@@ -23,6 +23,9 @@ final class MomentsWatchSession: Identifiable {
     var replyText = ""
     var showsReactions = false
     var showsSeenBy = false
+    /// On a table, the big pause button (board T1): it stays paused until it's tapped again. Off the table it plays on
+    /// (the viewer clears it).
+    var paused = false
     /// The reply box has the keyboard (as far as the screen showing it last said).
     @ObservationIgnored var replyFocused = false
     /// When the reply box lost the keyboard without being closed: closing or half folding the Duo takes the

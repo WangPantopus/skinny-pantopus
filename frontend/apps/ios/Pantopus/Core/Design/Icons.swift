@@ -133,6 +133,9 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
     case play
     /// T6.5d voice-postscript player toggle (play / pause).
     case pause
+    /// Moments on a table (the iPhone Duo's board T1): the previous and next Moment.
+    case skipBack = "skip-back"
+    case skipForward = "skip-forward"
 
     // T5.3.3 My posts — archive chip + empty-state compose icon.
     case archive
@@ -572,6 +575,8 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
         case .circleSlash: "circle.slash"
         case .play: "play.fill"
         case .pause: "pause.fill"
+        case .skipBack: "backward.end"
+        case .skipForward: "forward.end"
         case .archive: "archivebox"
         case .messageSquarePlus: "bubble.left.and.text.bubble.right"
         case .bookmark: "bookmark"

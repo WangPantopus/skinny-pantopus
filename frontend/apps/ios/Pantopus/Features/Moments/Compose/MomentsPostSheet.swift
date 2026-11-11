@@ -26,7 +26,8 @@ struct MomentsPostStage: View {
             case .phone: phoneStage
             case .closed: closedStage
             case .wide: wideStage
-            case .upright, .table: uprightStage
+            case .upright: uprightStage
+            case .table: tableStage
             }
         }
         // A fold can take the stage away and bring it back: the looping video carries on.
@@ -133,7 +134,7 @@ struct MomentsPostSheet: View {
     let model: MomentsComposerModel
     /// On the open iPhone Duo, a card beside the picture (board O9): no grabber, every corner rounded.
     var asCard = false
-    /// The small map: 150 pt; closed on the Duo, 110 (board C8).
+    /// The small map: 150 pt; closed on the Duo, 110 (board C8); 0 on a table, where a bigger one is beside it (T5).
     var mapHeight: CGFloat = 150
     let onPosted: () -> Void
     @Environment(AuthManager.self) private var auth
@@ -192,14 +193,16 @@ struct MomentsPostSheet: View {
     private var options: some View {
         @Bindable var model = model
         return VStack(alignment: .leading, spacing: 0) {
-            MomentsPostMap(
-                pin: model.pin,
-                showArea: model.showArea,
-                me: me,
-                placeholder: model.locating == .unavailable ? "Location is off" : "Finding where you are…",
-                height: mapHeight
-            )
-            .padding(.top, asCard ? 16 : 11)
+            if mapHeight > 0 {
+                MomentsPostMap(
+                    pin: model.pin,
+                    showArea: model.showArea,
+                    me: me,
+                    placeholder: model.locating == .unavailable ? "Location is off" : "Finding where you are…",
+                    height: mapHeight
+                )
+                .padding(.top, asCard ? 16 : 11)
+            }
             placeRow
                 .padding(.top, 10)
             if model.pin == nil, model.locating == .unavailable {
@@ -418,7 +421,7 @@ struct MomentsPostSheet: View {
 }
 
 /// The small map at the top of the sheet: your ring on the pin, or the area's circle.
-private struct MomentsPostMap: View {
+struct MomentsPostMap: View {
     let pin: CLLocationCoordinate2D?
     let showArea: Bool
     let me: MomentAuthorDTO?
