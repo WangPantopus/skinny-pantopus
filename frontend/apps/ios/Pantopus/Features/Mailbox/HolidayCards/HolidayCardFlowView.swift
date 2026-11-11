@@ -111,6 +111,8 @@ struct HolidayCardFlowView: View {
         // Full screen, like the other flows: no tab bar in any step or on the confirmation (founder, 11-09).
         .hidesTabBar()
         .task { await viewModel.load() }
+        // The card being written is kept as it changes, so it comes back if the system closes the app.
+        .onChange(of: viewModel.draft) { viewModel.saveDraft() }
         // Digital stamps: the balance after each step, card and take-back; StoreKit purchases finished on open and resume.
         .task(id: postageOn) {
             guard postageOn else { return }
