@@ -143,7 +143,7 @@ struct CardPrintView: View {
         .clipped()
         .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: shown != nil)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(alt.map { "Photo: \($0)" } ?? "Photo from \(first)")
+        .accessibilityLabel(alt.map { "Photo: \($0)" } ?? (fromName.isEmpty ? "Your photo" : "Photo from \(first)"))
         .accessibilityAddTraits(.isImage)
     }
 
