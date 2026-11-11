@@ -120,8 +120,9 @@ final class IconTests: XCTestCase {
         "plan-watch", "plan-playdate", "plan-pickup", "plan-walk", "plan-study", "location-arrow",
         // Today's hourly strip and daily forecast (the November 2026 redesign): the sky per condition.
         "cloud-moon", "cloud-fog", "cloud-snow", "cloud-hail", "cloud-lightning",
-        // Moments: the tab, a video's sound on and off, the camera's front/back switch.
-        "circle-dashed", "volume-2", "volume-x", "switch-camera"
+        // Moments: the tab, a video's sound on and off, the camera's front/back switch; on the iPhone Duo's table,
+        // the previous and next Moment.
+        "circle-dashed", "volume-2", "volume-x", "switch-camera", "skip-back", "skip-forward"
     ]
 
     func testInventoryMatches() {

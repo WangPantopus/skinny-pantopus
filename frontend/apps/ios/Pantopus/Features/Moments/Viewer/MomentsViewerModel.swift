@@ -127,16 +127,20 @@ final class MomentsViewerModel {
     /// Swipe left: the next ring nearby.
     func nextRing() {
         guard ringIndex + 1 < rings.count else { return close() }
-        ringIndex += 1
-        momentIndex = startIndex(in: ringIndex)
-        show()
+        playRing(at: ringIndex + 1)
     }
 
     /// Swipe right: the ring before.
     func previousRing() {
         guard ringIndex > 0 else { return }
-        ringIndex -= 1
-        momentIndex = startIndex(in: ringIndex)
+        playRing(at: ringIndex - 1)
+    }
+
+    /// A ring from its first Moment new to you: a swipe, or a face under "Up next" on a table (board T1).
+    func playRing(at index: Int) {
+        guard rings.indices.contains(index) else { return }
+        ringIndex = index
+        momentIndex = startIndex(in: index)
         show()
     }
 

@@ -30,10 +30,14 @@ struct MomentsCameraScreen: View {
             switch duo.pose {
             case .closed, .wide:
                 duoLayout
-            case .phone, .upright, .table:
+            case .phone, .upright:
                 phoneLayout
+            case .table:
+                tableLayout
             }
         }
+        // The timer is the table's: lifted off the table, a countdown stops before it takes anything.
+        .onChange(of: duo.pose, initial: true) { _, pose in if pose != .table { camera.cancelCountdown() } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.camera")
     }
@@ -219,7 +223,7 @@ struct MomentsCameraScreen: View {
     }
 
     /// The simulator, or the camera not allowed: say so; the library and text still work.
-    private var unavailable: some View {
+    var unavailable: some View {
         VStack(spacing: Spacing.s3) {
             Icon(.camera, size: 34, color: Color.white.opacity(0.8))
             Text(MomentsCameraController.hasCamera ? "Allow the camera in Settings to take a Moment." : "There's no camera here.")
