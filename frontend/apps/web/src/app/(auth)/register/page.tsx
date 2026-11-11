@@ -26,6 +26,7 @@ import {
   readAuthRedirectQuery,
   safeRedirectPath,
 } from '@/lib/auth-utils';
+import { markLeavingAuthPage, useLeavingAuthPage } from '@/lib/auth-leaving';
 import { launchFeatures } from '@/lib/featureFlags';
 import { OAUTH_ATTEMPT_UNAVAILABLE_ERROR, beginOAuthAttempt } from '@/lib/oauth-attempt';
 import { rememberPendingSignIn } from '@/lib/pending-sign-in';
@@ -52,7 +53,10 @@ function RegisterContent({ searchParams }: SearchParamsProps) {
   });
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [loading, setLoading] = useState(false);
+  const [submitting, setLoading] = useState(false);
+  // Signed up and on the way to the next page: the form stays busy until that page shows.
+  const leaving = useLeavingAuthPage();
+  const loading = submitting || leaving;
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -146,6 +150,8 @@ function RegisterContent({ searchParams }: SearchParamsProps) {
 
       bindPlaceArrival(redirectTo, response.user?.id);
       const token = response.accessToken || response.token;
+      // From here the next page is on its way: keep the form busy until it shows (lib/auth-leaving).
+      markLeavingAuthPage();
       if (token) {
         // Backend sets httpOnly cookies via same-origin proxy.
         router.push(safeRedirectPath(redirectTo, '/app/place'));
