@@ -3,6 +3,7 @@ package app.pantopus.android.ui.screens.place
 import androidx.compose.ui.graphics.Color
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.place.AirQualityCategory
+import app.pantopus.android.data.api.models.place.BallotPhase
 import app.pantopus.android.data.api.models.place.BenchmarkComparison
 import app.pantopus.android.data.api.models.place.ExemptionFilingStatus
 import app.pantopus.android.data.api.models.place.FloodRiskLevel
@@ -493,7 +494,24 @@ object PlacePresentation {
             }
             PlaceSectionId.CIVIC_ELECTION -> {
                 val d = env.civicElection ?: return PlaceSectionReading()
-                PlaceSectionReading(chip = PlaceChipModel(PlaceChipTone.SKY, "In ${d.daysUntil} days"))
+                // After Election Day there is nothing to count down to: the election's name, with where
+                // the count stands when the server says ("Counting"). Before it: today, tomorrow, or the days left.
+                val card = d.ballotCard
+                if (card != null && card.phase == BallotPhase.AFTER) {
+                    val stage = card.chip?.takeIf { it.isNotEmpty() }
+                    PlaceSectionReading(
+                        value = card.subtitle ?: d.name,
+                        chip = stage?.let { PlaceChipModel(PlaceChipTone.SKY, it) },
+                    )
+                } else {
+                    val whenText =
+                        when {
+                            d.daysUntil <= 0 -> "Today"
+                            d.daysUntil == 1 -> "Tomorrow"
+                            else -> "In ${d.daysUntil} days"
+                        }
+                    PlaceSectionReading(chip = PlaceChipModel(PlaceChipTone.SKY, whenText))
+                }
             }
             PlaceSectionId.UNKNOWN -> PlaceSectionReading()
         }
