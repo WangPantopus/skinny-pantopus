@@ -826,7 +826,7 @@ internal fun WriteStep(
                 "$count of $limit letters",
                 fontSize = 13.sp,
                 fontWeight = if (count >= limit) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (count >= limit) PantopusColors.cardWax else PantopusColors.cardTextQuiet,
+                color = if (count >= limit) PantopusColors.cardWax else DeskInk.quiet,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("sendCardCount"),
             )
         }
@@ -850,7 +850,7 @@ internal fun WriteStep(
                 Text(
                     if (signature != null) "Signed beside FROM." else "Or leave ${fromName.trim().substringBefore(' ')} typed.",
                     fontSize = 13.sp,
-                    color = PantopusColors.cardTextQuiet,
+                    color = DeskInk.quiet,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -882,7 +882,7 @@ internal fun WriteStep(
             Text(
                 "Write a few words on the back first.",
                 fontSize = 13.sp,
-                color = PantopusColors.cardTextQuiet,
+                color = DeskInk.quiet,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2),
             )
@@ -922,37 +922,49 @@ internal fun SealStep(
                 "One envelope for each of the ${to.entries.size} people.",
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
-                color = PantopusColors.cardTextQuiet,
+                color = DeskInk.quiet,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.s3).testTag("sendCardEnvelopeCount"),
             )
         }
-        Text(
-            "When should it arrive?",
-            fontSize = 16.sp,
-            lineHeight = 22.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.cardTextStrong,
-            modifier = Modifier.padding(top = Spacing.s6).semantics { heading() },
-        )
-        Column(
-            modifier = Modifier.padding(top = 10.dp).selectableGroup(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            options.forEach { arrival ->
-                val (title, detail) = arrivalChoice(arrival, cards, to, form.theirs?.nextRoundOn, zone)
-                ArrivalChoice(title, detail, selected = form.arrival == arrival, tag = "sendCardArrival.$arrival") { onArrival(arrival) }
-            }
-        }
-        form.sealNotice?.let {
+        // Plan Part 9: at the table the choice is a cream slip on the cloth, with the same three choices.
+        Slip(modifier = Modifier.padding(top = Spacing.s6)) {
             Text(
-                it,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                fontWeight = FontWeight.Medium,
-                color = PantopusColors.cardTextProblem,
-                modifier = Modifier.padding(top = Spacing.s3).semantics { liveRegion = LiveRegionMode.Assertive }.testTag("sendCardError"),
+                "When should it arrive?",
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.cardTextStrong,
+                modifier = Modifier.semantics { heading() },
             )
+            Column(
+                modifier = Modifier.padding(top = 10.dp).selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                options.forEach { arrival ->
+                    val (title, detail) = arrivalChoice(arrival, cards, to, form.theirs?.nextRoundOn, zone)
+                    ArrivalChoice(
+                        title,
+                        detail,
+                        selected = form.arrival == arrival,
+                        tag = "sendCardArrival.$arrival",
+                    ) { onArrival(arrival) }
+                }
+            }
+            form.sealNotice?.let {
+                Text(
+                    it,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = PantopusColors.cardTextProblem,
+                    modifier =
+                        Modifier
+                            .padding(top = Spacing.s3)
+                            .semantics { liveRegion = LiveRegionMode.Assertive }
+                            .testTag("sendCardError"),
+                )
+            }
         }
         // Before it's sent there's no knowing their clock; the sent card says the time on this one.
         DeskNote(sealNote(to), modifier = Modifier.padding(top = 14.dp))

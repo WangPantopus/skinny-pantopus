@@ -60,8 +60,17 @@ fun CardButton(
     val (background, ink, edge) =
         when (kind) {
             CardButtonKind.Wax -> Triple(PantopusColors.cardWax, PantopusColors.cardWaxText, Color.Transparent)
-            CardButtonKind.Paper -> Triple(PantopusColors.cardField, PantopusColors.cardTextBody, PantopusColors.cardFieldEdge)
-            CardButtonKind.Words -> Triple(Color.Transparent, PantopusColors.cardWax, Color.Transparent)
+            // On the cloth (plan Part 9) the quiet buttons are the table's glass, in cream.
+            CardButtonKind.Paper ->
+                if (LocalOnCloth.current) {
+                    Triple(PantopusColors.tableGlass, PantopusColors.tableCream, PantopusColors.tableGlassLine)
+                } else {
+                    Triple(PantopusColors.cardField, PantopusColors.cardTextBody, PantopusColors.cardFieldEdge)
+                }
+            CardButtonKind.Words -> {
+                val ink = if (LocalOnCloth.current) PantopusColors.tableCream else PantopusColors.cardWax
+                Triple(Color.Transparent, ink, Color.Transparent)
+            }
         }
     val tappable = enabled && !busy
     Row(

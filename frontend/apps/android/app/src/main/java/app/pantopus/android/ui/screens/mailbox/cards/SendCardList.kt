@@ -162,7 +162,7 @@ internal fun ListLookStep(
             fontSize = 16.sp,
             lineHeight = 22.sp,
             fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.cardTextStrong,
+            color = DeskInk.strong,
             modifier = Modifier.semantics { heading() },
         )
         val shape = RoundedCornerShape(Radii.lg)
