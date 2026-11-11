@@ -136,6 +136,15 @@ extension MomentsViewer {
     private func tableFlatHalf(fold: CGRect, height: CGFloat) -> some View {
         VStack(spacing: Spacing.s0) {
             tableHeader
+                // "Taken Oct 3" (an old photo) under the name, in the room above the buttons: nothing moves for it.
+                .overlay(alignment: .bottomLeading) {
+                    if let taken = model.metaTaken {
+                        // The pill sits 58 pt in (the phone header's name); here the name starts 56 in (face 44, gap 12).
+                        MomentsTakenPill(taken: taken)
+                            .offset(x: -2)
+                            .alignmentGuide(.bottom) { $0[.top] }
+                    }
+                }
                 .padding(.horizontal, Spacing.s5)
                 .padding(.top, 16.5)
             if session.showsSeenBy, model.isMine {
