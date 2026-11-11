@@ -74,6 +74,23 @@ const LOOK_UNAVAILABLE = 'Pantopus can’t show how your card will look yet. You
  * The server can't show the look: it has no Look it over yet (a 404 without the server's code, as a server from before
  * it answers). Sending still works there.
  */
+/** A card's own photo and voice go only with a bought stamp (founder 2026-11-11): 'ready', 'buy' or 'unavailable'. */
+type MediaStamp = 'ready' | 'buy' | 'unavailable';
+const MEDIA_NEEDS_STAMP = 'Photos and voice greetings go on cards sent with a bought stamp.';
+
+/**
+ * Where a card's own photo and voice stand: the server's word when the cards loaded, followed by the live stamp balance
+ * (refreshed when the page comes back from checkout), so buying a book makes them work without leaving the step. Null:
+ * an older server that doesn't ask for a bought stamp.
+ */
+function mediaStampOf(server: { state: MediaStamp } | null | undefined,
+  live: { paid_remaining: number; sales_open?: boolean } | null | undefined): MediaStamp | null {
+  if (!server) return null;
+  if (!live) return server.state;
+  if (live.paid_remaining >= 1) return 'ready';
+  return live.sales_open === false ? 'unavailable' : 'buy';
+}
+
 function lookIsUnavailable(error: MailboxApiError | null): boolean {
   return error?.status === 404 && !error.serverCode;
 }
@@ -701,6 +718,8 @@ function WriteStep({
   onRecorded,
   onRemoveVoice,
   onRetryVoice,
+  mediaStamp = null,
+  onGetStamps,
   onCloth = false,
   onNext,
 }: {
@@ -734,6 +753,9 @@ function WriteStep({
   onRecorded?: (recording: Blob) => void;
   onRemoveVoice?: () => void;
   onRetryVoice?: () => void;
+  /** 'buy': no bought stamp left, so the photo and voice buttons open the stamp books (founder 2026-11-11). */
+  mediaStamp?: MediaStamp | null;
+  onGetStamps?: () => void;
   /** On the card's cloth (design plan Part 9): cream words and glass buttons. */
   onCloth?: boolean;
   onNext: () => void;
@@ -761,7 +783,10 @@ function WriteStep({
   const mediaWait = photoWait || voiceWait;
   const showPhoto = canAddPhoto || Boolean(photo);
   const showVoice = (canAddVoice && canRecord) || Boolean(voice) || recorder.recording;
-  const record = () => { listen.stop(); void recorder.start(); };
+  // No bought stamp left: adding or recording opens the stamp books instead, and says why.
+  const needsStamp = mediaStamp === 'buy';
+  const record = () => { if (needsStamp) { onGetStamps?.(); return; } listen.stop(); void recorder.start(); };
+  const choosePhoto = () => { if (needsStamp) { onGetStamps?.(); return; } photoInput.current?.click(); };
   // Christmas with Jesus Christ: a gift tag, as the reader will see it (wave 4 drawing 4).
   const gift = cardMood(design.number, design.id) === 'reverence';
   return (
@@ -834,7 +859,7 @@ function WriteStep({
           />
           {!photo && !voice && !recorder.recording ? (
             <div className="flex flex-wrap gap-2">
-              {showPhoto ? <button type="button" data-testid="sendCardAddPhoto" onClick={() => photoInput.current?.click()} className={ghost}>Add a photo</button> : null}
+              {showPhoto ? <button type="button" data-testid="sendCardAddPhoto" onClick={choosePhoto} className={ghost}>Add a photo</button> : null}
               {showVoice ? <button type="button" data-testid="sendCardRecord" onClick={record} className={ghost}>Record a greeting</button> : null}
             </div>
           ) : (
@@ -860,12 +885,12 @@ function WriteStep({
                     <div className="mt-2 flex flex-wrap gap-2">
                       {photo.status === 'failed'
                         ? <button type="button" data-testid="sendCardPhotoRetry" onClick={onRetryPhoto} className={ghost}>Try again</button>
-                        : <button type="button" data-testid="sendCardPhotoReplace" onClick={() => photoInput.current?.click()} className={ghost}>Replace</button>}
+                        : <button type="button" data-testid="sendCardPhotoReplace" onClick={choosePhoto} className={ghost}>Replace</button>}
                       <button type="button" data-testid="sendCardPhotoRemove" onClick={onRemovePhoto} className={ghost}>Remove</button>
                     </div>
                   </>
                 ) : showPhoto ? (
-                  <button type="button" data-testid="sendCardAddPhoto" onClick={() => photoInput.current?.click()} className={ghost}>Add a photo</button>
+                  <button type="button" data-testid="sendCardAddPhoto" onClick={choosePhoto} className={ghost}>Add a photo</button>
                 ) : null}
               </div>
               <div className="min-w-0" data-testid="sendCardVoice">
@@ -905,6 +930,7 @@ function WriteStep({
               </div>
             </div>
           )}
+          {needsStamp ? <p className={`mt-3 text-[13px] ${quiet}`} data-testid="sendCardMediaNeedsStamp">{MEDIA_NEEDS_STAMP}</p> : null}
           {recorder.refused ? <p role="alert" className={`mt-3 text-[13px] ${quiet}`} data-testid="sendCardMicRefused">{recorder.refused}</p> : null}
           {photo ? (
             <label className={`mt-3 block text-[13px] ${quiet}`}>
@@ -1480,6 +1506,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
   const [listTakeBackError, setListTakeBackError] = useState<{ id: string; message: string } | null>(null);
   // The stamp books opened because a list's cards need more stamps than are left.
   const [stampShort, setStampShort] = useState<{ cards: number; missing: number } | null>(null);
+  // Why the stamp books opened when free stamps don't cover the card: its photo or voice needs a bought one.
+  const [stampReason, setStampReason] = useState<string | null>(null);
   // Sealing it by hand (design plan Part 2, launch key card_table): after Look it over, the card lies on the table and
   // goes the moment the seal is pressed home. What the table shows is kept here, so it stays through the send.
   const [sealing, setSealing] = useState<{ card: TableCard; note: string; fromName: string; toName: string; who: string; count: number } | null>(null);
@@ -1491,6 +1519,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
   const data = cards.data;
   const max = data?.max_recipients ?? 1;
   const stamps = useStamps(Boolean(data?.postage_enabled), `${sent?.id ?? ''}:${listSent?.length ?? 0}:${listTakenBack.size}:${tookBack}:${step}`);
+  const mediaStamp = mediaStampOf(data?.media?.bought_stamp, data?.postage_enabled ? stamps.balance : null);
   const design = useMemo(() => data?.designs.find((d) => d.id === designId) ?? null, [data, designId]);
   const today = sent ?? (data?.today && data.today.status !== 'withdrawn' ? data.today : null);
   const options = useMemo<HolidayCardArrival[]>(() => {
@@ -1720,6 +1749,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
       onError: (error) => {
         if (wentEarlier(error)) return;
         if (lookIsUnavailable(error)) setLookUnavailable(true);
+        // Its photo or voice needs a bought stamp: the stamp books open; step 4 says why, and the card stays as it is.
+        if (error.serverCode === 'CARD_MEDIA_NEEDS_STAMP') { void stamps.refresh(); setStampShort(null); setStampReason(MEDIA_NEEDS_STAMP); setStampSheet(true); }
       },
     });
   };
@@ -1738,6 +1769,16 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
         if (error.serverCode === 'STAMPS_REQUIRED') {
           send.reset();
           void stamps.refresh();
+          setStampSheet(true);
+          return;
+        }
+        // Its photo or voice needs a bought stamp and none is left: the same, and step 4 says why.
+        if (error.serverCode === 'CARD_MEDIA_NEEDS_STAMP') {
+          setSealError(error.message || MEDIA_NEEDS_STAMP);
+          send.reset();
+          void stamps.refresh();
+          setStampShort(null);
+          setStampReason(MEDIA_NEEDS_STAMP);
           setStampSheet(true);
           return;
         }
@@ -1869,6 +1910,16 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           refused();
           return;
         }
+        // Its photo or voice needs a bought stamp: the stamp books open over the table, and the table says why.
+        if (error.serverCode === 'CARD_MEDIA_NEEDS_STAMP') {
+          send.reset();
+          void stamps.refresh();
+          setStampShort(null);
+          setStampReason(MEDIA_NEEDS_STAMP);
+          setStampSheet(true);
+          refused(error.message || MEDIA_NEEDS_STAMP);
+          return;
+        }
         if (error.serverCode === 'CARD_ARRIVAL_CLOSED') {
           // Their 7 a.m. came while they looked it over: choose again on step 4, as before.
           refused();
@@ -1982,10 +2033,10 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
         title={step === 'sent' && sent?.by_link ? 'Your card is ready.' : undefined}
         onBack={back}
         headingRef={headingRef}
-        trailing={data.postage_enabled ? <StampChip stamps={stamps} onOpen={() => { setStampShort(null); setStampSheet(true); }} /> : null}
+        trailing={data.postage_enabled ? <StampChip stamps={stamps} onOpen={() => { setStampShort(null); setStampReason(null); setStampSheet(true); }} /> : null}
       />
       {data.postage_enabled ? (
-        <StampSheet open={stampSheet} onClose={() => { setStampSheet(false); setStampShort(null); }} stamps={stamps} short={stampShort} overTable={Boolean(sealing)} />
+        <StampSheet open={stampSheet} onClose={() => { setStampSheet(false); setStampShort(null); setStampReason(null); }} stamps={stamps} short={stampShort} reason={stampReason} overTable={Boolean(sealing)} />
       ) : null}
       {(tookBack || takenBackNote) && step === 'to' ? (
         <p role="status" className="mx-4 mt-2 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[14px] text-[#374151]">
@@ -2031,7 +2082,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           onSignature={setSignature}
           canSign={launchFeatures.cardTable && Boolean(data.signature)}
           // A card's own photo (memories plan step 4): one card to one person; a list goes without.
-          canAddPhoto={launchFeatures.holidayCardMemories && Boolean(data.media?.photo.usable) && to?.kind !== 'list'}
+          canAddPhoto={launchFeatures.holidayCardMemories && Boolean(data.media?.photo.usable) && to?.kind !== 'list' && mediaStamp !== 'unavailable'}
           photo={photo}
           photoAlt={photoAlt}
           onPhotoAlt={setPhotoAlt}
@@ -2039,7 +2090,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           onRemovePhoto={removePhoto}
           onRetryPhoto={() => { if (photo?.file) uploadPhoto(photo.file); }}
           // Its own voice greeting (memories plan step 7), the same way: one card to one person.
-          canAddVoice={launchFeatures.holidayCardMemories && Boolean(data.media?.voice.usable) && to?.kind !== 'list'}
+          canAddVoice={launchFeatures.holidayCardMemories && Boolean(data.media?.voice.usable) && to?.kind !== 'list' && mediaStamp !== 'unavailable'}
+          mediaStamp={mediaStamp}
+          onGetStamps={() => { setStampShort(null); setStampReason(MEDIA_NEEDS_STAMP); void stamps.refresh(); setStampSheet(true); }}
           voice={voice}
           greetingFor={to?.kind === 'person' ? firstName(to.name) : 'you'}
           onRecorded={uploadVoice}
