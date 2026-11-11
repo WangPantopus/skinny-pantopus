@@ -37,7 +37,16 @@ data class HomeOccupancy(
     @Json(name = "end_at") val endAt: String?,
     @Json(name = "verification_status") val verificationStatus: String,
     @Json(name = "access_end_at") val accessEndAt: String? = null,
-)
+    /** `address`, `household`, `claim` or `legacy`; older servers omit it. */
+    @Json(name = "verification_source") val verificationSource: String? = null,
+) {
+    /**
+     * Let in by the household (an invitation, a manager's approval) or by a claim: household access, not proof of
+     * the address (F3b).
+     */
+    val hasAddressVerification: Boolean
+        get() = verificationSource != "household" && verificationSource != "claim"
+}
 
 /**
  * `GET /api/homes/my-homes` entry. The home-columns fields are mixed in at

@@ -138,15 +138,17 @@ private fun line1For(home: MyHome): String =
 
 /**
  * "Camas, WA · Verified" / "· Claimed" / "· Private setup"; an entry in review says where it stands instead. Verified
- * is the ownership or the residency, never `verification_tier` (that is the evidence strength).
+ * is verified ownership or a proven address, the rule Place's own chip follows: someone let in by the household (an
+ * invitation, a manager's approval) reads "Claimed" in both places. Never `verification_tier` (the evidence strength).
  */
 private fun subtitleFor(home: MyHome): String {
     if (home.accessKind == "verification") {
         return home.pendingClaimReviewLabel ?: "Verification in progress"
     }
-    val verified =
-        home.ownershipStatus.equals("verified", ignoreCase = true) ||
-            home.occupancy?.verificationStatus.equals("verified", ignoreCase = true)
+    val addressProven =
+        home.occupancy?.verificationStatus.equals("verified", ignoreCase = true) &&
+            home.occupancy?.hasAddressVerification == true
+    val verified = home.ownershipStatus.equals("verified", ignoreCase = true) || addressProven
     val status =
         when {
             home.accessKind == "private_setup" -> "Private setup"
