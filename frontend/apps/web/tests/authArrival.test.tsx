@@ -31,7 +31,12 @@ import Callback from '../src/app/(site)/auth/callback/page';
 import ForgotPassword from '../src/app/(auth)/forgot-password/page';
 import ResetPassword from '../src/app/(auth)/reset-password/page';
 
-beforeEach(() => { jest.clearAllMocks(); search = new URLSearchParams(); window.history.replaceState({}, '', '/'); localStorage.clear(); });
+beforeEach(async () => {
+  jest.clearAllMocks(); search = new URLSearchParams(); window.history.replaceState({}, '', '/'); localStorage.clear();
+  // A sign-in or sign-up that worked keeps the auth forms busy until the page is left (lib/auth-leaving),
+  // which it notices a tick after the last form is gone: let that tick pass between tests.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 const TARGETS = ['/app/place?preview=0123456789abcdef', '/app/feed/post/post-1?comment=reply-2', '/persona/garden', '/app/persona/garden/follow?tier_rank=1', '/app/feed?surface=personas'];
 
 test.each([
