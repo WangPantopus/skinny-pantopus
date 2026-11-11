@@ -94,9 +94,11 @@ internal fun CardTableDialog(
     sealAnswer: SealAnswer? = null,
     /** The quiet buttons under "Done" once the sent card is gone ("Take it back"); "Share this card" is added. */
     goneActions: List<CardTableSendBack> = emptyList(),
+    /** A letter (plan Part 10): what opens once its folded sheet is out ("Read the letter"); null for a card. */
+    onLetterOut: (() -> Unit)? = null,
 ) {
     FullScreenWindow(onDismissRequest = onClose) {
-        val sender = TableSending(sending, sealAnswer, goneActions)
+        val sender = TableSending(sending, sealAnswer, goneActions, onLetterOut)
         CardTable(card, firstOpen, onClose, onOpened, menu, message, mine, canShare, sendBack, sender)
     }
 }
@@ -106,6 +108,8 @@ private class TableSending(
     val calls: CardTableSendingCalls?,
     val answer: SealAnswer?,
     val goneActions: List<CardTableSendBack>,
+    /** A letter's sheet out of its envelope opens the letter page (plan Part 10). */
+    val onLetterOut: (() -> Unit)? = null,
 )
 
 @Composable
@@ -132,6 +136,7 @@ private fun CardTable(
     state.onOpened = onOpened
     state.onTap = { tap -> view.feel(tap) }
     state.onSound = sounds::play
+    LetterOpens(state, reduceMotion, sending.onLetterOut)
     LaunchedEffect(state) { state.run() }
     LaunchedEffect(message) { message?.let { state.toast = it } }
     // Back brings an enlarged card back to its size first, closes the menu, and puts the verse's bookmark away.
@@ -146,9 +151,9 @@ private fun CardTable(
         if (!sharing) state.wake()
     }
 
-    val art = rememberCardTableArt()
+    val art = rememberCardTableArt(letter = card.letter)
     val faceArt = rememberCardFaceArt()
-    val picture = rememberCardPicture(card.design, wanted = !card.sealed)
+    val picture = rememberCardPicture(card.design, wanted = card.hasPicture)
     // The envelope arrives with its art and the card's picture in hand, or after a moment without the picture.
     var pictureWaitOver by rememberSaveable(card.id) { mutableStateOf(card.sealed) }
     LaunchedEffect(card.id) {
@@ -172,7 +177,7 @@ private fun CardTable(
             Modifier
                 .fillMaxSize()
                 .background(PantopusColors.tableNight)
-                .semantics { paneTitle = "Christmas card" }
+                .semantics { paneTitle = card.kind }
                 .testTag("cardTable"),
     ) {
         val density = LocalDensity.current
@@ -383,6 +388,7 @@ private fun sceneWords(
     step: TableStep,
 ): String {
     val name = card.from.trim().ifEmpty { "Someone" }
+    if (card.letter) return if (step == TableStep.Out) "The letter from $name. Opening it." else "A letter from $name"
     if (card.sealed) return "Christmas card from $name, sealed until Christmas morning"
     if (step != TableStep.Out && step != TableStep.Pulling) return "Christmas card from $name"
     val caption = card.caption.ifBlank { "A Christmas picture" }
@@ -550,3 +556,23 @@ private fun View.feel(tap: TableTap) {
         }
     performHapticFeedback(constant)
 }
+
+/** A letter out of its envelope opens as the letter page, after a moment to see it come out (at once without motion). */
+@Composable
+private fun LetterOpens(
+    state: CardTableState,
+    reduceMotion: Boolean,
+    onOut: (() -> Unit)?,
+) {
+    if (onOut == null) return
+    state.onLetterOut = onOut
+    val out = state.step == TableStep.Out
+    LaunchedEffect(out) {
+        if (!out) return@LaunchedEffect
+        delay(if (reduceMotion) LETTER_OPENS_AT_ONCE_MS else LETTER_OPENS_MS)
+        onOut()
+    }
+}
+
+private const val LETTER_OPENS_MS = 1_100L
+private const val LETTER_OPENS_AT_ONCE_MS = 300L

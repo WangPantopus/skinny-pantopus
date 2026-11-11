@@ -16,12 +16,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +49,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -148,9 +155,15 @@ private fun Envelope(
     }
 }
 
-/** "Pantopus read this for you", clipped to the top of the letter. */
+/**
+ * "Pantopus read this for you", clipped to the top of the letter. With the card table's letters (plan Part 10) it gives
+ * the letter the screen: two lines, then More, which unfolds the rest (its facts and where it was read from).
+ */
 @Composable
 private fun PantopusNote(note: MailLetterNote) {
+    var open by rememberSaveable(note.text) { mutableStateOf(false) }
+    var clipped by remember(note.text) { mutableStateOf(false) }
+    val folded = LaunchFeatures.cardTable && !open
     Box(modifier = Modifier.fillMaxWidth().testTag("mailLetterNote")) {
         Column(
             modifier =
@@ -175,7 +188,19 @@ private fun PantopusNote(note: MailLetterNote) {
                     modifier = Modifier.semantics { heading() },
                 )
             }
-            Text(note.text, fontSize = 15.sp, lineHeight = 22.sp, color = PantopusColors.appText)
+            Text(
+                note.text,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                color = PantopusColors.appText,
+                maxLines = if (folded) 2 else Int.MAX_VALUE,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { if (folded) clipped = it.hasVisualOverflow },
+            )
+            if (folded) {
+                if (clipped || note.facts.isNotEmpty()) MoreButton { open = true }
+                return@Column
+            }
             note.facts.forEach { (label, value) ->
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                     Text(
@@ -559,4 +584,22 @@ private fun RowScope.ActionTile(
             textAlign = TextAlign.Center,
         )
     }
+}
+
+/** More, under the folded note: the rest of what Pantopus read. */
+@Composable
+private fun MoreButton(onClick: () -> Unit) {
+    Text(
+        "More",
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+        textDecoration = TextDecoration.Underline,
+        color = PantopusColors.primary600,
+        modifier =
+            Modifier
+                .heightIn(min = 44.dp)
+                .clickable(onClickLabel = "Show the rest of what Pantopus read", role = Role.Button, onClick = onClick)
+                .wrapContentHeight(Alignment.CenterVertically)
+                .testTag("mailLetterNoteMore"),
+    )
 }

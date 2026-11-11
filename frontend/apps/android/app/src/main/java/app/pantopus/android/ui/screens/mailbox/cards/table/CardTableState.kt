@@ -60,11 +60,22 @@ data class CardOnTable(
     val verse: String? = null,
     /** Signed beside FROM (plan 8.2); null: the first name typed in the pen. Null while it's sealed for them. */
     val signature: CardSignature? = null,
+    /**
+     * A letter, not a card (plan Part 10, the welcome letter): the cream envelope with the red seal and the peak stamp
+     * on a slate cloth, no postmark and no mood, and a folded sheet comes out that opens the letter page.
+     */
+    val letter: Boolean = false,
 ) {
     /** The first name, the only one a shared picture or the words on the table ever use. */
     val fromFirst: String = from.trim().substringBefore(' ').removeSuffix(",").ifEmpty { "Someone" }
 
-    val stamp: MailStamp = MailStamp.forCard(number, design) ?: MailStamp.Fir
+    val stamp: MailStamp = if (letter) MailStamp.Peak else MailStamp.forCard(number, design) ?: MailStamp.Fir
+
+    /** What the table is called to a screen reader. */
+    val kind: String get() = if (letter) "Letter" else "Christmas card"
+
+    /** Its picture is read for the table: not while it's sealed (the server keeps it), and a letter has none. */
+    val hasPicture: Boolean get() = !sealed && !letter
 
     /** The words and printing on its two faces. */
     internal fun words(paperColor: Int): CardFaceWords =
@@ -77,6 +88,7 @@ data class CardOnTable(
             note = note,
             from = fromFirst,
             signature = signature,
+            letterTitle = "Welcome to ${from.trim()}".takeIf { letter },
         )
 }
 
@@ -238,7 +250,7 @@ internal class CardTableState(
     val lightY = TableSpring(40f, 11f)
 
     /** The mood the card's picture sets (plan Part 7). */
-    val mood = CardMood.of(card.number, card.design)
+    val mood = if (card.letter) CardMood.Letter else CardMood.of(card.number, card.design)
 
     /** Santa's envelope lands with a little more bounce (damping 9.6, as web's same spring). */
     val drop = TableSpring(58f, if (mood == CardMood.Santa) 9.6f else 11.5f, start = 0f)
@@ -283,6 +295,9 @@ internal class CardTableState(
     /** A quiet paper sound (plan 8.3); [CardSounds] decides whether it's heard. */
     var onSound: (TableSound) -> Unit = {}
     private val soundCues = TableSoundCues { onSound(it) }
+
+    /** A letter out of its envelope opens as the letter page (plan Part 10). */
+    var onLetterOut: () -> Unit = {}
 
     /** The reader has turned the card over at least once (the quiet "Send … a card" shows from then). */
     var turnedOnce by mutableStateOf(false)
@@ -413,10 +428,11 @@ internal class CardTableState(
             }
             TableStep.Pulling -> Unit
         }
-        words = nextWords
-        primaryLabel = nextPrimary
-        hint = nextHint
-        showsTopRight = step == TableStep.Out || (sealed && (step == TableStep.Back || step == TableStep.Front))
+        val letter = if (card.letter) LetterWords.of(step, first) else null
+        words = letter?.words ?: nextWords
+        primaryLabel = letter?.primary ?: nextPrimary
+        hint = letter?.hint ?: nextHint
+        showsTopRight = !card.letter && (step == TableStep.Out || (sealed && (step == TableStep.Back || step == TableStep.Front)))
     }
 
     // ---- Actions ----
@@ -484,6 +500,7 @@ internal class CardTableState(
             it.primary()
             return
         }
+        if (card.letter && step == TableStep.Out) return onLetterOut()
         when (step) {
             TableStep.Front ->
                 if (reduceMotion) {

@@ -101,7 +101,7 @@ internal fun CardTableScene(
         EnvelopeOver(state, art, geometry)
         EnvelopeFront(state, art, faceArt, geometry)
         TableLight(state, art)
-        MoodLight(state, art, on = state.moodsMove)
+        MoodLight(state, art, on = state.moodsMove && state.mood != CardMood.Letter)
     }
 }
 
@@ -548,7 +548,7 @@ private fun drawAddressSide(
         1.15f,
         -0.8f,
         width * 0.6f,
-        PantopusColors.tableEnvelopeFrom,
+        if (card.letter) PantopusColors.tablePen else PantopusColors.tableEnvelopeFrom,
         paints,
     )
     card.to?.takeIf { it.isNotBlank() && reveal.name > 0f }?.let { to ->
@@ -565,7 +565,7 @@ private fun drawAddressSide(
             1.1f,
             -1.6f,
             width * 0.78f,
-            PantopusColors.tableEnvelopeTo,
+            if (card.letter) PantopusColors.tablePen else PantopusColors.tableEnvelopeTo,
             paints,
         )
         canvas.restoreToCount(saved)
@@ -597,9 +597,11 @@ private fun drawAddressSide(
         paints.text.typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
         paints.text.textSize = size
         paints.text.letterSpacing = 0.2f
-        paints.text.color = PantopusColors.tableGold.toArgb()
+        // A letter says so in its seal's red (plan Part 10).
+        paints.text.color = (if (card.letter) PantopusColors.cardWax else PantopusColors.tableGold).toArgb()
         val baseline = height * (1f - 0.054f) - size * 0.2f
-        canvas.drawText("CHRISTMAS CARD", width * 0.068f - size * 0.1f, baseline, paints.text)
+        val label = if (card.letter) "A LETTER FOR YOU" else "CHRISTMAS CARD"
+        canvas.drawText(label, width * 0.068f - size * 0.1f, baseline, paints.text)
     }
 }
 
@@ -630,7 +632,8 @@ private fun drawPostage(
         paints.bitmap.alpha = 255
         canvas.restoreToCount(saved)
     }
-    if (reveal.postmark > 0f) {
+    // A letter Pantopus puts straight in the box has no postmark (and the postmark says Christmas).
+    if (reveal.postmark > 0f && !card.letter) {
         val saved = canvas.save()
         val grow = 1f + 0.18f * (1f - reveal.postmark)
         canvas.scale(grow, grow, width * 0.6f, height * 0.12f)
