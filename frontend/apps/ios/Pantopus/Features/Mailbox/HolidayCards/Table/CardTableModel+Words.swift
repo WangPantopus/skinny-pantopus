@@ -12,6 +12,7 @@ extension CardTableModel {
     /// The words at the top; nil when there are none.
     var words: String? {
         if let sending { return sendingWords(sending) }
+        if content.isLetter { return step == .front ? "A letter from \(content.firstName)." : nil }
         return switch step {
         case .front:
             content.sealed ? "\(content.firstName) sealed this card." : "A Christmas card from \(content.firstName)."
@@ -37,11 +38,11 @@ extension CardTableModel {
         case .back:
             content.sealed ? "Try to open it" : "Open it"
         case .flap:
-            "Take the card out"
+            content.isLetter ? "Take the letter out" : "Take the card out"
         case .pulling:
             nil
         case .out:
-            fold.isSpread ? nil : (cardBackIsUp ? "Turn it back" : "Turn it over")
+            content.isLetter ? "Read the letter" : fold.isSpread ? nil : (cardBackIsUp ? "Turn it back" : "Turn it over")
         }
     }
 
@@ -57,7 +58,7 @@ extension CardTableModel {
         case .pulling:
             ""
         case .out:
-            readsVerse ? "Read the verse" : restingHint
+            content.isLetter ? "" : readsVerse ? "Read the verse" : restingHint
         }
     }
 
@@ -140,6 +141,9 @@ extension CardTableModel {
     /// What VoiceOver reads for what's on the table.
     var spokenLabel: String {
         if let sending { return sendingSpoken(sending) }
+        if content.isLetter {
+            return step == .out ? "The letter from \(content.firstName). Opening it." : "A letter from \(content.firstName)"
+        }
         return switch step {
         case .front, .back, .flap, .pulling:
             "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")"

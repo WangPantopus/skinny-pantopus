@@ -38,6 +38,9 @@ struct CardTableContent: Equatable {
     /// A Christmas with Jesus Christ card's whole verse, for "Read the verse" (plan 6.2); nil for the rest, while
     /// it's sealed, and in Sent (the server doesn't send it there).
     var verse: String?
+    /// A letter, not a card (plan Part 10, the welcome letter): the cream envelope with the red seal on slate, the same
+    /// moves, and a folded sheet inside that opens the letter page.
+    var isLetter = false
 
     var firstName: String {
         HolidayCardWords.firstName(fromName)
@@ -133,7 +136,16 @@ final class CardTableModel {
 
     private(set) var content: CardTableContent
     var springs = CardTableSprings()
-    var step: Step = .front
+    var step: Step = .front {
+        didSet {
+            // A letter out of its envelope opens as the letter page, after a moment to see it come out (plan Part 10).
+            if content.isLetter, step == .out, oldValue != .out { letterIsOut() }
+        }
+    }
+
+    /// The letter is out: open the letter page (set by whoever shows a letter on the table).
+    @ObservationIgnored var onLetterOut: (() -> Void)?
+    @ObservationIgnored private var letterOutTask: Task<Void, Never>?
     /// The seal has broken.
     var cracked = false
     /// Tapping the table hides or shows the controls.
@@ -218,7 +230,24 @@ final class CardTableModel {
 
     /// The card's mood (plan Part 7), from its collection.
     var mood: CardTableMood {
-        CardTableMood(number: content.number)
+        content.isLetter ? .letter : CardTableMood(number: content.number)
+    }
+
+    private func letterIsOut() {
+        letterOutTask?.cancel()
+        letterOutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: self?.reduceMotion == true ? 300_000_000 : 1_100_000_000)
+            guard let self, !Task.isCancelled else { return }
+            openLetter()
+        }
+    }
+
+    /// "Read the letter", or a moment after it's out.
+    func openLetter() {
+        letterOutTask?.cancel()
+        guard let onLetterOut else { return }
+        self.onLetterOut = nil
+        onLetterOut()
     }
 
     /// The moods' snow, breathing candle and glint run: not with Reduce Motion or Low Power Mode.
@@ -238,8 +267,8 @@ final class CardTableModel {
     func prepare() async {
         guard !isReady else { return }
         // The cloth shows as soon as there's art; the picture has a little time to come first.
-        art = await CardTableArt.load()
-        picture = await CardTablePicture.load(content.design)
+        art = await CardTableArt.load(letter: content.isLetter)
+        picture = content.isLetter ? nil : await CardTablePicture.load(content.design)
         begin()
     }
 
@@ -331,6 +360,8 @@ final class CardTableModel {
 
     /// The screen's reading of how the Duo is held.
     func setFold(_ fold: CardTableFold) {
+        // A letter is one folded sheet: never the Duo's two pages.
+        let fold = content.isLetter ? .single : fold
         guard fold != self.fold else { return }
         let wasSpread = self.fold.isSpread
         self.fold = fold

@@ -43,6 +43,13 @@ struct MailReadForYouNote: View {
     let summary: MailSummary
     /// A bill's last line: check the amount before paying.
     let isBill: Bool
+    /// It shows two lines and "More" until opened, so the letter has the screen (plan Part 10).
+    @State private var isOpen = false
+
+    /// More than two lines' worth: the key facts, or a long summary.
+    private var folds: Bool {
+        !summary.keyFacts.isEmpty || summary.text.count > 90
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
@@ -57,9 +64,24 @@ struct MailReadForYouNote: View {
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.Color.appText)
                 .lineSpacing(3)
+                .lineLimit(folds && !isOpen ? 2 : nil)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
-            if !summary.keyFacts.isEmpty {
+            if folds, !isOpen {
+                Button {
+                    isOpen = true
+                } label: {
+                    Text("More")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.Color.info)
+                        .frame(minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Shows all of what Pantopus read")
+                .accessibilityIdentifier("mailLetterNoteMore")
+            }
+            if !summary.keyFacts.isEmpty, !folds || isOpen {
                 VStack(alignment: .leading, spacing: Spacing.s1) {
                     ForEach(Array(summary.keyFacts.enumerated()), id: \.offset) { _, fact in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -77,10 +99,12 @@ struct MailReadForYouNote: View {
                 }
                 .padding(.top, 10)
             }
-            Text(isBill ? "Read from the letter below. Check the amount before you pay." : "Read from the letter below.")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .padding(.top, 10)
+            if !folds || isOpen {
+                Text(isBill ? "Read from the letter below. Check the amount before you pay." : "Read from the letter below.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .padding(.top, 10)
+            }
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.top, Spacing.s4)

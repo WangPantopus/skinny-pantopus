@@ -474,6 +474,12 @@ public struct MailDetailView: View {
         return nil
     }
 
+    /// The letter's actions from its "…" menu (plan Part 10), as the end of the letter does them.
+    private var letterMenuAction: @MainActor @Sendable (MailLetterAction) -> Void {
+        let model = viewModel
+        return { action in Task { await model.tapLetterAction(action) } }
+    }
+
     /// The letter page's state, and where its taps go.
     private func letterHooks(_ content: MailDetailContent) -> MailLetterPageHooks {
         MailLetterPageHooks(
@@ -543,6 +549,7 @@ public struct MailDetailView: View {
             onArchive: { Task { await viewModel.archive() } },
             onTranslate: onTranslate,
             onCreateTask: onCreateTask,
+            onLetterMenuAction: letterMenuAction,
             categoryActions: viewModel.categoryActions.filter { $0 != .createTask || onCreateTask != nil },
             categoryActionInFlight: viewModel.categoryActionInFlight,
             onCategoryAction: { action in

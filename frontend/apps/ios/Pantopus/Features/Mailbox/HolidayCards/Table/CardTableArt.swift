@@ -34,18 +34,22 @@ final class CardTableArt: Sendable {
     let cloth: UIImage
     /// 256 pixels to 128 points, so it stays as fine as film grain.
     let grain: UIImage
+    /// The letter's set (plan Part 10): the envelope in cream with the red seal, and always the peak stamp.
+    let isLetter: Bool
 
-    private init() async {
-        async let envelopeFront = Self.decoded("env-front")
-        async let pocket = Self.decoded("env-pocket")
-        async let inside = Self.decoded("env-inside")
-        async let flapOut = Self.decoded("env-flap-out")
-        async let flapIn = Self.decoded("env-flap-in")
+    private init(letter: Bool) async {
+        // The cream set's five big layers; the gold pattern and the shadows are the red set's.
+        let env = letter ? "cream-env" : "env"
+        async let envelopeFront = Self.decoded("\(env)-front")
+        async let pocket = Self.decoded("\(env)-pocket")
+        async let inside = Self.decoded("\(env)-inside")
+        async let flapOut = Self.decoded("\(env)-flap-out")
+        async let flapIn = Self.decoded("\(env)-flap-in")
         async let flapGold = Self.decoded("env-flap-gold")
         async let pocketShadow = Self.decoded("env-pocket-shadow")
         async let flapShadow = Self.decoded("env-flap-shadow")
-        async let wax = Self.decoded("wax-gold")
-        async let waxCracked = Self.decoded("wax-gold-cracked")
+        async let wax = Self.decoded(letter ? "wax-red" : "wax-gold")
+        async let waxCracked = Self.decoded(letter ? "wax-red-cracked" : "wax-gold-cracked")
         async let stampPeak = Self.decoded("stamp-peak")
         async let stampFir = Self.decoded("stamp-fir")
         async let stampRiver = Self.decoded("stamp-river")
@@ -74,11 +78,13 @@ final class CardTableArt: Sendable {
         self.light = await light
         self.cloth = await cloth
         self.grain = await grain
+        isLetter = letter
     }
 
     /// The card's stamp, from its number (`["fir","peak","river"][(n-1)%3]`, so a card always has the same one); the
     /// star on Christmas with Jesus Christ cards (plan Part 7).
     func stamp(number: Int?) -> UIImage {
+        if isLetter { return stampPeak }
         if CardTableMood(number: number) == .reverence { return stampStar }
         return switch ((number ?? 1) - 1 + 3) % 3 {
         case 0: stampFir
@@ -90,13 +96,14 @@ final class CardTableArt: Sendable {
     // MARK: Loading
 
     @MainActor private weak static var current: CardTableArt?
+    @MainActor private weak static var currentLetter: CardTableArt?
 
-    /// The art, decoded away from the main thread (at once when it's already held).
+    /// The art, decoded away from the main thread (at once when it's already held); `letter`: the letter's set.
     @MainActor
-    static func load() async -> CardTableArt {
-        if let current { return current }
-        let art = await Task.detached(priority: .userInitiated) { await CardTableArt() }.value
-        current = art
+    static func load(letter: Bool = false) async -> CardTableArt {
+        if let held = letter ? currentLetter : current { return held }
+        let art = await Task.detached(priority: .userInitiated) { await CardTableArt(letter: letter) }.value
+        if letter { currentLetter = art } else { current = art }
         return art
     }
 

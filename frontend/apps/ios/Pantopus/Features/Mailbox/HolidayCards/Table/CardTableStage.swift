@@ -81,7 +81,7 @@ struct CardTableStage: View {
     private func moodLayer(_ pose: CardTablePose) -> some View {
         if model.mood == .reverence {
             CardTableCandle(size: layout.screen, breathes: model.moodMoves)
-        } else if model.moodMoves, model.isReady {
+        } else if model.mood.snows, model.moodMoves, model.isReady {
             CardTableSnow(size: CGSize(width: layout.screen.width + 80, height: layout.screen.height + 80))
                 .scaleEffect(1.04)
                 .offset(x: -40 + pose.lightX * 22, y: -40 + pose.lightY * 22)
@@ -226,7 +226,8 @@ struct CardTableStage: View {
             mailedOn: content.mailedOn,
             year: content.year,
             sealed: setup?.sealedForChristmas ?? content.sealed,
-            reveal: model.addressing
+            reveal: model.addressing,
+            isLetter: content.isLetter
         )
         .equatable()
         // To several people: a stack of envelopes under the top one.
@@ -321,48 +322,63 @@ private struct CardTableCardView: View {
         let perspective = cardWidth * 5.2
         let anchor: UnitPoint = isOpen ? .topLeading : .center
         ZStack(alignment: .topLeading) {
-            face(
-                CardTableBack(
-                    paperGrain: art.paper,
-                    paper: content.paper,
-                    note: content.note,
-                    fromName: content.firstName,
-                    year: content.year,
-                    number: content.number
-                )
-                .equatable()
+            face(backDrawing(content))
+                .projectionEffect(isOpen ? notePageTurn : .cardTableTurn(
+                    rotateY: pose.cardAngle + 180,
+                    rotateX: pose.cardTiltX,
+                    perspective: perspective,
+                    anchor: center
+                ))
+                .scaleEffect(pose.cardScale * pose.pageScale, anchor: anchor)
+                .rotationEffect(.degrees(isOpen ? 0 : pose.cardRotation))
+                .offset(x: isOpen ? pose.notePageX : pose.cardX, y: isOpen ? pose.notePageY : pose.cardY)
+                .opacity(backUp ? 1 : 0)
+            face(frontDrawing(content))
+                .projectionEffect(isOpen ? ProjectionTransform() : .cardTableTurn(
+                    rotateY: pose.cardAngle,
+                    rotateX: pose.cardTiltX,
+                    perspective: perspective,
+                    anchor: center
+                ))
+                .scaleEffect(pose.cardScale * pose.pageScale, anchor: anchor)
+                .rotationEffect(.degrees(pose.cardRotation))
+                .offset(x: pose.cardX, y: pose.cardY)
+                .opacity(frontUp ? 1 : 0)
+        }
+    }
+
+    /// The note side; a letter's folded sheet looks the same both ways (plan Part 10).
+    @ViewBuilder
+    private func backDrawing(_ content: CardTableContent) -> some View {
+        if content.isLetter {
+            CardTableLetterSheet(paperGrain: art.paper, title: "Welcome to \(content.firstName)")
+        } else {
+            CardTableBack(
+                paperGrain: art.paper,
+                paper: content.paper,
+                note: content.note,
+                fromName: content.firstName,
+                year: content.year,
+                number: content.number
             )
-            .projectionEffect(isOpen ? notePageTurn : .cardTableTurn(
-                rotateY: pose.cardAngle + 180,
-                rotateX: pose.cardTiltX,
-                perspective: perspective,
-                anchor: center
-            ))
-            .scaleEffect(pose.cardScale * pose.pageScale, anchor: anchor)
-            .rotationEffect(.degrees(isOpen ? 0 : pose.cardRotation))
-            .offset(x: isOpen ? pose.notePageX : pose.cardX, y: isOpen ? pose.notePageY : pose.cardY)
-            .opacity(backUp ? 1 : 0)
-            face(
-                CardTableFront(
-                    picture: picture,
-                    paperGrain: art.paper,
-                    paper: content.paper,
-                    caption: content.caption,
-                    year: content.year,
-                    mailedOn: content.mailedOn
-                )
-                .equatable()
+            .equatable()
+        }
+    }
+
+    @ViewBuilder
+    private func frontDrawing(_ content: CardTableContent) -> some View {
+        if content.isLetter {
+            CardTableLetterSheet(paperGrain: art.paper, title: "Welcome to \(content.firstName)")
+        } else {
+            CardTableFront(
+                picture: picture,
+                paperGrain: art.paper,
+                paper: content.paper,
+                caption: content.caption,
+                year: content.year,
+                mailedOn: content.mailedOn
             )
-            .projectionEffect(isOpen ? ProjectionTransform() : .cardTableTurn(
-                rotateY: pose.cardAngle,
-                rotateX: pose.cardTiltX,
-                perspective: perspective,
-                anchor: center
-            ))
-            .scaleEffect(pose.cardScale * pose.pageScale, anchor: anchor)
-            .rotationEffect(.degrees(pose.cardRotation))
-            .offset(x: pose.cardX, y: pose.cardY)
-            .opacity(frontUp ? 1 : 0)
+            .equatable()
         }
     }
 

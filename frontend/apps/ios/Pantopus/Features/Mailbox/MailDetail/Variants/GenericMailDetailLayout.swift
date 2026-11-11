@@ -39,6 +39,8 @@ struct GenericMailDetailLayout: View {
     /// A17.12 — when set, the overflow surfaces "Create task", which opens
     /// the Mail-tasks screen in its create frame for this mail.
     var onCreateTask: (@MainActor @Sendable () -> Void)?
+    /// A letter's own actions in the "…" menu too (plan Part 10): Put on the counter, File in the Vault, Shred.
+    var onLetterMenuAction: (@MainActor @Sendable (MailLetterAction) -> Void)?
     /// A17.1 — per-category ACTIONS row (RN `CATEGORY_ACTIONS`). Empty
     /// hides the section.
     var categoryActions: [MailCategoryAction] = []
@@ -62,9 +64,18 @@ struct GenericMailDetailLayout: View {
 
     /// The envelope, Pantopus's note, the letter (or a bundle's pieces) and the actions. A booklet opens to its
     /// pages; its note and cover follow them.
+    @ViewBuilder
     private func letterPage(_ letter: MailLetter, hooks: MailLetterPageHooks, onShowPage: @escaping () -> Void) -> some View {
+        if letter.card == nil, content.bookletDetail == nil, letter.kind != .bundle {
+            plainLetterPage(letter, hooks: hooks)
+        } else {
+            pinnedActionsPage(letter, hooks: hooks, onShowPage: onShowPage)
+        }
+    }
+
+    private func pinnedActionsPage(_ letter: MailLetter, hooks: MailLetterPageHooks, onShowPage: @escaping () -> Void) -> some View {
         MailItemDetailShell(
-            topBar: letterTopBar.showingBack(showsBack),
+            topBar: letterTopBar(letter, removed: hooks.removed != nil).showingBack(showsBack),
             hero: {
                 if let card = letter.card {
                     // A Christmas card opens as a card, from its envelope.
@@ -154,8 +165,11 @@ struct GenericMailDetailLayout: View {
     /// Back to the Mail tab, and the "…" menu: Translate and Create task
     /// when they're open to this person. A booklet beside the Mailbox on the
     /// open Duo also has "Lay it open as two pages".
-    private var letterTopBar: MailTopBarConfig {
+    private func letterTopBar(_ letter: MailLetter, removed: Bool) -> MailTopBarConfig {
         var items: [MailOverflowItem] = []
+        if letter.card == nil, content.bookletDetail == nil, letter.kind != .bundle, !removed, let onLetterMenuAction {
+            items += Self.letterMenu(letter, onAction: onLetterMenuAction)
+        }
         if let onTranslate {
             items.append(MailOverflowItem(id: "translate", icon: .globe, label: "Translate") { @Sendable in
                 Task { @MainActor in onTranslate() }
@@ -338,6 +352,59 @@ struct GenericMailDetailLayout: View {
         if lower.hasSuffix(".mp3") || lower.hasSuffix(".m4a") { return .audio }
         if lower.hasPrefix("http://") || lower.hasPrefix("https://") { return .link }
         return .other
+    }
+}
+
+// MARK: - A letter gets the screen (plan Part 10)
+
+private extension GenericMailDetailLayout {
+    /// A letter gets the screen (plan Part 10): nothing is pinned over it; its actions come at the end of it, and
+    /// are in the "…" menu as well.
+    func plainLetterPage(_ letter: MailLetter, hooks: MailLetterPageHooks) -> some View {
+        MailItemDetailShell(
+            topBar: letterTopBar(letter, removed: hooks.removed != nil).showingBack(showsBack),
+            hero: {
+                MailEnvelopeButton(piece: letter.piece, onTap: hooks.onEnvelope)
+            },
+            body: {
+                VStack(alignment: .leading, spacing: Spacing.s0) {
+                    letterBody(letter, hooks: hooks)
+                    MailLetterActions(
+                        letter: letter,
+                        inFlight: hooks.inFlight,
+                        removed: hooks.removed,
+                        restoreInFlight: hooks.restoreInFlight,
+                        onAction: hooks.onAction,
+                        onRestore: hooks.onRestore
+                    )
+                    .padding(.top, Spacing.s5)
+                    .accessibilityIdentifier("mailLetterEndActions")
+                }
+            }
+        )
+        .modifier(MailPageScrollPlace(offset: hooks.keptScrollOffset, onChange: hooks.onScrollOffset))
+        .accessibilityIdentifier("mailDetail_letter")
+    }
+
+    /// The letter's own actions for its "…" menu, as the end of the letter names them.
+    static func letterMenu(
+        _ letter: MailLetter,
+        onAction: @escaping @MainActor @Sendable (MailLetterAction) -> Void
+    ) -> [MailOverflowItem] {
+        func item(_ action: MailLetterAction, _ icon: PantopusIcon, _ label: String, destructive: Bool = false) -> MailOverflowItem {
+            MailOverflowItem(id: "letter.\(action.rawValue)", icon: icon, label: label, isDestructive: destructive) { @Sendable in
+                Task { @MainActor in onAction(action) }
+            }
+        }
+        var items: [MailOverflowItem] = []
+        if letter.isFiled {
+            items.append(item(.unfile, .undo2, "Take out of the Vault"))
+        } else {
+            items.append(letter.onCounter ? item(.done, .inbox, "On the counter") : item(.counter, .inbox, "Put on the counter"))
+            items.append(item(.file, .archive, "File in the Vault"))
+        }
+        items.append(item(.shred, .scissors, "Shred", destructive: true))
+        return items
     }
 }
 
