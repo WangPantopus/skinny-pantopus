@@ -56,6 +56,6 @@ test('document denial sends no fetched bytes; success uses attachment and no-sto
   expect(res.statusCode).toBe(410);expect(Buffer.isBuffer(res.body)).toBe(false);
   download.mockResolvedValue({bytes:Buffer.from('PDF'),mimeType:'application/pdf',title:'Shared\r\nfile'});res=response();
   await handler(guest,'get','/shared-documents/:receipt/:documentId')(req,res);
-  expect(res.body.toString()).toBe('PDF');expect(res.filename).toBe('Shared  file');
+  expect(res.body.toString()).toBe('PDF');expect(res.filename).toBe('Shared  file.pdf');
   expect(res.headers['Cache-Control']).toBe('private, no-store');
 });
