@@ -104,7 +104,11 @@ private const val SHORT_DISTANCE_MILES = 0.1
  * anchor, and skips the open-time permission prompt (the photo anchor
  * needs no fix; "Near me" prompts on tap instead). PRIVACY: a local
  * anchor input only — it never reaches an outgoing body.
+ *
+ * Moments (2026-11-11) opens it around the Moment's pin with [limits] (see [PlacePickerLimits]). Pulse and Beacon keep
+ * the defaults.
  */
+@Suppress("LongParameterList")
 @Composable
 fun PlacePickerSheet(
     currentTag: PostPlaceTag?,
@@ -113,6 +117,7 @@ fun PlacePickerSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     mediaLocation: MediaCaptureLocation? = null,
+    limits: PlacePickerLimits = PlacePickerLimits(),
     viewModel: PlacePickerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -165,7 +170,7 @@ fun PlacePickerSheet(
     ) {
         Header(onDone = onDismiss)
         SearchBox(query = query, onQueryChange = viewModel::onQueryChange)
-        if (mediaLocation != null) {
+        if (mediaLocation != null && limits.anchorChips) {
             // Rendered only when the media carries a capture location —
             // untagged media keeps today's sheet byte-identical.
             AnchorChips(
@@ -186,8 +191,22 @@ fun PlacePickerSheet(
         // Header + search + remove row stay pinned; the list area scrolls
         // (nearby POIs + locality can exceed the sheet, especially with
         // the keyboard up) — mirrors the iOS ScrollView structure.
+        // The rows the host keeps; search results that all drop read as no match.
+        val shown =
+            when (val current = state) {
+                is PlacePickerUiState.Loaded ->
+                    current.copy(
+                        nearby = current.nearby.filter(limits.placeFilter),
+                        locality = current.locality.takeIf { limits.showLocality },
+                    )
+                is PlacePickerUiState.SearchResults ->
+                    current.places.filter(limits.placeFilter).let { kept ->
+                        if (kept.isEmpty()) PlacePickerUiState.Empty else current.copy(places = kept)
+                    }
+                else -> current
+            }
         ListArea(
-            state = state,
+            state = shown,
             query = query,
             searchOnly = searchOnly,
             findingPlaces = findingPlaces,

@@ -89,6 +89,10 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.moments.MomentMediaFile
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.screens.compose.placepicker.MediaCaptureLocation
+import app.pantopus.android.ui.screens.compose.placepicker.PlacePickerLimits
+import app.pantopus.android.ui.screens.compose.placepicker.PlacePickerSheet
+import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentHaptics
 import app.pantopus.android.ui.screens.moments.components.StageKeyboardResize
@@ -105,7 +109,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
- * Posting a Moment (boards P1 to P4): the camera first, with Library (the last 24 hours) and Text beside it; then the
+ * Posting a Moment (boards P1 to P4): the camera first, with Library (any photo or video) and Text beside it; then the
  * Post sheet over what was made. Location comes first (a Moment pins where you are), then the one-time 18+ question.
  */
 @Composable
@@ -210,7 +214,24 @@ fun MomentsComposeScreen(
                     onCaption = viewModel::setCaption,
                     onPost = { viewModel.post() },
                     onPlace = viewModel::pickPlace,
+                    onFindPlace = { viewModel.findPlace(true) },
                 )
+        }
+        // The place picker (the Pulse composer's) around the Moment's pin: venues within reach of it, and search.
+        val pin = state.pin
+        if (state.findingPlace && pin != null) {
+            val reach = state.pickWithinM.toDouble()
+            PlacePickerSheet(
+                currentTag = state.pickedVenue?.let { PostPlaceTag(it.name, null, it.latitude, it.longitude, it.placeId, "poi") },
+                onSelect = viewModel::pickVenue,
+                onRemove = viewModel::clearVenue,
+                onDismiss = { viewModel.findPlace(false) },
+                mediaLocation = MediaCaptureLocation(pin.latitude, pin.longitude),
+                limits =
+                    PlacePickerLimits(anchorChips = false, showLocality = false) { place ->
+                        place.placeId?.startsWith("osm:") == true && (place.distanceM ?: Double.MAX_VALUE) <= reach
+                    },
+            )
         }
         if (asksDiscard) {
             val onSheet = state.step == ComposeStep.Review
@@ -647,6 +668,7 @@ private fun ReviewStep(
     onCaption: (String) -> Unit,
     onPost: () -> Unit,
     onPlace: (String) -> Unit,
+    onFindPlace: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val media = state.media) {
@@ -715,6 +737,7 @@ private fun ReviewStep(
             onPost = onPost,
             modifier = Modifier.align(Alignment.BottomCenter),
             onPlace = onPlace,
+            onFindPlace = onFindPlace,
         )
     }
 }
