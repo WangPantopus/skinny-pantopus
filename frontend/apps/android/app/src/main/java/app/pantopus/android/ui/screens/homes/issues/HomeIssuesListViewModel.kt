@@ -388,7 +388,7 @@ open class HomeIssuesListViewModel
                         headline = "No open issues",
                         subcopy =
                             "Report a leak, a broken appliance, or anything else that needs " +
-                                "fixing. Everyone in the household sees it and can track the fix.",
+                                "fixing. People with maintenance access can see it and track the fix.",
                         ctaTitle = reportTitle,
                         onCta = report,
                     )

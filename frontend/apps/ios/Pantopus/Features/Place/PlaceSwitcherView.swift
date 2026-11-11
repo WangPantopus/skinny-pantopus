@@ -145,15 +145,19 @@ final class PlaceSwitcherViewModel {
 
     /// "Camas, WA · Verified" / "· Claimed" / "· Private setup"; a request in
     /// review says where it stands instead. Verified means verified ownership
-    /// or a verified household place, as My homes' chips say
-    /// (`verification_tier` is the evidence strength, never "verified").
+    /// or a proven address, the rule Place's own chip follows: someone let in
+    /// by the household (an invitation, a manager's approval) reads "Claimed"
+    /// in both places (`verification_tier` is the evidence strength, never
+    /// "verified").
     static func subtitle(for home: MyHome) -> String {
         if home.accessKind == "verification" {
             return home.pendingClaimReviewLabel ?? "Verification in progress"
         }
+        let addressProven = home.occupancy?.verificationStatus == "verified"
+            && home.occupancy?.hasAddressVerification == true
         let status = if home.accessKind == "private_setup" {
             "Private setup"
-        } else if home.ownershipStatus == "verified" || home.occupancy?.verificationStatus == "verified" {
+        } else if home.ownershipStatus == "verified" || addressProven {
             "Verified"
         } else {
             "Claimed"

@@ -52,6 +52,14 @@ public struct HomeOccupancy: Decodable, Sendable, Hashable, Identifiable {
     public let endAt: String?
     public let accessEndAt: String?
     public let verificationStatus: String
+    /// `address`, `household`, `claim` or `legacy`; older servers omit it.
+    public let verificationSource: String?
+
+    /// Let in by the household (an invitation, a manager's approval) or by
+    /// a claim: household access, not proof of the address (F3b).
+    public var hasAddressVerification: Bool {
+        verificationSource != "household" && verificationSource != "claim"
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id, role
@@ -61,6 +69,7 @@ public struct HomeOccupancy: Decodable, Sendable, Hashable, Identifiable {
         case endAt = "end_at"
         case accessEndAt = "access_end_at"
         case verificationStatus = "verification_status"
+        case verificationSource = "verification_source"
     }
 }
 
