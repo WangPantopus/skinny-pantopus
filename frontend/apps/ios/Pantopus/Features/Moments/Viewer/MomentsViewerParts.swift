@@ -68,11 +68,12 @@ struct MomentsViewerHeader: View {
             if let onBack, !compact {
                 Button(action: onBack) {
                     Icon(.chevronLeft, size: 24, strokeWidth: 2.25, color: .white)
-                        .frame(width: 32, height: 44)
+                        .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, -6)
+                .padding(.leading, -6)
+                .padding(.trailing, -12)
                 .accessibilityLabel("Back to the list")
                 .accessibilityIdentifier("moments.viewer.backToSpot")
             }

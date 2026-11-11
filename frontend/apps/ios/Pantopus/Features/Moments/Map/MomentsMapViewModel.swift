@@ -367,12 +367,13 @@ final class MomentsMapViewModel {
     // MARK: - Crowded spots
 
     /// Board M2: the strip shows only this spot, and the pill takes you back.
-    func focus(on cluster: MomentsCluster) {
+    /// `camera`: where back goes, when it isn't where the map is now (the open Duo's card had moved it).
+    func focus(on cluster: MomentsCluster, from camera: MapCamera? = nil) {
         let title = cluster.placeName ?? areaName ?? "This spot"
         focus = MomentsFocus(
             title: title,
             ringIds: Set(cluster.rings.map(\.id)),
-            previousCamera: lastCamera,
+            previousCamera: camera ?? lastCamera,
             latitude: cluster.coordinate.latitude,
             longitude: cluster.coordinate.longitude
         )

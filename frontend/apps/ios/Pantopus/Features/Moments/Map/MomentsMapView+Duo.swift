@@ -92,6 +92,7 @@ extension MomentsMapView {
     var cardsBesideMap: some View {
         GeometryReader { geo in
             let card = duo.card
+            let band = leftBand(height: geo.size.height)
             ZStack(alignment: .topLeading) {
                 Color.clear
                 if let watching, let viewerHooks {
@@ -109,13 +110,6 @@ extension MomentsMapView {
                         )
                     }
                     .frame(width: card.width, height: max(bottom - card.minY, 200))
-                    // The shadow is drawn by a plain card behind it, not by the playing picture.
-                    .background {
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .fill(Color.black)
-                            .shadow(color: .black.opacity(0.38), radius: 22, x: 0, y: 14)
-                            .shadow(color: .black.opacity(0.22), radius: 4, x: 0, y: 2)
-                    }
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("moments.card")
                     .offset(x: card.minX, y: card.minY)
@@ -135,13 +129,29 @@ extension MomentsMapView {
                     .offset(x: card.minX, y: card.minY)
                 }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                let top = (duo.topRowTop ?? 0) + Self.openRowHeight
-                let bottom = min(duo.size.height - duo.insets.bottom, height)
-                clearBand = CGRect(x: 0, y: top, width: duo.leftHalf.width, height: max(bottom - top, 60))
-            }
+            // Worked out again whenever the keyboard or the screen changes, so it comes back when the keyboard goes.
+            .onChange(of: band, initial: true) { _, band in clearBand = band }
         }
         .ignoresSafeArea(.container)
+    }
+
+    /// The clear part of the left half: under the top row, and above the Home indicator, or above the keyboard while
+    /// typing (the cards' overlay ends at it, `height`).
+    private func leftBand(height: CGFloat) -> CGRect {
+        let top = (duo.topRowTop ?? 0) + Self.openRowHeight
+        let bottom = min(duo.size.height - duo.insets.bottom, height)
+        return CGRect(x: 0, y: top, width: duo.leftHalf.width, height: max(bottom - top, 60))
+    }
+
+    /// Open sideways with a Moment playing in the card, a crowded spot or the back pill takes the card's place: it
+    /// closes without putting the camera back (the spot zooms in, or the map goes back to the area). Returns the camera
+    /// from before the card, for the spot's list to go back to.
+    func closeCardForSpot() -> MapCamera? {
+        guard duo.pose.isWide, watching != nil else { return nil }
+        let before = cameraBeforeCard
+        cameraBeforeCard = nil
+        viewerHooks?.onClose()
+        return before
     }
 
     /// Board O6: who watched your Moment, on the left beside it, under the top row. It ends above MapKit's Legal

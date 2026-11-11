@@ -305,7 +305,7 @@ struct MomentsMapView: View {
     /// Open sideways (board O3), the spot goes to the middle of the left half and its list shows beside it.
     private func zoom(to cluster: MomentsCluster) {
         pinTappedAt = Date()
-        viewModel.focus(on: cluster)
+        viewModel.focus(on: cluster, from: closeCardForSpot())
         guard !cluster.isOnePoint || cluster.rings.count <= MomentsClustering.fanLimit else { return }
         if duo.pose.isWide { return zoomBeside(cluster) }
         let span = MomentsClustering.span(toOpen: cluster)
@@ -319,6 +319,7 @@ struct MomentsMapView: View {
 
     /// M2's back pill: the area, as it was.
     func backToArea() {
+        _ = closeCardForSpot()
         guard let previous = viewModel.clearFocus() else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { camera = .camera(previous) }
     }

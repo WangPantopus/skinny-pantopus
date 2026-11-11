@@ -103,6 +103,15 @@ struct MomentsViewer: View {
 
     var body: some View {
         menuDialogs(on: layout, active: !isCard)
+            // A card's black and shadow are a plain card behind it (not the playing picture's), and move with it.
+            .background {
+                if isCard {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(Color.black)
+                        .shadow(color: .black.opacity(0.38), radius: 22, x: 0, y: 14)
+                        .shadow(color: .black.opacity(0.22), radius: 4, x: 0, y: 2)
+                }
+            }
             .offset(y: max(0, dragOffset.height))
             .scaleEffect(dragScale)
             // A card has its own rounded black; behind a cover the black fades as it's dragged down.
@@ -392,7 +401,10 @@ extension MomentsViewer {
     @ViewBuilder
     private func bottomBar(floating: Bool, showsReact: Bool) -> some View {
         if model.isMine {
-            MomentsSeenByBar(count: model.moment?.viewerCount, floating: floating) { session.showsSeenBy = true }
+            // Beside the map, "Seen by" opens and closes the list on the left (board O6).
+            MomentsSeenByBar(count: model.moment?.viewerCount, floating: floating) {
+                if isCard { session.showsSeenBy.toggle() } else { session.showsSeenBy = true }
+            }
         } else if let author = model.ring?.author {
             MomentsReplyBar(
                 firstName: author.shortName,
