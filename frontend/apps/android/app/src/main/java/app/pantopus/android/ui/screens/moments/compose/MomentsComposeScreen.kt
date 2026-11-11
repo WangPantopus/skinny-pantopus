@@ -157,7 +157,24 @@ fun MomentsComposeScreen(
         }
         onPauseOrDispose { }
     }
-    BackHandler(enabled = state.step == ComposeStep.Review) { viewModel.backFromReview() }
+    // Closing with something to lose asks first (REVIEW item 8): a written card from the camera or the card, or a photo
+    // or video on the Post sheet (Back there goes back to the camera; Retake doesn't ask).
+    var asksDiscard by remember { mutableStateOf(false) }
+    val closeOrAsk: () -> Unit = {
+        if (state.text.isNotBlank()) {
+            asksDiscard = true
+        } else {
+            close()
+        }
+    }
+    BackHandler(enabled = state.step != ComposeStep.Review && state.text.isNotBlank()) { asksDiscard = true }
+    BackHandler(enabled = state.step == ComposeStep.Review) {
+        if (state.media != null) {
+            asksDiscard = true
+        } else {
+            viewModel.backFromReview()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.momentStage).semantics { testTagsAsResourceId = true }) {
         when (state.step) {
@@ -166,7 +183,7 @@ fun MomentsComposeScreen(
                     state = state,
                     hasCamera = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
                     askCamera = { cameraPermission.launch(Manifest.permission.CAMERA) },
-                    onClose = close,
+                    onClose = closeOrAsk,
                     onCaptured = viewModel::captured,
                     onLibrary = openLibrary,
                     onText = { viewModel.showStep(ComposeStep.Text) },
@@ -175,7 +192,7 @@ fun MomentsComposeScreen(
             ComposeStep.Text ->
                 TextStep(
                     state = state,
-                    onClose = close,
+                    onClose = closeOrAsk,
                     onText = viewModel::setText,
                     onBackground = viewModel::setBackground,
                     onNext = viewModel::textNext,
@@ -194,6 +211,36 @@ fun MomentsComposeScreen(
                     onPost = { viewModel.post() },
                     onPlace = viewModel::pickPlace,
                 )
+        }
+        if (asksDiscard) {
+            val onSheet = state.step == ComposeStep.Review
+            AlertDialog(
+                onDismissRequest = { asksDiscard = false },
+                title = { Text("Discard this Moment?") },
+                text = {
+                    Text(
+                        when {
+                            !onSheet -> "What you wrote won't be saved."
+                            state.media is MomentMediaFile.Video -> "Your video won't be saved."
+                            else -> "Your photo won't be saved."
+                        },
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            asksDiscard = false
+                            if (onSheet) viewModel.backFromReview() else close()
+                        },
+                        modifier = Modifier.testTag("moments.compose.discard"),
+                    ) { Text("Discard", color = PantopusColors.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { asksDiscard = false }, modifier = Modifier.testTag("moments.compose.keep")) {
+                        Text("Keep editing")
+                    }
+                },
+            )
         }
         if (state.askMediaLocation) {
             AlertDialog(
@@ -363,7 +410,7 @@ private fun CameraStep(
             )
             Spacer(Modifier.weight(1f))
             PlaceChip(
-                label = state.herePlace?.placeLabel,
+                label = state.chipPlace,
                 locating = state.gate == ComposeGate.Locating,
                 modifier = Modifier.testTag("moments.camera.place"),
             )
@@ -485,7 +532,7 @@ private fun TextStep(
                 modifier = Modifier.testTag("moments.camera.close"),
             )
             Spacer(Modifier.weight(1f))
-            PlaceChip(label = state.herePlace?.placeLabel, locating = state.gate == ComposeGate.Locating, light = true)
+            PlaceChip(label = state.chipPlace, locating = state.gate == ComposeGate.Locating, light = true)
             Spacer(Modifier.weight(1f))
             // Next waits for the fix the card pins at.
             val canGo = state.text.isNotBlank() && state.here != null
@@ -750,7 +797,7 @@ private fun PlaceChip(
                 .clip(RoundedCornerShape(18.dp))
                 .background(if (light) Color.Black.copy(alpha = 0.22f) else PantopusColors.momentCameraChip)
                 .padding(start = 10.dp, end = 14.dp)
-                .clearAndSetSemantics { contentDescription = "This Moment will pin at $text" },
+                .clearAndSetSemantics { contentDescription = "This Moment will pin at ${if (text == HOME_CHIP) "your home" else text}" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {

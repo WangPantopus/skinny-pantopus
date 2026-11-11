@@ -24,6 +24,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -317,6 +318,10 @@ fun MomentsViewerScreen(
     }
     // Back puts the quick reactions away before it closes the viewer.
     BackHandler(enabled = reacting && !typing) { dismissInput() }
+    // A Moment that couldn't load or has ended has nothing to react or reply to: the keyboard and the quick reactions
+    // go, so "Couldn't load this Moment / Try again" sits in the clear (what was typed stays in the box for later).
+    val canAnswer = state.load != ViewerLoad.Failed && state.load != ViewerLoad.Ended
+    LaunchedEffect(canAnswer) { if (!canAnswer && (typing || reacting)) dismissInput() }
     val density = LocalDensity.current
     val keyboardPx = WindowInsets.ime.getBottom(density)
     val belowPx = WindowInsets.navigationBars.getBottom(density)
@@ -389,6 +394,8 @@ fun MomentsViewerScreen(
                         moment = load.moment,
                         player = player,
                         videoStarted = videoStarted,
+                        // A card's words give way to the quick reactions and the reply, as the caption does.
+                        wordsHidden = typing || reacting,
                         onReady = {
                             ready = true
                             if (load.moment.kind != "video") viewModel.shown(load.moment)
@@ -539,6 +546,7 @@ fun MomentsViewerScreen(
             Box(modifier = Modifier.fillMaxWidth().height(BOTTOM_BAR), contentAlignment = Alignment.TopCenter) {
                 when {
                     ring == null -> Unit
+                    !mine && !canAnswer -> Unit
                     mine ->
                         SeenByRow(
                             count = moment?.viewerCount ?: 0,
@@ -686,13 +694,18 @@ fun MomentsViewerScreen(
     }
 }
 
-/** The Moment itself: the photo, the video over its poster, or the text card. */
+/**
+ * The Moment itself: the photo, the video over its poster, or the text card. With [wordsHidden] (the quick reactions
+ * open, a reply being typed) a card's words fade out so the emoji row and the reply never sit on them; TalkBack still
+ * reads them.
+ */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 private fun MomentStage(
     moment: MomentDto,
     player: ExoPlayer,
     videoStarted: Boolean,
+    wordsHidden: Boolean,
     onReady: () -> Unit,
     onFailed: () -> Unit,
 ) {
@@ -700,6 +713,7 @@ private fun MomentStage(
         "text" -> {
             LaunchedEffect(moment.id) { onReady() }
             val background = MomentCardBackground.fromWire(moment.background)
+            val wordsAlpha by animateFloatAsState(if (wordsHidden) 0f else 1f, animationSpec = tween(WORDS_FADE_MS), label = "cardWords")
             Box(
                 modifier =
                     Modifier
@@ -716,6 +730,7 @@ private fun MomentStage(
                     lineHeight = 37.sp,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
+                    modifier = Modifier.graphicsLayer { alpha = wordsAlpha },
                 )
             }
         }
@@ -879,10 +894,11 @@ private fun ViewerHeader(
                         }
                     }
                     val place = moment?.placeLabel ?: ring.placeLabel
+                    // Once it has ended, the header drops the time left ("This Moment has ended." is on screen).
                     val times =
                         listOfNotNull(
                             agoLabel(moment?.createdAt ?: brief?.createdAt),
-                            leftLabel(moment?.expiresAt ?: brief?.expiresAt),
+                            leftLabel(moment?.expiresAt ?: brief?.expiresAt).takeIf { state.load != ViewerLoad.Ended },
                         ).joinToString(" · ")
                     // A long place name gives way; "2h ago · 4h left" always shows.
                     Row(
@@ -1208,8 +1224,9 @@ private fun SeenBySheet(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5, vertical = Spacing.s2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Nobody yet: the title says so, as on iPhone ("Seen by 0" read like a count gone wrong).
                 Text(
-                    text = "Seen by $count",
+                    text = if (count > 0) "Seen by $count" else "No views yet",
                     fontSize = 19.sp,
                     fontWeight = FontWeight.Bold,
                     color = PantopusColors.appText,
@@ -1262,7 +1279,7 @@ private fun SeenBySheet(
                     )
                 (viewers?.viewers.isNullOrEmpty()) ->
                     Text(
-                        text = "No views yet.",
+                        text = "When someone watches it, they show up here.",
                         fontSize = 14.sp,
                         color = PantopusColors.appTextSecondary,
                         modifier = Modifier.padding(Spacing.s5),
@@ -1506,3 +1523,6 @@ private const val ENDED_NOTICE_MS = 1_200L
 private const val MUTED_NOTE_MS = 4_000L
 private const val SAVE_NOTE_MS = 2_500L
 private const val POP_MS = 550
+
+/** How fast a card's words fade for the quick reactions and the reply. */
+private const val WORDS_FADE_MS = 150

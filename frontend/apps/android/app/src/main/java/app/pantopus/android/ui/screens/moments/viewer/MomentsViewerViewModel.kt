@@ -278,7 +278,14 @@ class MomentsViewerViewModel
             val moment = _state.value.moment ?: return
             viewModelScope.launch {
                 when (val result = repository.report(moment.id, reason)) {
-                    is NetworkResult.Success -> _messages.tryEmit("Thanks. The Pantopus team will take a look.")
+                    is NetworkResult.Success -> {
+                        _messages.tryEmit("Thanks. The Pantopus team will take a look.")
+                        // What you reported doesn't keep playing for you: the viewer moves on (staying a moment with
+                        // the note when nothing is left), and the map leaves it out.
+                        loaded.remove(moment.id)
+                        MomentImages.forget(context, moment.id)
+                        if (_state.value.moment?.id == moment.id) removeCurrent(lingering = true)
+                    }
                     is NetworkResult.Failure -> _messages.tryEmit(result.error.viewerMessage("Couldn't send your report."))
                 }
             }
@@ -317,7 +324,8 @@ class MomentsViewerViewModel
             viewModelScope.launch {
                 when (val result = repository.block(author.id)) {
                     is NetworkResult.Success -> {
-                        _messages.tryEmit("Blocked ${author.name ?: "them"}.")
+                        // The first name: "Grace K." would end in two periods.
+                        _messages.tryEmit("You blocked ${author.firstName?.takeIf { it.isNotBlank() } ?: author.name ?: "them"}.")
                         dropAuthor(author.id)
                     }
                     is NetworkResult.Failure -> _messages.tryEmit(result.error.viewerMessage("Couldn't block them."))
@@ -336,15 +344,7 @@ class MomentsViewerViewModel
             val current = _state.value
             val kept = current.rings.filter { it.ring.author.id != authorId }
             val nextIndex = current.rings.drop(current.ringIndex).firstOrNull { it.ring.author.id != authorId }?.let { kept.indexOf(it) }
-            if (kept.isEmpty() || nextIndex == null) {
-                if (!lingering) return finish()
-                _state.update { it.copy(rings = emptyList(), load = ViewerLoad.Loading) }
-                viewModelScope.launch {
-                    kotlinx.coroutines.delay(LINGER_MS)
-                    finish()
-                }
-                return
-            }
+            if (kept.isEmpty() || nextIndex == null) return if (lingering) lingerThenFinish() else finish()
             _state.update { it.copy(rings = kept, ringIndex = nextIndex, momentIndex = kept[nextIndex].startAt, viewers = null) }
             load()
         }
@@ -377,14 +377,29 @@ class MomentsViewerViewModel
             }
         }
 
-        /** The current Moment ended or was deleted: drop it and play what's next. */
-        fun removeCurrent() {
+        /**
+         * Nothing left to play after a mute or a report: the viewer stays up a moment, black, so the note on it can be
+         * read, then closes.
+         */
+        private fun lingerThenFinish() {
+            _state.update { it.copy(rings = emptyList(), load = ViewerLoad.Loading) }
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(LINGER_MS)
+                finish()
+            }
+        }
+
+        /**
+         * The current Moment ended, was deleted or was reported: drop it and play what's next. With [lingering], when
+         * nothing is left the viewer stays a moment so its note can be read.
+         */
+        fun removeCurrent(lingering: Boolean = false) {
             val current = _state.value
             val ring = current.ring ?: return finish()
             val left = ring.moments.filterIndexed { index, _ -> index != current.momentIndex }
             if (left.isEmpty()) {
                 val rings = current.rings.filterIndexed { index, _ -> index != current.ringIndex }
-                if (current.ringIndex >= rings.size) return finish()
+                if (current.ringIndex >= rings.size) return if (lingering) lingerThenFinish() else finish()
                 _state.update { it.copy(rings = rings, momentIndex = rings[it.ringIndex].startAt, viewers = null) }
             } else {
                 val rings = current.rings.toMutableList().also { it[current.ringIndex] = ring.copy(moments = left, startAt = 0) }
@@ -444,6 +459,8 @@ internal fun leftLabel(
 ): String? {
     val end = iso?.let { runCatching { Instant.parse(it.replace("+00:00", "Z")) }.getOrNull() } ?: return null
     val seconds = java.time.Duration.between(now, end).seconds
+    // An ended Moment has no time left to show.
+    if (seconds <= 0) return null
     // Under an hour, minutes, never less than "1m left": a Moment in its last seconds is still up. An hour or more
     // rounds up to whole hours, so a Moment just posted for 24 hours says "24h left" (REVIEW P7).
     return if (seconds < 3600) "${(seconds / 60).coerceAtLeast(1)}m left" else "${(seconds + 3599) / 3600}h left"
