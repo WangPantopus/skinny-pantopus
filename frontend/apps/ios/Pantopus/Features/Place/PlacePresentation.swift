@@ -412,7 +412,14 @@ enum PlacePresentation {
             return .init(value: n > 0 ? "\(n) voting districts on record" : "Your federal, state, and city districts")
         case .civicElection:
             guard let d = env.civicElection else { return .init() }
-            return .init(chip: PlaceChipModel(tone: .sky, text: "In \(d.daysUntil) days"))
+            // After Election Day there is nothing to count down to: the election's name, with where
+            // the count stands when the server says ("Counting"). Before it: today, tomorrow, or the days left.
+            if let card = d.ballotCard, card.phase == .after {
+                let stage = card.chip.flatMap { $0.isEmpty ? nil : $0 }
+                return .init(value: card.subtitle ?? d.name, chip: stage.map { PlaceChipModel(tone: .sky, text: $0) })
+            }
+            let when = d.daysUntil <= 0 ? "Today" : d.daysUntil == 1 ? "Tomorrow" : "In \(d.daysUntil) days"
+            return .init(chip: PlaceChipModel(tone: .sky, text: when))
         case .unknown:
             return .init()
         }

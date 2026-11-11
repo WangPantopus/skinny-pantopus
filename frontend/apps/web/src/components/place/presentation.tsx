@@ -420,7 +420,13 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
     inline: true,
     format: (data) => {
       const d = data as PlaceCivicElectionData;
-      return { chip: { label: `In ${d.days_until} days`, variant: 'info' } };
+      // After Election Day there is nothing to count down to: the election's name, with where the
+      // count stands when the server says ("Counting"). Before it: today, tomorrow, or the days left.
+      if (d.phase === 'after') {
+        return { value: d.subtitle || d.name, ...(d.chip ? { chip: { label: d.chip, variant: 'info' as const } } : {}) };
+      }
+      const n = d.days_until;
+      return { chip: { label: n <= 0 ? 'Today' : n === 1 ? 'Tomorrow' : `In ${n} days`, variant: 'info' } };
     },
   },
 };
