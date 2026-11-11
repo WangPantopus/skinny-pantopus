@@ -77,6 +77,10 @@ final class MomentsComposerModel {
     private(set) var preparing = false
     var error: String?
     private(set) var isPosting = false
+    /// The place names' sheet over the Post sheet, kept here so a fold on the iPhone Duo leaves it as it was.
+    var picksPlace = false
+    /// The camera, held here so a fold on the iPhone Duo (which builds the camera screen again) keeps a recording going.
+    let camera = MomentsCameraModel()
 
     static let textLimit = 200
     static let captionLimit = 100
@@ -89,12 +93,18 @@ final class MomentsComposerModel {
     @ObservationIgnored private var preparation: Task<(String, MomentPreparedMedia)?, Never>?
     /// One id per text card sent to the Post sheet: tapping Post again after a lost answer returns the same Moment.
     @ObservationIgnored private var textRequestId = UUID().uuidString
+    /// `start` runs once: a fold can show the composer again, and the place and choices must stay as they are.
+    @ObservationIgnored private var started = false
     private let location: any LocationProviding
     private let defaults: UserDefaults
 
     init(location: any LocationProviding = DeviceLocationProvider.shared, defaults: UserDefaults = .standard) {
         self.location = location
         self.defaults = defaults
+        camera.onPhoto = { [weak self] image in self?.use(photo: image) }
+        camera.onVideo = { [weak self] url in
+            Task { await self?.use(video: url) }
+        }
     }
 
     // MARK: - Opening
@@ -111,6 +121,8 @@ final class MomentsComposerModel {
     /// the 18+ question once. Where location hasn't been allowed yet, the
     /// card asks first (`allowLocation`).
     func start() async {
+        guard !started else { return }
+        started = true
         restoreChoices()
         guard location.canLocateWithoutAsking else {
             locating = .unavailable
@@ -173,6 +185,11 @@ final class MomentsComposerModel {
             self.error = "Couldn't save that. Try again."
             return false
         }
+    }
+
+    /// The camera is what's showing: the capture session runs only then.
+    var wantsCamera: Bool {
+        gate == .open && mode == .camera && draft == nil
     }
 
     /// The place chip: "Esther Short Park", "Your home" at home (as the Post sheet says; others read the
@@ -452,6 +469,7 @@ extension MomentsComposerModel {
 
     /// The composer closed without posting: nothing is left behind.
     func abandon() {
+        camera.stop(discarding: true)
         preparation?.cancel()
         discardPrepared()
     }

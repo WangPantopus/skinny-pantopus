@@ -18,6 +18,8 @@ struct MomentsStripButtons: View {
         let label: String
         /// The reaction already chosen, shown in place of the icon.
         var emoji: String?
+        /// Dimmed and not tappable (the camera's flash while there's no camera).
+        var enabled = true
         let action: () -> Void
     }
 
@@ -58,6 +60,8 @@ struct MomentsStripButtons: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .opacity(item.enabled ? 1 : 0.4)
+        .disabled(!item.enabled)
         .accessibilityLabel(item.label)
         .accessibilityIdentifier(item.id)
     }

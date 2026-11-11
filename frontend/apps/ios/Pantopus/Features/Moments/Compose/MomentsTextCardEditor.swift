@@ -4,7 +4,9 @@
 //
 //  Board P2, a text card: up to 200 characters in white on one of six
 //  backgrounds (teal, sky, green, amber, rose, slate), with the count under
-//  it and Next to the Post sheet.
+//  it and Next to the Post sheet. On the iPhone Duo it takes the Duo's
+//  layouts (`MomentsTextCardEditor+Duo.swift`); the words and the color live
+//  in the composer's model, so a fold keeps them.
 //
 
 import SwiftUI
@@ -12,9 +14,33 @@ import SwiftUI
 struct MomentsTextCardEditor: View {
     let model: MomentsComposerModel
     let onClose: () -> Void
-    @FocusState private var focused: Bool
+    @FocusState var focused: Bool
+    @Environment(\.momentsDuoScreen) var duo
 
     var body: some View {
+        Group {
+            switch duo.pose {
+            case .closed:
+                closedLayout
+            case .wide:
+                wideLayout
+            case .phone, .upright, .table:
+                phoneLayout
+            }
+        }
+        // Folding or turning the Duo takes the keyboard just before the new layout: the words get it back, a few
+        // times while the new screen settles.
+        .onChange(of: duo.pose) { _, _ in
+            for delay in [80, 250, 500, 1000] {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(delay))
+                    if !focused { focused = true }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var phoneLayout: some View {
         @Bindable var model = model
         let colors = MomentsPalette.card(model.background)
         ZStack(alignment: .top) {
@@ -60,7 +86,7 @@ struct MomentsTextCardEditor: View {
         .accessibilityIdentifier("moments.textCard")
     }
 
-    private func nextButton(ink: Color) -> some View {
+    func nextButton(ink: Color) -> some View {
         let isEmpty = model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return Button {
             focused = false
@@ -80,8 +106,13 @@ struct MomentsTextCardEditor: View {
         .accessibilityIdentifier("moments.textCard.next")
     }
 
-    private var swatches: some View {
-        HStack(spacing: Spacing.s3) {
+    var swatches: some View {
+        swatches(spacing: Spacing.s3)
+    }
+
+    /// The six backgrounds: 12 pt apart on the phone, 10 on the Duo (boards C7, O8).
+    func swatches(spacing: CGFloat) -> some View {
+        HStack(spacing: spacing) {
             ForEach(MomentsComposerModel.backgrounds, id: \.self) { name in
                 let selected = model.background == name
                 Button { model.background = name } label: {

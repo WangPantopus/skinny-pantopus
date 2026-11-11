@@ -99,6 +99,7 @@ struct MomentsLibraryScreen: View {
     @State private var assets: [PHAsset] = []
     @State private var loaded = false
     @State private var opening: String?
+    @Environment(\.momentsDuoScreen) private var duo
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
     var body: some View {
@@ -119,6 +120,20 @@ struct MomentsLibraryScreen: View {
                 .padding(.bottom, Spacing.s1)
         }
         .background(Color.black)
+        // The closed iPhone Duo: Close is in the side strip, as on the camera and the text card (boards C6, C7).
+        .overlay {
+            if duo.pose == .closed {
+                GeometryReader { geo in
+                    MomentsStripButtons(
+                        screen: duo,
+                        height: geo.size.height,
+                        top: [MomentsStripButtons.Item(id: "moments.camera.close", icon: .x, label: "Close") { onClose() }],
+                        bottom: nil
+                    )
+                }
+                .ignoresSafeArea(.container)
+            }
+        }
         .task { await open() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.library")
@@ -126,14 +141,18 @@ struct MomentsLibraryScreen: View {
 
     private var header: some View {
         HStack {
-            Button(action: onClose) {
-                Icon(.x, size: 26, color: .white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+            if duo.pose == .closed {
+                Color.clear.frame(width: 44, height: 44)
+            } else {
+                Button(action: onClose) {
+                    Icon(.x, size: 26, color: .white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+                .accessibilityIdentifier("moments.camera.close")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
-            .accessibilityIdentifier("moments.camera.close")
             Spacer()
             Text("Last 24 hours")
                 .font(.system(size: 16, weight: .semibold))
