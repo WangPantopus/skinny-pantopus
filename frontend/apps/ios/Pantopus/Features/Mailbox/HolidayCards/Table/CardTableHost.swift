@@ -33,6 +33,8 @@ extension CardTableContent {
             .map { MailDates.daysBetween(now, $0, calendar: .current) } ?? 0
         verse = card.card.sealed ? nil : card.card.verse
         signature = card.card.sealed ? nil : card.card.signature
+        photo = card.card.sealed ? nil : card.card.photo
+        mediaFrom = .piece(mailId: letter.piece.id)
     }
 }
 
@@ -55,6 +57,9 @@ extension CardTableContent {
         sealedInDays = ""
         sealedDayCount = 0
         signature = piece.card.signature
+        // Your own photo: never covered here.
+        photo = piece.card.photo.map { CardPhoto(fileId: $0.fileId, width: $0.width, height: $0.height, alt: $0.alt) }
+        mediaFrom = .sent(cardId: piece.id)
     }
 }
 

@@ -13,43 +13,6 @@ import QuartzCore
 import SwiftUI
 import UIKit
 
-/// What's on the table.
-struct CardTableContent: Equatable {
-    let design: String
-    let number: Int?
-    let caption: String
-    let paper: String?
-    /// The cloth's colour (hex).
-    let table: String?
-    let slug: String?
-    let year: Int
-    /// The day it was mailed ("OCT 30") for the postmarks.
-    let mailedOn: String?
-    let note: String
-    let fromName: String
-    let toName: String
-    var sealed: Bool
-    /// When the seal lifts: an instant, or a day (`YYYY-MM-DD`).
-    let sealedUntil: String?
-    /// "in 56 days", "tomorrow" or "today".
-    var sealedInDays: String
-    /// How many days until it opens, for "Not yet."
-    var sealedDayCount: Int
-    /// A Christmas with Jesus Christ card's whole verse, for "Read the verse" (plan 6.2); nil for the rest, while
-    /// it's sealed, and in Sent (the server doesn't send it there).
-    var verse: String?
-    /// The sender's signature beside FROM (plan 8.2), drawn in place of the typed first name; nil while sealed and when
-    /// unsigned.
-    var signature: CardSignature?
-    /// A letter, not a card (plan Part 10, the welcome letter): the cream envelope with the red seal on slate, the same
-    /// moves, and a folded sheet inside that opens the letter page.
-    var isLetter = false
-
-    var firstName: String {
-        HolidayCardWords.firstName(fromName)
-    }
-}
-
 /// One thing that moves: where it is, how fast, where it's headed, and its stiffness and damping.
 struct CardTableSpring: Equatable {
     var x: Double

@@ -93,7 +93,9 @@ struct CardPrintView: View {
                 .foregroundStyle(MailPaper.printCoverInk)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
-                .padding(.horizontal, Spacing.s3)
+                // A small print (the half-closed Duo's) keeps every word.
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, Spacing.s2)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(MailPaper.printCover)
                 .contentShape(Rectangle())
