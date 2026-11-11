@@ -74,11 +74,12 @@ struct CardTableMediaLayer: View {
             screen: layout.screen,
             bottomRoom: model.pagesBottomRoom(layout)
         ) {
-            // The open Duo: on the picture page's lower corner by the hinge.
-            let page = pages.pictureFrame
-            let width = min(page.width * 0.42, page.height * 0.42 / k)
-            let top = page.maxY - width * k - page.height * 0.04
-            return CGRect(x: page.maxX - width - page.width * 0.04, y: top, width: width, height: width * k)
+            // The open Duo: over the note page's lower right corner, clear of FROM and the caption, hanging a little
+            // below the page.
+            let page = pages.noteFrame
+            let width = min(page.width * 0.42, page.height * 0.46 / k)
+            let top = page.maxY - width * k * 0.88
+            return CGRect(x: page.maxX - width - page.width * 0.05, y: top, width: width, height: width * k)
         }
         let cardBottom = layout.cardTop + layout.cardHeight
         if Self.isWide(width: layout.width) {
