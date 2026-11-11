@@ -354,6 +354,8 @@ private fun Steps(
                         onSignature = viewModel::onSignature,
                         photo = form.photo,
                         photos = photoCalls(cards, form, viewModel),
+                        voice = form.voice,
+                        voices = voiceCalls(cards, form, viewModel),
                     )
                 }
             }
@@ -832,5 +834,21 @@ private fun photoCalls(
 ): CardPhotoCalls? {
     val canAdd = LaunchFeatures.holidayCardMemories && cards.media?.photo?.usable == true && form.to !is CardRecipient.Several
     if (!canAdd && form.photo == null) return null
-    return CardPhotoCalls(viewModel::addPhoto, viewModel::retryPhoto, viewModel::removePhoto, viewModel::onPhotoAlt)
+    val drafts = viewModel.drafts
+    return CardPhotoCalls(drafts::addPhoto, drafts::retryPhoto, drafts::removePhoto, drafts::onPhotoAlt)
+}
+
+/**
+ * What Write on the back can do with a voice greeting (memories plan step 7): only with the key on, when `GET /cards`
+ * says greetings can be added now, and for one card to one person. One already added stays so it can be removed.
+ */
+private fun voiceCalls(
+    cards: HolidayCardsResponse,
+    form: SendCardForm,
+    viewModel: SendCardViewModel,
+): CardVoiceCalls? {
+    val canAdd = LaunchFeatures.holidayCardMemories && cards.media?.voice?.usable == true && form.to !is CardRecipient.Several
+    if (!canAdd && form.voice == null) return null
+    val drafts = viewModel.drafts
+    return CardVoiceCalls(drafts::addVoice, drafts::retryVoice, drafts::removeVoice)
 }

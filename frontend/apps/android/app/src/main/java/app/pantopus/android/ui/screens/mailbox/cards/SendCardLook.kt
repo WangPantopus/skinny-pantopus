@@ -58,6 +58,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.StampBalance
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailCard
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardGreetingVoice
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardPrintPhoto
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
 import app.pantopus.android.ui.screens.mailbox.cards.table.LetterCardPrint
@@ -203,7 +204,7 @@ private fun PersonLook(
     }
     LookSection("On the back") {
         CardNoteSide(card, from, modifier = Modifier.padding(vertical = Spacing.s2).rotate(1f))
-        LetterCardPrint(card, from.substringBefore(' '), modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s2))
+        LetterCardPrint(card, from.substringBefore(' '), first, modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s2))
     }
 }
 
@@ -239,7 +240,7 @@ private fun EmailLook(
                 CardPictureSide(card, from, modifier = Modifier.weight(1f))
                 CardNoteSide(card, from, modifier = Modifier.weight(1f))
             }
-            LetterCardPrint(card, from.substringBefore(' '), modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s2))
+            LetterCardPrint(card, from.substringBefore(' '), "you", modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s2))
         }
         if (LaunchFeatures.cardTable) {
             OpenTheWayTheyWill(card, from, to = null, modifier = Modifier.fillMaxWidth().padding(top = Spacing.s3))
@@ -273,7 +274,7 @@ private fun LinkLook(
                 CardPictureSide(card, from, modifier = Modifier.weight(1f))
                 CardNoteSide(card, from, modifier = Modifier.weight(1f))
             }
-            LetterCardPrint(card, from.substringBefore(' '), modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s2))
+            LetterCardPrint(card, from.substringBefore(' '), "you", modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s2))
         }
         OpenTheWayTheyWill(card, from, to = null, modifier = Modifier.fillMaxWidth().padding(top = Spacing.s3))
     }
@@ -825,6 +826,7 @@ internal fun lookCard(
         signature = card?.signature?.takeIf { it.drawable },
         // The sender's own upload, as it will go: never covered for them.
         photo = card?.photo?.let { CardPrintPhoto.own(it) },
+        voice = card?.voice?.let { CardGreetingVoice.own(it) },
     )
 }
 

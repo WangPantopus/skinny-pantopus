@@ -70,6 +70,8 @@ data class CardOnTable(
      * share picture. Null while it's sealed and for a card without one.
      */
     val photo: CardPrintPhoto? = null,
+    /** Its voice greeting (memories plan step 7): beside the photo once it's turned over; pressed to play. */
+    val voice: CardGreetingVoice? = null,
 ) {
     /** The first name, the only one a shared picture or the words on the table ever use. */
     val fromFirst: String = from.trim().substringBefore(' ').removeSuffix(",").ifEmpty { "Someone" }
@@ -80,7 +82,7 @@ data class CardOnTable(
     val kind: String get() = if (letter) "Letter" else "Christmas card"
 
     /** Something lies on the table with it once it's turned over: its own photo (memories plan). */
-    val hasMedia: Boolean get() = !sealed && !letter && photo != null
+    val hasMedia: Boolean get() = !sealed && !letter && (photo != null || voice != null)
 
     /** Its picture is read for the table: not while it's sealed (the server keeps it), and a letter has none. */
     val hasPicture: Boolean get() = !sealed && !letter

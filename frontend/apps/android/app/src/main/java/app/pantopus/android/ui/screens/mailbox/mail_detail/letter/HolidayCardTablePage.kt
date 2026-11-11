@@ -153,4 +153,5 @@ internal fun MailLetterCard.tableCard(
         verse = verse,
         signature = signature,
         photo = photo,
+        voice = voice,
     )

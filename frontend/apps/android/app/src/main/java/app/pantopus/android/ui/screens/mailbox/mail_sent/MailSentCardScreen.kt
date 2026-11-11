@@ -60,6 +60,7 @@ import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardFlip
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardFront
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardTimes
 import app.pantopus.android.ui.screens.mailbox.cards.TakeBackDialog
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardGreetingVoice
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardLinkBox
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardPrintPhoto
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardShareSheet
@@ -223,7 +224,7 @@ private fun SentCardPage(
         sentLetterCard(card)?.let { face ->
             val from = card.envelope?.from?.takeIf { it.isNotBlank() } ?: "You"
             PageSection("The card you sent") {
-                BothSides(face, from)
+                BothSides(face, from, first)
                 if (LaunchFeatures.cardTable) TheWayTheyDid(card, face, from)
             }
         }
@@ -304,6 +305,8 @@ private fun ColumnScope.TheWayTheyDid(
 private fun ColumnScope.BothSides(
     card: MailLetterCard,
     from: String,
+    /** Who it went to, for the greeting's label ("For Maya"). */
+    forFirst: String = "you",
 ) {
     var showBack by rememberSaveable { mutableStateOf(false) }
     val shape = RoundedCornerShape(3.dp)
@@ -348,7 +351,12 @@ private fun ColumnScope.BothSides(
         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Spacing.s3).testTag("mailSentPieceTurn"),
     )
     CardNoteSide(card, from, modifier = Modifier.padding(vertical = Spacing.s4).rotate(1f))
-    LetterCardPrint(card, from.substringBefore(' '), modifier = Modifier.padding(bottom = Spacing.s4))
+    LetterCardPrint(
+        card,
+        from.substringBefore(' '),
+        forFirst = forFirst,
+        modifier = Modifier.padding(bottom = Spacing.s4),
+    )
 }
 
 /** Where the card has been, step by step, and that a card never says when it was opened. */
@@ -565,6 +573,7 @@ private fun sentLetterCard(card: SentCard): MailLetterCard? {
         signature = face.signature?.takeIf { it.drawable },
         // The sender's own photo, through Sent's route: never covered for them (memories plan).
         photo = face.photo?.let { CardPrintPhoto.sent(card.id, it) },
+        voice = face.voice?.let { CardGreetingVoice.sent(card.id, it) },
     )
 }
 
