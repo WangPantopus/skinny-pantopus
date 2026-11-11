@@ -108,10 +108,13 @@ fun MomentsPostSheet(
     modifier: Modifier = Modifier,
     onPlace: (String) -> Unit = {},
     onFindPlace: () -> Unit = {},
+    onNoLocation: (Boolean) -> Unit = {},
 ) {
     // A venue picked in the place picker moves the pin off the home (the server checks its point again).
     val venue = state.pickedVenue
-    val atHome = state.place?.atHome == true && venue == null
+    // "Don't show where": no pin, no map, connections only.
+    val unplaced = state.noLocationOn
+    val atHome = state.place?.atHome == true && venue == null && !unplaced
     val density = LocalDensity.current
     val keyboardPx = WindowInsets.ime.getBottom(density)
     val belowPx = WindowInsets.navigationBars.getBottom(density)
@@ -138,7 +141,7 @@ fun MomentsPostSheet(
                         Modifier.size(width = 36.dp, height = 5.dp).clip(RoundedCornerShape(3.dp)).background(PantopusColors.appBorder),
                 )
             }
-            state.pin?.let { pin ->
+            state.pin?.takeIf { !unplaced }?.let { pin ->
                 PinMap(
                     latitude = venue?.latitude ?: pin.latitude,
                     longitude = venue?.longitude ?: pin.longitude,
@@ -149,6 +152,7 @@ fun MomentsPostSheet(
             // The place others will read: the venue's name (or the one picked), or the town with "Show the area instead".
             val label =
                 when {
+                    unplaced -> NO_LOCATION
                     atHome && !state.showArea -> "Your home"
                     state.showArea -> state.place?.areaLabel ?: state.place?.placeLabel ?: "Your area"
                     else -> venue?.name ?: state.pickedPlace?.label ?: state.place?.placeLabel ?: "Where you are"
@@ -221,44 +225,52 @@ fun MomentsPostSheet(
                     }
                 }
             }
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Spacing.s5)
-                        .padding(top = 6.dp)
-                        .heightIn(min = 52.dp)
-                        .clickable(role = Role.Switch) { onShowArea(!state.showArea) }
-                        .testTag("moments.post.area")
-                        .clearAndSetSemantics {
-                            contentDescription = "Show the area instead. $AREA_LINE"
-                            role = Role.Switch
-                            selected = state.showArea
-                        },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(text = "Show the area instead", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appText)
-                    Text(
-                        text = AREA_LINE,
-                        fontSize = 12.5.sp,
-                        lineHeight = 16.sp,
-                        color = PantopusColors.appTextSecondary,
+            if (!unplaced) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.s5)
+                            .padding(top = 6.dp)
+                            .heightIn(min = 52.dp)
+                            .clickable(role = Role.Switch) { onShowArea(!state.showArea) }
+                            .testTag("moments.post.area")
+                            .clearAndSetSemantics {
+                                contentDescription = "Show the area instead. $AREA_LINE"
+                                role = Role.Switch
+                                selected = state.showArea
+                            },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = "Show the area instead",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = PantopusColors.appText,
+                        )
+                        Text(
+                            text = AREA_LINE,
+                            fontSize = 12.5.sp,
+                            lineHeight = 16.sp,
+                            color = PantopusColors.appTextSecondary,
+                        )
+                    }
+                    Switch(
+                        checked = state.showArea,
+                        onCheckedChange = onShowArea,
+                        colors =
+                            SwitchDefaults.colors(
+                                checkedTrackColor = PantopusColors.primary600,
+                                uncheckedTrackColor = PantopusColors.momentSwitchTrack,
+                                uncheckedBorderColor = PantopusColors.momentSwitchTrack,
+                                uncheckedThumbColor = Color.White,
+                            ),
                     )
                 }
-                Switch(
-                    checked = state.showArea,
-                    onCheckedChange = onShowArea,
-                    colors =
-                        SwitchDefaults.colors(
-                            checkedTrackColor = PantopusColors.primary600,
-                            uncheckedTrackColor = PantopusColors.momentSwitchTrack,
-                            uncheckedBorderColor = PantopusColors.momentSwitchTrack,
-                            uncheckedThumbColor = Color.White,
-                        ),
-                )
             }
+            NoLocationRow(state = state, onNoLocation = onNoLocation)
             SectionLabel("How long")
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).semantics { contentDescription = "How long" },
@@ -306,7 +318,9 @@ fun MomentsPostSheet(
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 listOf("nearby" to "Everyone nearby", "connections" to "My connections").forEach { (key, text) ->
-                    val on = key == state.audience
+                    // A Moment with no location goes only to connections: "Everyone nearby" needs a place.
+                    val on = key == if (unplaced) "connections" else state.audience
+                    val usable = !unplaced || key == "connections"
                     Box(
                         modifier =
                             Modifier
@@ -315,7 +329,7 @@ fun MomentsPostSheet(
                                 .then(if (on) Modifier.pantopusShadow(SegmentShadow, RoundedCornerShape(9.dp)) else Modifier)
                                 .clip(RoundedCornerShape(9.dp))
                                 .background(if (on) Color.White else Color.Transparent)
-                                .clickable(role = Role.RadioButton) { onAudience(key) }
+                                .clickable(enabled = usable, role = Role.RadioButton) { onAudience(key) }
                                 .testTag("moments.post.audience.$key")
                                 .clearAndSetSemantics {
                                     contentDescription = text
@@ -328,7 +342,12 @@ fun MomentsPostSheet(
                             text = text,
                             fontSize = 14.5.sp,
                             fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
-                            color = if (on) PantopusColors.appText else PantopusColors.appTextSecondary,
+                            color =
+                                when {
+                                    on -> PantopusColors.appText
+                                    usable -> PantopusColors.appTextSecondary
+                                    else -> PantopusColors.appTextSecondary.copy(alpha = 0.45f)
+                                },
                         )
                     }
                 }
@@ -384,7 +403,7 @@ fun MomentsPostSheet(
         SheetPrimaryButton(
             label = if (state.posting) "Posting…" else "Post · shows for ${if (state.hours == 1) "1 hour" else "${state.hours} hours"}",
             onClick = onPost,
-            enabled = !state.posting && state.pin != null,
+            enabled = !state.posting && (state.pin != null || unplaced),
             modifier = Modifier.padding(horizontal = Spacing.s4).testTag("moments.post.submit"),
         )
         Spacer(Modifier.height(Spacing.s6))
@@ -433,7 +452,12 @@ private fun PlaceRow(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             PantopusIconImage(
-                icon = if (atHome && !state.showArea) PantopusIcon.Home else PantopusIcon.MapPin,
+                icon =
+                    when {
+                        state.noLocationOn -> PantopusIcon.MapPinOff
+                        atHome && !state.showArea -> PantopusIcon.Home
+                        else -> PantopusIcon.MapPin
+                    },
                 contentDescription = null,
                 size = 18.dp,
                 strokeWidth = 2.2f,
@@ -448,7 +472,16 @@ private fun PlaceRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            Text(text = if (state.showArea) "Area" else "Exact spot", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+            Text(
+                text =
+                    when {
+                        state.noLocationOn -> "Not on the map"
+                        state.showArea -> "Area"
+                        else -> "Exact spot"
+                    },
+                fontSize = 13.sp,
+                color = PantopusColors.appTextSecondary,
+            )
             if (tappable) {
                 PantopusIconImage(
                     icon = PantopusIcon.ChevronDown,
@@ -550,6 +583,59 @@ private fun PlaceChoiceItem(
                     selected = on
                 },
     )
+}
+
+/**
+ * "Don't show where" (founder 2026-11-11): no pin and not on the map; only connections see it. It stays on when there's
+ * no pin at all (location off), and it needs a connection.
+ */
+@Composable
+private fun NoLocationRow(
+    state: MomentsComposeUiState,
+    onNoLocation: (Boolean) -> Unit,
+) {
+    val noConnections = state.hasConnections == false
+    val enabled = !state.noLocationLocked && (!noConnections || state.noLocationOn)
+    val line =
+        when {
+            noConnections && !state.noLocationOn -> "Add a connection first. Only your connections see a Moment with no location."
+            state.noLocationLocked -> "Location is off, so only your connections see it. It isn't on the map."
+            else -> "Only your connections see it. It isn't on the map."
+        }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s5)
+                .padding(top = 6.dp)
+                .heightIn(min = 52.dp)
+                .clickable(enabled = enabled, role = Role.Switch) { onNoLocation(!state.noLocationOn) }
+                .testTag("moments.post.noLocation")
+                .clearAndSetSemantics {
+                    contentDescription = "Don't show where. $line"
+                    role = Role.Switch
+                    selected = state.noLocationOn
+                },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(text = "Don't show where", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appText)
+            Text(text = line, fontSize = 12.5.sp, lineHeight = 16.sp, color = PantopusColors.appTextSecondary)
+        }
+        Switch(
+            checked = state.noLocationOn,
+            onCheckedChange = onNoLocation,
+            enabled = enabled,
+            colors =
+                SwitchDefaults.colors(
+                    checkedTrackColor = PantopusColors.primary600,
+                    uncheckedTrackColor = PantopusColors.momentSwitchTrack,
+                    uncheckedBorderColor = PantopusColors.momentSwitchTrack,
+                    uncheckedThumbColor = Color.White,
+                ),
+        )
+    }
 }
 
 @Composable

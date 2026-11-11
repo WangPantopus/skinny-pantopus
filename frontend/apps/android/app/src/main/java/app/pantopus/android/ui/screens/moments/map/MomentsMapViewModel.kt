@@ -198,7 +198,10 @@ class MomentsMapViewModel
                         ring = ring.copy(moments = live),
                         // Your own ring keeps its color (the server says your Moments are "seen"; `mine` styles it).
                         seen = live.map { !ring.mine && (it.seen || it.id in watched) },
-                        distanceMeters = center?.let { (lat, lng) -> metersBetween(lat, lng, ring.latitude, ring.longitude) } ?: 0.0,
+                        distanceMeters =
+                            center
+                                ?.takeIf { !ring.noLocation }
+                                ?.let { (lat, lng) -> metersBetween(lat, lng, ring.latitude, ring.longitude) } ?: 0.0,
                     )
                 }
             }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -306,7 +309,7 @@ class MomentsMapViewModel
                     ) {
                         is NetworkResult.Success -> {
                             _state.update { it.copy(rings = result.data, loaded = true, failed = false) }
-                            if (result.data.isEmpty()) emptyPlace()
+                            if (result.data.all { it.noLocation }) emptyPlace()
                         }
                         is NetworkResult.Failure -> {
                             // Moments was turned off while the app was open (every route then answers 404

@@ -63,6 +63,8 @@ interface MomentsApi {
         @Query("north") north: Double,
         @Query("east") east: Double,
         @Query("since") since: String? = null,
+        /** This app shows Moments with no location (in the strip), so they count toward the dot (contract v3.4). */
+        @Query("include_unplaced") includeUnplaced: Boolean = true,
     ): MomentsUnseenResponse
 
     /** `GET /api/moments/mine`: the caller's own unexpired Moments, any state but ended. */

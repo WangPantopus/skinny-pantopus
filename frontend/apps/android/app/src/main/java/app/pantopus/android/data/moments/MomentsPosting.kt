@@ -44,8 +44,9 @@ data class MomentPosting(
     /** The Moment's id: the server made it when Post was tapped. */
     val momentId: String,
     val kind: String,
-    val latitude: Double,
-    val longitude: Double,
+    /** Where it pins; null for a Moment with no location (it shows only in the row of faces while it posts). */
+    val latitude: Double?,
+    val longitude: Double?,
     /** You, as your ring will show you, so the posting ring and the ring that follows it wear the same face. */
     val author: MomentAuthorDto? = null,
     /** 0 to 1: exporting a video is the first fifth, the upload the rest. */
@@ -112,8 +113,8 @@ class MomentsPosting
         fun start(
             moment: MomentDto,
             file: MomentMediaFile,
-            latitude: Double,
-            longitude: Double,
+            latitude: Double?,
+            longitude: Double?,
         ) {
             media[moment.id] = file
             writeNote(Note.of(moment, file, latitude, longitude))
@@ -460,8 +461,8 @@ class MomentsPosting
             val path: String,
             val durationMs: Long,
             val recordedHere: Boolean,
-            val latitude: Double,
-            val longitude: Double,
+            val latitude: Double?,
+            val longitude: Double?,
         ) {
             fun mediaFile(file: File): MomentMediaFile =
                 if (kind == "video") MomentMediaFile.Video(file, durationMs, recordedHere) else MomentMediaFile.Photo(file)
@@ -482,8 +483,8 @@ class MomentsPosting
                 fun of(
                     moment: MomentDto,
                     file: MomentMediaFile,
-                    latitude: Double,
-                    longitude: Double,
+                    latitude: Double?,
+                    longitude: Double?,
                 ): Note {
                     val video = file as? MomentMediaFile.Video
                     return Note(
@@ -507,8 +508,8 @@ class MomentsPosting
                         path = json.getString("path"),
                         durationMs = json.optLong("durationMs"),
                         recordedHere = json.optBoolean("recordedHere"),
-                        latitude = json.getDouble("latitude"),
-                        longitude = json.getDouble("longitude"),
+                        latitude = if (json.has("latitude")) json.getDouble("latitude") else null,
+                        longitude = if (json.has("longitude")) json.getDouble("longitude") else null,
                     )
                 }
             }

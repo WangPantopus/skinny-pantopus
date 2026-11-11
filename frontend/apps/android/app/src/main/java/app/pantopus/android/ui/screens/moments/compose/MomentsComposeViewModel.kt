@@ -68,6 +68,9 @@ internal const val DEFAULT_PICK_WITHIN_M = 1500
 /** What the chip says at home (board P4: the Post sheet's "Your home"). */
 internal const val HOME_CHIP = "Your home"
 
+/** What the chip and the place row say for a Moment with no location. */
+internal const val NO_LOCATION = "No location"
+
 /** Before anything can be captured: location, then the one-time 18+ confirmation (contract v2). */
 enum class ComposeGate { Locating, NeedsLocation, NeedsAdult, NotEligible, Open }
 
@@ -102,6 +105,10 @@ data class MomentsComposeUiState(
     val venue: MomentVenue? = null,
     /** The place picker (search and the places around the pin) is open. */
     val findingPlace: Boolean = false,
+    /** "Don't show where" (founder 2026-11-11): no pin, not on the map, connections only. */
+    val noLocation: Boolean = false,
+    /** Whether you have a connection (place-preview's `has_connections`); null until known. */
+    val hasConnections: Boolean? = null,
 ) {
     val kind: String
         get() =
@@ -115,13 +122,19 @@ data class MomentsComposeUiState(
      * The camera's and the card's chip: where it will pin, or "Your home" at home, as the Post sheet says (others read
      * the town, never the place the home sits at).
      */
-    val chipPlace: String? get() = if (herePlace?.atHome == true) HOME_CHIP else herePlace?.placeLabel
+    val chipPlace: String?
+        get() =
+            when {
+                here == null && gate == ComposeGate.Open -> NO_LOCATION
+                herePlace?.atHome == true -> HOME_CHIP
+                else -> herePlace?.placeLabel
+            }
 
     /** The names that fit the pin, the automatic one first (contract v3); empty from a server without them. */
     val placeChoices: List<MomentPlaceChoiceDto> get() = place?.places.orEmpty()
 
     /** More than one name fits an exact pin away from home: the place row opens the list. */
-    val canPickPlace: Boolean get() = !showArea && place?.atHome != true && placeChoices.size > 1
+    val canPickPlace: Boolean get() = !showArea && !noLocationOn && place?.atHome != true && placeChoices.size > 1
 
     /** The picked name, while it is still one of [placeChoices]. */
     val pickedPlace: MomentPlaceChoiceDto? get() = placeKey?.let { key -> placeChoices.firstOrNull { it.key == key } }
@@ -135,8 +148,14 @@ data class MomentsComposeUiState(
     private fun samePin(newPin: ComposePin?): Boolean =
         pin != null && newPin != null && pin.latitude == newPin.latitude && pin.longitude == newPin.longitude
 
+    /** No location: switched on, or there's no pin at all (location off and nothing in the file). */
+    val noLocationOn: Boolean get() = noLocation || pin == null
+
+    /** With no pin at all the switch stays on: there's nowhere to pin the Moment. */
+    val noLocationLocked: Boolean get() = pin == null
+
     /** An exact pin can name a venue from the place picker (around the photo's spot, or where you are). */
-    val canFindPlace: Boolean get() = !showArea && pin != null
+    val canFindPlace: Boolean get() = !showArea && pin != null && !noLocationOn
 
     /** The venue that names the Moment: only for an exact pin. */
     val pickedVenue: MomentVenue? get() = venue?.takeIf { !showArea }
@@ -204,6 +223,7 @@ class MomentsComposeViewModel
                             it.copy(
                                 here = here,
                                 herePlace = preview.data,
+                                hasConnections = preview.data.hasConnections ?: it.hasConnections,
                                 gate = if (preview.data.adultConfirmed) ComposeGate.Open else ComposeGate.NeedsAdult,
                                 notice = null,
                             )
@@ -218,6 +238,45 @@ class MomentsComposeViewModel
         fun locationRefused() {
             _state.update { it.copy(gate = ComposeGate.NeedsLocation) }
         }
+
+        /**
+         * "Post with no location" on the location card: the camera, the library and a text card work as usual, and the
+         * Moment goes to your connections only, with no pin (founder 2026-11-11). Needs a connection and the 18+ answer.
+         */
+        fun continueWithoutLocation() {
+            viewModelScope.launch {
+                when (val preview = repository.postingPreview()) {
+                    is NetworkResult.Success -> {
+                        val info = preview.data
+                        if (info.hasConnections == false) {
+                            _state.update { it.copy(hasConnections = false, notice = NEEDS_CONNECTION) }
+                            return@launch
+                        }
+                        _state.update {
+                            it.copy(
+                                here = null,
+                                herePlace = null,
+                                noLocation = true,
+                                hasConnections = info.hasConnections ?: it.hasConnections,
+                                gate = if (info.adultConfirmed) ComposeGate.Open else ComposeGate.NeedsAdult,
+                                notice = null,
+                            )
+                        }
+                    }
+                    is NetworkResult.Failure -> _state.update { it.copy(notice = preview.error.message) }
+                }
+            }
+        }
+
+        /** The Post sheet's "Don't show where". It can't come off when there's no pin; it needs a connection. */
+        fun setNoLocation(on: Boolean) =
+            _state.update {
+                when {
+                    !on && it.noLocationLocked -> it
+                    on && it.hasConnections == false -> it.copy(notice = NEEDS_CONNECTION)
+                    else -> it.copy(noLocation = on, notice = null)
+                }
+            }
 
         /** "I'm 18 or older" (the one-time confirmation, shared with Pulse's). */
         fun confirmAdult(then: (() -> Unit)? = null) {
@@ -300,6 +359,7 @@ class MomentsComposeViewModel
                             media = media,
                             pin = pin,
                             place = place,
+                            hasConnections = place?.hasConnections ?: it.hasConnections,
                             placeKey = it.placeKeyFor(pin),
                             venue = it.venueFor(pin),
                             takenAt = takenAt,
@@ -429,6 +489,7 @@ class MomentsComposeViewModel
         fun post(retried: Boolean = false) {
             val current = _state.value
             if (current.posting) return
+            if (current.noLocationOn) return postWithoutLocation(current)
             val pin = current.pin ?: return
             _state.update { it.copy(posting = true, notice = null) }
             viewModelScope.launch {
@@ -484,6 +545,36 @@ class MomentsComposeViewModel
             }
         }
 
+        /** A Moment with no location: connections only, no pin, no place (contract v3.4). */
+        private fun postWithoutLocation(current: MomentsComposeUiState) {
+            _state.update { it.copy(posting = true, notice = null) }
+            viewModelScope.launch {
+                val body =
+                    CreateMomentBody(
+                        kind = current.kind,
+                        hours = current.hours,
+                        audience = "connections",
+                        showArea = false,
+                        caption = current.caption.trim().takeIf { it.isNotEmpty() && current.media != null },
+                        text = current.text.trim().takeIf { current.media == null },
+                        background = current.background.wire.takeIf { current.media == null },
+                        location = MomentLocationBody(source = "none"),
+                        clientRequestId = requestId,
+                        takenAt = current.takenAt?.toString()?.takeIf { current.media != null },
+                    )
+                when (val result = repository.create(body)) {
+                    is NetworkResult.Success -> {
+                        val moment = result.data
+                        val media = current.media
+                        if (media != null) posting.start(moment, media, null, null) else posting.posted(moment)
+                        choices.edit().putInt("$accountId.hours", current.hours).apply()
+                        _state.update { it.copy(posting = false, done = true) }
+                    }
+                    is NetworkResult.Failure -> handlePostFailure(result.error, retried = true)
+                }
+            }
+        }
+
         private fun handlePostFailure(
             error: NetworkError,
             retried: Boolean,
@@ -504,6 +595,7 @@ class MomentsComposeViewModel
                         _state.update { it.copy(notice = NO_FIX) }
                     }
                 "PLACE_NOT_NEARBY" -> _state.update { it.copy(venue = null, notice = FAR_PLACE) }
+                "NO_CONNECTIONS" -> _state.update { it.copy(hasConnections = false, noLocation = false, notice = NEEDS_CONNECTION) }
                 "MOMENTS_DAILY_LIMIT" -> _state.update { it.copy(notice = "You've posted 20 Moments today. Try again tomorrow.") }
                 "MEDIA_TOO_LONG" -> _state.update { it.copy(notice = "Videos can be up to 30 seconds.") }
                 else -> _state.update { it.copy(notice = error.message) }
@@ -529,5 +621,6 @@ class MomentsComposeViewModel
             const val NOTICE_MS = 4_000L
             const val NO_FIX = "We couldn't find where you are. Try again in a moment."
             const val FAR_PLACE = "That place is too far from this Moment's pin. Pick one nearby."
+            const val NEEDS_CONNECTION = "A Moment with no location goes only to your connections. Add a connection first."
         }
     }

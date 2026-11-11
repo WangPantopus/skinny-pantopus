@@ -189,6 +189,8 @@ fun MomentsMapScreen(
             val inSpot = spot?.let { s -> rings.filter { it.id in s.ringIds } } ?: rings
             inSpot.sortedWith(
                 compareByDescending<MomentRingUi> { it.mine }
+                    // Connections' Moments with no location come first: the row of faces is the only place they show.
+                    .thenByDescending { it.ring.noLocation }
                     .thenByDescending { it.anyNew }
                     .thenBy { it.distanceMeters },
             )
@@ -227,8 +229,9 @@ fun MomentsMapScreen(
     ) {
         MomentsMap(
             state = state,
-            rings = rings,
-            posts = posts,
+            // Moments with no location have no spot: only the row of faces shows them.
+            rings = rings.filterNot { it.ring.noLocation },
+            posts = posts.filter { it.latitude != null && it.longitude != null },
             avatarUrl = viewModel.avatarUrl,
             camera = camera,
             recenter = recenter,

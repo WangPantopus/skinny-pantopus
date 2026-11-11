@@ -85,8 +85,8 @@ private sealed interface MomentItem {
         val posting: MomentPosting,
     ) : MomentItem {
         override val key: String get() = "posting:${posting.momentId}"
-        override val latitude: Double get() = posting.latitude
-        override val longitude: Double get() = posting.longitude
+        override val latitude: Double get() = posting.latitude ?: 0.0
+        override val longitude: Double get() = posting.longitude ?: 0.0
     }
 }
 
