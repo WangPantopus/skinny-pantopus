@@ -613,6 +613,7 @@ private fun sentTrailTitle(
         "emailed" -> "${if (letter) "Sent" else "Emailed"} to $contactTo"
         "joined" -> claimStepTitle(step.done, letter)
         "returned" -> if (letter) "The claim link expired" else "They didn’t open the email in 90 days"
+        "not_delivered" -> "Couldn’t be delivered"
         else -> step.step
     }
 }

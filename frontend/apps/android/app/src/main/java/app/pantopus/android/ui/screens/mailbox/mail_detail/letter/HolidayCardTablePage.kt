@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardOnTable
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardSenderActionsViewModel
@@ -72,10 +73,7 @@ internal fun HolidayCardTablePage(
                 add(CardTableMenuItem("File in the Vault", "cardTableFile") { if (!busy) actions.onFile() })
             }
             add(CardTableMenuItem("Shred", "cardTableShred") { if (!busy) actions.onShred() })
-            if (person != null) {
-                add(CardTableMenuItem("Report", "cardTableReport") { reporting = true })
-                add(CardTableMenuItem("Block", "cardTableBlock") { confirmBlock = true })
-            }
+            if (person != null) addAll(personItems(letter.fromName, onReport = { reporting = true }, onBlock = { confirmBlock = true }))
         }
     CardTableDialog(
         card = card.onTable(letter),
@@ -95,8 +93,24 @@ internal fun HolidayCardTablePage(
             onCloseReport = { reporting = false },
             onCloseBlock = { confirmBlock = false },
             viewModel = senderActions,
+            cardId = letter.envelope.id.takeIf { LaunchFeatures.holidayCardMemories },
         )
     }
+}
+
+/** Report and Block for whoever sent it; with card memories (wave 4 drawing 6), "Report this card" and "Block {first name}". */
+private fun personItems(
+    fromName: String,
+    onReport: () -> Unit,
+    onBlock: () -> Unit,
+): List<CardTableMenuItem> {
+    val memories = LaunchFeatures.holidayCardMemories
+    val first = fromName.trim().substringBefore(' ').removeSuffix(".")
+    val block = if (memories && first.isNotEmpty()) "Block $first" else "Block"
+    return listOf(
+        CardTableMenuItem(if (memories) "Report this card" else "Report", "cardTableReport", onReport),
+        CardTableMenuItem(block, "cardTableBlock", onBlock),
+    )
 }
 
 /** "Send Hazel a card", when there's a person to send one to and a way to; null otherwise. */

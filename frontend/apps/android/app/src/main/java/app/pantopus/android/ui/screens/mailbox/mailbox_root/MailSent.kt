@@ -332,6 +332,8 @@ object MailSentWords {
             "email_waiting" -> if (card.kind == "letter") "Waiting for them to claim it" else "Waiting for them to open the email"
             "claimed" -> if (card.kind == "letter") "They claimed your letter" else "They joined Pantopus and have it"
             "expired" -> if (card.kind == "letter") "The claim link expired" else "They didn’t open the email in 90 days"
+            // A block withdrew it before it came (memories contract section 8): never why or when.
+            "not_delivered" -> "Couldn’t be delivered"
             else -> ""
         }
     }

@@ -14,6 +14,11 @@ import com.squareup.moshi.JsonClass
 data class UserReportRequest(
     val reason: String,
     val details: String?,
+    /**
+     * "Report this card" (memories plan, launch key `holiday_card_memories`): the card being reported, one the reporter
+     * got from this person. Pantopus admins can then open that one card, and only it, to review it (each opening logged).
+     */
+    @Json(name = "mail_id") val mailId: String? = null,
 )
 
 /** `POST /api/users/:userId/report` response. */

@@ -83,7 +83,11 @@ class ReportUserSheetViewModel
             return !requiresDetails || _details.value.trim().isNotEmpty()
         }
 
-        fun submit(userId: String) {
+        /** [mailId]: "Report this card", which shares that one card with Pantopus admins for review. */
+        fun submit(
+            userId: String,
+            mailId: String? = null,
+        ) {
             val reason = _selectedReason.value ?: return
             val current = _state.value
             if (current is ReportSheetUiState.Submitting || current is ReportSheetUiState.Succeeded) return
@@ -92,7 +96,7 @@ class ReportUserSheetViewModel
             _state.value = ReportSheetUiState.Submitting
             val trimmed = _details.value.trim()
             val payloadDetails = composeDetails(reason, trimmed)
-            val body = UserReportRequest(reason = reason.backendKey, details = payloadDetails)
+            val body = UserReportRequest(reason = reason.backendKey, details = payloadDetails, mailId = mailId)
 
             viewModelScope.launch {
                 when (val result = repo.report(userId, body)) {

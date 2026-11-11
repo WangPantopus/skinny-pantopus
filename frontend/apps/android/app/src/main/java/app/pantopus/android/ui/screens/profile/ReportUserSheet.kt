@@ -62,6 +62,8 @@ fun ReportUserSheet(
     onDismiss: () -> Unit,
     onSubmitted: () -> Unit,
     viewModel: ReportUserSheetViewModel = hiltViewModel(),
+    /** "Report this card": the card that is shared with Pantopus admins for review, and the plain words saying so. */
+    card: ReportedCard? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val reason by viewModel.selectedReason.collectAsStateWithLifecycle()
@@ -87,8 +89,9 @@ fun ReportUserSheet(
             details = details,
             onSelectReason = viewModel::selectReason,
             onDetailsChange = viewModel::updateDetails,
-            onSubmit = { viewModel.submit(userId) },
+            onSubmit = { viewModel.submit(userId, card?.mailId) },
             onCancel = onDismiss,
+            card = card,
         )
     }
 }
@@ -108,6 +111,7 @@ fun ReportUserSheetBody(
     onDetailsChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onCancel: () -> Unit,
+    card: ReportedCard? = null,
 ) {
     val isSubmitting = state is ReportSheetUiState.Submitting
     val detailsRequired = selectedReason == ReportReason.Other
@@ -126,7 +130,12 @@ fun ReportUserSheetBody(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Text(
-            text = if (!handle.isNullOrEmpty()) "Report @$handle" else "Report $displayName",
+            text =
+                when {
+                    card != null -> "Report this card"
+                    !handle.isNullOrEmpty() -> "Report @$handle"
+                    else -> "Report $displayName"
+                },
             style = PantopusTextStyle.h3,
             color = PantopusColors.appText,
             modifier =
@@ -138,8 +147,12 @@ fun ReportUserSheetBody(
 
         Text(
             text =
-                "Tell us why you're reporting this account. Our moderators review " +
-                    "every report.",
+                if (card != null) {
+                    "What's wrong with it? Our moderators review every report."
+                } else {
+                    "Tell us why you're reporting this account. Our moderators review " +
+                        "every report."
+                },
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,
         )
@@ -154,6 +167,18 @@ fun ReportUserSheetBody(
             value = details,
             onChange = onDetailsChange,
         )
+
+        if (card != null) {
+            // The founder's choice (November 2): a card's report shares that one card with admins, said plainly.
+            Text(
+                text =
+                    "Pantopus will be able to see this card to review it. Only this card: nothing else in your mail or " +
+                        "${card.fromFirst}’s is shared.",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appText,
+                modifier = Modifier.testTag("reportUser_cardDisclosure"),
+            )
+        }
 
         if (state is ReportSheetUiState.Failed) {
             Text(
@@ -377,3 +402,9 @@ private fun DetailsField(
         }
     }
 }
+
+/** The card a report shares with Pantopus admins (memories plan): its piece id and its sender's first name. */
+data class ReportedCard(
+    val mailId: String,
+    val fromFirst: String,
+)
