@@ -94,15 +94,21 @@ router.post('/adult-confirm', actionLimiter, async (req, res) => {
 
 /**
  * POST /place-preview — what the Post sheet shows: the place's label, the area's, the names the author may pick for an
- * exact pin (`places`; the first is the label), the home notice, the 18+ state.
+ * exact pin (`places`; the first is the label), the home notice, the 18+ state, and whether the author has a
+ * connection (`has_connections`: a Moment with no location needs one). With no point (location off) it answers only
+ * the last two.
  */
 router.post('/place-preview', actionLimiter, async (req, res) => {
   try {
-    const { latitude, longitude } = parseBody(Joi.object(point), req.body);
-    const [labels, atHome, adult] = await Promise.all([
-      momentPlace.labelsAt(latitude, longitude),
-      momentPlace.isAtHome(req.user.id, latitude, longitude),
+    const at = parseBody(Joi.object({
+      latitude: Joi.number().min(-90).max(90), longitude: Joi.number().min(-180).max(180),
+    }).and('latitude', 'longitude'), req.body);
+    const placed = at.latitude != null;
+    const [labels, atHome, adult, connections] = await Promise.all([
+      placed ? momentPlace.labelsAt(at.latitude, at.longitude) : { place_label: null, area_label: null, places: [] },
+      placed ? momentPlace.isAtHome(req.user.id, at.latitude, at.longitude) : false,
       adultStatus(req.user.id),
+      store.connectionIds(req.user.id),
     ]);
     // pick_within_m: how far from the pin the place picker's venues may be (POST / takes a venue_id within it).
     res.json({
@@ -110,6 +116,7 @@ router.post('/place-preview', actionLimiter, async (req, res) => {
       at_home: atHome,
       adult_confirmed: Boolean(adult.attestedAt) && !adult.ineligible,
       pick_within_m: momentPlace.PICK_PLACE_M,
+      has_connections: connections.length > 0,
     });
   } catch (error) {
     sendError(res, error, 'place_preview');
@@ -129,6 +136,8 @@ const createSchema = Joi.object({
   location: Joi.alternatives().try(
     Joi.object({ source: Joi.string().valid('gps').required(), ...point, fix_at: Joi.string().isoDate().required() }),
     Joi.object({ source: Joi.string().valid('capture').required(), ...point, taken_at: Joi.string().isoDate().required() }),
+    // No location (founder 2026-11-11): no pin, not on the map; only the author's connections see it.
+    Joi.object({ source: Joi.string().valid('none').required() }),
   ).required(),
   // When an album photo or video pinned where you are (its file doesn't say where) was taken (optional; a `capture`
   // location carries its own `taken_at`). One taken more than a day ago says so on the Moment.
@@ -163,6 +172,9 @@ router.post('/', createLimiter, async (req, res) => {
       const prior = await store.loadMoment(id);
       if (prior && prior.user_id === req.user.id) return res.status(201).json({ moment: await oneMoment(prior, req.user.id) });
     }
+    // No location: connections only, no area, no place.
+    const unplaced = body.location.source === 'none';
+    if (unplaced) Object.assign(body, { audience: 'connections', show_area: false, venue_id: null, place_key: null });
     await store.checkPostingRules(req.user, body);
     // A venue picked in the place picker moves the pin to it and names it; found again here by its id near the pin.
     const venue = body.venue_id && !body.show_area
@@ -173,10 +185,12 @@ router.post('/', createLimiter, async (req, res) => {
     }
     const location = venue ? { ...body.location, latitude: venue.latitude, longitude: venue.longitude } : body.location;
     const { latitude, longitude } = location;
-    const [found, atHome] = await Promise.all([
-      momentPlace.labelsAt(latitude, longitude),
-      momentPlace.isAtHome(req.user.id, latitude, longitude),
-    ]);
+    const [found, atHome] = unplaced
+      ? [{ place_label: null, area_label: null, places: [] }, false]
+      : await Promise.all([
+        momentPlace.labelsAt(latitude, longitude),
+        momentPlace.isAtHome(req.user.id, latitude, longitude),
+      ]);
     // The name the author picked for this point, worked out again here; an area or at-home Moment says the town.
     const labels = venue
       ? { ...found, place_label: venue.label, places: [{ key: 'venue', label: venue.label }, ...found.places] }
@@ -195,7 +209,7 @@ router.post('/', createLimiter, async (req, res) => {
       background: body.background || 'teal',
       location,
       labels,
-      labelKind: momentPlace.labelKind(labels, shown),
+      labelKind: unplaced ? 'none' : momentPlace.labelKind(labels, shown),
       takenAt: store.takenAtShown(body.location.source === 'capture' ? body.location.taken_at : body.taken_at),
       venueId: venue ? body.venue_id : null,
     }), id);
@@ -294,7 +308,9 @@ router.get('/map', async (req, res) => {
   try {
     const box = parseBody(mapSchema, req.query);
     if (box.south >= box.north || box.west >= box.east) throw store.fail(400, 'MOMENT_INVALID', 'Send a map area with south < north and west < east.');
-    res.json({ rings: await store.mapRings(req.user.id, box) });
+    // `unplaced`: connections' Moments with no location (and the caller's own), for the row of faces, whatever the box.
+    const [rings, unplaced] = await Promise.all([store.mapRings(req.user.id, box), store.unplacedRings(req.user.id)]);
+    res.json({ rings, unplaced });
   } catch (error) {
     sendError(res, error, 'map');
   }
