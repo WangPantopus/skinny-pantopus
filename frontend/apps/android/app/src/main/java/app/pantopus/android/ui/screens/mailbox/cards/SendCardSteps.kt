@@ -153,13 +153,24 @@ internal fun ToStep(
                     }
             }
         }
+        // Sending to someone not on Pantopus already invites them (plan 11.6): said once, above both ways.
+        if (LaunchFeatures.cardTable) {
+            Text(
+                "They don’t need Pantopus yet. They join to open it.",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = PantopusColors.cardTextQuiet,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s5).testTag("sendCardInviteLine"),
+            )
+        }
         CardButton(
-            if (many) "Not on Pantopus? Add their email" else "Not on Pantopus? Send it to their email",
+            notOnPantopusYet(many),
             onClick = { viewModel.showEmail(true) },
             kind = CardButtonKind.Words,
             icon = PantopusIcon.Mail,
             enabled = !(many && full),
-            modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardByEmail"),
+            modifier = Modifier.padding(top = if (LaunchFeatures.cardTable) Spacing.s1 else Spacing.s5).testTag("sendCardByEmail"),
         )
         // A link is one card for whoever opens it: not with a list.
         if (LaunchFeatures.cardTable && form.listed.isEmpty()) {
@@ -286,13 +297,27 @@ private fun EmailForm(
         if (many) {
             ListChips(form, max = viewModel.maxRecipients, onRemove = viewModel::toggle, modifier = Modifier.padding(bottom = Spacing.s4))
         }
-        Text(
-            "Their email address",
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.cardTextStrong,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Their email address",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.cardTextStrong,
+                modifier = Modifier.weight(1f),
+            )
+            // The system's own contact picker (plan 11.7): the one address chosen, no permission asked, nothing kept.
+            if (LaunchFeatures.cardTable) {
+                val pickContact = rememberContactEmailPicker(viewModel::onEmailChange)
+                CardButton(
+                    "Choose from contacts",
+                    onClick = pickContact,
+                    kind = CardButtonKind.Words,
+                    fill = false,
+                    modifier = Modifier.testTag("sendCardContacts"),
+                )
+            }
+        }
         DeskField(
             value = form.email,
             onValueChange = viewModel::onEmailChange,
@@ -1167,3 +1192,9 @@ private fun envelopePreview(
             "Christmas card from $fromName to ${to.label}" + if (sealed) ", sealed until Christmas morning." else ", in its envelope.",
         card = MailPieceCard(design = design.id, sealed = sealed),
     )
+
+/** "Not on Pantopus yet?" with the card table (plan 11.6), as before without it. */
+private fun notOnPantopusYet(many: Boolean): String {
+    val yet = if (LaunchFeatures.cardTable) " yet" else ""
+    return if (many) "Not on Pantopus$yet? Add their email" else "Not on Pantopus$yet? Send it to their email"
+}
