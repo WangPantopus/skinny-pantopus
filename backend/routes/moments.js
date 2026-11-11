@@ -347,6 +347,24 @@ router.get('/mine', async (req, res) => {
   }
 });
 
+// A ring holds a person's Moments at one spot: a day's posting limit is far under this.
+const BATCH_MAX = 40;
+
+/**
+ * GET /batch?ids=a,b,c — several Moments in one read, each as GET /:id answers it (signed links included), in the
+ * order asked. The viewer reads a person's whole ring and the next person's first Moment ahead with it. One the caller
+ * can't open (ended, not live, blocked, muted, not theirs to see) is left out, never an error.
+ */
+router.get('/batch', async (req, res) => {
+  try {
+    const ids = String(req.query.ids || '').split(',').map((id) => id.trim()).filter((id) => UUID.test(id)).slice(0, BATCH_MAX);
+    const rows = await store.openMoments(ids, req.user.id);
+    res.json({ moments: await store.serializeMoments(rows, req.user.id) });
+  } catch (error) {
+    sendError(res, error, 'batch');
+  }
+});
+
 /** GET /:id — one Moment, with its signed links; 410 once it has ended. */
 router.get('/:id', async (req, res) => {
   try {
