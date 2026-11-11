@@ -8,6 +8,7 @@ import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import { toast } from '@/components/ui/toast-store';
+import { markLeavingAuthPage, useLeavingAuthPage } from '@/lib/auth-leaving';
 import { takeSignInHandoff } from '@/lib/email-verified-handoff';
 import { landingAfterSignIn } from '@/lib/invitation-after-sign-in';
 import { OAUTH_ATTEMPT_UNAVAILABLE_ERROR, beginOAuthAttempt } from '@/lib/oauth-attempt';
@@ -37,7 +38,10 @@ function LoginContent({ searchParams }: SearchParamsProps) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [loading, setLoading] = useState(false);
+  const [submitting, setLoading] = useState(false);
+  // Signed in and on the way to the next page: the form stays busy until that page shows.
+  const leaving = useLeavingAuthPage();
+  const loading = submitting || leaving;
   const [resending, setResending] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
 
@@ -96,6 +100,9 @@ function LoginContent({ searchParams }: SearchParamsProps) {
 
       // api.auth.login() stores tokens in memory. Backend sets httpOnly
       // cookies via same-origin proxy — no separate session sync needed.
+
+      // From here the next page is on its way: keep the form busy until it shows (lib/auth-leaving).
+      markLeavingAuthPage();
 
       // If the backend says email verification is required, redirect there
       if (response.requiresEmailVerification) {
