@@ -329,10 +329,13 @@ class SendCardViewModel
             _form.value = SendCardForm()
         }
 
-        private val _stampsNeeded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+        private val _stampsNeeded = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
 
-        /** The server refused a card for a stamp (they were spent on another device meanwhile): the stamp books open. */
-        val stampsNeeded: SharedFlow<Unit> = _stampsNeeded.asSharedFlow()
+        /**
+         * The server refused a card for a stamp (they were spent on another device meanwhile): the stamp books open. True
+         * when it was for the card's photo or greeting, which need a bought stamp (the sheet then says so).
+         */
+        val stampsNeeded: SharedFlow<Boolean> = _stampsNeeded.asSharedFlow()
 
         private val _stampShort = MutableStateFlow<StampShort?>(null)
 
@@ -599,7 +602,7 @@ class SendCardViewModel
                     val cards = needed ?: body.recipients.size
                     _stampShort.value = StampShort(cards, maxOf(1, cards - (available ?: 0)))
                     _form.update { it.copy(sending = false) }
-                    _stampsNeeded.tryEmit(Unit)
+                    _stampsNeeded.tryEmit(false)
                     return@launch
                 }
                 _form.update {
@@ -623,7 +626,7 @@ class SendCardViewModel
         fun getStampsForList(available: Int) {
             val needed = _form.value.listPreview?.needed ?: return
             _stampShort.value = StampShort(needed, maxOf(1, needed - available))
-            _stampsNeeded.tryEmit(Unit)
+            _stampsNeeded.tryEmit(false)
         }
 
         /** One card on a sent list taken back (confirmed by the screen): its stamp comes back. */
@@ -702,7 +705,7 @@ class SendCardViewModel
                 }
             }
             if ((look as? CardLook.Failed)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
-            if ((look as? CardLook.Failed)?.error?.wantsStamps(cards.value) == true) _stampsNeeded.tryEmit(Unit)
+            (look as? CardLook.Failed)?.error?.takeIf { it.wantsStamps(cards.value) }?.let { _stampsNeeded.tryEmit(it.forMedia()) }
         }
 
         /**
@@ -738,7 +741,7 @@ class SendCardViewModel
                 // the stamp books open; the card, its photo and its greeting stay as they are.
                 if ((result as? NetworkResult.Failure)?.error?.wantsStamps(cards.value) == true) {
                     _form.update { it.copy(sending = false) }
-                    _stampsNeeded.tryEmit(Unit)
+                    _stampsNeeded.tryEmit((result as? NetworkResult.Failure)?.error?.forMedia() == true)
                     return@launch
                 }
                 val closed = (result as? NetworkResult.Failure)?.error?.serverCode() == ARRIVAL_CLOSED
@@ -1064,7 +1067,10 @@ private fun NetworkError.serverCode(): String? {
  * off, the server's sentence shows instead.
  */
 private fun NetworkError.wantsStamps(cards: HolidayCardsResponse?): Boolean =
-    cards?.postageEnabled == true && serverCode().let { it == "STAMPS_REQUIRED" || it == "CARD_MEDIA_NEEDS_STAMP" }
+    cards?.postageEnabled == true && (serverCode() == "STAMPS_REQUIRED" || forMedia())
+
+/** 402 `CARD_MEDIA_NEEDS_STAMP`: the stamp books open saying a photo or voice greeting needs a bought stamp. */
+private fun NetworkError.forMedia(): Boolean = serverCode() == "CARD_MEDIA_NEEDS_STAMP"
 
 /** `needed` and `available` from a list's 402 `STAMPS_REQUIRED` answer. */
 private fun NetworkError.stampCounts(): Pair<Int?, Int?> {
