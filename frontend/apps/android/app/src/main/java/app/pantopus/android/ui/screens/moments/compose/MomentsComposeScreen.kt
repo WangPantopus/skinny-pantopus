@@ -559,8 +559,8 @@ private fun TextStep(
             Spacer(Modifier.weight(1f))
             PlaceChip(label = state.chipPlace, locating = state.gate == ComposeGate.Locating, light = true)
             Spacer(Modifier.weight(1f))
-            // Next waits for the fix the card pins at.
-            val canGo = state.text.isNotBlank() && state.here != null
+            // Next waits for the fix the card pins at, unless it has no location (posting with location off).
+            val canGo = state.text.isNotBlank() && (state.here != null || state.noLocation)
             Text(
                 text = "Next",
                 color = state.background.top.copy(alpha = if (canGo) 1f else 0.5f),

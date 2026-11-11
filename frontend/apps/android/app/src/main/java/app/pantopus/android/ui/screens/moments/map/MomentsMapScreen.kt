@@ -69,6 +69,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -848,6 +849,22 @@ private fun MomentsEmptyCard(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
+            )
+        }
+        // Location off can still post, with no location, for connections (founder 2026-11-11): the composer asks.
+        if (locationMissing) {
+            Text(
+                text = "Post with no location",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.primary600,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(role = Role.Button, onClick = onAdd)
+                        .padding(vertical = Spacing.s1)
+                        .testTag("moments.locationAsk.noLocation"),
             )
         }
     }
