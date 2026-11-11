@@ -4,10 +4,12 @@
 //
 //  Posting a Moment (boards P1–P4). The camera opens first and shows where
 //  the Moment will pin before anything is taken: where the phone is now (a
-//  fix at most five minutes old). A photo or video from the library, taken in
-//  the last 24 hours, pins where it was taken. The Post sheet then shows the
-//  pin, the place others will read, "Show the area instead", how long, who
-//  sees it and the caption; at your own home it says so first. A photo or
+//  fix at most five minutes old). A photo or video from the library, from any
+//  time (founder, 2026-11-11), pins where it was taken; one taken more than a
+//  day ago says when ("Taken Oct 3"). The Post sheet then shows the pin, the
+//  place others will read (a venue near the pin can be picked, as on Pulse),
+//  "Show the area instead", how long, who sees it and the caption; at your own
+//  home it says so first. A photo or
 //  video is made ready while the sheet is open, and the upload carries on
 //  after it closes (`MomentsUploader`).
 //
@@ -65,7 +67,14 @@ final class MomentsComposerModel {
 
     var background = "teal"
     /// The place name picked on the Post sheet (a key from the preview's `places`); nil: the automatic one.
-    var placeKey: String?
+    var placeKey: String? {
+        didSet { if placeKey != nil { venue = nil } }
+    }
+
+    /// A venue picked in the place picker (the Pulse composer's, around the pin): the Moment pins at it under its name.
+    private(set) var venue: MomentVenue?
+    /// When the album photo or video was taken (any time); nil for the camera, a text card, or a file that never said.
+    private(set) var takenAt: Date?
     // The Post sheet (P3).
     var showArea = false
     var hours = 24
@@ -79,6 +88,8 @@ final class MomentsComposerModel {
     private(set) var isPosting = false
     /// The place names' sheet over the Post sheet, kept here so a fold on the iPhone Duo leaves it as it was.
     var picksPlace = false
+    /// The place picker (search and the venues around the pin) over the Post sheet, kept here for the same reason.
+    var findsPlace = false
     /// The camera, held here so a fold on the iPhone Duo (which builds the camera screen again) keeps a recording going.
     let camera = MomentsCameraModel()
 
@@ -207,23 +218,23 @@ final class MomentsComposerModel {
 
     func use(photo: UIImage) {
         capture = nil
+        takenAt = nil
         draft = .photo(photo)
         prepare { folder in try MomentsMediaExport.photo(photo, into: folder) }
     }
 
     func use(video url: URL) async {
         capture = nil
+        takenAt = nil
         await useVideo(url)
     }
 
-    /// A photo or video from the last 24 hours: it pins where it was taken, when the file says.
+    /// A photo or video from the album, from any time: it pins where it was taken, when the file says; one taken
+    /// more than a day ago says when on the Moment.
     func use(asset: PHAsset) async {
         error = nil
         let taken = asset.creationDate ?? Date()
-        guard Date().timeIntervalSince(taken) <= 24 * 3600 else {
-            error = MomentsFailure.captureTooOld.message
-            return
-        }
+        takenAt = asset.creationDate
         var point = asset.location.map {
             MediaCaptureLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude, capturedAt: taken)
         }
@@ -269,6 +280,7 @@ final class MomentsComposerModel {
     func finishText() {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         textRequestId = UUID().uuidString
+        takenAt = nil
         draft = .text
     }
 
@@ -280,6 +292,7 @@ final class MomentsComposerModel {
         error = nil
         if capture != nil, let fix { Task { await preview(latitude: fix.coordinate.latitude, longitude: fix.coordinate.longitude) } }
         capture = nil
+        takenAt = nil
     }
 
     /// Exports in the background while the Post sheet is open.
@@ -312,48 +325,25 @@ final class MomentsComposerModel {
 
     // MARK: - The Post sheet
 
-    /// What the place row says: the place (the picked name, when one was picked), the town for an area, or
-    /// "Your home".
-    var placeLine: String {
-        if showArea { return place?.areaLabel ?? place?.placeLabel ?? "This area" }
-        if place?.atHome == true { return "Your home" }
-        if let picked = pickedPlace { return picked.label }
-        return place?.placeLabel.isEmpty == false ? place?.placeLabel ?? "" : "Near you"
-    }
-
-    /// The names to pick from: more than one fits the exact pin, and neither the area nor the home hides it.
-    var placeChoices: [MomentPlaceChoiceDTO] {
-        guard let place, place.places.count > 1, !showArea, !place.atHome else { return [] }
-        return place.places
-    }
-
-    /// The name the person picked, while it can still be picked.
-    var pickedPlace: MomentPlaceChoiceDTO? {
-        guard let placeKey else { return nil }
-        return placeChoices.first { $0.key == placeKey }
-    }
-
-    /// The row with the check: the picked one, else the automatic one (the first).
-    var selectedPlaceKey: String? {
-        pickedPlace?.key ?? placeChoices.first?.key
-    }
-
-    var showsHomeNotice: Bool {
-        place?.atHome == true && !showArea
-    }
-
-    /// The pin the sheet's map shows.
-    var pin: CLLocationCoordinate2D? {
+    /// Where the photo was taken, or the fix: what the place picker looks around and what's sent as the location.
+    var basePin: CLLocationCoordinate2D? {
         if let capture { return CLLocationCoordinate2D(latitude: capture.latitude, longitude: capture.longitude) }
         return fix.map { CLLocationCoordinate2D(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) }
     }
 
-    var canPost: Bool {
-        !isPosting && pin != nil && draft != nil && !asksAdult
+    /// A place picked in the place picker: a venue near the pin names the Moment and moves its pin there (the server
+    /// finds it again by its id). Only venues are offered (see the sheet's filter).
+    func pickVenue(_ tag: PostPlaceTag) {
+        guard let id = tag.placeId, id.hasPrefix("osm:"), let basePin else { return }
+        placeKey = nil
+        venue = MomentVenue(placeId: id, name: tag.name, latitude: tag.latitude, longitude: tag.longitude, around: basePin)
+        findsPlace = false
     }
 
-    var postLabel: String {
-        "Post · shows for \(hours == 1 ? "1 hour" : "\(hours) hours")"
+    /// "Remove location" in the place picker: back to the name the spot gets by itself.
+    func clearVenue() {
+        venue = nil
+        findsPlace = false
     }
 }
 
@@ -388,25 +378,18 @@ extension MomentsComposerModel {
             }
             prepared = ready
         }
-        let body = MomentCreateBody(
+        let body = createBody(
             kind: kind,
-            hours: hours,
-            audience: audience,
-            showArea: showArea,
-            caption: kind == .text || trimmedCaption.isEmpty ? nil : trimmedCaption,
-            text: kind == .text ? text.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
-            background: kind == .text ? background : nil,
             location: pinAt,
             // The outbox folder's id (or the text card's) names this Post tap: a retry returns the same Moment.
-            clientRequestId: (prepared?.0 ?? textRequestId).lowercased(),
-            // Only a name other than the automatic one is sent; the server checks it against the pin itself.
-            placeKey: pickedPlace.flatMap { $0.key == placeChoices.first?.key ? nil : $0.key }
+            requestId: (prepared?.0 ?? textRequestId).lowercased(),
+            caption: trimmedCaption
         )
         let created: MomentDTO
         do {
             created = try await MomentsAPI.send(MomentsEndpoints.create(body), as: MomentEnvelope.self).moment
         } catch let failure as MomentsFailure {
-            if failure == .adultConfirmRequired { asksAdult = true } else { error = failure.message }
+            refused(failure)
             return false
         } catch {
             self.error = MomentsFailure.offline.message
@@ -420,6 +403,32 @@ extension MomentsComposerModel {
             MomentsUploader.shared.wentLive(created)
         }
         return true
+    }
+
+    /// What the server said no to, where the person can act on it.
+    private func refused(_ failure: MomentsFailure) {
+        if failure == .placeNotNearby { venue = nil }
+        if failure == .adultConfirmRequired { asksAdult = true } else { error = failure.message }
+    }
+
+    /// The create request for what's on the Post sheet.
+    private func createBody(kind: MomentKind, location: MomentLocationBody, requestId: String, caption: String) -> MomentCreateBody {
+        MomentCreateBody(
+            kind: kind,
+            hours: hours,
+            audience: audience,
+            showArea: showArea,
+            caption: kind == .text || caption.isEmpty ? nil : caption,
+            text: kind == .text ? text.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+            background: kind == .text ? background : nil,
+            location: location,
+            clientRequestId: requestId,
+            // Only a name other than the automatic one is sent; the server checks it against the pin itself.
+            placeKey: pickedVenue == nil ? pickedPlace.flatMap { $0.key == placeChoices.first?.key ? nil : $0.key } : nil,
+            // An album item pinned where you are says when it was taken (a capture pin carries its own).
+            takenAt: kind != .text && capture == nil ? takenAt.map(MomentTime.string) : nil,
+            venueId: pickedVenue?.placeId
+        )
     }
 
     // MARK: - The last choices

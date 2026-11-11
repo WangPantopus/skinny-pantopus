@@ -268,6 +268,9 @@ extension MomentsViewer {
                     onClose: { model.close() }
                 )
                 .padding(.top, 9)
+                if let taken = model.metaTaken {
+                    MomentsTakenPill(taken: taken)
+                }
             }
             .opacity(model.holding ? 0 : 1)
             .animation(.easeOut(duration: 0.15), value: model.holding)
