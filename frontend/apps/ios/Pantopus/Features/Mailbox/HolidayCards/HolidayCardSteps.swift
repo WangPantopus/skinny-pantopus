@@ -566,16 +566,24 @@ struct HolidayCardWriteStep: View {
                     .foregroundStyle(count >= cards.messageLimit ? MailPaper.wax : HolidayCardDesk.muted(scheme))
                     .accessibilityIdentifier("sendCardCount")
             }
+            // The card's own photo (memories plan step 4): one person's card only, while the server takes one.
+            if viewModel.attachments.photo != nil || (cards.takesPhoto && viewModel.recipient?.entries == nil) {
+                HolidayCardPhotoRow(attachments: viewModel.attachments)
+            }
             if cards.signature != nil {
                 signRow
             }
             VStack(spacing: Spacing.s2) {
-                HolidayCardWaxButton(title: "Seal it", isEnabled: !empty) { viewModel.toSeal() }
+                let wait = viewModel.attachments.wait
+                HolidayCardWaxButton(title: "Seal it", isEnabled: !empty && wait == nil) { viewModel.toSeal() }
                     .accessibilityIdentifier("sendCardSealIt")
-                if empty {
-                    Text("Write a few words on the back first.")
+                if empty || wait != nil {
+                    Text(verbatim: empty ? "Write a few words on the back first." : wait ?? "")
                         .font(.system(size: 13))
                         .foregroundStyle(HolidayCardDesk.muted(scheme))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("sendCardSealWait")
                 }
             }
             .padding(.top, Spacing.s2)

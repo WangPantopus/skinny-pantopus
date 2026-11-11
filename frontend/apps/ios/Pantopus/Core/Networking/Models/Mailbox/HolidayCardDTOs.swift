@@ -68,9 +68,12 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// The server keeps a signature beside FROM (`card_table`, plan 8.2): its box and the most bytes it takes. Nil
     /// from older servers and with the key off: no signing, the typed first name as before.
     public let signature: HolidayCardSignatureSpec?
+    /// Which of a card's own photo and voice can be added now (launch key `holiday_card_memories`); nil from older
+    /// servers.
+    public let media: HolidayCardMediaSpec?
 
     private enum CodingKeys: String, CodingKey {
-        case open, holiday, year, designs, collections, arrivals, today, stamps, signature
+        case open, holiday, year, designs, collections, arrivals, today, stamps, signature, media
         case maxRecipients = "max_recipients"
         case postageEnabled = "postage_enabled"
         case closesOn = "closes_on"
@@ -105,6 +108,17 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         today = try? c.decodeIfPresent(SentHolidayCard.self, forKey: .today)
         maxRecipients = max(1, (try? c.decodeIfPresent(Int.self, forKey: .maxRecipients)) ?? 1)
         signature = try? c.decodeIfPresent(HolidayCardSignatureSpec.self, forKey: .signature)
+        media = try? c.decodeIfPresent(HolidayCardMediaSpec.self, forKey: .media)
+    }
+
+    /// "Add a photo" shows (the server takes one now, and this build carries the memories).
+    var takesPhoto: Bool {
+        LaunchFeatures.holidayCardMemories && media?.photo?.usable == true
+    }
+
+    /// "Record a greeting" shows.
+    var takesVoice: Bool {
+        LaunchFeatures.holidayCardMemories && media?.voice?.usable == true
     }
 }
 
@@ -294,11 +308,17 @@ public struct SendHolidayCardBody: Encodable, Sendable {
     public let useStamp: Bool?
     /// Signed beside FROM (plan 8.2); left out when they keep their typed name.
     public let signature: CardSignature?
+    /// The card's own photo and voice greeting (file ids from `POST /cards/media`) and the photo's description; a
+    /// send with either must carry `request_id`.
+    public let photo: String?
+    public let photoAlt: String?
+    public let voice: String?
 
     private enum CodingKeys: String, CodingKey {
-        case design, message, arrival, to, signature
+        case design, message, arrival, to, signature, photo, voice
         case requestId = "request_id"
         case useStamp = "use_stamp"
+        case photoAlt = "photo_alt"
     }
 
     public enum Recipient: Encodable, Sendable {
@@ -330,7 +350,8 @@ public struct SendHolidayCardBody: Encodable, Sendable {
         to: Recipient,
         requestId: String? = nil,
         useStamp: Bool? = nil,
-        signature: CardSignature? = nil
+        signature: CardSignature? = nil,
+        media: HolidayCardMediaPick = .none
     ) {
         self.design = design
         self.message = message
@@ -339,6 +360,9 @@ public struct SendHolidayCardBody: Encodable, Sendable {
         self.requestId = requestId
         self.useStamp = useStamp
         self.signature = signature
+        photo = media.photo
+        photoAlt = media.photo == nil ? nil : media.photoAlt
+        voice = media.voice
     }
 }
 
@@ -624,9 +648,14 @@ public struct MailCard: Decodable, Sendable, Hashable {
     public let verse: String?
     /// The sender's signature beside FROM (plan 8.2); nil while sealed, unsigned, and from older servers.
     public let signature: CardSignature?
+    /// The card's own photo and voice greeting (`holiday_card_memories`); nil while sealed, without them, and from
+    /// older servers.
+    public let photo: CardPhoto?
+    public let voice: CardVoice?
 
     private enum CodingKeys: String, CodingKey {
         case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table, verse, signature
+        case photo, voice
         case sealedUntil = "sealed_until"
     }
 
@@ -646,6 +675,8 @@ public struct MailCard: Decodable, Sendable, Hashable {
         table = design.table
         verse = sealed ? nil : design.verse
         signature = nil
+        photo = nil
+        voice = nil
     }
 
     private init(copying card: MailCard, sealed: Bool) {
@@ -663,6 +694,8 @@ public struct MailCard: Decodable, Sendable, Hashable {
         table = card.table
         verse = card.verse
         signature = card.signature
+        photo = card.photo
+        voice = card.voice
     }
 
     /// The same card on the morning its seal lifts.
@@ -686,5 +719,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         table = try? c.decodeIfPresent(String.self, forKey: .table)
         verse = try? c.decodeIfPresent(String.self, forKey: .verse)
         signature = try? c.decodeIfPresent(CardSignature.self, forKey: .signature)
+        photo = sealed ? nil : try? c.decodeIfPresent(CardPhoto.self, forKey: .photo)
+        voice = sealed ? nil : try? c.decodeIfPresent(CardVoice.self, forKey: .voice)
     }
 }

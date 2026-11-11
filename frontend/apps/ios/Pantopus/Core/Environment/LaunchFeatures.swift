@@ -67,6 +67,11 @@ public enum LaunchFeature: String, CaseIterable, Sendable {
     /// whole phone becomes the table where a card opens, a folded card on the
     /// iPhone Duo, and sharing. Needs `mailbox` and `holiday_cards` on too.
     case cardTable = "card_table"
+    /// 14. A Christmas card's own photo and voice greeting (founder decisions, 2026-11-02 and 2026-11-10; memories plan
+    /// steps 4 and 7): "Add a photo" and "Record a greeting" on Write on the back, "Report this card" and
+    /// "Block {name}" on a card, and Sent's "Couldn't be delivered". Needs `mailbox` on too. A delivered card's photo
+    /// and greeting show either way, as the server sends them.
+    case holidayCardMemories = "holiday_card_memories"
 }
 
 /// Read-only switches for the features cut from the first launch.
@@ -136,6 +141,10 @@ public enum LaunchFeatures {
 
     public static var cardTable: Bool {
         isEnabled(.cardTable) && isEnabled(.mailbox) && isEnabled(.holidayCards)
+    }
+
+    public static var holidayCardMemories: Bool {
+        isEnabled(.holidayCardMemories) && isEnabled(.mailbox)
     }
 
     /// Parses a comma-separated key list ("all" enables every feature).

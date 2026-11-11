@@ -117,6 +117,9 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
         /// The sender's own signature beside FROM (plan 8.2), on the card's page (`GET /sent/:id`) only, also while
         /// it's sealed for them; nil when unsigned and on the list.
         public let signature: CardSignature?
+        /// The card's own photo and voice greeting (`holiday_card_memories`), on the card's page only, never covered.
+        public let photo: CardPhoto?
+        public let voice: CardVoice?
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -129,10 +132,12 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
             slug = try? c.decodeIfPresent(String.self, forKey: .slug)
             table = try? c.decodeIfPresent(String.self, forKey: .table)
             signature = try? c.decodeIfPresent(CardSignature.self, forKey: .signature)
+            photo = try? c.decodeIfPresent(CardPhoto.self, forKey: .photo)
+            voice = try? c.decodeIfPresent(CardVoice.self, forKey: .voice)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case design, number, caption, paper, height, year, slug, table, signature
+            case design, number, caption, paper, height, year, slug, table, signature, photo, voice
         }
     }
 

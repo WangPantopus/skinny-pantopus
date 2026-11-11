@@ -59,6 +59,32 @@ public enum HolidayCardEndpoints {
         Endpoint(method: .get, path: "/api/mailbox/cards/\(cardId)/link")
     }
 
+    /// `GET /api/mailbox/cards/media/:fileId` — route `backend/routes/mailbox.js:2223`. The uploader's own photo or
+    /// voice (Write on the back, Look it over): private, no-store; anyone else gets 404.
+    public static func ownMedia(fileId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/mailbox/cards/media/\(fileId)")
+    }
+
+    /// `GET /api/mailbox/sent/:id/card-media/:fileId` — route `backend/routes/mailbox.js:2917`. The sender's own
+    /// card's photo or voice, also while it waits or is sealed.
+    public static func sentMedia(cardId: String, fileId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/mailbox/sent/\(cardId)/card-media/\(fileId)")
+    }
+
+    /// `GET /api/mailbox/:id/card-media/:fileId` — route `backend/routes/mailbox.js:3066`. A delivered card's photo or
+    /// voice, for its own recipient only once its seal lifts (404 otherwise). Needs only `mailbox`.
+    public static func pieceMedia(mailId: String, fileId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/mailbox/\(mailId)/card-media/\(fileId)")
+    }
+
+    static func media(_ source: CardMediaSource) -> Endpoint {
+        switch source {
+        case let .own(fileId): ownMedia(fileId: fileId)
+        case let .sent(cardId, fileId): sentMedia(cardId: cardId, fileId: fileId)
+        case let .piece(mailId, fileId): pieceMedia(mailId: mailId, fileId: fileId)
+        }
+    }
+
     /// `POST /api/mailbox/cards/:id/take-back` — route
     /// `backend/routes/mailbox.js:1988`. Until the carrier's 7 a.m. pickup (by
     /// email: until they open it).

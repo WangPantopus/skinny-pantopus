@@ -201,6 +201,7 @@ struct MailSentPieceView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("On the back: \(note) From \(HolidayCardWords.withoutPeriod(from)).")
                 .rotationEffect(.degrees(1))
+            ownMedia(piece, from: from)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Spacing.s1)
@@ -398,5 +399,23 @@ private struct SentLetterText: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.s5)
         .background(Theme.Color.appSurface, in: RoundedRectangle(cornerRadius: Radii.lg))
+    }
+}
+
+private extension MailSentPieceView {
+    /// Your own photo beside the card, never covered (memories plan step 4).
+    @ViewBuilder
+    func ownMedia(_ piece: MailSentPiece, from: String) -> some View {
+        if let photo = piece.card.photo {
+            CardMediaBeside(
+                photo: photo,
+                source: .sent(cardId: piece.id, fileId: photo.fileId),
+                number: piece.card.number,
+                day: piece.envelope.postmarkedOn ?? piece.sentAt,
+                fromName: from
+            )
+            .padding(.top, -Spacing.s6)
+            .accessibilityIdentifier("mailSentPhoto")
+        }
     }
 }
