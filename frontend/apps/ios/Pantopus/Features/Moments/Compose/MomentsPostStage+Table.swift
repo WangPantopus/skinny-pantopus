@@ -67,7 +67,9 @@ private struct MomentsTablePostCard: View {
             MomentsPostSheet(model: model, asCard: true, mapHeight: 0, onPosted: onPosted)
                 .padding(.top, 10)
         }
+        // The options 331 wide, as drawn: 6 pt from the map and from the card's edge.
         .padding(.leading, Spacing.s3)
+        .padding(.trailing, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: Radii.xl3, style: .continuous).fill(Theme.Color.appSurface))
         .clipShape(RoundedRectangle(cornerRadius: Radii.xl3, style: .continuous))

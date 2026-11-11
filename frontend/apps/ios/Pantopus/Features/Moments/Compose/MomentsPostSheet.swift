@@ -488,9 +488,11 @@ struct MomentsPostMap: View {
 
     private func region(around pin: CLLocationCoordinate2D) -> MKCoordinateRegion {
         let span = showArea ? 0.03 : 0.004
-        // The pin's head stands above its point: a little south keeps it in the middle.
+        // The pin's head stands above its point: a little south keeps it in the middle (as far as on the 150-pt map on
+        // a taller one, the table's 407, board T5).
+        let south = showArea ? 0 : span * 0.12 * min(1, 150 / height)
         return MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: pin.latitude + (showArea ? 0 : span * 0.12), longitude: pin.longitude),
+            center: CLLocationCoordinate2D(latitude: pin.latitude + south, longitude: pin.longitude),
             span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
         )
     }
