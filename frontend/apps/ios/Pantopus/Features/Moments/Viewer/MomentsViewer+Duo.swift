@@ -122,8 +122,9 @@ extension MomentsViewer {
     }
 
     /// The picture filling `size`, with the bars and the header over its top and the caption over its bottom. Closed
-    /// the header's buttons are in the side strip.
-    func duoStage(size: CGSize, barsTop: CGFloat, headerButtons: Bool) -> some View {
+    /// the header's buttons are in the side strip. The caption sits above the reply box floating over the picture,
+    /// or (the card beside the map, where the box is under the picture) 63 pt off the picture's bottom, as on the phone.
+    func duoStage(size: CGSize, barsTop: CGFloat, headerButtons: Bool, captionBottom: CGFloat = 70) -> some View {
         ZStack(alignment: .top) {
             Color.black
             media
@@ -137,7 +138,7 @@ extension MomentsViewer {
                 }
                 .overlay(alignment: .bottom) {
                     if let caption = model.moment?.caption, !caption.isEmpty, model.moment?.kind != .text, !isReplying {
-                        MomentsCaptionPill(caption: caption).padding(.bottom, 70)
+                        MomentsCaptionPill(caption: caption).padding(.bottom, captionBottom)
                     }
                 }
                 .overlay {
@@ -163,6 +164,7 @@ extension MomentsViewer {
                     muted: model.muted,
                     compact: isReplying,
                     showsButtons: headerButtons,
+                    onBack: isCard ? onBack : nil,
                     onSound: { model.muted.toggle() },
                     onMore: { showsMenu = true },
                     onClose: { model.close() }

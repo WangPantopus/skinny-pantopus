@@ -57,12 +57,26 @@ struct MomentsViewerHeader: View {
     let compact: Bool
     /// The closed iPhone Duo has Close, More and Sound in its side strip (board C3): the header shows none.
     var showsButtons = true
+    /// The card beside the map, opened from a crowded spot's list (board O3): back to the list.
+    var onBack: (@MainActor () -> Void)?
     let onSound: () -> Void
     let onMore: () -> Void
     let onClose: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
+            if let onBack, !compact {
+                Button(action: onBack) {
+                    Icon(.chevronLeft, size: 24, strokeWidth: 2.25, color: .white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, -6)
+                .padding(.trailing, -12)
+                .accessibilityLabel("Back to the list")
+                .accessibilityIdentifier("moments.viewer.backToSpot")
+            }
             Group {
                 // Your own face is the one your ring shows on the map: your picture, else your initials.
                 if let author {

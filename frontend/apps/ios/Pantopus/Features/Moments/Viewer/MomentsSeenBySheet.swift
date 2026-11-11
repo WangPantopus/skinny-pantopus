@@ -12,7 +12,10 @@ import SwiftUI
 
 struct MomentsSeenBySheet: View {
     let model: MomentsViewerModel
-    /// Closes it where it isn't a system sheet (the closed iPhone Duo's column); a sheet dismisses itself.
+    /// Above the title: the sheet's 26 pt, or the card beside your Moment on the open iPhone Duo (board O6).
+    var topPadding: CGFloat = 26
+    /// Closes it where it isn't a system sheet (the closed iPhone Duo's column, the card on the open Duo); a sheet
+    /// dismisses itself.
     var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsDelete = false
@@ -35,7 +38,7 @@ struct MomentsSeenBySheet: View {
                     .accessibilityIdentifier("moments.seenBy.timeLeft")
             }
             .padding(.horizontal, Spacing.s5)
-            .padding(.top, 26)
+            .padding(.top, topPadding)
             HStack(spacing: 10) {
                 action(
                     model.isSaving ? "Saving…" : "Save to Photos",

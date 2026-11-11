@@ -12,6 +12,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// How the screen is held.
 enum MomentsDuoPose: Equatable {
@@ -25,6 +26,20 @@ enum MomentsDuoPose: Equatable {
     case upright
     /// Half folded upright, standing on a table: the top half stands, the bottom half lies flat.
     case table
+
+    /// Open sideways (flat or like a book): the map fills the screen and watching is a card beside it.
+    var isWide: Bool {
+        if case .wide = self { return true }
+        return false
+    }
+
+    /// Open, any way up: the map's one big layout (boards O1, U1).
+    var isOpen: Bool {
+        switch self {
+        case .wide, .upright, .table: true
+        case .phone, .closed: false
+        }
+    }
 }
 
 /// What a Duo layout needs to know about the screen, in the screen's own points (its top-left corner is 0, 0).
@@ -53,6 +68,48 @@ struct MomentsDuoScreen: Equatable {
             .filter { $0.maxX > minX && $0.minX < maxX }
             .map(\.maxY)
             .max() ?? 0
+    }
+
+    // MARK: - Open sideways (boards O2–O6, B1)
+
+    /// The card beside the map: from 7.5 pt past the fold to 8 pt before the side strip, 12 pt from the top and the
+    /// bottom (boards O2, O3). Like a book it starts past the crease, so nothing in it sits on the fold.
+    var card: CGRect {
+        let fold = fold ?? CGRect(x: size.width / 2, y: 0, width: 0, height: size.height)
+        let minX = fold.maxX + 7.5
+        let maxX = size.width - insets.trailing - 8
+        return CGRect(x: minX, y: 12, width: max(maxX - minX, 0), height: max(size.height - 24, 0))
+    }
+
+    /// The left half: the screen up to the fold.
+    var leftHalf: CGRect {
+        CGRect(x: 0, y: 0, width: fold?.minX ?? size.width / 2, height: size.height)
+    }
+
+    /// Where the map's top row sits from the screen's top (☰, the area and chat): 12 pt closed and open sideways,
+    /// where nothing is above it (boards C1, O1); upright beside the clock corner, level with the clock (board U1).
+    var topRowTop: CGFloat? {
+        switch pose {
+        case .phone: nil
+        case .closed, .wide: 12
+        case .upright, .table: 24
+        }
+    }
+
+    /// The open Duo held sideways, from the window itself, for a screen outside Moments (a Moment's quote in
+    /// Messages, board O11): the fold runs from top to bottom.
+    @MainActor
+    static var windowIsWide: Bool {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *) {
+            let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+            guard let window = windows.first(where: \.isKeyWindow),
+                  let fold = window.reservedRegions(kind: .division, options: .includeInactive).first
+            else { return false }
+            return fold.frame.height > fold.frame.width
+        }
+        #endif
+        return false
     }
 
     /// Reads the screen from a view that fills the safe area: its proxy is the safe area, and its insets reach the

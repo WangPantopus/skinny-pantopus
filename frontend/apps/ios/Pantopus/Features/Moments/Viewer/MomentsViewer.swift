@@ -15,6 +15,13 @@
 
 import SwiftUI
 
+/// Where the viewer shows: full screen over what opened it, or on the open iPhone Duo as a card beside the map
+/// (board O2), inside the Moments tab.
+enum MomentsViewerPresentation: Equatable {
+    case cover
+    case card
+}
+
 struct MomentsViewer: View {
     @Bindable var session: MomentsWatchSession
     @FocusState var replyFocused: Bool
@@ -39,12 +46,17 @@ struct MomentsViewer: View {
     /// A viewer whose opener can go away with it (a chat's quote) stops when it leaves the screen. The Moments tab
     /// holds its watching above the screen and stops it only when the person closes it.
     private let stopsOnDisappear: Bool
+    let presentation: MomentsViewerPresentation
+    /// The card opened from a crowded spot's list (board O3): a back chevron at the header's leading edge returns to it.
+    let onBack: (@MainActor () -> Void)?
     private let onClose: @MainActor () -> Void
 
     init(
         session: MomentsWatchSession,
         systemScheme: ColorScheme,
         stopsOnDisappear: Bool = false,
+        presentation: MomentsViewerPresentation = .cover,
+        onBack: (@MainActor () -> Void)? = nil,
         onHideAuthor: @escaping @MainActor (String) -> Void,
         onShowAuthor: @escaping @MainActor (String) -> Void,
         onClose: @escaping @MainActor () -> Void
@@ -52,6 +64,8 @@ struct MomentsViewer: View {
         self.session = session
         self.systemScheme = systemScheme
         self.stopsOnDisappear = stopsOnDisappear
+        self.presentation = presentation
+        self.onBack = onBack
         self.onHideAuthor = onHideAuthor
         self.onShowAuthor = onShowAuthor
         self.onClose = onClose
@@ -61,8 +75,13 @@ struct MomentsViewer: View {
         session.model
     }
 
+    /// A card lives in the Moments tab, which reads how the Duo is held; a cover reads its own screen.
     var duo: MomentsDuoScreen {
-        ownScreen ?? openerScreen
+        isCard ? openerScreen : ownScreen ?? openerScreen
+    }
+
+    var isCard: Bool {
+        presentation == .card
     }
 
     /// How far the viewer has been dragged down, never negative.
@@ -83,12 +102,24 @@ struct MomentsViewer: View {
     }
 
     var body: some View {
-        layout
+        menuDialogs(on: layout, active: !isCard)
+            // A card's black and shadow are a plain card behind it (not the playing picture's), and move with it.
+            .background {
+                if isCard {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(Color.black)
+                        .shadow(color: .black.opacity(0.38), radius: 22, x: 0, y: 14)
+                        .shadow(color: .black.opacity(0.22), radius: 4, x: 0, y: 2)
+                }
+            }
             .offset(y: max(0, dragOffset.height))
             .scaleEffect(dragScale)
-            .background(Color.black.opacity(backdropOpacity).ignoresSafeArea())
-            .preferredColorScheme(.dark)
-            .readsMomentsDuoScreen(Binding(get: { duo }, set: { ownScreen = $0 }))
+            // A card has its own rounded black; behind a cover the black fades as it's dragged down.
+            .background { if !isCard { Color.black.opacity(backdropOpacity).ignoresSafeArea() } }
+            // Watching is always dark. A card is inside the tab, so only the card goes dark, not the app.
+            .environment(\.colorScheme, .dark)
+            .preferredColorScheme(isCard ? nil : .dark)
+            .readsMomentsDuoScreen(Binding(get: { duo }, set: { if !isCard { ownScreen = $0 } }))
             .task { model.start() }
             .onAppear(perform: giveReplyFocusBack)
             .onDisappear { if stopsOnDisappear { model.stop() } }
@@ -106,16 +137,6 @@ struct MomentsViewer: View {
             .onChange(of: scenePhase, initial: true) { _, phase in model.away = phase != .active }
             // Folding or turning the Duo takes the keyboard just before the new layout: the reply box gets it back.
             .onChange(of: duo.pose) { _, _ in giveReplyFocusBack() }
-            .confirmationDialog("Moment options", isPresented: $showsMenu, titleVisibility: .hidden) { menu }
-            .confirmationDialog("Report this Moment?", isPresented: $showsReport, titleVisibility: .visible) {
-                ForEach(Self.reportReasons, id: \.token) { reason in
-                    Button(reason.label) { Task { await model.report(reason: reason.token) } }
-                        .accessibilityIdentifier("moments.report.\(reason.token)")
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Reports go to the Pantopus team. The person isn't told who reported.")
-            }
             .alert("Block \(model.ring?.author.shortName ?? "")?", isPresented: $showsBlock) {
                 Button("Block", role: .destructive) { Task { await model.blockAuthor(onHide: onHideAuthor) } }
                     .accessibilityIdentifier("moments.blockConfirm")
@@ -123,11 +144,11 @@ struct MomentsViewer: View {
             } message: {
                 Text("You won't see each other's Moments or posts, and you can't message each other. They aren't told.")
             }
-            // Closed, the iPhone Duo shows Seen by in its column (`MomentsColumnSheet`); a fold there takes this sheet
-            // down without closing Seen by.
+            // Closed, the iPhone Duo shows Seen by in its column (`MomentsColumnSheet`), and beside the card the map
+            // shows it on the left (board O6); a fold to either takes this sheet down without closing Seen by.
             .sheet(isPresented: Binding(
-                get: { session.showsSeenBy && duo.pose != .closed },
-                set: { if $0 || duo.pose != .closed { session.showsSeenBy = $0 } }
+                get: { session.showsSeenBy && showsSeenBySheet },
+                set: { if $0 || showsSeenBySheet { session.showsSeenBy = $0 } }
             )) {
                 MomentsSeenBySheet(model: model)
                     .presentationDetents([.fraction(0.56), .large])
@@ -143,23 +164,57 @@ struct MomentsViewer: View {
     /// The phone's viewer, or the Duo's for how it's held.
     @ViewBuilder
     private var layout: some View {
-        switch duo.pose {
-        case .phone:
-            ZStack(alignment: .bottom) {
-                GeometryReader { geo in stage(geo) }
-                    .ignoresSafeArea(.keyboard)
-                bottomColumn(floating: false, showsReact: true)
+        if isCard {
+            cardLayout
+        } else {
+            switch duo.pose {
+            case .phone:
+                ZStack(alignment: .bottom) {
+                    GeometryReader { geo in stage(geo) }
+                        .ignoresSafeArea(.keyboard)
+                    bottomColumn(floating: false, showsReact: true)
+                }
+            case .closed:
+                closedLayout
+            case .wide, .upright, .table:
+                framedLayout
             }
-        case .closed:
-            closedLayout
-        case .wide, .upright, .table:
-            framedLayout
         }
     }
 
-    /// Paused by a menu, a sheet or a dialog over the viewer.
+    /// Seen by is the system's sheet: not closed (the column's sheet) and not in the card (the list beside it).
+    private var showsSeenBySheet: Bool {
+        !isCard && duo.pose != .closed
+    }
+
+    /// Paused by a menu, a sheet or a dialog over the viewer. Beside the card, Seen by covers nothing: your Moment
+    /// keeps playing next to the list (board O6).
     private var covered: Bool {
-        showsMenu || showsReport || showsBlock || session.showsSeenBy
+        showsMenu || showsReport || showsBlock || (session.showsSeenBy && !isCard)
+    }
+
+    /// The … menu and the report reasons. On a wide screen they're popovers pointing at the view they're attached
+    /// to: the whole screen for a cover, the More button for a card.
+    func menuDialogs(on view: some View, active: Bool) -> some View {
+        view
+            .confirmationDialog(
+                "Moment options",
+                isPresented: Binding(get: { showsMenu && active }, set: { if active { showsMenu = $0 } }),
+                titleVisibility: .hidden
+            ) { menu }
+            .confirmationDialog(
+                "Report this Moment?",
+                isPresented: Binding(get: { showsReport && active }, set: { if active { showsReport = $0 } }),
+                titleVisibility: .visible
+            ) {
+                ForEach(Self.reportReasons, id: \.token) { reason in
+                    Button(reason.label) { Task { await model.report(reason: reason.token) } }
+                        .accessibilityIdentifier("moments.report.\(reason.token)")
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Reports go to the Pantopus team. The person isn't told who reported.")
+            }
     }
 }
 
@@ -295,8 +350,9 @@ extension MomentsViewer {
     }
 
     /// The reactions while replying, a short note, and the reply box (or Seen by). On the Duo the box floats over
-    /// the picture 12 pt off its bottom (`floating`), and closed the reaction button is in the side strip.
-    func bottomColumn(floating: Bool, showsReact: Bool) -> some View {
+    /// the picture 12 pt off its bottom (`floating`), and closed the reaction button is in the side strip. In the
+    /// card beside the map it sits under the picture as on the phone, 12 pt off the card's bottom (`bottomInset`).
+    func bottomColumn(floating: Bool, showsReact: Bool, bottomInset: CGFloat? = nil) -> some View {
         VStack(spacing: 0) {
             if isReplying {
                 Spacer(minLength: 0)
@@ -328,7 +384,10 @@ extension MomentsViewer {
                 .padding(.horizontal, Spacing.s3)
                 // 14 pt off the screen's bottom, into the Home indicator's area as the boards draw it;
                 // over the keyboard while typing. On the Duo, 12 pt off the picture's bottom or the keyboard.
-                .padding(.bottom, floating ? Spacing.s3 : replyFocused ? Spacing.s2 : max(14 - homeInset, -20))
+                .padding(
+                    .bottom,
+                    bottomInset ?? (floating ? Spacing.s3 : replyFocused ? Spacing.s2 : max(14 - homeInset, -20))
+                )
         }
         .background {
             // A tap outside the reactions (not typing) closes them.
@@ -342,7 +401,10 @@ extension MomentsViewer {
     @ViewBuilder
     private func bottomBar(floating: Bool, showsReact: Bool) -> some View {
         if model.isMine {
-            MomentsSeenByBar(count: model.moment?.viewerCount, floating: floating) { session.showsSeenBy = true }
+            // Beside the map, "Seen by" opens and closes the list on the left (board O6).
+            MomentsSeenByBar(count: model.moment?.viewerCount, floating: floating) {
+                if isCard { session.showsSeenBy.toggle() } else { session.showsSeenBy = true }
+            }
         } else if let author = model.ring?.author {
             MomentsReplyBar(
                 firstName: author.shortName,
@@ -390,13 +452,15 @@ extension MomentsViewer {
     }
 
     /// A fold took the keyboard a moment ago: the reply box asks for it again, a few times while the new screen
-    /// settles (closing or half folding the Duo drops it just before the screen is laid out again).
+    /// settles (closing or half folding the Duo drops it just before the screen is laid out again). On the open Duo
+    /// the card and the cover trade places: the screen that had the keyboard goes without saying it lost it, so the
+    /// session still says the box has it.
     private func giveReplyFocusBack() {
-        guard session.wantsReplyFocusBack, !replyFocused else { return }
+        guard session.wantsReplyFocusBack || session.replyFocused, !replyFocused else { return }
         for delay in [80, 250, 500, 1000] {
             Task {
                 try? await Task.sleep(for: .milliseconds(delay))
-                guard session.replyFocusDropped != nil, !replyFocused else { return }
+                guard session.replyFocusDropped != nil || session.replyFocused, !replyFocused else { return }
                 replyFocused = true
             }
         }

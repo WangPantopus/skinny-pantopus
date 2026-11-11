@@ -23,17 +23,47 @@ struct MomentsMapActions {
 }
 
 struct MomentsMapView: View {
-    @State private var viewModel: MomentsMapViewModel
-    @State private var camera: MapCameraPosition = .automatic
-    @State private var uploads = MomentsUploader.shared
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State var viewModel: MomentsMapViewModel
+    @State var camera: MapCameraPosition = .automatic
+    @State var uploads = MomentsUploader.shared
+    /// Open sideways (iPhone Duo): the camera from before a card opened beside the map, put back when it closes.
+    @State var cameraBeforeCard: MapCamera?
+    /// Where on screen the camera's center lands (the middle of the map's own safe area), read when it settles.
+    @State var cameraAnchor: CGPoint?
+    /// Open sideways: the part of the left half the top row, the Home indicator and the keyboard leave clear.
+    @State var clearBand: CGRect = .zero
+    /// A card opened before the camera had settled once: it glides to its ring when it does.
+    @State var glidePending = false
+    /// A crowded spot waits to go back beside its list (a fold opened the Duo sideways).
+    @State var spotPending = false
+    /// The map's size when `cameraAnchor` was read: after a fold it's stale until the camera settles again.
+    @State var anchorSize: CGSize = .zero
+    /// The iPhone Duo: how tall the card at the bottom left is (open, the pill or the empty, location or load-failed
+    /// card; closed, the strip or one of those cards). MapKit's Legal link sits just above it.
+    @State var leftCardHeight: CGFloat = 52
+    /// When a ring or a bubble was last tapped: the map's own tap sees that tap too.
+    @State private var pinTappedAt = Date.distantPast
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) var colorScheme
     @Environment(AuthManager.self) private var auth
-    private let actions: MomentsMapActions
+    /// How the iPhone Duo is held (`.phone` on phones), as the Moments tab reads it.
+    @Environment(\.momentsDuoScreen) var duo
+    let actions: MomentsMapActions
+    /// Watching that the open Duo held sideways shows as a card beside the map (board O2); nil otherwise.
+    let watching: MomentsWatchSession?
+    let viewerHooks: MomentsViewerHooks?
 
-    init(viewModel: MomentsMapViewModel, actions: MomentsMapActions) {
+    init(
+        viewModel: MomentsMapViewModel,
+        actions: MomentsMapActions,
+        watching: MomentsWatchSession? = nil,
+        viewerHooks: MomentsViewerHooks? = nil
+    ) {
         _viewModel = State(initialValue: viewModel)
         self.actions = actions
+        self.watching = watching
+        self.viewerHooks = viewerHooks
     }
 
     var body: some View {
@@ -41,22 +71,44 @@ struct MomentsMapView: View {
             ZStack(alignment: .top) {
                 MapReader { proxy in
                     mapLayer { context in
-                        cameraSettled(context, proxy: proxy, clear: Self.clearRect(in: geo))
+                        cameraSettled(context, proxy: proxy, clear: clearRect(in: geo))
                     }
+                    // Open sideways: the map follows the card's ring, and moves up with the keyboard.
+                    .onChange(of: playingRingId) { old, new in cardRingChanged(from: old, to: new, proxy: proxy) }
+                    .onChange(of: clearBand) { _, _ in clearBandChanged(proxy: proxy) }
+                    .onChange(of: showsSeenByCard) { _, _ in clearBandChanged(proxy: proxy) }
+                    .onChange(of: duo.pose) { old, new in poseChanged(from: old, to: new) }
                 }
                 .ignoresSafeArea()
-                MomentsMapTopBar(viewModel: viewModel, onArea: actions.areaPicker, onBack: backToArea)
-            }
-            .overlay(alignment: .bottom) {
-                MomentsMapBottom(
+                MomentsMapTopBar(
                     viewModel: viewModel,
-                    postings: uploads.postings,
-                    me: me,
-                    actions: actions,
-                    onRetry: uploads.retry,
-                    onDiscard: uploads.discard
+                    width: duo.pose.isOpen ? Self.openRowWidth : nil,
+                    top: duo.topRowTop,
+                    onArea: actions.areaPicker,
+                    onBack: backToArea
                 )
             }
+            .overlay(alignment: .bottom) {
+                if duo.pose.isOpen {
+                    MomentsMapOpenBottom(
+                        viewModel: viewModel,
+                        postings: uploads.postings,
+                        actions: actions,
+                        hidden: cardOpen
+                    ) { leftCardHeight = $0 }
+                } else {
+                    MomentsMapBottom(
+                        viewModel: viewModel,
+                        postings: uploads.postings,
+                        me: me,
+                        actions: actions,
+                        onRetry: uploads.retry,
+                        onDiscard: uploads.discard,
+                        onBottomHeight: closedBottomReporter
+                    )
+                }
+            }
+            .overlay { if duo.pose.isWide { cardsBesideMap } }
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.start() }
@@ -87,7 +139,10 @@ struct MomentsMapView: View {
         .overlay(alignment: .top) {
             if let note = uploads.liveNote ?? uploads.plainNote {
                 MomentsLiveNote(text: note, confirms: uploads.liveNote != nil)
-                    .padding(.top, 64)
+                    // Open sideways it stays on the left half, under the top row, clear of the fold.
+                    .frame(maxWidth: duo.pose.isWide ? duo.leftHalf.width : nil)
+                    .frame(maxWidth: duo.pose.isWide ? .infinity : nil, alignment: .leading)
+                    .padding(.top, duo.pose.isOpen ? (duo.topRowTop ?? 0) + Self.openRowHeight + 12 : 64)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task(id: note) {
                         try? await Task.sleep(for: .seconds(4))
@@ -110,7 +165,7 @@ struct MomentsMapView: View {
     }
 
     /// You, as your posting ring shows you.
-    private var me: MomentAuthorDTO? {
+    var me: MomentAuthorDTO? {
         guard case let .signedIn(user) = auth.state else { return nil }
         return MomentAuthorDTO(me: user)
     }
@@ -122,21 +177,37 @@ struct MomentsMapView: View {
     private static let coveredTop = 52.0
     private static let coveredBottom = 148.0
 
-    /// The part of the map nothing covers, in the full-screen map's own points.
-    private static func clearRect(in geo: GeometryProxy) -> CGRect {
-        CGRect(
+    /// The part of the map nothing covers, in the full-screen map's own points. Open (iPhone Duo), under the top row
+    /// and above the bottom row; with a card beside the map, the clear part of the left half.
+    private func clearRect(in geo: GeometryProxy) -> CGRect {
+        if duo.pose.isOpen {
+            return openClearRect
+        }
+        return CGRect(
             x: 0,
-            y: geo.safeAreaInsets.top + coveredTop,
+            y: geo.safeAreaInsets.top + Self.coveredTop,
             width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
-            height: max(geo.size.height - coveredTop - coveredBottom, 120)
+            height: max(geo.size.height - Self.coveredTop - Self.coveredBottom, 120)
         )
     }
 
     /// The camera settled: what shows in the clear part is read off the map itself, so the strip lists what
     /// can be seen and rings join bubbles at the same distance on every phone.
     private func cameraSettled(_ context: MapCameraUpdateContext, proxy: MapProxy, clear: CGRect) {
-        guard let northWest = proxy.convert(CGPoint(x: clear.minX, y: clear.minY), from: .local),
-              let southEast = proxy.convert(CGPoint(x: clear.maxX, y: clear.maxY), from: .local),
+        if duo.pose.isOpen {
+            // Where the camera's center lands on screen, for moving a ring to a chosen point (board O2). In the
+            // window's points: the map's own local points start under its top padding.
+            cameraAnchor = proxy.convert(context.camera.centerCoordinate, to: .global)
+            anchorSize = duo.size
+        }
+        // Once the camera is known (below), a card waiting for it glides to its ring.
+        defer { if duo.pose.isWide { glideIfPending(proxy: proxy) } }
+        // The open Duo's clear part is in the window's (screen's) points; the phone's in the map's own.
+        let topLeft = CGPoint(x: clear.minX, y: clear.minY)
+        let bottomRight = CGPoint(x: clear.maxX, y: clear.maxY)
+        let open = duo.pose.isOpen
+        guard let northWest = open ? proxy.convert(topLeft, from: .global) : proxy.convert(topLeft, from: .local),
+              let southEast = open ? proxy.convert(bottomRight, from: .global) : proxy.convert(bottomRight, from: .local),
               northWest.latitude > southEast.latitude, southEast.longitude > northWest.longitude
         else {
             viewModel.cameraChanged(context.region, camera: context.camera)
@@ -165,7 +236,7 @@ struct MomentsMapView: View {
                 switch marker {
                 case let .ring(ring):
                     Annotation("", coordinate: marker.coordinate, anchor: MomentRingPin.anchor) {
-                        Button { open(ring) } label: { MomentRingPin(ring: ring) }
+                        Button { open(ring) } label: { MomentRingPin(ring: ring, playing: isPlaying(ring)) }
                             .buttonStyle(.plain)
                             .accessibilityLabel(MomentsSpeech.label(for: ring))
                             .accessibilityHint("Plays their Moments")
@@ -174,7 +245,7 @@ struct MomentsMapView: View {
                     .annotationTitles(.hidden)
                 case let .fan(cluster):
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
-                        MomentsFan(rings: cluster.rings, onOpen: open)
+                        MomentsFan(rings: cluster.rings, playing: playingMomentIds, onOpen: open)
                     }
                     .annotationTitles(.hidden)
                 case let .cluster(cluster):
@@ -194,27 +265,49 @@ struct MomentsMapView: View {
                     coordinate: CLLocationCoordinate2D(latitude: posting.latitude, longitude: posting.longitude),
                     anchor: MomentRingPin.anchor
                 ) {
-                    MomentsPostingPin(posting: posting, me: me)
+                    if duo.pose.isOpen {
+                        // The open Duo has no strip to retry from: the pin itself asks (board O10).
+                        MomentsPostingPinButton(posting: posting, me: me, onRetry: uploads.retry, onDiscard: uploads.discard)
+                    } else {
+                        MomentsPostingPin(posting: posting, me: me)
+                    }
                 }
                 .annotationTitles(.hidden)
             }
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
         .onMapCameraChange(frequency: .onEnd, onSettled)
-        // What the camera centers on lands between the top row and the strip.
-        .safeAreaPadding(.top, Self.coveredTop)
-        .safeAreaPadding(.bottom, Self.coveredBottom)
+        // A tap on the map itself closes the card beside it (open sideways, board O2). A ring's own tap comes first.
+        // Elsewhere the gesture is off, so phones' maps take touches as they always have.
+        .simultaneousGesture(TapGesture().onEnded { closeCardOnMapTap() }, including: duo.pose.isWide ? .all : .subviews)
+        // What the camera centers on lands between the top row and the strip; open, in the middle of the clear part.
+        .safeAreaPadding(.top, duo.pose == .phone ? Self.coveredTop : openMapRect.minY)
+        .safeAreaPadding(.bottom, duo.pose == .phone ? Self.coveredBottom : openMapBottomPadding)
         .accessibilityIdentifier("moments.mapCanvas")
     }
 
     private func open(_ ring: MomentRingDTO) {
+        pinTappedAt = Date()
         actions.watch(viewModel.watchQueue(from: ring), 0, false)
     }
 
+    /// The map's own tap also sees a tap on a ring: a ring tapped just now wins.
+    private func closeCardOnMapTap() {
+        guard duo.pose.isWide, watching != nil else { return }
+        Task {
+            try? await Task.sleep(for: .milliseconds(80))
+            guard Date().timeIntervalSince(pinTappedAt) > 0.4 else { return }
+            mapTapped()
+        }
+    }
+
     /// Board M2: zoom into a crowded spot; the strip shows only it. More on one point than fit round it: the strip lists them.
+    /// Open sideways (board O3), the spot goes to the middle of the left half and its list shows beside it.
     private func zoom(to cluster: MomentsCluster) {
-        viewModel.focus(on: cluster)
+        pinTappedAt = Date()
+        viewModel.focus(on: cluster, from: closeCardForSpot())
         guard !cluster.isOnePoint || cluster.rings.count <= MomentsClustering.fanLimit else { return }
+        if duo.pose.isWide { return zoomBeside(cluster) }
         let span = MomentsClustering.span(toOpen: cluster)
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) {
             camera = .region(MKCoordinateRegion(
@@ -225,7 +318,8 @@ struct MomentsMapView: View {
     }
 
     /// M2's back pill: the area, as it was.
-    private func backToArea() {
+    func backToArea() {
+        _ = closeCardForSpot()
         guard let previous = viewModel.clearFocus() else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { camera = .camera(previous) }
     }
@@ -263,6 +357,8 @@ struct MomentsMapView: View {
 /// Rings on one point, close up: each its own pin round the point, the point marked with a dot.
 private struct MomentsFan: View {
     let rings: [MomentRingDTO]
+    /// The Moments playing in the card beside the map (open sideways): a ring holding one of them is drawn playing.
+    var playing: Set<String> = []
     let onOpen: (MomentRingDTO) -> Void
 
     var body: some View {
@@ -276,7 +372,7 @@ private struct MomentsFan: View {
                 .shadow(color: .black.opacity(0.3), radius: 1.5, x: 0, y: 1)
             ForEach(Array(rings.enumerated()), id: \.element.id) { index, ring in
                 let offset = MomentsClustering.fanOffset(index: index, of: rings.count)
-                Button { onOpen(ring) } label: { MomentRingPin(ring: ring) }
+                Button { onOpen(ring) } label: { MomentRingPin(ring: ring, playing: ring.moments.contains { playing.contains($0.id) }) }
                     .buttonStyle(.plain)
                     // The tail's tip toward the point: the pin stands on its spot round it.
                     .offset(x: offset.width, y: offset.height - 35)
@@ -290,7 +386,7 @@ private struct MomentsFan: View {
 }
 
 /// Board P5: your ring while a Moment posts, and "Posting · 65%" under it.
-private struct MomentsPostingPin: View {
+struct MomentsPostingPin: View {
     let posting: MomentPosting
     let me: MomentAuthorDTO?
 
