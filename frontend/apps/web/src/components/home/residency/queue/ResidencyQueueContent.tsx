@@ -9,6 +9,12 @@ import type { useResidencyQueue } from './useResidencyQueue';
 
 interface Props { homeId: string; queue: ReturnType<typeof useResidencyQueue>; fromMembers?: boolean }
 
+// A request under a day old reads "Today" (it read "0d ago"), then "3d ago".
+function requestedAgo(createdAt: string) {
+  const days = Math.floor((Date.now() - Date.parse(createdAt)) / 86400000);
+  return days < 1 ? 'Today' : `${days}d ago`;
+}
+
 export function ResidencyQueueContent({ homeId, queue, fromMembers = false }: Props) {
   const reviewPath = `/app/homes/${homeId}/owners/review-claim/residency`;
   return <div className={fromMembers ? 'space-y-3' : 'space-y-4'}>
@@ -34,7 +40,7 @@ export function ResidencyQueueContent({ homeId, queue, fromMembers = false }: Pr
           {fromMembers && <p className="text-xs text-app-text-muted">{queueDate(claim)}</p>}
         </div>
         {!fromMembers && <span className="text-xs text-app-text-muted" title={queueDate(claim)}>
-          {claim.created_at ? `${Math.floor((Date.now() - Date.parse(claim.created_at)) / 86400000)}d ago` : 'Date unavailable'}
+          {claim.created_at ? requestedAgo(claim.created_at) : 'Date unavailable'}
         </span>}
       </>;
       return <article key={claim.id}
