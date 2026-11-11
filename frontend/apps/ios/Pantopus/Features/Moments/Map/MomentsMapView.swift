@@ -34,6 +34,10 @@ struct MomentsMapView: View {
     @State var clearBand: CGRect = .zero
     /// A card opened before the camera had settled once: it glides to its ring when it does.
     @State var glidePending = false
+    /// A crowded spot waits to go back beside its list (a fold opened the Duo sideways).
+    @State var spotPending = false
+    /// The map's size when `cameraAnchor` was read: after a fold it's stale until the camera settles again.
+    @State var anchorSize: CGSize = .zero
     /// The iPhone Duo: how tall the card at the bottom left is (open, the pill or the empty, location or load-failed
     /// card; closed, the strip or one of those cards). MapKit's Legal link sits just above it.
     @State var leftCardHeight: CGFloat = 52
@@ -73,6 +77,7 @@ struct MomentsMapView: View {
                     .onChange(of: playingRingId) { old, new in cardRingChanged(from: old, to: new, proxy: proxy) }
                     .onChange(of: clearBand) { _, _ in clearBandChanged(proxy: proxy) }
                     .onChange(of: showsSeenByCard) { _, _ in clearBandChanged(proxy: proxy) }
+                    .onChange(of: duo.pose) { old, new in poseChanged(from: old, to: new) }
                 }
                 .ignoresSafeArea()
                 MomentsMapTopBar(
@@ -193,6 +198,7 @@ struct MomentsMapView: View {
             // Where the camera's center lands on screen, for moving a ring to a chosen point (board O2). In the
             // window's points: the map's own local points start under its top padding.
             cameraAnchor = proxy.convert(context.camera.centerCoordinate, to: .global)
+            anchorSize = duo.size
         }
         // Once the camera is known (below), a card waiting for it glides to its ring.
         defer { if duo.pose.isWide { glideIfPending(proxy: proxy) } }
@@ -277,8 +283,6 @@ struct MomentsMapView: View {
         // What the camera centers on lands between the top row and the strip; open, in the middle of the clear part.
         .safeAreaPadding(.top, duo.pose == .phone ? Self.coveredTop : openMapRect.minY)
         .safeAreaPadding(.bottom, duo.pose == .phone ? Self.coveredBottom : openMapBottomPadding)
-        // The camera's center moves with the map's safe area: follow it until the camera settles again.
-        .onChange(of: openMapBottomPadding) { old, new in cameraAnchor?.y -= (new - old) / 2 }
         .accessibilityIdentifier("moments.mapCanvas")
     }
 

@@ -193,7 +193,27 @@ extension MomentsMapView {
             glide(to: ring, proxy: proxy)
         } else if new == nil, let before = cameraBeforeCard {
             cameraBeforeCard = nil
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.45)) { camera = .camera(before) }
+            if let focus = viewModel.focus {
+                // Back to a crowded spot: its list beside it open sideways, else the spot in the middle (a fold).
+                if duo.pose.isWide, watching == nil {
+                    spotPending = !pan(focus.coordinate, to: spotSpot, proxy: proxy)
+                } else {
+                    recenter(on: focus, distance: before.distance)
+                }
+            } else {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.45)) { camera = .camera(before) }
+            }
+        }
+    }
+
+    /// A fold or a turn: a crowded spot zoomed into stays in view. Into the closed or upright layout it's put in the
+    /// middle at once; open sideways it goes back to the middle of the left half once the map has its new size.
+    func poseChanged(from old: MomentsDuoPose, to new: MomentsDuoPose) {
+        guard let focus = viewModel.focus, watching == nil, old.isWide != new.isWide else { return }
+        if new.isWide {
+            spotPending = true
+        } else {
+            recenter(on: focus, distance: nil)
         }
     }
 
@@ -203,42 +223,64 @@ extension MomentsMapView {
         glide(to: ring, proxy: proxy)
     }
 
-    /// The camera settled: a card that opened before the map had settled once (a Moment from Messages or a push,
-    /// with the tab just built) glides to its ring now.
+    /// The camera settled: what waited for it moves now (the map had a new size, or hadn't settled yet). A card that
+    /// opened first (a Moment from Messages or a push, the tab just built) glides to its ring; a crowded spot goes to
+    /// the middle of the left half.
     func glideIfPending(proxy: MapProxy) {
-        guard glidePending, playingRingId != nil, let ring = watching?.model.ring else { return }
-        glidePending = false
-        if cameraBeforeCard == nil { cameraBeforeCard = viewModel.lastCamera }
-        glide(to: ring, proxy: proxy)
+        if glidePending, playingRingId != nil, let ring = watching?.model.ring {
+            if cameraBeforeCard == nil { cameraBeforeCard = viewModel.lastCamera }
+            glide(to: ring, proxy: proxy)
+        }
+        if spotPending, let focus = viewModel.focus, watching == nil {
+            spotPending = !pan(focus.coordinate, to: spotSpot, proxy: proxy)
+        }
     }
 
-    /// Pans the map, at the zoom it has, so the ring's tip lands on `ringSpot` (all in the window's points, which are
-    /// the screen's here).
+    /// The ring's tip goes to `ringSpot`; until the camera has settled at this size, it waits.
     private func glide(to ring: MomentRingDTO, proxy: MapProxy) {
         let coordinate = CLLocationCoordinate2D(latitude: ring.latitude, longitude: ring.longitude)
+        glidePending = !pan(coordinate, to: ringSpot, proxy: proxy)
+    }
+
+    /// Where a crowded spot goes beside its list: the middle of the left half; its people's pins stand above it.
+    var spotSpot: CGPoint {
+        CGPoint(x: duo.leftHalf.midX, y: clearBand.midY + 36)
+    }
+
+    /// Pans the map, at the zoom it has, so `coordinate` lands on `target` (in the window's points, which are the
+    /// screen's here). False while the camera hasn't settled at this size: the camera's center on screen isn't known.
+    private func pan(_ coordinate: CLLocationCoordinate2D, to target: CGPoint, proxy: MapProxy) -> Bool {
         guard clearBand.height > 0,
+              anchorSize == duo.size,
               let anchor = cameraAnchor,
               let current = viewModel.lastCamera,
-              let ringPoint = proxy.convert(coordinate, to: .global)
-        else {
-            glidePending = true
-            return
-        }
-        glidePending = false
-        let target = ringSpot
-        let centerPoint = CGPoint(x: anchor.x + ringPoint.x - target.x, y: anchor.y + ringPoint.y - target.y)
-        guard let center = proxy.convert(centerPoint, from: .global) else { return }
+              let point = proxy.convert(coordinate, to: .global)
+        else { return false }
+        // Up and down, the camera's center is the middle of the map's safe area (its top and bottom margins), which
+        // the bottom card's height can change between two settles of the camera.
+        let anchorY = (openMapRect.minY + duo.size.height - openMapBottomPadding) / 2
+        let centerPoint = CGPoint(x: anchor.x + point.x - target.x, y: anchorY + point.y - target.y)
+        guard let center = proxy.convert(centerPoint, from: .global) else { return false }
         var next = current
         next.centerCoordinate = center
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.5)) { camera = .camera(next) }
+        return true
+    }
+
+    /// The spot in the middle of the map, at the zoom it was opened at (no animation: a fold switches at once).
+    private func recenter(on focus: MomentsFocus, distance: Double?) {
+        guard var next = viewModel.lastCamera else { return }
+        next.centerCoordinate = focus.coordinate
+        if let distance { next.distance = distance }
+        camera = .camera(next)
     }
 
     /// Board O3: zooms into a crowded spot with the spot in the middle of the left half, beside its list. The zoom is
     /// the phone's (`MomentsClustering.span(toOpen:)` across the clear part); the camera keeps its heading and pitch.
     func zoomBeside(_ cluster: MomentsCluster) {
         let span = MomentsClustering.span(toOpen: cluster)
-        guard let anchor = cameraAnchor, let current = viewModel.lastCamera, let region = viewModel.lastRegion,
-              region.span.latitudeDelta > 0
+        guard anchorSize == duo.size, var anchor = cameraAnchor, let current = viewModel.lastCamera,
+              let region = viewModel.lastRegion, region.span.latitudeDelta > 0
         else {
             camera = .region(MKCoordinateRegion(
                 center: cluster.coordinate,
@@ -250,8 +292,8 @@ extension MomentsMapView {
         // Points per degree of latitude now (the last read was this many points tall) and after the zoom.
         let pointsNow = viewModel.mapPoints / region.span.latitudeDelta
         let pointsAfter = clear.height / span
-        // The spot in the middle of the left half; its people's pins stand above it.
-        let target = CGPoint(x: duo.leftHalf.midX, y: clear.midY + 36)
+        let target = spotSpot
+        anchor.y = (openMapRect.minY + duo.size.height - openMapBottomPadding) / 2
         let longitudeScale = max(cos(cluster.coordinate.latitude * .pi / 180), 0.1)
         let center = CLLocationCoordinate2D(
             latitude: cluster.coordinate.latitude + (target.y - anchor.y) / pointsAfter,
@@ -267,5 +309,11 @@ extension MomentsMapView {
     func mapTapped() {
         guard duo.pose.isWide, watching != nil, let viewerHooks else { return }
         viewerHooks.onClose()
+    }
+}
+
+extension MomentsFocus {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 }
