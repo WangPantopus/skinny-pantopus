@@ -181,6 +181,9 @@ final class MomentsUploader {
             return
         }
         let uploaded = try await upload(id: id, momentId: momentId, media: prepared)
+        // The file is in: nothing is left to remind about, whatever the picture check takes from here
+        // (the wait for it can outlast the app's time in the background).
+        MomentsUploadReminder.cancel(id)
         await settle(id, state: uploaded.state, momentId: momentId)
     }
 
@@ -232,6 +235,8 @@ final class MomentsUploader {
         let request = try await MomentsBackgroundUpload.request(momentId: momentId, boundary: boundary, renewing: renewing)
         // The body stays in the folder while the system sends it; it goes with the folder.
         let body = try MomentsUploadBody.write(media: media, folder: folder, boundary: boundary)
+        // Should the app be swiped away now, iOS stops the transfer and nothing runs to say so: the reminder is set first.
+        MomentsUploadReminder.schedule(id, account: Self.signedInAccount)
         return await MomentsBackgroundUpload.shared.send(id: id, request: request, bodyFile: body, progress: progress)
     }
 
@@ -306,6 +311,7 @@ final class MomentsUploader {
 
     /// The upload's files and bookkeeping go; the posting ring is a separate matter.
     private func removeFiles(_ id: String) {
+        MomentsUploadReminder.cancel(id)
         media.removeValue(forKey: id)
         tasks.removeValue(forKey: id)
         if let folder = try? Self.outboxRoot().appendingPathComponent(id, isDirectory: true) {
@@ -316,6 +322,11 @@ final class MomentsUploader {
     private func update(_ id: String, _ change: (inout MomentPosting) -> Void) {
         guard let index = postings.firstIndex(where: { $0.id == id }) else { return }
         change(&postings[index])
+    }
+
+    private static var signedInAccount: String? {
+        guard case let .signedIn(user) = AuthManager.shared.state else { return nil }
+        return user.id
     }
 
     // MARK: - After a relaunch
@@ -384,6 +395,7 @@ final class MomentsUploader {
         media = [:]
         pickedUp = []
         MomentsBackgroundUpload.shared.cancelAll()
+        MomentsUploadReminder.cancelAll()
         postings = []
         plainNote = nil
         liveNote = nil

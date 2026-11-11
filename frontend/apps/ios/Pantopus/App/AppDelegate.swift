@@ -125,6 +125,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 
+    /// The app is closed by hand while it runs (swiped away): iOS stops a Moment's upload with it, so the
+    /// reminder to come back and finish posting is said now.
+    func applicationWillTerminate(_: UIApplication) {
+        MainActor.assumeIsolated {
+            var account: String?
+            if case let .signedIn(user) = AuthManager.shared.state { account = user.id }
+            MomentsUploadReminder.appWillTerminate(account: account)
+        }
+    }
+
     // MARK: - Background uploads
 
     /// The system woke the app because a Moment's file finished going up while it was closed.
@@ -194,6 +204,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         }
         // "<name> added a Moment" while the app is open: the Moments tab's dot reads again. With
         // Moments off for this account there is nothing to open: no banner.
+        // "Your Moment didn't finish posting" with the app open: the map already shows the ring and its
+        // "Try again", so no banner.
+        if type == MomentsUploadReminder.type { return [] }
         if type == "moment_new" {
             let isOn = await MainActor.run { MomentsFlags.shared.moments }
             guard isOn else { return [] }
