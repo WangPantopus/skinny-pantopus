@@ -76,7 +76,7 @@ const LOOK_UNAVAILABLE = 'Pantopus can’t show how your card will look yet. You
  */
 /** A card's own photo and voice go only with a bought stamp (founder 2026-11-11): 'ready', 'buy' or 'unavailable'. */
 type MediaStamp = 'ready' | 'buy' | 'unavailable';
-const MEDIA_NEEDS_STAMP = 'Photos and voice greetings go on cards sent with a bought stamp.';
+const MEDIA_NEEDS_STAMP = 'Free stamps send your card and note. A photo or voice greeting needs a bought stamp.';
 
 /**
  * Where a card's own photo and voice stand: the server's word when the cards loaded, followed by the live stamp balance

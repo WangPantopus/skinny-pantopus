@@ -26,6 +26,9 @@ const S3_BUCKET =
   process.env.AWS_S3_BUCKET ||
   process.env.AWS_BUCKET_NAME ||
   'pantopus-uploads';
+// A Christmas card's own photo and voice greeting (services/holidayCardMedia) go in their own private bucket when this is
+// set; unset, they share S3_BUCKET as before. The bucket is recorded on each file's row, so reads and deletes follow it.
+const CARD_MEDIA_BUCKET = (process.env.CARD_MEDIA_BUCKET || '').trim() || S3_BUCKET;
 const rawCloudfront = (process.env.AWS_CLOUDFRONT_URL || '').trim();
 const normalizedCloudfront = rawCloudfront
   ? rawCloudfront.replace(/\/+$/, '')
@@ -45,4 +48,4 @@ const S3_STORAGE_NAMESPACE = S3_ENDPOINT
   ? new URL(S3_ENDPOINT).origin + new URL(S3_ENDPOINT).pathname.replace(/\/+$/, '')
   : `aws:${S3_REGION}`;
 
-module.exports = { s3Client, S3_BUCKET, CLOUDFRONT_URL, S3_REGION, S3_STORAGE_NAMESPACE };
+module.exports = { s3Client, S3_BUCKET, CARD_MEDIA_BUCKET, CLOUDFRONT_URL, S3_REGION, S3_STORAGE_NAMESPACE };
