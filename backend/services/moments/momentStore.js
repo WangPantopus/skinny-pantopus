@@ -313,6 +313,27 @@ async function openMoment(id, viewerId, { liveOnly = true } = {}) {
 }
 
 /**
+ * The Moments among `ids` that `viewerId` may open right now (openMoment's rules), in the order asked: one read for a
+ * person's whole ring, so the viewer never waits between Moments. One that ended, isn't live yet or can't be seen is
+ * left out; the app's own read of it (GET /:id) says why.
+ */
+async function openMoments(ids, viewerId) {
+  const wanted = [...new Set(ids)];
+  if (!wanted.length) return [];
+  const { data, error } = await supabaseAdmin.from('Post').select(MOMENT_SELECT).in('id', wanted).eq('is_story', true);
+  if (error) throw new Error(`Failed to load the Moments: ${error.message}`);
+  const rows = data || [];
+  const ctx = await viewerContext(viewerId, rows.map((row) => row.user_id));
+  const open = new Map(rows.filter((row) => {
+    const state = momentState(row);
+    if (state === 'ended') return false;
+    if (row.user_id === viewerId) return true;
+    return state === 'live' && canSee(row, ctx);
+  }).map((row) => [row.id, row]));
+  return wanted.map((id) => open.get(id)).filter(Boolean);
+}
+
+/**
  * The posts `viewerId` reported in the last few days (a Moment lasts two at most): a Moment someone reported leaves
  * their map and their tab's dot for good, whatever becomes of the report. A failed read hides nothing: this is for
  * the reporter's comfort, not a rule about who may see what.
@@ -751,7 +772,7 @@ async function deleteMoment(row) {
 module.exports = {
   KINDS, HOURS, BACKGROUNDS, AUDIENCES, DAILY_LIMIT, HOUR_MS, MOMENT_SELECT,
   fail, meta, hasEnded, momentState, displayedPoint, viewerContext, canSee, loadAuthors, loadMoment,
-  serializeMoments, openMoment, mapRings, unplacedRings, connectionIds, unseenPeople, wentLiveAt, ownMoments, viewersOf,
+  serializeMoments, openMoment, openMoments, mapRings, unplacedRings, connectionIds, unseenPeople, wentLiveAt, ownMoments, viewersOf,
   newMomentRow, takenAtShown, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
   filesHeld, purgeFiles, deleteMoment,
 };
