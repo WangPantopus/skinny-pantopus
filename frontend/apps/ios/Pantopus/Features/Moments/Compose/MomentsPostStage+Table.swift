@@ -7,7 +7,8 @@
 //  over a blurred copy of itself, with Retake; the flat half has a card with
 //  a bigger map of where it pins and the options beside it (the phone
 //  sheet's, without its small map). Typing a caption, the system's keyboard
-//  fills the flat half, so the card rises above it onto the standing half.
+//  fills the flat half, so the card rises above it onto the standing half,
+//  below the clock's corner, with a shorter map and the options scrolling.
 //
 
 import SwiftUI
@@ -36,20 +37,25 @@ extension MomentsPostStage {
                 }
             }
             .ignoresSafeArea()
-            // 12 pt in from the flat half's edges; above the keyboard while a caption is typed.
+            // 12 pt in from the flat half's edges. While a caption is typed the keyboard fills the flat half: the card
+            // goes above it, from 12 pt under the clock's corner, as tall as the room left.
             GeometryReader { geo in
-                MomentsTablePostCard(model: model, onPosted: onPosted)
-                    .frame(width: card.width, height: card.height)
-                    .offset(x: Spacing.s3, y: min(fold.maxY + 12.5, geo.size.height - Spacing.s3 - card.height))
+                let lifted = geo.size.height < fold.maxY + 12.5 + card.height + Spacing.s3
+                let top = lifted ? duo.occludedBottom(from: Spacing.s3, to: Spacing.s3 + card.width) + Spacing.s3 : fold.maxY + 12.5
+                let height = lifted ? max(geo.size.height - Spacing.s3 - top, 200) : card.height
+                MomentsTablePostCard(model: model, mapHeight: height - 24, onPosted: onPosted)
+                    .frame(width: card.width, height: height)
+                    .offset(x: Spacing.s3, y: top)
             }
             .ignoresSafeArea(.container)
         }
     }
 }
 
-/// Board T5's card: the map of where it pins, 290 × 407, beside the options and Post.
+/// Board T5's card: the map of where it pins, 290 × 407 (shorter while a caption is typed), beside the options and Post.
 private struct MomentsTablePostCard: View {
     let model: MomentsComposerModel
+    let mapHeight: CGFloat
     let onPosted: () -> Void
     @Environment(AuthManager.self) private var auth
 
@@ -60,7 +66,7 @@ private struct MomentsTablePostCard: View {
                 showArea: model.showArea,
                 me: me,
                 placeholder: model.locating == .unavailable ? "Location is off" : "Finding where you are…",
-                height: 407
+                height: mapHeight
             )
             .frame(width: 290)
             .padding(.top, Spacing.s3)
