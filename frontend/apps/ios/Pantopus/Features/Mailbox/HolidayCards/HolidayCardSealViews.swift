@@ -35,17 +35,8 @@ struct HolidayCardSealStep: View {
                     .padding(.top, Spacing.s3)
                     .accessibilityIdentifier("sendCardEnvelopeCount")
             }
-            Text("When should it arrive?")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(HolidayCardDesk.text(scheme))
-                .accessibilityAddTraits(.isHeader)
+            arrivalChoices
                 .padding(.top, Spacing.s6)
-            VStack(spacing: 10) {
-                ForEach(viewModel.arrivals, id: \.self) { arrival in
-                    choice(arrival)
-                }
-            }
-            .padding(.top, 10)
             Text(sealNote)
                 .font(.system(size: 13))
                 .foregroundStyle(MailPaper.cardTextSoft)
@@ -72,6 +63,34 @@ struct HolidayCardSealStep: View {
             button
                 .padding(.top, Spacing.s5)
                 .accessibilityIdentifier("sendCardSend")
+        }
+    }
+
+    /// "When should it arrive?" and its three choices; at the table (plan Part 9) on a cream slip lying on the cloth.
+    @ViewBuilder
+    private var arrivalChoices: some View {
+        let choices = VStack(alignment: .leading, spacing: Spacing.s0) {
+            Text("When should it arrive?")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(LaunchFeatures.cardTable ? MailPaper.cardText : HolidayCardDesk.text(scheme))
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 10) {
+                ForEach(viewModel.arrivals, id: \.self) { arrival in
+                    choice(arrival)
+                }
+            }
+            .padding(.top, 10)
+        }
+        if LaunchFeatures.cardTable {
+            choices
+                .environment(\.colorScheme, .light)
+                .padding(14)
+                .background(MailPaper.letter, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                .shadow(color: .black.opacity(0.28), radius: 10, x: 0, y: 6)
+                .rotationEffect(.degrees(-0.6))
+                .accessibilityIdentifier("sendCardArrivalSlip")
+        } else {
+            choices
         }
     }
 
