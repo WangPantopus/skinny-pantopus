@@ -919,7 +919,7 @@ November 11):
   callback (`GET /api/users/oauth/:provider`, #3908), so the iPhone box names
   pantopus.com once that release is live. No app update is needed.
 - Checked at 04:03 UTC: Google showed "Choose an account to continue to
-  pantopus.com", and a web sign-in with Google as wang@pantopus.com returned
+  pantopus.com", and a web sign-in with the founder's Google account returned
   through `auth.pantopus.com` and opened Your Place. Apple's sign-in page
   accepts the new return URL and refuses an unregistered one. Not checked: a
   full Apple sign-in on the web (it needs an Apple ID password) and staging,
