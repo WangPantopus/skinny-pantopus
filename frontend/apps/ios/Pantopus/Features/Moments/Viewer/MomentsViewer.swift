@@ -456,11 +456,11 @@ extension MomentsViewer {
     }
 
     /// A fold took the keyboard a moment ago: the reply box asks for it again, a few times while the new screen
-    /// settles (closing or half folding the Duo drops it just before the screen is laid out again). On the open Duo
-    /// the card and the cover trade places: the screen that had the keyboard goes without saying it lost it, so the
-    /// session still says the box has it.
+    /// settles (closing or half folding the Duo drops it just before the screen is laid out again; lifting it off a
+    /// table drops it just after). On the open Duo the card and the cover trade places: the screen that had the
+    /// keyboard goes without saying it lost it, so the session still says the box has it.
     private func giveReplyFocusBack() {
-        guard session.wantsReplyFocusBack || session.replyFocused, !replyFocused else { return }
+        guard session.wantsReplyFocusBack || session.replyFocused else { return }
         for delay in [80, 250, 500, 1000] {
             Task {
                 try? await Task.sleep(for: .milliseconds(delay))
