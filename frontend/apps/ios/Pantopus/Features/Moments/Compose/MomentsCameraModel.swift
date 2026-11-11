@@ -38,9 +38,16 @@ final class MomentsCameraModel {
     private(set) var recents: [MomentsRecentItem]?
     /// The library is open to Pantopus (all of it, or the photos picked).
     private(set) var libraryAllowed = false
+    /// On a table (board T3): Video, where the shutter starts and stops a video, or Photo.
+    var tripodVideo = false
+    /// On a table: 0 (off), 3 or 10 seconds before the photo or the video starts.
+    var timer = 0
+    /// The seconds left before the timer takes the photo or starts the video; nil when it isn't counting down.
+    private(set) var countdown: Int?
 
     @ObservationIgnored let controller = MomentsCameraController()
     @ObservationIgnored private var clock: Task<Void, Never>?
+    @ObservationIgnored private var countdownTask: Task<Void, Never>?
     @ObservationIgnored private var running = false
     /// The composer closed: a recording that stops now isn't posted.
     @ObservationIgnored private var discardsVideo = false
@@ -70,6 +77,7 @@ final class MomentsCameraModel {
     /// The camera no longer shows: the mode changed, a photo or video was taken, or the composer closed
     /// (`discarding`: a recording cut short by closing isn't posted).
     func stop(discarding: Bool = false) {
+        cancelCountdown()
         if discarding { discardsVideo = true }
         guard running else { return }
         running = false
@@ -135,5 +143,39 @@ final class MomentsCameraModel {
             await items.append(MomentsRecentItem(asset: asset, thumbnail: MomentsLibraryLoader.thumbnail(for: asset, side: 300)))
         }
         recents = items
+    }
+}
+
+// MARK: - On a table (board T3)
+
+extension MomentsCameraModel {
+    /// The tripod's shutter: a photo, or a video started or stopped (tap to start, tap again to stop, 30 seconds at
+    /// most); with a timer, once it has counted down. A tap while it counts down stops the countdown.
+    func tripodShutter() {
+        if recording { return stopVideo() }
+        if countdown != nil { return cancelCountdown() }
+        guard ready == true, !capturing else { return }
+        guard timer > 0 else { return shoot() }
+        let seconds = timer
+        countdownTask = Task { [weak self] in
+            for left in stride(from: seconds, to: 0, by: -1) {
+                self?.countdown = left
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+            }
+            self?.countdown = nil
+            self?.shoot()
+        }
+    }
+
+    /// Stops a countdown before it takes anything: the camera stopped, or the Duo left the table.
+    func cancelCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        countdown = nil
+    }
+
+    private func shoot() {
+        if tripodVideo { startVideo() } else { takePhoto() }
     }
 }

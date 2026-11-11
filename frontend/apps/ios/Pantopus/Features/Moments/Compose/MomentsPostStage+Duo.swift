@@ -108,7 +108,7 @@ extension MomentsPostStage {
 
     /// What's being posted, as the Moment will show it: filling the Moment's tall shape.
     @ViewBuilder
-    private var picture: some View {
+    var picture: some View {
         switch model.draft {
         case let .photo(image):
             Color(white: 0.067)
@@ -135,7 +135,7 @@ extension MomentsPostStage {
 
     /// Around the picture on a wide screen: a blurred, darker copy of it; a text card's colors; a video's black.
     @ViewBuilder
-    private var blurredCopy: some View {
+    var blurredCopy: some View {
         switch model.draft {
         case let .photo(image):
             Color.black

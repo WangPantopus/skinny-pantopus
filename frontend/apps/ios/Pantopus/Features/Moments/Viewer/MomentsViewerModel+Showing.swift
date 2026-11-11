@@ -46,6 +46,11 @@ extension MomentsViewerModel {
         ring?.mine ?? false
     }
 
+    /// On a table, who plays after this person (board T1): the rings after this one, in the queue's order.
+    var upNext: ArraySlice<MomentRingDTO> {
+        rings.indices.contains(ringIndex + 1) ? rings[(ringIndex + 1)...] : []
+    }
+
     var isPaused: Bool {
         holding || replying || covered || away || load != .ready
     }

@@ -157,7 +157,7 @@ extension MomentsTextCardEditor {
     // MARK: - Parts
 
     /// The words, white and centered, on the card.
-    private func field(size: CGFloat, lineSpacing: CGFloat, lines: Int) -> some View {
+    func field(size: CGFloat, lineSpacing: CGFloat, lines: Int) -> some View {
         TextField(
             "",
             text: Binding(get: { model.text }, set: { model.text = $0 }),
@@ -175,7 +175,7 @@ extension MomentsTextCardEditor {
         .accessibilityIdentifier("moments.textCard.field")
     }
 
-    private var counter: some View {
+    var counter: some View {
         Text("\(model.text.count) / \(MomentsComposerModel.textLimit)")
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(Color.white.opacity(0.78))

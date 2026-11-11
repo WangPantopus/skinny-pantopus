@@ -137,6 +137,8 @@ struct MomentsViewer: View {
             .onChange(of: scenePhase, initial: true) { _, phase in model.away = phase != .active }
             // Folding or turning the Duo takes the keyboard just before the new layout: the reply box gets it back.
             .onChange(of: duo.pose) { _, _ in giveReplyFocusBack() }
+            // The pause button is the table's (board T1): lifted off the table, the Moment plays on.
+            .onChange(of: duo.pose, initial: true) { _, pose in if pose != .table { session.paused = false } }
             .alert("Block \(model.ring?.author.shortName ?? "")?", isPresented: $showsBlock) {
                 Button("Block", role: .destructive) { Task { await model.blockAuthor(onHide: onHideAuthor) } }
                     .accessibilityIdentifier("moments.blockConfirm")
@@ -176,21 +178,23 @@ struct MomentsViewer: View {
                 }
             case .closed:
                 closedLayout
-            case .wide, .upright, .table:
+            case .wide, .upright:
                 framedLayout
+            case .table:
+                tableLayout
             }
         }
     }
 
-    /// Seen by is the system's sheet: not closed (the column's sheet) and not in the card (the list beside it).
+    /// Seen by is the system's sheet: not closed (the column's sheet), not in the card or on a table (the list beside it).
     private var showsSeenBySheet: Bool {
-        !isCard && duo.pose != .closed
+        !seenByBeside && duo.pose != .closed
     }
 
-    /// Paused by a menu, a sheet or a dialog over the viewer. Beside the card, Seen by covers nothing: your Moment
-    /// keeps playing next to the list (board O6).
+    /// Paused by a menu, a sheet or a dialog over the viewer, or on a table by its pause button. Beside the card and on a
+    /// table, Seen by covers nothing: your Moment keeps playing next to the list (board O6).
     private var covered: Bool {
-        showsMenu || showsReport || showsBlock || (session.showsSeenBy && !isCard)
+        showsMenu || showsReport || showsBlock || (session.showsSeenBy && !seenByBeside) || (session.paused && duo.pose == .table)
     }
 
     /// The … menu and the report reasons. On a wide screen they're popovers pointing at the view they're attached
@@ -338,8 +342,8 @@ extension MomentsViewer {
                 .accessibilityIdentifier("moments.viewer.video")
             case .text:
                 // While a reply is being written the card keeps its color and gives up its words, so they
-                // don't read through the reactions and the reply box.
-                MomentsTextCard(text: isReplying ? "" : moment.text ?? "", background: moment.background)
+                // don't read through the reactions and the reply box. On a table nothing covers the card.
+                MomentsTextCard(text: isReplying && duo.pose != .table ? "" : moment.text ?? "", background: moment.background)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("moments.viewer.text")
             }
@@ -424,7 +428,7 @@ extension MomentsViewer {
         }
     }
 
-    private func send() {
+    func send() {
         let text = session.replyText
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         Task {
@@ -455,11 +459,11 @@ extension MomentsViewer {
     }
 
     /// A fold took the keyboard a moment ago: the reply box asks for it again, a few times while the new screen
-    /// settles (closing or half folding the Duo drops it just before the screen is laid out again). On the open Duo
-    /// the card and the cover trade places: the screen that had the keyboard goes without saying it lost it, so the
-    /// session still says the box has it.
+    /// settles (closing or half folding the Duo drops it just before the screen is laid out again; lifting it off a
+    /// table drops it just after). On the open Duo the card and the cover trade places: the screen that had the
+    /// keyboard goes without saying it lost it, so the session still says the box has it.
     private func giveReplyFocusBack() {
-        guard session.wantsReplyFocusBack || session.replyFocused, !replyFocused else { return }
+        guard session.wantsReplyFocusBack || session.replyFocused else { return }
         for delay in [80, 250, 500, 1000] {
             Task {
                 try? await Task.sleep(for: .milliseconds(delay))

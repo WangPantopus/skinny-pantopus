@@ -15,7 +15,8 @@ struct MomentsTextCardEditor: View {
     let model: MomentsComposerModel
     let onClose: () -> Void
     @FocusState var focused: Bool
-    /// Open sideways (board O8): the words' own height in the card, which the field is given so the card centers them.
+    /// Open sideways (board O8) and on a table (T4): the words' own height in the card, which the field is given so the
+    /// card centers them.
     @State var wideWordsHeight: CGFloat = 0
     @Environment(\.momentsDuoScreen) var duo
 
@@ -26,8 +27,10 @@ struct MomentsTextCardEditor: View {
                 closedLayout
             case .wide:
                 wideLayout
-            case .phone, .upright, .table:
+            case .phone, .upright:
                 phoneLayout
+            case .table:
+                tableLayout
             }
         }
         // Folding or turning the Duo takes the keyboard just before the new layout: the words get it back, a few
@@ -116,23 +119,28 @@ struct MomentsTextCardEditor: View {
     func swatches(spacing: CGFloat) -> some View {
         HStack(spacing: spacing) {
             ForEach(MomentsComposerModel.backgrounds, id: \.self) { name in
-                let selected = model.background == name
-                Button { model.background = name } label: {
-                    Circle()
-                        .fill(MomentsPalette.card(name).top)
-                        .frame(width: selected ? 34 : 28, height: selected ? 34 : 28)
-                        .overlay(Circle().strokeBorder(Color.white.opacity(selected ? 1 : 0.85), lineWidth: selected ? 3 : 2))
-                        .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(name.capitalized)
-                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-                .accessibilityIdentifier("moments.textCard.bg.\(name)")
+                swatch(name)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Background color")
+    }
+
+    /// One background: 34 pt in a white ring when chosen, 28 otherwise, in a 44-pt tap area.
+    func swatch(_ name: String) -> some View {
+        let selected = model.background == name
+        return Button { model.background = name } label: {
+            Circle()
+                .fill(MomentsPalette.card(name).top)
+                .frame(width: selected ? 34 : 28, height: selected ? 34 : 28)
+                .overlay(Circle().strokeBorder(Color.white.opacity(selected ? 1 : 0.85), lineWidth: selected ? 3 : 2))
+                .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name.capitalized)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("moments.textCard.bg.\(name)")
     }
 }
