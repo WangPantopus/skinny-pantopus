@@ -502,6 +502,12 @@ export default function BusinessAddressFlow({
       {/* CONFLICT */}
       {flowState === 'CONFLICT_OPTIONS' && verdict && (
         <DecisionCard accent="red" title="This location is already managed on Pantopus" testId="decision-conflict">
+          {(verdict.decision.reasons || []).includes('VERIFIED_SAME_NAME_BUSINESS') && (
+            <p className="text-sm text-app-text-secondary mb-2" data-testid="conflict-same-name">
+              A verified business with this name is already at this address. If it&apos;s yours, ask its owner to add
+              you to the team, or write to support@pantopus.com.
+            </p>
+          )}
           <p className="text-sm text-app-text-secondary">
             Use a different address, or add your unit if you&apos;re in a different suite at this building.
           </p>

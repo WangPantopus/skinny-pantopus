@@ -140,6 +140,20 @@ export default function AdminVerificationPage() {
                     Approving verifies it as this type and sets its platform fee to {item.fee_on_approval_pct}%.
                   </p>
                 )}
+                {!!item.same_name_pages?.length && (
+                  <p className="text-xs text-amber-700 mt-1" data-testid="admin-verification-same-name">
+                    Also using this name at its address, not verified:{' '}
+                    {item.same_name_pages.map((page, i) => (
+                      <span key={page.business_user_id}>
+                        {i > 0 && ', '}
+                        {page.username
+                          ? <Link href={`/b/${page.username}`} className="underline">{page.name} (@{page.username})</Link>
+                          : page.name}
+                      </span>
+                    ))}
+                    . Approving lets this business keep the name there.
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {item.document_url ? (
                     <a
