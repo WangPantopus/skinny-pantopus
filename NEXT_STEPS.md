@@ -877,19 +877,22 @@ Opus 5.5 sessions under one coordinator; the written three-app check of each wav
 - [x] Wave 2, behind `card_table`: the card rack, enlarge and Read the verse, the Duo upright, opened cards show their
   picture in the Mailbox and Sent; the verse text on the nine nativity designs is in production.
 - [x] Wave 3, behind `card_table`: the mood follows the card (star stamp, candlelight, snow), taps you feel, signing with
-  a finger, quiet paper sounds with a "Card sounds" switch, the welcome letter on the table, the send flow at the table
- ; the signature field is in production.
+  a finger, quiet paper sounds with a "Card sounds" switch, the welcome letter on the table, the send flow at the
+  table; the signature field is in production.
 - [x] Part 11: Share this card, the Open card picture, Share all, the invitation words on "Who it's for", Choose from
-  contacts. Not built: 11.8 (D9), a card to someone new free of the one-card-a-day rule, until the
-  founder decides.
-- [x] Wave 4, behind `holiday_card_memories` (off): a card's own photo and voice greeting, Report this card, Block,
-  Sent's "Couldn't be delivered" (founder's choice B), drafts, and the founder's November 11 rule that a photo or voice
-  greeting goes only on a card sent with a bought stamp. Server parts are in production with the key off.
-- [x] Storage (founder, November 11): CloudFront no longer serves `holiday-card-media/` or `ai-chat/` from the uploads
-  bucket. Still reachable by link and left for later: `chat/` and `ownership-evidence/`.
+  contacts. Not built: 11.8 (D9), a card to someone new free of the one-card-a-day rule, until the founder decides.
+- [x] Wave 4, behind `holiday_card_memories`: a card's own photo and voice greeting, Report this card, Block, Sent's
+  "Couldn't be delivered" (founder's choice B), drafts, and the founder's November 11 rule that a photo or voice greeting
+  goes only on a card sent with a bought stamp. Free-stamp senders see "Free stamps send your card and note. A photo or
+  voice greeting needs a bought stamp." and the stamp books.
+- [x] Live on November 11 (founder and coordinator): card photos and voice live in their own private Supabase bucket,
+  `pantopus-card-media` (`CARD_MEDIA_BUCKET` in `.env.prod`); `holiday_card_memories` is on for the production backend and
+  worker, on Vercel, and in `PANTOPUS_LAUNCH_FEATURES` on `ios-release` and `android-release`. Checked on production: the
+  web bundle carries the key and the server answers photo and voice usable, bought stamp required.
+- [ ] Later: the public uploads bucket (`pantopus-uploads` on Supabase) still serves `chat/` and `ownership-evidence/`
+  files to anyone with the link (founder: not now).
 - [ ] Founder: new iOS and Android store builds from master (they carry waves 1-4 and Part 11).
-- [ ] Founder, when photo and voice should go live: someone works the web Reports queue; switch `holiday_card_memories`
-  on for backend and worker, web and the app builds; stamp books must be on (photo and voice need a bought stamp).
+- [ ] Founder: someone with an admin account works the web Reports page; "Report this card" sends cards there.
 - [ ] Not verified anywhere: real phones (taps felt, sounds heard, real microphones, a real store purchase) and screen
   readers speaking aloud.
 
