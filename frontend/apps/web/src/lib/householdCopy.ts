@@ -41,7 +41,7 @@ export function gatedStaleTime<T>(freshMs: number, shows: (data: T) => boolean) 
  * opened. `waiting` is true while a copy that may not show is being checked again.
  */
 export function useAfterRecheck<T>(
-  query: { data: T | undefined; dataUpdatedAt: number; isFetching: boolean; refetch?: () => Promise<unknown> },
+  query: { data: T | undefined; dataUpdatedAt: number; isFetching: boolean; isEnabled?: boolean; refetch?: () => Promise<unknown> },
   shows: (data: T) => boolean,
 ): { data: T | undefined; waiting: boolean } {
   const [visit, setVisit] = useState(() => ({ openedAt: Date.now(), hidden: false }));
@@ -59,7 +59,10 @@ export function useAfterRecheck<T>(
       if (!needsRecheck.current || document.visibilityState === 'hidden') return;
       needsRecheck.current = false;
       setVisit({ openedAt: Date.now(), hidden: false });
-      void latest.current.query.refetch?.();
+      // refetch() runs even a disabled query. One that holds nothing has nothing to check again, and its
+      // key may be a placeholder (Place with no home would ask for /api/homes/null/intelligence).
+      const { query: current } = latest.current;
+      if (current.isEnabled !== false || current.data !== undefined) void current.refetch?.();
     };
     // Leaving means the page is hidden. A window that only loses focus (another app beside it, the
     // address bar, DevTools) still shows the screen, so what it shows stays.
