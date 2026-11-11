@@ -71,6 +71,16 @@ interface MomentsApi {
     @GET("api/moments/mine")
     suspend fun mine(): MomentsMineResponse
 
+    /**
+     * `GET /api/moments/batch?ids=a,b,c`: several Moments in one read, each as the detail answers it; one that can't be
+     * opened is left out. A server from before it answers 404, and the viewer reads one at a time.
+     * Route `backend/routes/moments.js` (batch).
+     */
+    @GET("api/moments/batch")
+    suspend fun batch(
+        @Query("ids") ids: String,
+    ): MomentsMineResponse
+
     /** `GET /api/moments/:id`: 410 `MOMENT_ENDED` once it has ended, 404 when it isn't visible. */
     @GET("api/moments/{id}")
     suspend fun moment(

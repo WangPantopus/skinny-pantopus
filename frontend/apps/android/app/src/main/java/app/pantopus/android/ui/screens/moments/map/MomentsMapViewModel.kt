@@ -378,6 +378,11 @@ class MomentsMapViewModel
             _state.update { it.copy(spot = null) }
         }
 
+        /** A spot the viewer asked to see (the place under a Moment's name, tapped), until the map has moved there. */
+        val placeToShow: StateFlow<Pair<Double, Double>?> = repository.placeToShow
+
+        fun placeShown() = repository.placeShown()
+
         /**
          * Hands the viewer its queue: [start] and then the other rings shown, nearest to it first, new ones before
          * watched ones (swiping left moves to the next ring nearby).

@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.moments.compose
 
 import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -38,6 +39,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import javax.inject.Inject
+
+/** As many photos and videos as can be picked together in the library. */
+const val MOMENTS_PICK_LIMIT = 10
 
 /** Which part of posting shows (boards P1 to P4). */
 enum class ComposeStep { Camera, Text, Review }
@@ -91,6 +95,9 @@ data class MomentsComposeUiState(
     val showArea: Boolean = false,
     val caption: String = "",
     val posting: Boolean = false,
+    /** Several picked together: how many, and which one the sheet is on (1 first); 0 for one on its own. */
+    val pickedTogether: Int = 0,
+    val pickedAt: Int = 0,
     /** A problem to show on the sheet or the camera ("Couldn't open that file."). */
     val notice: String? = null,
     /** Done: close posting (the Moment is up, or uploading in the background). */
@@ -325,60 +332,110 @@ class MomentsComposeViewModel
         private var pickedSource: Pair<Uri, String>? = null
 
         /**
-         * A photo or video from the library (the document picker, as the Pulse composer picks: the system photo picker
-         * hides where things were taken), from any time (founder, 2026-11-11): it pins where it was taken when the file
-         * says, and one taken more than a day ago says when on the Moment.
+         * A photo or video from the library, from any time (founder, 2026-11-11): it pins where it was taken when the
+         * file says, and one taken more than a day ago says when on the Moment. Android's photo picker (the library
+         * since 2026-11-11, for its Albums tab) never says where: its item pins where you are, and the place row and
+         * "Don't show where" on the sheet change that. A phone without the photo picker picks from the document picker,
+         * which says where once Android lets the app read it.
          */
-        fun picked(uri: Uri) {
+        fun picked(uri: Uri) = picked(listOf(uri))
+
+        /**
+         * Several picked together in the photo picker (founder, 2026-11-11): each is its own Moment. The first takes
+         * the Post sheet; when it has posted, the next takes it with its own place and caption, under the same "How
+         * long" and "Who sees it" ([postedOne]). Back from the sheet drops the ones still waiting.
+         */
+        fun picked(uris: List<Uri>) {
+            val first = uris.firstOrNull() ?: return
+            waiting = uris.drop(1).take(MOMENTS_PICK_LIMIT - 1)
             viewModelScope.launch {
-                val video = MomentMedia.isVideo(context, uri)
-                val mime = context.contentResolver.getType(uri) ?: if (video) "video/mp4" else "image/jpeg"
-                val copy = MomentMedia.copyIn(context, uri, if (video) "mp4" else "jpg")
-                if (copy == null) {
-                    _state.update { it.copy(notice = "Couldn't open that file.") }
-                    return@launch
-                }
-                val duration = if (video) MomentMedia.videoDurationMs(copy) else 0L
-                if (video && duration > MomentMedia.MAX_VIDEO_MS + DURATION_SLACK_MS) {
-                    copy.delete()
-                    _state.update { it.copy(notice = "Videos can be up to 30 seconds.") }
-                    return@launch
-                }
-                val place = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }
-                val capture = MomentMedia.capture(context, uri, copy, video, place.captured, place.mayBeHidden)
-                // A file that never says when it was taken posts like one taken now (no date on the Moment).
-                val takenAt = capture.takenAt
-                val media = if (video) MomentMediaFile.Video(copy, duration, recordedHere = false) else MomentMediaFile.Photo(copy)
-                val lat = capture.latitude
-                val lng = capture.longitude
-                if (lat != null && lng != null) {
-                    val pin = ComposePin(lat, lng, takenAt ?: Instant.now(), capture = true)
-                    val place = (repository.placePreview(lat, lng) as? NetworkResult.Success)?.data
-                    _state.update {
-                        it.copy(
-                            media = media,
-                            pin = pin,
-                            place = place,
-                            hasConnections = place?.hasConnections ?: it.hasConnections,
-                            placeKey = it.placeKeyFor(pin),
-                            venue = it.venueFor(pin),
-                            takenAt = takenAt,
-                            step = ComposeStep.Review,
-                            caption = "",
-                            notice = null,
-                        )
-                    }
+                val opened = open(first)
+                if (opened) {
+                    _state.update { it.copy(pickedTogether = waiting.size + 1, pickedAt = 1) }
                 } else {
-                    // Android hides where it was taken, or the file never said: it pins where you are, as the sheet shows.
-                    captured(media, takenAt)
-                    // A photo whose location Android hides can still pin where it was taken once the app may read it.
-                    if (capture.hidden && !video && MediaLocationAccess.mayAsk(context)) {
-                        pickedSource = uri to mime
-                        _state.update { it.copy(askMediaLocation = true) }
-                    }
+                    waiting = emptyList()
                 }
             }
         }
+
+        /** The ones picked together that haven't had the sheet yet. */
+        private var waiting: List<Uri> = emptyList()
+
+        /**
+         * A Moment was made for the one on the sheet: the next one picked with it takes the sheet (one that can't be
+         * opened is passed over), or with none left the composer closes.
+         */
+        private fun postedOne() {
+            viewModelScope.launch {
+                requestId = java.util.UUID.randomUUID().toString()
+                while (waiting.isNotEmpty()) {
+                    val next = waiting.first()
+                    waiting = waiting.drop(1)
+                    if (open(next)) {
+                        _state.update { it.copy(posting = false, pickedAt = it.pickedTogether - waiting.size) }
+                        return@launch
+                    }
+                }
+                _state.update { it.copy(posting = false, done = true) }
+            }
+        }
+
+        /** Puts one library item on the Post sheet; false when it can't be opened or runs too long (a notice says so). */
+        private suspend fun open(uri: Uri): Boolean {
+            val video = MomentMedia.isVideo(context, uri)
+            val mime = context.contentResolver.getType(uri) ?: if (video) "video/mp4" else "image/jpeg"
+            val copy = MomentMedia.copyIn(context, uri, if (video) "mp4" else "jpg")
+            if (copy == null) {
+                _state.update { it.copy(notice = "Couldn't open that file.") }
+                return false
+            }
+            val duration = if (video) MomentMedia.videoDurationMs(copy) else 0L
+            if (video && duration > MomentMedia.MAX_VIDEO_MS + DURATION_SLACK_MS) {
+                copy.delete()
+                _state.update { it.copy(notice = "Videos can be up to 30 seconds.") }
+                return false
+            }
+            val place = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }
+            val capture = MomentMedia.capture(context, uri, copy, video, place.captured, place.mayBeHidden)
+            // A file that never says when it was taken posts like one taken now (no date on the Moment).
+            val takenAt = capture.takenAt
+            val media = if (video) MomentMediaFile.Video(copy, duration, recordedHere = false) else MomentMediaFile.Photo(copy)
+            val lat = capture.latitude
+            val lng = capture.longitude
+            if (lat != null && lng != null) {
+                val pin = ComposePin(lat, lng, takenAt ?: Instant.now(), capture = true)
+                val place = (repository.placePreview(lat, lng) as? NetworkResult.Success)?.data
+                _state.update {
+                    it.copy(
+                        media = media,
+                        pin = pin,
+                        place = place,
+                        hasConnections = place?.hasConnections ?: it.hasConnections,
+                        placeKey = it.placeKeyFor(pin),
+                        venue = it.venueFor(pin),
+                        takenAt = takenAt,
+                        step = ComposeStep.Review,
+                        caption = "",
+                        notice = null,
+                    )
+                }
+            } else {
+                // Android hides where it was taken, or the file never said: it pins where you are, as the sheet shows.
+                captured(media, takenAt)
+                // A photo whose location Android hides can still pin where it was taken once the app may read it.
+                // The photo picker's items never give it up, whatever is allowed: asking would get the person nothing.
+                val couldRead = capture.hidden && !video && !fromPhotoPicker(uri)
+                if (couldRead && MediaLocationAccess.mayAsk(context)) {
+                    pickedSource = uri to mime
+                    _state.update { it.copy(askMediaLocation = true) }
+                }
+            }
+            return true
+        }
+
+        /** `content://media/picker/…`: an item Android's photo picker handed over. */
+        private fun fromPhotoPicker(uri: Uri): Boolean =
+            uri.authority == MediaStore.AUTHORITY && uri.pathSegments.firstOrNull()?.startsWith("picker") == true
 
         /** The answer to "Pin where this photo was taken?" (asked once on a phone). */
         fun mediaLocationAnswered() {
@@ -438,8 +495,16 @@ class MomentsComposeViewModel
             requestId = java.util.UUID.randomUUID().toString()
             val current = _state.value
             current.media?.file?.delete()
+            // The ones picked with it that were still waiting go too.
+            waiting = emptyList()
             _state.update {
-                it.copy(media = null, step = if (current.media == null) ComposeStep.Text else ComposeStep.Camera, notice = null)
+                it.copy(
+                    media = null,
+                    step = if (current.media == null) ComposeStep.Text else ComposeStep.Camera,
+                    notice = null,
+                    pickedTogether = 0,
+                    pickedAt = 0,
+                )
             }
         }
 
@@ -538,7 +603,7 @@ class MomentsComposeViewModel
                             .putInt("$accountId.hours", current.hours)
                             .putString("$accountId.audience", current.audience)
                             .apply()
-                        _state.update { it.copy(posting = false, done = true) }
+                        postedOne()
                     }
                     is NetworkResult.Failure -> handlePostFailure(result.error, retried)
                 }
@@ -568,7 +633,7 @@ class MomentsComposeViewModel
                         val media = current.media
                         if (media != null) posting.start(moment, media, null, null) else posting.posted(moment)
                         choices.edit().putInt("$accountId.hours", current.hours).apply()
-                        _state.update { it.copy(posting = false, done = true) }
+                        postedOne()
                     }
                     is NetworkResult.Failure -> handlePostFailure(result.error, retried = true)
                 }

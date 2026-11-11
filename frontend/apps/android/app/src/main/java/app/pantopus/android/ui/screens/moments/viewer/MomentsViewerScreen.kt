@@ -24,7 +24,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -66,6 +70,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -76,16 +81,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -148,6 +158,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -217,12 +228,14 @@ fun MomentsViewerScreen(
     var seenByOpen by remember { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
     var away by remember { mutableStateOf(false) }
+    // A finger is dragging to the person before or after, or pinching a photo bigger.
+    var handling by remember { mutableStateOf(false) }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { away = true }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { away = false }
     // The notification shade or a system dialog over the app takes the window's focus without pausing the app.
     val covered = !LocalWindowInfo.current.isWindowFocused
-    val paused =
-        holding || typing || reacting || menuOpen || reporting || confirmingBlock || seenByOpen || confirmingDelete || away || covered
+    val touched = handling || holding || typing || reacting
+    val paused = touched || menuOpen || reporting || confirmingBlock || seenByOpen || confirmingDelete || away || covered
     // Play picks up where it was; a Moment whose time ran out during the pause says so instead.
     LaunchedEffect(paused) { if (!paused) viewModel.endedOnScreen() }
     val view = LocalView.current
@@ -246,62 +259,100 @@ fun MomentsViewerScreen(
     var progress by remember(momentKey) { mutableFloatStateOf(0f) }
     var elapsed by remember(momentKey) { mutableLongStateOf(0L) }
 
-    // One player for the whole viewer; a video Moment hands it its signed link.
-    val player = remember { ExoPlayer.Builder(context).build().apply { repeatMode = Player.REPEAT_MODE_OFF } }
-    DisposableEffect(player) { onDispose { player.release() } }
-    // One state for every video (the player's listener holds it), back to false for each new Moment.
+    // Two players for the whole viewer: one plays the video Moment on screen, the other gets the next video ready
+    // while it plays, so moving on starts at once instead of waiting on the network. They trade places.
+    val players =
+        remember { List(2) { ExoPlayer.Builder(context).build().apply { repeatMode = Player.REPEAT_MODE_OFF } } }
+    DisposableEffect(players) { onDispose { players.forEach { it.release() } } }
+    var active by remember { mutableIntStateOf(0) }
+    val activeNow by rememberUpdatedState(active)
+    val player = players[active]
+    val standby = players[1 - active]
+    // The Moment whose video the standby player holds.
+    var standbyFor by remember { mutableStateOf<String?>(null) }
+    // One state for every video (the players' listeners hold it), back to false for each new Moment.
     var videoStarted by remember { mutableStateOf(false) }
     LaunchedEffect(momentKey) { videoStarted = false }
     val onVideoEnded by rememberUpdatedState { viewModel.next() }
-    DisposableEffect(player) {
-        val listener =
-            object : Player.Listener {
-                override fun onRenderedFirstFrame() {
-                    videoStarted = true
-                }
+    DisposableEffect(players) {
+        val listeners =
+            players.mapIndexed { index, each ->
+                // Only the player on screen speaks: the standby one stays quiet until it is.
+                val listener =
+                    object : Player.Listener {
+                        override fun onRenderedFirstFrame() {
+                            if (index == activeNow) videoStarted = true
+                        }
 
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_ENDED) onVideoEnded()
-                }
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (index == activeNow && playbackState == Player.STATE_ENDED) onVideoEnded()
+                        }
 
-                // A video that can't play (its link ran out, the network dropped): on to the next Moment.
-                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                    onVideoEnded()
-                }
+                        // A video that can't play (its link ran out, the network dropped): on to the next Moment.
+                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            if (index == activeNow) onVideoEnded() else standbyFor = null
+                        }
+                    }
+                each.addListener(listener)
+                each to listener
             }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
+        onDispose { listeners.forEach { (each, listener) -> each.removeListener(listener) } }
     }
     LaunchedEffect(moment?.id, moment?.mediaUrl) {
         val current = moment
         if (current?.kind == "video" && current.mediaUrl != null) {
-            player.setMediaItem(MediaItem.fromUri(current.mediaUrl))
-            player.prepare()
+            if (standbyFor == current.id) {
+                // Made ready ahead: the players trade places, and the one that was playing is free for the next.
+                standbyFor = null
+                player.stop()
+                player.clearMediaItems()
+                active = 1 - active
+            } else {
+                player.setMediaItem(MediaItem.fromUri(current.mediaUrl))
+                player.prepare()
+            }
         } else {
             player.stop()
             player.clearMediaItems()
         }
     }
-    LaunchedEffect(muted) { player.volume = if (muted) 0f else 1f }
-    LaunchedEffect(moment?.id, paused) { if (moment?.kind == "video") player.playWhenReady = !paused }
+    val upNext by viewModel.upNext.collectAsStateWithLifecycle()
+    LaunchedEffect(upNext?.id, moment?.id, active) {
+        val next = upNext
+        val link = next?.mediaUrl
+        if (next != null && next.kind == "video" && link != null && next.id != moment?.id && standbyFor != next.id) {
+            standby.playWhenReady = false
+            standby.volume = 0f
+            standby.setMediaItem(MediaItem.fromUri(link))
+            standby.prepare()
+            standbyFor = next.id
+        }
+    }
+    LaunchedEffect(muted, active) { player.volume = if (muted) 0f else 1f }
+    LaunchedEffect(moment?.id, paused, active) { if (moment?.kind == "video") player.playWhenReady = !paused }
     LaunchedEffect(videoStarted) { if (videoStarted) moment?.let(viewModel::shown) }
 
     // The clock: a photo shows for about 6 seconds, a text card a little longer when it's long, a video for its length.
-    LaunchedEffect(momentKey, ready, paused, moment?.kind) {
+    LaunchedEffect(momentKey, ready, paused, moment?.kind, active) {
         val current = moment ?: return@LaunchedEffect
+        // The bar moves every frame the screen draws (it stepped 20 times a second before), read only where it's drawn.
         if (current.kind == "video") {
             while (true) {
+                withFrameNanos { }
                 val duration = player.duration.takeIf { it > 0 } ?: current.durationMs ?: 0L
                 if (duration > 0) progress = (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f)
-                delay(FRAME_MS)
             }
         }
         if (!ready || paused) return@LaunchedEffect
         val total = if (current.kind == "text") textDurationMs(current.text.orEmpty()) else PHOTO_MS
-        while (elapsed < total) {
-            delay(FRAME_MS)
-            elapsed += FRAME_MS
-            progress = (elapsed.toFloat() / total).coerceIn(0f, 1f)
+        var last = withFrameNanos { it }
+        var sofar = elapsed.toDouble()
+        while (sofar < total) {
+            val now = withFrameNanos { it }
+            sofar += (now - last) / NANOS_PER_MS
+            last = now
+            elapsed = sofar.toLong()
+            progress = (sofar / total).toFloat().coerceIn(0f, 1f)
         }
         viewModel.next()
     }
@@ -339,6 +390,71 @@ fun MomentsViewerScreen(
         }
     }
     var dragY by remember { mutableFloatStateOf(0f) }
+    // Moving between people with the finger (founder, 2026-11-11): a sideways drag turns the page as it goes, the
+    // person after or before coming in beside the one showing like the next face of a box. [pageX] is how far.
+    var pageX by remember { mutableFloatStateOf(0f) }
+    var turning by remember { mutableStateOf(false) }
+    // A turn that has finished holds its last frame for the ring it left, until the next ring is the one showing: the
+    // page that came in and the Moment that replaces it are the same picture, so nothing blinks.
+    var turned by remember { mutableStateOf<Pair<Int, Float>?>(null) }
+    val ringIndexNow by rememberUpdatedState(state.ringIndex)
+    val shownX = { turned?.takeIf { it.first == ringIndexNow }?.second ?: pageX }
+    LaunchedEffect(state.ringIndex) { turned = null }
+    // Which side a page is coming in from: read where it's needed, so a drag redraws without rebuilding the viewer.
+    val incomingStep by remember {
+        derivedStateOf {
+            val x = shownX()
+            if (x < 0f) {
+                1
+            } else if (x > 0f) {
+                -1
+            } else {
+                0
+            }
+        }
+    }
+    // The page springing back; a finger that takes it again stops the spring.
+    var settling by remember { mutableStateOf<Job?>(null) }
+    val settlePage = {
+        settling?.cancel()
+        settling =
+            scope.launch {
+                animate(pageX, 0f, animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) { value, _ ->
+                    pageX = value
+                }
+                handling = false
+            }
+    }
+    val turnPage = { dx: Float, width: Float ->
+        val step = if (dx < 0f) 1 else -1
+        val there = viewModel.peek(step) != null
+        when {
+            abs(dx) < width * TURN_FRACTION || (!there && step < 0) -> settlePage()
+            // Past the last person the viewer closes, as it always has.
+            !there -> {
+                settlePage()
+                viewModel.nextRing()
+            }
+            else -> {
+                turning = true
+                settling?.cancel()
+                scope.launch {
+                    val end = -step * width
+                    animate(pageX, end, animationSpec = tween(TURN_MS, easing = LinearOutSlowInEasing)) { value, _ -> pageX = value }
+                    turned = state.ringIndex to end
+                    pageX = 0f
+                    if (step > 0) viewModel.nextRing() else viewModel.previousRing()
+                    turning = false
+                    handling = false
+                }
+            }
+        }
+        Unit
+    }
+    // A pinch makes a photo bigger where the fingers are, while they're held.
+    var zoom by remember { mutableFloatStateOf(1f) }
+    var zoomOrigin by remember { mutableStateOf(TransformOrigin.Center) }
+    val canZoom by rememberUpdatedState(moment?.kind == "photo" && state.load is ViewerLoad.Ready)
 
     Box(
         modifier =
@@ -348,156 +464,201 @@ fun MomentsViewerScreen(
                 .testTag("moments.viewer")
                 .semantics { testTagsAsResourceId = true },
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = BOTTOM_BAR)
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        translationY = dragY.coerceAtLeast(0f) * 0.6f
-                        alpha = 1f - (dragY.coerceAtLeast(0f) / 1600f).coerceIn(0f, 0.5f)
-                    }.clip(RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp))
-                    .viewerGestures(
-                        enabled = !typing && !reacting,
-                        onHold = { holding = it },
-                        onTap = { x, width -> if (x < width / 3f) viewModel.previous() else viewModel.next() },
-                        onSwipeLeft = viewModel::nextRing,
-                        onSwipeRight = viewModel::previousRing,
-                        onSwipeDown = close,
-                        onSwipeUp = {
-                            if (mineNow) {
-                                seenByOpen = true
-                                viewModel.loadViewers()
-                            }
-                        },
-                        onDrag = { dragY = it },
-                    ).semantics {
-                        customActions =
-                            listOf(
-                                CustomAccessibilityAction("Next Moment") {
-                                    viewModel.next()
-                                    true
-                                },
-                                CustomAccessibilityAction("Previous Moment") {
-                                    viewModel.previous()
-                                    true
-                                },
-                                CustomAccessibilityAction("Next person nearby") {
-                                    viewModel.nextRing()
-                                    true
-                                },
-                            )
-                    },
-        ) {
-            when (val load = state.load) {
-                is ViewerLoad.Ready ->
-                    MomentStage(
-                        moment = load.moment,
-                        player = player,
-                        videoStarted = videoStarted,
-                        // A card's words give way to the quick reactions and the reply, as the caption does.
-                        wordsHidden = typing || reacting,
-                        onReady = {
-                            ready = true
-                            if (load.moment.kind != "video") viewModel.shown(load.moment)
-                        },
-                        onFailed = viewModel::next,
-                    )
-                ViewerLoad.Loading -> Unit
-                ViewerLoad.Ended ->
-                    Text(
-                        text = "This Moment has ended.",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                ViewerLoad.Failed ->
-                    Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "Couldn't load this Moment", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(Spacing.s3))
-                        Text(
-                            text = "Try again",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier =
-                                Modifier
-                                    .clip(RoundedCornerShape(Radii.pill))
-                                    .border(1.dp, PantopusColors.momentReplyOutline, RoundedCornerShape(Radii.pill))
-                                    .clickable(role = Role.Button, onClick = viewModel::retry)
-                                    .padding(horizontal = Spacing.s4, vertical = 10.dp),
-                        )
-                    }
+        // The person a sideways drag is bringing in, beside the one showing.
+        if (incomingStep != 0) {
+            viewModel.peek(incomingStep)?.let { peek ->
+                PeekPage(
+                    peek = peek,
+                    state = state,
+                    muted = muted,
+                    modifier = Modifier.fillMaxSize().graphicsLayer { pageTurn(shownX() + incomingStep * size.width, size.width) },
+                )
             }
-            // The top fade keeps the bars and the header readable over a bright photo.
+        }
+        Box(modifier = Modifier.fillMaxSize().graphicsLayer { pageTurn(shownX(), size.width) }) {
             Box(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
-                        .background(Brush.verticalGradient(listOf(PantopusColors.momentTopFade, Color.Transparent)))
-                        .clearAndSetSemantics {},
-            )
-            // The caption gives way to the quick reactions while they are up.
-            moment?.caption?.takeIf { it.isNotBlank() && moment.kind != "text" && !typing && !reacting }?.let { caption ->
-                Text(
-                    text = caption,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    lineHeight = 21.sp,
-                    textAlign = TextAlign.Center,
+                        .padding(bottom = BOTTOM_BAR)
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            translationY = dragY.coerceAtLeast(0f) * 0.6f
+                            alpha = 1f - (dragY.coerceAtLeast(0f) / 1600f).coerceIn(0f, 0.5f)
+                        }.clip(RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp))
+                        .viewerGestures(
+                            enabled = !typing && !reacting && !turning,
+                            onHold = { holding = it },
+                            onTap = { x, width -> if (x < width / 3f) viewModel.previous() else viewModel.next() },
+                            onPage = { x ->
+                                settling?.cancel()
+                                handling = true
+                                // All the way toward a person; a third of the way where there is none.
+                                pageX = if (viewModel.peek(if (x < 0f) 1 else -1) == null) x / 3f else x
+                            },
+                            onTurn = turnPage,
+                            onZoom = { scale, origin ->
+                                if (origin == null) {
+                                    handling = false
+                                    scope.launch {
+                                        animate(
+                                            zoom,
+                                            1f,
+                                            animationSpec = spring(dampingRatio = ZOOM_BACK_DAMPING),
+                                        ) { value, _ -> zoom = value }
+                                    }
+                                } else if (canZoom) {
+                                    handling = true
+                                    pageX = 0f
+                                    if (zoom == 1f) zoomOrigin = origin
+                                    zoom = scale.coerceIn(1f, MAX_ZOOM)
+                                }
+                            },
+                            onSwipeDown = close,
+                            onSwipeUp = {
+                                if (mineNow) {
+                                    seenByOpen = true
+                                    viewModel.loadViewers()
+                                }
+                            },
+                            onDrag = { dragY = it },
+                        ).semantics {
+                            customActions =
+                                listOf(
+                                    CustomAccessibilityAction("Next Moment") {
+                                        viewModel.next()
+                                        true
+                                    },
+                                    CustomAccessibilityAction("Previous Moment") {
+                                        viewModel.previous()
+                                        true
+                                    },
+                                    CustomAccessibilityAction("Next person nearby") {
+                                        viewModel.nextRing()
+                                        true
+                                    },
+                                )
+                        },
+            ) {
+                when (val load = state.load) {
+                    is ViewerLoad.Ready ->
+                        Box(
+                            modifier =
+                                Modifier.fillMaxSize().graphicsLayer {
+                                    scaleX = zoom
+                                    scaleY = zoom
+                                    transformOrigin = zoomOrigin
+                                },
+                        ) {
+                            MomentStage(
+                                moment = load.moment,
+                                player = player,
+                                videoStarted = videoStarted,
+                                // A card's words give way to the quick reactions and the reply, as the caption does.
+                                wordsHidden = typing || reacting,
+                                onReady = {
+                                    ready = true
+                                    if (load.moment.kind != "video") viewModel.shown(load.moment)
+                                },
+                                onFailed = viewModel::next,
+                            )
+                        }
+                    ViewerLoad.Loading -> Unit
+                    ViewerLoad.Ended ->
+                        Text(
+                            text = "This Moment has ended.",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                    ViewerLoad.Failed ->
+                        Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "Couldn't load this Moment", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            Spacer(Modifier.height(Spacing.s3))
+                            Text(
+                                text = "Try again",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier =
+                                    Modifier
+                                        .clip(RoundedCornerShape(Radii.pill))
+                                        .border(1.dp, PantopusColors.momentReplyOutline, RoundedCornerShape(Radii.pill))
+                                        .clickable(role = Role.Button, onClick = viewModel::retry)
+                                        .padding(horizontal = Spacing.s4, vertical = 10.dp),
+                            )
+                        }
+                }
+                // The top fade keeps the bars and the header readable over a bright photo.
+                Box(
                     modifier =
                         Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(start = Spacing.s10, end = Spacing.s10, bottom = 63.dp)
-                            .clip(RoundedCornerShape(Radii.lg))
-                            .background(PantopusColors.momentCaptionPill)
-                            .padding(horizontal = 14.dp, vertical = Spacing.s2)
-                            .testTag("moments.viewer.caption"),
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .background(Brush.verticalGradient(listOf(PantopusColors.momentTopFade, Color.Transparent)))
+                            .clearAndSetSemantics {},
                 )
+                // The caption gives way to the quick reactions while they are up.
+                moment?.caption?.takeIf { it.isNotBlank() && moment.kind != "text" && !typing && !reacting }?.let { caption ->
+                    Text(
+                        text = caption,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 21.sp,
+                        textAlign = TextAlign.Center,
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(start = Spacing.s10, end = Spacing.s10, bottom = 63.dp)
+                                .clip(RoundedCornerShape(Radii.lg))
+                                .background(PantopusColors.momentCaptionPill)
+                                .padding(horizontal = 14.dp, vertical = Spacing.s2)
+                                .testTag("moments.viewer.caption"),
+                    )
+                }
             }
-        }
 
-        // Bars and header, over the top of the Moment.
-        Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
-            ring?.let { current ->
-                ProgressBars(
-                    count = current.moments.size,
-                    index = state.momentIndex,
-                    progress = progress,
-                    modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 9.dp),
+            // Bars and header, over the top of the Moment.
+            Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+                ring?.let { current ->
+                    ProgressBars(
+                        count = current.moments.size,
+                        index = state.momentIndex,
+                        progress = { progress },
+                        modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 9.dp),
+                    )
+                }
+                ViewerHeader(
+                    state = state,
+                    mine = mine,
+                    showsSound = moment?.kind == "video",
+                    muted = muted,
+                    showsMore = !mine && ring != null,
+                    onSound = { muted = !muted },
+                    onMore = { menuOpen = true },
+                    onClose = close,
+                    menuOpen = menuOpen,
+                    onDismissMenu = { menuOpen = false },
+                    onReport = {
+                        menuOpen = false
+                        reporting = true
+                    },
+                    onMute = {
+                        menuOpen = false
+                        viewModel.muteAuthor()
+                    },
+                    onBlock = {
+                        menuOpen = false
+                        confirmingBlock = true
+                    },
+                    onPlace = if (ring?.ring?.noLocation == false) viewModel::showPlace else null,
                 )
-            }
-            ViewerHeader(
-                state = state,
-                mine = mine,
-                showsSound = moment?.kind == "video",
-                muted = muted,
-                showsMore = !mine && ring != null,
-                onSound = { muted = !muted },
-                onMore = { menuOpen = true },
-                onClose = close,
-                menuOpen = menuOpen,
-                onDismissMenu = { menuOpen = false },
-                onReport = {
-                    menuOpen = false
-                    reporting = true
-                },
-                onMute = {
-                    menuOpen = false
-                    viewModel.muteAuthor()
-                },
-                onBlock = {
-                    menuOpen = false
-                    confirmingBlock = true
-                },
-            )
-            // A photo or video taken more than a day before it was posted says when (contract v3.3), under the name.
-            takenLabel(moment?.takenAt)?.takeIf { state.load is ViewerLoad.Ready }?.let { taken ->
-                MomentTakenPill(label = taken, modifier = Modifier.padding(start = 58.dp, top = 2.dp))
+                // A photo or video taken more than a day before it was posted says when (contract v3.3), under the name.
+                takenLabel(moment?.takenAt)?.takeIf { state.load is ViewerLoad.Ready }?.let { taken ->
+                    MomentTakenPill(label = taken, modifier = Modifier.padding(start = 58.dp, top = 2.dp))
+                }
             }
         }
 
@@ -718,27 +879,8 @@ private fun MomentStage(
     when (moment.kind) {
         "text" -> {
             LaunchedEffect(moment.id) { onReady() }
-            val background = MomentCardBackground.fromWire(moment.background)
             val wordsAlpha by animateFloatAsState(if (wordsHidden) 0f else 1f, animationSpec = tween(WORDS_FADE_MS), label = "cardWords")
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .momentCardGradient(background)
-                        .padding(horizontal = 36.dp, vertical = Spacing.s10)
-                        .testTag("moments.viewer.text"),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = moment.text.orEmpty(),
-                    color = Color.White,
-                    fontSize = 29.sp,
-                    lineHeight = 37.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.graphicsLayer { alpha = wordsAlpha },
-                )
-            }
+            MomentTextCard(moment = moment, wordsAlpha = { wordsAlpha }, modifier = Modifier.testTag("moments.viewer.text"))
         }
         "video" ->
             Box(modifier = Modifier.fillMaxSize().testTag("moments.viewer.video")) {
@@ -778,12 +920,133 @@ private fun MomentStage(
     }
 }
 
+/** A text card: its words in white on its background. */
+@Composable
+private fun MomentTextCard(
+    moment: MomentDto,
+    wordsAlpha: () -> Float,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .momentCardGradient(MomentCardBackground.fromWire(moment.background))
+                .padding(horizontal = 36.dp, vertical = Spacing.s10),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = moment.text.orEmpty(),
+            color = Color.White,
+            fontSize = 29.sp,
+            lineHeight = 37.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.graphicsLayer { alpha = wordsAlpha() },
+        )
+    }
+}
+
+/**
+ * The page a sideways drag brings in: the person's opening Moment (its photo, its video's first picture or its card,
+ * when it was read ahead) under their bars and header, laid out as the viewer lays out the one showing. Nothing on it
+ * can be tapped or read aloud until it is the one showing.
+ */
+@Composable
+private fun PeekPage(
+    peek: ViewerPeek,
+    state: MomentsViewerUiState,
+    muted: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val peekState =
+        remember(peek, state.rings) {
+            state.copy(
+                ringIndex = peek.ringIndex,
+                momentIndex = peek.index,
+                load = peek.moment?.let { ViewerLoad.Ready(it) } ?: ViewerLoad.Loading,
+            )
+        }
+    val mine = peek.ring.ring.mine
+    Box(modifier = modifier.background(PantopusColors.momentStage).clearAndSetSemantics {}) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = BOTTOM_BAR)
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp)),
+        ) {
+            peek.moment?.let { moment ->
+                if (moment.kind == "text") {
+                    MomentTextCard(moment = moment, wordsAlpha = { 1f })
+                } else {
+                    val video = moment.kind == "video"
+                    AsyncImage(
+                        model =
+                            rememberMomentImage(
+                                if (video) moment.posterUrl else moment.mediaUrl,
+                                if (video) MomentImages.posterKey(moment.id) else MomentImages.mediaKey(moment.id),
+                            ),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .background(Brush.verticalGradient(listOf(PantopusColors.momentTopFade, Color.Transparent))),
+            )
+        }
+        Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+            ProgressBars(
+                count = peek.ring.moments.size,
+                index = peek.index,
+                progress = { 0f },
+                modifier = Modifier.padding(start = 10.dp, end = 10.dp, top = 9.dp),
+            )
+            ViewerHeader(
+                state = peekState,
+                mine = mine,
+                showsSound = peek.brief.kind == "video",
+                muted = muted,
+                showsMore = !mine,
+                onSound = {},
+                onMore = {},
+                onClose = {},
+                menuOpen = false,
+                onDismissMenu = {},
+                onReport = {},
+                onMute = {},
+                onBlock = {},
+            )
+        }
+    }
+}
+
+/** One page of the turn: [position] is how far its leading edge is from where it fills the screen. */
+private fun GraphicsLayerScope.pageTurn(
+    position: Float,
+    width: Float,
+) {
+    translationX = position
+    if (width > 0f && position != 0f) {
+        rotationY = TURN_DEGREES * position / width
+        transformOrigin = TransformOrigin(if (position > 0f) 0f else 1f, 0.5f)
+        cameraDistance = TURN_CAMERA
+    }
+}
+
 /** One bar per Moment in the ring (board V1): watched ones full, the current one filling, the rest empty. */
 @Composable
 private fun ProgressBars(
     count: Int,
     index: Int,
-    progress: Float,
+    progress: () -> Float,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -791,12 +1054,6 @@ private fun ProgressBars(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         repeat(count) { bar ->
-            val fill =
-                when {
-                    bar < index -> 1f
-                    bar == index -> progress
-                    else -> 0f
-                }
             Box(
                 modifier =
                     Modifier
@@ -804,10 +1061,17 @@ private fun ProgressBars(
                         .height(3.dp)
                         .clip(RoundedCornerShape(2.dp))
                         .background(PantopusColors.momentBarTrack)
-                        .testTag("moments.viewer.bar.$bar"),
-            ) {
-                Box(modifier = Modifier.fillMaxWidth(fill).height(3.dp).background(Color.White))
-            }
+                        // Drawn, not laid out: the bar on screen fills every frame without the viewer being built again.
+                        .drawBehind {
+                            val fill =
+                                when {
+                                    bar < index -> 1f
+                                    bar == index -> progress().coerceIn(0f, 1f)
+                                    else -> 0f
+                                }
+                            drawRect(Color.White, size = Size(size.width * fill, size.height))
+                        }.testTag("moments.viewer.bar.$bar"),
+            )
         }
     }
 }
@@ -863,6 +1127,8 @@ private fun ViewerHeader(
     onReport: () -> Unit,
     onMute: () -> Unit,
     onBlock: () -> Unit,
+    /** The place is a button that shows it on the map; none for a Moment with no location or a page coming in. */
+    onPlace: (() -> Unit)? = null,
 ) {
     val ring = state.ring?.ring
     val moment = state.moment
@@ -908,13 +1174,33 @@ private fun ViewerHeader(
                         ).joinToString(" · ")
                     // A long place name gives way; "2h ago · 4h left" always shows.
                     Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier =
                             Modifier.testTag("moments.viewer.meta").clearAndSetSemantics {
                                 contentDescription = listOfNotNull(place, times.takeIf { it.isNotEmpty() }).joinToString(" · ")
+                                if (onPlace != null && place != null) {
+                                    customActions =
+                                        listOf(
+                                            CustomAccessibilityAction("Show on the map") {
+                                                onPlace()
+                                                true
+                                            },
+                                        )
+                                }
                             },
                     ) {
                         val metaStyle = TextStyle(shadow = STAGE_SHADOW)
                         if (place != null) {
+                            val tappable = onPlace != null
+                            if (tappable) {
+                                PantopusIconImage(
+                                    icon = PantopusIcon.MapPin,
+                                    contentDescription = null,
+                                    size = 11.dp,
+                                    tint = PantopusColors.momentOnStageSecondary,
+                                )
+                                Spacer(Modifier.width(3.dp))
+                            }
                             Text(
                                 text = place,
                                 color = PantopusColors.momentOnStageSecondary,
@@ -922,7 +1208,22 @@ private fun ViewerHeader(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = metaStyle,
-                                modifier = Modifier.weight(1f, fill = false),
+                                modifier =
+                                    Modifier
+                                        .weight(1f, fill = false)
+                                        .then(
+                                            if (onPlace != null) {
+                                                Modifier
+                                                    .clickable(
+                                                        interactionSource = null,
+                                                        indication = null,
+                                                        role = Role.Button,
+                                                        onClick = onPlace,
+                                                    ).testTag("moments.viewer.place")
+                                            } else {
+                                                Modifier
+                                            },
+                                        ),
                             )
                         }
                         if (times.isNotEmpty()) {
@@ -1413,15 +1714,19 @@ private fun ReactionPop(
 
 /**
  * The viewer's gestures (board V1 note): a tap on the left third goes back and elsewhere forward, a hold pauses, a
- * swipe left or right changes ring, a swipe down closes, a swipe up opens Seen by on your own Moment. [onDrag] follows
- * a downward drag so the Moment can move with the finger.
+ * swipe down closes, a swipe up opens Seen by on your own Moment. A drag keeps to the way it first goes: down, and
+ * [onDrag] follows it so the Moment moves with the finger; sideways, and [onPage] follows it so the page turns with the
+ * finger, [onTurn] saying how far it had gone when it lifted. Two fingers pinch: [onZoom] says how big and around
+ * where (as a fraction of the picture), then null when they lift; a pinch is never also a tap or a swipe.
  */
+@Suppress("LongParameterList", "CyclomaticComplexMethod", "LongMethod")
 private fun Modifier.viewerGestures(
     enabled: Boolean,
     onHold: (Boolean) -> Unit,
     onTap: (x: Float, width: Float) -> Unit,
-    onSwipeLeft: () -> Unit,
-    onSwipeRight: () -> Unit,
+    onPage: (Float) -> Unit,
+    onTurn: (dx: Float, width: Float) -> Unit,
+    onZoom: (scale: Float, origin: TransformOrigin?) -> Unit,
     onSwipeDown: () -> Unit,
     onSwipeUp: () -> Unit,
     onDrag: (Float) -> Unit,
@@ -1438,6 +1743,10 @@ private fun Modifier.viewerGestures(
                 val startedAt = down.uptimeMillis
                 var travel = Offset.Zero
                 var holding = false
+                // Sideways or up and down, once the finger has moved past the slop; it keeps to that until it lifts.
+                var sideways: Boolean? = null
+                // The fingers' distance when the second one landed; the pinch is measured against it.
+                var pinchFrom = 0f
                 // Whether the hold's wait is over: a finger resting on the glass sends nothing, so the hold starts on
                 // the clock, not on the finger's next movement.
                 var decided = false
@@ -1451,26 +1760,49 @@ private fun Modifier.viewerGestures(
                         }
                     if (event == null) {
                         decided = true
-                        if (travel.getDistance() < slop) {
+                        if (travel.getDistance() < slop && pinchFrom == 0f) {
                             holding = true
                             onHold(true)
                         }
                         continue
                     }
+                    val pressed = event.changes.filter { it.pressed }
+                    if (pressed.size >= 2) {
+                        val between = (pressed[0].position - pressed[1].position).getDistance()
+                        if (pinchFrom == 0f) {
+                            pinchFrom = between.coerceAtLeast(1f)
+                            onDrag(0f)
+                            if (sideways == true) onPage(0f)
+                        }
+                        val middle = (pressed[0].position + pressed[1].position) / 2f
+                        onZoom(between / pinchFrom, TransformOrigin(middle.x / size.width, middle.y / size.height))
+                        event.changes.forEach { it.consume() }
+                        continue
+                    }
+                    if (pressed.isEmpty()) break
+                    if (pinchFrom > 0f) {
+                        // One finger of a pinch is still down: it waits for the other, and moves nothing.
+                        event.changes.forEach { it.consume() }
+                        continue
+                    }
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     travel = change.position - start
-                    if (abs(travel.y) > abs(travel.x) && travel.y > slop) onDrag(travel.y)
-                    if (!change.pressed) break
+                    if (sideways == null && travel.getDistance() > slop) sideways = abs(travel.x) > abs(travel.y)
+                    when (sideways) {
+                        true -> onPage(travel.x)
+                        false -> if (travel.y > 0f) onDrag(travel.y)
+                        null -> Unit
+                    }
                     change.consume()
                 }
                 onDrag(0f)
                 if (holding) onHold(false)
-                val dx = travel.x
                 val dy = travel.y
                 when {
-                    abs(dx) > swipe && abs(dx) > abs(dy) -> if (dx < 0) onSwipeLeft() else onSwipeRight()
-                    dy > swipe && abs(dy) > abs(dx) -> onSwipeDown()
-                    dy < -swipe && abs(dy) > abs(dx) -> onSwipeUp()
+                    pinchFrom > 0f -> onZoom(1f, null)
+                    sideways == true -> onTurn(travel.x, size.width.toFloat())
+                    sideways == false && dy > swipe -> onSwipeDown()
+                    sideways == false && dy < -swipe -> onSwipeUp()
                     !holding && travel.getDistance() < slop -> onTap(start.x, size.width.toFloat())
                 }
             }
@@ -1522,9 +1854,19 @@ private const val PHOTO_MS = 6_000L
 private const val TEXT_BASE_MS = 3_000L
 private const val TEXT_PER_CHAR_MS = 45L
 private const val TEXT_MAX_MS = 12_000L
-private const val FRAME_MS = 50L
+private const val NANOS_PER_MS = 1_000_000.0
 private const val HOLD_MS = 180L
 private const val SWIPE_DP = 60f
+
+/** How far across the screen a sideways drag has to go for the page to turn when the finger lifts. */
+private const val TURN_FRACTION = 0.2f
+private const val TURN_MS = 240
+
+/** The two pages meet like the faces of a box: a quarter turn between them, seen from a little way off. */
+private const val TURN_DEGREES = 90f
+private const val TURN_CAMERA = 24f
+private const val MAX_ZOOM = 4f
+private const val ZOOM_BACK_DAMPING = 0.82f
 private const val ENDED_NOTICE_MS = 1_200L
 private const val MUTED_NOTE_MS = 4_000L
 private const val SAVE_NOTE_MS = 2_500L
