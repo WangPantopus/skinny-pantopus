@@ -39,6 +39,64 @@ data class HolidayCardsResponse(
     @Json(name = "max_recipients") val maxRecipients: Int = 1,
     /** The box a signature beside FROM is drawn in (plan 8.2, launch key `card_table`); absent: no signing, the typed name. */
     val signature: CardSignatureBox? = null,
+    /** What can go into a card besides the note (launch key `holiday_card_memories`); absent from an older server. */
+    val media: HolidayCardMediaRules? = null,
+)
+
+/** `media` on `GET /api/mailbox/cards`: whether a photo and a voice greeting can be added now, and their limits. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardMediaRules(
+    val photo: CardMediaRule? = null,
+    val voice: CardMediaRule? = null,
+)
+
+/** One kind of card media: [usable] is false while the key is off; the size and length limits the server keeps. */
+@JsonClass(generateAdapter = true)
+data class CardMediaRule(
+    val usable: Boolean = false,
+    @Json(name = "max_bytes") val maxBytes: Long? = null,
+    /** A photo is stored at most this many pixels on its long side. */
+    @Json(name = "long_side") val longSide: Int? = null,
+    /** A voice greeting is at most this many seconds. */
+    @Json(name = "max_seconds") val maxSeconds: Int? = null,
+)
+
+/**
+ * A card's own photo (memories plan step 4): its stored file, upright size and the sender's description. [covered]: the
+ * reader isn't the sender's connection, so it shows "Photo from {name}. Tap to show." and loads nothing until the tap.
+ * Never on a sealed card, in a list row, a share picture or a public page.
+ */
+@JsonClass(generateAdapter = true)
+data class CardPhoto(
+    @Json(name = "file_id") val fileId: String,
+    val width: Int? = null,
+    val height: Int? = null,
+    val alt: String? = null,
+    val covered: Boolean = false,
+)
+
+/** A card's voice greeting (memories plan step 7): its file and its length as the server measured it. */
+@JsonClass(generateAdapter = true)
+data class CardVoice(
+    @Json(name = "file_id") val fileId: String,
+    @Json(name = "duration_ms") val durationMs: Long? = null,
+)
+
+/** `POST /api/mailbox/cards/media` (201): the stored file, kept for the sender's next send for 72 hours. */
+@JsonClass(generateAdapter = true)
+data class CardMediaUploaded(
+    val media: CardMediaFile,
+    @Json(name = "expires_at") val expiresAt: String? = null,
+)
+
+/** A stored photo (upright, at most 1600 px on its long side, no metadata) or voice greeting. */
+@JsonClass(generateAdapter = true)
+data class CardMediaFile(
+    @Json(name = "file_id") val fileId: String,
+    val kind: String = "photo",
+    val width: Int? = null,
+    val height: Int? = null,
+    @Json(name = "duration_ms") val durationMs: Long? = null,
 )
 
 /** Where `GET /api/mailbox/cards` keeps signatures: a [w] × [h] box, at most [maxBytes] as compact JSON. */
@@ -170,6 +228,12 @@ data class SendHolidayCardBody(
     @Json(name = "use_stamp") val useStamp: Boolean? = null,
     /** Signed beside FROM (plan 8.2); null: the first name typed in the pen. The same on every look and retry. */
     val signature: CardSignature? = null,
+    /** The card's own photo, the file id `POST /cards/media` gave (needs [requestId]); null: none. */
+    val photo: String? = null,
+    /** The photo's description for screen readers, up to 200 letters. */
+    @Json(name = "photo_alt") val photoAlt: String? = null,
+    /** The card's voice greeting's file id (needs [requestId]); null: none. */
+    val voice: String? = null,
 )
 
 /** `POST /api/mailbox/cards/shared` (launch key `card_table`): what was shared, for the counts; never the note or a name. */
@@ -417,6 +481,10 @@ data class SentCardFace(
     val verse: String? = null,
     /** The sender's own signature beside FROM (plan 8.2; the card's page only), also while it's sealed for them. */
     val signature: CardSignature? = null,
+    /** The card's own photo (the card's page only; never covered for its sender). */
+    val photo: CardPhoto? = null,
+    /** The card's voice greeting (the card's page only). */
+    val voice: CardVoice? = null,
 )
 
 /**

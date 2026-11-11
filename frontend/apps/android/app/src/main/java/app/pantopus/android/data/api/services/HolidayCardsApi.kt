@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.mailbox.CardMediaUploaded
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardLinkResponse
 import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
@@ -16,10 +17,14 @@ import app.pantopus.android.data.api.models.mailbox.StampBalance
 import app.pantopus.android.data.api.models.mailbox.StampConfirmation
 import app.pantopus.android.data.api.models.mailbox.StampConfirmed
 import app.pantopus.android.data.api.models.mailbox.TakeBackHolidayCardResponse
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -89,6 +94,18 @@ interface HolidayCardsApi {
     suspend fun sendList(
         @Body body: SendHolidayCardListBody,
     ): SendHolidayCardListResponse
+
+    /**
+     * `POST /api/mailbox/cards/media` (launch key `holiday_card_memories`; 404 while it's off): a card's own photo or
+     * voice greeting, [kind] first, then the file. 201 with the stored file, sendable on one card for 72 hours; 415 an
+     * unreadable or moving picture or recording, 413 too large or too long, 429 too many in an hour, 503 to try again.
+     */
+    @Multipart
+    @POST("api/mailbox/cards/media")
+    suspend fun uploadMedia(
+        @Part("kind") kind: RequestBody,
+        @Part file: MultipartBody.Part,
+    ): CardMediaUploaded
 
     /** `POST /api/mailbox/cards/shared` — counts what was shared (launch key `card_table`). Answers 204. */
     @POST("api/mailbox/cards/shared")

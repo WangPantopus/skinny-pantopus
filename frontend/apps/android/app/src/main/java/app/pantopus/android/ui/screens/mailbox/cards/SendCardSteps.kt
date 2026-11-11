@@ -779,6 +779,9 @@ internal fun WriteStep(
     /** The server keeps signatures (`GET /api/mailbox/cards` `signature`, launch key `card_table`). */
     canSign: Boolean = false,
     onSignature: (CardSignature?) -> Unit = {},
+    /** The card's own photo (memories plan step 4); "Add a photo" shows when [photos] can be added to this card. */
+    photo: CardPhotoDraft? = null,
+    photos: CardPhotoCalls? = null,
 ) {
     var showBack by rememberSaveable { mutableStateOf(true) }
     var signing by rememberSaveable { mutableStateOf(false) }
@@ -855,6 +858,7 @@ internal fun WriteStep(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("sendCardCount"),
             )
         }
+        if (photos != null) PhotoUnderTheNote(photo, fromName, photos) { focusManager.clearFocus() }
         if (canSign) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2),
@@ -900,12 +904,13 @@ internal fun WriteStep(
                 focusManager.clearFocus()
                 onNext()
             },
-            enabled = message.isNotBlank(),
+            enabled = message.isNotBlank() && photo?.ready != false,
             modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardSealIt"),
         )
-        if (message.isBlank()) {
+        val waits = sealWaits(message, photo)
+        if (waits != null) {
             Text(
-                "Write a few words on the back first.",
+                waits,
                 fontSize = 13.sp,
                 color = DeskInk.quiet,
                 textAlign = TextAlign.Center,

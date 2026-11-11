@@ -61,8 +61,10 @@ import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardFront
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardTimes
 import app.pantopus.android.ui.screens.mailbox.cards.TakeBackDialog
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardLinkBox
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardPrintPhoto
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardShareSheet
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
+import app.pantopus.android.ui.screens.mailbox.cards.table.LetterCardPrint
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailLetterCard
@@ -346,6 +348,7 @@ private fun ColumnScope.BothSides(
         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Spacing.s3).testTag("mailSentPieceTurn"),
     )
     CardNoteSide(card, from, modifier = Modifier.padding(vertical = Spacing.s4).rotate(1f))
+    LetterCardPrint(card, from.substringBefore(' '), modifier = Modifier.padding(bottom = Spacing.s4))
 }
 
 /** Where the card has been, step by step, and that a card never says when it was opened. */
@@ -560,6 +563,8 @@ private fun sentLetterCard(card: SentCard): MailLetterCard? {
         table = face.table,
         verse = face.verse?.takeIf { it.isNotBlank() },
         signature = face.signature?.takeIf { it.drawable },
+        // The sender's own photo, through Sent's route: never covered for them (memories plan).
+        photo = face.photo?.let { CardPrintPhoto.sent(card.id, it) },
     )
 }
 

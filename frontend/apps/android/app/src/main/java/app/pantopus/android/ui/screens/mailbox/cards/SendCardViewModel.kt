@@ -2,11 +2,13 @@
 
 package app.pantopus.android.ui.screens.mailbox.cards
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.data.api.models.mailbox.CardMediaFile
 import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
@@ -23,6 +25,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.identity.LocalProfileRepository
 import app.pantopus.android.data.mailbox.CardLook
+import app.pantopus.android.data.mailbox.CardMediaUploads
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardSignatureJson
@@ -42,6 +45,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 
@@ -155,6 +159,8 @@ data class SendCardForm(
     val message: String = "",
     /** Signed beside FROM (plan 8.2); null: the first name typed in the pen. Sent with every look and retry. */
     val signature: CardSignature? = null,
+    /** The card's own photo (memories plan step 4): uploading, stored, or refused; its stored file is saved with the screen. */
+    val photo: CardPhotoDraft? = null,
     val arrival: String? = null,
     /** When a card to the person chosen can come, by their clock; null until read (the sender's next morning stands in). */
     val theirs: HolidayCardArrivalsFor? = null,
@@ -222,6 +228,34 @@ data class SendCardForm(
     fun withRequestId(): SendCardForm = if (requestId != null) this else copy(requestId = UUID.randomUUID().toString())
 }
 
+/**
+ * The card's own photo while the card is written (memories plan step 4): it uploads as soon as it's chosen. [local] is the
+ * prepared picture on this phone, shown while it uploads (never kept after a relaunch); [stored] is the server's file once
+ * it's there; [failed] is why it didn't upload (Try again or Remove: a card never goes without it by itself).
+ */
+data class CardPhotoDraft(
+    val local: File? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val stored: CardMediaFile? = null,
+    val progress: Float = 0f,
+    val failed: String? = null,
+    /** The description screen readers read, up to [PHOTO_ALT_LIMIT] letters. */
+    val alt: String = "",
+) {
+    val ready: Boolean get() = stored != null
+    val uploading: Boolean get() = stored == null && failed == null
+
+    /** The photo as it goes with a look or a send; null until it's stored. */
+    val fileId: String? get() = stored?.fileId
+
+    /** The description as it goes: trimmed, or null when there's none. */
+    val sentAlt: String? get() = alt.trim().takeIf { it.isNotEmpty() && stored != null }
+}
+
+/** The longest photo description the server takes. */
+const val PHOTO_ALT_LIMIT = 200
+
 /** Step 1 once a card was taken back from this flow. */
 private const val TOOK_BACK = "You took your card back. You can send a card again today."
 
@@ -251,6 +285,7 @@ class SendCardViewModel
         private val network: NetworkMonitor,
         private val localProfiles: LocalProfileRepository,
         private val saved: SavedStateHandle,
+        private val media: CardMediaUploads,
     ) : ViewModel() {
         /** The season and today's card, as last read (shared with the Mailbox's row). */
         val cards: StateFlow<HolidayCardsResponse?> = repo.latest
@@ -401,6 +436,71 @@ class SendCardViewModel
             _form.update { it.copy(signature = signature?.takeIf { s -> s.drawable }) }
         }
 
+        private var photoJob: Job? = null
+
+        /**
+         * "Add a photo" or "Replace" (memories plan step 4): the picked photo, prepared on the phone (upright, at most
+         * 1600 px, no EXIF), uploads at once with its progress. A failure keeps the note and says why.
+         */
+        fun addPhoto(uri: Uri) {
+            photoJob?.cancel()
+            val before = _form.value.photo
+            media.forget(before?.local)
+            _form.update { it.copy(photo = CardPhotoDraft(alt = before?.alt.orEmpty())) }
+            photoJob =
+                viewModelScope.launch {
+                    val prepared = media.preparePhoto(uri)
+                    if (prepared == null) {
+                        _form.update {
+                            it.copy(photo = it.photo?.copy(failed = "We couldn’t read this photo. Try another one."))
+                        }
+                        return@launch
+                    }
+                    _form.update {
+                        it.copy(photo = it.photo?.copy(local = prepared.file, width = prepared.width, height = prepared.height))
+                    }
+                    uploadPhoto(prepared.file)
+                }
+        }
+
+        /** "Try again" after a failed upload: the same prepared photo. */
+        fun retryPhoto() {
+            val local = _form.value.photo?.local ?: return
+            photoJob?.cancel()
+            _form.update { it.copy(photo = it.photo?.copy(failed = null, progress = 0f)) }
+            photoJob = viewModelScope.launch { uploadPhoto(local) }
+        }
+
+        private suspend fun uploadPhoto(file: File) {
+            val result =
+                media.upload("photo", file, "image/jpeg") { done ->
+                    _form.update { form -> if (form.photo?.local == file) form.copy(photo = form.photo.copy(progress = done)) else form }
+                }
+            _form.update { form ->
+                val photo = form.photo?.takeIf { it.local == file } ?: return@update form
+                when (result) {
+                    is NetworkResult.Success ->
+                        form.copy(
+                            photo = photo.copy(stored = result.data, progress = 1f, width = result.data.width, height = result.data.height),
+                        )
+                    is NetworkResult.Failure ->
+                        form.copy(photo = photo.copy(failed = sendMessage(result.error, doing = "upload your photo")))
+                }
+            }
+        }
+
+        /** "Remove": the card goes without a photo, on purpose. */
+        fun removePhoto() {
+            photoJob?.cancel()
+            media.forget(_form.value.photo?.local)
+            _form.update { it.copy(photo = null) }
+        }
+
+        /** The photo's description for screen readers, cut at [PHOTO_ALT_LIMIT] letters. */
+        fun onPhotoAlt(text: String) {
+            _form.update { it.copy(photo = it.photo?.copy(alt = text.takeLetters(PHOTO_ALT_LIMIT))) }
+        }
+
         /** When a card to the person chosen can come, by their clock. A failure keeps the sender's next morning. */
         private fun readTheirs() {
             val person = _form.value.to as? CardRecipient.Person ?: return
@@ -427,7 +527,7 @@ class SendCardViewModel
             _form.update { form ->
                 when {
                     form.step == SendCardStep.Pick && form.design != null -> form.copy(step = SendCardStep.Write)
-                    form.step == SendCardStep.Write && form.message.isNotBlank() ->
+                    form.step == SendCardStep.Write && form.message.isNotBlank() && form.photo?.ready != false ->
                         form.copy(step = SendCardStep.Seal, lookUnavailable = false)
                     else -> form
                 }
@@ -604,6 +704,8 @@ class SendCardViewModel
                         design = design,
                         message = form.message.trim(),
                         signature = form.signature,
+                        photo = form.photo?.fileId,
+                        photoAlt = form.photo?.sentAlt,
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
@@ -623,7 +725,8 @@ class SendCardViewModel
                 val same = it.step == SendCardStep.Seal && it.to == asked.to && it.design == asked.design && it.arrival == asked.arrival
                 when {
                     // Back, or another choice, while it was read: only an answer for what's chosen now counts.
-                    !same || it.message != asked.message || it.signature != asked.signature -> it.copy(previewing = false)
+                    !same || it.message != asked.message || it.signature != asked.signature || it.photo != asked.photo ->
+                        it.copy(previewing = false)
                     look is CardLook.Shown ->
                         it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
                     look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
@@ -654,6 +757,8 @@ class SendCardViewModel
                         design = design,
                         message = form.message.trim(),
                         signature = form.signature,
+                        photo = form.photo?.fileId,
+                        photoAlt = form.photo?.sentAlt,
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
@@ -802,6 +907,7 @@ class SendCardViewModel
             val design = saved.get<String>(KEY_DESIGN) ?: saved.get<String>(SEND_CARD_DESIGN_KEY)?.takeIf { LaunchFeatures.cardTable }
             val message = saved.get<String>(KEY_MESSAGE).orEmpty()
             val signature = saved.get<String>(KEY_SIGNATURE)?.let(CardSignatureJson::fromJson)
+            val photo = saved.get<String>(KEY_PHOTO)?.let { readPhoto(it, saved.get<String>(KEY_PHOTO_ALT).orEmpty()) }
             val step = savedStep(opensAtPick = sendBack != null)
             val reachable =
                 when {
@@ -818,12 +924,31 @@ class SendCardViewModel
                 design = design,
                 message = message,
                 signature = signature,
+                photo = photo,
                 arrival = saved.get<String>(KEY_ARRIVAL),
                 requestId = saved.get<String>(KEY_REQUEST_ID),
                 listed = list?.first.orEmpty(),
                 listIds = list?.second.orEmpty(),
             )
         }
+
+        /** The photo as saved: its stored file (still sendable for 72 hours) and its description. */
+        private fun readPhoto(
+            json: String,
+            alt: String,
+        ): CardPhotoDraft? =
+            runCatching {
+                val saved = JSONObject(json)
+                val width = saved.optInt("w").takeIf { it > 0 }
+                val height = saved.optInt("h").takeIf { it > 0 }
+                CardPhotoDraft(
+                    width = width,
+                    height = height,
+                    stored = CardMediaFile(saved.getString("id"), "photo", width, height),
+                    progress = 1f,
+                    alt = alt,
+                )
+            }.getOrNull()
 
         /** The list as saved: who's on it and their cards' request IDs. */
         private fun readList(json: String): Pair<List<CardRecipient>, Map<String, String>>? =
@@ -872,6 +997,12 @@ class SendCardViewModel
             saved[KEY_DESIGN] = form.design.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_MESSAGE] = form.message.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_SIGNATURE] = form.signature?.takeIf { form.step != SendCardStep.Sent }?.let(CardSignatureJson::toJson)
+            // The photo's stored file and its words, never the picture itself (the plan: raw media isn't kept).
+            saved[KEY_PHOTO] =
+                form.photo?.stored?.takeIf { form.step != SendCardStep.Sent }?.let {
+                    JSONObject().put("id", it.fileId).put("w", it.width ?: 0).put("h", it.height ?: 0).toString()
+                }
+            saved[KEY_PHOTO_ALT] = form.photo?.alt?.takeIf { form.step != SendCardStep.Sent && form.photo.ready }
             saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_REQUEST_ID] = form.requestId.takeIf { form.step != SendCardStep.Sent }
         }
@@ -918,6 +1049,8 @@ class SendCardViewModel
             private const val KEY_DESIGN = "sendCard.design"
             private const val KEY_MESSAGE = "sendCard.message"
             private const val KEY_SIGNATURE = "sendCard.signature"
+            private const val KEY_PHOTO = "sendCard.photo"
+            private const val KEY_PHOTO_ALT = "sendCard.photoAlt"
             private const val KEY_ARRIVAL = "sendCard.arrival"
             private const val KEY_REQUEST_ID = "sendCard.requestId"
             private const val KEY_TO_LIST = "sendCard.toList"
