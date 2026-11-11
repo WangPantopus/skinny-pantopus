@@ -1945,7 +1945,7 @@ const refuseCard = (status, error, code) => ({ refusal: { status, body: { error,
 
 // A card's own photo or voice greeting goes only on a card sent with a bought stamp (founder, 2026-11-11; migration
 // 20261111090000_card_media_bought_stamp). Without one left, the apps open the stamp books, as for no stamps at all.
-const MEDIA_NEEDS_STAMP_WORDS = 'Photos and voice greetings go on cards sent with a bought stamp.';
+const MEDIA_NEEDS_STAMP_WORDS = 'Free stamps send your card and note. A photo or voice greeting needs a bought stamp.';
 const cardMediaNeedsStamp = () => refuseCard(402, MEDIA_NEEDS_STAMP_WORDS, 'CARD_MEDIA_NEEDS_STAMP');
 
 /** The bought stamps a person has left now: none while stamp books aren't on for them. Throws when unreadable. */
