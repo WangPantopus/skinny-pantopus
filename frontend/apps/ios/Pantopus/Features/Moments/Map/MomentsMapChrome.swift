@@ -12,10 +12,32 @@ import SwiftUI
 
 struct MomentsMapTopBar: View {
     let viewModel: MomentsMapViewModel
+    /// The open iPhone Duo: the row is this wide at the top left (boards O1, U1); nil, as wide as the screen.
+    var width: CGFloat?
+    /// The iPhone Duo: this far from the screen's top (12 pt closed and sideways, beside the clock upright); nil, the
+    /// phone's 4 pt under the safe area.
+    var top: CGFloat?
     let onArea: @MainActor () -> Void
     let onBack: @MainActor () -> Void
 
     var body: some View {
+        if let top {
+            row
+                .frame(width: width)
+                .padding(.leading, Spacing.s4)
+                .padding(.trailing, width == nil ? Spacing.s4 : 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, top)
+                // Measured from the screen's top: upright, the row sits beside the clock corner, in its safe area.
+                .ignoresSafeArea(.container, edges: .top)
+        } else {
+            row
+                .padding(.horizontal, Spacing.s4)
+                .padding(.top, Spacing.s1)
+        }
+    }
+
+    private var row: some View {
         // ☰ first and the chat button last (founder decision 2026-11-08).
         HStack(spacing: Spacing.s2) {
             NavigationMenuButton(accessibilityIdentifier: "moments.menu", floating: true)
@@ -26,8 +48,6 @@ struct MomentsMapTopBar: View {
             }
             MessagesButton(accessibilityIdentifier: "moments.chat", floating: true)
         }
-        .padding(.horizontal, Spacing.s4)
-        .padding(.top, Spacing.s1)
     }
 
     private var areaName: String {
@@ -86,6 +106,9 @@ struct MomentsMapBottom: View {
     let actions: MomentsMapActions
     let onRetry: @MainActor (String) -> Void
     let onDiscard: @MainActor (String) -> Void
+    /// The closed iPhone Duo: the height of the strip or the card at the bottom, for the map to keep its Legal link
+    /// just above it. Phones don't ask.
+    var onBottomHeight: ((CGFloat) -> Void)?
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 0) {
@@ -94,13 +117,16 @@ struct MomentsMapBottom: View {
                 EmptyView()
             case .needsLocation:
                 MomentsLocationCard(viewModel: viewModel)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onBottomHeight?($0) }
             case .ready:
                 MomentsRoundButton.locate { Task { await viewModel.locate() } }
                 if viewModel.loadFailed, !viewModel.loaded, postings.isEmpty {
                     MomentsLoadFailedCard { Task { await viewModel.load() } }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onBottomHeight?($0) }
                         .padding(.top, 14)
                 } else if viewModel.isEmpty, postings.isEmpty {
                     MomentsEmptyCard(line: viewModel.emptyLine, onAdd: actions.compose)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onBottomHeight?($0) }
                         .padding(.top, 14)
                 } else {
                     MomentsRoundButton.add(action: actions.compose)
@@ -113,6 +139,7 @@ struct MomentsMapBottom: View {
                         onRetry: onRetry,
                         onDiscard: onDiscard
                     )
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onBottomHeight?($0) }
                     .padding(.top, 9)
                 }
             }

@@ -113,12 +113,33 @@ struct MomentRingStroke: View {
 /// verified check at the bottom right. Its point is the tail's tip.
 struct MomentRingPin: View {
     let ring: MomentRingDTO
+    /// Playing in the card beside the map on the open iPhone Duo (board O2): a quarter bigger, standing on its tip,
+    /// in a sky halo.
+    var playing = false
 
     static let size = CGSize(width: 64, height: 72)
     /// Where the tip of the tail sits in the pin, for the map's anchor.
     static let anchor = UnitPoint(x: 0.5, y: 71.0 / 72.0)
+    /// The playing ring's scale, and how far its middle then sits above the tip.
+    static let playingScale: CGFloat = 1.25
+    static let playingMiddleAboveTip = (71 - 32) * playingScale
 
     var body: some View {
+        // One view either way, so the face's photo isn't loaded again when the ring starts or stops playing.
+        pin
+            .scaleEffect(playing ? Self.playingScale : 1, anchor: Self.anchor)
+            .background {
+                if playing {
+                    Circle()
+                        .fill(MomentsPalette.ringStart.opacity(0.2))
+                        .overlay(Circle().strokeBorder(MomentsPalette.ringStart.opacity(0.4), lineWidth: 2))
+                        .frame(width: 108, height: 108)
+                        .position(x: 32, y: 71 - Self.playingMiddleAboveTip)
+                }
+            }
+    }
+
+    private var pin: some View {
         ZStack(alignment: .topLeading) {
             PinTail()
                 .fill(MomentsPalette.pinSurface)
@@ -165,13 +186,7 @@ struct MomentStripFace: View {
 
     var body: some View {
         VStack(spacing: Spacing.s1) {
-            ZStack {
-                Circle().fill(MomentsPalette.pinSurface).frame(width: 55, height: 55)
-                MomentRingStroke(seen: ring.ringSeen, lineWidth: 3)
-                    .frame(width: 54.5, height: 54.5)
-                MomentAvatar(author: ring.author, size: 44)
-            }
-            .frame(width: 56, height: 56)
+            MomentRingFace(ring: ring)
             Text(ring.mine ? "You" : ring.author.shortName)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(ring.isNew || ring.mine ? Theme.Color.appText : Theme.Color.appTextSecondary)
@@ -179,6 +194,21 @@ struct MomentStripFace: View {
                 .frame(maxWidth: 60)
         }
         .frame(width: 62)
+    }
+}
+
+/// A face in its ring, 56 pt: the strip's faces, and the crowded spot's list on the open iPhone Duo (board O3).
+struct MomentRingFace: View {
+    let ring: MomentRingDTO
+
+    var body: some View {
+        ZStack {
+            Circle().fill(MomentsPalette.pinSurface).frame(width: 55, height: 55)
+            MomentRingStroke(seen: ring.ringSeen, lineWidth: 3)
+                .frame(width: 54.5, height: 54.5)
+            MomentAvatar(author: ring.author, size: 44)
+        }
+        .frame(width: 56, height: 56)
     }
 }
 

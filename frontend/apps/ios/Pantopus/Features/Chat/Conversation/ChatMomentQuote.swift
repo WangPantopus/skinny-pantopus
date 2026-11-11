@@ -43,6 +43,7 @@ struct ChatMomentQuoteView: View {
     @State private var opening = false
     @State private var note: String?
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
 
     var body: some View {
         Button(action: open) {
@@ -89,9 +90,15 @@ struct ChatMomentQuoteView: View {
         .accessibilityIdentifier("chat.momentQuote")
     }
 
-    /// Opens the viewer on that one Moment (on your own, with Seen by).
+    /// Opens the viewer on that one Moment (on your own, with Seen by). On the open iPhone Duo held sideways it opens
+    /// beside the map in the Moments tab instead (board O11), as a push's link does.
     private func open() {
         guard !quote.ended, !opening else { return }
+        if MomentsFlags.shared.moments, let rootTabs, MomentsDuoScreen.windowIsWide {
+            MomentsNavigator.shared.pending = quote.momentId
+            rootTabs.selected = .moments
+            return
+        }
         opening = true
         Task {
             defer { opening = false }

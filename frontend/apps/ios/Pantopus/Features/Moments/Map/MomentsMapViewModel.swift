@@ -51,6 +51,10 @@ struct MomentsFocus: Equatable {
     let ringIds: Set<String>
     /// Where the map was before, for the back pill.
     let previousCamera: MapCamera?
+    /// The spot itself: on the iPhone Duo a fold keeps it in view (the middle of the left half open sideways, the
+    /// middle of the map otherwise).
+    var latitude = 0.0
+    var longitude = 0.0
 }
 
 /// One face in the strip: a person, with every spot they have a Moment at.
@@ -363,9 +367,16 @@ final class MomentsMapViewModel {
     // MARK: - Crowded spots
 
     /// Board M2: the strip shows only this spot, and the pill takes you back.
-    func focus(on cluster: MomentsCluster) {
+    /// `camera`: where back goes, when it isn't where the map is now (the open Duo's card had moved it).
+    func focus(on cluster: MomentsCluster, from camera: MapCamera? = nil) {
         let title = cluster.placeName ?? areaName ?? "This spot"
-        focus = MomentsFocus(title: title, ringIds: Set(cluster.rings.map(\.id)), previousCamera: lastCamera)
+        focus = MomentsFocus(
+            title: title,
+            ringIds: Set(cluster.rings.map(\.id)),
+            previousCamera: camera ?? lastCamera,
+            latitude: cluster.coordinate.latitude,
+            longitude: cluster.coordinate.longitude
+        )
     }
 
     /// Back to the area: the camera the spot was opened from.

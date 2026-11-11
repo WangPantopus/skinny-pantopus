@@ -60,26 +60,29 @@ public struct MomentsTabRoot: View {
 
     public var body: some View {
         NavigationStack {
-            MomentsMapView(viewModel: map, actions: actions)
-                .toolbar(.hidden, for: .navigationBar)
+            // Open sideways, the iPhone Duo shows watching as a card beside the map (board O2).
+            MomentsMapView(
+                viewModel: map,
+                actions: actions,
+                watching: duo.pose.isWide ? watching : nil,
+                viewerHooks: viewerHooks
+            )
+            .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(isPresented: $showsAreaPicker) {
             MomentsAreaPicker(viewModel: map) { showsAreaPicker = false }
                 .presentationDetents([.medium])
                 .presentationBackground(Theme.Color.appSurface)
         }
-        .fullScreenCover(item: $watching) { session in
+        // Everywhere else it's full screen. A fold that moves it into the card takes the cover down without ending
+        // it: only the person's close ends watching.
+        .fullScreenCover(item: Binding(get: { duo.pose.isWide ? nil : watching }, set: { _ in })) { session in
             MomentsViewer(
                 session: session,
                 systemScheme: colorScheme,
-                onHideAuthor: { map.hide(authorId: $0) },
-                onShowAuthor: { map.unhide(authorId: $0) },
-                onClose: {
-                    endWatching()
-                    Task { await map.load() }
-                    // A Moment opened from a push while another tab was up: what was watched is no longer new.
-                    Task { await MomentsTabDot.shared.reread() }
-                }
+                onHideAuthor: viewerHooks.onHideAuthor,
+                onShowAuthor: viewerHooks.onShowAuthor,
+                onClose: viewerHooks.onClose
             )
         }
         .fullScreenCover(item: $composing) { _ in
@@ -97,9 +100,29 @@ public struct MomentsTabRoot: View {
         .onChange(of: navigator.pending, initial: true) { _, _ in playLinked() }
         // A link that came while a Moment was being written waits for the composer to close.
         .onChange(of: composing == nil) { _, _ in playLinked() }
-        .readsMomentsDuoScreen($duo)
+        // A fold or a turn switches layouts at once (the card and the cover trade places without sliding).
+        .readsMomentsDuoScreen(Binding(get: { duo }, set: { screen in
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { duo = screen }
+        }))
         // The screens opened over the map know how the Duo is held from their first frame.
         .environment(\.momentsDuoScreen, duo)
+    }
+
+    /// What watching does to the map, in the cover or the card: hides a muted or blocked person, and on close reads
+    /// the map again.
+    private var viewerHooks: MomentsViewerHooks {
+        MomentsViewerHooks(
+            onHideAuthor: { map.hide(authorId: $0) },
+            onShowAuthor: { map.unhide(authorId: $0) },
+            onClose: {
+                endWatching()
+                Task { await map.load() }
+                // A Moment opened from a push while another tab was up: what was watched is no longer new.
+                Task { await MomentsTabDot.shared.reread() }
+            }
+        )
     }
 
     /// Watching starts: whatever was playing before stops.
