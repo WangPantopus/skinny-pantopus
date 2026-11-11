@@ -237,7 +237,13 @@ private struct MailCardTablePage: View {
                     .accessibilityIdentifier("cardTableBlockConfirm")
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("They won't be able to send you mail. This card stays until you shred it.")
+                // A block withdraws what's on its way between them (memories contract section 8; wave 4 drawing 8).
+                Text(
+                    LaunchFeatures.holidayCardMemories
+                        ? "They won't be able to send you mail. Cards and replies on their way between you are withdrawn. "
+                        + "This card stays until you shred it."
+                        : "They won't be able to send you mail. This card stays until you shred it."
+                )
             }
             .sheet(isPresented: $reportsSender) {
                 if let senderPersonId {
@@ -245,6 +251,10 @@ private struct MailCardTablePage: View {
                         userId: senderPersonId,
                         handle: nil,
                         displayName: model.content.fromName,
+                        // "Report this card" shares that card, and only that card, with Pantopus admins.
+                        card: LaunchFeatures.holidayCardMemories
+                            ? ReportedCard(mailId: viewModel.mailId, senderFirstName: model.content.firstName)
+                            : nil,
                         onClose: { reportsSender = false },
                         onSubmitted: {
                             reportsSender = false
@@ -334,10 +344,15 @@ private struct MailCardTablePage: View {
             items.append(CardTableMenuItem(title: sendBack.title, identifier: "cardTableMenuSendBack", action: sendBack.action))
         }
         if senderPersonId != nil {
-            items.append(CardTableMenuItem(title: "Report", identifier: "cardTableMenuReport") {
+            // As drawn for the card memories (wave 4 drawing 6): the card itself is reported, and the person is named.
+            let memories = LaunchFeatures.holidayCardMemories
+            items.append(CardTableMenuItem(title: memories ? "Report this card" : "Report", identifier: "cardTableMenuReport") {
                 reportsSender = true
             })
-            items.append(CardTableMenuItem(title: "Block", identifier: "cardTableMenuBlock") {
+            items.append(CardTableMenuItem(
+                title: memories ? "Block \(model.content.firstName)" : "Block",
+                identifier: "cardTableMenuBlock"
+            ) {
                 confirmsBlock = true
             })
         }

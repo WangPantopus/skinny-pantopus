@@ -23,7 +23,16 @@ public enum ReportReason: String, CaseIterable, Identifiable, Sendable {
     case impersonation
     case fraud
     case hateSpeech = "hate_speech"
+    /// A card's report only (wave 4 drawing 7).
+    case inappropriate
+    case safety
     case other
+
+    /// What a person's report offers.
+    static let forPerson: [ReportReason] = [.spam, .harassment, .impersonation, .fraud, .hateSpeech, .other]
+    /// What "Report this card" offers, as drawn: the existing card reasons without "Misinformation" (it doesn't fit a
+    /// card; the founder's choice with the wave 4 drawings).
+    static let forCard: [ReportReason] = [.spam, .harassment, .inappropriate, .safety, .other]
 
     public var id: String {
         rawValue
@@ -37,7 +46,19 @@ public enum ReportReason: String, CaseIterable, Identifiable, Sendable {
         case .impersonation: "Impersonation"
         case .fraud: "Fraud"
         case .hateSpeech: "Hate speech"
+        case .inappropriate: "Inappropriate content"
+        case .safety: "Safety concern"
         case .other: "Other"
+        }
+    }
+
+    /// A card's label, as web's list and the drawing word it.
+    func label(onCard: Bool) -> String {
+        guard onCard else { return label }
+        switch self {
+        case .spam: return "Spam or misleading"
+        case .harassment: return "Harassment or bullying"
+        default: return label
         }
     }
 
@@ -46,6 +67,8 @@ public enum ReportReason: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .spam: "spam"
         case .harassment, .hateSpeech: "harassment"
+        case .inappropriate: "inappropriate"
+        case .safety: "safety"
         case .impersonation, .fraud, .other: "other"
         }
     }
@@ -58,7 +81,7 @@ public enum ReportReason: String, CaseIterable, Identifiable, Sendable {
         case .impersonation: "[Impersonation]"
         case .fraud: "[Fraud]"
         case .hateSpeech: "[Hate speech]"
-        case .spam, .harassment, .other: nil
+        case .spam, .harassment, .inappropriate, .safety, .other: nil
         }
     }
 }
@@ -81,11 +104,14 @@ public final class ReportUserSheetViewModel {
     public var details: String = ""
 
     private let userId: String
+    /// "Report this card": the card shared with admins with this report.
+    private let mailId: String?
     private let client: APIClient
     private let logger = Logger(label: "app.pantopus.ios.ReportUser")
 
-    init(userId: String, client: APIClient = .shared) {
+    init(userId: String, mailId: String? = nil, client: APIClient = .shared) {
         self.userId = userId
+        self.mailId = mailId
         self.client = client
     }
 
@@ -113,7 +139,8 @@ public final class ReportUserSheetViewModel {
         let trimmed = details.trimmingCharacters(in: .whitespacesAndNewlines)
         let body = UserReportBody(
             reason: selectedReason.backendKey,
-            details: payloadDetails(for: selectedReason, userDetails: trimmed)
+            details: payloadDetails(for: selectedReason, userDetails: trimmed),
+            mailId: mailId
         )
         do {
             _ = try await client.request(
@@ -149,6 +176,18 @@ public final class ReportUserSheetViewModel {
     }
 }
 
+/// "Report this card" (launch key `holiday_card_memories`; wave 4 drawing 7): the card received from this person is
+/// shared with Pantopus admins for review, that card only, and the sheet says so plainly.
+public struct ReportedCard: Sendable, Equatable {
+    public let mailId: String
+    public let senderFirstName: String
+
+    public init(mailId: String, senderFirstName: String) {
+        self.mailId = mailId
+        self.senderFirstName = senderFirstName
+    }
+}
+
 /// Sheet content presented from `PublicProfileView` when the overflow's
 /// Report row is tapped.
 @MainActor
@@ -156,6 +195,7 @@ public struct ReportUserSheet: View {
     @State private var viewModel: ReportUserSheetViewModel
     private let handle: String?
     private let displayName: String
+    private let card: ReportedCard?
     private let onClose: @MainActor () -> Void
     private let onSubmitted: @MainActor () -> Void
     @FocusState private var detailsFocused: Bool
@@ -164,12 +204,14 @@ public struct ReportUserSheet: View {
         userId: String,
         handle: String?,
         displayName: String,
+        card: ReportedCard? = nil,
         onClose: @escaping @MainActor () -> Void,
         onSubmitted: @escaping @MainActor () -> Void
     ) {
-        _viewModel = State(initialValue: ReportUserSheetViewModel(userId: userId))
+        _viewModel = State(initialValue: ReportUserSheetViewModel(userId: userId, mailId: card?.mailId))
         self.handle = handle
         self.displayName = displayName
+        self.card = card
         self.onClose = onClose
         self.onSubmitted = onSubmitted
     }
@@ -178,9 +220,7 @@ public struct ReportUserSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
-                    Text("Tell us why you're reporting this account. Our moderators review every report.")
-                        .pantopusTextStyle(.small)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    intro
 
                     reasonGroup
                     detailsField
@@ -214,7 +254,24 @@ public struct ReportUserSheet: View {
         }
     }
 
+    @ViewBuilder private var intro: some View {
+        if let card {
+            // Said plainly, as drawn: what the report shares.
+            (Text("Pantopus will be able to see this card to review it.").bold()
+                + Text(" Only this card: nothing else in your mail or \(card.senderFirstName)’s is shared."))
+                .pantopusTextStyle(.small)
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("reportUser_cardDisclosure")
+        } else {
+            Text("Tell us why you're reporting this account. Our moderators review every report.")
+                .pantopusTextStyle(.small)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+        }
+    }
+
     private var titleText: String {
+        if card != nil { return "Report this card" }
         if let handle, !handle.isEmpty { return "Report @\(handle)" }
         return "Report \(displayName)"
     }
@@ -227,11 +284,13 @@ public struct ReportUserSheet: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             VStack(spacing: Spacing.s0) {
-                ForEach(Array(ReportReason.allCases.enumerated()), id: \.element) { index, reason in
+                let reasons = card == nil ? ReportReason.forPerson : ReportReason.forCard
+                ForEach(Array(reasons.enumerated()), id: \.element) { index, reason in
                     ReportReasonRow(
                         reason: reason,
+                        label: reason.label(onCard: card != nil),
                         isSelected: viewModel.selectedReason == reason,
-                        isLast: index == ReportReason.allCases.count - 1
+                        isLast: index == reasons.count - 1
                     ) {
                         viewModel.selectedReason = reason
                     }
@@ -292,7 +351,7 @@ public struct ReportUserSheet: View {
         let isSubmitting = viewModel.state == .submitting
         VStack(spacing: Spacing.s2) {
             PrimaryButton(
-                title: "Submit report",
+                title: card == nil ? "Submit report" : "Report",
                 isLoading: isSubmitting,
                 isEnabled: viewModel.canSubmit && !isSubmitting
             ) {
@@ -312,6 +371,7 @@ public struct ReportUserSheet: View {
 /// One tappable row in the reason radio group.
 private struct ReportReasonRow: View {
     let reason: ReportReason
+    let label: String
     let isSelected: Bool
     let isLast: Bool
     let onTap: @MainActor () -> Void
@@ -320,7 +380,7 @@ private struct ReportReasonRow: View {
         VStack(spacing: Spacing.s0) {
             Button(action: onTap) {
                 HStack(spacing: Spacing.s3) {
-                    Text(reason.label)
+                    Text(label)
                         .pantopusTextStyle(.body)
                         .foregroundStyle(Theme.Color.appText)
                     Spacer()
@@ -332,7 +392,7 @@ private struct ReportReasonRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("reportUser_reason_\(reason.rawValue)")
-            .accessibilityLabel(reason.label)
+            .accessibilityLabel(label)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
 
             if !isLast {
