@@ -1,8 +1,10 @@
 # The business file: find, claim and prove every business (plan, November 11, 2026)
 
-**Status: a plan. Nothing is built, and nothing starts until the founder says so.**
-Read against master `58725ba2b2`. Sources were checked on November 11, 2026; the
-last section lists what was not checked.
+**Status: step 1 is live. Steps 2 to 6 are a plan: none is built, and none starts
+until the founder says so.** Step 1 merged on November 11, 2026 as
+[PR #3938](https://github.com/WangPantopus/skinny-pantopus/pull/3938) and reached
+production that morning. The plan was read against master `58725ba2b2`. Sources
+were checked on November 11, 2026; the last section lists what was not checked.
 
 ## The short version
 
@@ -19,8 +21,8 @@ last section lists what was not checked.
    days. We send a code to the phone or domain an official record already lists.
 5. The part nobody can copy is ours: reviews and counts backed by paid invoices
    and verified homes.
-6. First we fix a hole that exists today: the first account to type an address
-   blocks every other business from it, with no proof.
+6. First we fixed a hole: the first account to type an address blocked every
+   other business from it, with no proof. That is step 1, now live.
 
 ## Where the big names are weak
 
@@ -153,13 +155,13 @@ days." That is the moment they learn we know their paperwork better than they do
 
 ## The steps
 
-### Step 1. Stop the first-come address block (server only)
+### Step 1. Stop the first-come address block (live since November 11, 2026)
 
-**Today:** a business location is refused when another business already has an
-active location at the same address and suite. No proof is asked, a forgotten
-draft counts, and there is no way to contest it.
+**Before:** a business location was refused when another business already had
+an active location at the same address and suite. No proof was asked, a
+forgotten draft counted, and there was no way to contest it.
 
-**After:**
+**Now:**
 
 - A home at the address: refused, as today.
 - Another business there that Pantopus has not verified: allowed. Both list it.
@@ -167,17 +169,24 @@ draft counts, and there is no way to contest it.
   buildings.
 - A verified business there with the same or nearly the same name: refused, with
   a sentence that says so and gives the support address.
-- When a reviewer approves a business's documents, they are shown any unverified
-  same-name pages at that address.
+- A rename can't take a verified business's name at an address the two share.
+- The admin verification page lists any unverified same-name pages at the
+  business's address, so the reviewer sees them before approving.
 
-**What changes:** the conflict rule in `backend/services/businessAddressService.js`,
-the three refusal sentences in `backend/routes/businesses.js`, and the two
-existing tests of the old rule. No migration, no app code.
+**What changed:** the conflict rule in `backend/services/businessAddressService.js`,
+the name comparison in `backend/utils/businessNameMatch.js`, the refusal
+sentences in `backend/routes/businesses.js`, the admin queue, the web's conflict
+card, and the two existing tests of the old rule. No migration, no iPhone or
+Android code.
 
-**Checked by:** creating two businesses at one address on the web, the iPhone
+**Checked by:** creating businesses at one address on the web, the iPhone
 simulator and the Android emulator against a local backend and database; a home
-address still refused; the same-name refusal read on each; all still true after
-a reload.
+address still refused; the same-name refusal read on each; saved businesses
+still there after a reload or relaunch.
+
+**Left open:** on the iPhone the wizard shows a refusal below the last step's
+buttons, so the owner has to scroll to read it. Businesses that existed before
+the change were not re-checked.
 
 **Money:** protects the invoice fee. A crew's page is what households pay.
 
@@ -228,7 +237,7 @@ Reviews and counts from paid invoices and verified homes, on every business page
 
 ## What the founder decides
 
-1. Go ahead with step 1.
+1. ~~Go ahead with step 1.~~ Approved and live, November 11.
 2. One new table for public licence and registration records (step 2).
 3. A text-message provider, which costs a little per code and needs an account.
 4. New screens on web, iPhone and Android from step 2 on.
