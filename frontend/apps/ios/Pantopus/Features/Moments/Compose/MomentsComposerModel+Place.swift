@@ -12,9 +12,43 @@ import CoreLocation
 import Foundation
 
 extension MomentsComposerModel {
+    /// "Post with no location" on the location card (founder 2026-11-11): the camera, the library and a text card
+    /// work as usual, and the Moment goes to connections only, with no pin. Needs a connection and the 18+ answer.
+    func continueWithoutLocation() async {
+        error = nil
+        do {
+            let reply: MomentPlacePreviewDTO = try await MomentsAPI.send(MomentsEndpoints.postingPreview)
+            if let has = reply.hasConnections { hasConnections = has }
+            guard reply.hasConnections != false else {
+                error = MomentsFailure.noConnections.message
+                return
+            }
+            if reply.adultConfirmed == false { asksAdult = true }
+            noLocation = true
+            choseNoLocation = true
+            previewSettled = true
+        } catch let failure as MomentsFailure {
+            error = failure.message
+        } catch {
+            self.error = MomentsFailure.offline.message
+        }
+    }
+
+    /// The Post sheet's "Don't show where". It stays on when there's no pin; it needs a connection.
+    func setNoLocation(_ on: Bool) {
+        if !on, noLocationLocked { return }
+        if on, hasConnections == false {
+            error = MomentsFailure.noConnections.message
+            return
+        }
+        error = nil
+        noLocation = on
+    }
+
     /// What the place row says: the place (the venue or the name picked, when one was), the town for an area, or
     /// "Your home".
     var placeLine: String {
+        if noLocationOn { return "No location" }
         if showArea { return place?.areaLabel ?? place?.placeLabel ?? "This area" }
         if let pickedVenue { return pickedVenue.name }
         if place?.atHome == true { return "Your home" }
@@ -24,7 +58,7 @@ extension MomentsComposerModel {
 
     /// The names to pick from: more than one fits the exact pin, and neither the area nor the home hides it.
     var placeChoices: [MomentPlaceChoiceDTO] {
-        guard let place, place.places.count > 1, !showArea, !place.atHome else { return [] }
+        guard let place, place.places.count > 1, !showArea, !noLocationOn, !place.atHome else { return [] }
         return place.places
     }
 
@@ -42,7 +76,7 @@ extension MomentsComposerModel {
 
     /// A venue picked in the place picker moves the pin off the home (the server checks its point again).
     var showsHomeNotice: Bool {
-        place?.atHome == true && !showArea && pickedVenue == nil
+        place?.atHome == true && !showArea && pickedVenue == nil && !noLocationOn
     }
 
     /// The pin the sheet's map shows: at the venue picked, else `basePin`.
@@ -60,7 +94,17 @@ extension MomentsComposerModel {
 
     /// An exact pin can name a venue from the place picker (around the photo's spot, or where you are).
     var canFindPlace: Bool {
-        !showArea && basePin != nil && draft != nil
+        !showArea && basePin != nil && draft != nil && !noLocationOn
+    }
+
+    /// No location: switched on, or there's no pin at all (location off and nothing in the file).
+    var noLocationOn: Bool {
+        noLocation || basePin == nil
+    }
+
+    /// With no pin at all the switch stays on: there's nowhere to pin the Moment.
+    var noLocationLocked: Bool {
+        basePin == nil
     }
 
     /// How far from the pin the picker's places may be (the server's number, else 1500 m).
@@ -86,7 +130,7 @@ extension MomentsComposerModel {
     }
 
     var canPost: Bool {
-        !isPosting && pin != nil && draft != nil && !asksAdult
+        !isPosting && (pin != nil || noLocationOn) && draft != nil && !asksAdult
     }
 
     var postLabel: String {

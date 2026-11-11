@@ -54,7 +54,7 @@ final class MomentsComposerModel {
     private(set) var locating: Locating = .locating
     private(set) var place: MomentPlacePreviewDTO?
     /// The server has said what this spot reads as and whether the 18+ answer is on file (or couldn't be reached).
-    private(set) var previewSettled = false
+    var previewSettled = false
     /// Location was asked for here and didn't come: the card offers Settings.
     private(set) var locationRefused = false
     /// The 18+ question before the first Moment, and its answer when it's no.
@@ -73,6 +73,12 @@ final class MomentsComposerModel {
 
     /// A venue picked in the place picker (the Pulse composer's, around the pin): the Moment pins at it under its name.
     private(set) var venue: MomentVenue?
+    /// "Don't show where" (founder 2026-11-11): no pin, not on the map, connections only.
+    var noLocation = false
+    /// Whether the person has a connection (place-preview's `has_connections`); nil until known.
+    var hasConnections: Bool?
+    /// "Post with no location" on the location card: posting goes on with location off.
+    var choseNoLocation = false
     /// When the album photo or video was taken (any time); nil for the camera, a text card, or a file that never said.
     private(set) var takenAt: Date?
     // The Post sheet (P3).
@@ -123,7 +129,7 @@ final class MomentsComposerModel {
     var gate: Gate {
         switch locating {
         case .locating: .locating
-        case .unavailable: .needsLocation
+        case .unavailable: choseNoLocation ? (asksAdult ? .needsAdult : (previewSettled ? .open : .locating)) : .needsLocation
         case .located: asksAdult ? .needsAdult : (previewSettled ? .open : .locating)
         }
     }
@@ -174,6 +180,7 @@ final class MomentsComposerModel {
                 longitude: longitude
             ))
             place = reply
+            if let has = reply.hasConnections { hasConnections = has }
             // A picked name stays only while it still fits the pin.
             if let placeKey, !reply.places.contains(where: { $0.key == placeKey }) { self.placeKey = nil }
             if reply.adultConfirmed == false { asksAdult = true }
@@ -208,7 +215,7 @@ final class MomentsComposerModel {
     var placeChip: String {
         switch locating {
         case .locating: "Finding where you are…"
-        case .unavailable: "Location is off"
+        case .unavailable: choseNoLocation ? "No location" : "Location is off"
         case .located:
             if place?.atHome == true { "Your home" } else { place?.placeLabel.isEmpty == false ? place?.placeLabel ?? "" : "Near you" }
         }
@@ -359,7 +366,10 @@ extension MomentsComposerModel {
         isPosting = true
         defer { isPosting = false }
         error = nil
-        guard let pinAt = await pinLocation() else {
+        // No location: nothing to locate (connections only, no pin).
+        var located: MomentLocationBody? = .noLocation
+        if !noLocationOn { located = await pinLocation() }
+        guard let pinAt = located else {
             error = "Turn on location to post a Moment."
             return false
         }
@@ -408,6 +418,10 @@ extension MomentsComposerModel {
     /// What the server said no to, where the person can act on it.
     private func refused(_ failure: MomentsFailure) {
         if failure == .placeNotNearby { venue = nil }
+        if failure == .noConnections {
+            hasConnections = false
+            noLocation = false
+        }
         if failure == .adultConfirmRequired { asksAdult = true } else { error = failure.message }
     }
 
@@ -416,18 +430,19 @@ extension MomentsComposerModel {
         MomentCreateBody(
             kind: kind,
             hours: hours,
-            audience: audience,
-            showArea: showArea,
+            // No location goes only to connections ("Everyone nearby" needs a place).
+            audience: noLocationOn ? .connections : audience,
+            showArea: showArea && !noLocationOn,
             caption: kind == .text || caption.isEmpty ? nil : caption,
             text: kind == .text ? text.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             background: kind == .text ? background : nil,
             location: location,
             clientRequestId: requestId,
             // Only a name other than the automatic one is sent; the server checks it against the pin itself.
-            placeKey: pickedVenue == nil ? pickedPlace.flatMap { $0.key == placeChoices.first?.key ? nil : $0.key } : nil,
+            placeKey: pickedVenue == nil && !noLocationOn ? pickedPlace.flatMap { $0.key == placeChoices.first?.key ? nil : $0.key } : nil,
             // An album item pinned where you are says when it was taken (a capture pin carries its own).
             takenAt: kind != .text && capture == nil ? takenAt.map(MomentTime.string) : nil,
-            venueId: pickedVenue?.placeId
+            venueId: noLocationOn ? nil : pickedVenue?.placeId
         )
     }
 

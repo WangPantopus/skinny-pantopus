@@ -201,7 +201,8 @@ struct MomentsPostSheet: View {
     private var options: some View {
         @Bindable var model = model
         return VStack(alignment: .leading, spacing: 0) {
-            if mapHeight > 0 {
+            // No map on the table pose (mapHeight 0), and none with no location (there's no pin).
+            if mapHeight > 0, !model.noLocationOn {
                 MomentsPostMap(
                     pin: model.pin,
                     showArea: model.showArea,
@@ -212,11 +213,11 @@ struct MomentsPostSheet: View {
                 .padding(.top, asCard ? 16 : 11)
             }
             placeRow
-                .padding(.top, 10)
+                .padding(.top, model.noLocationOn && mapHeight > 0 ? (asCard ? 16 : 11) : 10)
             if let taken = model.takenLine {
                 takenRow(taken).padding(.top, 2)
             }
-            if model.pin == nil, model.locating == .unavailable {
+            if model.pin == nil, model.locating == .unavailable, !model.noLocationOn {
                 Text("Turn on location for Pantopus in Settings to post a Moment.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.error)
@@ -226,8 +227,12 @@ struct MomentsPostSheet: View {
             if model.showsHomeNotice {
                 homeNotice.padding(.top, Spacing.s2)
             }
-            areaRow
-                .padding(.top, Spacing.s2)
+            if !model.noLocationOn {
+                areaRow
+                    .padding(.top, Spacing.s2)
+            }
+            noLocationRow
+                .padding(.top, model.noLocationOn ? Spacing.s2 : 0)
             label("How long").padding(.top, Spacing.s4)
             durations.padding(.top, Spacing.s2)
             label("Who sees it").padding(.top, 14)
@@ -328,11 +333,13 @@ struct MomentsPostSheet: View {
     }
 
     private func segment(_ value: MomentAudience, _ title: String, id: String) -> some View {
-        let selected = model.audience == value
+        // A Moment with no location goes only to connections: "Everyone nearby" needs a place.
+        let selected = (model.noLocationOn ? .connections : model.audience) == value
+        let usable = !model.noLocationOn || value == .connections
         return Button { model.audience = value } label: {
             Text(title)
                 .font(.system(size: 14.5, weight: selected ? .semibold : .medium))
-                .foregroundStyle(selected ? Theme.Color.appText : Theme.Color.appTextSecondary)
+                .foregroundStyle(selected ? Theme.Color.appText : Theme.Color.appTextSecondary.opacity(usable ? 1 : 0.45))
                 .frame(maxWidth: .infinity, minHeight: 34)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -342,6 +349,7 @@ struct MomentsPostSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!usable)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier(id)
     }

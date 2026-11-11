@@ -245,8 +245,10 @@ final class MomentsMapViewModel {
             now = Date()
             hiddenAuthors = hiddenAuthors.filter { $0.value > started }
             // What the server says is seen now wins; what was watched since stays watched.
-            watched = watched.filter { id in reply.rings.contains { ring in ring.moments.contains { $0.id == id && !$0.seen } } }
-            rings = reply.rings
+            // Connections' Moments with no location ride along (flagged `noLocation`): the strip shows them, the map doesn't.
+            let all = reply.rings + reply.unplaced
+            watched = watched.filter { id in all.contains { ring in ring.moments.contains { $0.id == id && !$0.seen } } }
+            rings = all
             loaded = true
             loadFailed = false
         } catch is CancellationError {
@@ -283,18 +285,18 @@ final class MomentsMapViewModel {
         }
     }
 
-    /// The rings inside the visible map.
+    /// The rings inside the visible map, and the Moments with no location (they show wherever the map is).
     var visibleRings: [MomentRingDTO] {
         guard let region = lastRegion else { return currentRings }
         let latitudes = (region.center.latitude - region.span.latitudeDelta / 2)...(region.center.latitude + region.span.latitudeDelta / 2)
         let longitudes = (region.center.longitude - region.span.longitudeDelta / 2)...(region.center.longitude + region.span
             .longitudeDelta / 2)
-        return currentRings.filter { latitudes.contains($0.latitude) && longitudes.contains($0.longitude) }
+        return currentRings.filter { $0.noLocation || (latitudes.contains($0.latitude) && longitudes.contains($0.longitude)) }
     }
 
-    /// The map's rings and bubbles at this zoom.
+    /// The map's rings and bubbles at this zoom (never a Moment with no location).
     var markers: [MomentsMarker] {
-        MomentsClustering.markers(currentRings, span: span, mapPoints: mapPoints)
+        MomentsClustering.markers(currentRings.filter { !$0.noLocation }, span: span, mapPoints: mapPoints)
     }
 
     /// The strip: the spot zoomed into (M2), or every ring in view; you first, then new ones, then nearest.
@@ -303,6 +305,8 @@ final class MomentsMapViewModel {
         let origin = distanceOrigin
         return shown.sorted { first, second in
             if first.mine != second.mine { return first.mine }
+            // Connections' Moments with no location first: the strip is the only place they show.
+            if first.noLocation != second.noLocation { return first.noLocation }
             if first.isNew != second.isNew { return first.isNew }
             return origin.distance(from: first.location) < origin.distance(from: second.location)
         }
@@ -319,7 +323,11 @@ final class MomentsMapViewModel {
             spots[ring.author.id, default: []].append(ring)
         }
         return order.compactMap { author in
-            let rings = (spots[author] ?? []).sorted { origin.distance(from: $0.location) < origin.distance(from: $1.location) }
+            // Their Moments with no location first (the strip is the only place they show), then the nearest spot.
+            let rings = (spots[author] ?? []).sorted { first, second in
+                if first.noLocation != second.noLocation { return first.noLocation }
+                return origin.distance(from: first.location) < origin.distance(from: second.location)
+            }
             return MomentsStripPerson(rings: rings)
         }
     }

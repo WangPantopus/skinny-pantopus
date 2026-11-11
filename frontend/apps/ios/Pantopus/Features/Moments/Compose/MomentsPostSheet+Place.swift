@@ -73,7 +73,7 @@ extension MomentsPostSheet {
     func placeLine(canChange: Bool) -> some View {
         HStack(spacing: Spacing.s2) {
             Icon(
-                model.showsHomeNotice ? .home : .mapPin,
+                model.noLocationOn ? .mapPinOff : model.showsHomeNotice ? .home : .mapPin,
                 size: 18,
                 strokeWidth: 2.2,
                 color: Theme.Color.primaryTint
@@ -84,7 +84,7 @@ extension MomentsPostSheet {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("moments.post.place")
-            Text(model.showArea ? "Area only" : "Exact spot")
+            Text(model.noLocationOn ? "Not on the map" : model.showArea ? "Area only" : "Exact spot")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.Color.appTextSecondary)
             if canChange {
@@ -94,5 +94,34 @@ extension MomentsPostSheet {
         }
         .padding(.horizontal, Spacing.s1)
         .frame(minHeight: canChange ? 44 : 32)
+    }
+
+    /// "Don't show where" (founder 2026-11-11): no pin and not on the map; only connections see it. It stays on with
+    /// no pin at all (location off) and needs a connection.
+    var noLocationRow: some View {
+        let noConnections = model.hasConnections == false
+        let line = if noConnections, !model.noLocationOn {
+            "Add a connection first. Only your connections see a Moment with no location."
+        } else if model.noLocationLocked {
+            "Location is off, so only your connections see it. It isn't on the map."
+        } else {
+            "Only your connections see it. It isn't on the map."
+        }
+        return Toggle(isOn: Binding(get: { model.noLocationOn }, set: { model.setNoLocation($0) })) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Don't show where")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.Color.appText)
+                Text(line)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .tint(Theme.Color.primarySolid)
+        .disabled(model.noLocationLocked || (noConnections && !model.noLocationOn))
+        .padding(.horizontal, Spacing.s1)
+        .frame(minHeight: 52)
+        .accessibilityIdentifier("moments.post.noLocation")
     }
 }

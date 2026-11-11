@@ -259,7 +259,8 @@ struct MomentsMapView: View {
                     .annotationTitles(.hidden)
                 }
             }
-            ForEach(uploads.postings) { posting in
+            // A Moment with no location posts in the strip only: there's no spot for it on the map.
+            ForEach(uploads.postings.filter { !$0.noLocation }) { posting in
                 Annotation(
                     "",
                     coordinate: CLLocationCoordinate2D(latitude: posting.latitude, longitude: posting.longitude),
