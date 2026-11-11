@@ -142,6 +142,9 @@ final class HolidayCardFlowViewModel {
         }
     }
 
+    /// The card's own photo beside its note (memories plan step 4, `holiday_card_memories`), uploaded as it's chosen.
+    let attachments = HolidayCardAttachments()
+
     /// When it comes. Changing it here keeps a sentence about a choice
     /// that closed; the person's own pick clears it (`pick(_:)`).
     var arrival: HolidayCardArrival? {
@@ -371,7 +374,7 @@ final class HolidayCardFlowViewModel {
     }
 
     func toSeal() {
-        guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, attachments.wait == nil else { return }
         if arrival.map({ !arrivals.contains($0) }) ?? true { arrival = arrivals.first }
         lookUnavailable = false
         step = .seal
@@ -478,8 +481,15 @@ final class HolidayCardFlowViewModel {
             to: to,
             requestId: requestId,
             useStamp: cards?.postageEnabled == true ? true : nil,
-            signature: cards?.signature == nil ? nil : signature
+            signature: cards?.signature == nil ? nil : signature,
+            media: mediaPick
         )
+    }
+
+    /// The photo the card carries: one person's card only (a list goes without), and only while the server takes one.
+    var mediaPick: HolidayCardMediaPick {
+        guard recipient?.entries == nil, cards?.takesPhoto == true else { return .none }
+        return attachments.pick
     }
 
     /// "Seal and send", from "Look it over" (or from step 4 when the look
@@ -570,6 +580,7 @@ final class HolidayCardFlowViewModel {
         theirs = nil
         designId = nil
         message = ""
+        attachments.reset()
         arrival = nil
         query = ""
         email = ""

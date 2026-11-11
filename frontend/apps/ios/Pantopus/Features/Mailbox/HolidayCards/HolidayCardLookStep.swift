@@ -186,6 +186,7 @@ struct HolidayCardLookStep: View {
                 .rotationEffect(.degrees(1))
                 .frame(maxWidth: .infinity)
                 .padding(.top, 14)
+            ownMedia
         }
     }
 
@@ -280,6 +281,7 @@ struct HolidayCardLookStep: View {
                         .accessibilityLabel("On the back: \(note)")
                 }
                 .padding(.top, 6)
+                ownMedia
                 if LaunchFeatures.cardTable {
                     openOnTable
                 }
@@ -359,8 +361,12 @@ struct HolidayCardLookStep: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("On the back: \(note) From \(HolidayCardWords.withoutPeriod(from)).")
     }
+}
 
-    private func sectionLabel(_ text: String) -> some View {
+// MARK: - The footer
+
+private extension HolidayCardLookStep {
+    func sectionLabel(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 11, weight: .semibold))
             .tracking(0.66)
@@ -370,11 +376,23 @@ struct HolidayCardLookStep: View {
             .padding(.horizontal, Spacing.s1)
             .accessibilityAddTraits(.isHeader)
     }
-}
 
-// MARK: - The footer
+    /// The sender's own photo beside the card, never covered (memories plan step 4).
+    @ViewBuilder
+    var ownMedia: some View {
+        if let photo = card?.photo {
+            CardMediaBeside(
+                photo: photo,
+                source: .own(fileId: photo.fileId),
+                number: card?.number ?? design.number,
+                day: preview.piece.item.postmark?.date ?? preview.piece.item.createdAt,
+                fromName: from
+            )
+            .padding(.top, -Spacing.s4)
+            .accessibilityIdentifier("sendCardLookPhoto")
+        }
+    }
 
-private extension HolidayCardLookStep {
     /// "Open it the way they will", on a card by email or by link.
     var openOnTable: some View {
         Button {

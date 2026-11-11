@@ -262,6 +262,27 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// A Christmas card's own photo or voice greeting (`POST /api/mailbox/cards/media`, `backend/routes/mailbox.js:2182`,
+    /// launch key `holiday_card_memories`): `kind` goes first, then `file`. A refusal keeps the server's `{ error, code }`
+    /// in the thrown error's body, which the card flow reads.
+    func uploadHolidayCardMedia(
+        kind: String,
+        file: MultipartFile,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> HolidayCardMediaUpload {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/mailbox/cards/media")
+        let body = Self.buildBody(boundary: boundary, file: file, fields: ["kind": kind])
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body, progress: progress)
+        let text = String(data: data, encoding: .utf8)
+        switch http.statusCode {
+        case 200..<300: return try JSONDecoder().decode(HolidayCardMediaUpload.self, from: data)
+        case 401: throw APIError.unauthorized
+        case 400..<500: throw APIError.clientError(status: http.statusCode, message: text)
+        default: throw APIError.server(status: http.statusCode, body: text ?? "")
+        }
+    }
+
     /// Reuses private multipart delivery while binding every retry to the opening lease session.
     func uploadLeaseFile(
         scope: TenantLeaseFileSession,
