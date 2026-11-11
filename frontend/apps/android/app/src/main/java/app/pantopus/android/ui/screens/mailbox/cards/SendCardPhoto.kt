@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -99,7 +101,7 @@ internal fun WritePhoto(
                 status,
                 fontSize = 13.sp,
                 fontWeight = if (photo.failed != null) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (photo.failed != null) PantopusColors.cardWax else DeskInk.quiet,
+                color = if (photo.failed != null) DeskInk.alert else DeskInk.quiet,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("sendCardPhotoStatus"),
             )
             if (photo.failed != null && photo.local != null) {
@@ -120,6 +122,7 @@ private fun PhotoDescription(
     onValueChange: (String) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
     val shape = RoundedCornerShape(Radii.lg)
     val label = "Describe the photo (optional, for screen readers)"
     Text(label, fontSize = 13.sp, color = DeskInk.quiet, modifier = Modifier.padding(top = Spacing.s3, bottom = Spacing.s1))
@@ -129,6 +132,7 @@ private fun PhotoDescription(
         textStyle = TextStyle(fontSize = 16.sp, color = PantopusColors.cardTextStrong),
         cursorBrush = SolidColor(PantopusColors.cardWax),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         modifier =
             Modifier
                 .keepsKeyboard()

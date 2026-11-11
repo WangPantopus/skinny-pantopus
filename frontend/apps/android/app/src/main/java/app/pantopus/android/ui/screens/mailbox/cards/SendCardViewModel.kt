@@ -498,7 +498,9 @@ class SendCardViewModel
 
         /** The photo's description for screen readers, cut at [PHOTO_ALT_LIMIT] letters. */
         fun onPhotoAlt(text: String) {
-            _form.update { it.copy(photo = it.photo?.copy(alt = text.takeLetters(PHOTO_ALT_LIMIT))) }
+            // One line, as the server keeps it (it folds spaces): a return in the keyboard doesn't break it.
+            val line = text.replace(Regex("\\s*[\\r\\n]+\\s*"), " ")
+            _form.update { it.copy(photo = it.photo?.copy(alt = line.takeLetters(PHOTO_ALT_LIMIT))) }
         }
 
         /** When a card to the person chosen can come, by their clock. A failure keeps the sender's next morning. */

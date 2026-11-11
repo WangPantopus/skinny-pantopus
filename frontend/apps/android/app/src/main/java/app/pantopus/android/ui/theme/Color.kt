@@ -437,6 +437,9 @@ object PantopusColors {
     val cardPrintDate = Color(0xFFFF8A1F)
     val cardPrintDateGlow = Color(0xBFFF7814)
 
+    /** A refusal said on the card's cloth (plan Part 9 steps): a light red `#FFB4A8` that reads on the dark cloth. */
+    val tableAlert = Color(0xFFFFB4A8)
+
     // Ballot illustration — mirrors iOS `Ballot/*` in the asset catalog.
 
     /**
