@@ -74,7 +74,7 @@ class MomentsDot
                         return@launch
                     }
                     val since = prefs.getString(sinceKey(id), null)
-                    val result = safeApiCall { api.unseen(box.south, box.west, box.north, box.east, since) }
+                    val result = safeApiCall { api.unseen(box.south, box.west, box.north, box.east, since, includeUnplaced = true) }
                     if (account != id) return@launch
                     _shown.value = !onTab && result is NetworkResult.Success && result.data.count > 0
                 }

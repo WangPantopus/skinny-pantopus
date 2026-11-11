@@ -69,6 +69,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -189,6 +190,8 @@ fun MomentsMapScreen(
             val inSpot = spot?.let { s -> rings.filter { it.id in s.ringIds } } ?: rings
             inSpot.sortedWith(
                 compareByDescending<MomentRingUi> { it.mine }
+                    // Connections' Moments with no location come first: the row of faces is the only place they show.
+                    .thenByDescending { it.ring.noLocation }
                     .thenByDescending { it.anyNew }
                     .thenBy { it.distanceMeters },
             )
@@ -227,8 +230,9 @@ fun MomentsMapScreen(
     ) {
         MomentsMap(
             state = state,
-            rings = rings,
-            posts = posts,
+            // Moments with no location have no spot: only the row of faces shows them.
+            rings = rings.filterNot { it.ring.noLocation },
+            posts = posts.filter { it.latitude != null && it.longitude != null },
             avatarUrl = viewModel.avatarUrl,
             camera = camera,
             recenter = recenter,
@@ -845,6 +849,22 @@ private fun MomentsEmptyCard(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
+            )
+        }
+        // Location off can still post, with no location, for connections (founder 2026-11-11): the composer asks.
+        if (locationMissing) {
+            Text(
+                text = "Post with no location",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.primary600,
+                textAlign = TextAlign.Center,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(role = Role.Button, onClick = onAdd)
+                        .padding(vertical = Spacing.s1)
+                        .testTag("moments.locationAsk.noLocation"),
             )
         }
     }

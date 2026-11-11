@@ -137,8 +137,10 @@ class MomentsRepository
         ): NetworkResult<List<MomentRingDto>> =
             when (val result = safeApiCall { api.map(south, west, north, east, zoom) }) {
                 is NetworkResult.Success -> {
-                    _rings.value = result.data.rings
-                    NetworkResult.Success(result.data.rings)
+                    // Moments with no location ride along (flagged `noLocation`): the strip shows them, the map doesn't.
+                    val all = result.data.rings + result.data.unplaced.map { it.copy(noLocation = true) }
+                    _rings.value = all
+                    NetworkResult.Success(all)
                 }
                 is NetworkResult.Failure -> result
             }
@@ -200,6 +202,9 @@ class MomentsRepository
             latitude: Double,
             longitude: Double,
         ): NetworkResult<MomentPlacePreviewDto> = safeApiCall { api.placePreview(MomentPointBody(latitude, longitude)) }
+
+        /** With location off: only the 18+ state and whether you have a connection (contract v3.4). */
+        suspend fun postingPreview(): NetworkResult<MomentPlacePreviewDto> = safeApiCall { api.placePreview(MomentPointBody()) }
 
         suspend fun adultConfirm(): NetworkResult<MomentAdultConfirmResponse> = safeApiCall { api.adultConfirm() }
 

@@ -215,6 +215,7 @@ fun MomentsComposeScreen(
                     onPost = { viewModel.post() },
                     onPlace = viewModel::pickPlace,
                     onFindPlace = { viewModel.findPlace(true) },
+                    onNoLocation = viewModel::setNoLocation,
                 )
         }
         // The place picker (the Pulse composer's) around the Moment's pin: venues within reach of it, and search.
@@ -308,6 +309,9 @@ fun MomentsComposeScreen(
                         }
                     },
                     onClose = close,
+                    // Founder 2026-11-11: post anyway, with no location (connections only, not on the map).
+                    tertiary = "Post with no location",
+                    onTertiary = viewModel::continueWithoutLocation,
                 )
             ComposeGate.NeedsAdult ->
                 AdultSheet(
@@ -555,8 +559,8 @@ private fun TextStep(
             Spacer(Modifier.weight(1f))
             PlaceChip(label = state.chipPlace, locating = state.gate == ComposeGate.Locating, light = true)
             Spacer(Modifier.weight(1f))
-            // Next waits for the fix the card pins at.
-            val canGo = state.text.isNotBlank() && state.here != null
+            // Next waits for the fix the card pins at, unless it has no location (posting with location off).
+            val canGo = state.text.isNotBlank() && (state.here != null || state.noLocation)
             Text(
                 text = "Next",
                 color = state.background.top.copy(alpha = if (canGo) 1f else 0.5f),
@@ -669,6 +673,7 @@ private fun ReviewStep(
     onPost: () -> Unit,
     onPlace: (String) -> Unit,
     onFindPlace: () -> Unit,
+    onNoLocation: (Boolean) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val media = state.media) {
@@ -738,6 +743,7 @@ private fun ReviewStep(
             modifier = Modifier.align(Alignment.BottomCenter),
             onPlace = onPlace,
             onFindPlace = onFindPlace,
+            onNoLocation = onNoLocation,
         )
     }
 }
@@ -820,11 +826,24 @@ private fun PlaceChip(
                 .clip(RoundedCornerShape(18.dp))
                 .background(if (light) Color.Black.copy(alpha = 0.22f) else PantopusColors.momentCameraChip)
                 .padding(start = 10.dp, end = 14.dp)
-                .clearAndSetSemantics { contentDescription = "This Moment will pin at ${if (text == HOME_CHIP) "your home" else text}" },
+                .clearAndSetSemantics {
+                    contentDescription =
+                        when (text) {
+                            NO_LOCATION -> "This Moment has no location. Only your connections see it."
+                            HOME_CHIP -> "This Moment will pin at your home"
+                            else -> "This Moment will pin at $text"
+                        }
+                },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        PantopusIconImage(icon = PantopusIcon.MapPin, contentDescription = null, size = 16.dp, strokeWidth = 2.2f, tint = Color.White)
+        PantopusIconImage(
+            icon = if (text == NO_LOCATION) PantopusIcon.MapPinOff else PantopusIcon.MapPin,
+            contentDescription = null,
+            size = 16.dp,
+            strokeWidth = 2.2f,
+            tint = Color.White,
+        )
         Text(
             text = text,
             color = Color.White,
@@ -888,6 +907,8 @@ private fun GateCard(
     secondary: String,
     onSecondary: () -> Unit,
     onClose: () -> Unit,
+    tertiary: String? = null,
+    onTertiary: () -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).blocksTouches()) {
         StageIcon(
@@ -918,6 +939,21 @@ private fun GateCard(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onSecondary).padding(vertical = 10.dp),
             )
+            tertiary?.let { label ->
+                Text(
+                    text = label,
+                    color = PantopusColors.appTextSecondary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable(role = Role.Button, onClick = onTertiary)
+                            .padding(vertical = 8.dp)
+                            .testTag("moments.gate.noLocation"),
+                )
+            }
         }
     }
 }
