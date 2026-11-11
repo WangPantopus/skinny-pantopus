@@ -12,6 +12,8 @@ import SwiftUI
 
 struct MomentsSeenBySheet: View {
     let model: MomentsViewerModel
+    /// Closes it where it isn't a system sheet (the closed iPhone Duo's column); a sheet dismisses itself.
+    var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsDelete = false
 
@@ -68,7 +70,9 @@ struct MomentsSeenBySheet: View {
         .alert("Delete this Moment?", isPresented: $confirmsDelete) {
             Button("Delete", role: .destructive) {
                 Task {
-                    if await model.delete() { dismiss() }
+                    if await model.delete() {
+                        if let onClose { onClose() } else { dismiss() }
+                    }
                 }
             }
             .accessibilityIdentifier("moments.seenBy.deleteConfirm")
