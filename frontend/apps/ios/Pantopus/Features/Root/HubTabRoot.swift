@@ -3631,6 +3631,7 @@ public struct HubTabRoot: View {
         case let .mailWelcome(mail) where LaunchFeatures.cardTable:
             // The welcome letter arrives on the table (plan Part 10); out of its envelope it reads on the letter page.
             CardTableLetterHost(
+                model: mailScreenModels.model(for: route) { CardTableModel.welcomeLetter() },
                 onOpen: {
                     Task { @MainActor in
                         NotificationCenter.default.post(name: .mailboxMailViewed, object: mail.id)

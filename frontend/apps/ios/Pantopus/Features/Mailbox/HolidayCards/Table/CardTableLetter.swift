@@ -87,28 +87,70 @@ extension CardTableContent {
     }
 }
 
-/// Pantopus's welcome letter on the table, the whole screen (plan Part 10). Out of its envelope it opens the letter
-/// page (`onOpen`); closing it leaves it sealed in the Mailbox.
+/// Pantopus's welcome letter on the table, the whole screen (plan Part 10), shown from the tab root's cover so it also
+/// spans side-by-side Mail on the open Duo, as a card does. Out of its envelope it opens the letter page (`onOpen`);
+/// closing it leaves it sealed in the Mailbox.
 struct CardTableLetterHost: View {
-    @State private var model: CardTableModel
+    /// The letter's table, kept with its route.
+    let model: CardTableModel
+    let onOpen: () -> Void
     let onClose: () -> Void
 
-    init(onOpen: @escaping () -> Void, onClose: @escaping () -> Void) {
-        let year = Calendar.current.component(.year, from: Date())
-        let content = CardTableContent(welcomeLetterTo: MailPieceRecipient.personName, year: year)
-        let model = CardTableModel(content: content, startsOnTable: false)
-        model.onLetterOut = onOpen
-        _model = State(initialValue: model)
-        self.onClose = onClose
-    }
+    @Environment(\.cardTableCoverSlot) private var slot
+    @State private var ownCover = false
 
     var body: some View {
-        CardTableScreen(model: model, menuItems: [], closeLabel: "Back to the Mailbox", canShare: false, onClose: onClose)
+        MailPaper.tableNight
+            .ignoresSafeArea()
             .toolbar(.hidden, for: .navigationBar)
+            .onAppear(perform: show)
+            .fullScreenCover(isPresented: $ownCover) { screen }
+    }
+
+    private var screen: some View {
+        CardTableScreen(model: model, menuItems: [], closeLabel: "Back to the Mailbox", canShare: false, onClose: close)
+    }
+
+    private func show() {
+        model.onLetterOut = { leave(then: onOpen) }
+        quietly {
+            if let slot {
+                slot.show(CardTableCoverSlot.Page(id: "welcomeLetter", owner: model) { AnyView(screen) }, owner: model)
+            } else {
+                ownCover = true
+            }
+        }
+    }
+
+    private func close() {
+        leave(then: onClose)
+    }
+
+    private func leave(then next: () -> Void) {
+        quietly {
+            slot?.show(nil, owner: model)
+            ownCover = false
+        }
+        next()
+    }
+
+    private func quietly(_ change: () -> Void) {
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet, change)
     }
 }
 
 extension CardTableModel {
+    /// Pantopus's welcome letter to the person signed in, not yet out of its envelope.
+    static func welcomeLetter() -> CardTableModel {
+        let year = Calendar.current.component(.year, from: Date())
+        return CardTableModel(
+            content: CardTableContent(welcomeLetterTo: MailPieceRecipient.personName, year: year),
+            startsOnTable: false
+        )
+    }
+
     /// The letter is out: a moment to see it, then the letter page (plan Part 10).
     func letterIsOut() {
         letterOutTask?.cancel()
