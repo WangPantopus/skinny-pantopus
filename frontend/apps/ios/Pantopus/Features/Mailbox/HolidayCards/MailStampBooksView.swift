@@ -303,9 +303,11 @@ struct StampBooksSheet: View {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: Spacing.s1) {
+                        // Wraps to a second line on a narrow screen (the closed Duo) instead of being cut short.
                         Text("Christmas stamp books")
                             .font(.system(size: 28, design: .serif))
                             .foregroundStyle(MailPaper.cardText)
+                            .fixedSize(horizontal: false, vertical: true)
                             .accessibilityAddTraits(.isHeader)
                         Text("Send a little Christmas joy to everyone on your list. One stamp sends one digital card to one person.")
                             .font(.system(size: 15))
