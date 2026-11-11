@@ -205,8 +205,8 @@ struct CardGreetingButton: View {
                     Text(verbatim: "\(pillWord) · \(HolidayCardGreetingWords.length(durationMs))")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(MailPaper.tableCream)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        // Its own width, even past a small cassette's (the closed Duo's), so every word shows.
+                        .fixedSize()
                         .padding(.horizontal, 11)
                         .padding(.vertical, 4)
                         .background(MailPaper.greetingPill, in: Capsule())
