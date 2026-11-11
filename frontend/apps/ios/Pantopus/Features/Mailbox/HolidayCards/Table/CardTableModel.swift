@@ -170,8 +170,7 @@ final class CardTableModel {
     /// The quiet buttons may come (Send {first name} a card, or step 5's): the buttons keep room for them from the
     /// start, so the card doesn't move.
     var reservesSecondary = false
-    /// "Share this card" is a quiet button too once the card is turned over (plan 11.1); off where nothing is shared.
-    @ObservationIgnored var offersShare = false
+    @ObservationIgnored var offersShare = false // "Share this card" as a quiet button too (plan 11.1)
 
     // Sealing a card by hand (plan Part 2, CardTableSending.swift); nil while reading one.
     var sending: CardTableSending?
