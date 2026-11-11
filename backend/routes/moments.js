@@ -104,7 +104,13 @@ router.post('/place-preview', actionLimiter, async (req, res) => {
       momentPlace.isAtHome(req.user.id, latitude, longitude),
       adultStatus(req.user.id),
     ]);
-    res.json({ ...labels, at_home: atHome, adult_confirmed: Boolean(adult.attestedAt) && !adult.ineligible });
+    // pick_within_m: how far from the pin the place picker's venues may be (POST / takes a venue_id within it).
+    res.json({
+      ...labels,
+      at_home: atHome,
+      adult_confirmed: Boolean(adult.attestedAt) && !adult.ineligible,
+      pick_within_m: momentPlace.PICK_PLACE_M,
+    });
   } catch (error) {
     sendError(res, error, 'place_preview');
   }
@@ -124,6 +130,11 @@ const createSchema = Joi.object({
     Joi.object({ source: Joi.string().valid('gps').required(), ...point, fix_at: Joi.string().isoDate().required() }),
     Joi.object({ source: Joi.string().valid('capture').required(), ...point, taken_at: Joi.string().isoDate().required() }),
   ).required(),
+  // When an album photo or video pinned where you are (its file doesn't say where) was taken (optional; a `capture`
+  // location carries its own `taken_at`). One taken more than a day ago says so on the Moment.
+  taken_at: Joi.string().isoDate().allow(null),
+  // A venue the place picker listed around the pin (its `osm:` id, optional): the Moment pins there under its name.
+  venue_id: Joi.string().max(64).pattern(/^osm:(node|way|relation)\/\d+$/).allow('', null),
   // A retry of the same Post tap returns the Moment it made (optional).
   client_request_id: Joi.string().uuid().allow(null),
   // The Post sheet's pick among place-preview's `places` (optional): a key, never the place's words.
@@ -153,13 +164,23 @@ router.post('/', createLimiter, async (req, res) => {
       if (prior && prior.user_id === req.user.id) return res.status(201).json({ moment: await oneMoment(prior, req.user.id) });
     }
     await store.checkPostingRules(req.user, body);
-    const { latitude, longitude } = body.location;
+    // A venue picked in the place picker moves the pin to it and names it; found again here by its id near the pin.
+    const venue = body.venue_id && !body.show_area
+      ? await momentPlace.venueNear(body.venue_id, body.location.latitude, body.location.longitude)
+      : null;
+    if (body.venue_id && !body.show_area && !venue) {
+      throw store.fail(422, 'PLACE_NOT_NEARBY', "That place is too far from this Moment's pin. Pick one nearby.");
+    }
+    const location = venue ? { ...body.location, latitude: venue.latitude, longitude: venue.longitude } : body.location;
+    const { latitude, longitude } = location;
     const [found, atHome] = await Promise.all([
       momentPlace.labelsAt(latitude, longitude),
       momentPlace.isAtHome(req.user.id, latitude, longitude),
     ]);
     // The name the author picked for this point, worked out again here; an area or at-home Moment says the town.
-    const labels = { ...found, place_label: momentPlace.pickedLabel(found, body.place_key) || found.place_label };
+    const labels = venue
+      ? { ...found, place_label: venue.label, places: [{ key: 'venue', label: venue.label }, ...found.places] }
+      : { ...found, place_label: momentPlace.pickedLabel(found, body.place_key) || found.place_label };
     const shown = body.show_area || atHome ? labels.area_label : labels.place_label;
     const { row, created } = await store.insertMoment(store.newMomentRow({
       userId: req.user.id,
@@ -172,9 +193,11 @@ router.post('/', createLimiter, async (req, res) => {
       caption: body.caption || null,
       text: body.text || null,
       background: body.background || 'teal',
-      location: body.location,
+      location,
       labels,
-      labelKind: momentPlace.labelKind(found, shown),
+      labelKind: momentPlace.labelKind(labels, shown),
+      takenAt: store.takenAtShown(body.location.source === 'capture' ? body.location.taken_at : body.taken_at),
+      venueId: venue ? body.venue_id : null,
     }), id);
     logger.info('moments.created', { momentId: row.id, kind: body.kind, hours: body.hours, audience: body.audience });
     res.status(201).json({ moment: await oneMoment(row, req.user.id) });
