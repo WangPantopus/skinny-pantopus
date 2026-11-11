@@ -1700,6 +1700,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `FCM_SERVICE_ACCOUNT_JSON` | `pantopus-staging` sender | production sender (P4) | Firebase, one line |
 | `AWS_S3_ENDPOINT`, `AWS_S3_FORCE_PATH_STYLE=true`, `AWS_S3_REGION` and `AWS_REGION` (project region), `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET=pantopus-uploads`, `AWS_CLOUDFRONT_URL=https://<ref>.supabase.co/storage/v1/object/public/pantopus-uploads` | staging project | production project | Supabase Storage → S3 Connection (the same setup the local test kit uses). An AWS S3 bucket also works: drop the endpoint and path-style lines. |
 | `HOME_DOCUMENTS_BUCKET`, `GIG_COMPLETION_BUCKET` | `home-documents`, `gig-completion` | same | S2 / P2A buckets |
+| `CARD_MEDIA_BUCKET` | a private bucket, before `holiday_card_memories` is on | `pantopus-card-media` (private), before `holiday_card_memories` is on | Christmas card photos and voice greetings; unset = `AWS_S3_BUCKET`, which is public on Supabase |
 | `LAMBDA_BACKED_CRON_ENABLED` | `false` | `false` | S8 |
 | `SLACK_ALERTS_WEBHOOK_URL` | optional | optional | D7 |
 | `LAUNCH_FEATURES` | empty | `mailbox,mail_extras,holiday_cards` | Full production Mailbox enabled November 6; other launch cuts retain their existing settings. |

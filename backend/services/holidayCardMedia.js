@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 const sharp = require('sharp');
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { S3_BUCKET, S3_STORAGE_NAMESPACE } = require('../config/aws');
+const { S3_BUCKET, CARD_MEDIA_BUCKET, S3_STORAGE_NAMESPACE } = require('../config/aws');
 const s3 = require('./s3Service');
 const { removePhotoMetadata } = require('./photoMetadata');
 const { areLaunchFeaturesEnabled } = require('../utils/featureFlags');
@@ -38,6 +38,9 @@ const MAX_INPUT_PIXELS = 64 * 1024 * 1024;
 // Voice ships with the founder's no-converter choice (contract section 3, November 3): AAC-LC in MP4, checked by
 // services/cardVoice. Its controls follow the launch key like the photo's.
 const VOICE_SHIPPED = true;
+
+// Where a stored item is: the bucket its row recorded at upload (CARD_MEDIA_BUCKET, or S3_BUCKET before it was set).
+const bucketOf = (file) => file?.metadata?.storage_bucket || S3_BUCKET;
 
 const FILE_SELECT = 'id, user_id, file_path, file_size, mime_type, file_context, is_deleted, created_at, metadata';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -146,7 +149,7 @@ async function storeUpload({ userId, kind, buffer, mimeType, facts }) {
   const digest = sha256(buffer);
   try {
     await s3.uploadToS3(buffer, key, mimeType, { 'pantopus-file-id': id, 'pantopus-sha256': digest },
-      { contentLength: buffer.length });
+      { contentLength: buffer.length, bucket: CARD_MEDIA_BUCKET });
   } catch (error) {
     logger.warn('Card media not stored', { fileId: id, error: error.message });
     throw refusal(503, 'CARD_MEDIA_UNAVAILABLE', 'Couldn’t add it just now. Try again in a moment.');
@@ -167,13 +170,13 @@ async function storeUpload({ userId, kind, buffer, mimeType, facts }) {
     file_context: CONTEXT,
     processing_status: 'completed',
     metadata: {
-      storage_contract: STORAGE_CONTRACT, storage_bucket: S3_BUCKET, storage_namespace: S3_STORAGE_NAMESPACE,
+      storage_contract: STORAGE_CONTRACT, storage_bucket: CARD_MEDIA_BUCKET, storage_namespace: S3_STORAGE_NAMESPACE,
       storage_key: key, kind, sha256: digest, ...facts,
     },
   };
   const { data, error } = await supabaseAdmin.from('File').insert(row).select(FILE_SELECT).single();
   if (error || !data) {
-    await s3.deleteFromS3(key);
+    await s3.deleteFromS3(key, CARD_MEDIA_BUCKET);
     logger.warn('Card media row not stored', { fileId: id, error: error?.message || null });
     throw refusal(503, 'CARD_MEDIA_UNAVAILABLE', 'Couldn’t add it just now. Try again in a moment.');
   }
@@ -354,7 +357,7 @@ async function send(req, res, file) {
   if (range?.unsatisfiable) return res.status(416).set('Content-Range', `bytes */${size}`).end();
   let object;
   try {
-    object = await s3.getObjectStream(file.file_path, undefined, range ? `bytes=${range.start}-${range.end}` : undefined);
+    object = await s3.getObjectStream(file.file_path, bucketOf(file), range ? `bytes=${range.start}-${range.end}` : undefined);
   } catch (error) {
     if (error?.name === 'NoSuchKey' || error?.$metadata?.httpStatusCode === 404) return notFound(res);
     throw error;
@@ -376,7 +379,7 @@ async function removeFiles(files) {
   let removed = 0;
   for (const file of files) {
     const key = file.metadata?.storage_key;
-    const gone = key === file.file_path && String(key || '').startsWith(PREFIX) ? await s3.deleteFromS3(key) : false;
+    const gone = key === file.file_path && String(key || '').startsWith(PREFIX) ? await s3.deleteFromS3(key, bucketOf(file)) : false;
     const write = gone
       ? supabaseAdmin.from('File').delete().eq('id', file.id)
       : supabaseAdmin.from('File').update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq('id', file.id);
@@ -466,14 +469,14 @@ async function cleanup(now = new Date()) {
   // Objects no row names (written before the grace period): an upload that stopped between storing and saving, or an
   // account deleted with its rows.
   let orphans = 0;
-  const keys = await s3.listKeysWrittenBefore(PREFIX, Date.parse(before), 1000);
+  const keys = await s3.listKeysWrittenBefore(PREFIX, Date.parse(before), 1000, CARD_MEDIA_BUCKET);
   for (let i = 0; i < keys.length; i += 100) {
     const page = keys.slice(i, i + 100).filter((key) => key.startsWith(PREFIX) && !key.includes('..'));
     if (!page.length) continue;
     const { data: named, error: namedError } = await supabaseAdmin.from('File').select('file_path').in('file_path', page);
     if (namedError) throw new Error(namedError.message);
     const known = new Set((named || []).map((row) => row.file_path));
-    for (const key of page.filter((k) => !known.has(k))) if (await s3.deleteFromS3(key)) orphans += 1;
+    for (const key of page.filter((k) => !known.has(k))) if (await s3.deleteFromS3(key, CARD_MEDIA_BUCKET)) orphans += 1;
   }
   return { removed, orphans };
 }
