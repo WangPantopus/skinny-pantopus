@@ -121,6 +121,9 @@ public struct MomentsTabRoot: View {
             onHideAuthor: { map.hide(authorId: $0) },
             onShowAuthor: { map.unhide(authorId: $0) },
             onClose: {
+                // The map shows where the last person watched was, when it isn't showing it (a push's Moment too).
+                // Open sideways the card is beside the map, which moves for it already.
+                if !duo.pose.isWide { map.showWatched(watching?.model.ring) }
                 endWatching()
                 Task { await map.load() }
                 // A Moment opened from a push while another tab was up: what was watched is no longer new.
