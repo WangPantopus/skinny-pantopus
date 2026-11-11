@@ -179,6 +179,16 @@ final class HolidayCardAttachments {
         photoAlt = ""
     }
 
+    /// A draft brought back after the app was closed: its stored photo and greeting, by reference only. Nothing of their
+    /// bytes is on this phone any more, so the print and Listen read them from the uploader's own route.
+    func restore(photo stored: CardPhoto?, alt: String, voice storedVoice: CardVoice?) {
+        uploadTask?.cancel()
+        voiceTask?.cancel()
+        photo = stored.map { Photo(status: .ready, upload: Data(), mimeType: "image/jpeg", progress: 1, stored: $0) }
+        photoAlt = stored == nil ? "" : alt
+        voice = storedVoice.map { Voice(status: .ready, upload: Data(), stored: $0) }
+    }
+
     /// The card went or was started over: everything goes.
     func reset() {
         remove()
