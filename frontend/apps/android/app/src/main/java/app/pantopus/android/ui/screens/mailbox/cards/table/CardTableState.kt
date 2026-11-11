@@ -65,6 +65,11 @@ data class CardOnTable(
      * on a slate cloth, no postmark and no mood, and a folded sheet comes out that opens the letter page.
      */
     val letter: Boolean = false,
+    /**
+     * The card's own photo (memories plan step 4): it lies on the table under the card once it's turned over, never in a
+     * share picture. Null while it's sealed and for a card without one.
+     */
+    val photo: CardPrintPhoto? = null,
 ) {
     /** The first name, the only one a shared picture or the words on the table ever use. */
     val fromFirst: String = from.trim().substringBefore(' ').removeSuffix(",").ifEmpty { "Someone" }
@@ -73,6 +78,9 @@ data class CardOnTable(
 
     /** What the table is called to a screen reader. */
     val kind: String get() = if (letter) "Letter" else "Christmas card"
+
+    /** Something lies on the table with it once it's turned over: its own photo (memories plan). */
+    val hasMedia: Boolean get() = !sealed && !letter && photo != null
 
     /** Its picture is read for the table: not while it's sealed (the server keeps it), and a letter has none. */
     val hasPicture: Boolean get() = !sealed && !letter
@@ -140,6 +148,8 @@ internal class TableGeometry(
     val bottomRoom: Float,
     val density: Float,
     wordsBottom: Float,
+    /** The room kept under the card for its own photo once it's turned over (memories plan; in [bottomRoom]); 0: none. */
+    val mediaRoom: Float = 0f,
 ) {
     val cardWidth: Float
     val cardHeight: Float

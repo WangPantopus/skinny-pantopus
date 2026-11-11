@@ -138,4 +138,5 @@ internal fun MailLetterCard.tableCard(
         daysUntilOpen = daysUntilOpen,
         verse = verse,
         signature = signature,
+        photo = photo,
     )

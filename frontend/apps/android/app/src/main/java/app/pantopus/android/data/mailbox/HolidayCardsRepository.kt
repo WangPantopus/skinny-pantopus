@@ -77,6 +77,8 @@ class HolidayCardsRepository
             requestId: String? = null,
             toLink: Boolean = false,
             signature: CardSignature? = null,
+            photo: String? = null,
+            photoAlt: String? = null,
         ): CardLook {
             val body =
                 SendHolidayCardBody(
@@ -90,6 +92,8 @@ class HolidayCardsRepository
                             latest.value?.postageEnabled == true
                         },
                     signature = signature,
+                    photo = photo,
+                    photoAlt = photoAlt,
                 )
             val response =
                 when (val result = safeApiCall { api.preview(body) }) {
@@ -144,6 +148,8 @@ class HolidayCardsRepository
             requestId: String? = null,
             toLink: Boolean = false,
             signature: CardSignature? = null,
+            photo: String? = null,
+            photoAlt: String? = null,
         ): NetworkResult<SentHolidayCard> {
             val body =
                 SendHolidayCardBody(
@@ -157,6 +163,8 @@ class HolidayCardsRepository
                             latest.value?.postageEnabled == true
                         },
                     signature = signature,
+                    photo = photo,
+                    photoAlt = photoAlt,
                 )
             return when (val result = safeApiCall { api.send(body) }) {
                 is NetworkResult.Success -> {

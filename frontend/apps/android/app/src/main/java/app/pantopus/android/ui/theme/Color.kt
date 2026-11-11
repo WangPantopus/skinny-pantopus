@@ -423,6 +423,23 @@ object PantopusColors {
     val tableSlipName = Color(0xFF3A2F26)
     val tableSlipLine = Color(0xFF5B4D3F)
 
+    /**
+     * A card's own photo as a print (memories plan, wave 4 drawings 2-5), as the web draws it: its white border
+     * `#FBFAF6`, the grey while it loads `#D9D4C8`, the cover of a stranger's photo `#E7DFCD` with its words `#3A2F22`,
+     * the soft gloss `rgb(255 255 255 / 22%)`, and a 1990s camera's orange date `#FF8A1F` with its glow.
+     */
+    val cardPrintPaper = Color(0xFFFBFAF6)
+    val cardPrintEmpty = Color(0xFFD9D4C8)
+    val cardPrintCover = Color(0xFFE7DFCD)
+    val cardPrintCoverInk = Color(0xFF3A2F22)
+    val cardPrintEmptyInk = Color(0xFF5B5346)
+    val cardPrintGloss = Color(0x38FFFFFF)
+    val cardPrintDate = Color(0xFFFF8A1F)
+    val cardPrintDateGlow = Color(0xBFFF7814)
+
+    /** A refusal said on the card's cloth (plan Part 9 steps): a light red `#FFB4A8` that reads on the dark cloth. */
+    val tableAlert = Color(0xFFFFB4A8)
+
     // Ballot illustration — mirrors iOS `Ballot/*` in the asset catalog.
 
     /**

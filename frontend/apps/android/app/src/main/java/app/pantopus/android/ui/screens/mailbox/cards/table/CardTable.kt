@@ -224,6 +224,7 @@ private fun CardTable(
             )
         }
         PictureProblem(state, picture)
+        TableMedia(state, card, geometry, reduceMotion)
         val insets =
             with(density) {
                 PaddingValues(top = safeTop.toDp(), bottom = safeBottom.toDp())
@@ -331,7 +332,9 @@ private fun rememberTableGeometry(
     val width = constraints.maxWidth
     val height = constraints.maxHeight
     val readsVerse = card.verse != null && !sending
-    return remember(width, height, safeTop, safeBottom, density, card.fromFirst, card.sealed, quietButton, sending, readsVerse) {
+    // The card's own photo lies under it once it's turned over (wave 4 drawing 3): the table keeps room for it.
+    val media = card.hasMedia && !sending
+    return remember(width, height, safeTop, safeBottom, density, card.fromFirst, card.sealed, quietButton, sending, readsVerse, media) {
         with(density) {
             val textWidth = width - 32.dp.roundToPx()
             val hintWidth = Constraints(maxWidth = textWidth.coerceAtLeast(1))
@@ -360,7 +363,9 @@ private fun rememberTableGeometry(
             // The button starts at least 12 dp below the lowest edge of paper, wherever the light has drifted it and with
             // its small turn ([PAPER_SWAY]); on a short screen the card shrinks.
             val gap = 12.dp.toPx() + PAPER_SWAY.dp.toPx()
-            val bottomRoom = safeBottom + 8.dp.toPx() + hintHeight + 2.dp.toPx() + quietHeight + pillHeight + gap
+            // As the web keeps it: a third of the width, 112 to 176 dp.
+            val mediaRoom = if (media) (width * 0.34f).coerceIn(112.dp.toPx(), 176.dp.toPx()) else 0f
+            val bottomRoom = safeBottom + 8.dp.toPx() + hintHeight + 2.dp.toPx() + quietHeight + pillHeight + gap + mediaRoom
             val wordsWidth = Constraints(maxWidth = (width - 48.dp.roundToPx()).coerceAtLeast(1))
             val longestWords = if (card.sealed) "It opens Christmas morning, in 56 days." else "A Christmas card from ${card.fromFirst}."
             val wordsHeight = measurer.measure(longestWords, tableWordsStyle, constraints = wordsWidth).size.height
@@ -375,6 +380,7 @@ private fun rememberTableGeometry(
                 bottomRoom = bottomRoom,
                 density = this.density,
                 wordsBottom = wordsBottom,
+                mediaRoom = mediaRoom,
             )
         }
     }

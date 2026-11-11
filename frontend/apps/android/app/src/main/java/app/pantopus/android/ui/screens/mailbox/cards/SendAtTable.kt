@@ -58,6 +58,11 @@ internal object DeskInk {
     val section: Color
         @Composable @ReadOnlyComposable
         get() = if (LocalOnCloth.current) PantopusColors.tableCreamSoft else PantopusColors.cardSectionInk
+
+    /** Why something didn't work: wax red on the desk, a light red on the cloth. */
+    val alert: Color
+        @Composable @ReadOnlyComposable
+        get() = if (LocalOnCloth.current) PantopusColors.tableAlert else PantopusColors.cardWax
 }
 
 /** The room the page keeps for the header and the step's line above the cloth. */

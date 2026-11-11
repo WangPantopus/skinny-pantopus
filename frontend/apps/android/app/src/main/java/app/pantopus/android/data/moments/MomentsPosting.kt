@@ -548,7 +548,7 @@ private fun NetworkError.postingMessage(): String =
     }
 
 /** A file body that reports how much of it has been sent, 0 to 1. */
-private class ProgressBody(
+internal class ProgressBody(
     private val file: File,
     private val type: MediaType,
     private val onProgress: (Float) -> Unit,

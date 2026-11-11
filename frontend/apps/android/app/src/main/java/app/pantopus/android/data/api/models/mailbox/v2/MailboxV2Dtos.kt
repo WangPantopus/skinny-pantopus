@@ -2,7 +2,9 @@ package app.pantopus.android.data.api.models.mailbox.v2
 
 import app.pantopus.android.data.api.models.common.JsonArrayValue
 import app.pantopus.android.data.api.models.common.JsonValue
+import app.pantopus.android.data.api.models.mailbox.CardPhoto
 import app.pantopus.android.data.api.models.mailbox.CardSignature
+import app.pantopus.android.data.api.models.mailbox.CardVoice
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -114,6 +116,10 @@ data class MailCard(
     val verse: String? = null,
     /** Signed beside FROM (plan 8.2): null while it's sealed and for a card with the name typed. */
     val signature: CardSignature? = null,
+    /** The card's own photo (memories plan): only on the card's own reads, null while it's sealed and for a card without. */
+    val photo: CardPhoto? = null,
+    /** The card's voice greeting: the same reads, null while it's sealed and for a card without. */
+    val voice: CardVoice? = null,
 )
 
 /**

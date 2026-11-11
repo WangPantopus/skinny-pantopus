@@ -352,6 +352,8 @@ private fun Steps(
                         signature = form.signature,
                         canSign = LaunchFeatures.cardTable && cards.signature != null,
                         onSignature = viewModel::onSignature,
+                        photo = form.photo,
+                        photos = photoCalls(cards, form, viewModel),
                     )
                 }
             }
@@ -817,3 +819,18 @@ internal fun TiltedThumb(
 
 /** The season's picture with this [id], with its caption, paper and height; null for one it doesn't have. */
 internal fun HolidayCardsResponse.designOf(id: String?): HolidayCardDesign? = designs.firstOrNull { it.id == id }
+
+/**
+ * What Write on the back can do with a photo (memories plan step 4): only with the key on, when `GET /cards` says photos
+ * can be added now, and for one card to one person (a list goes without: one photo, one card). A photo already added
+ * stays shown so it can be removed.
+ */
+private fun photoCalls(
+    cards: HolidayCardsResponse,
+    form: SendCardForm,
+    viewModel: SendCardViewModel,
+): CardPhotoCalls? {
+    val canAdd = LaunchFeatures.holidayCardMemories && cards.media?.photo?.usable == true && form.to !is CardRecipient.Several
+    if (!canAdd && form.photo == null) return null
+    return CardPhotoCalls(viewModel::addPhoto, viewModel::retryPhoto, viewModel::removePhoto, viewModel::onPhotoAlt)
+}
