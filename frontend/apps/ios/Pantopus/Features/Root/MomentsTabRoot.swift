@@ -11,7 +11,8 @@
 //
 //  The map's rings, camera and the spot zoomed into are held here, above the
 //  screen that shows them, so watching or posting comes back to the map as
-//  it was.
+//  it was. So is watching itself (`MomentsWatchSession`): on the iPhone Duo a
+//  fold can build the viewer again, and it picks up where it was.
 //
 
 import SwiftUI
@@ -46,8 +47,10 @@ struct MomentsComposeRequest: Identifiable {
 public struct MomentsTabRoot: View {
     @State private var flags = MomentsFlags.shared
     @State private var map = MomentsMapViewModel()
-    @State private var watching: MomentsWatchRequest?
+    @State private var watching: MomentsWatchSession?
     @State private var composing: MomentsComposeRequest?
+    /// How the iPhone Duo is held (`.phone` on phones), for the screens opened over the map.
+    @State private var duo = MomentsDuoScreen()
     @State private var showsAreaPicker = false
     @State private var navigator = MomentsNavigator.shared
     /// The phone's light or dark, for the sheets over the always-dark viewer.
@@ -65,15 +68,14 @@ public struct MomentsTabRoot: View {
                 .presentationDetents([.medium])
                 .presentationBackground(Theme.Color.appSurface)
         }
-        .fullScreenCover(item: $watching) { request in
+        .fullScreenCover(item: $watching) { session in
             MomentsViewer(
-                request: request,
+                session: session,
                 systemScheme: colorScheme,
-                onWatched: { map.markWatched($0) },
                 onHideAuthor: { map.hide(authorId: $0) },
                 onShowAuthor: { map.unhide(authorId: $0) },
                 onClose: {
-                    watching = nil
+                    endWatching()
                     Task { await map.load() }
                     // A Moment opened from a push while another tab was up: what was watched is no longer new.
                     Task { await MomentsTabDot.shared.reread() }
@@ -86,7 +88,7 @@ public struct MomentsTabRoot: View {
         .onChange(of: flags.moments) { _, isOn in
             // Moments switched off: nothing of Moments is left open (the bar drops this tab).
             if !isOn {
-                watching = nil
+                endWatching()
                 composing = nil
                 showsAreaPicker = false
                 navigator.pending = nil
@@ -95,6 +97,21 @@ public struct MomentsTabRoot: View {
         .onChange(of: navigator.pending, initial: true) { _, _ in playLinked() }
         // A link that came while a Moment was being written waits for the composer to close.
         .onChange(of: composing == nil) { _, _ in playLinked() }
+        .readsMomentsDuoScreen($duo)
+        // The screens opened over the map know how the Duo is held from their first frame.
+        .environment(\.momentsDuoScreen, duo)
+    }
+
+    /// Watching starts: whatever was playing before stops.
+    private func watch(_ request: MomentsWatchRequest) {
+        watching?.end()
+        watching = MomentsWatchSession(request: request) { map.markWatched($0) }
+    }
+
+    /// The person closed it (or Moments went away): it stops. A screen going away never stops it.
+    private func endWatching() {
+        watching?.end()
+        watching = nil
     }
 
     /// A Moment named by a link (the "added a Moment" push): the viewer opens on that one, as from a chat
@@ -109,7 +126,7 @@ public struct MomentsTabRoot: View {
                 var me: String?
                 if case let .signedIn(user) = AuthManager.shared.state { me = user.id }
                 let ring = MomentRingDTO(moment: moment, mine: moment.author.id == me)
-                watching = MomentsWatchRequest(rings: [ring], start: 0, newOnly: false)
+                watch(MomentsWatchRequest(rings: [ring], start: 0, newOnly: false))
             } catch {
                 let failure = error as? MomentsFailure
                 // The map's short note (the pill that says "Your Moment is live"), without its check mark.
@@ -124,7 +141,7 @@ public struct MomentsTabRoot: View {
         MomentsMapActions(
             watch: { rings, start, newOnly in
                 guard !rings.isEmpty else { return }
-                watching = MomentsWatchRequest(rings: rings, start: start, newOnly: newOnly)
+                watch(MomentsWatchRequest(rings: rings, start: start, newOnly: newOnly))
             },
             compose: { composing = MomentsComposeRequest() },
             areaPicker: { showsAreaPicker = true }

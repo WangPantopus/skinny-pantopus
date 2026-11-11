@@ -55,6 +55,8 @@ struct MomentsViewerHeader: View {
     let muted: Bool
     /// While typing a reply only close shows (board V4).
     let compact: Bool
+    /// The closed iPhone Duo has Close, More and Sound in its side strip (board C3): the header shows none.
+    var showsButtons = true
     let onSound: () -> Void
     let onMore: () -> Void
     let onClose: () -> Void
@@ -102,7 +104,7 @@ struct MomentsViewerHeader: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("moments.viewer.author")
-            if !compact {
+            if showsButtons, !compact {
                 if isVideo {
                     headerButton(
                         muted ? .volumeX : .volume2,
@@ -122,10 +124,12 @@ struct MomentsViewerHeader: View {
                     )
                 }
             }
-            headerButton(.x, width: isVideo && !compact ? 40 : 44, label: "Close", id: "moments.viewer.close", action: onClose)
+            if showsButtons {
+                headerButton(.x, width: isVideo && !compact ? 40 : 44, label: "Close", id: "moments.viewer.close", action: onClose)
+            }
         }
         .padding(.leading, Spacing.s3)
-        .padding(.trailing, Spacing.s1)
+        .padding(.trailing, showsButtons ? Spacing.s1 : Spacing.s3)
         .frame(height: 48)
     }
 
@@ -170,6 +174,10 @@ struct MomentsReplyBar: View {
     let isTyping: Bool
     let reaction: String?
     let canReply: Bool
+    /// Closed, the iPhone Duo has the reaction button in its side strip (board C3).
+    var showsReact = true
+    /// On the Duo the box floats over the picture on a dark glass (boards C3, U2).
+    var floating = false
     let onReact: () -> Void
     let onSend: () -> Void
 
@@ -186,7 +194,13 @@ struct MomentsReplyBar: View {
                     .padding(.horizontal, isTyping ? Spacing.s4 : 18)
                     .frame(height: 44)
                     .typesInFieldOnTap(focus)
-                    .background(Capsule().fill(Color.black.opacity(isTyping ? 0.25 : 0)))
+                    .background {
+                        if floating, !isTyping {
+                            MomentsFloatingGlass(shape: Capsule())
+                        } else {
+                            Capsule().fill(Color.black.opacity(isTyping ? 0.25 : 0))
+                        }
+                    }
                     .overlay(Capsule().stroke(Color.white.opacity(isTyping ? 0.6 : 0.45), lineWidth: 1))
                     .accessibilityLabel("Reply to \(firstName)")
                     .accessibilityIdentifier("moments.viewer.reply")
@@ -204,7 +218,7 @@ struct MomentsReplyBar: View {
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel("Send")
                 .accessibilityIdentifier("moments.viewer.send")
-            } else {
+            } else if showsReact {
                 Button(action: onReact) {
                     Group {
                         if let reaction {
@@ -228,6 +242,8 @@ struct MomentsReplyBar: View {
 /// Your own Moment: "Seen by 12" (or "No views yet") where others have the reply box.
 struct MomentsSeenByBar: View {
     let count: Int?
+    /// On the Duo it floats over the picture on a dark glass (boards C3, U2).
+    var floating = false
     let action: () -> Void
 
     var body: some View {
@@ -242,6 +258,7 @@ struct MomentsSeenByBar: View {
             }
             .padding(.horizontal, 18)
             .frame(height: 44)
+            .background { if floating { MomentsFloatingGlass(shape: Capsule()) } }
             .overlay(Capsule().stroke(Color.white.opacity(0.45), lineWidth: 1))
             .contentShape(Capsule())
         }

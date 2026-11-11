@@ -61,6 +61,7 @@ final class MomentsViewerModel {
     let cache = MomentsViewerCache()
     let newOnly: Bool
     @ObservationIgnored private var counted: Set<String> = []
+    @ObservationIgnored private var started = false
     @ObservationIgnored private var clock: Task<Void, Never>?
     @ObservationIgnored private var loading: Task<Void, Never>?
     @ObservationIgnored private var toastAction: (@MainActor () -> Void)?
@@ -80,12 +81,16 @@ final class MomentsViewerModel {
 
     // MARK: - Playing
 
-    /// The viewer appeared: load and play the first one.
+    /// The viewer appeared: load and play the first one. A screen built again for the same watching (a fold on the
+    /// iPhone Duo) picks up where it was: the same Moment at the same second.
     func start() {
+        guard !started else { return applyPause() }
+        started = true
         show()
     }
 
     func stop() {
+        started = false
         clock?.cancel()
         loading?.cancel()
         video.stop()

@@ -39,7 +39,7 @@ public struct ChatMomentQuote: Sendable, Hashable {
 struct ChatMomentQuoteView: View {
     let quote: ChatMomentQuote
     let side: ChatMessageSide
-    @State private var watching: MomentsWatchRequest?
+    @State private var watching: MomentsWatchSession?
     @State private var opening = false
     @State private var note: String?
     @Environment(\.colorScheme) private var colorScheme
@@ -63,11 +63,13 @@ struct ChatMomentQuoteView: View {
         .buttonStyle(.plain)
         // "Moment ended" opens nothing.
         .disabled(quote.ended || opening)
-        .fullScreenCover(item: $watching) { request in
+        .fullScreenCover(item: $watching) { session in
+            // A chat can be built again with its quote (Messages on the open iPhone Duo): this viewer stops when it
+            // leaves the screen, as it always has.
             MomentsViewer(
-                request: request,
+                session: session,
                 systemScheme: colorScheme,
-                onWatched: { _ in },
+                stopsOnDisappear: true,
                 onHideAuthor: { _ in },
                 onShowAuthor: { _ in },
                 onClose: {
@@ -98,7 +100,7 @@ struct ChatMomentQuoteView: View {
                 var me: String?
                 if case let .signedIn(user) = AuthManager.shared.state { me = user.id }
                 let ring = MomentRingDTO(moment: moment, mine: moment.author.id == me)
-                watching = MomentsWatchRequest(rings: [ring], start: 0, newOnly: false)
+                watching = MomentsWatchSession(request: MomentsWatchRequest(rings: [ring], start: 0, newOnly: false)) { _ in }
             } catch {
                 note = (error as? MomentsFailure)?.message ?? "This Moment isn't available."
             }
