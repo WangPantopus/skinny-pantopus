@@ -148,6 +148,16 @@ this scrape endpoint.
    run predates these names, the next automatic run whose commit is still the head
    deploys.
 3. The environment must explicitly enable deployment and provide all secrets.
+   The release job also reads the environment's Supabase sign-in settings
+   (`scripts/deploy/check-signin-settings.cjs`, read-only, with the same
+   `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_ID`) and hands the result to the
+   **Sign-in settings match the apps** job. That job is red when the Apple
+   provider is off or its Client IDs lack the iPhone app's bundle ID, because
+   Continue with Apple then fails for everyone on the iPhone app (it did in
+   production from October 23 to November 10, 2026). It says what to add in
+   Supabase; the fix is the founder's, in the console, and the next release run
+   goes green. It never stops or delays the release, and a setting that can't be
+   read is a warning, not a failure.
 4. Build a frozen-lockfile image, push a commit tag, and use its immutable digest
    for the API and worker. No `prod`, `staging`, or `latest` tag is used at runtime.
 5. After database adoption, apply validated migrations **before** the application

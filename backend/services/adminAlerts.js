@@ -374,5 +374,58 @@ async function notifyFloorPlanSheetToReview({ caseId, area, summary }) {
   }
 }
 
+const SIGN_IN_PROVIDERS = { apple: 'Apple', google: 'Google' };
+const SIGN_IN_SETUP_ALERT_EVERY_MS = 24 * 60 * 60 * 1000;
+const signInSetupAlerted = new Map();
+
+/**
+ * Supabase Auth refused a genuine Sign in with Apple or Google token because of its own provider setup (POST
+ * /api/users/oauth/native), so everyone who taps that button in the app is turned away until the setting changes.
+ * At most one email per provider and cause a day from each server process. It names the provider, the cause and
+ * the app's public ID: never the person or the token.
+ *
+ * @param {object} params
+ * @param {'apple'|'google'} params.provider
+ * @param {'app_id_not_accepted'|'provider_disabled'} params.reason
+ * @param {string} [params.appId] The app's bundle ID, for app_id_not_accepted.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifySignInSetupProblem({ provider, reason, appId }) {
+  const to = recipients();
+  const label = SIGN_IN_PROVIDERS[provider];
+  if (!to.length || !label) return false;
+
+  const id = /^[A-Za-z0-9.-]{1,255}$/.test(appId || '') ? appId : null;
+  const where = `Supabase > Authentication > Sign In / Providers > ${label}`;
+  const fixes = {
+    app_id_not_accepted: id && [`the app's ID, ${id}, isn't in the provider's Client IDs`, `${where} > Client IDs: add ${id} and keep the IDs already there.`],
+    provider_disabled: [`the ${label} provider is switched off`, `${where}: turn it on and check its Client IDs.`],
+  };
+  if (!fixes[reason]) return false;
+  const [cause, fix] = fixes[reason];
+
+  const key = `${provider}:${reason}`;
+  if (Date.now() - (signInSetupAlerted.get(key) || 0) < SIGN_IN_SETUP_ALERT_EVERY_MS) return false;
+  signInSetupAlerted.set(key, Date.now());
+
+  const site = String(process.env.WEB_APP_URL || process.env.FRONTEND_URL || '').replace(/\/+$/, '') || 'unknown site';
+  const subject = `[Pantopus] Continue with ${label} is failing in the app`;
+  const lead = `Supabase Auth is refusing Sign in with ${label} from the app, so everyone who taps Continue with ${label} there is turned away. Email sign-in still works.`;
+  const text = [lead, '', `Cause: ${cause}.`, `Fix: ${fix}`, `Site: ${site}`, '', 'This repeats at most once a day while it lasts.'].join('\n');
+  const html = `<p>${lead}</p>
+<ul><li>Cause: ${cause}.</li><li>Fix: ${fix}</li><li>Site: ${site}</li></ul>
+<p>This repeats at most once a day while it lasts.</p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    signInSetupAlerted.delete(key);
+    logger.warn('adminAlerts: sign-in setup email failed (non-fatal)', { provider, reason, error: err.message });
+    return false;
+  }
+}
+
 module.exports = { notifyClaimToReview, notifyClaimInfoSent, notifyReportToReview, notifyRemovalVoteToReview,
-  notifyAddressWatchCase, notifyProbationDisputeToReview, notifyRecordProblemToReview, notifyFloorPlanSheetToReview, recipients };
+  notifyAddressWatchCase, notifyProbationDisputeToReview, notifyRecordProblemToReview, notifyFloorPlanSheetToReview,
+  notifySignInSetupProblem, recipients };

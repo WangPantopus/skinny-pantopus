@@ -5368,6 +5368,27 @@ router.post('/oauth/callback', oauthLimiter, authRouteDpop(), async (req, res) =
 });
 
 /**
+ * Supabase Auth turns an identity token away for two reasons that are its own
+ * provider setup, not the token: the provider is switched off, or the app's ID
+ * (the token's audience, which it reads only from a token the provider signed)
+ * isn't in the provider's Client IDs. Trying again can't fix either, so
+ * /oauth/native answers these like an unavailable provider and tells the admin
+ * inbox, instead of calling the token bad. The iPhone app's Continue with
+ * Apple failed this way in production from the day its bundle ID changed until
+ * November 10, 2026. A refused audience counts only when it is this server's
+ * own iPhone app (APNS_BUNDLE_ID): a token issued to any other app is a bad
+ * token.
+ */
+function nativeSignInSetupProblem(error) {
+  const message = String(error?.message || '');
+  if (/Provider \(issuer [^)]*\) is not enabled/i.test(message)) return { reason: 'provider_disabled' };
+  const refused = /Unacceptable audience in id_token: \[([^\]]*)\]/i.exec(message);
+  const appId = String(process.env.APNS_BUNDLE_ID || '').trim();
+  if (refused && appId && refused[1].split(/[\s,]+/).includes(appId)) return { reason: 'app_id_not_accepted', appId };
+  return null;
+}
+
+/**
  * POST /api/users/oauth/native
  * Native identity-token sign-in (Sign in with Apple / Google Credential
  * Manager): `{ provider:'apple'|'google', idToken, nonce?, accessToken?, device? }`
@@ -5389,6 +5410,15 @@ router.post('/oauth/native', oauthLimiter, validate(oauthNativeSchema), authRout
       return res.status(503).json({ error: 'Sign-in is busy right now. Please try again in a minute.', code: 'AUTH_BUSY' });
     }
     if (sessionError || !sessionData?.session || !sessionData?.user) {
+      const setup = nativeSignInSetupProblem(sessionError);
+      if (setup) {
+        logger.error('OAuth native sign-in refused - provider setup', { provider, ...setup, error: sessionError.message });
+        require('../services/adminAlerts').notifySignInSetupProblem({ provider, ...setup }).catch(() => {});
+        return res.status(503).json({
+          error: `${OAUTH_PROVIDER_LABELS[provider]} sign-in isn't available right now. Please use your email instead.`,
+          code: 'OAUTH_PROVIDER_UNAVAILABLE',
+        });
+      }
       logger.warn('OAuth native sign-in failed', { provider, error: sessionError?.message });
       return res.status(401).json({ error: 'Invalid or expired identity token' });
     }
