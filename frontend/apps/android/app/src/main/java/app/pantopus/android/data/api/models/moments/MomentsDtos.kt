@@ -228,6 +228,12 @@ data class ChatMomentRefDto(
     val ended: Boolean = false,
     /** Conversation lists only: the viewer sent that reply ("Replied to their Moment"). */
     @Json(name = "from_me") val fromMe: Boolean? = null,
+    /**
+     * A live text card's color (`teal` … `slate`) and its first words (contract v3.2): the quote shows the card. Null
+     * for a photo or video, once ended, while held, across a block, and from a server without them.
+     */
+    val background: String? = null,
+    val excerpt: String? = null,
 )
 
 /** [ChatMomentRefDto] on the wire. */
@@ -238,6 +244,8 @@ data class ChatMomentRefJson(
     @Json(name = "thumb_url") val thumbUrl: String? = null,
     val ended: Boolean = false,
     @Json(name = "from_me") val fromMe: Boolean? = null,
+    val background: String? = null,
+    val excerpt: String? = null,
 )
 
 /**
@@ -247,8 +255,10 @@ data class ChatMomentRefJson(
  */
 class ChatMomentRefJsonAdapter {
     @FromJson
-    fun fromJson(json: ChatMomentRefJson): ChatMomentRefDto = ChatMomentRefDto(json.id, json.kind, json.thumbUrl, json.ended, json.fromMe)
+    fun fromJson(json: ChatMomentRefJson): ChatMomentRefDto =
+        ChatMomentRefDto(json.id, json.kind, json.thumbUrl, json.ended, json.fromMe, json.background, json.excerpt)
 
     @ToJson
-    fun toJson(ref: ChatMomentRefDto): ChatMomentRefJson = ChatMomentRefJson(ref.id, ref.kind, null, ref.ended, ref.fromMe)
+    fun toJson(ref: ChatMomentRefDto): ChatMomentRefJson =
+        ChatMomentRefJson(ref.id, ref.kind, null, ref.ended, ref.fromMe, ref.background, ref.excerpt)
 }

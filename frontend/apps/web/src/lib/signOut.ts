@@ -1,6 +1,7 @@
 import * as api from '@pantopus/api';
 import { clearAuthToken } from '@pantopus/api';
 import { clearPendingPlaces } from '@/components/place/pendingPlace';
+import { clearCardDraft } from '@/components/mailbox/cards/cardDraft';
 import { toast } from '@/components/ui/toast-store';
 import { hardNavigate } from '@/lib/session-refresh';
 
@@ -16,6 +17,7 @@ export async function signOut(): Promise<void> {
       const hasSessionCookie = document.cookie.split(';').some((cookie) => cookie.trim() === 'pantopus_session=1');
       if (!hasSessionCookie) {
         clearPendingPlaces();
+        clearCardDraft();
         clearAuthToken();
         hardNavigate('/login');
       }
@@ -25,6 +27,7 @@ export async function signOut(): Promise<void> {
     return;
   }
   clearPendingPlaces();
+  clearCardDraft();
   clearAuthToken();
   hardNavigate('/login');
 }

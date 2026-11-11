@@ -460,10 +460,7 @@ struct HolidayCardLookFooter: View {
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s3)
         .frame(maxWidth: .infinity)
-        .background(HolidayCardDesk.background(scheme).ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) {
-            Rectangle().fill(MailPaper.cardRowLine).frame(height: 1)
-        }
+        .holidayCardBarBackground(scheme, atTable: LaunchFeatures.cardTable)
     }
 }
 

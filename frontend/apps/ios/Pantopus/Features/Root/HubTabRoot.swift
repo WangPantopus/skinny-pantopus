@@ -3628,6 +3628,20 @@ public struct HubTabRoot: View {
                 onBack: { Task { @MainActor in pop() } },
                 onWriteBack: { _ in Task { @MainActor in push(.ceremonialMail) } }
             )
+        case let .mailWelcome(mail) where LaunchFeatures.cardTable:
+            // The welcome letter arrives on the table (plan Part 10); out of its envelope it reads on the letter page.
+            CardTableLetterHost(
+                model: mailScreenModels.model(for: route) { CardTableModel.welcomeLetter() },
+                onOpen: {
+                    Task { @MainActor in
+                        NotificationCenter.default.post(name: .mailboxMailViewed, object: mail.id)
+                        if !path.isEmpty { path.removeLast() }
+                        push(.mailItemDetail(mailId: mail.id))
+                    }
+                },
+                onClose: { Task { @MainActor in pop() } }
+            )
+            .hidesTabBar()
         case let .mailWelcome(mail):
             CeremonialMailOpenView(
                 viewModel: mailScreenModels.model(for: route) { CeremonialMailOpenViewModel(sealed: mail) },

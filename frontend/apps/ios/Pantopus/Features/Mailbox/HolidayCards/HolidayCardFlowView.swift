@@ -52,6 +52,20 @@ struct HolidayCardFlowView: View {
         onDone ?? onClose
     }
 
+    /// Write on the back, Seal it for the day and Look it over happen at the table (plan Part 9): on the chosen card's
+    /// cloth under the window light. Who it's for and Pick a card stay on paper.
+    private var atTable: Bool {
+        guard LaunchFeatures.cardTable, viewModel.design != nil, viewModel.today == nil, viewModel.cards?.open == true else {
+            return false
+        }
+        return viewModel.step == .write || viewModel.step == .seal || viewModel.step == .look
+    }
+
+    /// The desk's words: light at the table.
+    private var desk: ColorScheme {
+        atTable ? .dark : scheme
+    }
+
     var body: some View {
         VStack(spacing: Spacing.s0) {
             header
@@ -84,7 +98,15 @@ struct HolidayCardFlowView: View {
                 footer
             }
         }
-        .background(HolidayCardDesk.background(scheme).ignoresSafeArea())
+        // At the table its words are light ink on the cloth; the cream fields, rows and cards keep their dark ink.
+        .environment(\.colorScheme, desk)
+        .background {
+            if atTable {
+                HolidayCardTableCloth(table: viewModel.design?.table)
+            } else {
+                HolidayCardDesk.background(desk).ignoresSafeArea()
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         // Full screen, like the other flows: no tab bar in any step or on the confirmation (founder, 11-09).
         .hidesTabBar()
@@ -130,7 +152,7 @@ struct HolidayCardFlowView: View {
         VStack(spacing: Spacing.s2) {
             HStack(spacing: Spacing.s1) {
                 Button(action: back) {
-                    Icon(.chevronLeft, size: 24, color: HolidayCardDesk.text(scheme))
+                    Icon(.chevronLeft, size: 24, color: HolidayCardDesk.text(desk))
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -139,7 +161,7 @@ struct HolidayCardFlowView: View {
                 .accessibilityIdentifier("sendCardBack")
                 Text(heading.title)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(HolidayCardDesk.text(scheme))
+                    .foregroundStyle(HolidayCardDesk.text(desk))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
@@ -250,7 +272,7 @@ struct HolidayCardFlowView: View {
                 if viewModel.step != .to, let recipient = viewModel.recipient {
                     Text("To \(recipient.name)")
                         .font(.system(size: 14))
-                        .foregroundStyle(HolidayCardDesk.muted(scheme))
+                        .foregroundStyle(HolidayCardDesk.muted(desk))
                         .lineLimit(1)
                         .accessibilityIdentifier("sendCardTo")
                 }

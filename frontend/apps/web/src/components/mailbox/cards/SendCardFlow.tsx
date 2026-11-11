@@ -40,6 +40,7 @@ import CardShareSheet from './CardShareSheet';
 import CardRack from './CardRack';
 import { askTakeBack } from './takeBack';
 import { chosenPersonFor } from './sendOneBack';
+import { clearCardDraft, readCardDraft, saveCardDraft } from './cardDraft';
 import { cardMood, cardPicture, clockTime, firstNameOf, SERIF, shortDay, WAX } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
@@ -659,7 +660,8 @@ function PickStep({
 type PhotoDraft = {
   status: 'uploading' | 'ready' | 'failed';
   progress: number;
-  file: File;
+  /** The chosen file; none once a reload brought the draft back (only its reference is kept). */
+  file: File | null;
   localUrl: string | null;
   ref: CardMediaRef | null;
   error: string | null;
@@ -668,8 +670,9 @@ type PhotoDraft = {
 /** The card's own voice greeting while it's written (memories plan step 7): the recording, its upload, the server's reference. */
 type VoiceDraft = {
   status: 'uploading' | 'ready' | 'failed';
-  blob: Blob;
-  localUrl: string;
+  /** The recording; none once a reload brought the draft back (it then plays from the server). */
+  blob: Blob | null;
+  localUrl: string | null;
   ref: CardMediaRef | null;
   error: string | null;
 };
@@ -1524,6 +1527,56 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
     if (!(today && !data.postage_enabled)) setStep('pick');
   }, [data, chosenPerson, today]);
 
+  // The card being written comes back after a reload of this tab (memories plan step 4, "Drafts"): who it's for, the
+  // picture, the note and signature, the uploaded photo and greeting, the arrival and the request ID, so a retry after
+  // a lost answer finds the card it stored. Once, as it opens; not when it opened for someone or a picture on purpose.
+  const draftRead = useRef(false);
+  useEffect(() => {
+    if (draftRead.current || !data || !me?.id) return;
+    draftRead.current = true;
+    if (chosenPerson || (launchFeatures.cardTable && chosenDesign)) return;
+    const draft = readCardDraft(me.id);
+    if (!draft || !data.open) return;
+    if (draft.to) {
+      setTo(draft.to);
+      setListed(draft.to.kind === 'list' ? draft.to.entries : draft.to.kind === 'link' ? [] : [draft.to]);
+    }
+    const designHere = Boolean(draft.designId && data.designs.some((d) => d.id === draft.designId));
+    if (designHere) setDesignId(draft.designId);
+    setMessage(draft.message.slice(0, data.message_limit));
+    setSignature(draft.signature);
+    if (draft.photo) {
+      setPhoto({ status: 'ready', progress: 1, file: null, localUrl: null, ref: draft.photo, error: null });
+      setPhotoAlt(draft.photoAlt);
+    }
+    if (draft.voice) setVoice({ status: 'ready', blob: null, localUrl: null, ref: draft.voice, error: null });
+    setArrival(draft.arrival);
+    requestId.current = draft.requestId;
+    listIds.current = new Map(draft.listIds);
+    setStep(!draft.to ? 'to' : !designHere ? 'pick' : draft.step);
+  }, [data, me?.id, chosenPerson, chosenDesign]);
+  // Kept as it changes (an upload only once it's stored), and gone once the card is sent, taken back or started over.
+  // A send starting is a change too: the request ID it carries is kept before its answer comes.
+  const sending = send.isPending || preview.isPending || sendList.isPending || previewList.isPending;
+  useEffect(() => {
+    if (!draftRead.current || !me?.id) return;
+    if (step === 'sent' || sent || listSent || (!to && !designId && !message.trim())) { clearCardDraft(); return; }
+    saveCardDraft({
+      user: me.id,
+      step: step === 'look' ? 'seal' : step,
+      to,
+      designId,
+      message,
+      signature,
+      photo: photo?.status === 'ready' ? photo.ref : null,
+      photoAlt,
+      voice: voice?.status === 'ready' ? voice.ref : null,
+      arrival,
+      requestId: requestId.current,
+      listIds: [...listIds.current],
+    });
+  }, [me?.id, step, sent, listSent, to, designId, message, signature, photo, photoAlt, voice, arrival, sending]);
+
   // Each step starts at its heading, for keyboards and screen readers.
   useEffect(() => { headingRef.current?.focus(); }, [step]);
 
@@ -1583,7 +1636,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
 
   const uploadVoice = (blob: Blob) => {
     setVoice((before) => {
-      if (before && before.blob !== blob) URL.revokeObjectURL(before.localUrl);
+      if (before?.localUrl && before.blob !== blob) URL.revokeObjectURL(before.localUrl);
       return { status: 'uploading', blob, localUrl: before?.blob === blob ? before.localUrl : URL.createObjectURL(blob), ref: null, error: null };
     });
     const mine = (draft: VoiceDraft | null) => Boolean(draft && draft.blob === blob);
@@ -1592,7 +1645,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
       .catch((error: { data?: { error?: string } }) => setVoice((d) => (mine(d)
         ? { ...d!, status: 'failed', error: error?.data?.error || 'The greeting didn’t upload. Check your connection.' } : d)));
   };
-  const removeVoice = () => setVoice((before) => { if (before) URL.revokeObjectURL(before.localUrl); return null; });
+  const removeVoice = () => setVoice((before) => { if (before?.localUrl) URL.revokeObjectURL(before.localUrl); return null; });
   const voiceReady = voice?.status === 'ready' && voice.ref ? voice.ref : null;
 
   const cardToSend = () => {
@@ -1984,14 +2037,14 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           onPhotoAlt={setPhotoAlt}
           onAddPhoto={uploadPhoto}
           onRemovePhoto={removePhoto}
-          onRetryPhoto={() => { if (photo) uploadPhoto(photo.file); }}
+          onRetryPhoto={() => { if (photo?.file) uploadPhoto(photo.file); }}
           // Its own voice greeting (memories plan step 7), the same way: one card to one person.
           canAddVoice={launchFeatures.holidayCardMemories && Boolean(data.media?.voice.usable) && to?.kind !== 'list'}
           voice={voice}
           greetingFor={to?.kind === 'person' ? firstName(to.name) : 'you'}
           onRecorded={uploadVoice}
           onRemoveVoice={removeVoice}
-          onRetryVoice={() => { if (voice) uploadVoice(voice.blob); }}
+          onRetryVoice={() => { if (voice?.blob) uploadVoice(voice.blob); }}
           onCloth={atTable}
           onNext={() => { setStep('seal'); setLookUnavailable(false); if (to?.kind === 'person') void theirs.refetch(); }}
         />

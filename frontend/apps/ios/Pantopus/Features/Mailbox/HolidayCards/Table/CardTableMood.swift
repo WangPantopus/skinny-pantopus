@@ -14,7 +14,8 @@
 import SwiftUI
 
 enum CardTableMood: Equatable {
-    case nostalgia, reverence, santa
+    /// `letter`: a letter, not a card (plan Part 10): no snow, candle, glint or bounce.
+    case nostalgia, reverence, santa, letter
 
     /// By the picture's number, as the server's collections hold them: 59-67 Christmas with Jesus Christ, 50-58
     /// Christmas with Santa, every other picture nostalgia.
@@ -27,7 +28,7 @@ enum CardTableMood: Equatable {
     }
 
     var snows: Bool {
-        self != .reverence
+        self == .nostalgia || self == .santa
     }
 }
 

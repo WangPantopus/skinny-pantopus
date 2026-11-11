@@ -49,6 +49,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.log2
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -92,9 +93,10 @@ private sealed interface MomentItem {
 /**
  * Rings over the Google map (boards M1, M2, P5), placed where the map projects them and moved with every camera
  * change without recomposing, as Plans' pins are. Drawn in Compose rather than as map markers so each ring can carry
- * the person's photo and TalkBack reads it ("Aisha M., 1 Moment, new, at Esther Short Park"). Rings closer than about
- * 48 dp gather into a crowded spot; tapping it zooms in. Zoomed all the way, rings that share a spot fan out in a
- * circle so each can be tapped. Taps anywhere else reach the map.
+ * the person's photo and TalkBack reads it ("Aisha M., 1 Moment, new, at Esther Short Park"). Rings closer than 52 dp
+ * gather into a crowded spot, as on iPhone, and so does anything a crowded spot would be drawn over: rings and bubbles
+ * never sit on each other. Tapping a crowded spot zooms in. Zoomed all the way, a few rings that share a spot fan out
+ * in a circle so each can be tapped. Taps anywhere else reach the map.
  */
 @Composable
 fun MomentsMapOverlay(
@@ -111,8 +113,10 @@ fun MomentsMapOverlay(
     layoutKey: () -> Any? = { null },
 ) {
     val zoom by remember(cameraState) { derivedStateOf { (camera().zoom * 2f).roundToInt() / 2f } }
-    val items = remember(rings, posting, zoom) { buildItems(rings, posting, zoom.toDouble()) }
     val density = LocalDensity.current
+    // A bubble's "+N" grows with the text size, and so does the room it takes.
+    val fontScale = density.fontScale
+    val items = remember(rings, posting, zoom, fontScale) { buildItems(rings, posting, zoom.toDouble(), fontScale.toDouble()) }
     val pxPerDp = density.density
     val pinAnchor = with(density) { MOMENT_PIN_ANCHOR_FROM_TOP.toPx() }
     val clusterAnchor = with(density) { MOMENT_CLUSTER_ANCHOR_FROM_TOP.toPx() }
@@ -322,20 +326,45 @@ internal fun clusterCamera(
     return Triple(latitude, longitude, zoom.toFloat())
 }
 
-/** Room kept around a framed crowded spot: a pin's height above its spot, half its width at the sides. */
-private const val FRAME_TOP_DP = 92.0
+/**
+ * Room kept around a framed crowded spot: a little above the topmost spot (the map's own top padding already keeps a
+ * pin's height clear under the top row), half a pin's width at the sides.
+ */
+private const val FRAME_TOP_DP = 21.0
 private const val FRAME_SIDE_DP = 48.0
 private const val FRAME_BOTTOM_DP = 28.0
 private const val FRAME_MIN_DP = 40.0
 
-private const val CLUSTER_DP = 48.0
+/** Two rings closer than this join a bubble (a pin is 64 dp wide), as iPhone's `clusterPoints`. */
+private const val CLUSTER_DP = 52.0
+
+/** How far two drawn shapes may overlap before they join: the same give two pins 52 dp apart have. */
+private const val OVERLAP_GIVE_DP = 12.0
 
 /** From this zoom, rings that share a spot fan out in a circle instead of a crowded spot. */
 const val MOMENTS_SPREAD_ZOOM = 17.0
+
+/** More rings than this stay a crowded spot even zoomed all the way (iPhone's `fanLimit`): the strip lists them. */
+private const val FAN_LIMIT = 6
 private const val SPREAD_DP = 40.0
 private const val SPREAD_DP_MAX = 96.0
 private const val SPREAD_GAP_DP = 70.0
 private const val TILE_DP = 256.0
+
+/** A pin's drawn size around its spot: 64 × 72, the point at the bottom (`MomentMapPin`). */
+private const val PIN_HALF_WIDTH_DP = 32.0
+private const val PIN_ABOVE_DP = 71.0
+private const val PIN_BELOW_DP = 1.0
+
+/** A bubble's drawn size (`MomentClusterBubble`): 50 dp tall over a 9 dp point, 7 + faces + 15 dp wide. */
+private const val BUBBLE_ABOVE_DP = 59.0
+private const val BUBBLE_PADDING_DP = 22.0
+private const val BUBBLE_FACE_DP = 36.0
+private const val BUBBLE_FACE_STEP_DP = 28.0
+private const val BUBBLE_EXTRA_GAP_DP = 10.0
+
+/** About the width of one character of "+12" (15 sp, bold). */
+private const val BUBBLE_EXTRA_CHAR_DP = 9.5
 
 /** Web Mercator position in dp at [zoom], for distances between rings. */
 private fun worldDp(
@@ -350,24 +379,137 @@ private fun worldDp(
     return x to y
 }
 
+/** How far [count] rings that share a spot sit from it, far enough apart that their pins don't touch. */
+private fun spreadRadius(count: Int): Double = (SPREAD_GAP_DP / 2 / sin(PI / count.coerceAtLeast(2))).coerceIn(SPREAD_DP, SPREAD_DP_MAX)
+
 /** [rings] around their shared spot, one per step of a circle, far enough apart that their pins don't touch. */
 private fun spread(rings: List<MomentRingUi>): List<MomentItem.Single> {
-    val radius = (SPREAD_GAP_DP / 2 / sin(PI / rings.size.coerceAtLeast(2))).coerceIn(SPREAD_DP, SPREAD_DP_MAX)
+    val radius = spreadRadius(rings.size)
     return rings.mapIndexed { index, ring ->
         val angle = 2 * PI * index / rings.size - PI / 2
         MomentItem.Single(ring, dx = (radius * cos(angle)).toFloat(), dy = (radius * sin(angle)).toFloat())
     }
 }
 
+/** Zoomed all the way in, a few rings fan out round their spot; more stay a crowded spot. */
+private fun fansOut(
+    group: List<MomentRingUi>,
+    zoom: Double,
+): Boolean = zoom >= MOMENTS_SPREAD_ZOOM && group.size in 2..FAN_LIMIT
+
+/** Where something is drawn on the map, in world dp at the overlay's zoom. */
+private data class Frame(
+    val left: Double,
+    val top: Double,
+    val right: Double,
+    val bottom: Double,
+)
+
+private fun pinFrame(
+    x: Double,
+    y: Double,
+): Frame = Frame(x - PIN_HALF_WIDTH_DP, y - PIN_ABOVE_DP, x + PIN_HALF_WIDTH_DP, y + PIN_BELOW_DP)
+
+/** A bubble's width: up to three faces 28 dp apart, and "+N" for the people it holds beyond them. */
+private fun bubbleWidth(
+    group: List<MomentRingUi>,
+    fontScale: Double,
+): Double {
+    val people = group.distinctBy { it.author.id }.size
+    val faces = people.coerceIn(1, 3)
+    val extra = people - faces
+    val extraWidth = if (extra > 0) BUBBLE_EXTRA_GAP_DP + BUBBLE_EXTRA_CHAR_DP * fontScale * ("+$extra".length) else 0.0
+    return BUBBLE_PADDING_DP + BUBBLE_FACE_DP + BUBBLE_FACE_STEP_DP * (faces - 1) + extraWidth
+}
+
+/** What [group] draws: one pin, the pins of a fan, or a bubble at the middle of its rings. */
+private fun frameOf(
+    group: List<MomentRingUi>,
+    positions: Map<String, Pair<Double, Double>>,
+    zoom: Double,
+    fontScale: Double,
+): Frame {
+    val points = group.map { positions.getValue(it.id) }
+    if (group.size == 1) return pinFrame(points[0].first, points[0].second)
+    if (fansOut(group, zoom)) {
+        val radius = spreadRadius(group.size)
+        val pins =
+            points.mapIndexed { index, (x, y) ->
+                val angle = 2 * PI * index / group.size - PI / 2
+                pinFrame(x + radius * cos(angle), y + radius * sin(angle))
+            }
+        return Frame(pins.minOf { it.left }, pins.minOf { it.top }, pins.maxOf { it.right }, pins.maxOf { it.bottom })
+    }
+    val x = points.map { it.first }.average()
+    val y = points.map { it.second }.average()
+    val half = bubbleWidth(group, fontScale) / 2
+    return Frame(x - half, y - BUBBLE_ABOVE_DP, x + half, y)
+}
+
+/**
+ * Whether two groups would be drawn over each other: two pins when their centers are closer than 52 dp (iPhone's rule),
+ * anything wider (a bubble, a fan) when the shapes overlap by more than the same 12 dp of give.
+ */
+private fun overlaps(
+    first: List<MomentRingUi>,
+    firstFrame: Frame,
+    second: List<MomentRingUi>,
+    secondFrame: Frame,
+    positions: Map<String, Pair<Double, Double>>,
+): Boolean {
+    if (first.size == 1 && second.size == 1) {
+        val (x, y) = positions.getValue(first[0].id)
+        val (ox, oy) = positions.getValue(second[0].id)
+        return hypot(ox - x, oy - y) < CLUSTER_DP
+    }
+    val across = min(firstFrame.right, secondFrame.right) - max(firstFrame.left, secondFrame.left)
+    val down = min(firstFrame.bottom, secondFrame.bottom) - max(firstFrame.top, secondFrame.top)
+    return across > OVERLAP_GIVE_DP && down > OVERLAP_GIVE_DP
+}
+
+/**
+ * A bubble sits at the middle of its rings and is wider than a pin, so it can land on a ring or another bubble (your
+ * own ring included): groups whose drawn shapes would overlap join, until none do (REVIEW LA2).
+ */
+private fun joinOverlapping(
+    groups: MutableList<List<MomentRingUi>>,
+    positions: Map<String, Pair<Double, Double>>,
+    zoom: Double,
+    fontScale: Double,
+) {
+    val frames = groups.mapTo(mutableListOf()) { frameOf(it, positions, zoom, fontScale) }
+    while (true) {
+        val (first, second) = firstOverlap(groups, frames, positions) ?: return
+        groups[first] = groups[first] + groups[second]
+        groups.removeAt(second)
+        frames.removeAt(second)
+        frames[first] = frameOf(groups[first], positions, zoom, fontScale)
+    }
+}
+
+/** The first two groups that would be drawn over each other, by their places in [groups]; null when none are. */
+private fun firstOverlap(
+    groups: List<List<MomentRingUi>>,
+    frames: List<Frame>,
+    positions: Map<String, Pair<Double, Double>>,
+): Pair<Int, Int>? {
+    for (first in groups.indices) {
+        for (second in first + 1 until groups.size) {
+            if (overlaps(groups[first], frames[first], groups[second], frames[second], positions)) return first to second
+        }
+    }
+    return null
+}
+
 private fun buildItems(
     rings: List<MomentRingUi>,
     posting: List<MomentPosting>,
     zoom: Double,
+    fontScale: Double,
 ): List<MomentItem> {
     val positions = rings.associate { it.id to worldDp(it.latitude, it.longitude, zoom) }
     val used = mutableSetOf<String>()
-    val singles = mutableListOf<MomentItem>()
-    val groups = mutableListOf<MomentItem>()
+    val groups = mutableListOf<List<MomentRingUi>>()
     // New rings claim their neighbors first, so a crowded spot is named after what's fresh there.
     rings.sortedByDescending { it.anyNew }.forEach { ring ->
         if (ring.id in used) return@forEach
@@ -377,13 +519,19 @@ private fun buildItems(
                 other.id !in used && positions.getValue(other.id).let { (ox, oy) -> hypot(ox - x, oy - y) < CLUSTER_DP }
             }
         used += near.map { it.id }
+        groups.add(near)
+    }
+    joinOverlapping(groups, positions, zoom, fontScale)
+    val singles = mutableListOf<MomentItem.Single>()
+    val bubbles = mutableListOf<MomentItem>()
+    groups.forEach { group ->
         when {
-            near.size < 2 -> singles += MomentItem.Single(ring)
-            zoom >= MOMENTS_SPREAD_ZOOM -> singles += spread(near)
-            else -> groups += MomentItem.Group(near)
+            group.size < 2 -> singles += MomentItem.Single(group.first())
+            fansOut(group, zoom) -> singles += spread(group)
+            else -> bubbles += MomentItem.Group(group)
         }
     }
     // Watched rings under new ones, your posting Moment on top.
-    val ordered = singles.sortedBy { (it as MomentItem.Single).ring.anyNew }
-    return groups + ordered + posting.map { MomentItem.Posting(it) }
+    val ordered = singles.sortedBy { it.ring.anyNew }
+    return bubbles + ordered + posting.map { MomentItem.Posting(it) }
 }

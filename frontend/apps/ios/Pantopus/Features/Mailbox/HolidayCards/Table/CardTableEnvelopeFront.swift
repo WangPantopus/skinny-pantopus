@@ -25,6 +25,9 @@ struct CardTableEnvelopeFront: View, Equatable {
     /// Being addressed as it's sent (plan Part 2), 0 to 1: the name written left to right, the stamp landing, the
     /// postmark's thump, and the gold seal last (`CardTableAddress`). 1 shows it all.
     var reveal: Double = 1
+    /// A letter on the cream envelope (plan Part 10): the names in the pen's ink, no postmark (Pantopus put it
+    /// straight in the box, and the postmark says Christmas), and "A letter for you" in the seal's red.
+    var isLetter = false
 
     var body: some View {
         Canvas(rendersAsynchronously: false) { context, size in
@@ -40,7 +43,7 @@ struct CardTableEnvelopeFront: View, Equatable {
                 let box = CGRect(x: width * 0.755, y: height * 0.0345, width: stampWidth, height: stampWidth * 300 / 242)
                 stampLayer.draw(Image(uiImage: stamp), in: box.insetBy(dx: -box.width * (grow - 1) / 2, dy: -box.height * (grow - 1) / 2))
             }
-            let postmarkIn = CardTableAddress.progress(reveal, CardTableAddress.postmark)
+            let postmarkIn = isLetter ? 0 : CardTableAddress.progress(reveal, CardTableAddress.postmark)
             if postmarkIn > 0 {
                 var inked = context
                 inked.opacity = postmarkIn
@@ -76,7 +79,7 @@ struct CardTableEnvelopeFront: View, Equatable {
             fontSize: width * 0.05,
             lineHeight: width * 0.05 * 1.15,
             turn: -0.8,
-            ink: MailPaper.tableFromName,
+            ink: isLetter ? MailPaper.tablePenInk : MailPaper.tableFromName,
             maxWidth: width * 0.27
         )
         .draw(in: context, x: width * 0.066, top: size.height * 0.062)
@@ -92,9 +95,9 @@ struct CardTableEnvelopeFront: View, Equatable {
             fontSize: width * 0.094,
             lineHeight: width * 0.094 * 1.1,
             turn: -1.6,
-            ink: MailPaper.tableToName,
+            ink: isLetter ? MailPaper.tablePenInk : MailPaper.tableToName,
             maxWidth: width * 0.78,
-            shadow: MailPaper.tableToNameShadow
+            shadow: isLetter ? nil : MailPaper.tableToNameShadow
         )
         .draw(in: pen, x: width * 0.15, top: size.height * 0.46)
     }
@@ -103,8 +106,9 @@ struct CardTableEnvelopeFront: View, Equatable {
         let fontSize = size.width * 0.0235
         let font = CardTableSerif.font(size: fontSize, weight: .semibold)
         let top = size.height - size.height * 0.054 - fontSize
+        let kind = Text(isLetter ? "A LETTER FOR YOU" : "CHRISTMAS CARD")
         context.drawText(
-            Text("CHRISTMAS CARD").font(Font(font)).tracking(fontSize * 0.2).foregroundColor(MailPaper.tableGold),
+            kind.font(Font(font)).tracking(fontSize * 0.2).foregroundColor(isLetter ? MailPaper.wax : MailPaper.tableGold),
             x: size.width * 0.068,
             baseline: top + CardTableType.baseline(font, lineHeight: fontSize)
         )
@@ -124,7 +128,7 @@ struct CardTableEnvelopeFront: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.paper === rhs.paper && lhs.stamp === rhs.stamp && lhs.postmark === rhs.postmark && lhs.fromName == rhs.fromName
             && lhs.toName == rhs.toName && lhs.mailedOn == rhs.mailedOn && lhs.year == rhs.year && lhs.sealed == rhs.sealed
-            && lhs.reveal == rhs.reveal
+            && lhs.reveal == rhs.reveal && lhs.isLetter == rhs.isLetter
     }
 }
 

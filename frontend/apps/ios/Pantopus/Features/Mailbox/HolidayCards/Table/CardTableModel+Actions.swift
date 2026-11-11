@@ -47,7 +47,7 @@ extension CardTableModel {
         case .pulling:
             break
         case .out:
-            turnCard()
+            if content.isLetter { openLetter() } else { turnCard() }
         }
     }
 

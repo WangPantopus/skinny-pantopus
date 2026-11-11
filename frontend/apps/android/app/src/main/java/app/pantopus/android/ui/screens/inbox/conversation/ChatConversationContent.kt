@@ -368,6 +368,11 @@ data class ChatMomentQuote(
     /** A small picture of the photo or the video's poster; null for a text card and once it ended. */
     val thumbUrl: String?,
     val ended: Boolean,
+    /** `photo`, `video` or `text`. */
+    val kind: String? = null,
+    /** A live text card's color and first words (contract v3.2): the quote is a small card with them. */
+    val background: String? = null,
+    val excerpt: String? = null,
 )
 
 @Immutable

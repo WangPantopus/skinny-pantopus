@@ -55,12 +55,26 @@ struct HolidayCardToStep: View {
     @Bindable var viewModel: HolidayCardFlowViewModel
     @Environment(\.colorScheme) private var scheme
     @FocusState private var focused: Bool
+    /// The system contact picker is up (plan 11.7).
+    @State private var pickingContact = false
 
     var body: some View {
-        if viewModel.byEmail {
-            byEmail
-        } else {
-            byName
+        Group {
+            if viewModel.byEmail {
+                byEmail
+            } else {
+                byName
+            }
+        }
+        .sheet(isPresented: $pickingContact) {
+            ContactPickerSheet(
+                onPicked: { contact in
+                    if let email = contact.email { viewModel.email = email }
+                    pickingContact = false
+                },
+                onCancel: { pickingContact = false }
+            )
+            .ignoresSafeArea()
         }
     }
 
@@ -96,6 +110,17 @@ struct HolidayCardToStep: View {
                     .strokeBorder(focused ? MailPaper.wax : MailPaper.cardFieldEdge, lineWidth: 1)
             )
             results
+            if LaunchFeatures.cardTable {
+                // Plan 11.6: the invitation is already here.
+                Text("They don’t need Pantopus yet. They join to open it.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(HolidayCardDesk.muted(scheme))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, Spacing.s3)
+                    .accessibilityIdentifier("sendCardJoinToOpen")
+            }
             Button {
                 focused = false
                 viewModel.byEmail = true
@@ -251,9 +276,28 @@ struct HolidayCardToStep: View {
                 HolidayCardListChips(viewModel: viewModel)
                     .padding(.bottom, Spacing.s2)
             }
-            Text("Their email address")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(HolidayCardDesk.text(scheme))
+            HStack(alignment: .firstTextBaseline) {
+                Text("Their email address")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(HolidayCardDesk.text(scheme))
+                Spacer(minLength: Spacing.s2)
+                if LaunchFeatures.cardTable {
+                    // Plan 11.7: the phone's own contact picker; the app never reads the address book, asks for no
+                    // permission and keeps nothing of the contact.
+                    Button {
+                        focused = false
+                        pickingContact = true
+                    } label: {
+                        Text("Choose from contacts")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(MailPaper.wax)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("sendCardChooseContact")
+                }
+            }
             TextField("", text: $viewModel.email, prompt: Text(verbatim: "name@example.com").foregroundStyle(MailPaper.cardTextMuted))
                 .font(.system(size: 16))
                 .foregroundStyle(MailPaper.cardText)

@@ -9,6 +9,7 @@ import { getAuthToken } from '@pantopus/api';
 import { formatTimeAgo } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
+import ReportedCard from './ReportedCard';
 
 type AdminReport = api.admin.AdminReport;
 type ReportStatus = api.admin.ReportStatus;
@@ -68,6 +69,8 @@ export default function AdminReportsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  // "Report this card": the one report whose card is open (each opening is logged on the server).
+  const [cardOpen, setCardOpen] = useState<string | null>(null);
   // Opened from the alert email's link, "back" could leave the app, so a non-admin sees a message here.
   const [denied, setDenied] = useState(false);
 
@@ -188,6 +191,9 @@ export default function AdminReportsPage() {
                     <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase px-2 py-1 rounded bg-red-50 text-red-700">
                       <Flag className="w-3 h-3" />{REASON_LABELS[report.reason] || report.reason}
                     </span>
+                    {report.shared_card ? (
+                      <span className="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-amber-50 text-amber-800">Shares a card</span>
+                    ) : null}
                     <span className="text-xs text-app-text-muted ml-auto">{formatTimeAgo(report.created_at)}</span>
                   </div>
                   <TargetSummary report={report} />
@@ -196,6 +202,17 @@ export default function AdminReportsPage() {
                   )}
                   <p className="mt-2 text-xs text-app-text-muted">Reported by {personLabel(report.reporter)}</p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {report.shared_card ? (
+                      <button
+                        type="button"
+                        onClick={() => setCardOpen((open) => (open === report.id ? null : report.id))}
+                        aria-expanded={cardOpen === report.id}
+                        data-testid="admin-open-reported-card"
+                        className="px-3 py-1.5 rounded-lg text-sm font-medium border border-app-border text-app-text hover:bg-app-hover transition"
+                      >
+                        {cardOpen === report.id ? 'Close the card' : 'Open the card'}
+                      </button>
+                    ) : null}
                     {href && (
                       <Link href={href} className="px-3 py-1.5 rounded-lg text-sm font-medium border border-app-border text-app-text hover:bg-app-hover transition">
                         Open {KIND_LABELS[report.kind].toLowerCase()}
@@ -235,6 +252,9 @@ export default function AdminReportsPage() {
                       <span className="text-xs text-app-text-muted">Closed {formatTimeAgo(report.resolved_at)}</span>
                     )}
                   </div>
+                  {report.shared_card && cardOpen === report.id ? (
+                    <ReportedCard reportId={report.id} reporter={personLabel(report.reporter)} />
+                  ) : null}
                 </li>
               );
             })}

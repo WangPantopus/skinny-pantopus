@@ -54,6 +54,14 @@ class MomentsRepository
         /** Moments watched in this run of the app, recorded or not yet. */
         val watched: StateFlow<Set<String>> = _watched.asStateFlow()
 
+        private val _reported = MutableStateFlow<Set<String>>(emptySet())
+
+        /**
+         * Moments you reported in this run of the app: they leave your map at once, before the next read (the server
+         * leaves them out of every read after the report too).
+         */
+        val reported: StateFlow<Set<String>> = _reported.asStateFlow()
+
         /**
          * What the viewer plays next, set by the map just before it opens the viewer: the rings in order and where to
          * start. Kept here rather than in the route because a map can hold 300 rings.
@@ -90,6 +98,7 @@ class MomentsRepository
         fun clearAccount() {
             _rings.value = emptyList()
             _watched.value = emptySet()
+            _reported.value = emptySet()
             _mapNote.value = null
             playback = null
         }
@@ -176,7 +185,10 @@ class MomentsRepository
         suspend fun report(
             id: String,
             reason: String,
-        ): NetworkResult<Unit> = safeApiCall { api.report(id, MomentReportBody(reason)) }.toUnit()
+        ): NetworkResult<Unit> =
+            safeApiCall { api.report(id, MomentReportBody(reason)) }.toUnit().also { result ->
+                if (result is NetworkResult.Success) _reported.update { it + id }
+            }.alsoChanged()
 
         suspend fun mute(userId: String): NetworkResult<Unit> = safeApiCall { api.mute(userId) }.toUnit().alsoChanged()
 

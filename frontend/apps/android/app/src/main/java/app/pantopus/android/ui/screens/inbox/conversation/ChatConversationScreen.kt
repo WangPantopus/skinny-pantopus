@@ -162,7 +162,9 @@ import app.pantopus.android.ui.screens.inbox.conversation.ai.AiStarterRow
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
 import app.pantopus.android.ui.screens.inbox.conversation.ai.starterChips
 import app.pantopus.android.ui.screens.moments.MomentOpenHolder
+import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentImages
+import app.pantopus.android.ui.screens.moments.components.momentCardGradient
 import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
 import app.pantopus.android.ui.screens.plans.chat.PlanChatClosedBar
 import app.pantopus.android.ui.screens.plans.chat.PlanChatStrip
@@ -6100,16 +6102,35 @@ private fun MomentReplyQuote(
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appTextSecondary,
         )
-        if (!ended) {
+        val excerpt = quote.excerpt
+        if (!ended && quote.kind == "text" && excerpt != null) {
+            // A live text card: its own color with its first words, two lines at most, as wide as its words (v3.2).
+            Text(
+                text = excerpt,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 17.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .widthIn(max = 200.dp)
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .momentCardGradient(MomentCardBackground.fromWire(quote.background))
+                        .padding(horizontal = 10.dp, vertical = Spacing.s2),
+            )
+        } else if (!ended) {
             Box(
                 modifier =
                     Modifier
                         .size(width = 60.dp, height = 80.dp)
                         .clip(RoundedCornerShape(Radii.md))
-                        .background(PantopusColors.momentCardTealTop),
+                        .background(MomentCardBackground.fromWire(quote.background).top),
                 contentAlignment = Alignment.Center,
             ) {
-                // A text card has no picture: its mark on the teal card color.
+                // A text card has no picture: its mark on the card's color (teal from a server that doesn't say).
                 PantopusIconImage(icon = PantopusIcon.CircleDashed, contentDescription = null, size = 22.dp, tint = Color.White)
                 // The picture's link is signed and short-lived: memory only, never the image cache on disk.
                 rememberMomentImage(quote.thumbUrl, MomentImages.thumbKey(quote.momentId))?.let { picture ->

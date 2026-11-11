@@ -2,7 +2,7 @@
 // ADMIN ENDPOINTS — Platform admin operations
 // ============================================================
 
-import { get, post } from '../client';
+import apiClient, { get, post } from '../client';
 import type { ClaimReviewApproval } from './homeOwnership';
 
 export interface AdminClaim {
@@ -123,6 +123,8 @@ export interface AdminReport {
   reporter: ReportPerson | null;
   /** False for neighbor-message reports, which have no review status yet. */
   closable: boolean;
+  /** "Report this card" (launch key holiday_card_memories): the report shares that one card, opened with getReportedCard. */
+  shared_card?: { kind: 'card' | 'reply' } | null;
 }
 
 export async function getReports(status: ReportStatus = 'pending'): Promise<{
@@ -140,6 +142,48 @@ export async function resolveReport(
   outcome: 'resolved' | 'dismissed',
 ): Promise<{ report: AdminReport }> {
   return post(`/api/admin/reports/${kind}/${reportId}/resolve`, { outcome });
+}
+
+/** The one card a "Report this card" shares, as the admins see it: never covered, both names, its dates. */
+export interface ReportedCard {
+  id: string;
+  kind: 'card' | 'reply' | null;
+  from_name: string | null;
+  to_name: string | null;
+  sent_on: string | null;
+  delivered_on: string | null;
+  card: {
+    design: string;
+    number: number | null;
+    caption: string | null;
+    paper: string | null;
+    year: number | null;
+    verse?: string | null;
+    signature?: { w: number; h: number; strokes: number[][] } | null;
+    photo?: { file_id: string; width: number | null; height: number | null; alt: string | null } | null;
+    voice?: { file_id: string; duration_ms: number | null } | null;
+  } | null;
+  note: string;
+}
+
+/**
+ * GET /api/admin/reports/user/:reportId/card: that card and nothing else. Every opening is logged on the server
+ * (admin_opened_reported_card); 404 REPORT_CARD_NOT_FOUND when the report shares none.
+ */
+export async function getReportedCard(reportId: string): Promise<{
+  report: { id: string; reason: string; details: string | null; status: ReportStatus; created_at: string };
+  card: ReportedCard;
+}> {
+  return get(`/api/admin/reports/user/${encodeURIComponent(reportId)}/card`);
+}
+
+/** The shared card's own photo or voice greeting, as a Blob (private, no-store), through the report's route only. */
+export async function getReportedCardMediaBlob(reportId: string, fileId: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await apiClient.get<Blob>(
+    `/api/admin/reports/user/${encodeURIComponent(reportId)}/card/media/${encodeURIComponent(fileId)}`,
+    { responseType: 'blob', signal },
+  );
+  return response.data;
 }
 
 /** Take a reported post down (moderation) and close every open report on it. */

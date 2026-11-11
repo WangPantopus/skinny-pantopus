@@ -12,6 +12,7 @@ extension CardTableModel {
     /// The words at the top; nil when there are none.
     var words: String? {
         if let sending { return sendingWords(sending) }
+        if content.isLetter { return step == .front ? "A letter from \(content.firstName)." : nil }
         return switch step {
         case .front:
             content.sealed ? "\(content.firstName) sealed this card." : "A Christmas card from \(content.firstName)."
@@ -37,11 +38,11 @@ extension CardTableModel {
         case .back:
             content.sealed ? "Try to open it" : "Open it"
         case .flap:
-            "Take the card out"
+            content.isLetter ? "Take the letter out" : "Take the card out"
         case .pulling:
             nil
         case .out:
-            fold.isSpread ? nil : (cardBackIsUp ? "Turn it back" : "Turn it over")
+            content.isLetter ? "Read the letter" : fold.isSpread ? nil : (cardBackIsUp ? "Turn it back" : "Turn it over")
         }
     }
 
@@ -57,7 +58,7 @@ extension CardTableModel {
         case .pulling:
             ""
         case .out:
-            readsVerse ? "Read the verse" : restingHint
+            content.isLetter ? "" : readsVerse ? "Read the verse" : restingHint
         }
     }
 
@@ -66,12 +67,20 @@ extension CardTableModel {
         step == .out && sending == nil && !content.sealed && !(content.verse ?? "").isEmpty
     }
 
-    /// The quiet button under the main one: "Send {first name} a card", once the reader has turned the card over (on
-    /// the open Duo both sides show, so at once). Never on a sealed card.
+    /// The quiet buttons under the main one: "Send {first name} a card" and "Share this card" (plan 11.1), once the
+    /// reader has turned the card over (on the open Duo both sides show, so at once). Never on a sealed card; the
+    /// corner's share stays.
     var secondaries: [CardTableMenuItem] {
         if let sending { return sending == .gone ? goneButtons : [] }
-        guard step == .out, !content.sealed, turnedOnce || fold.isSpread, let sendBack else { return [] }
-        return [sendBack]
+        guard step == .out, !content.sealed, turnedOnce || fold.isSpread else { return [] }
+        var items: [CardTableMenuItem] = []
+        if let sendBack { items.append(sendBack) }
+        if offersShare {
+            items.append(CardTableMenuItem(title: "Share this card", identifier: "cardTableShareQuiet") { [weak self] in
+                self?.isSharing = true
+            })
+        }
+        return items
     }
 
     // MARK: Sealing (plan Part 2)
@@ -140,6 +149,9 @@ extension CardTableModel {
     /// What VoiceOver reads for what's on the table.
     var spokenLabel: String {
         if let sending { return sendingSpoken(sending) }
+        if content.isLetter {
+            return step == .out ? "The letter from \(content.firstName). Opening it." : "A letter from \(content.firstName)"
+        }
         return switch step {
         case .front, .back, .flap, .pulling:
             "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")"

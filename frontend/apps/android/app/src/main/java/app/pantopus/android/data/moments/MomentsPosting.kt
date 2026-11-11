@@ -77,7 +77,9 @@ sealed interface MomentPostingOutcome {
  * so its location was checked while it was fresh; its time starts when the upload finishes.
  *
  * Each upload leaves a small note beside its file until it is in, so one the app was closed on is picked up at the
- * next launch for the same account ([resume]). Sign-out drops every upload, file and note ([clearAccount]).
+ * next launch for the same account ([resume]). Each also has a job with Android's WorkManager ([MomentUploadWorker]),
+ * so it finishes after the app is swiped away too ([finishInBackground], REVIEW B7). Sign-out drops every upload, file,
+ * note and job ([clearAccount]).
  */
 @Singleton
 class MomentsPosting
@@ -92,6 +94,9 @@ class MomentsPosting
         private val media = ConcurrentHashMap<String, MomentMediaFile>()
         private val prepared = ConcurrentHashMap<String, Prepared>()
         private val resuming = AtomicBoolean(false)
+
+        /** Uploads the server refused for good (too long, unreadable, ended): a background job doesn't try them again. */
+        private val refused = ConcurrentHashMap.newKeySet<String>()
 
         private val _posts = MutableStateFlow<List<MomentPosting>>(emptyList())
 
@@ -117,6 +122,7 @@ class MomentsPosting
                     MomentPosting(moment.id, moment.kind, latitude, longitude, author = moment.author)
             }
             run(moment.id)
+            MomentUploadWorker.schedule(context, moment.id)
         }
 
         /** A text card has nothing to upload: it's live the moment it's posted. */
@@ -128,13 +134,16 @@ class MomentsPosting
         /** "Try again" on a Moment that couldn't post. */
         fun retry(momentId: String) {
             if (media[momentId] == null) return
+            refused.remove(momentId)
             update(momentId) { it.copy(stage = MomentPosting.Stage.PREPARING, progress = 0f, message = null) }
             run(momentId)
+            MomentUploadWorker.schedule(context, momentId)
         }
 
         /** Gives up on a Moment that couldn't post: the server's copy (still uploading, so nobody saw it) goes too. */
         fun discard(momentId: String) {
             jobs.remove(momentId)?.cancel()
+            MomentUploadWorker.cancel(context, momentId)
             forget(momentId)
             _posts.update { list -> list.filterNot { it.momentId == momentId } }
             scope.launch { repository.delete(momentId) }
@@ -177,8 +186,10 @@ class MomentsPosting
         fun clearAccount() {
             jobs.values.forEach { it.cancel() }
             jobs.clear()
+            MomentUploadWorker.cancelAll(context)
             media.clear()
             prepared.clear()
+            refused.clear()
             _posts.value = emptyList()
             MomentMedia.clear(context)
         }
@@ -194,7 +205,92 @@ class MomentsPosting
                     MomentPosting(note.momentId, note.kind, note.latitude, note.longitude, author = author)
             }
             run(note.momentId)
+            MomentUploadWorker.schedule(context, note.momentId)
         }
+
+        /** What a background job found when it saw an upload through (REVIEW B7). */
+        enum class BackgroundUpload { DONE, TRY_LATER, GAVE_UP }
+
+        /**
+         * The background job's side of an upload (REVIEW B7): it waits for the upload this process is doing, or, when
+         * Android started the app for the job after it was closed, picks the upload up from its note as [resume] does, and
+         * waits for it to end. An upload that failed earlier in this run of the app goes once more.
+         */
+        suspend fun finishInBackground(
+            momentId: String,
+            userId: String,
+        ): BackgroundUpload {
+            if (jobs[momentId]?.isActive != true) {
+                if (media.containsKey(momentId)) {
+                    if (momentId in refused) return BackgroundUpload.GAVE_UP
+                    retry(momentId)
+                } else {
+                    pickUp(momentId, userId)?.let { return it }
+                }
+            }
+            // "Try again" replaces the job: follow the newest one until the upload is over.
+            var waits = 0
+            var following = true
+            while (following) {
+                val job = jobs[momentId]
+                following =
+                    when {
+                        job != null -> {
+                            job.join()
+                            val newest = jobs[momentId]
+                            newest != null && newest !== job
+                        }
+                        // Between the note being read and the upload starting.
+                        media.containsKey(momentId) && stageOf(momentId) == MomentPosting.Stage.PREPARING && waits++ < PICKUP_WAITS -> {
+                            delay(PICKUP_POLL_MS)
+                            true
+                        }
+                        else -> false
+                    }
+            }
+            return when {
+                stageOf(momentId) != MomentPosting.Stage.FAILED -> BackgroundUpload.DONE
+                momentId in refused -> BackgroundUpload.GAVE_UP
+                else -> BackgroundUpload.TRY_LATER
+            }
+        }
+
+        /**
+         * A job with no upload in this process: [momentId]'s note, if it is still [userId]'s and its Moment still waits
+         * for the file, goes back up (null: wait for it); otherwise the answer is final.
+         */
+        private suspend fun pickUp(
+            momentId: String,
+            userId: String,
+        ): BackgroundUpload? {
+            val note = readNotes().firstOrNull { it.momentId == momentId } ?: return BackgroundUpload.DONE
+            if (note.userId != userId) return BackgroundUpload.GAVE_UP
+            val file = File(note.path)
+            val server =
+                when (val mine = repository.mine()) {
+                    is NetworkResult.Success -> mine.data.firstOrNull { it.id == momentId }
+                    // No answer about it: try again once the job runs again.
+                    is NetworkResult.Failure -> return BackgroundUpload.TRY_LATER
+                }
+            return when {
+                !file.exists() -> {
+                    dropNote(note, deleteFile = false)
+                    if (server?.state == UPLOADING) repository.delete(momentId)
+                    BackgroundUpload.GAVE_UP
+                }
+                // It got in, ended or was deleted meanwhile.
+                server?.state != UPLOADING -> {
+                    dropNote(note, deleteFile = true)
+                    BackgroundUpload.DONE
+                }
+                else -> {
+                    restore(note, file, server?.author)
+                    null
+                }
+            }
+        }
+
+        private fun stageOf(momentId: String): MomentPosting.Stage? = _posts.value.firstOrNull { it.momentId == momentId }?.stage
 
         private fun run(momentId: String) {
             jobs[momentId]?.cancel()
@@ -250,16 +346,28 @@ class MomentsPosting
                         return
                     }
                     is NetworkResult.Failure -> {
-                        val error = result.error
                         attempt++
-                        if (!error.isRetryable() || attempt >= MAX_ATTEMPTS) {
-                            fail(momentId, error.postingMessage())
-                            return
-                        }
+                        if (gaveUp(momentId, result.error, attempt)) return
                         delay(BACKOFF_MS * (1L shl (attempt - 1)))
                     }
                 }
             }
+        }
+
+        /**
+         * After a refusal for good (too long, unreadable, ended) or the last try, the posting ring says what went wrong:
+         * true when the upload gave up.
+         */
+        private fun gaveUp(
+            momentId: String,
+            error: NetworkError,
+            attempt: Int,
+        ): Boolean {
+            val lasting = !error.isRetryable()
+            if (!lasting && attempt < MAX_ATTEMPTS) return false
+            if (lasting) refused += momentId
+            fail(momentId, error.postingMessage())
+            return true
         }
 
         /** The file is in: live now, or the picture check runs first (a few seconds), or a review holds it. */
@@ -306,6 +414,7 @@ class MomentsPosting
 
         /** The upload is over, one way or another: its files and its note leave the phone. */
         private fun forget(momentId: String) {
+            refused.remove(momentId)
             media.remove(momentId)?.let { runCatching { it.file.delete() } }
             prepared.remove(momentId)?.let { parts ->
                 runCatching { (listOfNotNull(parts.file, parts.poster) + parts.frames).forEach { it.delete() } }
@@ -419,6 +528,8 @@ class MomentsPosting
             const val CHECK_POLL_MS = 2_000L
             const val CHECK_WAIT_MS = 30_000L
             const val RING_WAIT_MS = 4_000L
+            const val PICKUP_POLL_MS = 500L
+            const val PICKUP_WAITS = 20
         }
     }
 

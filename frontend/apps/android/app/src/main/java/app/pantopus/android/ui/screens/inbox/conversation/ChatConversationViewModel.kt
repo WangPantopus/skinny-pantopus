@@ -3344,6 +3344,13 @@ class ChatConversationViewModel
         }
 
         /**
+         * Whether the change log can catch the window up. A Moment ending, being deleted or a block changes no message,
+         * so the log never brings it: while a held quote still reads as running, the window is read again instead and
+         * each message takes the server's `moment` (Moments contract "Chat"; as iPhone's #3871).
+         */
+        private fun changeLogCatchesUp(): Boolean = contextMessageId == null && messages.none { it.moment?.ended == false }
+
+        /**
          * Re-read every loaded page after reconnect. New-message-only backfill cannot repair a missed edit,
          * reaction or deletion, and a fixed newest-page window can leave a gap after a busy disconnection.
          * Apply once at the end so the reader keeps the same timeline and scroll anchor during recovery.
@@ -3353,9 +3360,10 @@ class ChatConversationViewModel
             val context = historyContext()
             val oldest = messages.minWithOrNull(messageOrder)
             changedDuringCatchUp.clear()
+            val viaChangeLog = changeLogCatchesUp()
             catchUpJob =
                 viewModelScope.launch {
-                    if (contextMessageId == null && recoverChanges(context)) return@launch
+                    if (viaChangeLog && recoverChanges(context)) return@launch
                     var before: String? = null
                     val authoritative = LinkedHashMap<String, ChatMessageDto>()
                     var firstPage: ChatMessagesResponse? = null
@@ -4337,6 +4345,9 @@ class ChatConversationViewModel
                                             },
                                         thumbUrl = moment.thumbUrl.takeIf { !moment.ended },
                                         ended = moment.ended,
+                                        kind = moment.kind,
+                                        background = moment.background.takeIf { !moment.ended },
+                                        excerpt = moment.excerpt?.trim()?.takeIf { it.isNotEmpty() && !moment.ended },
                                     )
                                 },
                             reactions = reactions,
