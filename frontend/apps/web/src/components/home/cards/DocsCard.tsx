@@ -264,6 +264,7 @@ export default function DocsCard({
         <div className="bg-app-surface rounded-xl border border-app-border p-8 text-center">
           <div className="mb-2"><FolderOpen className="w-8 h-8 mx-auto text-app-text-muted" /></div>
           <p className="text-sm text-app-text-secondary">No documents uploaded yet</p>
+          <p className="text-xs text-app-text-muted mt-1">Documents added in the Pantopus app on your phone show up here</p>
         </div>
       )}
     </div>
