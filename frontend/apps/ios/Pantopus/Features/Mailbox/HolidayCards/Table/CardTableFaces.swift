@@ -220,6 +220,8 @@ struct CardTableBack: View, Equatable {
     let year: Int
     /// The card's number: each word's small shift and turn come from it, so the writing looks the same every time.
     let number: Int?
+    /// The sender's own signature (plan 8.2), drawn after FROM in place of the typed first name.
+    var signature: CardSignature?
     /// Set by the writing step, which writes the note in its own text view on top.
     var drawsNote = true
     var grainOpacity = 1.0
@@ -253,7 +255,8 @@ struct CardTableBack: View, Equatable {
         context.stroke(rules, with: .color(MailPaper.tableRule), lineWidth: 1)
     }
 
-    /// "FROM" and the name beside it in the pen, on one baseline, in a box at 97u.
+    /// "FROM" and the name beside it in the pen, on one baseline, in a box at 97u; or their own signature after it, its
+    /// line on the same baseline (plan 8.2).
     private func drawFrom(in context: GraphicsContext, u: CGFloat) {
         let labelFont = CardTableSerif.font(size: 2.3 * u)
         let penFont = CardTableType.pen(6.4 * u)
@@ -265,6 +268,11 @@ struct CardTableBack: View, Equatable {
         let label = Text("FROM").font(Font(labelFont)).tracking(tracking).foregroundColor(MailPaper.tableFromLabel)
         context.drawText(label, x: 8 * u, baseline: baseline)
         let labelWidth = context.resolve(label).measure(in: CGSize(width: 100 * u, height: 20 * u)).width
+        if let signature = CardTableSignature.drawable(signature) {
+            let box = CardTableSignature.box(nameX: 8 * u + labelWidth + 2 * u, baseline: baseline, u: u)
+            CardTableSignature.draw(signature, in: context, box: box)
+            return
+        }
         var pen = context
         pen.blendMode = .multiply
         pen.drawText(
@@ -285,7 +293,8 @@ struct CardTableBack: View, Equatable {
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.paperGrain === rhs.paperGrain && lhs.paper == rhs.paper && lhs.note == rhs.note && lhs.fromName == rhs.fromName
-            && lhs.year == rhs.year && lhs.number == rhs.number && lhs.drawsNote == rhs.drawsNote
+            && lhs.year == rhs.year && lhs.number == rhs.number && lhs.signature == rhs.signature
+            && lhs.drawsNote == rhs.drawsNote
             && lhs.grainOpacity == rhs.grainOpacity
     }
 }

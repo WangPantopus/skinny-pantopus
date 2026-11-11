@@ -303,6 +303,8 @@ struct HolidayCardBack<Note: View>: View {
     let paper: String?
     let fromName: String
     let year: Int
+    /// The sender's signature beside FROM (plan 8.2), in place of the typed name; on the card table's back only.
+    var signature: CardSignature?
     @ViewBuilder let note: (_ cardWidth: CGFloat) -> Note
 
     var body: some View {
@@ -316,6 +318,7 @@ struct HolidayCardBack<Note: View>: View {
                     fromName: HolidayCardWords.firstName(fromName),
                     year: year,
                     number: nil,
+                    signature: signature,
                     drawsNote: false,
                     // Off the table the grain is lighter (multiply 25%), so the back reads bright cream (plan 1.9).
                     grainOpacity: 0.25
