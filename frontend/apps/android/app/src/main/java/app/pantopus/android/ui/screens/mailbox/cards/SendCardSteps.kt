@@ -89,6 +89,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.StampBalance
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardMood
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardRack
 import app.pantopus.android.ui.screens.mailbox.components.MailKind
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
@@ -782,6 +783,9 @@ internal fun WriteStep(
     /** The card's own photo (memories plan step 4); "Add a photo" shows when [photos] can be added to this card. */
     photo: CardPhotoDraft? = null,
     photos: CardPhotoCalls? = null,
+    /** The card's voice greeting (memories plan step 7); "Record a greeting" shows when [voices] can be added. */
+    voice: CardVoiceDraft? = null,
+    voices: CardVoiceCalls? = null,
 ) {
     var showBack by rememberSaveable { mutableStateOf(true) }
     var signing by rememberSaveable { mutableStateOf(false) }
@@ -859,6 +863,15 @@ internal fun WriteStep(
             )
         }
         if (photos != null) PhotoUnderTheNote(photo, fromName, photos) { focusManager.clearFocus() }
+        if (voices != null) {
+            VoiceUnderTheNote(
+                voice = voice,
+                forFirst = (to as? CardRecipient.Person)?.firstName ?: "you",
+                fromFirst = fromName.trim().substringBefore(' '),
+                gift = CardMood.of(design.number, design.id) == CardMood.Reverence,
+                calls = voices,
+            ) { focusManager.clearFocus() }
+        }
         if (canSign) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2),
@@ -904,10 +917,10 @@ internal fun WriteStep(
                 focusManager.clearFocus()
                 onNext()
             },
-            enabled = message.isNotBlank() && photo?.ready != false,
+            enabled = message.isNotBlank() && photo?.ready != false && voice?.ready != false,
             modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardSealIt"),
         )
-        val waits = sealWaits(message, photo)
+        val waits = sealWaits(message, photo, voice)
         if (waits != null) {
             Text(
                 waits,

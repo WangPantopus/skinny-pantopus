@@ -7,8 +7,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -289,49 +292,94 @@ internal fun TableMedia(
     g: TableGeometry,
     reduceMotion: Boolean,
 ) {
-    val photo = card.photo ?: return
     if (!card.hasMedia || g.mediaRoom <= 0f) return
     val shown = state.cardOutForOrder && state.cardBackShows && !state.enlarged
     val seen by animateFloatAsState(if (shown) 1f else 0f, tween(if (reduceMotion) 0 else 450), label = "cardMedia")
     if (seen <= 0f) return
     val density = LocalDensity.current
-    // A portrait print lies narrower than a landscape one, so either fits the room.
-    val printK = 0.88f / photo.ratio + 0.2f
-    val width = min(g.cardWidth * 0.47f, g.mediaRoom * 1.1f / printK)
-    val left = g.cardX + g.cardWidth * 0.02f
-    val top = g.cardTop + g.cardHeight - g.mediaRoom * 0.16f
-    CardPrint(
-        photo = photo,
-        datedOn = card.mailedOn.takeIf { state.mood == CardMood.Nostalgia },
-        fromFirst = card.fromFirst,
-        tilt = -3f,
-        modifier =
-            Modifier
-                .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
-                .width(with(density) { width.toDp() })
-                .graphicsLayer {
-                    alpha = seen
-                    translationY = (1f - seen) * width * 0.05f
-                }.testTag("cardTablePrint"),
-    )
+    val fade =
+        Modifier.graphicsLayer {
+            alpha = seen
+            translationY = (1f - seen) * g.mediaRoom * 0.05f
+        }
+    card.photo?.let { photo ->
+        // A portrait print lies narrower than a landscape one, so either fits the room.
+        val printK = 0.88f / photo.ratio + 0.2f
+        val width = min(g.cardWidth * 0.47f, g.mediaRoom * 1.1f / printK)
+        val left = g.cardX + g.cardWidth * 0.02f
+        val top = g.cardTop + g.cardHeight - g.mediaRoom * 0.16f
+        CardPrint(
+            photo = photo,
+            datedOn = card.mailedOn.takeIf { state.mood == CardMood.Nostalgia },
+            fromFirst = card.fromFirst,
+            tilt = -3f,
+            modifier =
+                Modifier
+                    .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
+                    .width(with(density) { width.toDp() })
+                    .then(fade)
+                    .testTag("cardTablePrint"),
+        )
+    }
+    card.voice?.let { voice ->
+        // As the web lays it: at the right under the card (in the middle when there's no photo).
+        val width = min(g.cardWidth * 0.45f, (g.mediaRoom * 1.02f - 30.4f * g.density) / 0.62f)
+        val left = if (card.photo != null) g.cardX + g.cardWidth * 0.98f - width else g.cardX + (g.cardWidth - width) / 2f
+        val top = g.cardTop + g.cardHeight - g.mediaRoom * 0.08f
+        CardGreeting(
+            voice = voice,
+            forFirst = card.to?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() } ?: "you",
+            fromFirst = card.fromFirst,
+            gift = state.mood == CardMood.Reverence,
+            tilt = 3f,
+            active = shown,
+            modifier =
+                Modifier
+                    .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
+                    .width(with(density) { width.toDp() })
+                    .then(fade)
+                    .testTag("cardTableGreeting"),
+        )
+    }
 }
 
 /**
- * A card's own photo under its back where the sender looks at it (Look it over, Sent): their own, so never covered, with
- * the orange date on a nostalgia card.
+ * A card's own photo and voice greeting under its back where the sender looks at them (Look it over, Sent): theirs, so
+ * the photo is never covered; the orange date on a nostalgia card; the cassette (a gift tag for Christmas with Jesus
+ * Christ) labelled for [forFirst], pressed to play.
  */
 @Composable
 internal fun LetterCardPrint(
     card: MailLetterCard,
     fromFirst: String,
+    forFirst: String,
     modifier: Modifier = Modifier,
 ) {
-    val photo = card.photo ?: return
-    CardPrint(
-        photo = photo,
-        datedOn = card.mailedOn.takeIf { CardMood.of(card.number, card.design) == CardMood.Nostalgia },
-        fromFirst = fromFirst,
-        tilt = -3f,
-        modifier = modifier.fillMaxWidth(0.55f).testTag("cardLetterPrint"),
-    )
+    if (card.photo == null && card.voice == null) return
+    val mood = CardMood.of(card.number, card.design)
+    Row(
+        modifier = modifier.fillMaxWidth().testTag("cardLetterMedia"),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        card.photo?.let { photo ->
+            CardPrint(
+                photo = photo,
+                datedOn = card.mailedOn.takeIf { mood == CardMood.Nostalgia },
+                fromFirst = fromFirst,
+                tilt = -3f,
+                modifier = Modifier.weight(0.55f).testTag("cardLetterPrint"),
+            )
+        }
+        card.voice?.let { voice ->
+            CardGreeting(
+                voice = voice,
+                forFirst = forFirst,
+                fromFirst = fromFirst,
+                gift = mood == CardMood.Reverence,
+                modifier = Modifier.weight(0.45f).padding(top = 12.dp),
+            )
+        }
+        if (card.photo == null || card.voice == null) Spacer(Modifier.weight(0.45f))
+    }
 }
