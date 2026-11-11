@@ -301,6 +301,9 @@ struct PlaceLaunchView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(1)
+                        // On an iPhone 17 the longest row is a few points too wide and read "Next pick…":
+                        // both sides shrink a little before either is cut.
+                        .minimumScaleFactor(0.85)
                     Spacer(minLength: 8)
                     HStack(spacing: 6) {
                         Circle().fill(reading.tone).frame(width: 6, height: 6)
@@ -308,6 +311,7 @@ struct PlaceLaunchView: View {
                             .font(.system(size: 13.5))
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.9)
                     }
                     // The reading wins the width; the short label yields first.
                     .layoutPriority(1)
