@@ -488,8 +488,14 @@ final class HolidayCardFlowViewModel {
 
     /// The photo the card carries: one person's card only (a list goes without), and only while the server takes one.
     var mediaPick: HolidayCardMediaPick {
-        guard recipient?.entries == nil, cards?.takesPhoto == true else { return .none }
+        guard recipient?.entries == nil, cards?.takesPhoto == true || cards?.takesVoice == true else { return .none }
         return attachments.pick
+    }
+
+    /// Who a greeting is for, on its label ("For Maya"): the person, or "you" for an address or a link.
+    var greetingFor: String {
+        if case let .person(_, name) = recipient { return name }
+        return "you"
     }
 
     /// "Seal and send", from "Look it over" (or from step 4 when the look

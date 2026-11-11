@@ -21,7 +21,7 @@ struct CardTableMediaLayer: View {
     /// How much room the layout keeps under the card for the print: none without one, on a letter, beside a wide
     /// card, or on the open Duo's pages.
     static func room(for content: CardTableContent, screen: CGSize, strip: CGFloat, fold: CardTableFold) -> CGFloat {
-        guard content.photo != nil, !content.isLetter, !fold.isSpread else { return 0 }
+        guard content.photo != nil || content.voice != nil, !content.isLetter, !fold.isSpread else { return 0 }
         let width = screen.width - strip
         guard !isWide(width: width) else { return 0 }
         return min(160, max(110, (screen.height * 0.16).rounded()))
@@ -51,6 +51,21 @@ struct CardTableMediaLayer: View {
                 .position(x: frame.midX, y: frame.minY + frame.width * printK(photo) / 2)
                 .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: frame.width * 0.05)))
                 .accessibilityIdentifier("cardTablePrint")
+            }
+            if shown, let voice = model.content.voice, let from = model.content.mediaFrom {
+                let frame = greetingFrame()
+                CardGreetingButton(
+                    source: from.source(voice.fileId),
+                    durationMs: voice.durationMs,
+                    forName: model.content.toName,
+                    fromName: model.content.fromName,
+                    gift: CardTableMood(number: model.content.number) == .reverence,
+                    tilt: 3
+                )
+                .frame(width: frame.width)
+                .fixedSize(horizontal: false, vertical: true)
+                .position(x: frame.midX, y: frame.minY + frame.height / 2)
+                .transition(reduceMotion ? .identity : .opacity.combined(with: .offset(y: frame.width * 0.05)))
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.45), value: shown)
@@ -90,6 +105,35 @@ struct CardTableMediaLayer: View {
         let room = Self.room(for: model.content, screen: layout.screen, strip: layout.screen.width - layout.width, fold: model.fold)
         let width = min(layout.cardWidth * 0.47, room * 1.1 / k)
         return CGRect(x: layout.cardX + layout.cardWidth * 0.02, y: cardBottom - room * 0.16, width: width, height: width * k)
+    }
+
+    /// Where the greeting lies: right of the print under a phone's card (alone, centred), right of a wide card, or on
+    /// the open Duo's picture page.
+    private func greetingFrame() -> CGRect {
+        // A cassette and its pill: about 0.62 of its width tall plus the pill; a gift tag about 0.53.
+        let tall: (CGFloat) -> CGFloat = { width in width * 0.62 + 30 }
+        if model.fold.isSpread, let pages = model.fold.pages(screen: layout.screen, bottomRoom: model.pagesBottomRoom(layout)) {
+            let page = pages.pictureFrame
+            let width = min(page.width * 0.38, 170)
+            return CGRect(x: page.minX + page.width * 0.05, y: page.minY + page.height * 0.05, width: width, height: tall(width))
+        }
+        let cardBottom = layout.cardTop + layout.cardHeight
+        if Self.isWide(width: layout.width) {
+            let width = min(224, layout.cardX - 24)
+            return CGRect(
+                x: layout.cardX + layout.cardWidth - 16,
+                y: layout.cardTop + layout.cardHeight * 0.58,
+                width: width,
+                height: tall(width)
+            )
+        }
+        let room = Self.room(for: model.content, screen: layout.screen, strip: layout.screen.width - layout.width, fold: model.fold)
+        let width = min(layout.cardWidth * 0.45, max(80, (room * 1.02 - 30) / 0.62))
+        let top = cardBottom - room * 0.08
+        guard model.content.photo != nil else {
+            return CGRect(x: layout.cardX + (layout.cardWidth - width) / 2, y: top, width: width, height: tall(width))
+        }
+        return CGRect(x: layout.cardX + layout.cardWidth * 0.98 - width, y: top, width: width, height: tall(width))
     }
 
     /// The day it was mailed ("NOV 10" on the postmark), as a date for the print's orange numbers.
