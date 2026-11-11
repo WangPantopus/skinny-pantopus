@@ -66,7 +66,8 @@ export default function BriefingNotice({ accountId }: { accountId: string }) {
         <p>Morning: {preferences.daily_briefing_enabled ? `On at ${preferences.daily_briefing_time_local}` : 'Off'}<br />
           Evening: {preferences.evening_briefing_enabled ? `On at ${preferences.evening_briefing_time_local}` : 'Off'}</p>
         <p>Times follow your briefing location’s time zone. We only notify you when there’s something useful.</p>
-        <p>Change the times or turn either briefing off in Settings → Notifications. Your device also needs to allow Pantopus notifications.</p>
+        {/* Briefings are pushed to phones only: the server registers iOS and Android tokens, never a browser. */}
+        <p>Change the times or turn either briefing off in Settings → Notifications. Briefings arrive as notifications from the Pantopus app on your phone.</p>
         {error && <p role="alert" className="text-app-error">{error}</p>}
       </div>
     </ModalShell>
