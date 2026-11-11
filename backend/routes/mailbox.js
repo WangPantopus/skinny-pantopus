@@ -1943,6 +1943,32 @@ async function personRefusal(senderId, toUserId) {
 
 const refuseCard = (status, error, code) => ({ refusal: { status, body: { error, code } } });
 
+// A card's own photo or voice greeting goes only on a card sent with a bought stamp (founder, 2026-11-11; migration
+// 20261111090000_card_media_bought_stamp). Without one left, the apps open the stamp books, as for no stamps at all.
+const MEDIA_NEEDS_STAMP_WORDS = 'Photos and voice greetings go on cards sent with a bought stamp.';
+const cardMediaNeedsStamp = () => refuseCard(402, MEDIA_NEEDS_STAMP_WORDS, 'CARD_MEDIA_NEEDS_STAMP');
+
+/** The bought stamps a person has left now: none while stamp books aren't on for them. Throws when unreadable. */
+async function boughtStampsLeft(senderId) {
+  if (!mailStamps.enabled(senderId)) return 0;
+  const { paid_remaining: paid } = await mailStamps.balance(senderId);
+  return Math.max(0, Number(paid) || 0);
+}
+
+/**
+ * What GET /cards tells the apps about the bought stamp a photo or voice needs (media.bought_stamp): how many they have
+ * left (null when it can't be read just now) and what the apps do: 'ready' (add them; the card spends a bought stamp),
+ * 'buy' (none left: the line, and tapping opens the stamp books) or 'unavailable' (none left and none can be bought:
+ * stamp books aren't on for them, or sales are over; photo and voice aren't offered).
+ */
+async function boughtStampControls(senderId, postage, stamps) {
+  if (!postage) return { required: true, remaining: 0, state: 'unavailable' };
+  const remaining = stamps ? Math.max(0, Number(stamps.paid_remaining) || 0) : null;
+  if (remaining && remaining > 0) return { required: true, remaining, state: 'ready' };
+  const onSale = await mailStamps.salesOpen(senderId).catch(() => false);
+  return { required: true, remaining, state: onSale ? 'buy' : 'unavailable' };
+}
+
 /**
  * Every check a card goes through before it's sent, in this order: the design, the note, a personal account, the season,
  * one card a day, the person (or the address) and when it can arrive by their clock, and the email limits. POST /cards
@@ -1986,6 +2012,9 @@ async function checkCardSender(senderId, body, now) {
     if (mediaErr.refusal) return refuse(mediaErr.status, mediaErr.message, mediaErr.code);
     throw mediaErr;
   }
+  // ...and they go only on a card sent with a bought stamp, so one must be left (Look it over and every send ask again).
+  // The database decides once more as it stores the card, so a send racing another can't spend a free one on it.
+  if (media.media && (await boughtStampsLeft(senderId)) < 1) return cardMediaNeedsStamp();
 
   // A person sends Christmas cards; a business account doesn't.
   const { data: sender, error: senderError } = await supabaseAdmin.from('User')
@@ -2071,6 +2100,7 @@ router.get('/cards', verifyToken, async (req, res) => {
     const postage = mailStamps.enabled(senderId);
     // The stamps left, for the Mailbox row's line; the cards still load when the balance can't be read.
     const stamps = postage ? await mailStamps.balance(senderId).catch(() => null) : null;
+    const controls = cardMedia.controls();
     return res.json({
       open: holidayCards.seasonOpen(timeZone, now),
       holiday: holidayCards.SEASON.holiday,
@@ -2081,8 +2111,10 @@ router.get('/cards', verifyToken, async (req, res) => {
       // server doesn't keep one, so the apps set the typed name.
       ...(cardTableOn() ? { signature: { w: holidayCards.SIGNATURE_BOX.w, h: holidayCards.SIGNATURE_BOX.h,
         max_bytes: holidayCards.SIGNATURE_MAX_BYTES } } : {}),
-      // Which of a card's own photo and voice can be added now (launch key holiday_card_memories), and their limits.
-      media: cardMedia.controls(),
+      // Which of a card's own photo and voice can be added now (launch key holiday_card_memories), their limits, and,
+      // while they can, the bought stamp they need (founder, 2026-11-11).
+      media: controls.photo.usable
+        ? { ...controls, bought_stamp: await boughtStampControls(senderId, postage, stamps) } : controls,
       designs: holidayCards.DESIGNS,
       collections: holidayCards.COLLECTIONS,
       arrivals: { person: arrivals(false), email: arrivals(true) },
@@ -2272,6 +2304,9 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
   const postage = mailStamps.enabled(senderId);
   if (requestId) card.request = { id: requestId, digest, ...(postage ? { settled_at: now.toISOString() } : {}) };
   if (postage) card.postage_v1 = true;
+  // A card with its own photo or voice spends a bought stamp, or isn't stored (mail_stamp_card_accounting). The mark is
+  // the server's alone: GET routes never show it (services/mailPiece).
+  if (media || mediaFiles.length) card.media_stamp = 'paid';
   const byLink = Boolean(card.by_link);
   // A link's token comes from the row's id, so the id is known before the insert.
   const linkRowId = byLink ? (rowId || crypto.randomUUID()) : null;
@@ -2340,6 +2375,7 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
     } else {
       await removeCardObject(objectResult.objectId);
       if (!found) await untie();
+      if (insertError?.message === 'CARD_MEDIA_NEEDS_STAMP') return cardMediaNeedsStamp().refusal;
       if (['STAMPS_REQUIRED', 'STAMP_DAILY_LIMIT'].includes(insertError?.message)) {
         const needsStamp = insertError.message === 'STAMPS_REQUIRED';
         return { status: needsStamp ? 402 : 429, body: {
