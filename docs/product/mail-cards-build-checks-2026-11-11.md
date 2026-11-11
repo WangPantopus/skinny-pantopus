@@ -233,24 +233,24 @@ refused; the microphone is asked for only on the tap and refusing it still lets 
 Reduce Motion; screen-reader labels; a lost send answer retried gives one card; drafts survive a relaunch and clear at
 sign-out.
 
-### Storage (checked and fixed with the founder, November 11)
+### Storage and go-live (November 11)
 
-The production uploads bucket is private, but its CloudFront distribution served every key to anyone with the link. At
-the founder's word a bucket-policy statement now stops CloudFront serving `holiday-card-media/` and `ai-chat/`: tested
-before (200) and after (403), other files still served, the backend's own reads unaffected. `chat/` and
-`ownership-evidence/` are still reachable by link (outside this build; founder said not now).
+Production uploads live in Supabase Storage, in the public bucket `pantopus-uploads` (the AWS uploads bucket is not what
+production writes to; a CloudFront rule added there for `holiday-card-media/` and `ai-chat/` is harmless but moot). So
+card photos and voice got their own private Supabase bucket, `pantopus-card-media` (#3931, `CARD_MEDIA_BUCKET`). With
+that released, `holiday_card_memories` went on for the production backend and worker, on Vercel and in both app release
+environments. Checked on production: the containers carry the key and the private bucket, the web bundle carries the
+key, and the server answers photo and voice usable, a bought stamp required. `chat/` and `ownership-evidence/` in the
+public bucket are still reachable by link (founder: not now).
 
 ### Not verified
 
 - Real phones: a real App Store or Google Play stamp purchase, taps felt, sound heard, real microphones.
 - Screen readers speaking aloud.
-- Hosted S3 under real load, and production with the key on (it stays off until the founder switches it on).
+- Real use in production at scale (the key is on; no real cards with photos were sent during the build).
 
-### Founder's switch-on list
+### Founder's steps
 
-1. (Done November 11) the bucket check and the CloudFront block for card media.
-2. Someone with an admin account works the web Reports queue promptly once photos are on (Apple 1.2).
-3. Switch `holiday_card_memories` on: backend and worker `LAUNCH_FEATURES`, web `NEXT_PUBLIC_LAUNCH_FEATURES`, and the
-   app builds' `PANTOPUS_LAUNCH_FEATURES`. Stamp books must be on for photo and voice to be offered (bought stamps only).
-4. New iOS and Android store builds from master (they carry waves 1-4 and Part 11).
-
+1. (Done November 11) the private bucket and switching the key on everywhere.
+2. Someone with an admin account works the web Reports page promptly (Apple 1.2).
+3. New iOS and Android store builds from master (they carry waves 1-4 and Part 11).
