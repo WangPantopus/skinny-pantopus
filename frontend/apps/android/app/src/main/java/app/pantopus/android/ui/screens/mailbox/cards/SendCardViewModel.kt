@@ -694,12 +694,15 @@ class SendCardViewModel
                     look is CardLook.Shown ->
                         it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
                     look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
+                    // A photo or greeting with no bought stamp left: the stamp books open over step 4 (below).
+                    look is CardLook.Failed && look.error.wantsStamps(cards.value) -> it.copy(previewing = false)
                     look is CardLook.Failed ->
                         it.copy(previewing = false, sealError = sendMessage(look.error, doing = "show how your card will look"))
                     else -> it
                 }
             }
             if ((look as? CardLook.Failed)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
+            if ((look as? CardLook.Failed)?.error?.wantsStamps(cards.value) == true) _stampsNeeded.tryEmit(Unit)
         }
 
         /**
@@ -731,8 +734,9 @@ class SendCardViewModel
                         toLink = to is CardRecipient.Link,
                     )
                 if (result is NetworkResult.Failure && wentEarlier(result.error)) return@launch
-                // The stamps ran out meanwhile (another device sent a card): the stamp books open; the card stays as it is.
-                if ((result as? NetworkResult.Failure)?.error?.serverCode() == STAMPS_REQUIRED) {
+                // The stamps ran out meanwhile (another device sent a card), or a photo or greeting has no bought stamp left:
+                // the stamp books open; the card, its photo and its greeting stay as they are.
+                if ((result as? NetworkResult.Failure)?.error?.wantsStamps(cards.value) == true) {
                     _form.update { it.copy(sending = false) }
                     _stampsNeeded.tryEmit(Unit)
                     return@launch
@@ -1053,6 +1057,14 @@ private fun NetworkError.serverCode(): String? {
         } ?: return null
     return runCatching { JSONObject(body).optString("code") }.getOrNull()?.takeIf { it.isNotBlank() }
 }
+
+/**
+ * A refusal the stamp books answer (stamp books on for this person): 402 `STAMPS_REQUIRED` (none left), or 402
+ * `CARD_MEDIA_NEEDS_STAMP` (a photo or voice greeting goes only with a bought stamp, and none is left). With stamp books
+ * off, the server's sentence shows instead.
+ */
+private fun NetworkError.wantsStamps(cards: HolidayCardsResponse?): Boolean =
+    cards?.postageEnabled == true && serverCode().let { it == "STAMPS_REQUIRED" || it == "CARD_MEDIA_NEEDS_STAMP" }
 
 /** `needed` and `available` from a list's 402 `STAMPS_REQUIRED` answer. */
 private fun NetworkError.stampCounts(): Pair<Int?, Int?> {

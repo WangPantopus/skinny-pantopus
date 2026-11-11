@@ -786,6 +786,8 @@ internal fun WriteStep(
     /** The card's voice greeting (memories plan step 7); "Record a greeting" shows when [voices] can be added. */
     voice: CardVoiceDraft? = null,
     voices: CardVoiceCalls? = null,
+    /** No bought stamp left (`media.bought_stamp` "buy"): both buttons open the stamp books, with the line under them. */
+    buyStamp: (() -> Unit)? = null,
 ) {
     var showBack by rememberSaveable { mutableStateOf(true) }
     var signing by rememberSaveable { mutableStateOf(false) }
@@ -862,16 +864,7 @@ internal fun WriteStep(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("sendCardCount"),
             )
         }
-        if (photos != null) PhotoUnderTheNote(photo, fromName, photos) { focusManager.clearFocus() }
-        if (voices != null) {
-            VoiceUnderTheNote(
-                voice = voice,
-                forFirst = (to as? CardRecipient.Person)?.firstName ?: "you",
-                fromFirst = fromName.trim().substringBefore(' '),
-                gift = CardMood.of(design.number, design.id) == CardMood.Reverence,
-                calls = voices,
-            ) { focusManager.clearFocus() }
-        }
+        MediaUnderTheNote(design, to, fromName, photo, photos, voice, voices, buyStamp) { focusManager.clearFocus() }
         if (canSign) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2),
@@ -931,6 +924,34 @@ internal fun WriteStep(
             )
         }
     }
+}
+
+/** The photo and the voice greeting under the note; with [buyStamp], both open the stamp books and the line says why. */
+@Composable
+private fun MediaUnderTheNote(
+    design: HolidayCardDesign,
+    to: CardRecipient?,
+    fromName: String,
+    photo: CardPhotoDraft?,
+    photos: CardPhotoCalls?,
+    voice: CardVoiceDraft?,
+    voices: CardVoiceCalls?,
+    buyStamp: (() -> Unit)?,
+    beforeAdd: () -> Unit,
+) {
+    if (photos != null) PhotoUnderTheNote(photo, fromName, photos, buyStamp, beforeAdd)
+    if (voices != null) {
+        VoiceUnderTheNote(
+            voice = voice,
+            forFirst = (to as? CardRecipient.Person)?.firstName ?: "you",
+            fromFirst = fromName.trim().substringBefore(' '),
+            gift = CardMood.of(design.number, design.id) == CardMood.Reverence,
+            calls = voices,
+            buyStamp = buyStamp,
+            beforeRecord = beforeAdd,
+        )
+    }
+    if (buyStamp != null && (photos != null || voices != null)) MediaNeedsBoughtStamp()
 }
 
 // ── Step 4: seal it for the day ──────────────────────────────

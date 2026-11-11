@@ -114,7 +114,16 @@ fun SendCardScreen(
             viewModel.stampsNeeded.collect {
                 showsStampBooks = true
                 stamps.refresh()
+                // A photo or greeting refused for a bought stamp: Write on the back then says why (`media.bought_stamp`).
+                viewModel.reload()
             }
+        }
+        // Photo and voice waiting for a bought stamp ("buy"): once one is bought (or found with Check for your stamps),
+        // the cards are read again, and Write on the back offers them without leaving the step.
+        val paid = stamps.balance?.paidRemaining ?: 0
+        val toBuy = season?.media?.boughtStamp?.toBuy == true
+        LaunchedEffect(paid, toBuy) {
+            if (toBuy && paid > 0) viewModel.reload()
         }
     }
     // Above the keyboard: the steps and what's pinned under them (step 1's button on with a list).
@@ -356,6 +365,7 @@ private fun Steps(
                         photos = photoCalls(cards, form, viewModel),
                         voice = form.voice,
                         voices = voiceCalls(cards, form, viewModel),
+                        buyStamp = onGetStamps.takeIf { cards.postageEnabled && cards.media?.boughtStamp?.toBuy == true },
                     )
                 }
             }
@@ -824,15 +834,16 @@ internal fun HolidayCardsResponse.designOf(id: String?): HolidayCardDesign? = de
 
 /**
  * What Write on the back can do with a photo (memories plan step 4): only with the key on, when `GET /cards` says photos
- * can be added now, and for one card to one person (a list goes without: one photo, one card). A photo already added
- * stays shown so it can be removed.
+ * can be added now, and for one card to one person (a list goes without: one photo, one card). None when no bought
+ * stamp is left and none can be bought (`media.bought_stamp` "unavailable"). A photo already added stays shown so it can
+ * be removed.
  */
 private fun photoCalls(
     cards: HolidayCardsResponse,
     form: SendCardForm,
     viewModel: SendCardViewModel,
 ): CardPhotoCalls? {
-    val canAdd = LaunchFeatures.holidayCardMemories && cards.media?.photo?.usable == true && form.to !is CardRecipient.Several
+    val canAdd = LaunchFeatures.holidayCardMemories && cards.media?.photo?.usable == true && cards.mediaCanGo(form)
     if (!canAdd && form.photo == null) return null
     val drafts = viewModel.drafts
     return CardPhotoCalls(drafts::addPhoto, drafts::retryPhoto, drafts::removePhoto, drafts::onPhotoAlt)
@@ -840,15 +851,20 @@ private fun photoCalls(
 
 /**
  * What Write on the back can do with a voice greeting (memories plan step 7): only with the key on, when `GET /cards`
- * says greetings can be added now, and for one card to one person. One already added stays so it can be removed.
+ * says greetings can be added now, for one card to one person, and not when no bought stamp can be had. One already
+ * added stays so it can be removed.
  */
 private fun voiceCalls(
     cards: HolidayCardsResponse,
     form: SendCardForm,
     viewModel: SendCardViewModel,
 ): CardVoiceCalls? {
-    val canAdd = LaunchFeatures.holidayCardMemories && cards.media?.voice?.usable == true && form.to !is CardRecipient.Several
+    val canAdd = LaunchFeatures.holidayCardMemories && cards.media?.voice?.usable == true && cards.mediaCanGo(form)
     if (!canAdd && form.voice == null) return null
     val drafts = viewModel.drafts
     return CardVoiceCalls(drafts::addVoice, drafts::retryVoice, drafts::removeVoice)
 }
+
+/** One card to one person, while a bought stamp is left or can be bought (not `media.bought_stamp` "unavailable"). */
+private fun HolidayCardsResponse.mediaCanGo(form: SendCardForm): Boolean =
+    form.to !is CardRecipient.Several && media?.boughtStamp?.unavailable != true
