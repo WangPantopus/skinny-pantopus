@@ -4838,7 +4838,8 @@ router.post('/:id/claim/:claimId/approve', verifyToken, validate(residencyApprov
       try {
         await require('../services/notificationService').createNotification({
           userId: result.target_id, type: 'residency_approved', title: 'Welcome home!',
-          body: `You've been verified at ${result.home_label || 'your home'}.`, icon: '🏡',
+          // A household's approval is household access, not address proof: Place still asks this person to verify.
+          body: result.home_label ? `You're now in the household at ${result.home_label}.` : "You're now in the household.", icon: '🏡',
           link: `/homes/${req.params.id}/dashboard`,
           metadata: { home_id: req.params.id, claim_id: req.params.claimId },
         });
