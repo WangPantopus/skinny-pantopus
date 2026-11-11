@@ -20,10 +20,13 @@ import app.pantopus.android.data.moments.MomentsPosting
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.data.plans.PlanLocationResolver
+import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
 import app.pantopus.android.ui.screens.compose.pulse.MediaLocationAccess
 import app.pantopus.android.ui.screens.compose.pulse.readPickedPlace
 import app.pantopus.android.ui.screens.moments.MomentsRoutes
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
+import app.pantopus.android.ui.screens.moments.components.takenLabel
+import app.pantopus.android.ui.screens.moments.components.takenLongAgo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +51,20 @@ data class ComposePin(
     val capture: Boolean,
 )
 
+/**
+ * A venue picked in the place picker (the Pulse composer's, around the pin): the Moment pins at it under its name.
+ * Only its id goes to the server, which finds it again near the pin (contract v3.3 `venue_id`).
+ */
+data class MomentVenue(
+    val placeId: String,
+    val name: String,
+    val latitude: Double,
+    val longitude: Double,
+)
+
+/** How far from the pin the place picker's venues may be when the server doesn't say (contract v3.3). */
+internal const val DEFAULT_PICK_WITHIN_M = 1500
+
 /** What the chip says at home (board P4: the Post sheet's "Your home"). */
 internal const val HOME_CHIP = "Your home"
 
@@ -71,7 +88,7 @@ data class MomentsComposeUiState(
     val showArea: Boolean = false,
     val caption: String = "",
     val posting: Boolean = false,
-    /** A problem to show on the sheet or the camera ("This was taken more than a day ago."). */
+    /** A problem to show on the sheet or the camera ("Couldn't open that file."). */
     val notice: String? = null,
     /** Done: close posting (the Moment is up, or uploading in the background). */
     val done: Boolean = false,
@@ -79,6 +96,12 @@ data class MomentsComposeUiState(
     val askMediaLocation: Boolean = false,
     /** The place's name picked on the Post sheet (a key from [MomentPlacePreviewDto.places]); null: the automatic one. */
     val placeKey: String? = null,
+    /** When the album photo or video was taken (any time); null for the camera, a text card, or a file that never said. */
+    val takenAt: Instant? = null,
+    /** A venue picked in the place picker; null: the name from [placeKey] or the automatic one. */
+    val venue: MomentVenue? = null,
+    /** The place picker (search and the places around the pin) is open. */
+    val findingPlace: Boolean = false,
 ) {
     val kind: String
         get() =
@@ -104,8 +127,25 @@ data class MomentsComposeUiState(
     val pickedPlace: MomentPlaceChoiceDto? get() = placeKey?.let { key -> placeChoices.firstOrNull { it.key == key } }
 
     /** A name picked stays only while the Moment pins at the same spot (Retake and Edit keep it, a new spot drops it). */
-    fun placeKeyFor(newPin: ComposePin?): String? =
-        placeKey?.takeIf { pin != null && newPin != null && pin.latitude == newPin.latitude && pin.longitude == newPin.longitude }
+    fun placeKeyFor(newPin: ComposePin?): String? = placeKey?.takeIf { samePin(newPin) }
+
+    /** A venue picked stays only while the Moment pins at the same spot, like [placeKeyFor]. */
+    fun venueFor(newPin: ComposePin?): MomentVenue? = venue?.takeIf { samePin(newPin) }
+
+    private fun samePin(newPin: ComposePin?): Boolean =
+        pin != null && newPin != null && pin.latitude == newPin.latitude && pin.longitude == newPin.longitude
+
+    /** An exact pin can name a venue from the place picker (around the photo's spot, or where you are). */
+    val canFindPlace: Boolean get() = !showArea && pin != null
+
+    /** The venue that names the Moment: only for an exact pin. */
+    val pickedVenue: MomentVenue? get() = venue?.takeIf { !showArea }
+
+    /** How far from the pin the picker's places may be (the server's number, else 1500 m). */
+    val pickWithinM: Int get() = place?.pickWithinM ?: DEFAULT_PICK_WITHIN_M
+
+    /** "Taken Oct 3" on the Post sheet: an album photo or video taken more than a day ago (everyone will see it). */
+    val takenLine: String? get() = takenAt?.takeIf { media != null && takenLongAgo(it) }?.let { takenLabel(it) }
 }
 
 /**
@@ -202,7 +242,10 @@ class MomentsComposeViewModel
         }
 
         /** The in-app camera took a photo or recorded a video here: it pins at the fresh fix. */
-        fun captured(media: MomentMediaFile) {
+        fun captured(
+            media: MomentMediaFile,
+            takenAt: Instant? = null,
+        ) {
             val current = _state.value
             _state.update {
                 it.copy(
@@ -210,6 +253,8 @@ class MomentsComposeViewModel
                     pin = current.here,
                     place = current.herePlace,
                     placeKey = it.placeKeyFor(current.here),
+                    venue = it.venueFor(current.here),
+                    takenAt = takenAt,
                     step = ComposeStep.Review,
                     caption = "",
                     notice = null,
@@ -222,7 +267,8 @@ class MomentsComposeViewModel
 
         /**
          * A photo or video from the library (the document picker, as the Pulse composer picks: the system photo picker
-         * hides where things were taken), taken in the last 24 hours: it pins where it was taken when the file says.
+         * hides where things were taken), from any time (founder, 2026-11-11): it pins where it was taken when the file
+         * says, and one taken more than a day ago says when on the Moment.
          */
         fun picked(uri: Uri) {
             viewModelScope.launch {
@@ -241,26 +287,13 @@ class MomentsComposeViewModel
                 }
                 val place = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }
                 val capture = MomentMedia.capture(context, uri, copy, video, place.captured, place.mayBeHidden)
+                // A file that never says when it was taken posts like one taken now (no date on the Moment).
                 val takenAt = capture.takenAt
-                if (takenAt == null || Instant.now().toEpochMilli() - takenAt.toEpochMilli() > MomentMedia.LIBRARY_WINDOW_MS) {
-                    copy.delete()
-                    _state.update {
-                        it.copy(
-                            notice =
-                                if (takenAt == null) {
-                                    "We can't tell when that was taken. Choose a photo or video from the last 24 hours."
-                                } else {
-                                    TOO_OLD
-                                },
-                        )
-                    }
-                    return@launch
-                }
                 val media = if (video) MomentMediaFile.Video(copy, duration, recordedHere = false) else MomentMediaFile.Photo(copy)
                 val lat = capture.latitude
                 val lng = capture.longitude
                 if (lat != null && lng != null) {
-                    val pin = ComposePin(lat, lng, takenAt, capture = true)
+                    val pin = ComposePin(lat, lng, takenAt ?: Instant.now(), capture = true)
                     val place = (repository.placePreview(lat, lng) as? NetworkResult.Success)?.data
                     _state.update {
                         it.copy(
@@ -268,6 +301,8 @@ class MomentsComposeViewModel
                             pin = pin,
                             place = place,
                             placeKey = it.placeKeyFor(pin),
+                            venue = it.venueFor(pin),
+                            takenAt = takenAt,
                             step = ComposeStep.Review,
                             caption = "",
                             notice = null,
@@ -275,7 +310,7 @@ class MomentsComposeViewModel
                     }
                 } else {
                     // Android hides where it was taken, or the file never said: it pins where you are, as the sheet shows.
-                    captured(media)
+                    captured(media, takenAt)
                     // A photo whose location Android hides can still pin where it was taken once the app may read it.
                     if (capture.hidden && !video && MediaLocationAccess.mayAsk(context)) {
                         pickedSource = uri to mime
@@ -301,7 +336,15 @@ class MomentsComposeViewModel
                 val takenAt = located.capturedAt ?: current.pin?.at ?: return@launch
                 val place = (repository.placePreview(located.latitude, located.longitude) as? NetworkResult.Success)?.data
                 val pin = ComposePin(located.latitude, located.longitude, takenAt, capture = true)
-                _state.update { it.copy(pin = pin, place = place, placeKey = it.placeKeyFor(pin)) }
+                _state.update {
+                    it.copy(
+                        pin = pin,
+                        place = place,
+                        placeKey = it.placeKeyFor(pin),
+                        venue = it.venueFor(pin),
+                        takenAt = it.takenAt ?: located.capturedAt,
+                    )
+                }
             }
         }
 
@@ -322,6 +365,8 @@ class MomentsComposeViewModel
                     pin = it.here,
                     place = it.herePlace,
                     placeKey = it.placeKeyFor(it.here),
+                    venue = it.venueFor(it.here),
+                    takenAt = null,
                     step = ComposeStep.Review,
                     notice = null,
                 )
@@ -347,8 +392,25 @@ class MomentsComposeViewModel
         /** A name from the place list: the first (automatic) one goes back to no pick. */
         fun pickPlace(key: String) =
             _state.update { current ->
-                current.copy(placeKey = if (key == current.placeChoices.firstOrNull()?.key) null else key)
+                current.copy(placeKey = if (key == current.placeChoices.firstOrNull()?.key) null else key, venue = null)
             }
+
+        /** The place row's "Find a place": search and the places around the pin (the Pulse composer's picker). */
+        fun findPlace(open: Boolean) = _state.update { it.copy(findingPlace = open && it.canFindPlace) }
+
+        /**
+         * A place picked in the picker: a venue near the pin names the Moment and moves its pin there (the server finds
+         * it again by its id). The town or an address isn't a venue: those rows aren't offered (see the sheet).
+         */
+        fun pickVenue(tag: PostPlaceTag) {
+            val id = tag.placeId?.takeIf { it.startsWith("osm:") } ?: return
+            _state.update {
+                it.copy(venue = MomentVenue(id, tag.name, tag.latitude, tag.longitude), placeKey = null, findingPlace = false)
+            }
+        }
+
+        /** "Remove location" in the picker: back to the name the spot gets by itself. */
+        fun clearVenue() = _state.update { it.copy(venue = null, findingPlace = false) }
 
         fun setCaption(caption: String) = _state.update { it.copy(caption = caption.take(MAX_CAPTION)) }
 
@@ -396,7 +458,10 @@ class MomentsComposeViewModel
                             ),
                         clientRequestId = requestId,
                         // Only a name picked for an exact pin away from home goes: the server works the list out again.
-                        placeKey = current.pickedPlace?.key?.takeIf { current.canPickPlace },
+                        placeKey = current.pickedPlace?.key?.takeIf { current.canPickPlace && current.pickedVenue == null },
+                        // An album item pinned where you are says when it was taken (a capture pin carries its own).
+                        takenAt = current.takenAt?.toString()?.takeIf { current.media != null && !usable.capture },
+                        venueId = current.pickedVenue?.placeId,
                     )
                 when (val result = repository.create(body)) {
                     is NetworkResult.Success -> {
@@ -438,7 +503,7 @@ class MomentsComposeViewModel
                     } else {
                         _state.update { it.copy(notice = NO_FIX) }
                     }
-                "CAPTURE_TOO_OLD" -> _state.update { it.copy(notice = TOO_OLD) }
+                "PLACE_NOT_NEARBY" -> _state.update { it.copy(venue = null, notice = FAR_PLACE) }
                 "MOMENTS_DAILY_LIMIT" -> _state.update { it.copy(notice = "You've posted 20 Moments today. Try again tomorrow.") }
                 "MEDIA_TOO_LONG" -> _state.update { it.copy(notice = "Videos can be up to 30 seconds.") }
                 else -> _state.update { it.copy(notice = error.message) }
@@ -463,6 +528,6 @@ class MomentsComposeViewModel
             const val DURATION_SLACK_MS = 500L
             const val NOTICE_MS = 4_000L
             const val NO_FIX = "We couldn't find where you are. Try again in a moment."
-            const val TOO_OLD = "That was taken more than a day ago. Moments are for the last 24 hours."
+            const val FAR_PLACE = "That place is too far from this Moment's pin. Pick one nearby."
         }
     }

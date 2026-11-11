@@ -107,8 +107,11 @@ fun MomentsPostSheet(
     onPost: () -> Unit,
     modifier: Modifier = Modifier,
     onPlace: (String) -> Unit = {},
+    onFindPlace: () -> Unit = {},
 ) {
-    val atHome = state.place?.atHome == true
+    // A venue picked in the place picker moves the pin off the home (the server checks its point again).
+    val venue = state.pickedVenue
+    val atHome = state.place?.atHome == true && venue == null
     val density = LocalDensity.current
     val keyboardPx = WindowInsets.ime.getBottom(density)
     val belowPx = WindowInsets.navigationBars.getBottom(density)
@@ -136,16 +139,51 @@ fun MomentsPostSheet(
                 )
             }
             state.pin?.let { pin ->
-                PinMap(latitude = pin.latitude, longitude = pin.longitude, area = state.showArea, avatarUrl = avatarUrl)
+                PinMap(
+                    latitude = venue?.latitude ?: pin.latitude,
+                    longitude = venue?.longitude ?: pin.longitude,
+                    area = state.showArea,
+                    avatarUrl = avatarUrl,
+                )
             }
             // The place others will read: the venue's name (or the one picked), or the town with "Show the area instead".
             val label =
                 when {
                     atHome && !state.showArea -> "Your home"
                     state.showArea -> state.place?.areaLabel ?: state.place?.placeLabel ?: "Your area"
-                    else -> state.pickedPlace?.label ?: state.place?.placeLabel ?: "Where you are"
+                    else -> venue?.name ?: state.pickedPlace?.label ?: state.place?.placeLabel ?: "Where you are"
                 }
-            PlaceRow(state = state, label = label, atHome = atHome, onPlace = onPlace)
+            PlaceRow(state = state, label = label, atHome = atHome, onPlace = onPlace, onFindPlace = onFindPlace)
+            // An album photo or video from more than a day ago: everyone sees when it was taken.
+            state.takenLine?.let { taken ->
+                Row(
+                    modifier =
+                        Modifier
+                            .padding(start = Spacing.s5, end = Spacing.s5, top = 2.dp)
+                            .fillMaxWidth()
+                            .testTag("moments.post.taken")
+                            .clearAndSetSemantics { contentDescription = "$taken. Everyone will see this date." },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Calendar,
+                        contentDescription = null,
+                        size = 18.dp,
+                        strokeWidth = 2.2f,
+                        tint = PantopusColors.appTextSecondary,
+                    )
+                    Text(text = taken, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                    Text(
+                        text = "Everyone will see this date",
+                        fontSize = 13.sp,
+                        color = PantopusColors.appTextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
             if (atHome && !state.showArea) {
                 Row(
                     modifier =
@@ -354,9 +392,10 @@ fun MomentsPostSheet(
 }
 
 /**
- * The place's name and "Exact spot" or "Area". When more than one name fits an exact pin away from home (contract v3,
- * place-preview's `places`) the row is a button with a small chevron: a short list of the places right there, then the
- * street, then the town, the automatic one first. The one picked is what everyone reads on the ring and in the viewer.
+ * The place's name and "Exact spot" or "Area". For an exact pin the row is a button with a small chevron: when more
+ * than one name fits the spot (contract v3, place-preview's `places`, the automatic one first) a short list of them,
+ * then "Find another place"; otherwise, and at home, it opens the place picker right away (the Pulse composer's, around
+ * the pin: the coffee shop, the school or the stadium the photo was taken in). The one picked is what everyone reads.
  */
 @Composable
 private fun PlaceRow(
@@ -364,17 +403,20 @@ private fun PlaceRow(
     label: String,
     atHome: Boolean,
     onPlace: (String) -> Unit,
+    onFindPlace: () -> Unit,
 ) {
-    val pickable = state.canPickPlace
+    val tappable = state.canFindPlace
+    val quickPicks = state.canPickPlace
     var choosing by remember { mutableStateOf(false) }
-    if (!pickable) choosing = false
+    if (!tappable) choosing = false
     Box(
         modifier =
-            if (pickable) {
+            if (tappable) {
                 Modifier
                     .fillMaxWidth()
-                    .clickable(role = Role.Button, onClickLabel = "Change the name") { choosing = true }
-                    .testTag("moments.post.placeChange")
+                    .clickable(role = Role.Button, onClickLabel = "Change the place") {
+                        if (quickPicks) choosing = true else onFindPlace()
+                    }.testTag("moments.post.placeChange")
                     .semantics { contentDescription = "Place: $label, exact spot" }
             } else {
                 Modifier.fillMaxWidth()
@@ -407,7 +449,7 @@ private fun PlaceRow(
                 modifier = Modifier.weight(1f),
             )
             Text(text = if (state.showArea) "Area" else "Exact spot", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
-            if (pickable) {
+            if (tappable) {
                 PantopusIconImage(
                     icon = PantopusIcon.ChevronDown,
                     contentDescription = null,
@@ -417,8 +459,9 @@ private fun PlaceRow(
                 )
             }
         }
-        if (pickable) {
-            val selectedKey = state.pickedPlace?.key ?: state.placeChoices.firstOrNull()?.key
+        if (quickPicks) {
+            val venue = state.pickedVenue
+            val selectedKey = if (venue != null) null else state.pickedPlace?.key ?: state.placeChoices.firstOrNull()?.key
             DropdownMenu(
                 expanded = choosing,
                 onDismissRequest = { choosing = false },
@@ -431,43 +474,82 @@ private fun PlaceRow(
                     color = PantopusColors.appTextSecondary,
                     modifier = Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s2).semantics { heading() },
                 )
-                state.placeChoices.forEachIndexed { index, choice ->
-                    val on = choice.key == selectedKey
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = choice.label,
-                                fontSize = 15.sp,
-                                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                                color = PantopusColors.appText,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        onClick = {
-                            choosing = false
-                            onPlace(choice.key)
-                        },
-                        leadingIcon = {
-                            RadioButton(
-                                selected = on,
-                                onClick = null,
-                                colors = RadioButtonDefaults.colors(selectedColor = PantopusColors.primary600),
-                            )
-                        },
-                        modifier =
-                            Modifier
-                                .widthIn(min = 240.dp, max = 320.dp)
-                                .testTag("moments.post.place.$index")
-                                .semantics {
-                                    role = Role.RadioButton
-                                    selected = on
-                                },
-                    )
+                // The venue picked in the place picker leads the list while it names the Moment.
+                venue?.let { picked ->
+                    PlaceChoiceItem(label = picked.name, on = true, tag = "moments.post.place.venue") { choosing = false }
                 }
+                state.placeChoices.forEachIndexed { index, choice ->
+                    PlaceChoiceItem(label = choice.label, on = choice.key == selectedKey, tag = "moments.post.place.$index") {
+                        choosing = false
+                        onPlace(choice.key)
+                    }
+                }
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "Find another place",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PantopusColors.primary600,
+                        )
+                    },
+                    onClick = {
+                        choosing = false
+                        onFindPlace()
+                    },
+                    leadingIcon = {
+                        PantopusIconImage(
+                            icon = PantopusIcon.Search,
+                            contentDescription = null,
+                            size = 20.dp,
+                            strokeWidth = 2.2f,
+                            tint = PantopusColors.primary600,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    },
+                    modifier = Modifier.widthIn(min = 240.dp, max = 320.dp).testTag("moments.post.findPlace"),
+                )
             }
         }
     }
+}
+
+/** One name in the place list, with its radio button. */
+@Composable
+private fun PlaceChoiceItem(
+    label: String,
+    on: Boolean,
+    tag: String,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = label,
+                fontSize = 15.sp,
+                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                color = PantopusColors.appText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        onClick = onClick,
+        leadingIcon = {
+            RadioButton(
+                selected = on,
+                onClick = null,
+                colors = RadioButtonDefaults.colors(selectedColor = PantopusColors.primary600),
+            )
+        },
+        modifier =
+            Modifier
+                .widthIn(min = 240.dp, max = 320.dp)
+                .testTag(tag)
+                .semantics {
+                    role = Role.RadioButton
+                    selected = on
+                },
+    )
 }
 
 @Composable
