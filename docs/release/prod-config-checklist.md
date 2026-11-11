@@ -875,9 +875,10 @@ Apple on the web and Android (which use the Services ID) were not affected.
 With the founder's OK the list became
 `app.pantopus.web,app.pantopus.ios,com.pantopus.app` at 23:44 UTC; the Auth
 service reloaded with it the same minute. Nothing else on the provider changed
-and no app update is needed. Not checked yet: a real Apple sign-in on the
-founder's iPhone after the change, and the staging project's list (it is not in
-the Chrome profile agents can reach).
+and no app update is needed. The founder then signed in with Continue with
+Apple on the iPhone at 00:01 UTC on November 11, and production's Auth log
+shows that login with provider `apple`. Not checked: the staging project's list
+(it is not in the Chrome profile agents can reach).
 
 So a changed bundle ID or setting can't go unseen again:
 
