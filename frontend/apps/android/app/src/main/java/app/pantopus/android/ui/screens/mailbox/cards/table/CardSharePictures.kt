@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
@@ -21,15 +22,19 @@ import androidx.compose.ui.graphics.toArgb
 import app.pantopus.android.ui.theme.PantopusColors
 import kotlin.math.min
 
-/** The sizes of a shared picture. */
+/** The sizes of a shared picture. [counted] is the size the server's share count knows it by (Story, Post or Link). */
 internal enum class ShareFormat(
     val key: String,
     val label: String,
     val width: Int,
     val height: Int,
+    val counted: String = key,
 ) {
     Story("story", "Story", 1080, 1920),
     Post("post", "Post", 1080, 1350),
+
+    /** The card lying open, picture and note side by side (plan 11.2); counted as a Post (no server change in Part 11). */
+    Open("open", "Open card", 1600, 1200, counted = "post"),
     Link("link", "Link preview", 1200, 630),
 }
 
@@ -50,10 +55,47 @@ internal class CardSharePictures(
     private val shadow = Paint(Paint.ANTI_ALIAS_FLAG)
     private val paints = EnvelopePaints()
 
-    /** A Story or Post picture; Link preview is kept on the website instead. */
+    /** A Story, Post or Open card picture; Link preview is kept on the website instead. */
     fun draw(
         format: ShareFormat,
         showNote: Boolean,
+    ): Bitmap =
+        picture(format) { canvas ->
+            when {
+                format == ShareFormat.Open -> openCard(canvas, showNote)
+                format == ShareFormat.Story && card.sealed -> storySealed(canvas)
+                format == ShareFormat.Story && showNote -> storyNote(canvas)
+                format == ShareFormat.Story -> storyCard(canvas)
+                card.sealed -> postSealed(canvas)
+                showNote -> postNote(canvas)
+                else -> postCard(canvas)
+            }
+        }
+
+    /**
+     * Share all (plan 11.3): Post-size pictures for a carousel, in this order: the shut envelope with its seal (no name, no
+     * address, no "do not open" mark), the card, and the note page only with [showNote] and a note to show. A sealed card
+     * is its sealed picture only.
+     */
+    fun drawSet(showNote: Boolean): List<Bitmap> {
+        if (card.sealed) return listOf(draw(ShareFormat.Post, showNote = false))
+
+        fun one(lay: (Canvas) -> Unit) =
+            picture(ShareFormat.Post) { canvas ->
+                lay(canvas)
+                slip(canvas, 139f, 612f, -1.2f, 262f, 46f, 12f, 12f)
+            }
+        return buildList {
+            add(one { shutEnvelope(it, 410f, 65f, 90f, -2.2f, 122f) })
+            add(one { cardFront(it, 400f, 70f, 92f, -2.2f) })
+            if (showNote && card.note.isNotBlank()) add(one { cardBack(it, 400f, 70f, 92f, 2.2f) })
+        }
+    }
+
+    /** One picture: the tinted cloth, what [lay] puts on it (in a space half the picture's size), then the room's light. */
+    private fun picture(
+        format: ShareFormat,
+        lay: (Canvas) -> Unit,
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(format.width, format.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -61,14 +103,7 @@ internal class CardSharePictures(
         val width = format.width / 2f
         val height = format.height / 2f
         drawTable(canvas, width, height)
-        when {
-            format == ShareFormat.Story && card.sealed -> storySealed(canvas)
-            format == ShareFormat.Story && showNote -> storyNote(canvas)
-            format == ShareFormat.Story -> storyCard(canvas)
-            card.sealed -> postSealed(canvas)
-            showNote -> postNote(canvas)
-            else -> postCard(canvas)
-        }
+        lay(canvas)
         drawRoom(canvas, width, height)
         return bitmap
     }
@@ -116,6 +151,63 @@ internal class CardSharePictures(
         shutEnvelope(canvas, w, (540f - w) / 2f, 62f, -2.2f, 122f)
         mark(canvas, 18f, 118f, 352f)
         slip(canvas, 139f, 606f, -1.2f, 262f, 46f, 12f, 12f)
+    }
+
+    /*
+     * Open card (plan 11.2; `share-layout`'s "Open card", as web and iPhone draw it), in a space 800 x 600 (1600 x 1200
+     * out): the card lying open, picture page left (x 50) and note page right (x 400), each 350 x 420 (700 x 840 out) from
+     * y 60, meeting at the fold (x 400), with the slip under the fold. With the note off, the right side is the open
+     * envelope and its lining (260 wide at x 445, its body from y 171). A sealed card is the shut envelope only.
+     */
+    private fun openCard(
+        canvas: Canvas,
+        showNote: Boolean,
+    ) {
+        if (card.sealed) {
+            shutEnvelope(canvas, 340f, 230f, 40f, -1.6f, 101f)
+            mark(canvas, 15f, 274f, 280f)
+            slip(canvas, 261f, 492f, -1.2f, 262f, 46f, 12f, 12f)
+            return
+        }
+        if (showNote) {
+            cardFront(canvas, 350f, 50f, 60f, 0f)
+            cardBack(canvas, 350f, 400f, 60f, 0f)
+            foldShade(canvas, 400f, 60f, 350f, 420f)
+        } else {
+            openEnvelope(canvas, 260f, 445f, 171f, 0f)
+            cardFront(canvas, 350f, 50f, 60f, 0f)
+        }
+        slip(canvas, 261f, 504f, -1.2f, 262f, 46f, 12f, 12f)
+    }
+
+    /** The crease where an open card folds: each page a little darker toward the fold (as on the open Duo), the right lighter. */
+    private fun foldShade(
+        canvas: Canvas,
+        foldX: Float,
+        top: Float,
+        pageWidth: Float,
+        pageHeight: Float,
+    ) {
+        for (side in listOf(-1f, 1f)) {
+            val strength = if (side < 0f) 0.25f else 0.25f * 0.8f
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            paint.shader =
+                LinearGradient(
+                    foldX,
+                    0f,
+                    foldX + side * pageWidth,
+                    0f,
+                    intArrayOf(
+                        Color.Black.copy(alpha = 0.42f * strength).toArgb(),
+                        Color.Black.copy(alpha = 0.08f * strength).toArgb(),
+                        Color.Black.copy(alpha = 0f).toArgb(),
+                    ),
+                    floatArrayOf(0f, 0.16f, 0.46f),
+                    Shader.TileMode.CLAMP,
+                )
+            val left = if (side < 0f) foldX - pageWidth else foldX
+            canvas.drawRect(left, top, left + pageWidth, top + pageHeight, paint)
+        }
     }
 
     private fun drawTable(
