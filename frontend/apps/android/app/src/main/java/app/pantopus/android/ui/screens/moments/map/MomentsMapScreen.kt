@@ -185,6 +185,8 @@ fun MomentsMapScreen(
         spot?.returnTo?.let { back -> scope.launch { camera.animateOrMove(CameraUpdateFactory.newCameraPosition(back), CLUSTER_MS) } }
         viewModel.closeSpot()
     }
+    // "Where is that?": the place under a Moment's name in the viewer brings the map in on that spot (the canvas moves).
+    val placeToShow by viewModel.placeToShow.collectAsStateWithLifecycle()
     val shown =
         remember(rings, spot) {
             val inSpot = spot?.let { s -> rings.filter { it.id in s.ringIds } } ?: rings
@@ -238,6 +240,11 @@ fun MomentsMapScreen(
             recenter = recenter,
             topPaddingPx = topPadding,
             bottomPaddingPx = bottomHeight,
+            placeToShow = placeToShow,
+            onPlaceShown = {
+                viewModel.closeSpot()
+                viewModel.placeShown()
+            },
             liveSpot = liveSpot,
             onLiveSpotShown = { moved ->
                 // The map moved off a crowded spot to your new ring: the strip shows the area again.
@@ -371,6 +378,8 @@ private fun MomentsMap(
     recenter: Int,
     topPaddingPx: Int,
     bottomPaddingPx: Int,
+    placeToShow: Pair<Double, Double>?,
+    onPlaceShown: () -> Unit,
     liveSpot: Pair<Double, Double>?,
     onLiveSpotShown: (moved: Boolean) -> Unit,
     onViewport: (Double, Double, Double, Double, Float) -> Unit,
@@ -452,6 +461,17 @@ private fun MomentsMap(
             reportViewport()
         }
         onLiveSpotShown(!inView)
+    }
+    // The place under a Moment's name, tapped in the viewer: once the map is back on screen and has opened where it
+    // was, it comes in on that spot, about a block across.
+    LaunchedEffect(placeToShow, googleMap) {
+        if (googleMap == null) return@LaunchedEffect
+        val (latitude, longitude) = placeToShow ?: return@LaunchedEffect
+        delay(VIEWPORT_SETTLE_MS)
+        camera.animateOrMove(CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), PLACE_ZOOM), RECENTER_MS)
+        onPlaceShown()
+        delay(VIEWPORT_SETTLE_MS)
+        reportViewport()
     }
     LaunchedEffect(camera) {
         snapshotFlow { if (mapLoaded) liveCamera ?: camera.position else null }
@@ -943,6 +963,7 @@ private const val VIEWPORT_SETTLE_MS = 350L
 private const val CAMERA_POLL_MS = 120L
 private const val CLUSTER_MS = 400
 private const val RECENTER_MS = 400
+private const val PLACE_ZOOM = 17f
 private const val ANIMATE_GRACE_MS = 400L
 private const val REFRESH_MS = 60_000L
 

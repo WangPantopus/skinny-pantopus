@@ -69,6 +69,25 @@ class MomentsRepository
         @Volatile
         var playback: MomentsPlayback? = null
 
+        private val _placeToShow = MutableStateFlow<Pair<Double, Double>?>(null)
+
+        /**
+         * A spot the viewer asked the map to show (the place under a Moment's name, tapped): latitude and longitude,
+         * until the map has moved there ([placeShown]).
+         */
+        val placeToShow: StateFlow<Pair<Double, Double>?> = _placeToShow.asStateFlow()
+
+        fun showPlace(
+            latitude: Double,
+            longitude: Double,
+        ) {
+            _placeToShow.value = latitude to longitude
+        }
+
+        fun placeShown() {
+            _placeToShow.value = null
+        }
+
         private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
 
         /** Something on the map changed (a Moment posted, deleted, a person muted or blocked): read it again. */
@@ -155,6 +174,14 @@ class MomentsRepository
             when (val result = safeApiCall { api.moment(id) }) {
                 is NetworkResult.Success -> NetworkResult.Success(result.data.moment)
                 is NetworkResult.Failure -> result
+            }
+
+        /** Several Moments in one read (the viewer's read-ahead); none when the read fails or the server is older. */
+        suspend fun moments(ids: List<String>): List<MomentDto> =
+            if (ids.isEmpty()) {
+                emptyList()
+            } else {
+                (safeApiCall { api.batch(ids.joinToString(",")) } as? NetworkResult.Success)?.data?.moments.orEmpty()
             }
 
         /** Records one view (the server counts each person once) and marks the Moment watched here at once. */

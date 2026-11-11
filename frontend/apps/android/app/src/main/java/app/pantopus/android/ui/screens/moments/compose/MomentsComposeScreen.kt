@@ -18,6 +18,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -128,13 +129,19 @@ fun MomentsComposeScreen(
             if (results.values.any { it }) viewModel.start() else viewModel.locationRefused()
         }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    // The document picker, as the Pulse composer picks: the system photo picker hides where a photo was taken, and a
-    // library Moment pins there. The 24-hour rule is checked on the picked file.
+    // Android's photo picker (founder, 2026-11-11): it opens on Photos with an Albums tab beside it (Favorites,
+    // Camera, Videos, Screenshots, Downloads and the person's own), where the document picker opened on "Recent" with
+    // the albums behind a menu. It needs no permission. A phone without it gets the document picker, as before.
+    // Up to ten can be picked together: each is its own Moment, with its own Post sheet in turn.
     val library =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            uri?.let(viewModel::picked)
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.PickMultipleVisualMedia(MOMENTS_PICK_LIMIT),
+        ) { uris ->
+            if (uris.isNotEmpty()) viewModel.picked(uris)
         }
-    val openLibrary = { library.launch(arrayOf("image/*", "video/*")) }
+    val openLibrary = {
+        library.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+    }
     val mediaLocation =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) viewModel.rereadPickedPlace()

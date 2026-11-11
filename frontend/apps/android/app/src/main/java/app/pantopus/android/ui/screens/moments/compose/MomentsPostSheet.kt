@@ -401,7 +401,13 @@ fun MomentsPostSheet(
         }
         Spacer(Modifier.height(14.dp))
         SheetPrimaryButton(
-            label = if (state.posting) "Posting…" else "Post · shows for ${if (state.hours == 1) "1 hour" else "${state.hours} hours"}",
+            label =
+                when {
+                    state.posting -> "Posting…"
+                    // Several picked together: which one this is. The hours are on the sheet's own row either way.
+                    state.pickedTogether > 1 -> "Post ${state.pickedAt} of ${state.pickedTogether}"
+                    else -> "Post · shows for ${if (state.hours == 1) "1 hour" else "${state.hours} hours"}"
+                },
             onClick = onPost,
             enabled = !state.posting && (state.pin != null || unplaced),
             modifier = Modifier.padding(horizontal = Spacing.s4).testTag("moments.post.submit"),

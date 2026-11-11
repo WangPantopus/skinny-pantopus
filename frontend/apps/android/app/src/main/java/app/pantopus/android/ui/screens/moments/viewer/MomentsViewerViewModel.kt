@@ -17,6 +17,7 @@ import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.ui.screens.moments.components.MomentImages
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,6 +35,16 @@ data class ViewerRing(
     val moments: List<MomentBriefDto>,
     /** Where it opens: its first new Moment, or its first. */
     val startAt: Int,
+)
+
+/** The person on one side of the one showing, for the page a sideways drag brings in. */
+data class ViewerPeek(
+    val ringIndex: Int,
+    val ring: ViewerRing,
+    val index: Int,
+    val brief: MomentBriefDto,
+    /** Their opening Moment when it was read ahead (its picture is in memory by then). */
+    val moment: MomentDto?,
 )
 
 /** A person muted from the viewer, for the note with Undo. */
@@ -167,6 +178,14 @@ class MomentsViewerViewModel
             _state.update { it.copy(finished = true) }
         }
 
+        /** The place under the name, tapped: the viewer closes and the map comes in on that spot. */
+        fun showPlace() {
+            val ring = _state.value.ring?.ring ?: return
+            if (ring.noLocation) return
+            repository.showPlace(ring.latitude, ring.longitude)
+            finish()
+        }
+
         /**
          * Reads the current Moment (signed links last 15 minutes, so a copy older than 10 is read again). A Moment whose
          * time is up never shows, whatever copy the phone holds: it says it ended and the viewer moves on.
@@ -213,24 +232,72 @@ class MomentsViewerViewModel
             if (hasEnded(brief.expiresAt) || hasEnded(_state.value.moment?.expiresAt)) showEnded(brief.id)
         }
 
-        /** Reads the next Moment ahead, with its picture (a video's poster), so it opens at once and without a blank. */
+        private var readingAhead: Job? = null
+
+        /** A Moment read a short while ago whose link is still good and whose time isn't up. */
+        private fun held(id: String): MomentDto? =
+            loaded[id]?.takeIf { System.currentTimeMillis() - it.second < LINK_REUSE_MS }?.first?.takeIf { !hasEnded(it.expiresAt) }
+
+        /**
+         * Reads ahead what a tap or a swipe can show next, nearest first: the next Moment, the one before, the first of
+         * the person after and of the person before, then the rest of this ring. One request reads them all; the nearest
+         * four get their pictures too (a video its poster), and the next one, when it's a video, is handed to the screen
+         * to make ready ([upNext]). So moving on never waits on the network.
+         */
         private fun prefetchNext() {
             val current = _state.value
             val ring = current.ring ?: return
-            val nextBrief =
+            val after =
                 ring.moments.getOrNull(current.momentIndex + 1)
                     ?: current.rings.getOrNull(current.ringIndex + 1)?.let { it.moments.getOrNull(it.startAt) }
-                    ?: return
-            if (loaded[nextBrief.id] != null || hasEnded(nextBrief.expiresAt)) return
-            viewModelScope.launch {
-                (repository.moment(nextBrief.id) as? NetworkResult.Success)?.data?.let { next ->
-                    loaded[nextBrief.id] = next to System.currentTimeMillis()
-                    when (next.kind) {
-                        "photo" -> next.mediaUrl?.let { MomentImages.prefetch(context, it, MomentImages.mediaKey(next.id)) }
-                        "video" -> next.posterUrl?.let { MomentImages.prefetch(context, it, MomentImages.posterKey(next.id)) }
+            val wanted =
+                (
+                    listOfNotNull(
+                        after,
+                        ring.moments.getOrNull(current.momentIndex - 1),
+                        current.rings.getOrNull(current.ringIndex + 1)?.let { it.moments.getOrNull(it.startAt) },
+                        current.rings.getOrNull(current.ringIndex - 1)?.let { it.moments.getOrNull(it.startAt) },
+                    ) + ring.moments.drop(current.momentIndex + 1)
+                ).filter { !hasEnded(it.expiresAt) }.map { it.id }.distinct().filter { it != current.brief?.id }.take(READ_AHEAD)
+            _upNext.value = after?.id?.let(::held)
+            if (wanted.isEmpty()) return
+            readingAhead?.cancel()
+            readingAhead =
+                viewModelScope.launch {
+                    val missing = wanted.filter { held(it) == null }
+                    val read = repository.moments(missing)
+                    val now = System.currentTimeMillis()
+                    read.forEach { loaded[it.id] = it to now }
+                    // A server from before the batch read (or a read that failed): the two nearest, one at a time.
+                    if (read.isEmpty()) {
+                        missing.take(SINGLE_READS_AHEAD).forEach { id ->
+                            (repository.moment(id) as? NetworkResult.Success)?.data?.let { loaded[id] = it to System.currentTimeMillis() }
+                        }
                     }
+                    wanted.mapNotNull(::held).take(PICTURES_AHEAD).forEach { next ->
+                        when (next.kind) {
+                            "photo" -> next.mediaUrl?.let { MomentImages.prefetch(context, it, MomentImages.mediaKey(next.id)) }
+                            "video" -> next.posterUrl?.let { MomentImages.prefetch(context, it, MomentImages.posterKey(next.id)) }
+                        }
+                    }
+                    if (_state.value.brief?.id == current.brief?.id) _upNext.value = after?.id?.let(::held)
                 }
-            }
+        }
+
+        private val _upNext = MutableStateFlow<MomentDto?>(null)
+
+        /** The Moment a tap shows next, once it has been read: the screen gets its video ready to play. */
+        val upNext: StateFlow<MomentDto?> = _upNext.asStateFlow()
+
+        /**
+         * The person a sideways drag brings in ([step] 1 after, -1 before): their ring, the Moment it opens on and,
+         * when it was read ahead, that Moment itself for its picture.
+         */
+        fun peek(step: Int): ViewerPeek? {
+            val current = _state.value
+            val ring = current.rings.getOrNull(current.ringIndex + step) ?: return null
+            val brief = ring.moments.getOrNull(ring.startAt) ?: return null
+            return ViewerPeek(current.ringIndex + step, ring, ring.startAt, brief, held(brief.id))
         }
 
         /** The Moment is on screen (its picture loaded or its video started): one view, once, never your own. */
@@ -421,6 +488,9 @@ class MomentsViewerViewModel
 
         private companion object {
             const val LINK_REUSE_MS = 10 * 60 * 1000L
+            const val READ_AHEAD = 24
+            const val PICTURES_AHEAD = 4
+            const val SINGLE_READS_AHEAD = 2
             const val MAX_REPLY = 1000
             const val LINGER_MS = 4_000L
         }
