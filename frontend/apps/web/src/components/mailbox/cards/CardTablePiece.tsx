@@ -171,8 +171,8 @@ export default function CardTablePiece({
   return (
     <CardTable
       card={card}
-      // Its photo opens through the reader's own route (memories contract section 4).
-      photoFrom={(fileId) => ({ piece: piece.id, fileId })}
+      // Its photo and greeting open through the reader's own route (memories contract section 4).
+      mediaFrom={(fileId) => ({ piece: piece.id, fileId })}
       note={piece.content || ''}
       fromName={from}
       toName={recipientName}
