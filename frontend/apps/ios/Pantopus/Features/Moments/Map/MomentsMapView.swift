@@ -176,7 +176,6 @@ struct MomentsMapView: View {
     /// The top row is this tall, and the strip this tall with its margin: the map keeps what it centers on
     /// between them, so rings don't open underneath either.
     private static let coveredTop = 52.0
-    private static let coveredBottom = 148.0
 
     /// The part of the map nothing covers, in the full-screen map's own points. Open (iPhone Duo), under the top row
     /// and above the bottom row; with a card beside the map, the clear part of the left half.
@@ -188,7 +187,7 @@ struct MomentsMapView: View {
             x: 0,
             y: geo.safeAreaInsets.top + Self.coveredTop,
             width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
-            height: max(geo.size.height - Self.coveredTop - Self.coveredBottom, 120)
+            height: max(geo.size.height - Self.coveredTop - coveredBottom, 120)
         )
     }
 
@@ -279,12 +278,13 @@ struct MomentsMapView: View {
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
         .onMapCameraChange(frequency: .onEnd, onSettled)
+        .watchesFingerOnMap(hidesBar: duo.pose == .phone) { viewModel.fingerOnMapAt = duo.pose.isOpen ? nil : Date() }
         // A tap on the map itself closes the card beside it (open sideways, board O2). A ring's own tap comes first.
         // Elsewhere the gesture is off, so phones' maps take touches as they always have.
         .simultaneousGesture(TapGesture().onEnded { closeCardOnMapTap() }, including: duo.pose.isWide ? .all : .subviews)
         // What the camera centers on lands between the top row and the strip; open, in the middle of the clear part.
         .safeAreaPadding(.top, duo.pose == .phone ? Self.coveredTop : openMapRect.minY)
-        .safeAreaPadding(.bottom, duo.pose == .phone ? Self.coveredBottom : openMapBottomPadding)
+        .safeAreaPadding(.bottom, duo.pose == .phone ? coveredBottom : openMapBottomPadding)
         .accessibilityIdentifier("moments.mapCanvas")
     }
 
