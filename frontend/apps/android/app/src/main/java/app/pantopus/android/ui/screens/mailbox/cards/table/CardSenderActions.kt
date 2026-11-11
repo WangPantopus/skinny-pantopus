@@ -83,6 +83,7 @@ class CardSenderActionsViewModel
 
 /** The report sheet and the "Block?" question, over the table. The card stays where it was. */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList") // The two sheets' open state and closes, the person, and the card a report shares.
 @Composable
 internal fun CardSenderSheets(
     userId: String,

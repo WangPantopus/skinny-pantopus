@@ -73,13 +73,7 @@ internal fun HolidayCardTablePage(
                 add(CardTableMenuItem("File in the Vault", "cardTableFile") { if (!busy) actions.onFile() })
             }
             add(CardTableMenuItem("Shred", "cardTableShred") { if (!busy) actions.onShred() })
-            if (person != null) {
-                // Wave 4 drawing 6: with card memories, "Report this card" and "Block {first name}".
-                val memories = LaunchFeatures.holidayCardMemories
-                val first = letter.fromName.trim().substringBefore(' ').removeSuffix(".")
-                add(CardTableMenuItem(if (memories) "Report this card" else "Report", "cardTableReport") { reporting = true })
-                add(CardTableMenuItem(if (memories && first.isNotEmpty()) "Block $first" else "Block", "cardTableBlock") { confirmBlock = true })
-            }
+            if (person != null) addAll(personItems(letter.fromName, onReport = { reporting = true }, onBlock = { confirmBlock = true }))
         }
     CardTableDialog(
         card = card.onTable(letter),
@@ -102,6 +96,21 @@ internal fun HolidayCardTablePage(
             cardId = letter.envelope.id.takeIf { LaunchFeatures.holidayCardMemories },
         )
     }
+}
+
+/** Report and Block for whoever sent it; with card memories (wave 4 drawing 6), "Report this card" and "Block {first name}". */
+private fun personItems(
+    fromName: String,
+    onReport: () -> Unit,
+    onBlock: () -> Unit,
+): List<CardTableMenuItem> {
+    val memories = LaunchFeatures.holidayCardMemories
+    val first = fromName.trim().substringBefore(' ').removeSuffix(".")
+    val block = if (memories && first.isNotEmpty()) "Block $first" else "Block"
+    return listOf(
+        CardTableMenuItem(if (memories) "Report this card" else "Report", "cardTableReport", onReport),
+        CardTableMenuItem(block, "cardTableBlock", onBlock),
+    )
 }
 
 /** "Send Hazel a card", when there's a person to send one to and a way to; null otherwise. */
