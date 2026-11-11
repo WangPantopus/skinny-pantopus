@@ -153,7 +153,9 @@ extension MomentsViewer {
                     .clipShape(RoundedRectangle(cornerRadius: Radii.xl3, style: .continuous))
                     .environment(\.colorScheme, systemScheme)
                     .padding(.horizontal, Spacing.s3)
-                    .padding(.top, Spacing.s3)
+                    // Below an old photo's "Taken" pill, which hangs about 27 pt under the header (as on the phone, the
+                    // pill stays in view above the list).
+                    .padding(.top, model.metaTaken == nil ? Spacing.s3 : 36)
                     .padding(.bottom, 23 + 48 + 12)
                     .transition(.opacity)
             } else {
