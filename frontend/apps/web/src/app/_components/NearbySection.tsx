@@ -65,12 +65,12 @@ export default function NearbySection() {
             <h2 id="nearby-title" className={styles.h2}>Get to know the life around you.</h2>
             <p className={styles.lede}>
               Pulse is the local conversation: questions, useful updates and nearby news, with no crime or
-              suspicious-person alerts. Neighborhood shows how many verified homes are around you, and fills in as
+              suspicious-person alerts. Place shows how many verified homes are around you, and fills in as
               neighbors join.
             </p>
           </div>
           <div className={styles.meter}>
-            <span className={styles.label} style={{ color: '#FFC867', fontSize: 11 }}>Neighborhood · ~1 km cells around you</span>
+            <span className={styles.label} style={{ color: '#FFC867', fontSize: 11 }}>~1 km cells around you</span>
             <div className={styles.meterCount}>
               <span className={styles.meterNumber}>{HOMES_FOR_CELLS[lit]}</span>
               <span style={{ fontSize: 15, color: '#C9D3E3' }}>verified homes nearby</span>
@@ -90,7 +90,7 @@ export default function NearbySection() {
             </div>
             <span style={{ fontSize: 14, color: '#C9D3E3' }} aria-live="polite">{lit} of {CELLS} cells around you have verified homes</span>
             <span style={{ fontSize: 14, lineHeight: 1.5, color: '#C9D3E3' }}>
-              Invite your neighbors from Neighborhood, and the hill fills in.
+              Invite your neighbors from Place, and the hill fills in.
             </span>
             <span className={styles.label} style={{ color: '#9FB0C6', fontSize: 11 }}>Example numbers</span>
           </div>
