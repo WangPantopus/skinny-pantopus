@@ -27,6 +27,9 @@ struct MomentsProgressBars: View {
                             Capsule()
                                 .fill(Color.white)
                                 .frame(width: geo.size.width * fill(at: index))
+                                // The bar is told how far 20 times a second and glides between; a new Moment's bar
+                                // starts empty at once.
+                                .animation(index == current && progress > 0 ? .linear(duration: 0.06) : nil, value: progress)
                         }
                 }
                 .frame(height: 3)
@@ -59,6 +62,8 @@ struct MomentsViewerHeader: View {
     var showsButtons = true
     /// The card beside the map, opened from a crowded spot's list (board O3): back to the list.
     var onBack: (@MainActor () -> Void)?
+    /// The place is a button that shows it on the map (the phone's viewer over the Moments tab; not a Moment with no location).
+    var onPlace: (() -> Void)?
     let onSound: () -> Void
     let onMore: () -> Void
     let onClose: () -> Void
@@ -100,8 +105,23 @@ struct MomentsViewerHeader: View {
                     }
                 }
                 HStack(spacing: 0) {
-                    Text(place)
-                        .lineLimit(1)
+                    if let onPlace, !place.isEmpty {
+                        Button(action: onPlace) {
+                            HStack(spacing: 3) {
+                                Icon(.mapPin, size: 11, color: Color.white.opacity(0.88))
+                                Text(place)
+                                    .lineLimit(1)
+                            }
+                            // A line of small type is a small target: a finger's height around it counts.
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                            .padding(.vertical, -10)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text(place)
+                            .lineLimit(1)
+                    }
                     Text(place.isEmpty || times.isEmpty ? times : " · \(times)")
                         .lineLimit(1)
                         .fixedSize()
@@ -112,6 +132,9 @@ struct MomentsViewerHeader: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel([place, times].filter { !$0.isEmpty }.joined(separator: " · "))
                 .accessibilityIdentifier("moments.viewer.meta")
+                .accessibilityActions {
+                    if let onPlace, !place.isEmpty { Button("Show on the map", action: onPlace) }
+                }
             }
             .foregroundStyle(.white)
             .shadow(color: .black.opacity(0.4), radius: 1, x: 0, y: 1)

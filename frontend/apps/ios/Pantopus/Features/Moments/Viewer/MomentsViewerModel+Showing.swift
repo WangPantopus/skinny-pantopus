@@ -52,7 +52,7 @@ extension MomentsViewerModel {
     }
 
     var isPaused: Bool {
-        holding || replying || covered || away || load != .ready
+        holding || handling || replying || covered || away || load != .ready
     }
 
     /// "Vancouver Community Library", the first part of the header's second line.
@@ -76,6 +76,10 @@ extension MomentsViewerModel {
         // Once it has ended ("This Moment has ended.") there is no time left to show.
         var over = ends.map { $0 <= Date() } ?? false
         if case .gone = load { over = true }
-        return [MomentTime.ago(created), over ? "" : MomentTime.left(ends)].filter { !$0.isEmpty }.joined(separator: " · ")
+        return Self.times(created: created, ends: over ? nil : ends)
+    }
+
+    static func times(created: Date?, ends: Date?) -> String {
+        [MomentTime.ago(created), MomentTime.left(ends)].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

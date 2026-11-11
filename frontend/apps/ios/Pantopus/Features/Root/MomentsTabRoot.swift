@@ -82,6 +82,7 @@ public struct MomentsTabRoot: View {
             MomentsViewer(
                 session: session,
                 systemScheme: colorScheme,
+                onShowPlace: { ring in map.showPlace(latitude: ring.latitude, longitude: ring.longitude) },
                 onHideAuthor: viewerHooks.onHideAuthor,
                 onShowAuthor: viewerHooks.onShowAuthor,
                 onClose: viewerHooks.onClose

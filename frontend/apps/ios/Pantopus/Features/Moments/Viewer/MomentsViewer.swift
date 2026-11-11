@@ -32,6 +32,19 @@ struct MomentsViewer: View {
     @State var pressStarted: Date?
     @State var pressMoved = false
     @State var holdTask: Task<Void, Never>?
+    /// Which way the press under the finger is going, once it has moved: it keeps to that way until it lifts.
+    @State var pressAxis: Axis?
+    /// How far a sideways drag has turned the page toward the person after (negative) or before (`+Paging`).
+    @State var pageOffset: CGFloat = 0
+    @State var pageWidth: CGFloat = 0
+    /// The page is finishing its turn: touches wait for it.
+    @State var turning = false
+    /// A pinch on a photo: how big, around where, and whether the press under it began before the pinch.
+    @State var zoom: CGFloat = 1
+    @State var zoomAnchor: UnitPoint = .center
+    @State var zooming = false
+    @State var pressZoomed = false
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     /// The Home indicator's inset, measured by the stage (which ignores the keyboard).
     @State private var homeInset: CGFloat = 34
     /// How the iPhone Duo is held, as this screen reads it (a cover has a screen of its own); until then, as the
@@ -49,6 +62,8 @@ struct MomentsViewer: View {
     let presentation: MomentsViewerPresentation
     /// The card opened from a crowded spot's list (board O3): a back chevron at the header's leading edge returns to it.
     let onBack: (@MainActor () -> Void)?
+    /// The place under the name, tapped: whoever opened the viewer over a map shows that spot on it.
+    let onShowPlace: (@MainActor (MomentRingDTO) -> Void)?
     private let onClose: @MainActor () -> Void
 
     init(
@@ -57,6 +72,7 @@ struct MomentsViewer: View {
         stopsOnDisappear: Bool = false,
         presentation: MomentsViewerPresentation = .cover,
         onBack: (@MainActor () -> Void)? = nil,
+        onShowPlace: (@MainActor (MomentRingDTO) -> Void)? = nil,
         onHideAuthor: @escaping @MainActor (String) -> Void,
         onShowAuthor: @escaping @MainActor (String) -> Void,
         onClose: @escaping @MainActor () -> Void
@@ -66,6 +82,7 @@ struct MomentsViewer: View {
         self.stopsOnDisappear = stopsOnDisappear
         self.presentation = presentation
         self.onBack = onBack
+        self.onShowPlace = onShowPlace
         self.onHideAuthor = onHideAuthor
         self.onShowAuthor = onShowAuthor
         self.onClose = onClose
@@ -172,8 +189,15 @@ struct MomentsViewer: View {
             switch duo.pose {
             case .phone:
                 ZStack(alignment: .bottom) {
+                    // The person a sideways drag is bringing in, beside the one showing.
+                    if let incoming {
+                        GeometryReader { geo in peekStage(geo, incoming.peek) }
+                            .ignoresSafeArea(.keyboard)
+                            .modifier(MomentsPageTurn(position: incoming.position, width: pageWidth, flat: reduceMotion))
+                    }
                     GeometryReader { geo in stage(geo) }
                         .ignoresSafeArea(.keyboard)
+                        .modifier(MomentsPageTurn(position: pageOffset, width: pageWidth, flat: reduceMotion))
                     bottomColumn(floating: false, showsReact: true)
                 }
             case .closed:
@@ -196,30 +220,6 @@ struct MomentsViewer: View {
     private var covered: Bool {
         showsMenu || showsReport || showsBlock || (session.showsSeenBy && !seenByBeside) || (session.paused && duo.pose == .table)
     }
-
-    /// The … menu and the report reasons. On a wide screen they're popovers pointing at the view they're attached
-    /// to: the whole screen for a cover, the More button for a card.
-    func menuDialogs(on view: some View, active: Bool) -> some View {
-        view
-            .confirmationDialog(
-                "Moment options",
-                isPresented: Binding(get: { showsMenu && active }, set: { if active { showsMenu = $0 } }),
-                titleVisibility: .hidden
-            ) { menu }
-            .confirmationDialog(
-                "Report this Moment?",
-                isPresented: Binding(get: { showsReport && active }, set: { if active { showsReport = $0 } }),
-                titleVisibility: .visible
-            ) {
-                ForEach(Self.reportReasons, id: \.token) { reason in
-                    Button(reason.label) { Task { await model.report(reason: reason.token) } }
-                        .accessibilityIdentifier("moments.report.\(reason.token)")
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Reports go to the Pantopus team. The person isn't told who reported.")
-            }
-    }
 }
 
 extension MomentsViewer {
@@ -232,6 +232,7 @@ extension MomentsViewer {
             Color.black
             media
                 .frame(width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing, height: mediaHeight)
+                .scaleEffect(zoom, anchor: zoomAnchor)
                 .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 18, bottomTrailingRadius: 18, style: .continuous))
                 .overlay { if isReplying { Color.black.opacity(0.55) } }
                 .overlay(alignment: .top) {
@@ -240,7 +241,8 @@ extension MomentsViewer {
                         .allowsHitTesting(false)
                 }
                 .overlay(alignment: .bottom) {
-                    if let caption = model.moment?.caption, !caption.isEmpty, model.moment?.kind != .text, !isReplying {
+                    // The caption gives way to a reply being written, and to a photo being pinched bigger.
+                    if let caption = model.moment?.caption, !caption.isEmpty, model.moment?.kind != .text, !isReplying, !zooming {
                         MomentsCaptionPill(caption: caption).padding(.bottom, 63)
                     }
                 }
@@ -251,6 +253,7 @@ extension MomentsViewer {
                 }
                 .contentShape(Rectangle())
                 .gesture(pressGesture(width: geo.size.width))
+                .simultaneousGesture(zoomGesture)
                 // VoiceOver can't tap a side: the same moves as actions.
                 .accessibilityAction(named: "Next Moment") { model.next() }
                 .accessibilityAction(named: "Previous Moment") { model.previous() }
@@ -267,6 +270,7 @@ extension MomentsViewer {
                     isVideo: model.moment?.kind == .video,
                     muted: model.muted,
                     compact: isReplying,
+                    onPlace: placeAction,
                     onSound: { model.muted.toggle() },
                     onMore: { showsMenu = true },
                     onClose: { model.close() }
@@ -276,11 +280,12 @@ extension MomentsViewer {
                     MomentsTakenPill(taken: taken)
                 }
             }
-            .opacity(model.holding ? 0 : 1)
-            .animation(.easeOut(duration: 0.15), value: model.holding)
+            .opacity(model.holding || zooming ? 0 : 1)
+            .animation(.easeOut(duration: 0.15), value: model.holding || zooming)
         }
         .ignoresSafeArea()
         .onChange(of: geo.safeAreaInsets.bottom, initial: true) { _, inset in homeInset = inset }
+        .onChange(of: geo.size.width, initial: true) { _, width in pageWidth = width }
     }
 
     @ViewBuilder
@@ -472,14 +477,4 @@ extension MomentsViewer {
             }
         }
     }
-
-    /// The post report reasons (`reportPostSchema`), as Pulse offers them.
-    private static let reportReasons: [(token: String, label: String)] = [
-        ("spam", "Spam"),
-        ("harassment", "Harassment"),
-        ("inappropriate", "Inappropriate content"),
-        ("misinformation", "Misinformation"),
-        ("safety", "Safety concern"),
-        ("other", "Something else")
-    ]
 }

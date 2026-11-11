@@ -79,6 +79,18 @@ public enum MomentsEndpoints {
         Endpoint(method: .get, path: "/api/moments/\(segment(id))", cachePolicy: .reloadIgnoringLocalCacheData)
     }
 
+    /// `GET /api/moments/batch?ids=a,b,c` — several Moments in one read, each as the detail answers it; one that
+    /// can't be opened is left out. A server from before it answers 404, and the viewer reads one at a time.
+    /// Route `backend/routes/moments.js` (batch).
+    public static func batch(ids: [String]) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/moments/batch",
+            query: ["ids": ids.joined(separator: ",")],
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
+    }
+
     /// `POST /api/moments/:id/view` — counted once per person; the author's own don't count.
     /// Route `backend/routes/moments.js` (view).
     public static func view(id: String) -> Endpoint {

@@ -324,6 +324,7 @@ public struct MomentsUnseenResponse: Decodable, Sendable {
     public let count: Int
 }
 
+/// `GET /api/moments/mine`, and `GET /api/moments/batch` (the same shape).
 public struct MomentsMineResponse: Decodable, Sendable {
     public let moments: [MomentDTO]
 }

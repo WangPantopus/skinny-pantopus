@@ -134,7 +134,9 @@ extension MomentsComposerModel {
     }
 
     var postLabel: String {
-        "Post · shows for \(hours == 1 ? "1 hour" : "\(hours) hours")"
+        // Several picked together: which one this is. The hours are on the sheet's own row either way.
+        if let pickedPosition { return "Post \(pickedPosition)" }
+        return "Post · shows for \(hours == 1 ? "1 hour" : "\(hours) hours")"
     }
 }
 

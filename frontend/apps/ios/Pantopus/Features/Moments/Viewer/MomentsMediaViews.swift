@@ -13,30 +13,56 @@ import UIKit
 
 // MARK: - Video
 
-/// Plays one Moment's video at a time and reports how far it has got.
+/// Plays one Moment's video at a time and reports how far it has got. A second player gets the next video ready
+/// while this one plays (`preload`), so moving on to it starts at once instead of waiting on the network.
 @MainActor
 final class MomentsVideoController {
-    let player = AVPlayer()
+    private(set) var player = AVPlayer()
     var onProgress: ((Double) -> Void)?
     var onEnd: (() -> Void)?
     var onReady: (() -> Void)?
+    private var standby = AVPlayer()
+    /// The Moment whose video the standby player holds.
+    private var standbyID: String?
     private var timeObserver: Any?
     private var endObserver: (any NSObjectProtocol)?
     private var statusObserver: NSKeyValueObservation?
     private var isReady = false
 
-    var isMuted: Bool {
-        get { player.isMuted }
-        set { player.isMuted = newValue }
+    var isMuted = false {
+        didSet { player.isMuted = isMuted }
     }
 
     init() {
         player.automaticallyWaitsToMinimizeStalling = true
+        standby.automaticallyWaitsToMinimizeStalling = true
+        standby.isMuted = true
     }
 
-    func load(_ url: URL) {
-        stop()
+    /// Gets a video ready without playing it: the standby player buffers its start.
+    func preload(_ url: URL, id: String) {
+        guard standbyID != id else { return }
+        standbyID = id
         let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = 4
+        standby.replaceCurrentItem(with: item)
+    }
+
+    func load(_ url: URL, id: String) {
+        stop()
+        let item: AVPlayerItem
+        if standbyID == id, let held = standby.currentItem, held.status != .failed {
+            // The one made ready: the players trade places, and the old one is free for the next.
+            swap(&player, &standby)
+            standby.isMuted = true
+            player.isMuted = isMuted
+            item = held
+            item.preferredForwardBufferDuration = 0
+        } else {
+            item = AVPlayerItem(url: url)
+            player.replaceCurrentItem(with: item)
+        }
+        standbyID = nil
         statusObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             guard item.status == .readyToPlay else { return }
             Task { @MainActor [weak self] in
@@ -50,7 +76,6 @@ final class MomentsVideoController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.onEnd?() }
         }
-        player.replaceCurrentItem(with: item)
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 20), queue: .main) { [weak self] time in
             MainActor.assumeIsolated {
                 guard let self, let duration = self.player.currentItem?.duration.seconds, duration.isFinite, duration > 0 else { return }
@@ -76,6 +101,13 @@ final class MomentsVideoController {
         statusObserver = nil
         player.replaceCurrentItem(with: nil)
         isReady = false
+    }
+
+    /// The viewer closed: the video made ready goes too.
+    func stopAll() {
+        stop()
+        standby.replaceCurrentItem(with: nil)
+        standbyID = nil
     }
 }
 

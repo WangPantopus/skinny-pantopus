@@ -30,7 +30,10 @@ struct MomentsComposer: View {
         ZStack {
             Color.black.ignoresSafeArea()
             if model.draft != nil {
-                MomentsPostStage(model: model) { onClose() }
+                // Posted: the next of several picked together takes the sheet; after the last, the composer closes.
+                MomentsPostStage(model: model) {
+                    Task { if await !model.moveOn() { onClose() } }
+                }
             } else if model.gate != .open {
                 // Where you are first, then the 18+ question: nothing can be taken, picked or written before both.
                 MomentsComposeGate(model: model, onClose: close)

@@ -124,6 +124,7 @@ struct MomentsMapView: View {
             }
         }
         .onChange(of: viewModel.recenterRequest) { _, _ in recenter() }
+        .onChange(of: viewModel.placeRequest) { _, place in showPlace(place) }
         .onChange(of: uploads.finished) { _, _ in
             // "Your Moment is live" while the map shows somewhere else: go to the new ring.
             if let spot = uploads.liveSpot {

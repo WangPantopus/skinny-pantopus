@@ -57,6 +57,11 @@ final class MomentsViewerModel {
         didSet { applyPause() }
     }
 
+    /// A finger is dragging to the person before or after, or a photo is being pinched bigger.
+    var handling = false {
+        didSet { applyPause() }
+    }
+
     let video = MomentsVideoController()
     let cache = MomentsViewerCache()
     let newOnly: Bool
@@ -64,9 +69,10 @@ final class MomentsViewerModel {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var clock: Task<Void, Never>?
     @ObservationIgnored private var loading: Task<Void, Never>?
+    @ObservationIgnored var readingAhead: Task<Void, Never>?
     @ObservationIgnored private var toastAction: (@MainActor () -> Void)?
     @ObservationIgnored private let onWatched: @MainActor (Set<String>) -> Void
-    private static let photoSeconds = 6.0
+    static let photoSeconds = 6.0
 
     init(request: MomentsWatchRequest, onWatched: @escaping @MainActor (Set<String>) -> Void) {
         rings = request.rings
@@ -81,8 +87,7 @@ final class MomentsViewerModel {
 
     // MARK: - Playing
 
-    /// The viewer appeared: load and play the first one. A screen built again for the same watching (a fold on the
-    /// iPhone Duo) picks up where it was: the same Moment at the same second.
+    /// The viewer appeared: play the first one. A screen built again by a Duo fold picks up at the same second.
     func start() {
         guard !started else { return applyPause() }
         started = true
@@ -93,7 +98,8 @@ final class MomentsViewerModel {
         started = false
         clock?.cancel()
         loading?.cancel()
-        video.stop()
+        readingAhead?.cancel()
+        video.stopAll()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
@@ -171,7 +177,26 @@ final class MomentsViewerModel {
         viewers = nil
         load = .loading
         let id = brief.id
+        // Read ahead already (the usual case after the first one): it shows in this same frame, with no blank between.
+        if let held = cache.ready(id), showNow(held) { return readAhead() }
         loading = Task { [weak self] in await self?.prepare(id) }
+    }
+
+    /// Shows a Moment that is in memory without waiting; a video starts once its player is ready (at once, made ready ahead).
+    private func showNow(_ detail: MomentDTO) -> Bool {
+        switch detail.kind {
+        case .text:
+            ready(detail.id)
+        case .photo:
+            guard let picture = cache.heldPicture(detail.id) else { return false }
+            image = picture
+            ready(detail.id)
+        case .video:
+            guard let url = detail.media else { return false }
+            poster = cache.heldPoster(detail.id)
+            play(url, of: detail)
+        }
+        return true
     }
 
     /// Reads the Moment (its signed media link), then shows its picture, video or card.
@@ -182,7 +207,7 @@ final class MomentsViewerModel {
             moment = detail
             myReaction = detail.myReaction
             try await present(detail)
-            prefetchNext()
+            readAhead()
         } catch is CancellationError {
             return
         } catch {
@@ -207,14 +232,18 @@ final class MomentsViewerModel {
                 guard let self, brief?.id == detail.id else { return }
                 poster = picture
             }
-            if !muted { try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback) }
-            video.isMuted = muted
-            video.onReady = { [weak self] in
-                guard let self, brief?.id == detail.id else { return }
-                ready(detail.id)
-            }
-            video.load(url)
+            play(url, of: detail)
         }
+    }
+
+    private func play(_ url: URL, of detail: MomentDTO) {
+        if !muted { try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback) }
+        video.isMuted = muted
+        video.onReady = { [weak self] in
+            guard let self, brief?.id == detail.id else { return }
+            ready(detail.id)
+        }
+        video.load(url, id: detail.id)
     }
 
     private func fail(_ id: String, _ failure: MomentsFailure?) {
@@ -269,12 +298,6 @@ final class MomentsViewerModel {
         }
     }
 
-    /// A photo shows for six seconds; a text card for 3 s plus 45 ms a character, between 6 and 12 (the same on Android).
-    private func duration(of moment: MomentDTO) -> Double {
-        guard moment.kind == .text, let text = moment.text else { return Self.photoSeconds }
-        return min(12, max(Self.photoSeconds, 3 + 0.045 * Double(text.count)))
-    }
-
     // MARK: - Counting and watching
 
     private func count(_ id: String) {
@@ -289,28 +312,6 @@ final class MomentsViewerModel {
         onWatched([id])
         guard !isMine else { return }
         Task { try? await MomentsAPI.send(MomentsEndpoints.view(id: id)) }
-    }
-
-    private func startIndex(in index: Int) -> Int {
-        guard rings.indices.contains(index) else { return 0 }
-        return rings[index].moments.firstIndex { !$0.seen } ?? 0
-    }
-
-    /// The next to play in a ring: the next one, or with Play all the next not watched.
-    private func nextIndex(in ring: MomentRingDTO, after index: Int) -> Int? {
-        let rest = ring.moments.indices.filter { $0 > index }
-        return newOnly ? rest.first { !ring.moments[$0].seen } : rest.first
-    }
-
-    /// The next Moment's details and picture, so the next tap shows it at once.
-    private func prefetchNext() {
-        guard let ring else { return }
-        if let index = nextIndex(in: ring, after: momentIndex) {
-            cache.prefetch(ring.moments[index].id)
-        } else if rings.indices.contains(ringIndex + 1), let first = rings[ringIndex + 1].moments.indices.first {
-            let start = startIndex(in: ringIndex + 1)
-            cache.prefetch(rings[ringIndex + 1].moments[rings[ringIndex + 1].moments.indices.contains(start) ? start : first].id)
-        }
     }
 
     // MARK: - Toasts
