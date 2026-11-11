@@ -577,8 +577,9 @@ struct HolidayCardWriteStep: View {
                     takesPhoto: onePerson && cards.takesPhoto,
                     takesVoice: onePerson && cards.takesVoice,
                     forName: viewModel.greetingFor,
-                    gift: CardTableMood(number: design.number) == .reverence
-                )
+                    gift: CardTableMood(number: design.number) == .reverence,
+                    needsStamp: cards.mediaStamp == .buy
+                ) { viewModel.openStampsForMedia() }
             }
             if cards.signature != nil {
                 signRow

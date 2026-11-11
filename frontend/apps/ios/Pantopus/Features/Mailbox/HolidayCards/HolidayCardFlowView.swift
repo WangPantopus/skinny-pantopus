@@ -126,9 +126,14 @@ struct HolidayCardFlowView: View {
             get: { viewModel.showsStampBooks && !viewModel.sealsAtTable },
             set: { viewModel.showsStampBooks = $0 }
         )) {
-            StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort)
+            StampBooksSheet(store: viewModel.stamps, short: viewModel.stampShort, forMedia: viewModel.stampsForMedia)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        // Stamps bought (or spent elsewhere): whether a photo and greeting can go, read again without leaving the step.
+        .onChange(of: viewModel.stamps.balance?.paidRemaining) { old, _ in
+            guard old != nil, viewModel.cards?.media?.boughtStamp != nil else { return }
+            Task { await viewModel.rereadCards() }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         // Seal it by hand: the table over the flow, from Look it over until Done.

@@ -111,14 +111,27 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         media = try? c.decodeIfPresent(HolidayCardMediaSpec.self, forKey: .media)
     }
 
-    /// "Add a photo" shows (the server takes one now, and this build carries the memories).
+    /// "Add a photo" shows (the server takes one now, and this build carries the memories), unless no bought stamp
+    /// is left and none can be bought.
     var takesPhoto: Bool {
-        LaunchFeatures.holidayCardMemories && media?.photo?.usable == true
+        LaunchFeatures.holidayCardMemories && media?.photo?.usable == true && mediaStamp != .unavailable
     }
 
     /// "Record a greeting" shows.
     var takesVoice: Bool {
-        LaunchFeatures.holidayCardMemories && media?.voice?.usable == true
+        LaunchFeatures.holidayCardMemories && media?.voice?.usable == true && mediaStamp != .unavailable
+    }
+
+    /// The server takes a photo or greeting now and this build carries them, whatever the stamps say: a send carries
+    /// what's attached (the server refuses it, saying why, rather than the card going without it).
+    var takesMemories: Bool {
+        LaunchFeatures.holidayCardMemories && (media?.photo?.usable == true || media?.voice?.usable == true)
+    }
+
+    /// Whether a photo or greeting can go now: `ready` (or a server without the rule), `buy` (the buttons open the
+    /// stamp books) or `unavailable`.
+    var mediaStamp: HolidayCardMediaSpec.BoughtStamp.State {
+        media?.boughtStamp?.state ?? .ready
     }
 }
 

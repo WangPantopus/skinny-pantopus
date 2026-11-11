@@ -6,7 +6,9 @@
 //  wave 4 drawings 1 and 2), under the note, which stays first and required. The photo comes from the system picker
 //  (no permission asked) and uploads with its own progress; the greeting records once the microphone is allowed (asked
 //  on the tap) and uploads when it stops. Each shows with its own buttons, side by side, and a failed upload keeps the
-//  note and offers Try again or Remove. Web's Write on the back has the same row.
+//  note and offers Try again or Remove. Web's Write on the back has the same row. A photo or greeting goes only on a
+//  card sent with a bought stamp (founder, 2026-11-11): with none left, both buttons stay, a line under them says so,
+//  and a tap opens the stamp books instead.
 //
 
 import PhotosUI
@@ -19,6 +21,9 @@ struct HolidayCardMediaRow: View {
     /// Who the greeting is for ("For Maya") and the card's mood (a gift tag for Christmas with Jesus Christ).
     let forName: String
     let gift: Bool
+    /// No bought stamp left, and books are on sale: the buttons open the stamp books (`onNeedsStamp`).
+    var needsStamp = false
+    var onNeedsStamp: () -> Void = {}
 
     @State private var picked: PhotosPickerItem?
     @State private var picking = false
@@ -71,6 +76,13 @@ struct HolidayCardMediaRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("sendCardMicRefused")
             }
+            if needsStamp, showsPhoto || showsVoice {
+                Text(HolidayCardMediaRow.needsStampLine)
+                    .font(.system(size: 13))
+                    .foregroundStyle(HolidayCardDesk.muted(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("sendCardMediaNeedsStamp")
+            }
             if attachments.photo != nil { describe }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,14 +100,27 @@ struct HolidayCardMediaRow: View {
         .onDisappear { listen.stop() }
     }
 
+    /// The server's words for the rule, under the buttons and on the stamp books opened for it.
+    static let needsStampLine = "Photos and voice greetings go on cards sent with a bought stamp."
+
+    /// The picker, or the stamp books while no bought stamp is left.
+    private func pickPhoto() {
+        Keyboard.close()
+        if needsStamp { onNeedsStamp() } else { picking = true }
+    }
+
+    /// The recorder, or the stamp books while no bought stamp is left.
+    private func startRecording() {
+        Keyboard.close()
+        listen.stop()
+        if needsStamp { onNeedsStamp() } else { Task { await attachments.recorder.start() } }
+    }
+
     // MARK: The photo
 
     private var addPhoto: some View {
-        HolidayCardPaperButton(title: "Add a photo", isPressed: false) {
-            Keyboard.close()
-            picking = true
-        }
-        .accessibilityIdentifier("sendCardAddPhoto")
+        HolidayCardPaperButton(title: "Add a photo", isPressed: false) { pickPhoto() }
+            .accessibilityIdentifier("sendCardAddPhoto")
     }
 
     private func photoCell(_ photo: HolidayCardAttachments.Photo) -> some View {
@@ -113,11 +138,8 @@ struct HolidayCardMediaRow: View {
                 HolidayCardPaperButton(title: "Try again", isPressed: false) { attachments.retry() }
                     .accessibilityIdentifier("sendCardPhotoRetry")
             } else {
-                HolidayCardPaperButton(title: "Replace", isPressed: false) {
-                    Keyboard.close()
-                    picking = true
-                }
-                .accessibilityIdentifier("sendCardPhotoReplace")
+                HolidayCardPaperButton(title: "Replace", isPressed: false) { pickPhoto() }
+                    .accessibilityIdentifier("sendCardPhotoReplace")
             }
             HolidayCardPaperButton(title: "Remove", isPressed: false) { attachments.remove() }
                 .accessibilityIdentifier("sendCardPhotoRemove")
@@ -129,12 +151,8 @@ struct HolidayCardMediaRow: View {
     // MARK: The greeting
 
     private var record: some View {
-        HolidayCardPaperButton(title: "Record a greeting", isPressed: false) {
-            Keyboard.close()
-            listen.stop()
-            Task { await attachments.recorder.start() }
-        }
-        .accessibilityIdentifier("sendCardRecord")
+        HolidayCardPaperButton(title: "Record a greeting", isPressed: false) { startRecording() }
+            .accessibilityIdentifier("sendCardRecord")
     }
 
     private var recordingCell: some View {
@@ -177,11 +195,8 @@ struct HolidayCardMediaRow: View {
                 .accessibilityIdentifier("sendCardListen")
             }
             if takesVoice {
-                HolidayCardPaperButton(title: "Record again", isPressed: false) {
-                    listen.stop()
-                    Task { await attachments.recorder.start() }
-                }
-                .accessibilityIdentifier("sendCardRecordAgain")
+                HolidayCardPaperButton(title: "Record again", isPressed: false) { startRecording() }
+                    .accessibilityIdentifier("sendCardRecordAgain")
             }
             HolidayCardPaperButton(title: "Remove", isPressed: false) {
                 listen.stop()

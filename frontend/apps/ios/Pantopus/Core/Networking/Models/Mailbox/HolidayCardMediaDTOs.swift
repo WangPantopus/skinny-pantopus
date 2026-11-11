@@ -53,17 +53,51 @@ public struct HolidayCardMediaSpec: Decodable, Sendable, Hashable {
         }
     }
 
+    /// A photo or voice greeting goes only on a card sent with a bought stamp (founder, 2026-11-11): what the person
+    /// can do about it now. Present only while `photo.usable`; nil from older servers (photo and voice as before).
+    public struct BoughtStamp: Decodable, Sendable, Hashable {
+        public enum State: String, Sendable {
+            /// A bought stamp is left: photo and voice as usual; the card spends one.
+            case ready
+            /// None left, and books are on sale for this person: both buttons stay, say why, and open the stamp books.
+            case buy
+            /// None left and none can be bought (stamp books off for this person, the free daily card, sales over).
+            case unavailable
+        }
+
+        public let state: State
+        /// Bought stamps left now; nil when the balance couldn't be read just now.
+        public let remaining: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case state, remaining
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let raw = try c.decode(String.self, forKey: .state)
+            guard let state = State(rawValue: raw) else {
+                throw DecodingError.dataCorruptedError(forKey: .state, in: c, debugDescription: "Unknown state \(raw)")
+            }
+            self.state = state
+            remaining = try? c.decodeIfPresent(Int.self, forKey: .remaining)
+        }
+    }
+
     public let photo: Photo?
     public let voice: Voice?
+    public let boughtStamp: BoughtStamp?
 
     private enum CodingKeys: String, CodingKey {
         case photo, voice
+        case boughtStamp = "bought_stamp"
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         photo = try? c.decodeIfPresent(Photo.self, forKey: .photo)
         voice = try? c.decodeIfPresent(Voice.self, forKey: .voice)
+        boughtStamp = try? c.decodeIfPresent(BoughtStamp.self, forKey: .boughtStamp)
     }
 }
 

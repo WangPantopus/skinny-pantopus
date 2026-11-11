@@ -444,9 +444,14 @@ struct HolidayCardLookFooter: View {
     let byEmail: Bool
     @Environment(\.colorScheme) private var scheme
 
-    /// Postage on and no stamps left: the button opens the stamp books.
+    /// Postage on and no stamps left, or no bought stamp for the card's photo or greeting: the button opens the stamp
+    /// books.
     private var needsStamps: Bool {
-        viewModel.cards?.postageEnabled == true && viewModel.stamps.isOut
+        viewModel.cards?.postageEnabled == true && (viewModel.stamps.isOut || needsBoughtStamp)
+    }
+
+    private var needsBoughtStamp: Bool {
+        viewModel.carriesMedia && viewModel.boughtStampsLeft == 0
     }
 
     var body: some View {
@@ -461,7 +466,7 @@ struct HolidayCardLookFooter: View {
                 .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
             if viewModel.cards?.postageEnabled == true, let design = viewModel.design {
-                StampPostageLine(store: viewModel.stamps, design: design.id)
+                StampPostageLine(store: viewModel.stamps, design: design.id, media: viewModel.carriesMedia)
             }
             if let error = viewModel.sendError {
                 Text(error)
@@ -475,7 +480,13 @@ struct HolidayCardLookFooter: View {
                     .isLink == true ? "Seal it and get the link" : "Seal and send",
                 isLoading: viewModel.sending
             ) {
-                if needsStamps { viewModel.showsStampBooks = true } else { viewModel.sealOrSend() }
+                if needsBoughtStamp {
+                    viewModel.openStampsForMedia()
+                } else if needsStamps {
+                    viewModel.showsStampBooks = true
+                } else {
+                    viewModel.sealOrSend()
+                }
             }
             .accessibilityIdentifier("sendCardLookSend")
         }
