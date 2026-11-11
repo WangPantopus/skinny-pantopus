@@ -104,14 +104,21 @@ fun SendCardScreen(
     // server refused for a stamp.
     val stamps: MailStampBooksViewModel? = if (season?.postageEnabled == true) hiltViewModel() else null
     var showsStampBooks by rememberSaveable { mutableStateOf(false) }
+    // Opened for the card's photo or greeting (no bought stamp left): the sheet says why.
+    var stampsForMedia by rememberSaveable { mutableStateOf(false) }
     val getStamps = { showsStampBooks = true }
+    val getStampsForMedia = {
+        stampsForMedia = true
+        showsStampBooks = true
+    }
     if (stamps != null) {
         LifecycleResumeEffect(stamps, form.step, form.sent?.id, form.listResults?.size, form.listTakenBack.size, form.tookBack) {
             stamps.refresh()
             onPauseOrDispose { }
         }
         LaunchedEffect(stamps) {
-            viewModel.stampsNeeded.collect {
+            viewModel.stampsNeeded.collect { forMedia ->
+                stampsForMedia = forMedia
                 showsStampBooks = true
                 stamps.refresh()
                 // A photo or greeting refused for a bought stamp: Write on the back then says why (`media.bought_stamp`).
@@ -175,6 +182,7 @@ fun SendCardScreen(
                             onSeeInSent = onSeeInSent,
                             stamps = stamps?.balance,
                             onGetStamps = getStamps,
+                            onStampsForMedia = getStampsForMedia,
                             onTakeBackFromList = { listTakeBack = it },
                             onLarge = { largeDesign = it },
                         )
@@ -242,9 +250,11 @@ fun SendCardScreen(
             stamps,
             onDismiss = {
                 showsStampBooks = false
+                stampsForMedia = false
                 viewModel.clearStampShort()
             },
             short = stampShort,
+            forMedia = stampsForMedia,
         )
     }
     listTakeBack?.let { card ->
@@ -316,6 +326,8 @@ private fun Steps(
     /** Digital stamps left (postage on, once read), for step 4 when it seals and sends itself. */
     stamps: StampBalance?,
     onGetStamps: () -> Unit,
+    /** The stamp books for the card's photo or greeting (no bought stamp left), saying why. */
+    onStampsForMedia: () -> Unit,
     /** A card on a sent list: "Take it back" (asked first). */
     onTakeBackFromList: (SentHolidayCard) -> Unit,
     /** Pick a card: show this picture large. */
@@ -365,7 +377,7 @@ private fun Steps(
                         photos = photoCalls(cards, form, viewModel),
                         voice = form.voice,
                         voices = voiceCalls(cards, form, viewModel),
-                        buyStamp = onGetStamps.takeIf { cards.postageEnabled && cards.media?.boughtStamp?.toBuy == true },
+                        buyStamp = onStampsForMedia.takeIf { cards.postageEnabled && cards.media?.boughtStamp?.toBuy == true },
                     )
                 }
             }
