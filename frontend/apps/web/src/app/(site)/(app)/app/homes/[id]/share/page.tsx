@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { passStatus } from '@/components/home/share/ShareCenter';
 import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
+import IssuedShareLink from '@/components/home/share/IssuedShareLink';
 
 const TEMPLATES: { id: string; label: string; icon: typeof Wifi; duration: string; color: string }[] = [
   { id: 'wifi_only', label: 'Wi-Fi Only',       icon: Wifi,         duration: '2 hours',  color: '#0284c7' },
@@ -48,6 +49,8 @@ function ShareContent() {
   const [guestName, setGuestName] = useState('');
   const [creating, setCreating] = useState(false);
   const createRequestId = useRef<string | null>(null);
+  // The new pass's link, kept on screen until it is closed: it can't be read again.
+  const [issued, setIssued] = useState<{ url: string; label: string } | null>(null);
   // A superseded list read must never replace a newer one.
   const generation = useRef(0);
 
@@ -103,19 +106,20 @@ function ShareContent() {
         request_id: createRequestId.current,
       });
       createRequestId.current = null;
-      setGuestName(''); setSelectedTemplate(null); setShowCreate(false);
-      toast.success('Guest pass created');
-      await fetchPasses();
-
-      // The API returns the raw token; the guest opens it through the public
-      // /guest route, so that is the link to copy (a bare token opens nothing).
+      // The API returns the raw token once; the guest opens it through the public
+      // /guest route, so that is the link to show (a bare token opens nothing).
       const passUrl = res?.token
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/guest/${encodeURIComponent(res.token)}`
         : '';
+      if (passUrl) setIssued({ url: passUrl, label: guestName.trim() });
+      setGuestName(''); setSelectedTemplate(null); setShowCreate(false);
+      toast.success('Guest pass created');
       if (passUrl) {
+        // Best effort: a browser may refuse the clipboard here, and the link stays on screen either way.
         try { await navigator.clipboard.writeText(passUrl); toast.success('Share link copied to clipboard'); }
-        catch { /* ignore */ }
+        catch { /* shown on screen */ }
       }
+      await fetchPasses();
     } catch (err: unknown) { toast.error(failureMessage(err, 'Failed to create pass')); }
     finally { setCreating(false); }
   }, [homeId, selectedTemplate, guestName, fetchPasses]);
@@ -175,6 +179,17 @@ function ShareContent() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {issued && (
+        <div className="mb-4">
+          <IssuedShareLink
+            url={issued.url}
+            title={`Link for ${issued.label}`}
+            note="Send it now. It’s shown only this once: to send it later, revoke this pass and create a new one."
+            onDone={() => setIssued(null)}
+          />
         </div>
       )}
 
