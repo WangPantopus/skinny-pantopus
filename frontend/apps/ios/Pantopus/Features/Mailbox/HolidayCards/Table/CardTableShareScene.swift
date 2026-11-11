@@ -17,7 +17,16 @@ import UIKit
 enum CardShareFormat: String, CaseIterable, Identifiable {
     case story
     case post
+    /// The folded card lying open (plan 11.2), as on the open iPhone Duo: picture page left, note page right.
+    case openCard
     case link
+    /// Share all (plan 11.3): one piece each, in the Post size; never in the size switch.
+    case allEnvelope, allFront, allNote
+
+    /// The sizes to pick from.
+    static var allCases: [CardShareFormat] {
+        [.story, .post, .openCard, .link]
+    }
 
     var id: String {
         rawValue
@@ -26,7 +35,8 @@ enum CardShareFormat: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .story: "Story"
-        case .post: "Post"
+        case .post, .allEnvelope, .allFront, .allNote: "Post"
+        case .openCard: "Open card"
         case .link: "Link preview"
         }
     }
@@ -35,7 +45,8 @@ enum CardShareFormat: String, CaseIterable, Identifiable {
     var size: CGSize {
         switch self {
         case .story: CGSize(width: 540, height: 960)
-        case .post: CGSize(width: 540, height: 675)
+        case .post, .allEnvelope, .allFront, .allNote: CGSize(width: 540, height: 675)
+        case .openCard: CGSize(width: 800, height: 600)
         case .link: CGSize(width: 600, height: 315)
         }
     }
@@ -123,6 +134,18 @@ struct CardTableShareScene: View {
                 front(width: 380, x: 80, y: 110, rotation: -2.6)
                 slip(CardShareSlip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
             }
+        case .openCard:
+            openCard
+        case .allEnvelope:
+            // The shut envelope with its seal: no "do not open" mark, no name or address.
+            shutEnvelope(width: 410, x: 65, y: 90, rotation: -2.2, sealWidth: 122)
+            slip(CardShareSlip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
+        case .allFront:
+            front(width: 400, x: 70, y: 92, rotation: -2.2)
+            slip(CardShareSlip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
+        case .allNote:
+            back(width: 400, x: 70, y: 92, rotation: 2.2)
+            slip(CardShareSlip(x: 139, y: 612, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
         case .link:
             // A sealed card never gives away its picture.
             if content.sealed {
@@ -133,6 +156,55 @@ struct CardTableShareScene: View {
             }
             linkWords
         }
+    }
+
+    /// Open card (plan 11.2, web's coordinates in the build's share layout): 1600 x 1200, the picture page at the left
+    /// and the note page at the right, meeting at a shaded fold; with the note off the open envelope lies there instead.
+    /// A sealed card is its shut envelope.
+    @ViewBuilder
+    private var openCard: some View {
+        if content.sealed {
+            shutEnvelope(width: 340, x: 230, y: 40, rotation: -1.6, sealWidth: 101)
+            sealedStamp(fontSize: 15, left: 274, top: 280)
+            slip(CardShareSlip(x: 261, y: 492, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
+        } else {
+            if showsNote {
+                front(width: 350, x: 50, y: 60, rotation: 0)
+                back(width: 350, x: 400, y: 60, rotation: 0)
+                foldShade
+            } else {
+                openEnvelope(width: 260, x: 445, y: 171, rotation: 0)
+                front(width: 350, x: 50, y: 60, rotation: 0)
+            }
+            slip(CardShareSlip(x: 261, y: 504, rotation: -1.2, width: 262, height: 46, title: 12, line: 12))
+        }
+    }
+
+    /// The fold between the open card's pages: darkest at the spine, gone by 46% of each page's width.
+    private var foldShade: some View {
+        HStack(spacing: 0) {
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0), location: 0.54),
+                    .init(color: .black.opacity(0.08 * 0.25), location: 0.84),
+                    .init(color: .black.opacity(0.42 * 0.25), location: 1)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.42 * 0.2), location: 0),
+                    .init(color: .black.opacity(0.08 * 0.2), location: 0.16),
+                    .init(color: .black.opacity(0), location: 0.46)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+        .frame(width: 700, height: 420)
+        .offset(x: 50, y: 60)
+        .allowsHitTesting(false)
     }
 
     // MARK: The mail

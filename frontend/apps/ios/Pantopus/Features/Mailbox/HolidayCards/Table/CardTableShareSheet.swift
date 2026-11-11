@@ -221,6 +221,7 @@ struct CardTableShareSheet: View {
             action("Copy link", identifier: "link", glyph: icon(.link)) { copyLink() }
             action("Save", identifier: "save", glyph: icon(.download)) { save() }
             action("More", identifier: "more", glyph: icon(.moreHorizontal)) { shareSheet(kind: "more") }
+            action("Share all", identifier: "all", glyph: icon(.layers)) { shareAll() }
         }
     }
 
@@ -269,11 +270,12 @@ struct CardTableShareSheet: View {
 
     // MARK: Actions
 
-    private func count(_ kind: String) {
+    private func count(_ kind: String, asPost: Bool = false) {
         let body = HolidayCardSharedBody(
             design: content.design,
             kind: kind,
-            format: format.rawValue,
+            // The server counts three sizes (no change in Part 11): an Open card, and Share all, count as a Post.
+            format: format == .openCard || asPost ? CardShareFormat.post.rawValue : format.rawValue,
             withNote: showsNote && !content.sealed
         )
         Task { _ = try? await APIClient.shared.request(HolidayCardEndpoints.shared(body)) }
@@ -289,6 +291,29 @@ struct CardTableShareSheet: View {
         if let currentImage { items.append(currentImage) }
         items.append(cardPage)
         request = .share(items: items)
+    }
+
+    /// Share all (plan 11.3): up to three pictures together in the Post size: the shut envelope with its seal, the
+    /// card, and the note page only with "Show the note" on. A sealed card shares its sealed picture only.
+    private func shareAll() {
+        let pieces: [CardShareFormat] = content.sealed
+            ? [.post]
+            : [.allEnvelope, .allFront] + (showsNote ? [.allNote] : [])
+        let images = pieces.compactMap { piece in
+            CardTableSharePicture.draw(CardTableShareScene(
+                format: piece,
+                showsNote: showsNote,
+                content: content,
+                art: art,
+                picture: picture
+            ))
+        }
+        guard !images.isEmpty else {
+            say = "We couldn’t draw these pictures. You can still copy the link."
+            return
+        }
+        count("more", asPost: true)
+        request = .share(items: images + [cardPage])
     }
 
     private func shareInstagram() {
