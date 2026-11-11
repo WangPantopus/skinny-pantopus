@@ -107,8 +107,10 @@ final class MomentsMapViewModel {
     private(set) var focus: MomentsFocus?
     /// Bumped to ask the view to move the camera to `center`.
     private(set) var recenterRequest = 0
-    /// A place the viewer asked for (the place under a Moment's name, tapped): the view moves the camera there.
+    /// A spot the map is asked to show without a finger on it (`MomentsMapView+Place.swift`): the view moves the camera.
     private(set) var placeRequest: MomentsPlaceRequest?
+    /// The map has just opened on you: its first read looks around once (`MomentsMapViewModel+Moves.swift`).
+    @ObservationIgnored var looksAround = false
     /// The clock the end times are read against; moved on each read and each minute.
     private(set) var now = Date()
     /// Where the camera last settled.
@@ -128,7 +130,7 @@ final class MomentsMapViewModel {
     /// Hidden at once, by when: a read begun after that already has the server's answer, so the id is dropped then
     /// (an unmute in Settings shows them again at the next read).
     @ObservationIgnored private var hiddenAuthors: [String: Date] = [:]
-    private let api: APIClient
+    let api: APIClient
     private let store: ScreenStore
     private let location: any LocationProviding
 
@@ -191,6 +193,7 @@ final class MomentsMapViewModel {
         phase = .ready
         focus = nil
         recenterRequest += 1
+        looksAround = true
         herePlace = nil
         guard source == .gps else { return }
         // What this spot reads as, for the empty card ("Share what's happening at Esther Short Park.").
@@ -253,6 +256,7 @@ final class MomentsMapViewModel {
             rings = all
             loaded = true
             loadFailed = false
+            lookAroundIfOpening()
         } catch is CancellationError {
             return
         } catch {
@@ -389,9 +393,10 @@ final class MomentsMapViewModel {
         )
     }
 
-    func showPlace(latitude: Double, longitude: Double) {
-        focus = nil
-        placeRequest = MomentsPlaceRequest(latitude: latitude, longitude: longitude)
+    /// Asks the view to move the camera (the moves and their rules: `MomentsMapViewModel+Moves.swift`).
+    func ask(_ request: MomentsPlaceRequest) {
+        if request.move == .closeIn { focus = nil }
+        placeRequest = request
     }
 
     /// Back to the area: the camera the spot was opened from.
