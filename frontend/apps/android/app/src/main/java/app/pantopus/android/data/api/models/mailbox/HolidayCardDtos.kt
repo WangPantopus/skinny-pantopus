@@ -48,7 +48,24 @@ data class HolidayCardsResponse(
 data class HolidayCardMediaRules(
     val photo: CardMediaRule? = null,
     val voice: CardMediaRule? = null,
+    /** A photo or voice greeting goes only on a card sent with a bought stamp (founder 2026-11-11); absent on older servers. */
+    @Json(name = "bought_stamp") val boughtStamp: CardBoughtStamp? = null,
 )
+
+/**
+ * `media.bought_stamp`: [state] is what the composer does, as the server decides it. `ready`: photo and voice as usual
+ * (the card spends a bought stamp). `buy`: both buttons stay, with the line under them, and open the stamp books.
+ * `unavailable`: no photo or voice at all. [remaining]: bought stamps left now, or null when it couldn't be read.
+ */
+@JsonClass(generateAdapter = true)
+data class CardBoughtStamp(
+    val required: Boolean = false,
+    val remaining: Int? = null,
+    val state: String? = null,
+) {
+    val toBuy: Boolean get() = state == "buy"
+    val unavailable: Boolean get() = state == "unavailable"
+}
 
 /** One kind of card media: [usable] is false while the key is off; the size and length limits the server keeps. */
 @JsonClass(generateAdapter = true)

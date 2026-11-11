@@ -207,11 +207,18 @@ final class HolidayCardFlowViewModel {
     let stamps = MailStampStore()
     /// The stamp books sheet is up (the header's count, "Get stamps to send", or a send the server refused for a stamp).
     var showsStampBooks = false {
-        didSet { if !showsStampBooks { stampShort = nil } }
+        didSet {
+            if !showsStampBooks {
+                stampShort = nil
+                stampsForMedia = false
+            }
+        }
     }
 
     /// The stamp books opened for a list whose cards need more stamps than are left.
     var stampShort: StampShort?
+    /// The stamp books opened for the card's photo or greeting, which go only with a bought stamp.
+    var stampsForMedia = false
 
     // A list (digital stamps on): who's on it, a request ID for each (kept
     // for the whole card, so every look and retry of the list finds the
@@ -415,7 +422,28 @@ final class HolidayCardFlowViewModel {
                 return
             }
             previewError = Self.refusal(error, fallback: "Couldn’t show your card just now. Try again in a moment.")
+            await needsBoughtStamp(error)
         }
+    }
+
+    /// No bought stamp for the card's photo or greeting (402 `CARD_MEDIA_NEEDS_STAMP` at Look it over or the seal):
+    /// the stamp books open, saying why (over the table when sealing by hand), and the card, note, photo and greeting
+    /// stay as they are. True when it was that.
+    @discardableResult
+    private func needsBoughtStamp(_ error: any Error) async -> Bool {
+        guard Self.refusalCode(error) == "CARD_MEDIA_NEEDS_STAMP" else { return false }
+        openStampsForMedia()
+        await stamps.refresh()
+        await rereadCards()
+        return true
+    }
+
+    /// The season's answer again, keeping what's shown when it can't be read: after stamps were bought, a photo and
+    /// a greeting can go without leaving the step.
+    func rereadCards() async {
+        guard let response: HolidayCardsResponse = try? await api.request(HolidayCardEndpoints.cards()) else { return }
+        state = .loaded(response)
+        if response.mediaStamp == .ready, previewError == HolidayCardMediaRow.needsStampLine { previewError = nil }
     }
 
     /// When a card to the person chosen can come, by their clock. A failure
@@ -488,7 +516,7 @@ final class HolidayCardFlowViewModel {
 
     /// The photo the card carries: one person's card only (a list goes without), and only while the server takes one.
     var mediaPick: HolidayCardMediaPick {
-        guard recipient?.entries == nil, cards?.takesPhoto == true || cards?.takesVoice == true else { return .none }
+        guard recipient?.entries == nil, cards?.takesMemories == true else { return .none }
         return attachments.pick
     }
 
@@ -525,6 +553,8 @@ final class HolidayCardFlowViewModel {
                 await stamps.refresh()
                 return
             }
+            // Its photo or greeting needs a bought stamp and none is left: the same, saying why.
+            if await needsBoughtStamp(error) { return }
             let sentence = Self.refusal(error, fallback: "Couldn’t send your card just now. Try again in a moment.")
             let closed = Self.refusalCode(error) == "CARD_ARRIVAL_CLOSED"
             guard closed || step == .seal else {
