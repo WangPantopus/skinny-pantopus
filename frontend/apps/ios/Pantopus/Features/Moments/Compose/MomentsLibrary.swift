@@ -4,9 +4,13 @@
 //
 //  Posting from the library (Moments brief, "Posting"): any photo or video
 //  in the album, newest first (founder, 2026-11-11; it was the last 24 hours
-//  before). One taken more than a day ago says when on the Moment ("Taken
-//  Oct 3"), so it never reads as now. A photo or video pins where it was taken
-//  when the file says where; a video over 30 seconds can't be chosen.
+//  before). The title is a button: it opens the albums the Photos app shows
+//  (Favorites, Videos, Recently Saved, the person's own; `MomentsLibraryAlbums.swift`)
+//  and the grid shows the one chosen. One taken more than a day ago says when
+//  on the Moment ("Taken Oct 3"), so it never reads as now. A photo or video
+//  pins where it was taken when the file says where; a video over 30 seconds
+//  can't be chosen. "Select" picks up to ten together: each is its own Moment,
+//  with its own Post sheet in turn (`MomentsComposerModel+Several.swift`).
 //
 
 import AVFoundation
@@ -100,9 +104,16 @@ struct MomentsLibraryScreen: View {
     let model: MomentsComposerModel
     let onClose: () -> Void
     @State private var status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-    @State private var assets: PHFetchResult<PHAsset>?
+    @State private var assets: MomentsAlbumAssets?
     @State private var loaded = false
+    /// The album in the grid: the whole library ("Recents") until another is chosen.
+    @State private var album: MomentsAlbum?
+    @State private var albums: [MomentsAlbumSection]?
+    @State private var showsAlbums = false
     @State private var opening: String?
+    /// "Select" is on: a tap picks or drops one, in the order they'll post.
+    @State private var selecting = false
+    @State private var picked: [PHAsset] = []
     @Environment(\.momentsDuoScreen) private var duo
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
@@ -120,8 +131,12 @@ struct MomentsLibraryScreen: View {
                     .background(Capsule().fill(Theme.Color.errorSolid.opacity(0.9)))
                     .padding(.vertical, Spacing.s2)
             }
-            MomentsModeTabs(model: model)
-                .padding(.bottom, Spacing.s1)
+            if selecting, !picked.isEmpty {
+                nextButton
+            } else {
+                MomentsModeTabs(model: model)
+                    .padding(.bottom, Spacing.s1)
+            }
         }
         .background(Color.black)
         // The closed iPhone Duo: Close is in the side strip, as on the camera and the text card (boards C6, C7).
@@ -139,6 +154,18 @@ struct MomentsLibraryScreen: View {
             }
         }
         .task { await open() }
+        .sheet(isPresented: $showsAlbums) {
+            MomentsAlbumsSheet(
+                sections: albums,
+                current: album?.id ?? MomentsAlbum.recentsID,
+                onChoose: show
+            ) {
+                showsAlbums = false
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .task { albums = await MomentsAlbums.sections() }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.library")
     }
@@ -158,15 +185,81 @@ struct MomentsLibraryScreen: View {
                 .accessibilityIdentifier("moments.camera.close")
             }
             Spacer()
-            Text("Recents")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .accessibilityAddTraits(.isHeader)
+            albumButton
             Spacer()
-            Color.clear.frame(width: 44, height: 44)
+            selectButton
         }
         .padding(.horizontal, Spacing.s2)
         .frame(height: 48)
+    }
+
+    /// "Recents ⌄": the album in the grid, and the way to another.
+    private var albumButton: some View {
+        Button {
+            showsAlbums = true
+        } label: {
+            HStack(spacing: 6) {
+                Text(album?.title ?? "Recents")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Icon(.chevronDown, size: 16, color: .white)
+            }
+            .padding(.horizontal, Spacing.s3)
+            .frame(height: 36)
+            .background(Capsule().fill(Color.white.opacity(0.14)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(status != .authorized && status != .limited)
+        .accessibilityLabel("\(album?.title ?? "Recents"), choose an album")
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("moments.library.albums")
+    }
+
+    /// "Select" / "Cancel", across from Close: several at once, each its own Moment.
+    private var selectButton: some View {
+        Button(selecting ? "Cancel" : "Select") {
+            selecting.toggle()
+            picked = []
+        }
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(.white)
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .opacity(assets?.isEmpty == false ? 1 : 0)
+        .disabled(assets?.isEmpty != false || opening != nil)
+        .accessibilityLabel(selecting ? "Cancel selecting" : "Select several")
+        .accessibilityIdentifier("moments.library.select")
+    }
+
+    /// "Next · 3": on to the first one's Post sheet.
+    private var nextButton: some View {
+        Button {
+            guard opening == nil, let first = picked.first else { return }
+            opening = first.localIdentifier
+            Task {
+                await model.use(assets: picked)
+                opening = nil
+            }
+        } label: {
+            ZStack {
+                Text("Next · \(picked.count)")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .opacity(opening == nil ? 1 : 0)
+                if opening != nil { ProgressView().tint(.white) }
+            }
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(Capsule().fill(Theme.Color.primarySolid))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, Spacing.s4)
+        .padding(.vertical, Spacing.s2)
+        .accessibilityLabel("Next, \(picked.count) picked")
+        .accessibilityIdentifier("moments.library.next")
     }
 
     @ViewBuilder
@@ -183,8 +276,10 @@ struct MomentsLibraryScreen: View {
         default:
             if !loaded {
                 ProgressView().tint(.white)
-            } else if let assets, assets.firstObject != nil {
+            } else if let assets, !assets.isEmpty {
                 grid(assets)
+                    // A new album starts at its top.
+                    .id(album?.id ?? MomentsAlbum.recentsID)
             } else {
                 note(title: "No photos or videos yet", line: "Photos and videos you take show here.", button: nil, action: nil)
                     .accessibilityIdentifier("moments.library.empty")
@@ -192,7 +287,7 @@ struct MomentsLibraryScreen: View {
         }
     }
 
-    private func grid(_ assets: PHFetchResult<PHAsset>) -> some View {
+    private func grid(_ assets: MomentsAlbumAssets) -> some View {
         ScrollView {
             if status == .limited {
                 Text("Showing the photos you allowed. Change this in Settings.")
@@ -204,8 +299,13 @@ struct MomentsLibraryScreen: View {
             }
             LazyVGrid(columns: columns, spacing: 2) {
                 ForEach(0..<assets.count, id: \.self) { index in
-                    let asset = assets.object(at: index)
-                    MomentsLibraryCell(asset: asset, isOpening: opening == asset.localIdentifier) {
+                    let asset = assets.asset(at: index)
+                    MomentsLibraryCell(
+                        asset: asset,
+                        isOpening: !selecting && opening == asset.localIdentifier,
+                        selecting: selecting,
+                        order: picked.firstIndex { $0.localIdentifier == asset.localIdentifier }.map { $0 + 1 }
+                    ) {
                         choose(asset)
                     }
                     .id(asset.localIdentifier)
@@ -243,12 +343,28 @@ struct MomentsLibraryScreen: View {
             loaded = true
             return
         }
-        assets = MomentsLibraryLoader.albumAssets()
+        assets = MomentsAlbums.assets(in: nil)
         loaded = true
+    }
+
+    private func show(_ chosen: MomentsAlbum) {
+        album = chosen.collection == nil ? nil : chosen
+        assets = MomentsAlbums.assets(in: chosen.collection)
+        showsAlbums = false
     }
 
     private func choose(_ asset: PHAsset) {
         guard opening == nil else { return }
+        if selecting {
+            if let index = picked.firstIndex(where: { $0.localIdentifier == asset.localIdentifier }) {
+                picked.remove(at: index)
+            } else if picked.count < MomentsComposerModel.pickLimit {
+                picked.append(asset)
+            } else {
+                model.error = "Up to \(MomentsComposerModel.pickLimit) at a time."
+            }
+            return
+        }
         opening = asset.localIdentifier
         Task {
             await model.use(asset: asset)
@@ -261,19 +377,17 @@ struct MomentsLibraryScreen: View {
 private struct MomentsLibraryCell: View {
     let asset: PHAsset
     let isOpening: Bool
+    /// "Select" is on, and this one's place among the ones picked (1 posts first).
+    var selecting = false
+    var order: Int?
     let onTap: () -> Void
-    @State private var thumbnail: UIImage?
 
     var body: some View {
         let tooLong = asset.mediaType == .video
             && asset.duration > MomentsMediaExport.maxVideoSeconds + MomentsMediaExport.videoSecondsTolerance
         Button(action: onTap) {
-            Color(white: 0.12)
+            MomentsLibraryThumbnail(asset: asset)
                 .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    if let thumbnail { Image(uiImage: thumbnail).resizable().scaledToFill() }
-                }
-                .clipped()
                 .overlay(alignment: .bottomTrailing) {
                     if asset.mediaType == .video {
                         Text(duration)
@@ -287,13 +401,33 @@ private struct MomentsLibraryCell: View {
                 .overlay {
                     if tooLong { Color.black.opacity(0.55) }
                     if isOpening { ProgressView().tint(.white) }
+                    if order != nil { Color.white.opacity(0.18) }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if selecting, !tooLong { badge }
                 }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(tooLong)
-        .task { thumbnail = await MomentsLibraryLoader.thumbnail(for: asset, side: 240) }
-        .accessibilityLabel(label(tooLong: tooLong))
+        .accessibilityLabel(label(tooLong: tooLong) + (order.map { ", picked, number \($0)" } ?? ""))
+        .accessibilityAddTraits(order == nil ? [] : .isSelected)
+    }
+
+    /// An empty ring until it's picked, then its number.
+    private var badge: some View {
+        ZStack {
+            Circle().fill(order == nil ? Color.black.opacity(0.25) : Theme.Color.primarySolid)
+            Circle().strokeBorder(Color.white, lineWidth: 1.5)
+            if let order {
+                Text("\(order)")
+                    .font(.system(size: 13, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: 24, height: 24)
+        .padding(6)
     }
 
     private var duration: String {

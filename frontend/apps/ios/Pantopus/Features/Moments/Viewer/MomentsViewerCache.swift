@@ -4,8 +4,9 @@
 //
 //  What a viewer has read: each Moment (its signed media link lasts 15
 //  minutes, so a copy older than 12 is read again) and the photos it has
-//  loaded, in memory only and never on disk. The next Moment is read ahead
-//  so the next tap shows it at once.
+//  loaded, in memory only and never on disk. A person's whole ring and the
+//  people on either side are read ahead in one request, with their pictures,
+//  so a tap or a swipe shows the next one at once.
 //
 
 import Foundation
@@ -21,6 +22,22 @@ final class MomentsViewerCache {
 
     func cached(_ id: String) -> MomentDTO? {
         details[id]?.moment
+    }
+
+    /// The Moment, only when what's held can play right now: it hasn't ended and its link is still good.
+    func ready(_ id: String) -> MomentDTO? {
+        guard let saved = details[id], Date().timeIntervalSince(saved.readAt) < Self.linkLifetime else { return nil }
+        if let end = saved.moment.expiresAtDate, end <= Date() { return nil }
+        return saved.moment
+    }
+
+    /// A photo, or a video's first picture, already in memory.
+    func heldPicture(_ id: String) -> UIImage? {
+        images[id]
+    }
+
+    func heldPoster(_ id: String) -> UIImage? {
+        images["poster.\(id)"]
     }
 
     /// The Moment, with a fresh enough link to load its file.
@@ -45,12 +62,7 @@ final class MomentsViewerCache {
         guard (response as? HTTPURLResponse)?.statusCode ?? 200 < 400, let image = UIImage(data: data) else {
             throw MomentsFailure.other("Couldn't load this Moment.")
         }
-        images[moment.id] = image
-        order.append(moment.id)
-        // A handful of photos in memory is plenty.
-        while order.count > 8 {
-            images.removeValue(forKey: order.removeFirst())
-        }
+        hold(image, as: moment.id)
         return image
     }
 
@@ -60,22 +72,48 @@ final class MomentsViewerCache {
         if let image = images[key] { return image }
         guard let url = moment.poster, let (data, response) = try? await session.data(from: url),
               (response as? HTTPURLResponse)?.statusCode ?? 200 < 400, let image = UIImage(data: data) else { return nil }
-        images[key] = image
-        order.append(key)
+        hold(image, as: key)
         return image
     }
 
-    /// Reads a Moment ahead (and its photo, or its video's poster).
-    func prefetch(_ id: String) {
-        guard details[id] == nil else { return }
-        Task { [weak self] in
-            guard let self, let moment = try? await detail(id) else { return }
+    /// The Moments on either side of the one showing stay in memory; older ones go.
+    private func hold(_ image: UIImage, as key: String) {
+        images[key] = image
+        order.removeAll { $0 == key }
+        order.append(key)
+        while order.count > 14 {
+            images.removeValue(forKey: order.removeFirst())
+        }
+    }
+
+    /// Reads these Moments ahead in one request (`ids` in the order they matter), then the pictures of the first
+    /// `pictures` of them, one after another so the nearest is ready first. Answers the Moments it can play.
+    @discardableResult
+    func readAhead(_ ids: [String], pictures: Int) async -> [MomentDTO] {
+        let missing = ids.filter { ready($0) == nil }
+        if !missing.isEmpty {
+            if let read = try? await MomentsAPI.send(MomentsEndpoints.batch(ids: missing), as: MomentsMineResponse.self) {
+                let now = Date()
+                for moment in read.moments {
+                    details[moment.id] = (moment, now)
+                }
+            } else {
+                // A server from before the batch read (or a read that failed): the two nearest, one at a time.
+                for id in missing.prefix(2) where !Task.isCancelled {
+                    _ = try? await detail(id)
+                }
+            }
+        }
+        let playable = ids.compactMap { ready($0) }
+        for moment in playable.prefix(pictures) {
+            guard !Task.isCancelled else { break }
             switch moment.kind {
             case .photo: _ = try? await picture(for: moment)
             case .video: _ = await poster(for: moment)
             case .text: break
             }
         }
+        return playable
     }
 
     func forget(_ id: String) {

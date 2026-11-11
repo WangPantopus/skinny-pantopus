@@ -81,6 +81,10 @@ final class MomentsComposerModel {
     var choseNoLocation = false
     /// When the album photo or video was taken (any time); nil for the camera, a text card, or a file that never said.
     private(set) var takenAt: Date?
+    /// The rest of what was picked together in the library, in the order picked (`+Several`): each takes the sheet
+    /// when the one before it has posted. And how many were picked together.
+    var waiting: [PHAsset] = []
+    var pickedTogether = 0
     // The Post sheet (P3).
     var showArea = false
     var hours = 24
@@ -205,22 +209,6 @@ final class MomentsComposerModel {
         }
     }
 
-    /// The camera is what's showing: the capture session runs only then.
-    var wantsCamera: Bool {
-        gate == .open && mode == .camera && draft == nil
-    }
-
-    /// The place chip: "Esther Short Park", "Your home" at home (as the Post sheet says; others read the
-    /// town), or why there's no pin yet.
-    var placeChip: String {
-        switch locating {
-        case .locating: "Finding where you are…"
-        case .unavailable: choseNoLocation ? "No location" : "Location is off"
-        case .located:
-            if place?.atHome == true { "Your home" } else { place?.placeLabel.isEmpty == false ? place?.placeLabel ?? "" : "Near you" }
-        }
-    }
-
     // MARK: - What's posted
 
     func use(photo: UIImage) {
@@ -300,6 +288,31 @@ final class MomentsComposerModel {
         if capture != nil, let fix { Task { await preview(latitude: fix.coordinate.latitude, longitude: fix.coordinate.longitude) } }
         capture = nil
         takenAt = nil
+        waiting = []
+        pickedTogether = 0
+    }
+
+    /// The one on the sheet has posted: the next of the ones picked together takes the sheet, with its own place and
+    /// words and the same "How long" and "Who sees it". False when none is left: the composer closes.
+    func moveOn() async -> Bool {
+        guard !waiting.isEmpty else { return false }
+        isPosting = true
+        defer { isPosting = false }
+        let wasElsewhere = capture != nil
+        (caption, venue, placeKey) = ("", nil, nil)
+        while !waiting.isEmpty {
+            (capture, takenAt) = (nil, nil)
+            await use(asset: waiting.removeFirst())
+            // One that can't be opened is passed over; the next takes its turn.
+            guard error == nil else { continue }
+            // It never said where it was taken, and the one before it did: the sheet is back where you are.
+            if capture == nil, wasElsewhere, let here = fix?.coordinate {
+                await preview(latitude: here.latitude, longitude: here.longitude)
+            }
+            return true
+        }
+        pickedTogether = 0
+        return false
     }
 
     /// Exports in the background while the Post sheet is open.
@@ -461,19 +474,6 @@ extension MomentsComposerModel {
         guard let account = Self.account else { return }
         defaults.set(hours, forKey: Self.hoursKey(account))
         defaults.set(audience.rawValue, forKey: Self.audienceKey(account))
-    }
-
-    private static var account: String? {
-        guard case let .signedIn(user) = AuthManager.shared.state else { return nil }
-        return user.id
-    }
-
-    private static func hoursKey(_ account: String) -> String {
-        "pantopus.moments.lastHours.\(account)"
-    }
-
-    private static func audienceKey(_ account: String) -> String {
-        "pantopus.moments.lastAudience.\(account)"
     }
 
     /// The pin: where a library item was taken, else a fix at most four and a half minutes old.

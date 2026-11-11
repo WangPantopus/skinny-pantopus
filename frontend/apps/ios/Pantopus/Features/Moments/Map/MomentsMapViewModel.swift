@@ -107,6 +107,8 @@ final class MomentsMapViewModel {
     private(set) var focus: MomentsFocus?
     /// Bumped to ask the view to move the camera to `center`.
     private(set) var recenterRequest = 0
+    /// A place the viewer asked for (the place under a Moment's name, tapped): the view moves the camera there.
+    private(set) var placeRequest: MomentsPlaceRequest?
     /// The clock the end times are read against; moved on each read and each minute.
     private(set) var now = Date()
     /// Where the camera last settled.
@@ -385,6 +387,11 @@ final class MomentsMapViewModel {
             latitude: cluster.coordinate.latitude,
             longitude: cluster.coordinate.longitude
         )
+    }
+
+    func showPlace(latitude: Double, longitude: Double) {
+        focus = nil
+        placeRequest = MomentsPlaceRequest(latitude: latitude, longitude: longitude)
     }
 
     /// Back to the area: the camera the spot was opened from.
