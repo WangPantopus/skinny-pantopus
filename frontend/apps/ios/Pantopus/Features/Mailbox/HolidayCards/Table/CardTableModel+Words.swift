@@ -67,12 +67,20 @@ extension CardTableModel {
         step == .out && sending == nil && !content.sealed && !(content.verse ?? "").isEmpty
     }
 
-    /// The quiet button under the main one: "Send {first name} a card", once the reader has turned the card over (on
-    /// the open Duo both sides show, so at once). Never on a sealed card.
+    /// The quiet buttons under the main one: "Send {first name} a card" and "Share this card" (plan 11.1), once the
+    /// reader has turned the card over (on the open Duo both sides show, so at once). Never on a sealed card; the
+    /// corner's share stays.
     var secondaries: [CardTableMenuItem] {
         if let sending { return sending == .gone ? goneButtons : [] }
-        guard step == .out, !content.sealed, turnedOnce || fold.isSpread, let sendBack else { return [] }
-        return [sendBack]
+        guard step == .out, !content.sealed, turnedOnce || fold.isSpread else { return [] }
+        var items: [CardTableMenuItem] = []
+        if let sendBack { items.append(sendBack) }
+        if offersShare {
+            items.append(CardTableMenuItem(title: "Share this card", identifier: "cardTableShareQuiet") { [weak self] in
+                self?.isSharing = true
+            })
+        }
+        return items
     }
 
     // MARK: Sealing (plan Part 2)

@@ -96,6 +96,7 @@ struct CardTableScreen: View {
             }
         }
         .onAppear {
+            model.offersShare = canShare
             model.reduceMotion = reduceMotion
             model.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
             model.setShowing(true)
