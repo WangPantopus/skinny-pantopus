@@ -65,6 +65,14 @@ enum class LaunchFeature(
      * and [HOLIDAY_CARDS] on too. With it off, cards look and work as they did.
      */
     CARD_TABLE("card_table"),
+
+    /**
+     * 14. A card's own photo and voice greeting (the founder's memories plan of 2026-11-02, built switched off on
+     * 2026-11-10): "Add a photo" and "Record a greeting" on Write on the back, shown only when `GET /api/mailbox/cards`
+     * also says `media.photo.usable` / `media.voice.usable`. It needs [MAILBOX] on too. Cards already delivered keep
+     * their photo and greeting for their reader with it off.
+     */
+    HOLIDAY_CARD_MEMORIES("holiday_card_memories"),
 }
 
 /**
@@ -97,6 +105,7 @@ object LaunchFeatures {
     val pulseRedesign: Boolean get() = isEnabled(LaunchFeature.PULSE_REDESIGN)
     val holidayCards: Boolean get() = isEnabled(LaunchFeature.HOLIDAY_CARDS)
     val cardTable: Boolean get() = isEnabled(LaunchFeature.CARD_TABLE) && mailbox && holidayCards
+    val holidayCardMemories: Boolean get() = isEnabled(LaunchFeature.HOLIDAY_CARD_MEMORIES) && mailbox
 
     /** Parses a comma-separated key list ("all" enables every feature). */
     fun parse(raw: String?): Set<LaunchFeature> {

@@ -124,11 +124,14 @@ interface HolidayCardsApi {
     suspend fun sent(
         @Query("before") before: String?,
         @Query("limit") limit: Int,
+        /** `not_delivered` (launch key `holiday_card_memories`): a card a block withdrew comes back as "Couldn't be delivered". */
+        @Query("include") include: String? = null,
     ): SentMailResponse
 
     /** `GET /api/mailbox/sent/:id` — the same route file: one card the person sent, its note and trail; 404 for anyone else. */
     @GET("api/mailbox/sent/{id}")
     suspend fun sentCard(
         @Path("id") id: String,
+        @Query("include") include: String? = null,
     ): SentCardResponse
 }

@@ -16,6 +16,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.ui.screens.profile.ReportUserSheet
+import app.pantopus.android.ui.screens.profile.ReportedCard
 import app.pantopus.android.ui.theme.PantopusColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,7 +92,13 @@ internal fun CardSenderSheets(
     onCloseReport: () -> Unit,
     onCloseBlock: () -> Unit,
     viewModel: CardSenderActionsViewModel,
+    /**
+     * "Report this card" and "Block {first name}" (memories plan, launch key `holiday_card_memories`; wave 4 drawings
+     * 6-8): the card the report shares with Pantopus admins, that one only. Null: the person is reported, as before.
+     */
+    cardId: String? = null,
 ) {
+    val first = name.trim().substringBefore(' ').removeSuffix(".").ifEmpty { name }
     if (reporting) {
         ReportUserSheet(
             userId = userId,
@@ -103,13 +110,21 @@ internal fun CardSenderSheets(
                 onCloseReport()
                 viewModel.say("Report received. Thanks for telling us.")
             },
+            card = cardId?.let { ReportedCard(it, first) },
         )
     }
     if (confirmBlock) {
+        // A block withdraws the cards (and later the replies) on their way between the two of them (contract section 8).
+        val withdrawn = if (cardId != null) " Cards and replies on their way between you are withdrawn." else ""
         AlertDialog(
             onDismissRequest = onCloseBlock,
-            title = { Text("Block $name?") },
-            text = { Text("You won't get mail from them, and you won't be able to message each other. You can unblock them later.") },
+            title = { Text(if (cardId != null) "Block $first?" else "Block $name?") },
+            text = {
+                Text(
+                    "You won't get mail from them, and you won't be able to message each other.$withdrawn " +
+                        "You can unblock them later.",
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {

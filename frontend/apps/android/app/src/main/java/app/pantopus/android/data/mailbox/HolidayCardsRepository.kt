@@ -1,5 +1,6 @@
 package app.pantopus.android.data.mailbox
 
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
@@ -202,11 +203,17 @@ class HolidayCardsRepository
         suspend fun sent(
             before: String?,
             limit: Int = SENT_PAGE,
-        ): NetworkResult<SentMailResponse> = safeApiCall { api.sent(before, limit) }
+        ): NetworkResult<SentMailResponse> = safeApiCall { api.sent(before, limit, notDelivered()) }
+
+        /**
+         * Sent asks for the cards a block withdrew (the founder's B, memories contract section 8) only with card memories
+         * on: older apps would read their `not_delivered` status as delivered.
+         */
+        private fun notDelivered(): String? = "not_delivered".takeIf { LaunchFeatures.holidayCardMemories }
 
         /** `GET /api/mailbox/sent/:id`: one card the person sent, with their note and its trail (Sent's row follows it). */
         suspend fun sentCard(id: String): NetworkResult<SentCard> =
-            when (val result = safeApiCall { api.sentCard(id) }) {
+            when (val result = safeApiCall { api.sentCard(id, notDelivered()) }) {
                 is NetworkResult.Success -> {
                     sentReadFlow.tryEmit(result.data.item)
                     NetworkResult.Success(result.data.item)
