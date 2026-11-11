@@ -10,6 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -137,12 +139,13 @@ internal fun CardTableControls(
     val bottom = insets.calculateBottomPadding()
     val hidden = state.controlsHidden && !touchExploring
     // The quiet buttons under the main one: the sender's once their card is gone, or the reader's "Send … a card" once
-    // the card has been turned over (not on a sealed card).
+    // the card has been turned over (not on a sealed card), with "Share this card" beside it (plan 11.1; the corner icon
+    // stays).
     val moment = state.sending
     val quiet =
         when {
             moment != null -> if (moment.step == SendStep.Gone) gone else emptyList()
-            sendBack != null && state.sendBackShows -> listOf(sendBack)
+            state.sendBackShows -> listOfNotNull(sendBack, CardTableSendBack(SHARE_THIS_CARD, onShare).takeIf { canShare })
             else -> emptyList()
         }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -249,6 +252,7 @@ private fun Words(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActionBlock(
     state: CardTableState,
@@ -290,28 +294,40 @@ private fun ActionBlock(
                     Text(state.primaryLabel, style = tablePrimaryStyle)
                 }
             }
-            quiet.forEachIndexed { index, action ->
-                Box(
-                    modifier =
-                        Modifier
-                            .minimumInteractiveComponentSize()
-                            .clip(RoundedCornerShape(22.dp))
-                            .then(
-                                if (away) {
-                                    Modifier
-                                } else {
-                                    Modifier.clickable(role = Role.Button, onClick = action.onClick)
-                                },
-                            ).heightIn(min = 44.dp)
-                            .padding(horizontal = 16.dp)
-                            .testTag(if (state.sending == null) "cardTableSendBack" else "cardTableGone.$index"),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(action.title, style = tableQuietStyle)
+            if (state.sending == null) {
+                // The reader's quiet buttons side by side in the one quiet line (plan 11.1), wrapping at large text.
+                FlowRow(horizontalArrangement = Arrangement.Center) {
+                    quiet.forEach { action ->
+                        QuietButton(action, away, if (action.title == SHARE_THIS_CARD) "cardTableShareQuiet" else "cardTableSendBack")
+                    }
                 }
+            } else {
+                quiet.forEachIndexed { index, action -> QuietButton(action, away, "cardTableGone.$index") }
             }
             HintSlot(state, away)
         }
+    }
+}
+
+/** A quiet button under the main one: words only, 44 dp to touch. */
+@Composable
+private fun QuietButton(
+    action: CardTableSendBack,
+    away: Boolean,
+    tag: String,
+) {
+    Box(
+        modifier =
+            Modifier
+                .minimumInteractiveComponentSize()
+                .clip(RoundedCornerShape(22.dp))
+                .then(if (away) Modifier else Modifier.clickable(role = Role.Button, onClick = action.onClick))
+                .heightIn(min = 44.dp)
+                .padding(horizontal = 16.dp)
+                .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(action.title, style = tableQuietStyle)
     }
 }
 
@@ -460,3 +476,6 @@ private fun TurnTip() {
         )
     }
 }
+
+/** The quiet "Share this card" once the card is turned over (plan 11.1). */
+internal const val SHARE_THIS_CARD = "Share this card"

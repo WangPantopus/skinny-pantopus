@@ -184,7 +184,15 @@ private fun CardTable(
         val safeTop = WindowInsets.safeDrawing.getTop(density).toFloat()
         val safeBottom = WindowInsets.navigationBars.getBottom(density).toFloat()
         val geometry =
-            rememberTableGeometry(card, constraints, safeTop, safeBottom, density, quietButton = sendBack != null, sending = calls != null)
+            rememberTableGeometry(
+                card,
+                constraints,
+                safeTop,
+                safeBottom,
+                density,
+                quietButton = hasQuietLine(sendBack, canShare),
+                sending = calls != null,
+            )
         SideEffect { state.geometry = geometry }
         // A new window size (the phone turned, a fold opened) brings an enlarged card back to its size.
         LaunchedEffect(geometry) { state.resetZoom(immediate = true) }
@@ -341,8 +349,11 @@ private fun rememberTableGeometry(
             val pillHeight = max(48.dp.toPx(), primaryHeight + 12.dp.toPx())
             val quietHeight =
                 if (quietButton && !card.sealed) {
-                    max(48.dp.toPx(), measurer.measure("Send ${card.fromFirst} a card", tableQuietStyle).size.height + 12.dp.toPx()) +
-                        2.dp.toPx()
+                    val send = measurer.measure("Send ${card.fromFirst} a card", tableQuietStyle).size
+                    val share = measurer.measure(SHARE_THIS_CARD, tableQuietStyle).size
+                    // Side by side when both fit the line (plan 11.1), else one under the other at large text.
+                    val lines = if (send.width + share.width + 64.dp.roundToPx() > textWidth) 2 else 1
+                    (max(48.dp.toPx(), send.height + 12.dp.toPx()) + 2.dp.toPx()) * lines
                 } else {
                     0f
                 }
@@ -576,3 +587,9 @@ private fun LetterOpens(
 
 private const val LETTER_OPENS_MS = 1_100L
 private const val LETTER_OPENS_AT_ONCE_MS = 300L
+
+/** The reader's quiet line under the button: "Send … a card" and, where it can be shared, "Share this card" (plan 11.1). */
+private fun hasQuietLine(
+    sendBack: CardTableSendBack?,
+    canShare: Boolean,
+): Boolean = sendBack != null || canShare
