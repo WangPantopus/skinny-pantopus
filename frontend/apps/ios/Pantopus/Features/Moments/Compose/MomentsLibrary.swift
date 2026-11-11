@@ -2,10 +2,11 @@
 //  MomentsLibrary.swift
 //  Pantopus
 //
-//  Posting from the library (Moments brief, "Posting"): only photos and
-//  videos taken in the last 24 hours, newest first, so a Moment is still
-//  about now. A photo or video pins where it was taken when the file says
-//  where; a video over 30 seconds can't be chosen.
+//  Posting from the library (Moments brief, "Posting"): any photo or video
+//  in the album, newest first (founder, 2026-11-11; it was the last 24 hours
+//  before). One taken more than a day ago says when on the Moment ("Taken
+//  Oct 3"), so it never reads as now. A photo or video pins where it was taken
+//  when the file says where; a video over 30 seconds can't be chosen.
 //
 
 import AVFoundation
@@ -13,29 +14,32 @@ import Photos
 import SwiftUI
 import UIKit
 
-/// Reads the photo library: the last 24 hours, thumbnails and the files themselves.
+/// Reads the photo library: the whole album, thumbnails and the files themselves.
 @MainActor
 enum MomentsLibraryLoader {
-    static func recentAssets() -> [PHAsset] {
+    /// Every photo and video, newest first. Lazy: the grid reads only the ones it shows, however big the album.
+    static func albumAssets(limit: Int = 0) -> PHFetchResult<PHAsset> {
         let options = PHFetchOptions()
         options.predicate = NSPredicate(
-            format: "creationDate >= %@ AND (mediaType == %d OR mediaType == %d)",
-            Date().addingTimeInterval(-24 * 3600) as NSDate,
+            format: "mediaType == %d OR mediaType == %d",
             PHAssetMediaType.image.rawValue,
             PHAssetMediaType.video.rawValue
         )
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        options.fetchLimit = 300
-        let result = PHAsset.fetchAssets(with: options)
-        var assets: [PHAsset] = []
-        result.enumerateObjects { asset, _, _ in assets.append(asset) }
-        return assets
+        options.fetchLimit = limit
+        return PHAsset.fetchAssets(with: options)
     }
 
-    /// The camera's library button: the newest of the last 24 hours, only when the library is already open to Pantopus.
+    /// The newest few (the camera's library button, the Duo's recent row).
+    static func newestAssets(_ count: Int) -> [PHAsset] {
+        let result = albumAssets(limit: count)
+        return (0..<result.count).map { result.object(at: $0) }
+    }
+
+    /// The camera's library button: the newest photo or video, only when the library is already open to Pantopus.
     static func newestThumbnail() async -> UIImage? {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-        guard status == .authorized || status == .limited, let newest = recentAssets().first else { return nil }
+        guard status == .authorized || status == .limited, let newest = newestAssets(1).first else { return nil }
         return await thumbnail(for: newest, side: 120)
     }
 
@@ -96,7 +100,7 @@ struct MomentsLibraryScreen: View {
     let model: MomentsComposerModel
     let onClose: () -> Void
     @State private var status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-    @State private var assets: [PHAsset] = []
+    @State private var assets: PHFetchResult<PHAsset>?
     @State private var loaded = false
     @State private var opening: String?
     @Environment(\.momentsDuoScreen) private var duo
@@ -154,7 +158,7 @@ struct MomentsLibraryScreen: View {
                 .accessibilityIdentifier("moments.camera.close")
             }
             Spacer()
-            Text("Last 24 hours")
+            Text("Recents")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .accessibilityAddTraits(.isHeader)
@@ -171,7 +175,7 @@ struct MomentsLibraryScreen: View {
         case .denied, .restricted:
             note(
                 title: "Allow Pantopus to see your photos",
-                line: "Then photos and videos you took in the last 24 hours show here.",
+                line: "Then your photos and videos show here.",
                 button: "Open Settings"
             ) {
                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
@@ -179,16 +183,16 @@ struct MomentsLibraryScreen: View {
         default:
             if !loaded {
                 ProgressView().tint(.white)
-            } else if assets.isEmpty {
-                note(title: "Nothing from the last 24 hours", line: "Photos and videos you take today show here.", button: nil, action: nil)
-                    .accessibilityIdentifier("moments.library.empty")
+            } else if let assets, assets.firstObject != nil {
+                grid(assets)
             } else {
-                grid
+                note(title: "No photos or videos yet", line: "Photos and videos you take show here.", button: nil, action: nil)
+                    .accessibilityIdentifier("moments.library.empty")
             }
         }
     }
 
-    private var grid: some View {
+    private func grid(_ assets: PHFetchResult<PHAsset>) -> some View {
         ScrollView {
             if status == .limited {
                 Text("Showing the photos you allowed. Change this in Settings.")
@@ -199,10 +203,12 @@ struct MomentsLibraryScreen: View {
                     .padding(.vertical, Spacing.s2)
             }
             LazyVGrid(columns: columns, spacing: 2) {
-                ForEach(Array(assets.enumerated()), id: \.element.localIdentifier) { index, asset in
+                ForEach(0..<assets.count, id: \.self) { index in
+                    let asset = assets.object(at: index)
                     MomentsLibraryCell(asset: asset, isOpening: opening == asset.localIdentifier) {
                         choose(asset)
                     }
+                    .id(asset.localIdentifier)
                     .accessibilityIdentifier("moments.library.item.\(index)")
                 }
             }
@@ -237,7 +243,7 @@ struct MomentsLibraryScreen: View {
             loaded = true
             return
         }
-        assets = MomentsLibraryLoader.recentAssets()
+        assets = MomentsLibraryLoader.albumAssets()
         loaded = true
     }
 

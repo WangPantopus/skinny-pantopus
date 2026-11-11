@@ -8,7 +8,7 @@
 //  strip under the clock. Open sideways, flat or like a book (O7): the
 //  picture in the Moment's tall shape on the left half; on the right Close
 //  and the flash, the library, the shutter and the switch, Library · Camera ·
-//  Text, and "From the last 24 hours" (the newest four, and See all). One
+//  Text, and "Recents" (the newest four, and See all). One
 //  layout for both, so the picture stays the same view through a fold.
 //
 
@@ -106,7 +106,7 @@ extension MomentsCameraScreen {
     // MARK: - Open sideways (O7)
 
     /// The right half, in the card's place beside the map: Close and the flash at the top, the shutter row, the tabs,
-    /// and the last 24 hours.
+    /// and the newest photos and videos.
     private var openControls: some View {
         let column = duo.card
         return ZStack(alignment: .topLeading) {
@@ -152,7 +152,8 @@ extension MomentsCameraScreen {
     }
 }
 
-/// Board O7: "From the last 24 hours", the newest four photos and videos, and See all (the library). Only where the
+/// Board O7: "Recents" (it read "From the last 24 hours" until the album opened up, founder 2026-11-11), the newest four
+/// photos and videos, and See all (the library). Only where the
 /// library is already open to Pantopus; otherwise See all opens the library, which asks.
 struct MomentsRecentStrip: View {
     let model: MomentsComposerModel
@@ -161,7 +162,7 @@ struct MomentsRecentStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
-                Text("From the last 24 hours")
+                Text("Recents")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.75))
                     .accessibilityAddTraits(.isHeader)
@@ -189,7 +190,7 @@ struct MomentsRecentStrip: View {
             if !model.camera.libraryAllowed {
                 note("Allow Pantopus to see your photos")
             } else if recents.isEmpty {
-                note("Nothing from the last 24 hours")
+                note("No photos or videos yet")
             } else {
                 HStack(spacing: 8) {
                     ForEach(0..<4, id: \.self) { index in
