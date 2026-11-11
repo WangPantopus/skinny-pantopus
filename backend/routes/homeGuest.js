@@ -39,6 +39,19 @@ function sendFailure(res, error) {
   return res.status(error.statusCode || 503).json({ error: error.code ? error.message : 'Could not load the share link. Please retry.',
     code: error.code || 'SHARE_UNAVAILABLE', ...(error.requiresPasscode ? { requiresPasscode: true } : {}) });
 }
+// The link names a document by its title, which has no extension, and a download
+// without one doesn't open on a double-click. The stored type supplies it.
+const EXTENSIONS = { 'application/pdf': '.pdf', 'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx', 'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx', 'text/plain': '.txt',
+  'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif' };
+function downloadName(title, mimeType) {
+  const name = String(title || 'Shared document').replace(/[\r\n]/g, ' ').slice(0,180);
+  const extension = EXTENSIONS[mimeType];
+  if (!extension) return name;
+  const already = (extension === '.jpg' ? ['.jpg', '.jpeg'] : [extension]).some(end => name.toLowerCase().endsWith(end));
+  return already ? name : `${name}${extension}`;
+}
 function privateResponse(res) {
   res.set('Cache-Control', 'private, no-store');
   res.set('Referrer-Policy', 'no-referrer');
@@ -59,7 +72,7 @@ router.get('/shared-documents/:receipt/:documentId', viewLimiter, optionalVerifi
     const document = await share.download({ receipt: req.params.receipt, documentId: req.params.documentId,
       recipientId: req.user?.id || null });
     // Attachment prevents an uploaded document from executing in the app origin.
-    res.attachment(String(document.title || 'Shared document').replace(/[\r\n]/g, ' ').slice(0,180));
+    res.attachment(downloadName(document.title, document.mimeType));
     // attachment() derives a type from the filename's extension, so the stored
     // MIME type must be applied after it or every download is octet-stream.
     res.type(document.mimeType || 'application/octet-stream');

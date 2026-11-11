@@ -334,7 +334,7 @@ describe('GET /api/homes/shared-documents/:receipt/:documentId', () => {
     const res = await request(makeApp()).get(`/api/homes/shared-documents/${'a'.repeat(64)}/${ROW_ID}`);
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/^text\/plain/);
-    expect(res.headers['content-disposition']).toBe('attachment; filename="Fixture document"');
+    expect(res.headers['content-disposition']).toBe('attachment; filename="Fixture document.txt"');
     expect(res.headers['cache-control']).toBe('private, no-store');
     expect(res.text).toBe('Shared document fixture bytes\n');
   });
