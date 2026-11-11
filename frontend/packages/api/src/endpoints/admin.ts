@@ -215,6 +215,8 @@ export interface VerificationQueueItem {
   document_mime_type: string | null;
   /** The platform fee approving sets for the business (a reduced rate for its type), or null when it sets none. */
   fee_on_approval_pct?: number | null;
+  /** Unverified pages with this business's name at one of its addresses; approving settles who keeps the name there. */
+  same_name_pages?: { business_user_id: string; name: string; username: string | null }[];
   metadata: Record<string, unknown> | null;
   created_at: string;
 }

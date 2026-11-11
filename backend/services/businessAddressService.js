@@ -19,7 +19,8 @@ const logger = require('../utils/logger');
 const { normalizeAddress, computeAddressHash } = require('../utils/normalizeAddress');
 const { geocodeAddress } = require('../utils/geocoding');
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { VERIFICATION_RANK } = require('../utils/businessConstants');
+const { VERIFICATION_RANK, PANTOPUS_VERIFIED_STATUSES } = require('../utils/businessConstants');
+const { sameBusinessName } = require('../utils/businessNameMatch');
 const parsePostGISPoint = require('../utils/parsePostGISPoint');
 
 // ── Constants ────────────────────────────────────────────────
@@ -369,7 +370,116 @@ async function findHouseholdAtAddress(hash, normalized) {
   return (occupants && occupants.length > 0) ? { homeIds: candidateIds } : null;
 }
 
-async function checkConflicts(normalized, hash, businessUserId) {
+/**
+ * Other businesses' active locations at this premises (same street address and the same suite, or none on both).
+ *
+ * Two passes, like the household probe: the stored hash, then house number + ZIP compared part by part. The phone
+ * create wizard saves its location with no hash, and "60 Centre St." hashes apart from "60 Centre St", so the hash
+ * alone misses both.
+ *
+ * @returns {Promise<{ rows: Array<{ id: string, business_user_id: string }> } | { error: string }>}
+ */
+async function otherBusinessLocationsAt(normalized, hash, businessUserId) {
+  const found = new Map();
+  const keep = (loc) => {
+    if (loc.business_user_id !== businessUserId) found.set(loc.id, { id: loc.id, business_user_id: loc.business_user_id });
+  };
+
+  if (hash) {
+    let query = supabaseAdmin
+      .from('BusinessLocation')
+      .select('id, business_user_id, address_hash, address2')
+      .eq('address_hash', hash)
+      .eq('is_active', true);
+    // Match on address2 (suite) for exact conflict detection
+    query = normalized.line2 ? query.eq('address2', normalized.line2) : query.or('address2.is.null,address2.eq.');
+    const { data, error } = await query;
+    if (error) return { error: error.message };
+    (data || []).forEach(keep);
+  }
+
+  const houseNumber = (String(normalized.line1 || '').trim().match(/^\d+/) || [])[0];
+  const zip5 = String(normalized.zip || '').trim().slice(0, 5);
+  if (houseNumber && zip5) {
+    const { data, error } = await supabaseAdmin
+      .from('BusinessLocation')
+      .select('id, business_user_id, address, address2, city, state, zipcode')
+      .eq('is_active', true)
+      .ilike('address', `${houseNumber} %`)
+      .ilike('zipcode', `${zip5}%`)
+      .limit(200);
+    if (error) return { error: error.message };
+    const wanted = householdMatchKey(normalized.line1, normalized.line2, normalized.city, normalized.state, zip5);
+    (data || [])
+      .filter((loc) => householdMatchKey(loc.address, loc.address2, loc.city, loc.state, loc.zipcode) === wanted)
+      .forEach(keep);
+  }
+
+  return { rows: [...found.values()] };
+}
+
+/**
+ * Among `locations` (other businesses' rows at one premises), the ones whose business reads as the same business
+ * as `businessName`, split by whether Pantopus has verified that business (a reviewed document or a registry
+ * check; the owner's own word doesn't count).
+ *
+ * @returns {Promise<{ verified: object[], unverified: object[] } | { error: string }>}
+ *   Each entry: { location_id, business_user_id, name, username }.
+ */
+async function sameNameBusinessesAmong(locations, businessName) {
+  const ids = [...new Set(locations.map((loc) => loc.business_user_id))];
+  if (ids.length === 0) return { verified: [], unverified: [] };
+
+  const [{ data: profiles, error: profileErr }, { data: accounts, error: accountErr }] = await Promise.all([
+    supabaseAdmin.from('BusinessProfile').select('business_user_id, verification_status').in('business_user_id', ids),
+    supabaseAdmin.from('User').select('id, name, username').in('id', ids),
+  ]);
+  if (profileErr || accountErr) return { error: (profileErr || accountErr).message };
+
+  const statusById = new Map((profiles || []).map((p) => [p.business_user_id, p.verification_status]));
+  const accountById = new Map((accounts || []).map((a) => [a.id, a]));
+  const verified = [];
+  const unverified = [];
+  for (const loc of locations) {
+    const account = accountById.get(loc.business_user_id);
+    if (!account || !sameBusinessName(businessName, account.name)) continue;
+    const entry = {
+      location_id: loc.id, business_user_id: loc.business_user_id, name: account.name, username: account.username,
+    };
+    (PANTOPUS_VERIFIED_STATUSES.has(statusById.get(loc.business_user_id)) ? verified : unverified).push(entry);
+  }
+  return { verified, unverified };
+}
+
+/** The name the business goes by, for the same-name check when the caller didn't pass one. */
+async function businessNameOf(businessUserId) {
+  if (!businessUserId) return { name: null };
+  const { data, error } = await supabaseAdmin.from('User').select('name').eq('id', businessUserId).maybeSingle();
+  if (error) return { error: error.message };
+  return { name: data?.name || null };
+}
+
+const NO_CONFLICT = Object.freeze({ has_conflict: false, conflicting_location_ids: [], status: 'ok', reasons: [] });
+// The check couldn't be made, so the address isn't given out (the routes say "try again").
+const UNCHECKED_CONFLICT = Object.freeze({
+  has_conflict: true, conflicting_location_ids: [], status: 'conflict', reasons: ['business_check_unavailable'],
+});
+
+/**
+ * May this business list a location at this address?
+ *
+ * - A home on Pantopus at the address: no, whatever businesses are there.
+ * - Other businesses there: yes. An address isn't owned by whoever typed it first; businesses share buildings,
+ *   and an abandoned draft must not lock the real business out.
+ * - Except a business Pantopus has verified keeps its name at its address: a page with the same or nearly the
+ *   same name is refused there (VERIFIED_SAME_NAME_BUSINESS).
+ *
+ * @param {object} normalized  { line1, line2, city, state, zip }
+ * @param {string} hash
+ * @param {string|null} businessUserId  The business adding the location; null while the wizard creates it.
+ * @param {string|null} [businessName]  Its name, when the caller has it (the wizard, a rename).
+ */
+async function checkConflicts(normalized, hash, businessUserId, businessName = null) {
   try {
     // A residential household at this address is a conflict regardless of what
     // other businesses are registered there.
@@ -385,47 +495,115 @@ async function checkConflicts(normalized, hash, businessUserId) {
       };
     }
 
-    let query = supabaseAdmin
-      .from('BusinessLocation')
-      .select('id, business_user_id, address_hash, address2')
-      .eq('address_hash', hash)
-      .eq('is_active', true);
-
-    // Match on address2 (suite) for exact conflict detection
-    if (normalized.line2) {
-      query = query.eq('address2', normalized.line2);
-    } else {
-      query = query.or('address2.is.null,address2.eq.');
+    const others = await otherBusinessLocationsAt(normalized, hash, businessUserId);
+    if (others.error) {
+      logger.warn('Conflict check query failed', { error: others.error });
+      return { ...NO_CONFLICT };
     }
+    if (others.rows.length === 0) return { ...NO_CONFLICT };
 
-    const { data: existing, error } = await query;
-
-    if (error) {
-      logger.warn('Conflict check query failed', { error: error.message });
-      return { has_conflict: false, conflicting_location_ids: [], status: 'ok', reasons: [] };
+    // Someone else lists this address. Only a verified business with this business's name stops it.
+    let name = businessName;
+    if (!name) {
+      const own = await businessNameOf(businessUserId);
+      if (own.error) {
+        logger.warn('Conflict check name lookup failed', { error: own.error });
+        return { ...UNCHECKED_CONFLICT };
+      }
+      name = own.name;
     }
-
-    if (!existing || existing.length === 0) {
-      return { has_conflict: false, conflicting_location_ids: [], status: 'ok', reasons: [] };
+    const sameName = await sameNameBusinessesAmong(others.rows, name);
+    if (sameName.error) {
+      logger.warn('Conflict check verification lookup failed', { error: sameName.error });
+      return { ...UNCHECKED_CONFLICT };
     }
-
-    // Check if all matches belong to the same business (updating own location)
-    const otherBusiness = existing.filter(loc => loc.business_user_id !== businessUserId);
-
-    if (otherBusiness.length > 0) {
+    if (sameName.verified.length > 0) {
       return {
         has_conflict: true,
-        conflicting_location_ids: otherBusiness.map(loc => loc.id),
+        conflicting_location_ids: sameName.verified.map((entry) => entry.location_id),
         status: 'conflict',
-        reasons: ['DUPLICATE_LOCATION'],
+        reasons: ['VERIFIED_SAME_NAME_BUSINESS'],
       };
     }
 
-    // Same business owns it — no conflict
-    return { has_conflict: false, conflicting_location_ids: [], status: 'ok', reasons: [] };
+    return { ...NO_CONFLICT };
   } catch (err) {
     logger.warn('Conflict check failed', { error: err.message });
-    return { has_conflict: false, conflicting_location_ids: [], status: 'ok', reasons: [] };
+    return { ...NO_CONFLICT };
+  }
+}
+
+/** A business's own active locations, as the premises the two checks below look at. */
+async function ownPremises(businessUserId) {
+  const { data, error } = await supabaseAdmin
+    .from('BusinessLocation')
+    .select('id, address, address2, city, state, zipcode, country, address_hash')
+    .eq('business_user_id', businessUserId)
+    .eq('is_active', true);
+  if (error) return { error: error.message };
+  return {
+    premises: (data || []).map((loc) => {
+      const normalized = {
+        line1: (loc.address || '').trim(),
+        line2: (loc.address2 || '').trim(),
+        city: (loc.city || '').trim(),
+        state: (loc.state || '').trim().toUpperCase(),
+        zip: (loc.zipcode || '').trim(),
+      };
+      const hash = loc.address_hash || computeAddressHash(
+        normalized.line1, normalized.line2, normalized.city, normalized.state, normalized.zip, loc.country || 'US',
+      );
+      return { normalized, hash };
+    }),
+  };
+}
+
+/**
+ * Would calling this business `name` take a verified business's name at an address they share? A page can't be
+ * made as "Zeta" beside the verified "Meta" and then renamed "Meta".
+ *
+ * @returns {Promise<'ok'|'taken'|'unchecked'>}
+ */
+async function verifiedNameTakenAtOwnLocations(businessUserId, name) {
+  const own = await ownPremises(businessUserId);
+  if (own.error) return 'unchecked';
+  for (const { normalized, hash } of own.premises) {
+    const others = await otherBusinessLocationsAt(normalized, hash, businessUserId);
+    if (others.error) return 'unchecked';
+    if (others.rows.length === 0) continue;
+    const sameName = await sameNameBusinessesAmong(others.rows, name);
+    if (sameName.error) return 'unchecked';
+    if (sameName.verified.length > 0) return 'taken';
+  }
+  return 'ok';
+}
+
+/**
+ * Pages Pantopus hasn't verified that carry this business's name at one of its addresses. A reviewer sees them
+ * beside the business's document: approving it makes this business the one that keeps the name there.
+ *
+ * @returns {Promise<Array<{ business_user_id: string, name: string, username: string|null }>>} Empty on any error.
+ */
+async function unverifiedSameNamePages(businessUserId, name) {
+  try {
+    const own = await ownPremises(businessUserId);
+    if (own.error) return [];
+    const pages = new Map();
+    for (const { normalized, hash } of own.premises) {
+      const others = await otherBusinessLocationsAt(normalized, hash, businessUserId);
+      if (others.error || others.rows.length === 0) continue;
+      const sameName = await sameNameBusinessesAmong(others.rows, name);
+      if (sameName.error) continue;
+      for (const entry of sameName.unverified) {
+        pages.set(entry.business_user_id, {
+          business_user_id: entry.business_user_id, name: entry.name, username: entry.username || null,
+        });
+      }
+    }
+    return [...pages.values()];
+  } catch (err) {
+    logger.warn('Same-name page lookup failed', { businessUserId, error: err.message });
+    return [];
   }
 }
 
@@ -582,7 +760,7 @@ async function logDecision(input, verdict) {
 
 async function validateBusinessAddress(input) {
   try {
-    const { address, address2, city, state, zipcode, country, place_id, location_intent, business_user_id } = input;
+    const { address, address2, city, state, zipcode, country, place_id, location_intent, business_user_id, business_name } = input;
 
     // ── Step 0: Normalize + Geocode ──
     const geocodeResult = await normalizeAndGeocode({ address, address2, city, state, zipcode, country });
@@ -645,7 +823,7 @@ async function validateBusinessAddress(input) {
     allReasons.push(...typeResult.reasons);
 
     // ── Step 5: Conflicts ──
-    const conflictResult = await checkConflicts(geocodeResult.normalized, geocodeResult.hash, business_user_id);
+    const conflictResult = await checkConflicts(geocodeResult.normalized, geocodeResult.hash, business_user_id, business_name);
     allReasons.push(...conflictResult.reasons);
 
     // ── Determine final status ──
@@ -800,6 +978,8 @@ module.exports = {
   detectCMRA_POBox,
   inferLocationType,
   checkConflicts,
+  verifiedNameTakenAtOwnLocations,
+  unverifiedSameNamePages,
   computeCapabilities,
   determineRequiredVerification,
 };
@@ -824,8 +1004,9 @@ module.exports = {
  *    → status = 'ok', business_location_type = 'storefront',
  *      capabilities.map_pin = true, required_verification includes 'MAIL_CODE'
  *
- * 5. "123 Main St, Springfield, IL 62701" same address already claimed by another business
- *    → status = 'conflict', reasons includes 'DUPLICATE_LOCATION'
+ * 5. "123 Main St, Springfield, IL 62701" where a verified business of the same name is already listed
+ *    → status = 'conflict', reasons includes 'VERIFIED_SAME_NAME_BUSINESS'
+ *    (another business there that isn't verified, or has a different name → status = 'ok')
  *
  * 6. Invalid/nonexistent address (e.g. "99999 Nonexistent Blvd, Nowhere, ZZ 00000")
  *    → status = 'undeliverable', reasons includes 'NO_GEOCODE_RESULTS'
