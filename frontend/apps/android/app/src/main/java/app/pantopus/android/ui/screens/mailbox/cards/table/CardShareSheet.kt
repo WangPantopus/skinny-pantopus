@@ -105,6 +105,9 @@ private enum class ShareAction(
     Link("link"),
     Save("save"),
     More("more"),
+
+    /** Share all (plan 11.3): the server counts six kinds (no change in Part 11), so it counts as More, in the Post size. */
+    All("more"),
 }
 
 private const val INSTAGRAM = "com.instagram.android"
@@ -139,7 +142,11 @@ private fun ShareSheetBody(
     var showNote by rememberSaveable(card.id) { mutableStateOf(false) }
     var say by rememberSaveable(card.id) { mutableStateOf("") }
     val format = ShareFormat.entries.first { it.key == formatKey }
-    val drawn = rememberSharePicture(card, format, showNote)
+    val tableArt = rememberCardTableArt()
+    val faceArt = rememberCardFaceArt()
+    val picture = rememberCardPicture(card.design, wanted = !card.sealed)
+    val pieces = SharePieces(tableArt, faceArt, picture)
+    val drawn = rememberSharePicture(card, format, showNote, pieces)
     Box(
         modifier =
             Modifier
@@ -182,28 +189,40 @@ private fun ShareSheetBody(
                 if (!card.sealed && format != ShareFormat.Link) {
                     NoteSwitch(card, mine, showNote) { showNote = it }
                 }
-                ActionTiles(canDraw = drawn !is SharePictureState.Failed) { action ->
+                ActionTiles(
+                    canDraw = drawn !is SharePictureState.Failed,
+                    canDrawAll = picture !is CardPictureState.Failed,
+                ) { action ->
+                    if (action == ShareAction.All) say = "Drawing the pictures…"
                     scope.launch {
-                        say = runAction(context, viewModel, card, mine, format, showNote, drawn, action)
+                        say = runAction(context, viewModel, card, mine, format, showNote, drawn, action) { pieces.drawSet(card, showNote) }
                     }
                 }
-                val problem = (drawn as? SharePictureState.Failed)?.let { "We couldn't draw this picture. You can still copy the link." }
-                val line = say.ifEmpty { problem.orEmpty() }
-                if (line.isNotEmpty()) {
-                    Text(
-                        line,
-                        fontSize = 13.sp,
-                        lineHeight = 1.4.em,
-                        color = PantopusColors.tableCreamSoft,
-                        modifier =
-                            Modifier
-                                .semantics { liveRegion = LiveRegionMode.Polite }
-                                .testTag("cardShareSay"),
-                    )
-                }
+                SayLine(say, drawn)
             }
         }
     }
+}
+
+/** What the last tile did, or that this picture couldn't be drawn; read out when it changes. */
+@Composable
+private fun SayLine(
+    say: String,
+    drawn: SharePictureState,
+) {
+    val problem = (drawn as? SharePictureState.Failed)?.let { "We couldn't draw this picture. You can still copy the link." }
+    val line = say.ifEmpty { problem.orEmpty() }
+    if (line.isEmpty()) return
+    Text(
+        line,
+        fontSize = 13.sp,
+        lineHeight = 1.4.em,
+        color = PantopusColors.tableCreamSoft,
+        modifier =
+            Modifier
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .testTag("cardShareSay"),
+    )
 }
 
 @Composable
@@ -266,8 +285,9 @@ private fun SharePreview(
         val shape = RoundedCornerShape(8.dp)
         val picture = (drawn as? SharePictureState.Ready)?.bitmap
         val shapeOf = format.width.toFloat() / format.height
+        // Wider than tall (Open card, Link preview): the sheet's width.
         val modifier =
-            if (format == ShareFormat.Link) {
+            if (format.width > format.height) {
                 Modifier.fillMaxWidth().aspectRatio(shapeOf)
             } else {
                 Modifier.height(height).aspectRatio(shapeOf)
@@ -389,16 +409,18 @@ private fun NoteSwitch(
     }
 }
 
-/** Instagram, Facebook, Email, Copy link, Save and More; what this phone can't do isn't offered. */
+/**
+ * Instagram, Facebook, Email, Copy link, Save, More and Share all; what this phone can't do isn't offered. Share all draws
+ * its own pictures, so it stays when only this size's picture couldn't be drawn (a Link preview the website didn't send).
+ */
 @Composable
 private fun ActionTiles(
     canDraw: Boolean,
+    canDrawAll: Boolean,
     onAction: (ShareAction) -> Unit,
 ) {
     val context = LocalContext.current
     val hasMail = remember { mailAppsExist(context) }
-    // Six to a row only where their words fit on one line.
-    val perRow = if (LocalDensity.current.fontScale > 1.3f || LocalConfiguration.current.screenWidthDp < 400) 3 else 6
     val tiles =
         buildList {
             if (canDraw) {
@@ -411,6 +433,15 @@ private fun ActionTiles(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(ShareAction.Save)
                 add(ShareAction.More)
             }
+            if (canDrawAll) add(ShareAction.All)
+        }
+    // Six to a row only where their words fit on one line; seven go four and three.
+    val perRow =
+        when {
+            LocalDensity.current.fontScale > 1.3f -> 3
+            tiles.size > 6 -> 4
+            LocalConfiguration.current.screenWidthDp < 400 -> 3
+            else -> 6
         }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         tiles.chunked(perRow).forEach { row ->
@@ -436,6 +467,7 @@ private fun ActionTile(
             ShareAction.Link -> "Copy link"
             ShareAction.Save -> "Save"
             ShareAction.More -> "More"
+            ShareAction.All -> "Share all"
         }
     Column(
         modifier =
@@ -444,7 +476,7 @@ private fun ActionTile(
                 .clickable(role = Role.Button, onClick = { onAction(action) })
                 .semantics { role = Role.Button }
                 .heightIn(min = 64.dp)
-                .testTag("cardShare-${action.key}"),
+                .testTag(if (action == ShareAction.All) "cardShare-all" else "cardShare-${action.key}"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -463,6 +495,7 @@ private fun ActionTile(
                 ShareAction.Link -> ShareIcon(PantopusIcon.Link)
                 ShareAction.Save -> ShareIcon(PantopusIcon.Download)
                 ShareAction.More -> ShareIcon(PantopusIcon.Share)
+                ShareAction.All -> AllMark()
             }
         }
         Text(
@@ -495,6 +528,35 @@ private fun InstagramMark() {
         )
         drawCircle(PantopusColors.tableCream, radius = 3.6f * unit, style = stroke)
         drawCircle(PantopusColors.tableCream, radius = 1.1f * unit, center = androidx.compose.ui.geometry.Offset(16.8f * unit, 7.2f * unit))
+    }
+}
+
+/** Share all's tile, as web draws it: a picture with another behind it. */
+@Composable
+private fun AllMark() {
+    Canvas(Modifier.size(22.dp)) {
+        val u = size.width / 24f
+        val stroke =
+            androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 1.7f * u,
+                join = androidx.compose.ui.graphics.StrokeJoin.Round,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+        drawRoundRect(
+            color = PantopusColors.tableCream,
+            topLeft = androidx.compose.ui.geometry.Offset(7.5f * u, 3.5f * u),
+            size = androidx.compose.ui.geometry.Size(12f * u, 13f * u),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f * u),
+            style = stroke,
+        )
+        val behind =
+            androidx.compose.ui.graphics.Path().apply {
+                moveTo(4.5f * u, 7.5f * u)
+                lineTo(4.5f * u, 18.5f * u)
+                quadraticTo(4.5f * u, 20.5f * u, 6.5f * u, 20.5f * u)
+                lineTo(15.5f * u, 20.5f * u)
+            }
+        drawPath(behind, PantopusColors.tableCream, style = stroke)
     }
 }
 
@@ -546,36 +608,52 @@ private sealed interface SharePictureState {
     data object Failed : SharePictureState
 }
 
+/** What every picture is drawn from: the table's art, the card's paper and type, and the card's own picture. */
+private data class SharePieces(
+    val tableArt: CardTableArt?,
+    val faceArt: CardFaceArt?,
+    val picture: CardPictureState,
+) {
+    /** The drawer, once everything it needs is here; a sealed card's picture is never asked for. */
+    fun drawer(card: CardOnTable): CardSharePictures? {
+        val art = tableArt ?: return null
+        val face = faceArt ?: return null
+        if (!card.sealed && picture !is CardPictureState.Loaded) return null
+        return CardSharePictures(card, art, face, (picture as? CardPictureState.Loaded)?.picture)
+    }
+
+    /** Share all's pictures (plan 11.3), or null while something is still on its way or couldn't be drawn. */
+    suspend fun drawSet(
+        card: CardOnTable,
+        showNote: Boolean,
+    ): List<Bitmap>? {
+        val drawer = drawer(card) ?: return null
+        return withContext(Dispatchers.Default) { runCatching { drawer.drawSet(showNote && !card.sealed) }.getOrNull() }
+    }
+}
+
 /** The picture for this size and choice: drawn on the phone, or for Link preview, the website's own copy. */
 @Composable
 private fun rememberSharePicture(
     card: CardOnTable,
     format: ShareFormat,
     showNote: Boolean,
+    pieces: SharePieces,
 ): SharePictureState {
     val context = LocalContext.current
-    val tableArt = rememberCardTableArt()
-    val faceArt = rememberCardFaceArt()
-    val picture = rememberCardPicture(card.design, wanted = !card.sealed)
     var state by remember { mutableStateOf<SharePictureState>(SharePictureState.Drawing) }
-    LaunchedEffect(format, showNote, tableArt, faceArt, picture) {
+    LaunchedEffect(format, showNote, pieces) {
         if (format == ShareFormat.Link) {
             state = linkPreview(context, card)?.let { SharePictureState.Ready(it) } ?: SharePictureState.Failed
             return@LaunchedEffect
         }
-        val art = tableArt ?: return@LaunchedEffect
-        val face = faceArt ?: return@LaunchedEffect
-        // A card's picture still on its way: wait for it, unless it's failed for now.
-        if (!card.sealed && picture is CardPictureState.Loading) return@LaunchedEffect
-        if (!card.sealed && picture is CardPictureState.Failed) {
+        // A card's picture that failed for now: say so. Still on its way: wait for it.
+        if (!card.sealed && pieces.picture is CardPictureState.Failed) {
             state = SharePictureState.Failed
             return@LaunchedEffect
         }
-        val loaded = (picture as? CardPictureState.Loaded)?.picture
-        val bitmap =
-            withContext(Dispatchers.Default) {
-                runCatching { CardSharePictures(card, art, face, loaded).draw(format, showNote) }.getOrNull()
-            }
+        val drawer = pieces.drawer(card) ?: return@LaunchedEffect
+        val bitmap = withContext(Dispatchers.Default) { runCatching { drawer.draw(format, showNote) }.getOrNull() }
         state = bitmap?.let { SharePictureState.Ready(it) } ?: SharePictureState.Failed
     }
     return state
@@ -612,10 +690,15 @@ private suspend fun runAction(
     showNote: Boolean,
     drawn: SharePictureState,
     action: ShareAction,
+    drawAll: suspend () -> List<Bitmap>?,
 ): String {
     val link = viewModel.cardPageLink(card)
+    if (action == ShareAction.All) {
+        viewModel.shared(card.design, action.key, ShareFormat.Post.counted, showNote && !card.sealed)
+        return shareAll(context, drawAll)
+    }
     val withNote = showNote && !card.sealed && format != ShareFormat.Link
-    viewModel.shared(card.design, action.key, format.key, withNote)
+    viewModel.shared(card.design, action.key, format.counted, withNote)
     if (action == ShareAction.Link) {
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         clipboard?.setPrimaryClip(ClipData.newPlainText("Card link", link))
@@ -635,6 +718,40 @@ private suspend fun runAction(
         ""
     } catch (_: ActivityNotFoundException) {
         "No app on this phone can take this picture. You can copy the link instead."
+    }
+}
+
+/**
+ * Share all (plan 11.3): the shut envelope, the card and (only with the note on) the note page, handed to the phone's
+ * share screen together, so an app that takes several can post them as a carousel. A sealed card is its sealed picture.
+ */
+private suspend fun shareAll(
+    context: Context,
+    drawAll: suspend () -> List<Bitmap>?,
+): String {
+    val set = drawAll()
+    if (set.isNullOrEmpty()) return "We couldn't draw these pictures. You can still copy the link."
+    val uris = shareFiles(context, set)
+    set.forEach { it.recycle() }
+    if (uris.isNullOrEmpty()) return "Couldn't get the pictures ready. Check that your phone has free space, then try again."
+    val send = if (uris.size == 1) picturesIntent(uris.first()) else severalPicturesIntent(uris)
+    return try {
+        context.startActivity(Intent.createChooser(send, "Share this card"))
+        ""
+    } catch (_: ActivityNotFoundException) {
+        "No app on this phone can take these pictures. You can copy the link instead."
+    }
+}
+
+/** Several pictures in one share, in order, each readable by the app that takes them. */
+private fun severalPicturesIntent(uris: List<Uri>): Intent {
+    val clip = ClipData.newRawUri("Christmas card", uris.first())
+    uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+    return Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        type = "image/jpeg"
+        putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+        clipData = clip
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 }
 
@@ -705,18 +822,28 @@ private fun openFacebookSharer(
     }
 }
 
-/** Writes the picture where another app may read it; one file at a time, nothing kept around. */
+/** Writes the picture where another app may read it; one share at a time, nothing kept around. */
 private suspend fun shareFile(
     context: Context,
     bitmap: Bitmap,
-): Uri? =
+): Uri? = shareFiles(context, listOf(bitmap))?.singleOrNull()
+
+/** Writes the pictures of one share, numbered in order when there are several; the last share's files go first. */
+private suspend fun shareFiles(
+    context: Context,
+    bitmaps: List<Bitmap>,
+): List<Uri>? =
     withContext(Dispatchers.IO) {
         runCatching {
             val folder = File(context.cacheDir, "card-share").apply { mkdirs() }
             folder.listFiles()?.forEach { it.delete() }
-            val file = File(folder, "pantopus-christmas-card-${System.currentTimeMillis()}.jpg")
-            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
-            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val stamp = System.currentTimeMillis()
+            bitmaps.mapIndexed { index, bitmap ->
+                val number = if (bitmaps.size > 1) "-${index + 1}" else ""
+                val file = File(folder, "pantopus-christmas-card-$stamp$number.jpg")
+                file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            }
         }.getOrNull()
     }
 
