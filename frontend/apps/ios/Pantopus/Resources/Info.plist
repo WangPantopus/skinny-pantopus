@@ -31,8 +31,6 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>SKIncludeConsumableInAppPurchaseHistory</key>
-	<true/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>
@@ -59,7 +57,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Pantopus uses your location to help find your address and show nearby activity.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Pantopus uses the microphone for voice messages in chat and the sound of videos you post.</string>
+	<string>Pantopus uses the microphone for voice messages in chat, a spoken greeting on a Christmas card, and the sound of videos you post.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Pantopus saves images you choose to export, like a QR code or your own Moment, to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -80,6 +78,8 @@
 	<string>$(POSTHOG_API_KEY)</string>
 	<key>PostHogHost</key>
 	<string>$(POSTHOG_HOST)</string>
+	<key>SKIncludeConsumableInAppPurchaseHistory</key>
+	<true/>
 	<key>SentryDSN</key>
 	<string>$(SENTRY_DSN)</string>
 	<key>StripePublishableKey</key>

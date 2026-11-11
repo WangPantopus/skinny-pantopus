@@ -42,6 +42,8 @@ struct CardTableContent: Equatable {
     /// The card's own photo (memories plan step 4, `holiday_card_memories`), lying on the table beside the card once
     /// it's turned over; nil while sealed, on a letter and without one. `covered` until the reader taps it.
     var photo: CardPhoto?
+    /// The card's own voice greeting (memories plan step 7), a cassette or gift tag beside the print; nil while sealed.
+    var voice: CardVoice?
     /// Whose route its bytes come from: the reader's piece, the sender's Sent, or the uploader's own (Look it over).
     var mediaFrom: CardMediaFrom?
 

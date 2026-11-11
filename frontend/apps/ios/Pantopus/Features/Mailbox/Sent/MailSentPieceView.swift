@@ -347,7 +347,7 @@ private extension MailSentPieceView {
         switch step.step {
         case "sealed": MailPaper.wax
         case "delivered", "joined", "opens": Theme.Color.success
-        case "returned": Theme.Color.appTextMuted
+        case "returned", "not_delivered": Theme.Color.appTextMuted
         default: Theme.Color.appTextStrong
         }
     }
@@ -406,13 +406,15 @@ private extension MailSentPieceView {
     /// Your own photo beside the card, never covered (memories plan step 4).
     @ViewBuilder
     func ownMedia(_ piece: MailSentPiece, from: String) -> some View {
-        if let photo = piece.card.photo {
+        if piece.card.photo != nil || piece.card.voice != nil {
             CardMediaBeside(
-                photo: photo,
-                source: .sent(cardId: piece.id, fileId: photo.fileId),
+                photo: piece.card.photo,
+                voice: piece.card.voice,
+                from: .sent(cardId: piece.id),
                 number: piece.card.number,
                 day: piece.envelope.postmarkedOn ?? piece.sentAt,
-                fromName: from
+                fromName: from,
+                forName: piece.toName
             )
             .padding(.top, -Spacing.s6)
             .accessibilityIdentifier("mailSentPhoto")

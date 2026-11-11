@@ -38,6 +38,9 @@ enum MailSentWords {
             return piece.isLetter ? "They claimed your letter" : "They joined Pantopus and have it"
         case .expired:
             return piece.isLetter ? "The claim link expired" : "They didn’t open the email in 90 days"
+        case .notDelivered:
+            // A block withdrew it (memories contract section 8): never why, nor when.
+            return "Couldn’t be delivered"
         }
     }
 
@@ -118,6 +121,7 @@ enum MailSentWords {
 
     /// A step's words: "Sealed by you", "Delivered with Maya’s 7 a.m. mail" …
     static func trailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String {
+        if step.step == "not_delivered" { return "Couldn’t be delivered" }
         if piece.byLink, let words = linkTrailTitle(step, piece: piece) { return step.done ? words : "\(words) · not yet" }
         let first = HolidayCardWords.possessive(recipientFirst(piece))
         let title = switch step.step {
