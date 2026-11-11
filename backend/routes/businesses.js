@@ -67,7 +67,10 @@ const logger = require('../utils/logger');
 const { escapeIlike } = require('../utils/escapeIlike');
 const { geocodeAddress } = require('../utils/geocoding');
 const { timezoneFromCoordinates, validTimezone } = require('../utils/timezone');
-const { validateBusinessAddress, PUBLIC_LOCATION_COLUMNS, toPublicBusinessLocation } = require('../services/businessAddressService');
+const {
+  validateBusinessAddress, verifiedNameTakenAtOwnLocations, PUBLIC_LOCATION_COLUMNS, toPublicBusinessLocation,
+} = require('../services/businessAddressService');
+const { sameBusinessName } = require('../utils/businessNameMatch');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const { isPublicStorageUrl } = require('../services/s3Service');
 const { POST_READ_SELECT, readablePosts, postScopeAccess } = require('../services/pulse/readAccess');
@@ -118,6 +121,34 @@ const ADDRESS_REFUSALS = {
   cmra_detected: "A mailbox store address can't be a business location. Use the street address where you work.",
   service_error: "We couldn't check this address right now. Try again in a minute.",
 };
+
+// A business Pantopus has verified keeps its name at its address; a second page with that name there is refused
+// (businessAddressService checkConflicts). The owner of the real business may be the one refused, when someone
+// else got verified first, so the sentence says where to turn.
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@pantopus.com';
+const VERIFIED_NAME_AT_ADDRESS = 'A verified business with this name is already at this address. '
+  + `If it's yours, ask its owner to add you to the team, or write to ${SUPPORT_EMAIL}.`;
+const ADDRESS_CONFLICT_SENTENCE = 'This address conflicts with an existing residence or location.';
+
+/**
+ * Why the address check refused a location as a conflict: 'same_name' (a verified business with this name is
+ * there), 'unchecked' (a lookup failed, so nothing was decided) or 'in_use' (a home on Pantopus is there).
+ */
+function conflictKind(verdict) {
+  const reasons = verdict?.decision?.reasons || [];
+  if (reasons.includes('VERIFIED_SAME_NAME_BUSINESS')) return 'same_name';
+  if (reasons.includes('household_check_unavailable') || reasons.includes('business_check_unavailable')) {
+    return 'unchecked';
+  }
+  return 'in_use';
+}
+
+/** What an owner reads when adding or moving a location is refused as a conflict. */
+function conflictSentence(verdict) {
+  const kind = conflictKind(verdict);
+  if (kind === 'same_name') return VERIFIED_NAME_AT_ADDRESS;
+  return kind === 'unchecked' ? ADDRESS_REFUSALS.service_error : ADDRESS_CONFLICT_SENTENCE;
+}
 
 /** Rate limiter: 20 address validations per business per hour. */
 const addressValidationLimiter = rateLimit({
@@ -480,6 +511,8 @@ async function fillLocationTimezone(locationId, { address, city, state, zipcode,
 // the sentence under Create; nothing has been created, so the owner can change the address or skip it.
 const WIZARD_ADDRESS_IN_USE = 'This address is already used by a home or business on Pantopus. '
   + 'Go back and change it, or tap Skip location for now.';
+const WIZARD_VERIFIED_NAME_AT_ADDRESS = `${VERIFIED_NAME_AT_ADDRESS} `
+  + 'To carry on now, go back and change the address, or tap Skip location for now.';
 const WIZARD_ADDRESS_UNCHECKED = 'We couldn\'t check this address just now. '
   + 'Try again in a moment, or tap Skip location for now.';
 const WIZARD_ADDRESS_REJECTIONS = {
@@ -496,9 +529,11 @@ const WIZARD_ADDRESS_REJECTIONS = {
 function wizardAddressRefusal(verdict) {
   const status = verdict?.decision?.status;
   if (status === 'conflict') {
-    // A household table that couldn't be read counts as a conflict (fail closed); the owner hears the check didn't run.
-    const unchecked = (verdict.decision.reasons || []).includes('household_check_unavailable');
-    return { status: 409, code: 'ADDRESS_CONFLICT', error: unchecked ? WIZARD_ADDRESS_UNCHECKED : WIZARD_ADDRESS_IN_USE };
+    // A table that couldn't be read counts as a conflict (fail closed); the owner hears the check didn't run.
+    const error = {
+      same_name: WIZARD_VERIFIED_NAME_AT_ADDRESS, unchecked: WIZARD_ADDRESS_UNCHECKED, in_use: WIZARD_ADDRESS_IN_USE,
+    }[conflictKind(verdict)];
+    return { status: 409, code: 'ADDRESS_CONFLICT', error };
   }
   const error = WIZARD_ADDRESS_REJECTIONS[status];
   return error ? { status: 422, code: 'ADDRESS_REJECTED', error } : null;
@@ -794,8 +829,10 @@ router.post('/create-full', verifyToken, validate(createBusinessFullSchema), asy
         state: location.state || '',
         zipcode: location.zipcode || '',
         country: location.country || 'US',
-        // No business exists yet, so a location already listed at this address is another business's.
+        // No business exists yet, so a location already listed at this address is another business's. Its name
+        // decides whether a verified business there stops this one.
         business_user_id: null,
+        business_name: name,
       });
       const refusal = wizardAddressRefusal(verdict);
       if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.code });
@@ -1425,6 +1462,22 @@ router.patch('/:businessId', verifyToken, validate(updateBusinessSchema), async 
 
     if (body.name !== undefined) userFields.name = body.name;
     if (body.tagline !== undefined) userFields.tagline = body.tagline;
+
+    // A rename can't take a verified business's name at an address the two share: the address check refuses a
+    // page made with that name there, and making it under another name first must not get around that. Saving
+    // the name it already has is not a rename (the editors send the whole form).
+    if (body.name !== undefined) {
+      const { data: current } = await supabaseAdmin.from('User').select('name').eq('id', businessId).maybeSingle();
+      if (!sameBusinessName(body.name, current?.name)) {
+        const taken = await verifiedNameTakenAtOwnLocations(businessId, body.name);
+        if (taken === 'taken') {
+          return res.status(409).json({ error: VERIFIED_NAME_AT_ADDRESS, code: 'BUSINESS_NAME_AT_ADDRESS_VERIFIED' });
+        }
+        if (taken === 'unchecked') {
+          return res.status(503).json({ error: "We couldn't check this name right now. Try again in a minute." });
+        }
+      }
+    }
     if (body.bio !== undefined) userFields.bio = body.bio;
 
     for (const key of [
@@ -1866,10 +1919,12 @@ router.post('/:businessId/locations', verifyToken, validate(createLocationSchema
       });
     }
 
-    // Block on conflicts
+    // Block on conflicts: a home at the address, or a verified business with this business's name there. Other
+    // businesses at the address don't block; an address isn't owned by whoever typed it first.
     if (status === 'conflict') {
       return res.status(409).json({
-        error: 'This location is already claimed by another business',
+        error: conflictSentence(verdict),
+        code: 'ADDRESS_CONFLICT',
         verdict: stripRawData(verdict),
       });
     }
@@ -2086,10 +2141,7 @@ router.patch('/:businessId/locations/:locationId', verifyToken, validate(updateL
       });
       const verdictStatus = verdict?.decision?.status;
       if (verdictStatus === 'conflict') {
-        return res.status(409).json({
-          error: 'This address conflicts with an existing residence or location.',
-          code: 'ADDRESS_CONFLICT',
-        });
+        return res.status(409).json({ error: conflictSentence(verdict), code: 'ADDRESS_CONFLICT' });
       }
       // Same hard-failure set the create route refuses.
       if (['need_suite', 'undeliverable', 'service_error', 'cmra_detected', 'po_box'].includes(verdictStatus)) {

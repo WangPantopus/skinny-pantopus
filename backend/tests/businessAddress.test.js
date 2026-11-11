@@ -166,16 +166,42 @@ describe('businessAddressService — Decision Engine', () => {
   });
 
   describe('checkConflicts', () => {
-    test('returns conflict when address hash matches another business', async () => {
-      const hash = computeAddressHash('123 Main St', '', 'Portland', 'OR', '97201');
+    // Another business at the address doesn't block: only a verified one with this business's name does.
+    const seedBusinessAt = (hash, { status, name }) => {
       seedTable('BusinessLocation', [
         { id: 'loc-1', business_user_id: 'biz-other', address_hash: hash, address2: null, is_active: true },
       ]);
+      seedTable('BusinessProfile', [{ business_user_id: 'biz-other', verification_status: status }]);
+      seedTable('User', [{ id: 'biz-other', name, username: 'other' }, { id: 'biz-mine', name: 'Rose City Roofing' }]);
+    };
+
+    test('returns ok when another, unverified business is at the address', async () => {
+      const hash = computeAddressHash('123 Main St', '', 'Portland', 'OR', '97201');
+      seedBusinessAt(hash, { status: 'self_attested', name: 'Rose City Roofing' });
+
+      const result = await checkConflicts({ line1: '123 Main St', line2: '' }, hash, 'biz-mine');
+      expect(result.has_conflict).toBe(false);
+      expect(result.status).toBe('ok');
+    });
+
+    test('returns ok when a verified business with a different name is at the address', async () => {
+      const hash = computeAddressHash('123 Main St', '', 'Portland', 'OR', '97201');
+      seedBusinessAt(hash, { status: 'document_verified', name: 'Burnside Bakery' });
+
+      const result = await checkConflicts({ line1: '123 Main St', line2: '' }, hash, 'biz-mine');
+      expect(result.has_conflict).toBe(false);
+      expect(result.status).toBe('ok');
+    });
+
+    test('returns conflict when a verified business with the same name is at the address', async () => {
+      const hash = computeAddressHash('123 Main St', '', 'Portland', 'OR', '97201');
+      seedBusinessAt(hash, { status: 'document_verified', name: 'Rose City Roofing LLC' });
 
       const result = await checkConflicts({ line1: '123 Main St', line2: '' }, hash, 'biz-mine');
       expect(result.has_conflict).toBe(true);
       expect(result.status).toBe('conflict');
-      expect(result.reasons).toContain('DUPLICATE_LOCATION');
+      expect(result.reasons).toContain('VERIFIED_SAME_NAME_BUSINESS');
+      expect(result.conflicting_location_ids).toEqual(['loc-1']);
     });
 
     test('returns ok when address hash matches same business (own location)', async () => {
@@ -355,11 +381,13 @@ describe('businessAddressService — Decision Engine', () => {
       expect(verdict.decision.business_location_type).toBe('storefront');
     });
 
-    test('returns CONFLICT when address already claimed by another business', async () => {
+    test('returns CONFLICT when a verified business with the same name is already at the address', async () => {
       const hash = computeAddressHash('123 Main St', '', 'Springfield', 'IL', '62701');
       seedTable('BusinessLocation', [
         { id: 'loc-existing', business_user_id: 'biz-other', address_hash: hash, address2: null, is_active: true },
       ]);
+      seedTable('BusinessProfile', [{ business_user_id: 'biz-other', verification_status: 'document_verified' }]);
+      seedTable('User', [{ id: 'biz-other', name: 'Springfield Hardware', username: 'springfieldhardware' }]);
 
       const verdict = await validateBusinessAddress({
         address: '123 Main St',
@@ -368,11 +396,12 @@ describe('businessAddressService — Decision Engine', () => {
         zipcode: '62701',
         country: 'US',
         location_intent: 'CUSTOMER_FACING',
-        business_user_id: 'biz-test',
+        business_user_id: null,
+        business_name: 'Springfield Hardware Inc.',
       });
 
       expect(verdict.decision.status).toBe('conflict');
-      expect(verdict.decision.reasons).toContain('DUPLICATE_LOCATION');
+      expect(verdict.decision.reasons).toContain('VERIFIED_SAME_NAME_BUSINESS');
     });
 
     test('sets map_pin=false for HOME_BASED_PRIVATE intent', async () => {

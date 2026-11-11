@@ -22,6 +22,7 @@ const { feeOnApproval, grantVerifiedTypeFee } = require('../services/businessEnt
 const stripeService = require('../stripe/stripeService');
 const s3 = require('../services/s3Service');
 const businessVerificationStorage = require('../services/businessVerificationStorage');
+const { unverifiedSameNamePages } = require('../services/businessAddressService');
 const notificationService = require('../services/notificationService');
 
 // A reviewer opens each document through a short-lived link instead of a stored URL.
@@ -119,6 +120,13 @@ router.get('/queue', async (req, res) => {
       }
     }
 
+    // Pages Pantopus hasn't verified that carry the business's name at one of its addresses. Approving the
+    // document makes this business the one that keeps the name there, so the reviewer sees who else uses it.
+    const sameNamePages = {};
+    await Promise.all(bizIds.map(async (bizId) => {
+      sameNamePages[bizId] = await unverifiedSameNamePages(bizId, businessMap[bizId]?.name);
+    }));
+
     const items = (evidence || []).map(e => ({
       id: e.id,
       business_user_id: e.business_user_id,
@@ -129,6 +137,7 @@ router.get('/queue', async (req, res) => {
       document_mime_type: documentLinks[e.file_id]?.mime_type || null,
       // The platform fee approving this document sets for the business, or null when it sets none.
       fee_on_approval_pct: feeOnApproval(businessMap[e.business_user_id]?.business_type, e.evidence_type),
+      same_name_pages: sameNamePages[e.business_user_id] || [],
       metadata: e.metadata,
       created_at: e.created_at,
     }));
