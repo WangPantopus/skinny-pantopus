@@ -1006,3 +1006,13 @@ The plan, decisions and status are in [docs/research/provider-replacement/](docs
 - [ ] `ADDRESS_POSTAL_PROVIDER=google` in staging, then production with the Google key.
 - [ ] PostGrid test account and the written questions to PostGrid and Lob; the real-mail pilot ([pilot](docs/research/provider-replacement/mail-pilot.md)).
 
+
+## Moment heights (added November 12)
+
+A Moment can say how high above sea level it was posted, and the map shows it. The handoff, the 22 design boards, the build plan and the rules for not breaking the released apps are in [docs/product/moment-heights/HANDOFF.md](docs/product/moment-heights/HANDOFF.md).
+
+- [x] Step 1, the server: keeps and returns a height, behind the switch `moment_heights` (off). Merged as [#3969](https://github.com/WangPantopus/skinny-pantopus/pull/3969) and released on November 12. The 2.1.2 iPhone and Android apps were run against it with the switch off and on.
+- [ ] Your OK for step 2: the "Show height" switch on the Post sheet, on iPhone and Android.
+- [ ] Your answers to the open questions in the handoff's section 10 (the name "The Climb", a dark map after sunset on Android, a table for personal bests).
+- [ ] Turn `moment_heights` on in production: your own account first, on a test build, then everyone, and not before the map step is in a store build.
+- [ ] Retake, the year picture and tonight's sky are designs only. Nothing about them is approved to build.
