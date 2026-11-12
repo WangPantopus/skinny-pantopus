@@ -140,9 +140,11 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
     public let mine: Bool
     /// Moments posted with no location (contract v3.4, `GET /map` `unplaced`): in the strip, never on the map.
     public let noLocation: Bool
+    /// A small look at the newest Moment, for the pin (contract v3.6, `MomentRingPreviewDTO.swift`); nil without one.
+    public let preview: MomentRingPreviewDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case id, author, latitude, longitude, moments, mine
+        case id, author, latitude, longitude, moments, mine, preview
         case placeLabel = "place_label"
         case newestAt = "newest_at"
         case noLocation = "no_location"
@@ -160,6 +162,8 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
         moments = try c.decodeIfPresent([MomentBriefDTO].self, forKey: .moments) ?? []
         newestAt = try c.decodeIfPresent(String.self, forKey: .newestAt)
         mine = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
+        // An older server sends none, and one this app can't read only costs the picture.
+        preview = try? c.decodeIfPresent(MomentRingPreviewDTO.self, forKey: .preview)
     }
 
     /// One Moment as a ring of its own: opened from a chat quote, with no map behind it.
@@ -180,21 +184,7 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
         moments = [brief]
         newestAt = moment.createdAt
         self.mine = mine
-    }
-
-    /// Moments not watched yet (the server's `unseen_count`, kept current as you watch).
-    public var unseenCount: Int {
-        moments.filter { !$0.seen }.count
-    }
-
-    /// How the ring is drawn, per Moment: your own ring is never gray (the
-    /// server sends your own Moments as seen, since your views aren't counted).
-    public var ringSeen: [Bool] {
-        mine ? moments.map { _ in false } : moments.map(\.seen)
-    }
-
-    public var isNew: Bool {
-        unseenCount > 0
+        preview = nil
     }
 }
 

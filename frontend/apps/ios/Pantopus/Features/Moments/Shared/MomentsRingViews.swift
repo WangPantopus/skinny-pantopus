@@ -151,8 +151,8 @@ struct MomentRingPin: View {
             MomentRingStroke(seen: ring.ringSeen, lineWidth: 3.5)
                 .frame(width: 62, height: 62)
                 .offset(x: 1, y: 1)
-            MomentAvatar(author: ring.author, size: 50)
-                .offset(x: 7, y: 7)
+            // The face, or a small look at their newest Moment with the face as a badge (`MomentPinPreview.swift`).
+            MomentPinInside(ring: ring)
             if ring.author.verified {
                 MomentVerifiedCheck()
                     .offset(x: 44, y: 42)
