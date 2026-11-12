@@ -4,6 +4,8 @@ import app.pantopus.android.data.api.models.mailbox.CardMediaUploaded
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardLinkResponse
 import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
+import app.pantopus.android.data.api.models.mailbox.HolidayCardNoteHelpBody
+import app.pantopus.android.data.api.models.mailbox.HolidayCardNoteIdeas
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
@@ -61,6 +63,15 @@ interface HolidayCardsApi {
     suspend fun arrivals(
         @Query("to") userId: String,
     ): HolidayCardArrivalsFor
+
+    /**
+     * `POST /api/ai/draft/card-note` — route `backend/routes/ai.js:451`: "Help me write it" (the server's launch key
+     * `card_note_help`; 404 while it's off). Up to three notes for the back of the card; nothing is stored or sent.
+     */
+    @POST("api/ai/draft/card-note")
+    suspend fun noteHelp(
+        @Body body: HolidayCardNoteHelpBody,
+    ): HolidayCardNoteIdeas
 
     /** `POST /api/mailbox/cards` — route `backend/routes/mailbox.js:1837`: send today's card (201). */
     @POST("api/mailbox/cards")

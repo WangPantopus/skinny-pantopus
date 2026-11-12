@@ -5,6 +5,8 @@ import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardListPreview
+import app.pantopus.android.data.api.models.mailbox.HolidayCardNoteHelpBody
+import app.pantopus.android.data.api.models.mailbox.HolidayCardNoteIdea
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
@@ -59,6 +61,13 @@ class HolidayCardsRepository
             }
             return result
         }
+
+        /** `POST /api/ai/draft/card-note`: up to three notes for the back of the card ("Help me write it"). */
+        suspend fun noteHelp(body: HolidayCardNoteHelpBody): NetworkResult<List<HolidayCardNoteIdea>> =
+            when (val result = safeApiCall { api.noteHelp(body) }) {
+                is NetworkResult.Success -> NetworkResult.Success(result.data.notes)
+                is NetworkResult.Failure -> result
+            }
 
         /** `GET /api/mailbox/cards/arrivals?to=`: when a card to this person can come, by their clock. */
         suspend fun arrivalsFor(userId: String): NetworkResult<HolidayCardArrivalsFor> = safeApiCall { api.arrivals(userId) }
