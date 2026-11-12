@@ -1781,6 +1781,9 @@ const cardListSchema = Joi.object({
 
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
 const cardTableOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_table']);
+// "Help me write it" on the write step (POST /api/ai/draft/card-note): its launch key, and a Claude key to call with.
+const cardNoteHelpOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_note_help'])
+  && Boolean(process.env.ANTHROPIC_API_KEY);
 const sendCardsOff = (res) => res.status(404).json({ error: 'Not found' });
 // A send's answer as { status, body }, so one card's send and each card on a list answer alike; `reply` sends it.
 const reply = (res, answer) => res.status(answer.status).json(answer.body);
@@ -2125,6 +2128,8 @@ router.get('/cards', verifyToken, async (req, res) => {
       postage_enabled: postage,
       stamps,
       max_recipients: postage ? CARD_LIST_MAX : 1,
+      // "Help me write it" can be used now (launch key card_note_help). Absent: the apps show no button.
+      ...(cardNoteHelpOn() ? { note_help: true } : {}),
     });
   } catch (err) {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });

@@ -33,6 +33,7 @@ import CardPrint from './CardPrint';
 import { canRecordGreeting, GreetingObject, greetingLength, recordingClock, useGreetingPlayer, useGreetingRecorder } from './CardGreeting';
 import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, Slip, StepsAtTable } from './AtTheTable';
 import CardFlip from './CardFlip';
+import { CardNoteHelpPanel, CardNoteHelpRow, useCardNoteHelp } from './CardNoteHelp';
 import CardLinkActions from './CardLinkActions';
 import LookItOver from './LookItOver';
 import CardTable, { type SendMoment, type TableCard } from './CardTable';
@@ -137,6 +138,15 @@ function listNames(entries: ListEntry[]): string {
   if (names.length <= 2) return names.join(' and ');
   const rest = names.length - 2;
   return `${names[0]}, ${names[1]} and ${rest} ${rest === 1 ? 'other' : 'others'}`;
+}
+
+/** Who "Help me write it" writes to: first names for people found by name, and how many the card goes to in all. */
+function noteHelpFor(to: Recipient): { names: string[]; count: number } {
+  if (to.kind === 'person') return { names: [firstName(to.name)], count: 1 };
+  if (to.kind === 'list') {
+    return { names: to.entries.flatMap((entry) => (entry.kind === 'person' ? [firstName(entry.name)] : [])), count: to.entries.length };
+  }
+  return { names: [], count: 1 };
 }
 
 function toName(to: Recipient | null): string {
@@ -720,6 +730,7 @@ function WriteStep({
   onRetryVoice,
   mediaStamp = null,
   onGetStamps,
+  noteHelp = null,
   onCloth = false,
   onNext,
 }: {
@@ -756,6 +767,11 @@ function WriteStep({
   /** 'buy': no bought stamp left, so the photo and voice buttons open the stamp books (founder 2026-11-11). */
   mediaStamp?: MediaStamp | null;
   onGetStamps?: () => void;
+  /**
+   * "Help me write it" (GET /cards `note_help`, launch key card_note_help): the first names the card is to and how
+   * many people it goes to. Null: no button.
+   */
+  noteHelp?: { names: string[]; count: number } | null;
   /** On the card's cloth (design plan Part 9): cream words and glass buttons. */
   onCloth?: boolean;
   onNext: () => void;
@@ -764,6 +780,15 @@ function WriteStep({
   const quiet = onCloth ? ON_CLOTH_MUTED : muted;
   const [showBack, setShowBack] = useState(true);
   const [signing, setSigning] = useState(false);
+  // A note picked from "Help me write it" lands on the back, face up.
+  const help = useCardNoteHelp({
+    designId: design.id,
+    names: noteHelp?.names ?? [],
+    count: noteHelp?.count ?? 1,
+    message,
+    limit,
+    onMessage: (text) => { setShowBack(true); onMessage(text); },
+  });
   const photoInput = useRef<HTMLInputElement>(null);
   const count = letters(message);
   // Seal it waits until the photo is uploaded; a failed one is tried again or removed, never dropped.
@@ -821,6 +846,12 @@ function WriteStep({
         </button>
         <span aria-live="polite" className={`text-[13px] ${count >= limit ? `font-semibold ${onCloth ? 'text-[#ffb4a8]' : 'text-[#8b1d1d]'}` : quiet}`}>{count} of {limit} letters</span>
       </div>
+      {noteHelp ? (
+        <>
+          <CardNoteHelpRow help={help} ghost={ghost} quiet={quiet} />
+          <CardNoteHelpPanel help={help} limit={limit} onCloth={onCloth} />
+        </>
+      ) : null}
       {canSign ? (
         <div className="mx-auto mt-2 flex max-w-[420px] items-center gap-2">
           <button
@@ -2098,6 +2129,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null 
           onRecorded={uploadVoice}
           onRemoveVoice={removeVoice}
           onRetryVoice={() => { if (voice?.blob) uploadVoice(voice.blob); }}
+          noteHelp={data.note_help && to ? noteHelpFor(to) : null}
           onCloth={atTable}
           onNext={() => { setStep('seal'); setLookUnavailable(false); if (to?.kind === 'person') void theirs.refetch(); }}
         />

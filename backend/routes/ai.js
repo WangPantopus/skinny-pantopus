@@ -46,6 +46,9 @@ const { glance, GlanceError } = require('../services/ai/glance');
 const rules = require('../services/ai/rules');
 const radonReport = require('../services/ai/radonReport');
 const postSuggestion = require('../services/ai/postSuggestion');
+const cardNote = require('../services/ai/cardNote');
+const holidayCards = require('../services/holidayCards');
+const { areLaunchFeaturesEnabled } = require('../utils/featureFlags');
 const { CHAT_MODEL, DRAFT_MODEL } = require('../config/anthropic');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const neighborhoodPulseComposer = require('../services/ai/neighborhoodPulseComposer');
@@ -421,6 +424,49 @@ router.post('/draft/mail-opening', verifyToken, aiDraftLimiter, validate(draftMa
   }
 
   res.json({ suggestion: result.suggestion });
+}));
+
+// ─── Christmas Card Note ("Help me write it") ───────────────────────────────
+// Three short notes for the back of a Christmas card (launch key card_note_help, which needs mailbox and
+// holiday_cards on too; GET /api/mailbox/cards says `note_help` while it can be used). The sender picks one and
+// edits it on the card; nothing here stores or sends anything.
+
+const cardNoteHelpOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_note_help']);
+
+const draftCardNoteSchema = Joi.object({
+  // The picture they picked (a design id from GET /api/mailbox/cards).
+  design: Joi.string().max(64).required(),
+  // The first names the card is to, as the app shows them (none for an address or a link), and how many people it
+  // goes to in all: a list gets one note, so past two people no one is named.
+  to: Joi.array().items(Joi.string().trim().min(1).max(cardNote.NAME_LIMIT)).max(20).default([]),
+  count: Joi.number().integer().min(0).max(20).optional(),
+  // "Anything to mention?"
+  hint: Joi.string().trim().max(cardNote.HINT_LIMIT).allow('').optional(),
+  // What's on the card so far.
+  note: Joi.string().max(4000).allow('').optional(),
+  // The notes they've already been shown ("Try again"), so the next three differ.
+  passed_over: Joi.array().items(Joi.string().max(1200)).max(cardNote.PASSED_OVER_MAX).optional(),
+});
+
+router.post('/draft/card-note', verifyToken, (req, res, next) => {
+  if (!cardNoteHelpOn()) return res.status(404).json({ error: 'Not found' });
+  return next();
+}, aiDraftLimiter, validate(draftCardNoteSchema), asyncHandler(async (req, res) => {
+  const { to, count, hint, note, passed_over: passedOver } = req.body;
+  const design = holidayCards.designById(req.body.design);
+  if (!design) return res.status(400).json({ error: 'CARD_DESIGN_UNKNOWN', message: 'Pick a card first.' });
+  const result = await agentService.suggestCardNote({
+    design,
+    to,
+    count,
+    hint,
+    // No more than fits on the card.
+    note: note ? [...note].slice(0, holidayCards.MESSAGE_LIMIT).join('') : undefined,
+    passedOver,
+    userId: req.user.id,
+  });
+  if (result.error) return res.status(aiErrorStatus(result.error)).json(result);
+  return res.json({ notes: result.notes });
 }));
 
 // ─── Mail Summarization ─────────────────────────────────────────────────────

@@ -771,11 +771,38 @@ export interface HolidayCards {
   today: SentHolidayCard | null;
   /** How many one card can go to at once: 20 with digital stamps on (a list, sendHolidayCardList), else 1. */
   max_recipients?: number;
+  /** "Help me write it" can be used now (launch key card_note_help; suggestHolidayCardNote). Absent: no button. */
+  note_help?: boolean;
 }
 
 /** GET /api/mailbox/cards */
 export async function getHolidayCards(): Promise<HolidayCards> {
   return get<HolidayCards>('/api/mailbox/cards');
+}
+
+/** One note "Help me write it" offers: a way of saying it, and the words, within the card's letter limit. */
+export interface HolidayCardNoteIdea {
+  tone: 'heartfelt' | 'light' | 'brief';
+  text: string;
+}
+
+/**
+ * POST /api/ai/draft/card-note ("Help me write it", launch key card_note_help): up to three notes for the back of the
+ * card, written by Pantopus AI from the picture, the first names it's to and what the sender wants to mention. The
+ * sender picks one and edits it; nothing is stored or sent. `passed_over` is the notes already shown ("Try again").
+ */
+export async function suggestHolidayCardNote(data: {
+  design: string;
+  /** First names, as shown on the screen (none for an address or a link). */
+  to: string[];
+  /** How many people the card goes to: past two, the note names no one. */
+  count: number;
+  hint?: string;
+  /** What's on the card so far. */
+  note?: string;
+  passed_over?: string[];
+}): Promise<{ notes: HolidayCardNoteIdea[] }> {
+  return post<{ notes: HolidayCardNoteIdea[] }>('/api/ai/draft/card-note', data);
 }
 
 /** When a card to one person can come, by their clock rather than yours. */

@@ -341,6 +341,13 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Plans asks for no verified address. Anyone on Pantopus sees playdates, asks to join one and hosts one, like the other kinds; invitations and playdate links open for them too. What stays: a playdate meets in a public place within 3 miles of where the host lives or is now, families within about 3 miles ask with their kids' ages, the host approves each family, parents stay and only ages are shared. A verified address still shows the "Verified" badge and still lets verified neighbors in right away where the host chose that (never for playdates). This replaces the verified-address part of the October 12, October 20 and October 31 decisions.
 - [ ] The apps on phones today (2.0.12 and earlier) still send someone without a verified address from the playdate card to "Verify your address" until the next store builds. Seeing playdates, asking to join, invitations and playdate links work for them as soon as the backend is deployed.
 
+**Made by the founder on November 11 (help writing a Christmas card).** You asked whether Pantopus AI should design Christmas cards. The recommendation was no AI pictures this season and an AI helper for the note instead; you said "Yes, plan it", then "Yes, build it".
+
+- [x] "Help me write it" on the card's write step: one optional line to mention, three notes (heartfelt, light, brief) within the 300 letters, pick one and edit it, Undo. It never invents memories or facts about the people, follows the picture's mood, and writes in the sender's language. The card carries no "written by AI" mark, like AI-assisted posts.
+- [x] A new launch key, `card_note_help`, on the server only, which needs `mailbox` and `holiday_cards` on too. It starts off. No new table and no migration.
+- [x] A list still sends one note to everyone, so for three or more people the helper writes a note that names no one. A different note per person is not built.
+- [ ] Not this season: AI-made card pictures. "Draw our photo in this card's style" would need a picture vendor and your decision on sending family photos to it.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -865,6 +872,16 @@ Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`
   - [ ] Optional, any time: a free Meta app ID (developers.facebook.com) in the iOS build setting `PANTOPUS_META_APP_ID` makes Instagram Story one tap. Until then it opens the share sheet with the picture.
   - [ ] Worth a thought, not needed: cards by email keep today's limits (3 new addresses a week, the same address once in 30 days). Links have only the one-card-a-day limit.
 - [ ] After the store release, not before (agents): add `/cards/*` to `apple-app-site-association` and Android's link filters, so a shared card link opens the app. Older apps would open a page they don't know.
+
+**Help me write it (added November 11).** Behind `card_note_help`, which is off. The server and the web came first; progress here.
+
+- [x] Server: `POST /api/ai/draft/card-note` beside the letter-opening helper, on the same Claude setup, request log and 30-an-hour limit per person; `GET /api/mailbox/cards` says `note_help` while it can be used.
+- [x] Web: the button under the card, the panel, Use this one, Undo, Try again. Checked in a browser against a local server with real Claude calls: one person, a list of three, starting from the sender's own words, an unkind request (refused, the card untouched), a reload mid-draft, the card sent and read in the other person's mailbox, and the key off (no button, 404). Checked on the route alone: Spanish, a loss in the family, a nativity card, a link in the request (refused).
+- [ ] iPhone: the same button and panel.
+- [ ] Android: the same button and panel.
+- [ ] Founder: switch `card_note_help` on for the production backend and worker (`LAUNCH_FEATURES`). The web shows the button at once; phones need store builds that carry it.
+- [ ] Founder: the privacy policy's section 5 now names card notes; it still waits on the Anthropic retention confirmation noted there.
+- [ ] Not verified anywhere: production, real phones, screen readers speaking aloud.
 
 ## Mail and card design (added November 11)
 
