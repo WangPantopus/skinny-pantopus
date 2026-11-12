@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import app.pantopus.android.data.api.models.moments.MomentAuthorDto
+import app.pantopus.android.data.api.models.moments.MomentRingPreviewDto
 import app.pantopus.android.ui.theme.MarkVariant
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevation
@@ -251,13 +252,15 @@ val MOMENT_PIN_ANCHOR_FROM_TOP: Dp = 71.dp
 
 /**
  * A ring on the map (board M1): a 64 × 72 pin in the surface color with the face inside the ring and the check of a
- * verified resident at its lower right. [seen] holds each Moment's watched state, oldest first.
+ * verified resident at its lower right. [seen] holds each Moment's watched state, oldest first. With a [preview] the
+ * ring holds a small look at the newest Moment and the face is a badge at its lower left (`MomentPinPreview.kt`).
  */
 @Composable
 fun MomentMapPin(
     author: MomentAuthorDto,
     seen: List<Boolean>,
     modifier: Modifier = Modifier,
+    preview: MomentRingPreviewDto? = null,
 ) {
     Box(modifier = modifier.size(width = 64.dp, height = 72.dp)) {
         Canvas(modifier = Modifier.fillMaxSize().pantopusShadow(PinShadow, PinShape)) {
@@ -273,7 +276,7 @@ fun MomentMapPin(
             drawPath(tail, Color.White)
             drawMomentRing(seen, Offset(32f * unit, 32f * unit), 29.25f * unit, 3.5f * unit, 8f * unit)
         }
-        MomentFace(author = author, size = 50.dp, modifier = Modifier.offset(x = 7.dp, y = 7.dp), initialsSize = 18.sp)
+        MomentPinInside(author = author, preview = preview)
         if (author.verified) {
             MomentVerifiedCheck(size = 18.dp, modifier = Modifier.offset(x = 44.dp, y = 42.dp))
         }

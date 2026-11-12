@@ -174,6 +174,8 @@ private fun RingItem(
     MomentMapPin(
         author = ring.author,
         seen = ring.seen,
+        // A small look at their newest Moment inside the ring, when the map read one (`MomentPinPreview.kt`).
+        preview = ring.ring.preview,
         modifier =
             Modifier
                 .testTag("moments.ring.${ring.id}")
