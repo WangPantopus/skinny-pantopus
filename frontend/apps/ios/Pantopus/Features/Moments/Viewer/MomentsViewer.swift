@@ -176,6 +176,7 @@ struct MomentsViewer: View {
                     .environment(\.colorScheme, systemScheme)
                     .preferredColorScheme(systemScheme)
             }
+            .momentsViewerProfile(session: session, systemScheme: systemScheme)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("moments.viewer")
     }
@@ -218,7 +219,8 @@ struct MomentsViewer: View {
     /// Paused by a menu, a sheet or a dialog over the viewer, or on a table by its pause button. Beside the card and on a
     /// table, Seen by covers nothing: your Moment keeps playing next to the list (board O6).
     private var covered: Bool {
-        showsMenu || showsReport || showsBlock || (session.showsSeenBy && !seenByBeside) || (session.paused && duo.pose == .table)
+        showsMenu || showsReport || showsBlock || session.profile != nil
+            || (session.showsSeenBy && !seenByBeside) || (session.paused && duo.pose == .table)
     }
 }
 
@@ -271,6 +273,7 @@ extension MomentsViewer {
                     muted: model.muted,
                     compact: isReplying,
                     onPlace: placeAction,
+                    onAuthor: authorAction,
                     onSound: { model.muted.toggle() },
                     onMore: { showsMenu = true },
                     onClose: { model.close() }

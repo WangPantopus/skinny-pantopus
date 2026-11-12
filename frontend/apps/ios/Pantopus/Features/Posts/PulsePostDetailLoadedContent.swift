@@ -146,7 +146,9 @@ public struct PulsePostDetailLoadedContent: View {
                         timeAndLocality: detail.timeAndLocality,
                         intent: detail.intent,
                         intentLabel: PulseComposePurpose.allCases.first { $0.postType == detail.post.postType }?.label,
-                        onAvatarTap: authorProfileTap
+                        onAvatarTap: authorProfileTap,
+                        momentsUserId: detail.post.creator?.identityType == "business"
+                            ? detail.post.creator?.businessPageId : detail.post.userId
                     )
                     // How it ended, or when a Heads-up ends (Pulse S7).
                     if let status = detail.status {

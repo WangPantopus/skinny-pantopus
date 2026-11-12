@@ -643,6 +643,10 @@ public struct RowModel: Identifiable, Sendable {
     /// as a trailing swipe + long-press context menu by the shell.
     public let destructiveAction: RowDestructiveAction?
 
+    /// The person this row is about, when its leading avatar is their profile picture: the avatar wears their
+    /// Moments ring and a tap on it plays them (Connections).
+    public let momentsUserId: String?
+
     public init(
         id: String,
         title: String,
@@ -670,7 +674,8 @@ public struct RowModel: Identifiable, Sendable {
         splitWith: SplitStackData? = nil,
         archetypeOverline: String? = nil,
         destructiveAction: RowDestructiveAction? = nil,
-        titleLineLimit: Int? = 2
+        titleLineLimit: Int? = 2,
+        momentsUserId: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -699,6 +704,7 @@ public struct RowModel: Identifiable, Sendable {
         self.splitWith = splitWith
         self.archetypeOverline = archetypeOverline
         self.destructiveAction = destructiveAction
+        self.momentsUserId = momentsUserId
     }
 }
 

@@ -1144,6 +1144,7 @@ struct RowView: View {
         if row.footer == nil && trailingHasOwnActions {
             HStack(alignment: .top, spacing: Spacing.s3) {
                 LeadingView(leading: row.leading)
+                    .momentsRing(of: row.momentsUserId, spoken: false)
                 contentColumn
             }
             .accessibilityElement(children: .combine)
@@ -1153,6 +1154,7 @@ struct RowView: View {
         } else {
             Group {
                 LeadingView(leading: row.leading)
+                    .momentsRing(of: row.momentsUserId, spoken: false)
                 contentColumn
             }
         }

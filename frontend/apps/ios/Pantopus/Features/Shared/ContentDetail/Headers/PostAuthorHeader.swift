@@ -111,6 +111,8 @@ public struct PostAuthorHeader: View {
     private let intentLabel: String
     private let onAvatarTap: (@MainActor () -> Void)?
     private let pulseCard: PulsePageCard?
+    /// The author's account: the photo wears their Moments ring while they have Moments to watch.
+    private let momentsUserId: String?
 
     public init(
         displayName: String,
@@ -121,7 +123,8 @@ public struct PostAuthorHeader: View {
         intent: PostIntent,
         intentLabel: String? = nil,
         onAvatarTap: (@MainActor () -> Void)? = nil,
-        pulseCard: PulsePageCard? = nil
+        pulseCard: PulsePageCard? = nil,
+        momentsUserId: String? = nil
     ) {
         self.displayName = displayName
         self.avatarURL = avatarURL
@@ -132,6 +135,7 @@ public struct PostAuthorHeader: View {
         self.intentLabel = intentLabel ?? intent.label
         self.onAvatarTap = onAvatarTap
         self.pulseCard = pulseCard
+        self.momentsUserId = momentsUserId
     }
 
     public var body: some View {
@@ -203,6 +207,7 @@ public struct PostAuthorHeader: View {
                 ringProgress: 1,
                 size: 44
             )
+            .momentsRing(of: momentsUserId)
             if isVerified {
                 VerifiedBadge(size: 16)
                     .offset(x: 2, y: 2)

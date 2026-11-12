@@ -91,6 +91,18 @@ public enum MomentsEndpoints {
         )
     }
 
+    /// `GET /api/moments/people?ids=a,b,c` (contract v3.7) — who among these people has live Moments the caller may
+    /// see, one ring per person: the ring around a profile picture. Someone with nothing to see is left out.
+    /// Route `backend/routes/moments.js` (people).
+    public static func people(ids: [String]) -> Endpoint {
+        Endpoint(
+            method: .get,
+            path: "/api/moments/people",
+            query: ["ids": ids.joined(separator: ",")],
+            cachePolicy: .reloadIgnoringLocalCacheData
+        )
+    }
+
     /// `POST /api/moments/:id/view` — counted once per person; the author's own don't count.
     /// Route `backend/routes/moments.js` (view).
     public static func view(id: String) -> Endpoint {

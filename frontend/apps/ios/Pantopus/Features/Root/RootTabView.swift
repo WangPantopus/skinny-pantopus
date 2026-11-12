@@ -247,6 +247,8 @@ public struct RootTabView: View {
 
     public var body: some View {
         tabs
+            // A profile picture's Moments ring plays from here, above every tab's pages (`MomentsProfileRing`).
+            .momentsRingStage()
             // The app-wide tint also reaches the dialogs UIKit presents; primaryTint resolves for dark mode there.
             .tint(Theme.Color.primaryTint)
             .environment(model)

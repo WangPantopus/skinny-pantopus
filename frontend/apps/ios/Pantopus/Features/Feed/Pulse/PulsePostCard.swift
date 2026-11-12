@@ -335,6 +335,7 @@ public struct PulsePostCard: View {
                 size: 32,
                 imageURL: content.authorAvatarURL
             )
+            .momentsRing(of: authorAccountId)
             VStack(alignment: .leading, spacing: 2) {
                 Text(content.authorName)
                     .font(.system(size: 13, weight: .semibold))
@@ -351,6 +352,15 @@ public struct PulsePostCard: View {
             .accessibilityIdentifier("pulsePostAuthor_\(content.id)")
         } else {
             identity
+        }
+    }
+
+    /// The author's account, a person's or a business's: its Moments ring goes around the photo.
+    private var authorAccountId: String? {
+        switch content.authorLink {
+        case let .person(userId): userId
+        case let .business(businessId): businessId
+        case nil: nil
         }
     }
 

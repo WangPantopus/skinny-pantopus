@@ -516,7 +516,8 @@ public struct ChatConversationView: View {
                 onNewAIChat: { viewModel.startNewAIConversation() },
                 onDeleteAIChat: { aiDeleteConfirmPresented = true },
                 isDeletingAIChat: viewModel.isDeletingAIConversation,
-                onOpenProfile: headerProfileTap
+                onOpenProfile: headerProfileTap,
+                momentsUserId: mode == .dm ? viewModel.profileUserId : nil
             )
             if isSelecting {
                 ChatSelectionTopBar(count: selectedMessageIds.count, onCancel: exitSelection)
@@ -2546,6 +2547,8 @@ private struct ChatConversationHeader: View {
     var isDeletingAIChat = false
     /// Opens the other person's profile from their avatar and name (person DMs only).
     var onOpenProfile: (@MainActor () -> Void)?
+    /// The other person of a person DM: their avatar wears the Moments ring while they have Moments to watch.
+    var momentsUserId: String?
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -2650,6 +2653,7 @@ private struct ChatConversationHeader: View {
             switch counterparty {
             case let .person(_, initials, _, verified, online):
                 ChatPersonAvatar(initials: initials, verified: verified, online: online, size: 36, imageURL: avatarURL)
+                    .momentsRing(of: momentsUserId)
             case let .group(name, _):
                 ChatPersonAvatar(initials: groupInitials(name), verified: false, online: false, size: 36)
             case .ai:
@@ -3499,6 +3503,7 @@ private struct ChatBubbleRow: View {
                             .hitArea(horizontal: 4, vertical: 11)
                             .onTapGesture(perform: onOpenSender)
                             .accessibilityIdentifier("chatSenderAvatar_\(content.id)")
+                            .momentsRing(of: content.senderUserId, lineWidth: 1.5, gap: 1.5, spoken: false)
                     } else {
                         ChatMiniAvatar(initials: initials, hidden: content.isContinuation, imageURL: content.senderAvatarURL)
                     }
