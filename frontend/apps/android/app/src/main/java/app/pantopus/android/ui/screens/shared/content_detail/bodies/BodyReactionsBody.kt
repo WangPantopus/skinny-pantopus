@@ -69,6 +69,7 @@ import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetailRows
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
 import app.pantopus.android.ui.screens.feed.pulse.PulseReactionPicker
 import app.pantopus.android.ui.screens.feed.pulse.icon
+import app.pantopus.android.ui.screens.moments.components.momentsRing
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
@@ -665,6 +666,8 @@ private fun CommentRow(
         ) {
             AvatarWithIdentityRing(
                 name = row.authorName,
+                // The commenter's Moments ring: a tap on a ringed photo plays them.
+                modifier = Modifier.momentsRing(row.authorUserId, stroke = 1.5.dp, gap = 1.5.dp),
                 imageUrl = row.authorAvatarUrl,
                 identity = row.authorIdentity,
                 ringProgress = 1f,

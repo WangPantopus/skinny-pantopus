@@ -165,6 +165,7 @@ import app.pantopus.android.ui.screens.moments.MomentOpenHolder
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentImages
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
+import app.pantopus.android.ui.screens.moments.components.momentsRing
 import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
 import app.pantopus.android.ui.screens.plans.chat.PlanChatClosedBar
 import app.pantopus.android.ui.screens.plans.chat.PlanChatStrip
@@ -518,6 +519,8 @@ fun ChatConversationScreen(
                     onBack = onBack,
                     onOpenDetails = { showDetailsSheet = true },
                     onOpenProfile = profileTapFor(args.mode, conversationMode, onOpenProfile),
+                    momentsUserId =
+                        (args.mode as? ChatThreadMode.Person)?.otherUserId?.takeIf { conversationMode == ChatConversationMode.Dm },
                     onNewAiChat = viewModel::startNewAiConversation,
                     onDeleteAiChat = { showAiDeleteConfirm = true },
                     isDeletingAiChat = isDeletingAi,
@@ -1190,6 +1193,8 @@ internal fun ChatHeader(
     onOpenDetails: () -> Unit = {},
     // Opens the other person's profile from their avatar and name (person DMs only).
     onOpenProfile: (() -> Unit)? = null,
+    // The other person of a person DM: their avatar wears the Moments ring while they have Moments to watch.
+    momentsUserId: String? = null,
     // The assistant's "New chat" (AI thread only).
     onNewAiChat: () -> Unit = {},
     // The assistant's More menu: "Delete conversation" (AI thread only), and whether that delete is running.
@@ -1240,6 +1245,7 @@ internal fun ChatHeader(
                 isFanThread = isFanThread,
                 counterparty = counterparty,
                 tierRank = if (isCreator) creatorContext.fanTierRank else null,
+                momentsUserId = momentsUserId,
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2004,6 +2010,7 @@ private fun HeaderAvatar(
     isFanThread: Boolean,
     counterparty: ChatCounterparty,
     tierRank: Int? = null,
+    momentsUserId: String? = null,
 ) {
     when {
         isAi -> ChatAiAvatar(size = 36.dp)
@@ -2016,6 +2023,7 @@ private fun HeaderAvatar(
                 online = counterparty.online,
                 size = 36.dp,
                 ringColor = tierRank?.let(::creatorTierColor),
+                momentsUserId = momentsUserId,
             )
         counterparty is ChatCounterparty.Group ->
             PersonAvatar(
@@ -2049,11 +2057,13 @@ private fun PersonAvatar(
     // empty-state avatar — callers scale it alongside [size].
     badgeSize: androidx.compose.ui.unit.Dp = 13.dp,
     avatarUrl: String? = null,
+    momentsUserId: String? = null,
 ) {
     Box(modifier = Modifier.size(size + 4.dp), contentAlignment = Alignment.BottomEnd) {
         Box(
             modifier =
                 Modifier
+                    .momentsRing(momentsUserId)
                     .size(size)
                     .clip(CircleShape)
                     .background(PantopusColors.primary600),
@@ -3364,6 +3374,7 @@ private fun BubbleRow(
                             .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onOpenSender)
                             .semantics { contentDescription = "Open ${content.senderName ?: "the sender"}'s profile" }
                             .testTag("chatSenderAvatar_${content.id}")
+                            .momentsRing(content.senderUserId, stroke = 1.5.dp, gap = 1.5.dp)
                     } else {
                         Modifier
                     },

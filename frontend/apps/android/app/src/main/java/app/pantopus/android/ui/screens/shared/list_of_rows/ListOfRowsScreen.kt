@@ -114,6 +114,7 @@ import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.components.VerifiedBadge
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.screens.moments.components.momentsRing
 import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
 import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.theme.PantopusColors
@@ -1617,7 +1618,7 @@ private fun AvatarWithBadgeView(leading: RowLeading.AvatarWithBadge) {
             .take(2)
             .mapNotNull { it.firstOrNull()?.uppercase() }
             .joinToString("")
-    Box(modifier = Modifier.size(size)) {
+    Box(modifier = Modifier.momentsRing(leading.momentsUserId).size(size)) {
         Box(
             modifier =
                 Modifier
