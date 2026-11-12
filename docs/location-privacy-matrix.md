@@ -211,6 +211,12 @@ taken. Others see only what the author chose on the Post sheet, which shows the 
   point, so grouping never places an area Moment more precisely than its own point.
 - **Map queries filter on displayed points:** `GET /api/moments/map` reads stored points in a box widened by
   `MAX_DISPLAY_OFFSET_DEGREES` on whole neighborhood cells, then keeps the Moments whose displayed point is in view.
+- **Height is the author's choice, and never at home:** with "Show height" on (behind the `moment_heights` flag),
+  the phone sends how high above sea level the Moment was made. The server keeps feet rounded to 10 in the Moment's
+  own details (`altitude_ft`, `store.shownAltitude`), and nothing for a Moment at home, shown as an area or with no
+  location, for a reading that can't be right or that the phone says is rough, or while the flag is off for the
+  author. No speed is kept, only whether the Moment was posted from the air (`flying`). Viewers get the height only
+  while the flag is on for them (`GET /api/moments/…`, and each ring of `GET /api/moments/map`).
 - **Files carry no location:** photo EXIF and video location tags are removed on upload (`photoMetadata.js`,
   `videoMetadata.js`); files sit in private storage behind 15-minute signed links and are deleted 7 days after the
   Moment ends (sooner when its author deletes it) unless a report holds them. Deleting the account deletes all of
