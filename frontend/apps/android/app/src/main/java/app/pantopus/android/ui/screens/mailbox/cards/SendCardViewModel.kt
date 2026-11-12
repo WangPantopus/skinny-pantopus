@@ -320,6 +320,9 @@ class SendCardViewModel
         private val _form = MutableStateFlow(restoredForm())
         val form: StateFlow<SendCardForm> = _form.asStateFlow()
 
+        /** "Help me write it" on the write step (SendCardNoteHelp.kt): its notes and its Undo, for this card. */
+        val noteHelp = CardNoteHelper(repo, network, viewModelScope, message = { _form.value.message }, write = ::onMessageChange)
+
         /** The card's own photo and greeting while it's written (memories plan steps 4 and 7). */
         val drafts = SendCardMedia(viewModelScope, media, _form) { error, doing -> sendMessage(error, doing) }
 

@@ -378,6 +378,7 @@ private fun Steps(
                         voice = form.voice,
                         voices = voiceCalls(cards, form, viewModel),
                         buyStamp = onStampsForMedia.takeIf { cards.postageEnabled && cards.media?.boughtStamp?.toBuy == true },
+                        noteHelp = viewModel.noteHelp.takeIf { cards.noteHelp },
                     )
                 }
             }

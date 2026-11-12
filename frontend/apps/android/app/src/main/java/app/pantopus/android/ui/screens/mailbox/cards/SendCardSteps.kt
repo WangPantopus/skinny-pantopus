@@ -788,6 +788,8 @@ internal fun WriteStep(
     voices: CardVoiceCalls? = null,
     /** No bought stamp left (`media.bought_stamp` "buy"): both buttons open the stamp books, with the line under them. */
     buyStamp: (() -> Unit)? = null,
+    /** "Help me write it" (`GET /api/mailbox/cards` `note_help`, the server's launch key `card_note_help`); null: no button. */
+    noteHelp: CardNoteHelper? = null,
 ) {
     var showBack by rememberSaveable { mutableStateOf(true) }
     var signing by rememberSaveable { mutableStateOf(false) }
@@ -863,6 +865,10 @@ internal fun WriteStep(
                 color = if (count >= limit) PantopusColors.cardWax else DeskInk.quiet,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("sendCardCount"),
             )
+        }
+        if (noteHelp != null) {
+            // A note picked there lands on the back, face up.
+            CardNoteHelpRow(noteHelp, design.id, to, message, limit, onOpen = { focusManager.clearFocus() }, onPicked = { showBack = true })
         }
         MediaUnderTheNote(design, to, fromName, photo, photos, voice, voices, buyStamp) { focusManager.clearFocus() }
         if (canSign) {
