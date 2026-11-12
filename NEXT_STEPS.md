@@ -341,6 +341,13 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Plans asks for no verified address. Anyone on Pantopus sees playdates, asks to join one and hosts one, like the other kinds; invitations and playdate links open for them too. What stays: a playdate meets in a public place within 3 miles of where the host lives or is now, families within about 3 miles ask with their kids' ages, the host approves each family, parents stay and only ages are shared. A verified address still shows the "Verified" badge and still lets verified neighbors in right away where the host chose that (never for playdates). This replaces the verified-address part of the October 12, October 20 and October 31 decisions.
 - [ ] The apps on phones today (2.0.12 and earlier) still send someone without a verified address from the playdate card to "Verify your address" until the next store builds. Seeing playdates, asking to join, invitations and playdate links work for them as soon as the backend is deployed.
 
+**Made by the founder on November 11 (Plans with businesses).** You asked for an evaluation of Plans and whether Pantopus can work with businesses on a model that makes money for both. To the proposal you said yes, asked what justifies a 15% fee, and then said: don't build it, draw the design and write the documents, and make sure people can still plan for themselves. Progress is in the Plans with businesses section below.
+
+- [x] Design it and write it down, no build: a verified business hosts a plan at its own place, free or with a price on each spot; guests pay in the app; Pantopus keeps a fee from the business's payout. The [proposal, design, build contract and build plan](docs/product/plans-with-businesses/README.md) and the [22 boards](https://claude.ai/artifact/W7CYVbCejsR9oP5BUdLTMv) are done.
+- [x] A neighbor's own plan stays exactly as it is: the same composer, kinds, ask and accept, private place and chat, free, with no card. The design holds every board to this, and the build plan checks it on every PR.
+- [ ] Confirm the six decisions the documents take as accepted (you said yes to the proposal; none was confirmed one by one): paid spots lead and venues host free; kids' activities and sports clinics first, in Camas, Washougal and Vancouver; 15% on a guest Pantopus brings (10% for the first 50 founding businesses) and 5% plus the card fee on the business's own guest (founding: the card fee only, for a year); verified businesses only; a full refund until 24 hours before, and whenever the business cancels; by hand first, then the build in steps.
+- [ ] Confirm the nine calls the contract makes (C1 to C9 in its section 2). The two that matter most: the fee follows how the guest arrived every time, not only on a first visit; and plans for children get their own switch, off until a lawyer has read the rules.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -968,6 +975,29 @@ Tells a verified homeowner whether their home costs more than it should, from re
 
 - [ ] A Today card: set aside on November 10. The apps accept only the Today kinds they know, so it needs iPhone and Android code and store builds; the yearly notice already tells the owner.
 - [ ] Selling the packet inside the phone apps (it is on the web only).
+
+## Plans with businesses (added November 11)
+
+Designed, not built (section 0). A verified business hosts a plan in Plans at its own place, with a price on each spot; a neighbor's plan is unchanged. Everything is in [docs/product/plans-with-businesses](docs/product/plans-with-businesses/README.md); the boards are on the [Plans with businesses canvas](https://claude.ai/artifact/W7CYVbCejsR9oP5BUdLTMv) (private).
+
+**Written.**
+
+- [x] The proposal: the model, why a business would pay 15%, what Pantopus has that others don't, the ten ways a guest arrives, what it is worth, the risks.
+- [x] The design: 22 boards in light and dark (guest, the doors, the business, the parts), with the rules each screen keeps.
+- [x] The build contract: added columns only and no new table through step 4; the routes; the two rates and how each guest's way in is checked; refunds; the payout 48 hours after the plan; the notices; "done when".
+- [x] The build plan: seven steps, the switches `plans_business` and `plans_business_kids` (both off), the checks, the traps.
+
+**Yours to do.**
+
+- [ ] Confirm the decisions (section 0).
+- [ ] Step 0, by hand, no code: three businesses (a kids' activity, a sports clinic, a café or bar) each host a weekly plan from the owner's own account for four weeks; a paid one collects by business invoice. Count plans, asks, who came and who came back.
+- [ ] Say go for the build, one step at a time. Each server step has a migration, and merging it applies it to production.
+- [ ] Before paid spots: one real charge, refund, delayed payout and bank payout on the live payment account, and an accountant's answer on sales tax for classes in Washington.
+- [ ] Before plans for children: a lawyer's read on businesses hosting children's sessions.
+- [ ] Before bars are invited: a lawyer's read of the Washington rule on bar promotions (WAC 314-52-110).
+- [ ] Before real people: the privacy policy, the data inventory and the store privacy labels.
+
+**Not built.** All of it. No business has been asked whether it wants this.
 
 ## Background backlog
 
