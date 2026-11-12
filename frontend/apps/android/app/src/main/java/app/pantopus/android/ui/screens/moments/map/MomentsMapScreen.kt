@@ -42,7 +42,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -71,6 +74,7 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -83,7 +87,6 @@ import app.pantopus.android.R
 import app.pantopus.android.data.moments.MomentPosting
 import app.pantopus.android.ui.components.MessagesButton
 import app.pantopus.android.ui.components.MessagesEntryHolder
-import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.moments.components.MOMENT_PIN_ANCHOR_FROM_TOP
@@ -124,18 +127,28 @@ data class MomentsMapActions(
     val onAdd: () -> Unit,
     /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
     val onOpenMenu: (() -> Unit)? = null,
+    /** A finger is moving the map (true), or the map has been still a second since (false): the tab bar steps aside. */
+    val onMapMoving: (Boolean) -> Unit = {},
 )
 
 /**
- * The Moments tab (boards M1 to M3 and P5): the map with people's rings where they posted, crowded spots, the strip
- * of faces with Play all, the + and locate buttons, and your Moment's ring while it posts. ☰ on the left and the
- * chat button on the right float over the map, as on Plans.
+ * The Moments tab (boards M1 to M3 and P5): the map with people's rings where they posted, crowded spots, the + and
+ * locate buttons, Play all, the row of faces when a crowded spot is open (when it shows: `MomentsMapRow.kt`), and your
+ * Moment's ring while it posts. ☰ on the left and the chat button on the right float over the map, as on Plans.
+ *
+ * @param barInset The tab bar's height under this screen now: the map runs on under the bar, and what floats at the
+ * bottom keeps clear of where the bar rests.
  */
 @Composable
 fun MomentsMapScreen(
     actions: MomentsMapActions,
+    barInset: Dp = 0.dp,
     viewModel: MomentsMapViewModel = hiltViewModel(),
 ) {
+    // Where the bar rests: it shrinks while the bar is away, and what floats at the bottom stays where it was.
+    var barRest by remember { mutableStateOf(barInset) }
+    SideEffect { if (barInset > barRest) barRest = barInset }
+    DisposableEffect(Unit) { onDispose { actions.onMapMoving(false) } }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val rings by viewModel.rings.collectAsStateWithLifecycle()
     val posts by viewModel.posts.collectAsStateWithLifecycle()
@@ -225,6 +238,7 @@ fun MomentsMapScreen(
     Box(
         modifier =
             Modifier
+                .runsUnderTabBar(barInset)
                 .fillMaxSize()
                 .onSizeChanged { mapSize = it }
                 .testTag("moments.map")
@@ -270,8 +284,10 @@ fun MomentsMapScreen(
                     }
                 val update = CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), zoom)
                 scope.launch { camera.animateOrMove(update, CLUSTER_MS) }
-                viewModel.openSpot(cluster, returnTo)
+                viewModel.openSpot(cluster, returnTo, openedZoom = zoom)
             },
+            onSpotSplit = viewModel::closeSpot,
+            onMapMoving = actions.onMapMoving,
             onPosting = { item -> if (item.stage == MomentPosting.Stage.FAILED) failedPosting = item },
         )
         MomentsTopChrome(
@@ -299,14 +315,21 @@ fun MomentsMapScreen(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    // Everything the map is covered by at the bottom, the tab bar's place included.
+                    .onSizeChanged { bottomHeight = it.height }
                     .padding(horizontal = Spacing.s4)
-                    .padding(bottom = Spacing.s3)
-                    .onSizeChanged { bottomHeight = it.height },
+                    .padding(bottom = Spacing.s3 + barRest),
             horizontalAlignment = Alignment.End,
         ) {
             val empty = state.loaded && !state.failed && shown.isEmpty() && posts.isEmpty()
             // A Moment that just went live keeps its place in the strip until its ring is read; no second cell then.
             val stripPosts = posts.filter { item -> shown.none { ring -> ring.mine && ring.ring.moments.any { it.id == item.momentId } } }
+            val people = remember(shown, spot != null) { rowPeople(stripPeople(shown), inSpot = spot != null) }
+            val newPeople = shown.filter { it.anyNew && !it.mine }.distinctBy { it.author.id }.size
+            val playAll = { if (viewModel.playAll(shown)) actions.onWatch() }
+            // The row holds a crowded spot's people, or what the map can't: a Moment with no location, yours while it
+            // posts, the first read failing.
+            val holdsOffMap = state.failed || stripPosts.isNotEmpty() || people.isNotEmpty()
             MapRoundButton(
                 icon = PantopusIcon.Navigation,
                 label = "Show my location",
@@ -329,31 +352,52 @@ fun MomentsMapScreen(
                     onAdd = actions.onAdd,
                     onUseLocation = ::askLocation,
                 )
-            } else {
+            } else if (spot != null || holdsOffMap) {
                 Spacer(Modifier.height(Spacing.s3))
                 AddButton(onClick = actions.onAdd)
                 Spacer(Modifier.height(9.dp))
                 MomentsStrip(
-                    shown = shown,
+                    people = people,
+                    newPeople = newPeople,
+                    canPlay = shown.isNotEmpty(),
                     posts = stripPosts,
                     avatarUrl = viewModel.avatarUrl,
-                    loading = !state.loaded,
                     failed = state.failed,
                     spot = spot,
                     onPerson = { person ->
                         viewModel.watchPerson(person, shown)
                         actions.onWatch()
                     },
-                    onPlayAll = { if (viewModel.playAll(shown)) actions.onWatch() },
+                    onPlayAll = playAll,
                     onRetry = viewModel::refresh,
                     onPosting = { item -> if (item.stage == MomentPosting.Stage.FAILED) failedPosting = item },
                 )
+            } else {
+                // One person is tapped on the map: no row. Play all keeps a pill while something is new, beside + as
+                // on iPhone.
+                Spacer(Modifier.height(Spacing.s3))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s3, Alignment.End),
+                ) {
+                    if (newPeople > 0) {
+                        MomentsPlayAll(
+                            newPeople = newPeople,
+                            onPlayAll = playAll,
+                            modifier = Modifier.glass(RoundedCornerShape(Radii.xl3)),
+                            minHeight = 48.dp,
+                            sidePadding = Spacing.s4,
+                        )
+                    }
+                    AddButton(onClick = actions.onAdd)
+                }
             }
         }
         // Notes sit just above the strip (or the empty card), never on it.
         ToastHost(
             controller = toast,
-            modifier = Modifier.padding(bottom = (with(density) { bottomHeight.toDp() } - Spacing.s6).coerceAtLeast(0.dp)),
+            modifier = Modifier.padding(bottom = (with(density) { bottomHeight.toDp() } - Spacing.s6 - Spacing.s3).coerceAtLeast(0.dp)),
         )
     }
 }
@@ -385,6 +429,8 @@ private fun MomentsMap(
     onViewport: (Double, Double, Double, Double, Float) -> Unit,
     onRing: (MomentRingUi) -> Unit,
     onCluster: (List<MomentRingUi>) -> Unit,
+    onSpotSplit: () -> Unit,
+    onMapMoving: (Boolean) -> Unit,
     onPosting: (MomentPosting) -> Unit,
 ) {
     val context = LocalContext.current
@@ -481,6 +527,33 @@ private fun MomentsMap(
                 reportViewport()
             }
     }
+    // A finger moving the map sends the tab bar away; it comes back once the map has been still a second (it glides
+    // on a little after the finger lifts).
+    var fingerMoving by remember { mutableStateOf(false) }
+    var barAway by remember { mutableStateOf(false) }
+    val mapMoving by rememberUpdatedState(onMapMoving)
+    LaunchedEffect(fingerMoving) {
+        if (fingerMoving) {
+            barAway = true
+            mapMoving(true)
+        } else if (barAway) {
+            snapshotFlow { liveCamera }.collectLatest {
+                delay(MAP_STILL_MS)
+                barAway = false
+                mapMoving(false)
+            }
+        }
+    }
+    // The row of faces is for a crowded spot: zoomed in past where the tap left the map, with its bubble split into
+    // single people, the spot closes and each of them is tapped on the map (as on iPhone).
+    var bubbleRings by remember { mutableStateOf(emptySet<String>()) }
+    val spot = state.spot
+    val zoomNow = liveCamera?.zoom
+    val spotSplit by rememberUpdatedState(onSpotSplit)
+    LaunchedEffect(spot, bubbleRings, zoomNow) {
+        val opened = spot?.openedZoom ?: return@LaunchedEffect
+        if (zoomNow != null && zoomNow >= opened + SPOT_SPLIT_ZOOM && spot.ringIds.none { it in bubbleRings }) spotSplit()
+    }
     val properties =
         remember(context, center?.fromGps) {
             MapProperties(
@@ -492,7 +565,13 @@ private fun MomentsMap(
         remember {
             MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false, compassEnabled = false, mapToolbarEnabled = false)
         }
-    Box(modifier = Modifier.fillMaxSize().onSizeChanged { mapSize = it }) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .onSizeChanged { mapSize = it }
+                .pointerInput(Unit) { watchFingersOnMap { moving -> fingerMoving = moving } },
+    ) {
         GoogleMap(
             modifier = Modifier.fillMaxSize().testTag("moments.mapCanvas").semantics { contentDescription = "Map of Moments near you" },
             cameraPositionState = camera,
@@ -515,6 +594,7 @@ private fun MomentsMap(
             onRing = onRing,
             onCluster = onCluster,
             onPosting = onPosting,
+            onBubbles = { bubbleRings = it },
             mapReady = mapLoaded,
             camera = { liveCamera ?: camera.position },
             layoutKey = { liveTargetPoint },
@@ -640,13 +720,17 @@ private fun AreaPill(
     }
 }
 
-/** The strip of faces in view (boards M1, M2, P5): "8 new near you" and Play all over the faces, nearest first. */
+/**
+ * The row of faces (boards M2, P5): a crowded spot's name and "5 people · 3 new" with Play all over its faces. With no
+ * spot open it shows only for what the map can't hold (`MomentsMapRow.kt`), and Play all is the map's.
+ */
 @Composable
 private fun MomentsStrip(
-    shown: List<MomentRingUi>,
+    people: List<MomentStripPerson>,
+    newPeople: Int,
+    canPlay: Boolean,
     posts: List<MomentPosting>,
     avatarUrl: String?,
-    loading: Boolean,
     failed: Boolean,
     spot: MomentsSpot?,
     onPerson: (MomentStripPerson) -> Unit,
@@ -654,13 +738,12 @@ private fun MomentsStrip(
     onRetry: () -> Unit,
     onPosting: (MomentPosting) -> Unit,
 ) {
-    val newPeople = shown.filter { it.anyNew && !it.mine }.distinctBy { it.author.id }.size
-    val people = remember(shown) { stripPeople(shown) }
     // Your posting Moment and your own ring come first: the strip goes back to its start when one arrives, and when
     // the strip changes to a spot's people.
     val list = rememberLazyListState()
-    val first = posts.firstOrNull()?.momentId ?: shown.firstOrNull()?.takeIf { it.mine }?.id
+    val first = posts.firstOrNull()?.momentId ?: people.firstOrNull()?.first?.takeIf { it.mine }?.id
     LaunchedEffect(first, spot?.ringIds) { list.animateScrollToItem(0) }
+    val title = rowTitle(failed = failed, people = people, posts = posts)
     Column(
         modifier =
             Modifier
@@ -668,7 +751,7 @@ private fun MomentsStrip(
                 .height(136.dp)
                 .glass(RoundedCornerShape(Radii.xl3))
                 .testTag("moments.strip")
-                .semantics { contentDescription = if (spot != null) "Moments at ${spot.label ?: "this spot"}" else "Moments in view" },
+                .semantics { contentDescription = if (spot != null) "Moments at ${spot.label ?: "this spot"}" else title },
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().height(44.dp).padding(start = Spacing.s4, end = 6.dp, top = Spacing.s1),
@@ -694,16 +777,12 @@ private fun MomentsStrip(
                     )
                 } else {
                     Text(
-                        text =
-                            when {
-                                loading -> "Moments near you"
-                                failed -> "Couldn't load Moments"
-                                newPeople > 0 -> "$newPeople new near you"
-                                else -> "All caught up near you"
-                            },
+                        text = title,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.appText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() },
                     )
                 }
@@ -716,7 +795,12 @@ private fun MomentsStrip(
                     color = PantopusColors.primary600,
                     modifier = Modifier.clickable(role = Role.Button, onClick = onRetry).padding(horizontal = 10.dp, vertical = Spacing.s3),
                 )
-            } else if (shown.isNotEmpty()) {
+            } else if (spot == null) {
+                // With no spot open, Play all is the map's: what's new in view, as its pill says.
+                if (newPeople > 0) {
+                    MomentsPlayAll(newPeople = newPeople, onPlayAll = onPlayAll, modifier = Modifier.clip(RoundedCornerShape(Radii.lg)))
+                }
+            } else if (canPlay) {
                 Row(
                     modifier =
                         Modifier
@@ -732,17 +816,6 @@ private fun MomentsStrip(
                     Text(text = "Play all", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
                 }
             }
-        }
-        if (loading) {
-            Row(modifier = Modifier.padding(start = Spacing.s2, top = 2.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                repeat(5) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Shimmer(width = 56.dp, height = 56.dp, cornerRadius = 28.dp)
-                        Shimmer(width = 40.dp, height = 10.dp)
-                    }
-                }
-            }
-            return@Column
         }
         LazyRow(
             state = list,
@@ -964,6 +1037,12 @@ private const val CAMERA_POLL_MS = 120L
 private const val CLUSTER_MS = 400
 private const val RECENTER_MS = 400
 private const val PLACE_ZOOM = 17f
+
+/** The map has been still this long with no finger on it: the tab bar comes back. */
+private const val MAP_STILL_MS = 1_000L
+
+/** Zoomed in this much past where a tapped crowded spot opened (the view about three quarters across), it can close. */
+private const val SPOT_SPLIT_ZOOM = 0.4f
 private const val ANIMATE_GRACE_MS = 400L
 private const val REFRESH_MS = 60_000L
 

@@ -137,6 +137,8 @@ data class MomentsSpot(
     val ringIds: Set<String>,
     val label: String?,
     val returnTo: CameraPosition?,
+    /** The zoom the tap left the map at: zoomed in past it until the bubble has split, the spot closes. */
+    val openedZoom: Float? = null,
 )
 
 data class MomentsMapUiState(
@@ -369,9 +371,10 @@ class MomentsMapViewModel
         fun openSpot(
             rings: List<MomentRingUi>,
             returnTo: CameraPosition?,
+            openedZoom: Float? = null,
         ) {
             val label = rings.groupingBy { it.placeLabel }.eachCount().maxByOrNull { it.value }?.key
-            _state.update { it.copy(spot = MomentsSpot(rings.map { ring -> ring.id }.toSet(), label, returnTo)) }
+            _state.update { it.copy(spot = MomentsSpot(rings.map { ring -> ring.id }.toSet(), label, returnTo, openedZoom)) }
         }
 
         fun closeSpot() {
