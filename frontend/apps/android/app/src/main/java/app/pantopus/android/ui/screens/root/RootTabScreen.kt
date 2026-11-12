@@ -2480,9 +2480,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // TalkBack explores the screen. Every new screen, tab or step back starts with it in view.
     val tabBarScroll = remember { TabBarScrollState() }
     val showsTabBar = backStackEntry?.destination?.route !in NO_TAB_BAR_ROUTES
-    val tabBarSlides = !rememberTouchExplorationEnabled() && showsTabBar && backStackEntry?.destination?.route !in TAB_BAR_STAYS_ROUTES
+    val touchExploring = rememberTouchExplorationEnabled()
+    val tabBarSlides = !touchExploring && showsTabBar && backStackEntry?.destination?.route !in TAB_BAR_STAYS_ROUTES
     val tabBarScrollConnection = rememberTabBarScrollConnection(tabBarScroll, enabled = tabBarSlides)
-    LaunchedEffect(backStackEntry) { tabBarScroll.show() }
+    // The Moments map has no page to scroll: its bar steps aside while a finger moves the map, and comes back about a
+    // second after the map stops (founder request 2026-11-11, as on iPhone).
+    var momentsMapMoving by remember { mutableStateOf(false) }
+    val momentsBarAway = momentsMapMoving && !touchExploring && backStackEntry?.destination?.route == PantopusRoute.Moments.path
+    LaunchedEffect(backStackEntry) {
+        tabBarScroll.show()
+        momentsMapMoving = false
+    }
     // Plans is a tab only while its switch is on, and the bar follows the switch while the app runs.
     val plansGate: PlansGateViewModel = hiltViewModel()
     val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
@@ -3147,7 +3155,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     badges = badges,
                     dots = dots,
                     tabs = barTabs,
-                    away = tabBarSlides && tabBarScroll.isAway,
+                    away = (tabBarSlides && tabBarScroll.isAway) || momentsBarAway,
                     onSelect = { target ->
                         ScreenTiming.tabTapped(target.path.substringAfterLast('/'))
                         if (target == currentRoute) {
@@ -3253,7 +3261,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onWatch = { navController.navigate(MomentsRoutes.WATCH) },
                                     onAdd = { navController.navigate(MomentsRoutes.compose()) },
                                     onOpenMenu = openMenu,
+                                    onMapMoving = { momentsMapMoving = it },
                                 ),
+                            // The map runs on under the bar, so it keeps its size while the bar slides away and back.
+                            barInset = padding.calculateBottomPadding(),
                         )
                     }
                 }

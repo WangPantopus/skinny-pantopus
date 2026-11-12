@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,6 +110,8 @@ fun MomentsMapOverlay(
     onCluster: (List<MomentRingUi>) -> Unit,
     onPosting: (MomentPosting) -> Unit,
     modifier: Modifier = Modifier,
+    /** The rings drawn inside a crowded spot's bubble at this zoom, told each time they change. */
+    onBubbles: (Set<String>) -> Unit = {},
     mapReady: Boolean = true,
     camera: () -> CameraPosition = { cameraState.position },
     layoutKey: () -> Any? = { null },
@@ -117,6 +121,10 @@ fun MomentsMapOverlay(
     // A bubble's "+N" grows with the text size, and so does the room it takes.
     val fontScale = density.fontScale
     val items = remember(rings, posting, zoom, fontScale) { buildItems(rings, posting, zoom.toDouble(), fontScale.toDouble()) }
+    val bubbles by rememberUpdatedState(onBubbles)
+    LaunchedEffect(items) {
+        bubbles(items.filterIsInstance<MomentItem.Group>().flatMapTo(mutableSetOf()) { group -> group.rings.map { it.id } })
+    }
     val pxPerDp = density.density
     val pinAnchor = with(density) { MOMENT_PIN_ANCHOR_FROM_TOP.toPx() }
     val clusterAnchor = with(density) { MOMENT_CLUSTER_ANCHOR_FROM_TOP.toPx() }
