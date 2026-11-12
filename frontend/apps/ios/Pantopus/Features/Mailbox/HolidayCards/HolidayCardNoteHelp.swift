@@ -36,6 +36,8 @@ final class HolidayCardNoteHelp {
 
     /// Every note shown for this card so far, so "Try again" gets different ones.
     @ObservationIgnored private var shown: [String] = []
+    /// The picture and the people the notes on show were written for (`cardKey`).
+    @ObservationIgnored private var ideasFor: String?
     /// What was on the card before a note went on it, and that note: Undo stays until the note is edited.
     private var before: String?
     private var applied: String?
@@ -62,9 +64,17 @@ final class HolidayCardNoteHelp {
         return count == 2 ? "One note for both of them." : "A note for them."
     }
 
-    /// The sheet opens where it was left, except after a failure or mid-write.
-    func opened() {
-        if case .ideas = state { return }
+    /// One picture and the people it's to, as the notes were written for them.
+    static func cardKey(design: String, names: [String], count: Int) -> String {
+        "\(design)|\(names.joined(separator: ","))|\(count)"
+    }
+
+    /// The sheet opens where it was left: the notes still show for the same picture and people (`card`, a `cardKey`).
+    /// After a failure, or once the picture or who it's for has changed, it asks again, so a note never names someone
+    /// else.
+    func opened(for card: String) {
+        if state == .writing { return }
+        if case .ideas = state, ideasFor == card { return }
         state = .asking
     }
 
@@ -95,6 +105,7 @@ final class HolidayCardNoteHelp {
                 return
             }
             shown.append(contentsOf: fits.map(\.text))
+            ideasFor = Self.cardKey(design: design, names: names, count: count)
             state = .ideas(fits)
         } catch {
             state = .failed(Self.sentence(error) ?? Self.fallback)

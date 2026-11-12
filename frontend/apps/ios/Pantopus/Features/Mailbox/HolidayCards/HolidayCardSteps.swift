@@ -622,7 +622,7 @@ struct HolidayCardWriteStep: View {
         let count = recipient.noteHelpCount
         return HolidayCardNoteHelpRow(help: help, message: viewModel.message) {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            help.opened()
+            help.opened(for: HolidayCardNoteHelp.cardKey(design: design.id, names: names, count: count))
             helping = true
         } onUndo: {
             if let before = help.undo() { viewModel.message = before }
