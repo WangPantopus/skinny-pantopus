@@ -133,10 +133,17 @@ class CardNoteHelper(
     /** Every note shown for this card so far, so "Try again" gets different ones. */
     private val shown = mutableListOf<String>()
 
-    /** The sheet opens where it was left, except after a failure. */
-    fun open() {
+    /** The picture and the people the notes on show were written for ([cardKey]). */
+    private var ideasFor: String? = null
+
+    /**
+     * The sheet opens where it was left: the notes still show for the same picture and people ([card], a [cardKey]). After
+     * a failure, or once the picture or who it's for has changed, it asks again, so a note never names someone else.
+     */
+    fun open(card: String) {
         _state.update {
-            it.copy(open = true, phase = if (it.phase is CardNoteHelpPhase.Ideas) it.phase else CardNoteHelpPhase.Asking)
+            val keep = it.phase == CardNoteHelpPhase.Writing || (it.phase is CardNoteHelpPhase.Ideas && ideasFor == card)
+            it.copy(open = true, phase = if (keep) it.phase else CardNoteHelpPhase.Asking)
         }
     }
 
@@ -178,6 +185,7 @@ class CardNoteHelper(
                     is NetworkResult.Success -> {
                         val fits = result.data.filter { it.text.isNotBlank() && it.text.letterCount() <= limit }
                         shown += fits.map { it.text }
+                        ideasFor = cardKey(design, names, count)
                         if (fits.isEmpty()) CardNoteHelpPhase.Failed(FALLBACK) else CardNoteHelpPhase.Ideas(fits)
                     }
                     is NetworkResult.Failure -> CardNoteHelpPhase.Failed(sentence(result.error) ?: FALLBACK)
@@ -220,6 +228,13 @@ class CardNoteHelper(
                 ?.optString("message")
                 ?.takeIf { it.isNotBlank() }
         }
+
+        /** One picture and the people it's to, as the notes were written for them. */
+        fun cardKey(
+            design: String,
+            names: List<String>,
+            count: Int,
+        ): String = "$design|${names.joinToString(",")}|$count"
 
         /** Who the notes are for, in the sheet's first line. */
         fun forLine(
@@ -275,7 +290,7 @@ internal fun CardNoteHelpRow(
                 "Help me write it",
                 onClick = {
                     onOpen()
-                    helper.open()
+                    helper.open(CardNoteHelper.cardKey(design, names, count))
                 },
                 kind = CardButtonKind.Paper,
                 fill = false,
