@@ -642,6 +642,7 @@ class ConnectionsViewModel
                         size = AvatarBadgeSize.Large,
                         // No verification in the relationship payload, so no check.
                         verified = false,
+                        momentsUserId = user?.id,
                     ),
                 trailing =
                     pendingAction(rel.id) ?: RowTrailing.CircularAction(
@@ -696,6 +697,7 @@ class ConnectionsViewModel
                             ),
                         size = AvatarBadgeSize.Large,
                         verified = false,
+                        momentsUserId = user?.id,
                     ),
                 trailing = RowTrailing.Status(text = "Pending", variant = StatusChipVariant.Warning),
                 onTap = profileTap(user?.id),
@@ -769,6 +771,7 @@ class ConnectionsViewModel
                         background = AvatarBackground.Gradient(ConnectionAvatarTone.toneFor(user?.id ?: request.id).gradient),
                         size = AvatarBadgeSize.Large,
                         verified = false,
+                        momentsUserId = user?.id,
                     ),
                 trailing =
                     pendingAction(requestId) ?: RowTrailing.VerticalActions(

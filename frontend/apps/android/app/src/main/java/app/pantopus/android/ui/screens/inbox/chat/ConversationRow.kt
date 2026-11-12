@@ -43,6 +43,7 @@ import app.pantopus.android.ui.screens.moments.MomentOpenHolder
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentImages
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
+import app.pantopus.android.ui.screens.moments.components.momentsRing
 import app.pantopus.android.ui.screens.moments.components.rememberMomentImage
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -138,7 +139,14 @@ private fun MomentThumb(reply: ConversationMomentReply) {
 private fun Avatar(content: ConversationRowContent) {
     when (val variant = content.variant) {
         ConversationRowVariant.AiAssistant -> ChatAiAvatar(size = 44.dp)
-        ConversationRowVariant.Dm -> DmAvatar(initials = content.initials, verified = content.verified, avatarUrl = content.avatarUrl)
+        // A one-to-one row's id is the other person's: their picture wears the Moments ring and plays them.
+        ConversationRowVariant.Dm ->
+            DmAvatar(
+                initials = content.initials,
+                verified = content.verified,
+                avatarUrl = content.avatarUrl,
+                modifier = Modifier.momentsRing(content.id, stroke = 2.5.dp),
+            )
         is ConversationRowVariant.Group -> GroupAvatar(content.initials, variant)
     }
 }
@@ -148,8 +156,9 @@ private fun DmAvatar(
     initials: String,
     verified: Boolean,
     avatarUrl: String?,
+    modifier: Modifier = Modifier,
 ) {
-    Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.BottomEnd) {
+    Box(modifier = modifier.size(52.dp), contentAlignment = Alignment.BottomEnd) {
         InitialsCircle(
             size = 52.dp,
             color = PantopusColors.personalBg,

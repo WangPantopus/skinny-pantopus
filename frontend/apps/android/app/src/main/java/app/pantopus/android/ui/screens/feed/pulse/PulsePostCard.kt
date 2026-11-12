@@ -50,6 +50,7 @@ import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.models.posts.PostReactionSummary
+import app.pantopus.android.ui.screens.moments.components.momentsRing
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatar
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
@@ -179,6 +180,14 @@ sealed interface PulseAuthorLink {
     data class Person(val userId: String) : PulseAuthorLink
 
     data class Business(val businessId: String) : PulseAuthorLink
+
+    /** The author's account, a person's or a business's (its Moments ring goes around the photo). */
+    val accountId: String
+        get() =
+            when (this) {
+                is Person -> userId
+                is Business -> businessId
+            }
 }
 
 /** Event card attendee strip — stacked avatars, "N going" and the Going button. */
@@ -338,6 +347,8 @@ private fun CardHeader(
             ) {
                 FeedAvatar(
                     initials = content.authorInitials,
+                    // The author's Moments ring (a person's or a business's): a tap on a ringed photo plays them.
+                    modifier = Modifier.momentsRing(content.authorLink?.accountId),
                     tint = content.avatarTint,
                     verified = content.authorVerified,
                     size = 32.dp,

@@ -947,6 +947,8 @@ internal fun LocalProfileLoadedFrame(
                 bio = content.stats.bio,
                 onTrustClick = onTrustClick,
                 accountNameLine = owner?.extras?.accountNameLine,
+                // Not on a preview of your own profile as others see it.
+                momentsUserId = header.avatarSeed.takeIf { preview == null },
             ) {
                 ProfileFrameHeaderActions(
                     mode = mode,

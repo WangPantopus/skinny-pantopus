@@ -53,6 +53,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.screens.moments.components.momentsRing
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -227,9 +228,12 @@ internal fun ProfileIdentityHeader(
     onTrustClick: () -> Unit,
     modifier: Modifier = Modifier,
     accountNameLine: String? = null,
+    /** Whose profile this is: the picture wears their Moments ring while they have Moments to watch, and plays them. */
+    momentsUserId: String? = null,
     actions: @Composable () -> Unit,
 ) {
     val large = profileLargeText()
+    val ring = Modifier.momentsRing(momentsUserId, stroke = 3.dp, gap = 3.dp)
     Column(
         modifier =
             modifier
@@ -243,6 +247,7 @@ internal fun ProfileIdentityHeader(
                 photoUrl = header.avatarUrl,
                 seed = header.avatarSeed,
                 size = 64.dp,
+                modifier = ring,
             )
             Spacer(Modifier.height(Spacing.s4))
             ProfileNameBlock(header)
@@ -253,6 +258,7 @@ internal fun ProfileIdentityHeader(
                     photoUrl = header.avatarUrl,
                     seed = header.avatarSeed,
                     size = 84.dp,
+                    modifier = ring,
                 )
                 Spacer(Modifier.size(Spacing.s4))
                 Column(modifier = Modifier.weight(1f)) {
