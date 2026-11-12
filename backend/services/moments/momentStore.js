@@ -19,7 +19,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const feedService = require('../feedService');
-const { isFeatureEnabled } = require('../featureFlagService');
+const { getFlag, isFeatureEnabled } = require('../featureFlagService');
 const { loadChatPeople } = require('../chatPeople');
 const { verifiedResidentUserIds } = require('../../utils/identityProfiles');
 const { applyLocationPrecision, MAX_DISPLAY_OFFSET_DEGREES, snapToNeighborhoodCells } = require('../../utils/locationPrivacy');
@@ -234,10 +234,19 @@ function shownHeight(row) {
   return { altitude_ft: m.altitude_ft, flying: Boolean(m.flying) };
 }
 
-/** Whether `viewer` (an id, or { id, role }) has heights: off for everyone until the founder turns the flag on. */
+/**
+ * Whether `viewer` (an id, or { id, role }) has heights: off for everyone until the founder turns the flag on. Every
+ * Moments read asks, so while the flag is off, or on only for named people, it costs no read of its own (the flag
+ * row is kept for a minute); only the internal-team tier looks up the person's role.
+ */
 async function heightsOn(viewer) {
   try {
-    return await isFeatureEnabled(HEIGHTS_FLAG, viewer);
+    const flag = await getFlag(HEIGHTS_FLAG);
+    if (!flag) return false;
+    if (flag.enabled_globally) return true;
+    const id = typeof viewer === 'string' ? viewer : viewer?.id;
+    if (id && (flag.beta_user_ids || []).includes(id)) return true;
+    return flag.enabled_for_internal_team ? await isFeatureEnabled(HEIGHTS_FLAG, viewer) : false;
   } catch (error) {
     logger.warn('moments.heights_flag_failed', { error: error.message });
     return false;
