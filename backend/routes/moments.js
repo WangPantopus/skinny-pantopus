@@ -94,9 +94,9 @@ router.post('/adult-confirm', actionLimiter, async (req, res) => {
 
 /**
  * POST /place-preview — what the Post sheet shows: the place's label, the area's, the names the author may pick for an
- * exact pin (`places`; the first is the label), the home notice, the 18+ state, and whether the author has a
- * connection (`has_connections`: a Moment with no location needs one). With no point (location off) it answers only
- * the last two.
+ * exact pin (`places`; the first is the label), the home notice, whether "Show height" may be offered
+ * (`can_show_height`), the 18+ state, and whether the author has a connection (`has_connections`: a Moment with no
+ * location needs one). With no point (location off) it answers only the last two (and `can_show_height: false`).
  */
 router.post('/place-preview', actionLimiter, async (req, res) => {
   try {
@@ -104,9 +104,10 @@ router.post('/place-preview', actionLimiter, async (req, res) => {
       latitude: Joi.number().min(-90).max(90), longitude: Joi.number().min(-180).max(180),
     }).and('latitude', 'longitude'), req.body);
     const placed = at.latitude != null;
-    const [labels, atHome, adult, connections] = await Promise.all([
+    const [labels, atHome, heights, adult, connections] = await Promise.all([
       placed ? momentPlace.labelsAt(at.latitude, at.longitude) : { place_label: null, area_label: null, places: [] },
       placed ? momentPlace.isAtHome(req.user.id, at.latitude, at.longitude) : false,
+      placed ? store.heightsOn(req.user) : false,
       adultStatus(req.user.id),
       // Never in the way of the place's words: a failed read leaves `has_connections` out.
       store.connectionIds(req.user.id).catch((error) => {
@@ -118,6 +119,9 @@ router.post('/place-preview', actionLimiter, async (req, res) => {
     res.json({
       ...labels,
       at_home: atHome,
+      // Whether the sheet may offer "Show height" for this point: never at home (and never for an area: the app hides
+      // it when the author picks one). POST / decides again.
+      can_show_height: heights && !atHome,
       adult_confirmed: Boolean(adult.attestedAt) && !adult.ineligible,
       pick_within_m: momentPlace.PICK_PLACE_M,
       ...(connections ? { has_connections: connections.length > 0 } : {}),
@@ -152,6 +156,14 @@ const createSchema = Joi.object({
   client_request_id: Joi.string().uuid().allow(null),
   // The Post sheet's pick among place-preview's `places` (optional): a key, never the place's words.
   place_key: Joi.string().max(40).pattern(/^[a-z0-9_]+$/).allow('', null),
+  // "Show height" (optional; behind the `moment_heights` flag): how high above sea level the phone, or the album
+  // photo, says the Moment was made, in metres, with how far off that may be and how fast the phone was moving when
+  // it knows. Sent only when the author turned the switch on; everyone reads feet rounded to 10 (store.shownAltitude).
+  altitude: Joi.object({
+    meters: Joi.number().required(),
+    accuracy_m: Joi.number().allow(null),
+    speed_mps: Joi.number().allow(null),
+  }).allow(null),
 });
 
 // The row id a retry key stands for, so the same tap never makes two Moments.
@@ -200,6 +212,9 @@ router.post('/', createLimiter, async (req, res) => {
       ? { ...found, place_label: venue.label, places: [{ key: 'venue', label: venue.label }, ...found.places] }
       : { ...found, place_label: momentPlace.pickedLabel(found, body.place_key) || found.place_label };
     const shown = body.show_area || atHome ? labels.area_label : labels.place_label;
+    // The height is kept only for an exact pin away from home, and only while heights are on for the author.
+    const reading = store.shownAltitude(body.altitude, { atHome, showArea: body.show_area, unplaced });
+    const altitude = reading && (await store.heightsOn(req.user)) ? reading : null;
     const { row, created } = await store.insertMoment(store.newMomentRow({
       userId: req.user.id,
       accountType: req.user.accountType,
@@ -216,6 +231,7 @@ router.post('/', createLimiter, async (req, res) => {
       labelKind: unplaced ? 'none' : momentPlace.labelKind(labels, shown),
       takenAt: store.takenAtShown(body.location.source === 'capture' ? body.location.taken_at : body.taken_at),
       venueId: venue ? body.venue_id : null,
+      altitude,
     }), id);
     logger.info('moments.created', { momentId: row.id, kind: body.kind, hours: body.hours, audience: body.audience });
     res.status(201).json({ moment: await oneMoment(row, req.user.id) });
