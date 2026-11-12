@@ -365,6 +365,21 @@ router.get('/batch', async (req, res) => {
   }
 });
 
+/**
+ * GET /people?ids=a,b,c — the rings around profile pictures: for the people on a screen (up to 100 account ids), who
+ * has live Moments the caller may see, one ring per person with all of them in the order they play. The map's rules
+ * decide (blocks, mutes, "my connections only", the Moments the caller reported): someone with nothing the caller may
+ * see is left out, never an error.
+ */
+router.get('/people', async (req, res) => {
+  try {
+    const ids = String(req.query.ids || '').split(',').map((id) => id.trim()).filter((id) => UUID.test(id)).slice(0, store.MAX_PEOPLE);
+    res.json({ rings: await store.peopleRings(req.user.id, ids) });
+  } catch (error) {
+    sendError(res, error, 'people');
+  }
+});
+
 /** GET /:id — one Moment, with its signed links; 410 once it has ended. */
 router.get('/:id', async (req, res) => {
   try {

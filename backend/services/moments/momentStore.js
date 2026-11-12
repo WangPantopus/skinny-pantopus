@@ -467,10 +467,14 @@ function previewOf(newest, thumbs) {
   return link ? { moment_id: newest.row.id, kind: m.kind, thumb_url: link, background: null } : null;
 }
 
-async function ringsOf(viewerId, shown) {
+/**
+ * The rings of `shown` ([{ row, point }]) for `viewerId`. `keyOf` says which Moments share a ring (the map's: one per
+ * person per spot); `previews: false` leaves the pin pictures out (rings that are never drawn as pins).
+ */
+async function ringsOf(viewerId, shown, { keyOf = ringKey, previews = true } = {}) {
   const groups = new Map();
   for (const { row, point } of shown) {
-    const key = ringKey(row, point);
+    const key = keyOf(row, point);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({ row, point });
   }
@@ -482,7 +486,7 @@ async function ringsOf(viewerId, shown) {
   const [authors, marks, thumbs] = await Promise.all([
     loadAuthors(kept.map(({ newest }) => newest.row.user_id)),
     viewerMarks(viewerId, kept.flatMap(({ members }) => members.map(({ row }) => row.id))),
-    previewLinks(kept.map(({ newest }) => newest)),
+    previews ? previewLinks(kept.map(({ newest }) => newest)) : new Map(),
   ]);
   return kept.map(({ key, members, newest }) => {
     const mine = newest.row.user_id === viewerId;
@@ -490,7 +494,7 @@ async function ringsOf(viewerId, shown) {
     return {
       id: key,
       author: authors.get(String(newest.row.user_id)),
-      preview: previewOf(newest, thumbs),
+      preview: previews ? previewOf(newest, thumbs) : null,
       // A ring of Moments with no location has no point at all (apps put it in the row of faces, never on the map).
       ...(newest.point.latitude == null
         ? { no_location: true }
@@ -502,6 +506,35 @@ async function ringsOf(viewerId, shown) {
       mine,
     };
   });
+}
+
+// A screen of profile pictures asks about the people on it; more ids than this in one request are left out.
+const MAX_PEOPLE = 100;
+
+/**
+ * Who among `userIds` has live Moments that `viewerId` may see, one ring per person holding all of them, oldest
+ * first (CONTRACT GET /api/moments/people): the ring apps draw around a profile picture, and what plays when it's
+ * tapped. The map's rules decide, nothing else: blocks, mutes and "my connections only" (canSee), and the Moments
+ * the viewer reported. A person with nothing the viewer may see has no ring. The ring's point and place are its
+ * newest Moment's (none when that one has no location).
+ */
+async function peopleRings(viewerId, userIds) {
+  const people = [...new Set((userIds || []).filter(Boolean).map(String))].slice(0, MAX_PEOPLE);
+  if (!people.length) return [];
+  const nowIso = new Date().toISOString();
+  const rows = (await readInBatches(people, (batch) => supabaseAdmin.from('Post').select(MOMENT_SELECT)
+    .eq('is_story', true)
+    .in('user_id', batch)
+    .gt('story_expires_at', nowIso)
+    .is('archived_at', null)
+    .eq('moderation_state', 'live')
+    .eq('post_metadata->moment->>state', 'live')
+    .limit(MAX_MAP_ROWS), "people's Moments")).filter((row) => momentState(row) === 'live');
+  if (!rows.length) return [];
+  const [ctx, reported] = await Promise.all([viewerContext(viewerId, rows.map((r) => r.user_id)), reportedIds(viewerId)]);
+  const shown = rows.filter((row) => canSee(row, ctx) && !reported.has(row.id))
+    .map((row) => ({ row, point: displayedPoint(row) }));
+  return ringsOf(viewerId, shown, { keyOf: (row) => `u_${row.user_id}_all`, previews: false });
 }
 
 /** When a Moment went live: its end time less its hours (a photo's or video's time starts when its upload finishes). */
@@ -799,7 +832,7 @@ async function deleteMoment(row) {
 module.exports = {
   KINDS, HOURS, BACKGROUNDS, AUDIENCES, DAILY_LIMIT, HOUR_MS, MOMENT_SELECT,
   fail, meta, hasEnded, momentState, displayedPoint, viewerContext, canSee, loadAuthors, loadMoment,
-  serializeMoments, openMoment, openMoments, mapRings, unplacedRings, connectionIds, unseenPeople, wentLiveAt, ownMoments, viewersOf,
+  serializeMoments, openMoment, openMoments, mapRings, unplacedRings, peopleRings, MAX_PEOPLE, connectionIds, unseenPeople, wentLiveAt, ownMoments, viewersOf,
   newMomentRow, takenAtShown, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
   filesHeld, purgeFiles, deleteMoment,
 };
