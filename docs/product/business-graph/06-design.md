@@ -1,7 +1,10 @@
 # The screens
 
-November 11, 2026 · Status: listed, not drawn. One sample board is drawn first
-for the founder's OK; the rest follow it.
+November 11, 2026 · Status: the sample board is drawn and waits for the
+founder's OK. The other fourteen are listed, not drawn.
+
+The boards are on the private Design canvas
+[The business graph](https://claude.ai/artifact/A3Vr8tG3uswcd8C678nKUe).
 
 ## How they are made
 
@@ -16,8 +19,10 @@ or person appears.
 **K2, "Is this you?"** on iPhone, light. It is the screen the whole business
 file turns on: the owner has typed a name, and Pantopus shows the state's
 record with its licence, city and status, a masked phone, and "This is my
-business". It shows the trust lines' look, the source-and-date line, and how a
-record that is already claimed reads.
+business". It shows how a record's lines look and the source-and-date line
+every fact carries. A record that is already claimed is on K5.
+
+![K2 · Is this you?](screens/k2-is-this-you.png)
 
 ## The boards
 
