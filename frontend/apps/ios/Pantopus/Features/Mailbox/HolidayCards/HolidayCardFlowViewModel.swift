@@ -251,6 +251,8 @@ final class HolidayCardFlowViewModel {
     private var didReadOwnName = false
 
     private let api: APIClient
+    /// "Help me write it" on the write step (HolidayCardNoteHelp.swift): its notes and its Undo, for this card.
+    let noteHelp: HolidayCardNoteHelp
     private var searchTask: Task<Void, Never>?
     private var theirsTask: Task<Void, Never>?
 
@@ -263,6 +265,7 @@ final class HolidayCardFlowViewModel {
 
     init(api: APIClient = .shared, fromName: String, designId: String? = nil, to person: (id: String, name: String)? = nil) {
         self.api = api
+        noteHelp = HolidayCardNoteHelp(api: api)
         self.fromName = fromName
         self.designId = designId
         chosenAtStart = person.map { .person(userId: $0.id, name: $0.name) }

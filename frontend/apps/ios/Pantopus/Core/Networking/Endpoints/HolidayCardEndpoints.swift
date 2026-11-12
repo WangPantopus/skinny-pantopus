@@ -49,6 +49,13 @@ public enum HolidayCardEndpoints {
         Endpoint(method: .post, path: "/api/mailbox/cards/batch", body: body)
     }
 
+    /// `POST /api/ai/draft/card-note` — route `backend/routes/ai.js:451`. "Help me write it" (the server's launch key
+    /// `card_note_help`; 404 while it's off): up to three notes for the back of the card, written by Pantopus AI.
+    /// Nothing is stored or sent.
+    public static func noteHelp(_ body: HolidayCardNoteHelpBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/ai/draft/card-note", body: body, timeout: 35)
+    }
+
     /// `POST /api/mailbox/cards/shared`: counts one share of a card's picture (`card_table`). Answers 204.
     public static func shared(_ body: HolidayCardSharedBody) -> Endpoint {
         Endpoint(method: .post, path: "/api/mailbox/cards/shared", body: body)
