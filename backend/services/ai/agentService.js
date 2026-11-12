@@ -32,6 +32,8 @@ const { photoBlocks } = require('./photos');
 const { refreshPickupDraft, editorFields } = require('./pickupDraft');
 const radonReport = require('./radonReport');
 const postSuggestion = require('./postSuggestion');
+const cardNote = require('./cardNote');
+const holidayCards = require('../holidayCards');
 const { getAuthorizedMail } = require('./mailAccess');
 const { nameMailSender } = require('../../utils/mailSenderView');
 const noaa = require('../external/noaa');
@@ -1795,6 +1797,69 @@ async function draftMailOpening({ intent, ink, recipientName, body, userId }) {
   }
 }
 
+// ─── Christmas card note ("Help me write it") ───────────────────────────────
+
+const CARD_NOTE_FAILED = {
+  error: 'DRAFT_INVALID',
+  message: "Couldn't write a note that fits the card. Try again, or write it yourself.",
+  fallback: true,
+};
+
+/**
+ * Three notes for the back of a Christmas card (services/ai/cardNote.js): heartfelt, light and brief, each within
+ * the card's letter limit. `design` is the picture (holidayCards.designById); `to` the first names the app shows,
+ * `count` how many people the card goes to; `hint`, `note` and `passedOver` are the sender's own words and the notes
+ * they've already seen. Answers `{ notes: [{ tone, text }] }` with at least one note, or an error.
+ */
+async function suggestCardNote({ design, to, count, hint, note, passedOver, userId }) {
+  const startTime = Date.now();
+  const client = getAnthropicClient();
+  if (!client) return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. You can still write it yourself.', fallback: true };
+
+  const log = (fields) => logRequest({
+    userId, endpoint: 'draft/card-note', model: DRAFT_MODEL, promptVersion: prompts.VERSIONS.cardNote,
+    latencyMs: Date.now() - startTime, ...fields,
+  });
+  try {
+    const response = await complete({
+      client,
+      model: DRAFT_MODEL,
+      system: prompts.cardNoteSystem({ limit: holidayCards.MESSAGE_LIMIT, target: cardNote.TARGET_LETTERS }),
+      messages: [{ role: 'user', content: cardNote.userContent({ design, to, count, hint, note, passedOver }) }],
+      schema: cardNote.cardNoteClaudeSchema,
+      effort: DRAFT_EFFORT,
+      maxTokens: DRAFT_MAX_TOKENS,
+      timeoutMs: SUGGESTION_TIMEOUT_MS,
+    });
+
+    let answer;
+    try {
+      answer = JSON.parse(response.text);
+    } catch {
+      await log({ status: 'schema_error', schemaValid: false, errorMessage: 'JSON parse failed' });
+      return { ...CARD_NOTE_FAILED };
+    }
+    // An empty list is the model declining (the prompt's last rule), not a failure to fit the card.
+    const declined = Array.isArray(answer?.notes) && answer.notes.length === 0;
+    const notes = cardNote.usableNotes(answer);
+    await log({
+      status: declined ? 'refusal' : notes.length ? 'ok' : 'schema_error', schemaValid: declined || notes.length > 0,
+      inputTokens: response.inputTokens, outputTokens: response.outputTokens,
+    });
+    if (declined) return { ...DECLINED };
+    if (!notes.length) return { ...CARD_NOTE_FAILED };
+    return { notes };
+  } catch (err) {
+    logger.error('suggestCardNote error', { userId, error: err.message });
+    await log({ status: err instanceof AIRefusalError ? 'refusal' : 'error', errorMessage: err.message });
+    if (err instanceof AIRefusalError) return { ...DECLINED };
+    if (isTimeoutError(err)) {
+      return { error: 'AI_TIMEOUT', message: 'That took too long. Try again, or write it yourself.', fallback: true };
+    }
+    return { error: 'AI_UNAVAILABLE', message: 'AI is temporarily unavailable. You can still write it yourself.', fallback: true };
+  }
+}
+
 module.exports = {
   streamChat,
   draftGig,
@@ -1807,6 +1872,7 @@ module.exports = {
   summarizeMail,
   generatePlaceBrief,
   draftMailOpening,
+  suggestCardNote,
   listConversations,
   getConversationMessages,
   deleteConversation,
