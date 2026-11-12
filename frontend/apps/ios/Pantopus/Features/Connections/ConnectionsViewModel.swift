@@ -704,7 +704,8 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             body: body,
             subtitleIcon: Self.localityText(user) == nil ? nil : .mapPin,
             bodyIcon: .userPlus,
-            destructiveAction: removal
+            destructiveAction: removal,
+            momentsUserId: user?.id
         )
     }
 
@@ -737,7 +738,8 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             onTap: profileTap(user?.id),
             body: body,
             subtitleIcon: Self.localityText(user) == nil ? nil : .mapPin,
-            bodyIcon: .clock
+            bodyIcon: .clock,
+            momentsUserId: user?.id
         )
     }
 
@@ -813,7 +815,8 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             onTap: profileTap(user?.id, busy: busy),
             body: body,
             subtitleIcon: Self.localityText(user) == nil ? nil : .mapPin,
-            bodyIcon: .userPlus
+            bodyIcon: .userPlus,
+            momentsUserId: user?.id
         )
     }
 

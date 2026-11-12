@@ -19,6 +19,9 @@ struct MomentsSeenBySheet: View {
     var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsDelete = false
+    /// A watcher's profile, opened from their row.
+    @State private var profile: MomentsViewerProfile?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -113,11 +116,20 @@ struct MomentsSeenBySheet: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(viewers) { viewer in row(viewer) }
+                        ForEach(viewers) { viewer in
+                            if let theirs = MomentsViewerProfile(viewer.user) {
+                                Button { profile = theirs } label: { row(viewer).contentShape(Rectangle()) }
+                                    .buttonStyle(.plain)
+                                    .accessibilityHint("Opens their profile")
+                            } else {
+                                row(viewer)
+                            }
+                        }
                     }
                 }
             }
         }
+        .momentsProfileSheet($profile, systemScheme: colorScheme)
     }
 
     private func row(_ viewer: MomentViewerDTO) -> some View {
