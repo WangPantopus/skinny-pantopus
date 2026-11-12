@@ -17,7 +17,7 @@ start the day the founder says go.
 | [03-business-file-contract.md](03-business-file-contract.md) | What the business file's steps 2 to 6 build |
 | [04-build-plan.md](04-build-plan.md) | One order for everything, who builds what, the checks, the traps |
 | [05-session-briefs.md](05-session-briefs.md) | A ready-to-paste brief for each build session, and the note for the Plans session |
-| [06-design.md](06-design.md) | The screens: which boards, what each shows. One sample is drawn first |
+| [06-design.md](06-design.md) | The screens: which boards, what each shows. All fifteen are drawn, with pictures |
 
 Beside this folder:
 
