@@ -88,52 +88,74 @@ final class MomentPinPictures {
 struct MomentPinInside: View {
     let ring: MomentRingDTO
     /// The picture loaded for the preview showing, and which Moment it is of.
-    @State private var loaded: (momentId: String, image: UIImage)?
+    @State private var loaded: LoadedPicture?
+
+    private struct LoadedPicture {
+        let momentId: String
+        let image: UIImage
+    }
 
     /// The face or the preview, inside the ring.
     private static let size: CGFloat = 50
-    private static let badge: CGFloat = 22
+    private static let badgeSize: CGFloat = 22
 
     var body: some View {
-        let preview = ring.preview.flatMap { $0.canShow ? $0 : nil }
-        let picture = preview.flatMap { picture(of: $0) }
-        ZStack(alignment: .topLeading) {
-            if let preview, preview.kind == .text {
-                card(preview.background).offset(x: 7, y: 7)
-                badge
-            } else if let picture {
-                Image(uiImage: picture)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: Self.size, height: Self.size)
-                    .clipShape(Circle())
-                    .offset(x: 7, y: 7)
-                    .transition(.opacity)
-                badge
-            } else {
-                MomentAvatar(author: ring.author, size: Self.size).offset(x: 7, y: 7)
-            }
-        }
-        .frame(width: 64, height: 64, alignment: .topLeading)
-        .accessibilityHidden(true)
-        .task(id: preview?.momentId) {
-            guard let preview, preview.kind != .text else { return }
-            guard let image = await MomentPinPictures.shared.picture(for: preview) else { return }
-            loaded = (preview.momentId, image)
-        }
+        inside
+            .frame(width: 64, height: 64, alignment: .topLeading)
+            .accessibilityHidden(true)
+            .task(id: shown?.momentId) { await load() }
+    }
+
+    /// The preview there is something to draw for, if any.
+    private var shown: MomentRingPreviewDTO? {
+        guard let preview = ring.preview, preview.canShow else { return nil }
+        return preview
     }
 
     /// The preview's picture once it is in memory: loaded here, or by another pin of the same Moment before.
-    private func picture(of preview: MomentRingPreviewDTO) -> UIImage? {
-        if let loaded, loaded.momentId == preview.momentId { return loaded.image }
-        return MomentPinPictures.shared.held(preview.momentId)
+    private var picture: UIImage? {
+        guard let shown, shown.kind != .text else { return nil }
+        if let loaded, loaded.momentId == shown.momentId { return loaded.image }
+        return MomentPinPictures.shared.held(shown.momentId)
+    }
+
+    private func load() async {
+        guard let shown, shown.kind != .text else { return }
+        guard let image = await MomentPinPictures.shared.picture(for: shown) else { return }
+        loaded = LoadedPicture(momentId: shown.momentId, image: image)
+    }
+
+    @ViewBuilder
+    private var inside: some View {
+        if let shown, shown.kind == .text {
+            ZStack(alignment: .topLeading) {
+                card(shown.background).offset(x: 7, y: 7)
+                badge
+            }
+        } else if let picture {
+            ZStack(alignment: .topLeading) {
+                thumbnail(picture).offset(x: 7, y: 7)
+                badge
+            }
+        } else {
+            MomentAvatar(author: ring.author, size: Self.size).offset(x: 7, y: 7)
+        }
+    }
+
+    private func thumbnail(_ image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: Self.size, height: Self.size)
+            .clipShape(Circle())
     }
 
     /// A text card in small: its two colours, and "Aa" for the words on it.
     private func card(_ background: String?) -> some View {
         let colors = MomentsPalette.card(background)
+        let gradient = LinearGradient(colors: [colors.top, colors.bottom], startPoint: .top, endPoint: .bottom)
         return Circle()
-            .fill(LinearGradient(colors: [colors.top, colors.bottom], startPoint: .top, endPoint: .bottom))
+            .fill(gradient)
             .frame(width: Self.size, height: Self.size)
             .overlay {
                 Text("Aa")
@@ -144,7 +166,7 @@ struct MomentPinInside: View {
 
     /// The person, small, at the bottom left of the ring (the verified check keeps the bottom right).
     private var badge: some View {
-        MomentAvatar(author: ring.author, size: Self.badge)
+        MomentAvatar(author: ring.author, size: Self.badgeSize)
             .padding(2)
             .background(Circle().fill(MomentsPalette.pinSurface))
             .offset(x: 1, y: 37)
