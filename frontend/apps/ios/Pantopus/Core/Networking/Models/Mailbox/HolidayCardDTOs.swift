@@ -750,7 +750,9 @@ public struct HolidayCardNoteIdea: Decodable, Sendable, Hashable, Identifiable {
     public let tone: String
     public let text: String
 
-    public var id: String { tone }
+    public var id: String {
+        tone
+    }
 }
 
 /// The answer of `POST /api/ai/draft/card-note`: up to three notes to pick from.
