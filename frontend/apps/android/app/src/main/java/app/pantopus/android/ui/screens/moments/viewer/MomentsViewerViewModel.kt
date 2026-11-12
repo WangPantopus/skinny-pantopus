@@ -483,6 +483,8 @@ class MomentsViewerViewModel
         override fun onCleared() {
             // The viewer closed: what was just watched no longer counts as new for the tab's dot.
             dot.read()
+            // And the map shows where the last person watched was, when it isn't showing it (a push's Moment too).
+            _state.value.ring?.ring?.let(repository::showWatched)
             super.onCleared()
         }
 

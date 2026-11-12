@@ -33,6 +33,25 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * A move the map makes without a finger on it (founder, 2026-11-11; iPhone's `MomentsPlaceRequest`): close in on a spot
+ * about a block across, bring a spot into view at the zoom the map has, or frame an area around a point.
+ */
+data class MomentsMapMove(
+    val latitude: Double,
+    val longitude: Double,
+    val kind: Kind = Kind.CLOSE_IN,
+    /** [Kind.FRAME]: the area around the point, this many degrees tall and wide. */
+    val latitudeSpan: Double = 0.0,
+    val longitudeSpan: Double = 0.0,
+    val askedAtMs: Long = System.currentTimeMillis(),
+) {
+    enum class Kind { CLOSE_IN, INTO_VIEW, FRAME }
+}
+
+/** A place tapped and the viewer closing on it happen within this: the place wins. */
+private const val SAME_BREATH_MS = 1_000L
+
+/**
  * The Moments routes for the screens, plus what the map and the viewer share while the app runs: the rings last read
  * for the map (the viewer's "next ring nearby" and Play all walk them), and the Moments watched since (their rings turn
  * gray at once, before the next read).
@@ -69,23 +88,38 @@ class MomentsRepository
         @Volatile
         var playback: MomentsPlayback? = null
 
-        private val _placeToShow = MutableStateFlow<Pair<Double, Double>?>(null)
+        private val _mapMove = MutableStateFlow<MomentsMapMove?>(null)
 
-        /**
-         * A spot the viewer asked the map to show (the place under a Moment's name, tapped): latitude and longitude,
-         * until the map has moved there ([placeShown]).
-         */
-        val placeToShow: StateFlow<Pair<Double, Double>?> = _placeToShow.asStateFlow()
+        /** A move the map is asked to make without a finger on it, until the map has made it ([mapMoved]). */
+        val mapMove: StateFlow<MomentsMapMove?> = _mapMove.asStateFlow()
 
+        /** The place under a Moment's name, tapped in the viewer: the map closes in on it. */
         fun showPlace(
             latitude: Double,
             longitude: Double,
         ) {
-            _placeToShow.value = latitude to longitude
+            _mapMove.value = MomentsMapMove(latitude, longitude)
         }
 
-        fun placeShown() {
-            _placeToShow.value = null
+        /**
+         * The viewer closed on this ring: the map shows where that was, when it isn't showing it already. A place asked
+         * for in the same breath (its name tapped, which also closes the viewer) keeps the map; a ring with no location
+         * has nowhere to show.
+         */
+        fun showWatched(ring: MomentRingDto) {
+            if (ring.noLocation || (ring.latitude == 0.0 && ring.longitude == 0.0)) return
+            val asked = _mapMove.value
+            if (asked?.kind == MomentsMapMove.Kind.CLOSE_IN && System.currentTimeMillis() - asked.askedAtMs < SAME_BREATH_MS) return
+            _mapMove.value = MomentsMapMove(ring.latitude, ring.longitude, MomentsMapMove.Kind.INTO_VIEW)
+        }
+
+        /** The map opened on you with Moments just outside the view (or none in it): it frames them with you. */
+        fun frame(move: MomentsMapMove) {
+            _mapMove.value = move
+        }
+
+        fun mapMoved() {
+            _mapMove.value = null
         }
 
         private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
@@ -119,6 +153,7 @@ class MomentsRepository
             _watched.value = emptySet()
             _reported.value = emptySet()
             _mapNote.value = null
+            _mapMove.value = null
             playback = null
         }
 
@@ -163,6 +198,18 @@ class MomentsRepository
                 }
                 is NetworkResult.Failure -> result
             }
+
+        /**
+         * Reads the placed rings of a box without touching what the map and the viewer share ([rings]): the map looking
+         * around for what is just outside its view. Null when the read failed.
+         */
+        suspend fun lookAt(
+            south: Double,
+            west: Double,
+            north: Double,
+            east: Double,
+            zoom: Int,
+        ): List<MomentRingDto>? = (safeApiCall { api.map(south, west, north, east, zoom) } as? NetworkResult.Success)?.data?.rings
 
         suspend fun mine(): NetworkResult<List<MomentDto>> =
             when (val result = safeApiCall { api.mine() }) {
