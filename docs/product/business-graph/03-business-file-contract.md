@@ -19,7 +19,7 @@ Each is open until the founder confirms it.
 | B4 | Codes | Six digits, good for 10 minutes, 5 tries, 3 sends a day per business. Saved hashed |
 | B5 | The phone on a record | Shown masked, never in full, until the claim is proved |
 | B6 | Bad news | A suspension or a lapsed bond is shown only from the official record, only on an exact licence or business-number link, with its date |
-| B7 | Two indexes, not one | The catalog index and the map index stay separate files and are joined when read |
+| B7 | Two indexes, not one | The catalog's search file and the map index stay separate files and are joined when read |
 | B8 | Who may claim | Any signed-in person may start. Nothing is granted until a proof passes |
 | B9 | A second claimer | A record linked by a proof stays linked. Someone else must write to support; a reviewer can move it |
 
@@ -164,29 +164,39 @@ account and its key are the founder's steps.
 
 ## 4. Step 3: find your business, for every kind
 
-### 4.1 The catalog index
+### 4.1 The catalog
 
-Built monthly by `scripts/businesses/build-index.cjs`, in the shape of
-`scripts/places/build-index.cjs`:
+Measured and designed in [the data design](07-data-design.md), which replaces
+the outline that stood here. In short:
 
-- Reads the United States part of Overture Places and Foursquare Open Source
-  Places. Drops records under a set confidence, closed ones, and exact repeats.
-- Writes a manifest and one data file, areas keyed by map cell, each listing:
-
-```
-[ id, name, category, address, city, state, zip, lat, lng, phone, website, brand, status, confidence, updated ]
-```
-
-  `id` is `ovt:<Overture id>` or `fsq:<Foursquare id>`.
-- Stored in the catalog bucket (section 7). The server reads it by range
-  request, as `placesIndex.js` reads the places index.
+- **Source:** the United States part of Overture Places (18,445,349 places,
+  2.15 GB, monthly). Foursquare Open Source Places joins when the founder has
+  a token for it.
+- **Built monthly** into a business file (one row per business, every fact
+  with its source and date) and a search file, both kept in the catalog
+  bucket (section 7). Duplicates are folded. Nothing is dropped for a low
+  "does it exist" score: one in six listings that a state licence proves real
+  scores under 0.5.
+- **Read by the server from its own disk.** The search file is one SQLite
+  file (7.6 GB) that answers a name near an address, a name anywhere in the
+  country, a phone and a website. It replaces the planned file of map areas,
+  which cannot search by name and took over a second in the densest city.
+- **Ids:** every business has a Pantopus id that survives each rebuild, and
+  remembers its source ids (`ovt:<Overture id>`, `fsq:<Foursquare id>`,
+  licence numbers).
 
 ### 4.2 Finding
 
 `GET /api/businesses/find?q=&lat=&lng=` answers one merged list, at most 8:
-public records, catalog listings, and named places from the map index. Two
-entries are one when their names read as the same (`businessNameMatch.js`) and
-they share a phone, a domain, or stand within 150 metres.
+public records, catalog listings, and named places from the map index.
+
+Two entries are one business when their names read as the same
+(`businessNameMatch.js`, plus the rule for the state's shortened names) **and**
+they share a phone or a street address. In the Clark County test those ties
+were right 53 times in 53. A shared name alone is not a tie: it was wrong 19
+times in 20. A shared phone alone is offered to the owner as "Is this also
+you?" and publishes nothing. The test and the exact rule are in
+[the data design, section 3](07-data-design.md#3-matching-tested-on-clark-county).
 
 Picking one prefills the create form and saves, on the new business:
 the location's `place_ref` when the pick has a map id (piece 2), and the
@@ -246,23 +256,33 @@ That is its own decision.
 
 ## 7. Files
 
-One private bucket, named by `BUSINESS_CATALOG_BUCKET`:
+One private bucket, named by `BUSINESS_CATALOG_BUCKET`, in the server's own
+AWS region. The full layout, with measured sizes, is in
+[the data design, section 5](07-data-design.md#5-where-everything-is-stored).
 
-| Prefix | Holds | Changed after writing |
-| --- | --- | --- |
-| `raw/<source>/<release>/` | Each source's monthly copy | Never |
-| `index/<yyyymmdd>/` | The built index and its manifest | Never; a new build is a new folder |
-| `index/current.json` | Which build the server reads | By the build only |
+| Prefix | Holds | Size | Changed after writing |
+| --- | --- | --- | --- |
+| `raw/<source>/<release>/` | Each source exactly as fetched | Overture 2.15 GB a month; the contractor files 128 MB a day | Never |
+| `built/<yyyymmdd>/` | The business file and the list of ids | About 3 GB (estimate) | Never; a new build is a new folder |
+| `search/<yyyymmdd>/` | The search file the server copies to its disk | 3.35 GB compressed, 7.6 GB opened | Never |
+| `search/current.json` | Which build the server reads | A few lines | By the build only |
+| `reports/<yyyymmdd>.json` | What each build counted, and its hand check | A few lines | Never |
 
-The server reads `index/` with its own key. Nothing in the bucket is public.
-Creating the bucket and its key are the founder's steps.
+The server reads `search/` with its own key and keeps the current file on
+its own disk (about 16 GB with room to swap). Nothing in the bucket is
+public. The 18 million listings never enter the app's database. Creating the
+bucket and its key, and making room on the server's disk, are the founder's
+steps. About $2 a month at first and $5 after a year, at list prices.
 
 ## 8. Open questions
 
 - Whether a contractor's phone on the state record is a phone they answer. The
   by-hand test asks five crews before the phone proof is built.
 - The licence terms of the Washington bond dataset, which shows no label.
-- How many United States places the catalog holds, and how large the index is.
-  Measured as the first task of step 3.
+- ~~How many United States places the catalog holds, and how large the index
+  is.~~ Measured: [the data design](07-data-design.md).
+- Foursquare Open Source Places needs a free account and token, which is the
+  founder's step. Until then the catalog is Overture alone.
+- The server's disk size and memory, which the search file depends on.
 - The text-message provider and its price.
 - Whether the mail vendor is switched on in production.

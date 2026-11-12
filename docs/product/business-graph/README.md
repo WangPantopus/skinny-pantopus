@@ -18,6 +18,7 @@ start the day the founder says go.
 | [04-build-plan.md](04-build-plan.md) | One order for everything, who builds what, the checks, the traps |
 | [05-session-briefs.md](05-session-briefs.md) | A ready-to-paste brief for each build session, and the note for the Plans session |
 | [06-design.md](06-design.md) | The screens: which boards, what each shows. All fifteen are drawn, with pictures |
+| [07-data-design.md](07-data-design.md) | The business data, measured: how every US business is fetched, stored, indexed, queried and refreshed; the matching test; what it costs; what to add next |
 
 Beside this folder:
 
