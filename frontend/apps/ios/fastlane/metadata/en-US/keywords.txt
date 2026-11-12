@@ -1,1 +1,1 @@
-neighbors,homeowner,household,chores,reminders,trash,recycling,flood,radon,wildfire,air quality
+christmas cards,ecards,holiday cards,greeting,neighbors,homeowner,household,flood,radon,wildfire
