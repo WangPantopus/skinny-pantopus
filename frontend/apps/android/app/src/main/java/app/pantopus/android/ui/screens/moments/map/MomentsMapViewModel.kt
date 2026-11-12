@@ -15,6 +15,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.moments.MomentPosting
 import app.pantopus.android.data.moments.MomentPostingOutcome
 import app.pantopus.android.data.moments.MomentsFeature
+import app.pantopus.android.data.moments.MomentsMapMove
 import app.pantopus.android.data.moments.MomentsPlayback
 import app.pantopus.android.data.moments.MomentsPosting
 import app.pantopus.android.data.moments.MomentsRepository
@@ -227,6 +228,9 @@ class MomentsMapViewModel
         val wentLive: SharedFlow<Unit> = _wentLive.asSharedFlow()
 
         private var viewport: Viewport? = null
+
+        /** The map has just opened on you: its first read there looks around once ([lookAroundIfOpening]). */
+        private var looksAround = false
         private var fetching: Job? = null
         private var labeledAt: Pair<Double, Double>? = null
         private var labeling: Job? = null
@@ -260,10 +264,12 @@ class MomentsMapViewModel
                 if (center == null && waitForFix && locations.hasLocationPermission()) {
                     locations.newFix()?.let { fresh ->
                         val here = MomentsCenter(fresh.latitude, fresh.longitude, fromGps = true)
+                        looksAround = true
                         _state.update { it.copy(center = here, locating = false, locationMissing = false) }
                         return@launch
                     }
                 }
+                if (center != null) looksAround = true
                 _state.update {
                     it.copy(center = center ?: it.center, locating = false, locationMissing = center == null && it.center == null)
                 }
@@ -276,6 +282,7 @@ class MomentsMapViewModel
         fun useHome() {
             viewModelScope.launch {
                 val home = locations.home() ?: return@launch
+                looksAround = true
                 _state.update { it.copy(center = MomentsCenter(home.latitude, home.longitude, fromGps = false), locationMissing = false) }
             }
         }
@@ -312,6 +319,7 @@ class MomentsMapViewModel
                         is NetworkResult.Success -> {
                             _state.update { it.copy(rings = result.data, loaded = true, failed = false) }
                             if (result.data.all { it.noLocation }) emptyPlace()
+                            lookAroundIfOpening(area, result.data)
                         }
                         is NetworkResult.Failure -> {
                             // Moments was turned off while the app was open (every route then answers 404
@@ -381,10 +389,10 @@ class MomentsMapViewModel
             _state.update { it.copy(spot = null) }
         }
 
-        /** A spot the viewer asked to see (the place under a Moment's name, tapped), until the map has moved there. */
-        val placeToShow: StateFlow<Pair<Double, Double>?> = repository.placeToShow
+        /** A move the map is asked to make without a finger on it (`MomentsMapMoves.kt`), until it has made it. */
+        val mapMove: StateFlow<MomentsMapMove?> = repository.mapMove
 
-        fun placeShown() = repository.placeShown()
+        fun mapMoved() = repository.mapMoved()
 
         /**
          * Hands the viewer its queue: [start] and then the other rings shown, nearest to it first, new ones before
@@ -439,6 +447,33 @@ class MomentsMapViewModel
 
         fun discardPosting(momentId: String) = posting.discard(momentId)
 
+        /**
+         * Once after the map opens on you (the tab opening, "Show my location", "Use my home"), when the camera has
+         * settled there and no crowded spot is open, it looks around (`MomentsMapMoves.kt`): what's new just outside the
+         * view is framed with you, and with nothing in view at all the nearest Moments are.
+         */
+        private fun lookAroundIfOpening(
+            area: Viewport,
+            rings: List<MomentRingDto>,
+        ) {
+            val state = _state.value
+            val center = state.center ?: return
+            // The first read can come before the camera reports where it settled: wait for the one after.
+            if (!looksAround || state.spot != null || !area.box.shows(center.latitude, center.longitude)) return
+            looksAround = false
+            val nothingInView = rings.none { !it.noLocation && area.box.holds(it.latitude, it.longitude) }
+            viewModelScope.launch {
+                val found =
+                    lookAround(center.latitude, center.longitude, nothingInView, repository.watched.value) { box, zoom ->
+                        repository.lookAt(box.south, box.west, box.north, box.east, zoom)
+                    }
+                // Unless the map was moved, a spot opened or the center changed while it looked.
+                val now = _state.value
+                val still = viewport?.box?.isAbout(area.box) == true && now.center == center && now.spot == null
+                if (still) frameMove(found, center.latitude, center.longitude, area.box)?.let(repository::frame)
+            }
+        }
+
         private data class Viewport(
             val south: Double,
             val west: Double,
@@ -448,6 +483,7 @@ class MomentsMapViewModel
         ) {
             val centerLatitude: Double get() = (south + north) / 2
             val centerLongitude: Double get() = (west + east) / 2
+            val box: MapBox get() = MapBox(south, west, north, east)
         }
 
         private companion object {

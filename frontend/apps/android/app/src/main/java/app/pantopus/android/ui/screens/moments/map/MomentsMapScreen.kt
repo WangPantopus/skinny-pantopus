@@ -85,6 +85,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.R
 import app.pantopus.android.data.moments.MomentPosting
+import app.pantopus.android.data.moments.MomentsMapMove
 import app.pantopus.android.ui.components.MessagesButton
 import app.pantopus.android.ui.components.MessagesEntryHolder
 import app.pantopus.android.ui.components.ToastController
@@ -105,6 +106,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.CameraPositionState
 import com.google.maps.android.compose.GoogleMap
@@ -198,8 +200,9 @@ fun MomentsMapScreen(
         spot?.returnTo?.let { back -> scope.launch { camera.animateOrMove(CameraUpdateFactory.newCameraPosition(back), CLUSTER_MS) } }
         viewModel.closeSpot()
     }
-    // "Where is that?": the place under a Moment's name in the viewer brings the map in on that spot (the canvas moves).
-    val placeToShow by viewModel.placeToShow.collectAsStateWithLifecycle()
+    // The map moving without a finger on it ("Where is that?" from the viewer, the last person watched, what's new just
+    // outside the view): the canvas makes the move (`MomentsMapMoves.kt`).
+    val mapMove by viewModel.mapMove.collectAsStateWithLifecycle()
     val shown =
         remember(rings, spot) {
             val inSpot = spot?.let { s -> rings.filter { it.id in s.ringIds } } ?: rings
@@ -254,10 +257,11 @@ fun MomentsMapScreen(
             recenter = recenter,
             topPaddingPx = topPadding,
             bottomPaddingPx = bottomHeight,
-            placeToShow = placeToShow,
-            onPlaceShown = {
-                viewModel.closeSpot()
-                viewModel.placeShown()
+            mapMove = mapMove,
+            onMapMoved = { closedIn ->
+                // Closing in on a place leaves a crowded spot; the other moves never happen with one open.
+                if (closedIn) viewModel.closeSpot()
+                viewModel.mapMoved()
             },
             liveSpot = liveSpot,
             onLiveSpotShown = { moved ->
@@ -422,8 +426,8 @@ private fun MomentsMap(
     recenter: Int,
     topPaddingPx: Int,
     bottomPaddingPx: Int,
-    placeToShow: Pair<Double, Double>?,
-    onPlaceShown: () -> Unit,
+    mapMove: MomentsMapMove?,
+    onMapMoved: (closedIn: Boolean) -> Unit,
     liveSpot: Pair<Double, Double>?,
     onLiveSpotShown: (moved: Boolean) -> Unit,
     onViewport: (Double, Double, Double, Double, Float) -> Unit,
@@ -508,16 +512,42 @@ private fun MomentsMap(
         }
         onLiveSpotShown(!inView)
     }
-    // The place under a Moment's name, tapped in the viewer: once the map is back on screen and has opened where it
-    // was, it comes in on that spot, about a block across.
-    LaunchedEffect(placeToShow, googleMap) {
-        if (googleMap == null) return@LaunchedEffect
-        val (latitude, longitude) = placeToShow ?: return@LaunchedEffect
+    // A move asked of the map (`MomentsMapMoves.kt`), made once the map is back on screen and has opened where it was:
+    // close in on a place about a block across; bring the last person watched into view at the zoom the map has, only
+    // when they aren't showing; or frame what's just outside the view around you.
+    LaunchedEffect(mapMove, googleMap, mapSize) {
+        val map = googleMap ?: return@LaunchedEffect
+        val move = mapMove ?: return@LaunchedEffect
+        if (mapSize.height == 0) return@LaunchedEffect
         delay(VIEWPORT_SETTLE_MS)
-        camera.animateOrMove(CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), PLACE_ZOOM), RECENTER_MS)
-        onPlaceShown()
-        delay(VIEWPORT_SETTLE_MS)
-        reportViewport()
+        val target = LatLng(move.latitude, move.longitude)
+        val update =
+            when (move.kind) {
+                MomentsMapMove.Kind.CLOSE_IN -> CameraUpdateFactory.newLatLngZoom(target, PLACE_ZOOM)
+                MomentsMapMove.Kind.INTO_VIEW -> {
+                    val point = map.projection.toScreenLocation(target)
+                    val inView = point.x in 0..mapSize.width && point.y in topPaddingPx..(mapSize.height - bottomPaddingPx)
+                    // A viewer closed somewhere else in the app a while ago is no reason to move the map now.
+                    val stale = System.currentTimeMillis() - move.askedAtMs > WATCHED_MOVE_MS
+                    // Never wider than a neighborhood.
+                    val zoom = map.cameraPosition.zoom.coerceAtLeast(START_ZOOM)
+                    if (inView || stale) null else CameraUpdateFactory.newLatLngZoom(target, zoom)
+                }
+                MomentsMapMove.Kind.FRAME -> {
+                    // Wider than the map reads rings for, there would be nothing to see.
+                    val wide = move.longitudeSpan.coerceAtMost(MAX_FETCH_SPAN_DEGREES * 0.95) / 2
+                    val tall = move.latitudeSpan / 2
+                    val southWest = LatLng(move.latitude - tall, move.longitude - wide)
+                    val northEast = LatLng(move.latitude + tall, move.longitude + wide)
+                    CameraUpdateFactory.newLatLngBounds(LatLngBounds(southWest, northEast), 0)
+                }
+            }
+        if (update != null) camera.animateOrMove(update, RECENTER_MS)
+        onMapMoved(move.kind == MomentsMapMove.Kind.CLOSE_IN)
+        if (update != null) {
+            delay(VIEWPORT_SETTLE_MS)
+            reportViewport()
+        }
     }
     LaunchedEffect(camera) {
         snapshotFlow { if (mapLoaded) liveCamera ?: camera.position else null }
@@ -1037,6 +1067,9 @@ private const val CAMERA_POLL_MS = 120L
 private const val CLUSTER_MS = 400
 private const val RECENTER_MS = 400
 private const val PLACE_ZOOM = 17f
+
+/** The viewer closed this long ago at most for the map to still go to the last person watched. */
+private const val WATCHED_MOVE_MS = 10_000L
 
 /** The map has been still this long with no finger on it: the tab bar comes back. */
 private const val MAP_STILL_MS = 1_000L
