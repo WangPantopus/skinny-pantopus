@@ -4,7 +4,8 @@
 //
 //  What floats over the Moments map: ☰, the area pill (M2: "‹ Esther Short
 //  Park", back to the area) and the chat button at the top; "Show my
-//  location", + and the strip at the bottom (M1, P5), or the empty card
+//  location" and + at the bottom, with the Play all pill or the strip of
+//  faces (M2, P5; when it shows: `MomentsMapRow.swift`), or the empty card
 //  (M3), or the location ask when there's neither a location nor a home.
 //
 
@@ -109,6 +110,7 @@ struct MomentsMapBottom: View {
     /// The closed iPhone Duo: the height of the strip or the card at the bottom, for the map to keep its Legal link
     /// just above it. Phones don't ask.
     var onBottomHeight: ((CGFloat) -> Void)?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 0) {
@@ -128,7 +130,7 @@ struct MomentsMapBottom: View {
                     MomentsEmptyCard(line: viewModel.emptyLine, onAdd: actions.compose)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onBottomHeight?($0) }
                         .padding(.top, 14)
-                } else {
+                } else if viewModel.showsRow(postings: postings) {
                     MomentsRoundButton.add(action: actions.compose)
                         .padding(.top, Spacing.s3)
                     MomentsStrip(
@@ -141,11 +143,31 @@ struct MomentsMapBottom: View {
                     )
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onBottomHeight?($0) }
                     .padding(.top, 9)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    // One person is tapped on the map: no row. Play all keeps a pill while something is new, beside +
+                    // (the bottom left is MapKit's, for its logo and Legal link).
+                    HStack(spacing: Spacing.s3) {
+                        let new = viewModel.newRingsInView
+                        if !new.isEmpty {
+                            MomentsPlayAllButton(rings: new, actions: actions)
+                                .transition(.opacity)
+                        }
+                        MomentsRoundButton.add(action: actions.compose)
+                    }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onBottomHeight?($0) }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.top, Spacing.s3)
                 }
             }
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.bottom, Spacing.s3)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3), value: showsRow)
+    }
+
+    private var showsRow: Bool {
+        viewModel.phase == .ready && viewModel.showsRow(postings: postings)
     }
 }
 
@@ -179,8 +201,8 @@ enum MomentsRoundButton {
 
 // MARK: - Strip
 
-/// Boards M1 and M2: "8 new near you" (or the spot's name and "5 people · 3
-/// new") with Play all, over the faces in view, new ones first, then nearest.
+/// Board M2: a crowded spot's name and "5 people · 3 new" with Play all, over its faces, new ones first, then
+/// nearest. With no spot open it shows only for what the map can't hold (`MomentsMapRow.swift`).
 struct MomentsStrip: View {
     let viewModel: MomentsMapViewModel
     let postings: [MomentPosting]
@@ -198,11 +220,8 @@ struct MomentsStrip: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
                     ForEach(postings) { posting in postingCell(posting) }
-                    if !viewModel.loaded, postings.isEmpty {
-                        ForEach(0..<5, id: \.self) { _ in placeholderCell }
-                    }
                     // One face per person: someone at three spots is one face, not three.
-                    ForEach(viewModel.stripPeople) { person in
+                    ForEach(viewModel.rowPeople) { person in
                         Button { actions.watch(viewModel.watchQueue(from: person), 0, false) } label: { MomentStripFace(ring: person.face) }
                             .buttonStyle(.plain)
                             .accessibilityLabel(MomentsSpeech.label(for: person))
@@ -217,7 +236,7 @@ struct MomentsStrip: View {
         .frame(height: 136)
         .momentsGlass(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(viewModel.focus.map { "Moments at \($0.title)" } ?? "Moments in view")
+        .accessibilityLabel(viewModel.focus.map { "Moments at \($0.title)" } ?? title)
         .accessibilityIdentifier("moments.strip")
         .confirmationDialog(
             "Your Moment didn't post",
@@ -233,13 +252,11 @@ struct MomentsStrip: View {
         }
     }
 
-    @ViewBuilder
     private func header(_ rings: [MomentRingDTO]) -> some View {
-        let new = rings.filter { $0.isNew && !$0.mine }
-        let newPeople = MomentsMapViewModel.newPeople(in: rings)
-        let people = MomentsMapViewModel.people(in: rings)
         HStack(spacing: Spacing.s2) {
             if let focus = viewModel.focus {
+                let newPeople = MomentsMapViewModel.newPeople(in: rings)
+                let people = MomentsMapViewModel.people(in: rings)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(focus.title)
                         .font(.system(size: 15, weight: .semibold))
@@ -253,7 +270,7 @@ struct MomentsStrip: View {
                 .accessibilityIdentifier("moments.strip.title")
                 .padding(.top, 2)
             } else {
-                Text(title(rings: rings, new: newPeople))
+                Text(title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
@@ -261,11 +278,15 @@ struct MomentsStrip: View {
                     .accessibilityIdentifier("moments.strip.title")
             }
             Spacer(minLength: 0)
-            if !rings.isEmpty {
+            if viewModel.focus == nil {
+                // With no spot open, Play all is the map's: what's new in view, as its pill says.
+                let new = viewModel.newRingsInView
+                if !new.isEmpty { MomentsPlayAllButton(rings: new, actions: actions, floats: false) }
+            } else if !rings.isEmpty {
                 Button {
-                    // Play all plays the new ones, nearest first; all of them once everything is watched.
-                    let queue = new.isEmpty ? rings : new
-                    actions.watch(queue, 0, !new.isEmpty)
+                    // Play all plays the spot's new ones, nearest first; all of them once everything is watched.
+                    let new = rings.filter { $0.isNew && !$0.mine }
+                    actions.watch(new.isEmpty ? rings : new, 0, !new.isEmpty)
                 } label: {
                     HStack(spacing: 6) {
                         Icon(.play, size: 12, color: Theme.Color.primaryTint)
@@ -285,11 +306,13 @@ struct MomentsStrip: View {
         .padding(.top, Spacing.s1)
     }
 
-    private func title(rings: [MomentRingDTO], new: Int) -> String {
-        if !viewModel.loaded { return "Moments near you" }
-        if new > 0 { return "\(new) new near you" }
-        if rings.isEmpty { return "Posting your Moment" }
-        return "All caught up near you"
+    /// With no spot open the row holds what the map can't: Moments with no location, and yours while it posts.
+    private var title: String {
+        if !viewModel.rowPeople.isEmpty { return "Not on the map" }
+        let failed = postings.contains { if case .failed = $0.phase { true } else { false } }
+        let posting = postings.contains { $0.phase == .uploading || $0.phase == .checking }
+        if failed, !posting { return "Your Moment didn't post" }
+        return postings.contains { $0.phase != .live } ? "Posting your Moment" : "Your Moment is live"
     }
 
     private func postingCell(_ posting: MomentPosting) -> some View {
@@ -311,15 +334,6 @@ struct MomentsStrip: View {
         .disabled(!failed)
         .accessibilityLabel(failed ? "Your Moment didn't post. Try again" : "Your Moment is posting")
         .accessibilityIdentifier("moments.strip.posting")
-    }
-
-    private var placeholderCell: some View {
-        VStack(spacing: Spacing.s1) {
-            Circle().fill(Theme.Color.appSurfaceSunken).frame(width: 56, height: 56)
-            Capsule().fill(Theme.Color.appSurfaceSunken).frame(width: 40, height: 10)
-        }
-        .frame(width: 62)
-        .accessibilityHidden(true)
     }
 }
 

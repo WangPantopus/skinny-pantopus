@@ -55,6 +55,10 @@ struct MomentsFocus: Equatable {
     /// middle of the map otherwise).
     var latitude = 0.0
     var longitude = 0.0
+    /// How far in the tap's own zoom left the map (latitude degrees); nil until the camera settles after it.
+    var openedSpan: Double?
+    /// When the bubble was tapped: a finger on the map only counts once that tap's own zoom is over.
+    var openedAt = Date()
 }
 
 /// One face in the strip: a person, with every spot they have a Moment at.
@@ -104,11 +108,15 @@ final class MomentsMapViewModel {
     private(set) var loadFailed = false
     /// "Use my location" was refused or found no fix.
     private(set) var locationUnavailable = false
-    private(set) var focus: MomentsFocus?
+    /// Set here, and closed by `closeSpotIfSplit` (`MomentsMapRow.swift`).
+    var focus: MomentsFocus?
     /// Bumped to ask the view to move the camera to `center`.
     private(set) var recenterRequest = 0
     /// A spot the map is asked to show without a finger on it (`MomentsMapView+Place.swift`): the view moves the camera.
     private(set) var placeRequest: MomentsPlaceRequest?
+    /// When a finger last touched the map itself (`MomentsMapFinger.swift`): a camera that settles just after was
+    /// moved by hand. Nil on the open iPhone Duo, where a crowded spot's list stays until it is closed.
+    @ObservationIgnored var fingerOnMapAt: Date?
     /// The map has just opened on you: its first read looks around once (`MomentsMapViewModel+Moves.swift`).
     @ObservationIgnored var looksAround = false
     /// The clock the end times are read against; moved on each read and each minute.
@@ -238,6 +246,7 @@ final class MomentsMapViewModel {
         }
         nameArea(at: region.center)
         if let focus, !visibleRings.contains(where: { focus.ringIds.contains($0.id) }) { self.focus = nil }
+        closeSpotIfSplit(span: span)
     }
 
     /// Reads the rings in view now (pull, a Moment posted, back from watching).
