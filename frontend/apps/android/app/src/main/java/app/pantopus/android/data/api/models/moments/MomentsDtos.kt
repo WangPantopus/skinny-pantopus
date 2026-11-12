@@ -51,7 +51,32 @@ data class MomentRingDto(
     @Json(name = "unseen_count") val unseenCount: Int = 0,
     @Json(name = "newest_at") val newestAt: String? = null,
     val mine: Boolean = false,
+    /** A small look at the newest Moment, for the pin (contract v3.6); null without one and from an older server. */
+    val preview: MomentRingPreviewDto? = null,
 )
+
+/**
+ * A small look at a ring's newest Moment, drawn inside its pin on the map (founder, 2026-11-11; contract v3.6,
+ * `GET /api/moments/map`, built in backend/services/moments/momentStore.js `previewOf`). A photo or a video carries a
+ * signed link to its small thumbnail (it lasts 15 minutes; the map is read again every minute); a text card carries its
+ * background. Every field is optional, so a shape this app can't use only costs the picture.
+ *
+ * Looking at a preview is not watching the Moment: nothing is recorded, so the viewer never shows in Seen by. The
+ * founder accepted that knowingly.
+ */
+@JsonClass(generateAdapter = true)
+data class MomentRingPreviewDto(
+    @Json(name = "moment_id") val momentId: String? = null,
+    val kind: String? = null,
+    @Json(name = "thumb_url") val thumbUrl: String? = null,
+    /** A text card's background name ("teal", "sky", "green", "amber", "rose", "slate"). */
+    val background: String? = null,
+) {
+    val isText: Boolean get() = kind == "text"
+
+    /** Whether there is something to draw: a text card always has its colours, a picture needs its Moment and link. */
+    val canShow: Boolean get() = isText || (!momentId.isNullOrBlank() && !thumbUrl.isNullOrBlank())
+}
 
 /** A reaction and how many gave it (author only, most used first). */
 @JsonClass(generateAdapter = true)
