@@ -206,7 +206,10 @@ describe('evaluateWatches', () => {
   });
 
   test('an already-alerted watch stays quiet without a further drop', async () => {
-    seedWatch({ last_alert_rate: 5.75, last_alert_at: '2026-08-14T00:00:00.000Z' });
+    // Alerted yesterday by the real clock: a fixed date here aged past the 90-day re-alert on 2026-11-12 and the
+    // watch (rightly) alerted again, failing this test on master.
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    seedWatch({ last_alert_rate: 5.75, last_alert_at: yesterday });
     const result = await watchService.evaluateWatches();
     expect(result).toEqual({ evaluated: 1, alerted: 0 });
     expect(notificationService.createNotification).not.toHaveBeenCalled();
