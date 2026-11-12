@@ -341,6 +341,12 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Plans asks for no verified address. Anyone on Pantopus sees playdates, asks to join one and hosts one, like the other kinds; invitations and playdate links open for them too. What stays: a playdate meets in a public place within 3 miles of where the host lives or is now, families within about 3 miles ask with their kids' ages, the host approves each family, parents stay and only ages are shared. A verified address still shows the "Verified" badge and still lets verified neighbors in right away where the host chose that (never for playdates). This replaces the verified-address part of the October 12, October 20 and October 31 decisions.
 - [ ] The apps on phones today (2.0.12 and earlier) still send someone without a verified address from the playdate card to "Verify your address" until the next store builds. Seeing playdates, asking to join, invitations and playdate links work for them as soon as the backend is deployed.
 
+**Made by the founder on November 11 (the business graph).** You asked for a business catalog and claim flow that is the best in the world, approved step 1 the same day, and that evening said the app should connect as one graph where a business does business wherever it can. The whole picture is in [docs/product/business-graph](docs/product/business-graph/README.md).
+
+- [x] Step 1 of the business file is live ([3938](https://github.com/WangPantopus/skinny-pantopus/pull/3938)): an unverified business no longer holds an address, and a verified one keeps its name at its address.
+- [x] The four shared pieces, and the one new table for the customer record (`BusinessCustomer`).
+- [x] No build yet: the designs, the architecture and the build documents first.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -968,6 +974,22 @@ Tells a verified homeowner whether their home costs more than it should, from re
 
 - [ ] A Today card: set aside on November 10. The apps accept only the Today kinds they know, so it needs iPhone and Android code and store builds; the yearly notice already tells the owner.
 - [ ] Selling the packet inside the phone apps (it is on the web only).
+
+## The business graph (added November 11)
+
+The map, the two contracts, the build plan and the session briefs are in [docs/product/business-graph](docs/product/business-graph/README.md). Nothing is built beyond step 1 of the business file. These steps are yours; the build waits on the first three.
+
+- [ ] Say go. Phase A (the ground) changes nothing anyone sees and can start alone.
+- [ ] Approve the second new table, `PublicBusinessRecord`, for licence and registration records ([contract, B1](docs/product/business-graph/03-business-file-contract.md)).
+- [ ] Choose a text-message provider, open its account and put its key in the hosted settings. The app's sender only logs today.
+- [ ] Ask five crews whether the phone on their state licence record is one they answer. The phone proof stands on it.
+- [ ] Confirm the two answers the plan took: a customer first met through an invoice or booking is the business's own in Plans; the statement covers every feature from its first day.
+- [ ] Read the contracts' open calls: S1 to S9 and B1 to B9.
+- [ ] A lawyer reads: keeping a record of a person's dealings with a business; showing licence, bond and insurance lines, the bad news included; publishing listings nobody claimed (step 5 only).
+- [ ] An accountant reads the business's own rate, where the business pays the card fee.
+- [ ] Before business file step 3: create the private storage bucket for the catalog and its key, and a Foursquare Places Portal account for the open places data.
+- [ ] After phase A merges: run the customer record's first fill on production. The script prints what it would write first.
+- [ ] Look at the sample board, then the rest ([the list](docs/product/business-graph/06-design.md)).
 
 ## Background backlog
 
