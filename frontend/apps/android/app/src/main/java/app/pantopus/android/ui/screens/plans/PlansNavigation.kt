@@ -2,6 +2,7 @@ package app.pantopus.android.ui.screens.plans
 
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -17,7 +18,6 @@ import app.pantopus.android.ui.screens.plans.change.PlanChangeScreen
 import app.pantopus.android.ui.screens.plans.detail.PlanDetailScreen
 import app.pantopus.android.ui.screens.plans.host.HostFlowScreen
 import app.pantopus.android.ui.screens.plans.requests.PlanRequestsScreen
-import androidx.compose.runtime.Composable
 
 /** The Plans pages' routes. Kept out of `RootTabScreen` so the two grow without merge conflicts. */
 object PlansRoutes {
