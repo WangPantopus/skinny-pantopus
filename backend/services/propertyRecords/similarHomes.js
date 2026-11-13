@@ -139,6 +139,8 @@ async function read(home, copy, options) {
   if (!parsed) return null;
   const stateFile = await reader.stateFile(state);
   const county = stateFile?.jurisdictions?.[fips];
+  // Stops at the release's date even where the county's past_date switch keeps its facts on screen (router.js): a
+  // comparison of county values, and the appeal packet built on it, is only as good as a roll we know is current.
   if (!county || county.status === 'withdrawn' || (county.stale_after && Date.now() > Date.parse(county.stale_after))) return null;
   const query = { ...parsed, zip: zip5(home.zipcode), city: cityKey(home.city) };
   const [street, suppressions] = await Promise.all([reader.recordsNear(fips, county.release, sortKey(parsed)), reader.suppressions()]);

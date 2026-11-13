@@ -221,6 +221,8 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
   const fieldTags = {};
   let provenance = null;
   let lookupNote = null;
+  // A county's release past its date that still answers (homeRecord.js dated): its date, so Add Home says how old it is.
+  let recordAge = null;
   let attom = null;
   let attomLookup = null;
   if (record) {
@@ -229,11 +231,13 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
       tiersUsed.push('record');
       fillFromRecord(record.copy, merged, sources, fieldTags);
       provenance = homeRecords.provenanceOf(record.copy);
+      if (record.copy.past_date) recordAge = homeRecords.dateLabel(record.copy.as_of);
     } else if (record.shared && wantsSharedFacts) {
       tiersUsed.push('record');
       fillFromRecord(record.shared, merged, sources, fieldTags);
       provenance = homeRecords.provenanceOf(record.shared);
       lookupNote = AGREED_RECORDS_NOTE;
+      if (record.shared.past_date) recordAge = homeRecords.dateLabel(record.shared.as_of);
     } else if (record.answer?.match === 'ambiguous') {
       lookupNote = SEVERAL_RECORDS_NOTE;
     } else if (record.answer?.reason === 'withdrawn') {
@@ -395,6 +399,7 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait', f
     ...(provenance ? { provenance, field_tags: fieldTags } : {}),
     ...(!provenance && Object.keys(fieldTags).length ? { field_tags: fieldTags } : {}),
     ...(lookupNote ? { lookup_note: lookupNote } : {}),
+    ...(recordAge ? { record_age: recordAge } : {}),
     ...(countyPage ? { county_page: countyPage } : {}),
     ...(countyCheck ? { county_check: countyCheck } : {}),
     ...(floorPlan ? { floor_plan: floorPlan } : {}),

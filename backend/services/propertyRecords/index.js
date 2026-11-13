@@ -57,7 +57,9 @@ async function lookup(address, { serves = (fips) => router.modeFor(fips) === 'li
     const county = stateFile.jurisdictions[fips];
     const facts = { jurisdiction: fips, county };
     if (county.status === 'withdrawn') return { match: 'unsupported', reason: 'withdrawn', ...facts };
-    if (county.stale_after && Date.now() > Date.parse(county.stale_after)) return { match: 'stale', reason: 'release_past_date', ...facts };
+    // Past its date a county's answer can't be vouched for, unless its past_date switch keeps it answering from the
+    // release it serves (router.js): homeRecord.js then says how old that release is.
+    if (county.stale_after && Date.now() > Date.parse(county.stale_after) && !router.pastDateFor(fips)) return { match: 'stale', reason: 'release_past_date', ...facts };
     if (suppressions?.hashes?.includes(suppressionHash(suppressions.salt, fips, query))) return { match: 'restricted', ...facts };
     const stored = await reader.recordsAt(fips, county.release, sortKey(parsed));
     const records = router.listedUnitsFor(fips) ? identity.withListedUnits(stored) : stored;
