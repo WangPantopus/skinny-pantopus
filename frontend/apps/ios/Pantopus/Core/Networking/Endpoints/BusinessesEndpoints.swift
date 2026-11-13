@@ -29,6 +29,14 @@ public enum BusinessesEndpoints {
         Endpoint(method: .get, path: "/api/businesses/\(businessId)")
     }
 
+    /// `GET /api/businesses/:businessId/plans?biz=1` — the business's upcoming
+    /// plans, soonest first, for its page (Plans with businesses, board B6).
+    /// Empty for anyone its plans don't exist for. Route
+    /// `backend/routes/businesses.js` (`/:businessId/plans`).
+    public static func plans(businessId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/businesses/\(businessId)/plans", query: PlansEndpoints.biz())
+    }
+
     /// `GET /api/businesses/public/:username` — unauthenticated public
     /// view used to surface hours + catalog + founding badge for a
     /// published business. The viewer only knows the business UUID at
