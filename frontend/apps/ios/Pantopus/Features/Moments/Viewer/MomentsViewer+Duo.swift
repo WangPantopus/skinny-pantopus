@@ -174,6 +174,10 @@ extension MomentsViewer {
                 if let taken = model.metaTaken {
                     MomentsTakenPill(taken: taken)
                 }
+                // The Duo's layouts show the height as a tag under the name, without the phone's rail.
+                if let height = model.shownHeight {
+                    MomentsViewerHeightLine(height: height)
+                }
             }
             .opacity(model.holding ? 0 : 1)
             .animation(.easeOut(duration: 0.15), value: model.holding)
