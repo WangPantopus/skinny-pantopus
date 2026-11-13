@@ -33,6 +33,11 @@ public final class DeviceLocationProvider: NSObject, LocationProviding, CLLocati
         return UserCoordinate(cached)
     }
 
+    public func cachedHeight() -> HeightReading? {
+        guard isAuthorized, !accessRefused, let cached, isUsable(cached) else { return nil }
+        return HeightReading(cached)
+    }
+
     public func requestCurrent(timeoutSeconds: TimeInterval = 4) async -> UserCoordinate? {
         guard timeoutSeconds.isFinite, timeoutSeconds > 0, !Task.isCancelled else { return nil }
         guard await ensureAuthorization(), !Task.isCancelled else { return nil }
@@ -188,6 +193,21 @@ private extension UserCoordinate {
             latitude: location.coordinate.latitude,
             longitude: location.coordinate.longitude,
             accuracyMeters: location.horizontalAccuracy
+        )
+    }
+}
+
+extension HeightReading {
+    /// What a Core Location fix, or an album photo's location, says about height. `altitude` is above sea level.
+    /// Nil without a height Core Location vouches for: a negative `verticalAccuracy` means there is none. An accuracy
+    /// of exactly 0 is what Photos gives for every album photo (it doesn't know), so it is left out. A negative
+    /// `speed` means it isn't known.
+    init?(_ location: CLLocation) {
+        guard location.altitude.isFinite, location.verticalAccuracy.isFinite, location.verticalAccuracy >= 0 else { return nil }
+        self.init(
+            meters: location.altitude,
+            accuracyMeters: location.verticalAccuracy > 0 ? location.verticalAccuracy : nil,
+            speedMps: location.speed.isFinite && location.speed >= 0 ? location.speed : nil
         )
     }
 }

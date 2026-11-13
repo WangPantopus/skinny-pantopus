@@ -343,11 +343,14 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
     public let pickWithinM: Double?
     /// Whether you have a connection (contract v3.4): a Moment with no location needs one. Nil from an older server.
     public let hasConnections: Bool?
+    /// The sheet may offer "Show height" here (contract v3.8): heights are on for you and it isn't your home.
+    public let canShowHeight: Bool
 
     private enum CodingKeys: String, CodingKey {
         case places
         case pickWithinM = "pick_within_m"
         case hasConnections = "has_connections"
+        case canShowHeight = "can_show_height"
         case placeLabel = "place_label"
         case areaLabel = "area_label"
         case atHome = "at_home"
@@ -365,6 +368,7 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
             .filter { !$0.key.isEmpty && !$0.label.isEmpty } ?? []
         pickWithinM = try? c.decodeIfPresent(Double.self, forKey: .pickWithinM)
         hasConnections = try? c.decodeIfPresent(Bool.self, forKey: .hasConnections)
+        canShowHeight = (try? c.decodeIfPresent(Bool.self, forKey: .canShowHeight)) ?? false
     }
 }
 
@@ -477,9 +481,11 @@ public struct MomentCreateBody: Encodable, Sendable, Hashable {
     public var takenAt: String?
     /// A venue picked in the place picker around the pin (its `osm:` id, contract v3.3): the Moment pins there.
     public var venueId: String?
+    /// "Show height" was on (contract v3.8, `MomentHeightDTOs.swift`); left out otherwise.
+    public var altitude: MomentAltitudeBody?
 
     private enum CodingKeys: String, CodingKey {
-        case kind, hours, audience, caption, text, background, location
+        case kind, hours, audience, caption, text, background, location, altitude
         case showArea = "show_area"
         case clientRequestId = "client_request_id"
         case placeKey = "place_key"

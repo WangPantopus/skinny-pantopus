@@ -4,8 +4,8 @@
 //
 //  The Post sheet's place row (the name others will read; for an exact pin it
 //  opens the short list of names, or the place picker around the pin, the
-//  Pulse composer's, founder 2026-11-11), the place picker itself, and the
-//  "Taken Oct 3" line for an old album photo or video.
+//  Pulse composer's, founder 2026-11-11), the place picker itself, the
+//  "Taken Oct 3" line for an old album photo or video, and "Show height".
 //
 
 import SwiftUI
@@ -123,5 +123,25 @@ extension MomentsPostSheet {
         .padding(.horizontal, Spacing.s1)
         .frame(minHeight: 52)
         .accessibilityIdentifier("moments.post.noLocation")
+    }
+
+    /// "Show height" (board H1): how high above sea level the phone, or the album photo, says this is, as everyone
+    /// will read it. Only on the sheet where it may be shown (`offersHeight`).
+    func heightRow(feet: Int) -> some View {
+        Toggle(isOn: Binding(get: { model.showHeight }, set: { model.showHeight = $0 })) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Show height")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.Color.appText)
+                Text(MomentHeight.line(feet: feet))
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .tint(Theme.Color.primarySolid)
+        .padding(.horizontal, Spacing.s1)
+        .frame(minHeight: 52)
+        .accessibilityIdentifier("moments.post.height")
     }
 }
