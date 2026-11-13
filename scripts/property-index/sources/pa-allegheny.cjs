@@ -5,6 +5,8 @@
 // market value today: the county's assessed values are shown as assessed values. Bedrooms and baths are on most homes.
 
 const path = require('node:path');
+const { parse, sortKey } = require('../../../backend/services/propertyRecords/addressKey');
+const { resolve } = require('../../../backend/services/propertyRecords/identity');
 const { ckanRows, getJson, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
@@ -97,6 +99,34 @@ function fromRow(row) {
   return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: String(word(row.PROPERTYCITY) || '').toUpperCase(), zip: zipCode(row.PROPERTYZIP) }, facts };
 }
 
+/**
+ * The county writes a range of house numbers as a number and a fraction ("12" and "-14"). A person writes "12-14", which the
+ * reader reads as one number (1214). Where another home has that number, the range would find that home's record: the worst
+ * answer there is. So such a home is also filed where its range reads, and the lookup there asks which one. A range that
+ * reads as a number nothing has finds nothing, and stays as it is (one more filing would count as one more home on its deed).
+ */
+function alsoAtItsRange(records) {
+  const byKey = new Map();
+  for (const record of records) {
+    const key = sortKey(record.address);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(record);
+  }
+  const twins = [];
+  for (const record of records) {
+    if ((record.kind !== 'property' && record.kind !== 'unit') || record.restricted || record.address.unit) continue;
+    const { number, pre, name, suffix, post } = record.address;
+    if (!/^\d+[A-Z]?-\d/.test(String(number))) continue;
+    const read = parse([number, pre, name, suffix, post].filter(Boolean).join(' '));
+    if (!read || sortKey(read) === sortKey(record.address)) continue;
+    const answer = resolve({ ...read, zip: record.address.zip, city: record.address.city }, byKey.get(sortKey(read)) || []);
+    if (answer.match !== 'exact' || answer.record.id === record.id) continue;
+    delete read.form;
+    twins.push({ ...record, address: { ...read, city: record.address.city, zip: record.address.zip } });
+  }
+  return twins;
+}
+
 async function* build({ work }) {
   const about = await getJson(`https://${DOMAIN}/api/3/action/resource_show?id=${RESOURCE}`, 'The table\'s description');
   const asOf = isoDate(about.result?.last_modified);
@@ -114,8 +144,10 @@ async function* build({ work }) {
   }
   // The address line and the address columns disagree on a few homes: each is found at both.
   const twins = alsoAtOwnLine(records);
-  records.push(...twins);
-  log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number, ${twins.length} also filed at their own address line`);
+  // Asked of every record the release will hold, own-line filings included.
+  const ranges = alsoAtItsRange([...records, ...twins]);
+  records.push(...twins, ...ranges);
+  log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number, ${twins.length} also filed at their own address line, ${ranges.length} where their range of numbers reads as another home's number`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'PA', name: COUNTY, publisher: 'Allegheny County Office of Property Assessments', dataset: 'property assessments, WPRDC', method: 'county', source: 'pa-allegheny', as_of: asOf, stale_after_days: 60, records,
