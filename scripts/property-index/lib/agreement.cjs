@@ -10,8 +10,8 @@
 // (years and counts exact, areas to the square foot, money to the dollar, acres to the hundredth, words ignoring case,
 // spacing and punctuation). A value is compared only for the same value year, a sale price only for a sale on the same
 // date or in the same month. Only facts both files fill are compared, and only where both show something. Words are
-// compared only where both files use the same ones: a row where fewer than half the second file's words are ever the
-// county's own is marked `different_words` and gets no share (two vocabularies for one thing, not disagreement).
+// compared only where both files use the same ones: a row where fewer than half of either file's words are ever the
+// other's is marked `different_words` and gets no share (two vocabularies for one thing, not disagreement).
 
 const { FACTS } = require('../../../backend/services/propertyRecords/facts');
 const { FIELDS, kindOf, shown } = require('./gaps.cjs');
@@ -129,13 +129,15 @@ function compareRecords(records, others, other, fips = null) {
       rows[fact].compared += 1;
       if (same(format, a.facts[fact], b.facts[fact])) rows[fact].agree += 1;
       if (!WORD_FORMATS.has(format)) continue;
-      vocabulary[fact] = vocabulary[fact] || { mine: new Set(), theirs: [] };
-      vocabulary[fact].mine.add(words(a.facts[fact]));
+      vocabulary[fact] = vocabulary[fact] || { mine: [], theirs: [] };
+      vocabulary[fact].mine.push(words(a.facts[fact]));
       vocabulary[fact].theirs.push(words(b.facts[fact]));
     }
   }
+  // Either way round: each file's words must mostly be the other's too.
+  const shared = (list, other) => { const known = new Set(other); return list.filter((word) => known.has(word)).length >= list.length / 2; };
   for (const [fact, { mine, theirs }] of Object.entries(vocabulary)) {
-    if (theirs.filter((word) => mine.has(word)).length < theirs.length / 2) rows[fact].different_words = true;
+    if (!shared(theirs, mine) || !shared(mine, theirs)) rows[fact].different_words = true;
   }
   return {
     source: other.source,
