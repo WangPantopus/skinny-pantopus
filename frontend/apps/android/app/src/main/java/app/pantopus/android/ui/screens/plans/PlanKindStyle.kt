@@ -110,3 +110,17 @@ val planGlassStrong: Color
     @Composable
     @ReadOnlyComposable
     get() = if (plansDark) PantopusColors.mapGlassStrongDark else PantopusColors.mapGlassStrong
+
+/**
+ * The business color (board P1, `PantopusColors.business*`), light and dark. The business shape, its badge on a
+ * kind tile or a pin, and "Verified business". The plan itself keeps its kind's color, glyph and pin.
+ */
+val planBusinessColors: PlanKindColors
+    @Composable
+    @ReadOnlyComposable
+    get() =
+        if (plansDark) {
+            PlanKindColors(accent = PantopusColors.businessOnDark, tint = PantopusColors.businessBgDark)
+        } else {
+            PlanKindColors(accent = PantopusColors.business, tint = PantopusColors.businessBg)
+        }

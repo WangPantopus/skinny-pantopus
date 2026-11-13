@@ -52,6 +52,8 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
+import app.pantopus.android.data.plans.isBusiness
+import app.pantopus.android.ui.theme.PantopusIcon
 
 /** The report reasons a plan offers (the posts report queue's vocabulary), in iOS's order. */
 private val reportReasons =
@@ -199,6 +201,7 @@ private fun PlanReady(
         },
         onBack = onBack,
         scope = scopeChip(plan),
+        scopeIcon = if (plan.isBusiness) PantopusIcon.MapPin else PantopusIcon.Lock,
         onShare = if (plan.shareUrl != null && !closed) ({ context.sharePlan(plan) }) else null,
         menu = menu,
         footer = footerFor(plan, ui, closed, viewModel, onSeeAllPlans, onVerify, askLocation) { confirmLeave = it },
@@ -313,6 +316,8 @@ private fun scopeChip(plan: PlanDto): String? {
     val browsing = plan.standing == PlanViewerStanding.NONE || plan.standing == PlanViewerStanding.LEFT
     val closed = plan.planState == PlanState.CANCELLED || plan.planState == PlanState.ENDED
     return when {
+        // A business's plan meets at its own public address (board G3): the street address over the map.
+        plan.isBusiness -> if (closed || !browsing) null else plan.place?.address ?: plan.place?.name
         plan.hasPrivatePart || !browsing || closed -> null
         plan.isPlaydate -> "Exact place and time shared when you're in"
         else -> "Exact place shared when you're in"

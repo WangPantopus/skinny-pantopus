@@ -47,6 +47,8 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.data.plans.isBusiness
+import app.pantopus.android.data.plans.hostApproves
 
 /** The most people one request can bring (brief section 4: party size 1 to 4). */
 private const val MAX_PARTY = 4
@@ -75,6 +77,8 @@ internal fun PlanAskSheet(
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val host = plan.hostFirst
+    // A business's plan that lets anyone in right away: "Join", not a request (board G3).
+    val joinsAtOnce = plan.isBusiness && !plan.hostApproves
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = sheet,
@@ -95,7 +99,7 @@ internal fun PlanAskSheet(
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (invited) "Join $host's plan" else "Ask $host to join",
+                        text = if (invited || joinsAtOnce) "Join $host's plan" else "Ask $host to join",
                         style = planH3,
                         color = PantopusColors.appText,
                         modifier = Modifier.semantics { heading() },
@@ -119,7 +123,10 @@ internal fun PlanAskSheet(
             }
             HelloField(plan, draft, onEdit)
             PlanScopeLine(
-                if (plan.isPlaydate) {
+                if (plan.isBusiness) {
+                    // A business's team sees less than a neighbor host (B4): a first name, how many and the note.
+                    "$host sees your first name, how many are coming and your note. Never your address."
+                } else if (plan.isPlaydate) {
                     "$host sees your first name, your verified badge, about how far away you live and your kids' ages. Never their names."
                 } else {
                     "$host sees your first name, your verified badge and about how far away you live. Never your address."
@@ -134,6 +141,7 @@ internal fun PlanAskSheet(
                         plan.standing == PlanViewerStanding.REQUESTED -> "Update request"
                         plan.isFull -> "Join the waitlist"
                         invited -> "I'm in"
+                        joinsAtOnce -> "Join"
                         else -> "Send request"
                     },
                 onClick = onSend,

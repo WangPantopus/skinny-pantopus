@@ -75,8 +75,11 @@ data class PlanChangeUi(
     /** Moving the start more than 30 minutes, or the place, asks everyone in "Still coming?" (brief section 5). */
     val asksStillComing: Boolean get() = peopleIn > 0 && (timeMoved || newPlace != null)
 
-    /** A public plan can move to another public place; a plan at home keeps its place (as on iOS). */
-    val canChangePlace: Boolean get() = plan?.isAtHome == false
+    /**
+     * A public plan can move to another public place; a plan at home keeps its place (as on iOS). A business's plan
+     * never meets at a place picked here: it moves only between the business's own locations.
+     */
+    val canChangePlace: Boolean get() = plan?.isAtHome == false && plan.business == null
 
     /** Where H6 looks for places: around the plan's own place. */
     val placesOrigin: Pair<Double, Double>?
@@ -297,6 +300,7 @@ class PlanChangeViewModel
                                     address = it.address,
                                     latitude = it.latitude,
                                     longitude = it.longitude,
+                                    placeId = it.placeId,
                                 )
                             },
                     )

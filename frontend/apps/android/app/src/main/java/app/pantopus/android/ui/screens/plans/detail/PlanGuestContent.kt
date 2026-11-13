@@ -54,9 +54,13 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.data.plans.isBusiness
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenBusiness
+import app.pantopus.android.ui.screens.plans.opensPlanBusiness
+import app.pantopus.android.ui.screens.plans.map.askWord
 
 /** The host's first name for sentences ("Sam approves each person"). */
-internal val PlanDto.hostFirst: String get() = PlanFormat.firstName(host?.displayName)
+internal val PlanDto.hostFirst: String get() = PlanFormat.hostName(this)
 
 /** "within an hour": how fast the host usually answers (iOS's table), or null with too little history. */
 internal fun answerTime(plan: PlanDto): String? {
@@ -70,8 +74,11 @@ internal fun answerTime(plan: PlanDto): String? {
     }
 }
 
-/** "Near Prune Hill · under 1 mi · at Sam's place" (or "a public place"). */
+/** "Near Prune Hill · under 1 mi · at Sam's place" (or "a public place"); a business's: "Lacamas Pickleball Club · about 1 mi". */
 internal fun whereLine(plan: PlanDto): String {
+    if (plan.isBusiness) {
+        return listOfNotNull(plan.place?.name ?: plan.host?.displayName, PlanFormat.distance(plan.distanceBand)).joinToString(" · ")
+    }
     val at =
         when {
             plan.placeKind == "home" -> "at ${plan.hostFirst}'s place"
@@ -126,7 +133,8 @@ internal fun extraGearWord(sport: String?): String =
 @Composable
 internal fun PlanHeading(plan: PlanDto) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        plan.planKind?.let { PlanTypeTag(it) }
+        // A business's plan shows what it calls it ("Clinic") in the kind's colors (board G3).
+        plan.planKind?.let { PlanTypeTag(it, label = plan.labelText.takeIf { plan.isBusiness }) }
         Text(text = plan.title, style = planH2, color = PantopusColors.appText, modifier = Modifier.semantics { heading() })
     }
 }
@@ -152,6 +160,24 @@ internal fun PlanHostCard(
     plan: PlanDto,
     ruleCaption: String? = null,
 ) {
+    plan.business?.let { business ->
+        // A business's plan (board G3): the business shape, "Verified business", how many plans it has hosted; the
+        // card opens the business's page.
+        PlanHostRow(
+            name = business.name ?: plan.host?.displayName ?: "A business",
+            verified = business.verified && ruleCaption == null,
+            caption = ruleCaption ?: hostCaption(plan),
+            avatarUrl = business.avatarUrl,
+            business = true,
+            modifier =
+                Modifier
+                    .planCard()
+                    .opensPlanBusiness(business.userId, LocalPlanOpenBusiness.current)
+                    .padding(14.dp)
+                    .testTag("planBusinessHost"),
+        )
+        return
+    }
     val host = plan.host ?: return
     // The host's card opens their profile, as on iOS.
     PlanHostRow(
@@ -236,10 +262,13 @@ internal fun askFooter(plan: PlanDto): AskFooter {
             )
         viewer?.canAsk == true ->
             AskFooter(
-                "Ask to join",
+                askWord(plan),
                 enabled = true,
                 caption =
                     when {
+                        // A business's plan (board G3): "Join", in right away; or the business approves each person.
+                        plan.isBusiness && !plan.hostApproves -> "You're in right away. No approval needed."
+                        plan.isBusiness -> approves ?: "$host approves each person"
                         !plan.hostApproves -> "You're in as soon as you ask, until the spots fill."
                         // J2: a playdate's body has no "approves" line, so the footer says it (the board's words, as iOS).
                         plan.isPlaydate -> "$host approves each family"

@@ -32,6 +32,7 @@ object PlanStoreKeys {
         window: String,
         latitude: Double?,
         longitude: Double?,
+        host: String? = null,
     ) = StoreKey<PlanPinsResponse>(
         "api/posts/map",
         mapOf(
@@ -44,11 +45,13 @@ object PlanStoreKeys {
             "window" to window,
             "latitude" to latitude?.toString(),
             "longitude" to longitude?.toString(),
+            "host" to host,
         ),
         kind = StoreKind.NEARBY,
         topics = setOf(TOPIC, "plan:*"),
         type = PlanPinsResponse::class.java,
-        saveWhen = { reply -> reply.markers.all { it.precision == "area" || it.precision == "neighborhood" } },
+        // A business's pin is exact for everyone (its own address), so it doesn't stop the copy being saved.
+        saveWhen = { reply -> reply.markers.all { it.precision == "area" || it.precision == "neighborhood" || it.business != null } },
     )
 
     /** The list under the map (first page) around a rounded point. */
@@ -57,6 +60,7 @@ object PlanStoreKeys {
         longitude: Double?,
         window: String,
         kinds: String?,
+        host: String? = null,
     ) = StoreKey<PlansListResponse>(
         "api/plans",
         mapOf(
@@ -64,6 +68,7 @@ object PlanStoreKeys {
             "longitude" to longitude?.toString(),
             "window" to window,
             "kinds" to kinds?.takeIf(String::isNotBlank),
+            "host" to host,
         ),
         kind = StoreKind.NEARBY,
         topics = setOf(TOPIC, "plan:*"),
@@ -85,4 +90,4 @@ object PlanStoreKeys {
 }
 
 /** True when a reply carries a plan's private part, which never goes on the phone. */
-private fun PlanDto.carriesPrivatePart(): Boolean = place != null || people != null || chatRoomId != null
+private fun PlanDto.carriesPrivatePart(): Boolean = (place != null && business == null) || people != null || chatRoomId != null

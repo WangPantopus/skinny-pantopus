@@ -141,6 +141,46 @@ data class PlanMyRequestDto(
 )
 
 /**
+ * `business` on a business's plan (Plans with businesses, the build contract's section 5.4): the business hosting it.
+ * A neighbor's plan has no `business` key, which is how the app tells the two apart.
+ */
+@JsonClass(generateAdapter = true)
+data class PlanBusinessDto(
+    @Json(name = "user_id") val userId: String? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "avatar_url") val avatarUrl: String? = null,
+    @Json(name = "verified") val verified: Boolean = false,
+    @Json(name = "page_url") val pageUrl: String? = null,
+    @Json(name = "plans_hosted") val plansHosted: Int = 0,
+)
+
+/** `price` on a business's plan. Step 2 sends `null`, which reads "Free"; a price is not drawn by this build. */
+@JsonClass(generateAdapter = true)
+data class PlanPriceDto(
+    @Json(name = "cents") val cents: Int? = null,
+    @Json(name = "currency") val currency: String? = null,
+    @Json(name = "per") val per: String? = null,
+)
+
+/** One of a venue's later plans folded under its soonest (`more_times.items`): a short line in the list. */
+@JsonClass(generateAdapter = true)
+data class PlanMoreTimeDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "title") val title: String? = null,
+    @Json(name = "label") val label: String? = null,
+    @Json(name = "label_text") val labelText: String? = null,
+    @Json(name = "starts_at") val startsAt: String? = null,
+    @Json(name = "timezone") val timezone: String? = null,
+)
+
+/** `more_times`: how many later plans the venue has in the list's window, and the first six. */
+@JsonClass(generateAdapter = true)
+data class PlanMoreTimesDto(
+    @Json(name = "count") val count: Int = 0,
+    @Json(name = "items") val items: List<PlanMoreTimeDto> = emptyList(),
+)
+
+/**
  * PlanCard, PlanDetail and the host's extras in one shape (brief section 5). The fields after [shareUrl] are
  * null unless the viewer is the host or is in.
  */
@@ -193,6 +233,18 @@ data class PlanDto(
     @Json(name = "my_invite") val myInvite: PlanMyInviteDto? = null,
     /** The host only: their invitations to this plan. */
     @Json(name = "invites") val invites: PlanHostInvitesDto? = null,
+    // A business's plan only (Plans with businesses): a neighbor's plan has none of these keys. Its `place` above is
+    // then public, for everyone: the business's own address.
+    @Json(name = "business") val business: PlanBusinessDto? = null,
+    /** The label key the business chose ("clinic"). */
+    @Json(name = "label") val label: String? = null,
+    /** What guests read the label as ("Clinic"). */
+    @Json(name = "label_text") val labelText: String? = null,
+    /** Null on a business's plan is "Free". */
+    @Json(name = "price") val price: PlanPriceDto? = null,
+    @Json(name = "guests_can_invite") val guestsCanInvite: Boolean? = null,
+    /** The venue's later plans in the list's window, folded under this one; null when there are none. */
+    @Json(name = "more_times") val moreTimes: PlanMoreTimesDto? = null,
 )
 
 /** `nearest_elsewhere` (F4): the closest town with plans 5 to 15 miles away when the page is empty. */
@@ -209,6 +261,11 @@ data class PlansListResponse(
     @Json(name = "items") val items: List<PlanDto> = emptyList(),
     @Json(name = "next_cursor") val nextCursor: String? = null,
     @Json(name = "nearest_elsewhere") val nearestElsewhere: PlansElsewhereDto? = null,
+    /**
+     * True when a business has a plan in the area and window, whatever the filter says (Plans with businesses): the
+     * All / Neighbors / Businesses filter shows only then. Absent for a person without the switch.
+     */
+    @Json(name = "has_business_plans") val hasBusinessPlans: Boolean? = null,
 )
 
 /**
@@ -260,6 +317,20 @@ data class PlanPinDto(
     @Json(name = "viewer_role") val viewerRole: String? = null,
     @Json(name = "viewer_request_status") val viewerRequestStatus: String? = null,
     @Json(name = "distance_band") val distanceBand: String? = null,
+    // A business's pin only: exact for everyone, who hosts, what they call it and how many more times this week.
+    @Json(name = "business") val business: PlanPinBusinessDto? = null,
+    @Json(name = "label") val label: String? = null,
+    @Json(name = "label_text") val labelText: String? = null,
+    @Json(name = "place_name") val placeName: String? = null,
+    @Json(name = "more_times") val moreTimes: Int = 0,
+)
+
+/** `business` on a business's map pin. */
+@JsonClass(generateAdapter = true)
+data class PlanPinBusinessDto(
+    @Json(name = "user_id") val userId: String? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "verified") val verified: Boolean = false,
 )
 
 /** `GET /api/posts/map` read for the Plans layer only; other layers' rows are dropped by `layer_type`. */
@@ -277,6 +348,8 @@ data class PlanPlaceInput(
     @Json(name = "latitude") val latitude: Double? = null,
     @Json(name = "longitude") val longitude: Double? = null,
     @Json(name = "home_id") val homeId: String? = null,
+    /** The place picker's id for a public place it listed (`osm:node/123`): the venue's key. Left out otherwise. */
+    @Json(name = "place_id") val placeId: String? = null,
 )
 
 /** `gps` in the create body: proves the host is nearby; never the pin. */
@@ -339,6 +412,8 @@ data class AskToJoinBody(
     @Json(name = "stays_with_kids") val staysWithKids: Boolean? = null,
     /** A fresh fix when the person browses by location (homes and saved places count without it). */
     @Json(name = "gps") val gps: PlanGpsInput? = null,
+    /** How the person found a business's plan, when the app knows (`business_page`). Left out otherwise. */
+    @Json(name = "via") val via: String? = null,
 )
 
 /** `POST /api/plans/:id/report` body: reason is spam, harassment, inappropriate, misinformation, safety or other. */

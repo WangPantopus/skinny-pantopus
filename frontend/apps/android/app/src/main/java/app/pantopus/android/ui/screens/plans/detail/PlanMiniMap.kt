@@ -61,6 +61,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import app.pantopus.android.data.plans.isBusiness
 
 /** Height of the map at the top of a plan page (boards J1 to J9, H9). */
 val PLAN_MAP_HEIGHT: Dp = 236.dp
@@ -103,7 +104,19 @@ fun PlanMiniMap(
         if (!ready) return@Box
         val neighborhood = kind == PlanKind.PLAYDATE || plan.area?.precision == "neighborhood"
         val radiusDp = ((if (neighborhood) 1000.0 else 500.0) / metersPerDp(center.latitude)).toFloat()
-        if (exactPoint == null) {
+        if (exactPoint != null && plan.isBusiness) {
+            // A business's plan is at its own public address (board G3): the pin with the place's name, no area and
+            // no reveal, for everyone.
+            val closed = plan.planState == PlanState.CANCELLED || plan.planState == PlanState.ENDED
+            val badge =
+                when {
+                    closed -> PlanPinBadge.None
+                    plan.standing == PlanViewerStanding.HOSTING -> PlanPinBadge.Hosting
+                    plan.standing == PlanViewerStanding.IN -> PlanPinBadge.In
+                    else -> PlanPinBadge.Business
+                }
+            PinAt(camera, exactPoint, kind, plan.place?.name, badge, scale = 1f, alpha = 1f)
+        } else if (exactPoint == null) {
             AreaAt(
                 camera,
                 areaPoint ?: center,

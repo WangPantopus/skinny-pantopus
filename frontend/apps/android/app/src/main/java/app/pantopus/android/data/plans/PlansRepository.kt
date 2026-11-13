@@ -114,7 +114,8 @@ class PlansRepository
             viewport: PlanViewport,
             kinds: String?,
             window: PlanWindow,
-        ): PlanPinsResponse? = store.peek(pinsKey(viewport, kinds, window, origin)).data
+            host: PlanHostFilter = PlanHostFilter.ALL,
+        ): PlanPinsResponse? = store.peek(pinsKey(viewport, kinds, window, origin, host)).data
 
         /** Pins for [viewport]; each pin's distance band is measured from where the person browses from. */
         suspend fun pins(
@@ -122,9 +123,10 @@ class PlansRepository
             kinds: String?,
             window: PlanWindow,
             force: Boolean = false,
+            host: PlanHostFilter = PlanHostFilter.ALL,
         ): Stored<PlanPinsResponse> {
             val from = origin
-            return store.read(pinsKey(viewport, kinds, window, from), force) { etag ->
+            return store.read(pinsKey(viewport, kinds, window, from, host), force) { etag ->
                 conditionalApiCall {
                     api.pins(
                         south = viewport.south,
@@ -139,6 +141,7 @@ class PlansRepository
                         gpsLatitude = from?.gps?.let { from.latitude },
                         gpsLongitude = from?.gps?.let { from.longitude },
                         gpsTimestamp = from?.gps?.toString(),
+                        host = host.param,
                     )
                 }
             }
@@ -149,6 +152,7 @@ class PlansRepository
             kinds: String?,
             window: PlanWindow,
             from: PlanOrigin?,
+            host: PlanHostFilter,
         ) = PlanStoreKeys.pins(
             viewport.south,
             viewport.west,
@@ -158,6 +162,7 @@ class PlansRepository
             window.wire,
             from?.latitude?.let(StoreKeys::roundCoordinate),
             from?.longitude?.let(StoreKeys::roundCoordinate),
+            host.param,
         )
 
         fun listCopy(
@@ -165,9 +170,10 @@ class PlansRepository
             longitude: Double?,
             window: PlanWindow,
             kinds: String?,
+            host: PlanHostFilter = PlanHostFilter.ALL,
         ): PlansListResponse? {
             val session = cacheSession()
-            return store.peek(listKey(latitude, longitude, window, kinds)).data?.also { remember(it, session) }
+            return store.peek(listKey(latitude, longitude, window, kinds, host)).data?.also { remember(it, session) }
         }
 
         suspend fun list(
@@ -176,13 +182,14 @@ class PlansRepository
             window: PlanWindow,
             kinds: String?,
             force: Boolean = false,
+            host: PlanHostFilter = PlanHostFilter.ALL,
         ): Stored<PlansListResponse> {
             val session = cacheSession()
             val lat = latitude?.let(StoreKeys::roundCoordinate)
             val lng = longitude?.let(StoreKeys::roundCoordinate)
             val gps = origin?.gps
             return store
-                .read(listKey(lat, lng, window, kinds), force) { etag ->
+                .read(listKey(lat, lng, window, kinds, host), force) { etag ->
                     conditionalApiCall {
                         api.list(
                             latitude = lat,
@@ -194,6 +201,7 @@ class PlansRepository
                             gpsLatitude = gps?.let { latitude },
                             gpsLongitude = gps?.let { longitude },
                             gpsTimestamp = gps?.toString(),
+                            host = host.param,
                         )
                     }
                 }.also { stored -> stored.data?.let { remember(it, session) } }
@@ -204,11 +212,13 @@ class PlansRepository
             longitude: Double?,
             window: PlanWindow,
             kinds: String?,
+            host: PlanHostFilter,
         ) = PlanStoreKeys.list(
             latitude?.let(StoreKeys::roundCoordinate),
             longitude?.let(StoreKeys::roundCoordinate),
             window.wire,
             kinds,
+            host.param,
         )
 
         fun mineCopy(): MyPlansResponse? = store.peek(PlanStoreKeys.mine).data

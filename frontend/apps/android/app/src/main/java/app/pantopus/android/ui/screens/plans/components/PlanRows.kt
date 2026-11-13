@@ -74,6 +74,11 @@ sealed interface PlanRowEnd {
         val text: String,
     ) : PlanRowEnd
 
+    /** A business's plan where a neighbor's shows spots: the price chip ("Free"). */
+    data class Price(
+        val text: String,
+    ) : PlanRowEnd
+
     data object Chevron : PlanRowEnd
 
     data object Check : PlanRowEnd
@@ -161,7 +166,9 @@ private fun endGoesBelow(
     end: PlanRowEnd,
     large: Boolean,
     crowded: Boolean,
-): Boolean = (large && (end is PlanRowEnd.Status || end is PlanRowEnd.Note)) || (crowded && end is PlanRowEnd.Status)
+): Boolean =
+    (large && (end is PlanRowEnd.Status || end is PlanRowEnd.Note || end is PlanRowEnd.Price)) ||
+        (crowded && end is PlanRowEnd.Status)
 
 /** Lines for the title and the second line: one each (board P2), two when crowded, more at large text. */
 private fun rowLines(
@@ -185,6 +192,7 @@ private fun PlanRowEndSlot(end: PlanRowEnd) {
                 style = PantopusTextStyle.small.copy(fontSize = 13.sp),
                 color = PantopusColors.appTextMuted,
             )
+        is PlanRowEnd.Price -> PlanPriceChip(text = end.text)
         PlanRowEnd.Chevron ->
             PantopusIconImage(
                 icon = PantopusIcon.ChevronRight,
@@ -198,10 +206,15 @@ private fun PlanRowEndSlot(end: PlanRowEnd) {
     }
 }
 
-/** A plan row's tile for a plan type. */
+/** A plan row's tile for a plan type; a business's plan adds the business badge on its corner (board P1). */
 @Composable
-fun PlanKindLeading(kind: PlanKind?) {
-    if (kind != null) {
+fun PlanKindLeading(
+    kind: PlanKind?,
+    business: Boolean = false,
+) {
+    if (kind != null && business) {
+        PlanBusinessTile(kind)
+    } else if (kind != null) {
         PlanTile(kind)
     } else {
         PlanIconTile(PantopusIcon.Calendar, PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong)
@@ -318,13 +331,15 @@ fun PlanHostRow(
     seed: String? = name,
     avatarUrl: String? = null,
     trailing: @Composable (() -> Unit)? = null,
+    /** A business hosts (board P1): the business shape and "Verified business" in place of a person's. */
+    business: Boolean = false,
 ) {
     Row(
         modifier = modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        PlanAvatar(name = name, seed = seed, avatarUrl = avatarUrl)
+        if (business) PlanBusinessShape(avatarUrl = avatarUrl) else PlanAvatar(name = name, seed = seed, avatarUrl = avatarUrl)
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Text(
@@ -332,8 +347,9 @@ fun PlanHostRow(
                     style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                     color = PantopusColors.appText,
                 )
-                if (verified) PlanVerifiedBadge()
+                if (verified && !business) PlanVerifiedBadge()
             }
+            if (verified && business) PlanVerifiedBusiness()
             if (caption.isNotBlank()) {
                 Text(text = caption, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
             }

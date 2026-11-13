@@ -81,6 +81,7 @@ import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanLocation
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.PlanViewerStanding
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
 import app.pantopus.android.data.plans.standing
@@ -334,6 +335,7 @@ private fun PlansSheetHost(
                     onSeeAll = { onStop(PlanSheetStop.Full) },
                     onOpen = { actions.onOpenPlan(it.id) },
                     onRetry = viewModel::refresh,
+                    onHostFilter = viewModel::setHostFilter,
                 )
             else ->
                 PlansListContent(
@@ -343,6 +345,8 @@ private fun PlansSheetHost(
                     onOpenPulse = actions.onOpenPulse,
                     onOpenConnections = actions.onOpenConnections,
                     onRetry = viewModel::refresh,
+                    onOpenId = actions.onOpenPlan,
+                    onHostFilter = viewModel::setHostFilter,
                 )
         }
     }
@@ -636,10 +640,12 @@ private fun PlanPinDto.toMapPin(card: PlanDto?): MapPin? {
                 PlanViewerStanding.IN -> PlanPinBadge.In
                 PlanViewerStanding.HOSTING -> PlanPinBadge.Hosting
                 PlanViewerStanding.REQUESTED, PlanViewerStanding.WAITLISTED -> PlanPinBadge.Waiting
-                else -> PlanPinBadge.None
+                // Where the viewer stands wins the shoulder; otherwise a business's pin carries its badge.
+                else -> if (isBusiness) PlanPinBadge.Business else PlanPinBadge.None
             },
-        neighborhood = precision == "neighborhood" || kind == PlanKind.PLAYDATE,
-        areaLabel = if (kind == PlanKind.PLAYDATE) areaLabel ?: card?.area?.label else null,
+        neighborhood = !isBusiness && (precision == "neighborhood" || kind == PlanKind.PLAYDATE),
+        areaLabel = if (kind == PlanKind.PLAYDATE && !isBusiness) areaLabel ?: card?.area?.label else null,
+        exact = isBusiness,
     )
 }
 

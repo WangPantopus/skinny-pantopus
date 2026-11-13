@@ -54,6 +54,7 @@ import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.PlanViewerStanding
 import app.pantopus.android.data.plans.PlanWindow
+import app.pantopus.android.data.plans.hostApproves
 import app.pantopus.android.data.plans.isAtHome
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
@@ -90,6 +91,19 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.semantics.stateDescription
+import app.pantopus.android.data.api.models.plans.PlanMoreTimeDto
+import app.pantopus.android.data.api.models.plans.PlanMoreTimesDto
+import app.pantopus.android.data.plans.PlanHostFilter
+import app.pantopus.android.data.plans.isBusiness
+import app.pantopus.android.ui.screens.plans.components.PLAN_BUSINESS_SPOKEN
+import app.pantopus.android.ui.screens.plans.components.PLAN_FREE
+import app.pantopus.android.ui.screens.plans.components.PlanSegmented
 
 /** h4 on the boards: 17/22 semibold. */
 internal val planH4 = PantopusTextStyle.body.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -114,6 +128,8 @@ internal fun rowEnd(
         plan.standing == PlanViewerStanding.NONE && plan.myInvite?.status == "pending" ->
             PlanRowEnd.Status("Invited", PantopusIcon.UserPlus, PantopusColors.primary600)
         mine -> PlanRowEnd.Chevron
+        // A business's row shows its price where a neighbor's shows spots (board G2): "Free" in step 2.
+        plan.isBusiness && !plan.isFull -> if (plan.price == null) PlanRowEnd.Price(PLAN_FREE) else PlanRowEnd.None
         plan.planState == PlanState.LIVE -> PlanRowEnd.Note("${plan.goingCount} going")
         plan.isFull -> PlanRowEnd.Note("Full")
         plan.spotsLeft == 1 -> PlanRowEnd.Note("1 spot")
@@ -156,9 +172,13 @@ internal fun rowSpoken(
         when (end) {
             is PlanRowEnd.Status -> end.text
             is PlanRowEnd.Note -> end.text
+            is PlanRowEnd.Price -> end.text
             else -> null
         }
-    return listOfNotNull(plan.planKind?.label, plan.title, PlanFormat.rowSubtitle(plan), endWords).joinToString(", ")
+    // A business's plan: what it calls it ("Clinic"), and that a business hosts it (the badge's words).
+    val kind = plan.labelText?.takeIf { plan.isBusiness } ?: plan.planKind?.label
+    val business = PLAN_BUSINESS_SPOKEN.takeIf { plan.isBusiness }
+    return listOfNotNull(kind, business, plan.title, PlanFormat.rowSubtitle(plan), endWords).joinToString(", ")
 }
 
 /** One plan as a row of the list; at the sheet's lowest stop ([peek], board F1) a chevron ends it, as on iOS. */
@@ -169,6 +189,8 @@ internal fun PlanListRow(
     mine: Boolean,
     onOpen: (PlanDto) -> Unit,
     peek: Boolean = false,
+    /** Opens one of a venue's later plans from its fold (the full list only; null leaves the fold out). */
+    fold: PlanFoldScope? = null,
 ) {
     val status = rowEnd(plan, mine)
     PlanRow(
@@ -176,11 +198,173 @@ internal fun PlanListRow(
         subtitle = PlanFormat.rowSubtitle(plan),
         end = if (peek) PlanRowEnd.Chevron else status,
         first = first,
-        leading = { PlanKindLeading(plan.planKind) },
+        leading = { PlanKindLeading(plan.planKind, business = plan.isBusiness) },
         // TalkBack still hears the status or spots a peek row doesn't show (as VoiceOver does on iOS).
         spoken = rowSpoken(plan, status),
         onClick = { onOpen(plan) },
     )
+    val more = plan.moreTimes?.takeIf { it.count > 0 && plan.isBusiness }
+    if (fold != null && more != null) PlanFold(plan.id, more, fold)
+}
+
+/** What a venue's fold needs from the list: the window it says "this week" by, and how to open a plan by id. */
+internal class PlanFoldScope(
+    val window: PlanWindow,
+    val onOpenId: (String) -> Unit,
+)
+
+/**
+ * A venue's later plans, folded under its soonest (boards G2 and P3): "3 more times this week at this place", and
+ * opened, a short line for each ("Open play · Sun 2:00 PM") and "Show less". Its own control under the row, so
+ * TalkBack reaches it.
+ */
+@Composable
+private fun PlanFold(
+    planId: String,
+    more: PlanMoreTimesDto,
+    scope: PlanFoldScope,
+) {
+    var open by rememberSaveable(planId) { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth().padding(start = FOLD_INDENT)) {
+        if (open) {
+            more.items.forEach { item ->
+                PlanDivider()
+                PlanFoldLine(item, onClick = { scope.onOpenId(item.id) })
+            }
+            val unlisted = more.count - more.items.size
+            if (unlisted > 0) {
+                PlanDivider()
+                Text(
+                    text = "And $unlisted more",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.padding(vertical = 10.dp),
+                )
+            }
+        }
+        PlanFoldToggle(
+            text = if (open) "Show less" else foldLine(more.count, scope.window),
+            open = open,
+            onClick = { open = !open },
+        )
+    }
+}
+
+/** "3 more times this week at this place", "1 more time today at this place". */
+internal fun foldLine(
+    count: Int,
+    window: PlanWindow,
+): String {
+    val times = if (count == 1) "1 more time" else "$count more times"
+    val span =
+        when (window) {
+            PlanWindow.NOW, PlanWindow.TODAY -> "today"
+            PlanWindow.WEEKEND -> "this weekend"
+            PlanWindow.WEEK -> "this week"
+        }
+    return "$times $span at this place"
+}
+
+@Composable
+private fun PlanFoldToggle(
+    text: String,
+    open: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .heightIn(min = 44.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .testTag("planFold")
+                .semantics(mergeDescendants = true) { stateDescription = if (open) "Open" else "Closed" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        PantopusIconImage(
+            icon = if (open) PantopusIcon.ChevronUp else PantopusIcon.ChevronDown,
+            contentDescription = null,
+            size = 14.dp,
+            tint = PantopusColors.primary700,
+        )
+        Text(
+            text = text,
+            style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.primary700,
+        )
+    }
+}
+
+/** One folded plan: its label (or title) in bold and when ("Open play · Sun 2:00 PM"); opens that plan. */
+@Composable
+private fun PlanFoldLine(
+    item: PlanMoreTimeDto,
+    onClick: () -> Unit,
+) {
+    val name = item.labelText?.takeIf(String::isNotBlank) ?: item.title.orEmpty()
+    val whenText = PlanFormat.instant(item.startsAt)?.let { PlanFormat.shortWhen(it, PlanFormat.zone(item.timezone)) }
+    Text(
+        text =
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)) { append(name) }
+                whenText?.let { append(" · $it") }
+            },
+        style = PantopusTextStyle.small.copy(fontSize = 14.sp),
+        color = PantopusColors.appTextSecondary,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 44.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(vertical = 12.dp)
+                .testTag("planFoldItem"),
+    )
+}
+
+/** The fold lines up under the row's words, past the 44 dp tile and its 12 dp gap. */
+private val FOLD_INDENT = 56.dp
+
+/**
+ * The All / Neighbors / Businesses filter under the list's title (boards G1, G2 and P3): only once a business has a
+ * plan in the area, so Plans looks as it always has until then.
+ */
+@Composable
+internal fun PlansHostFilterBar(
+    state: PlansMapUiState,
+    onSelect: (PlanHostFilter) -> Unit,
+) {
+    if (!state.showsHostFilter) return
+    PlanSegmented(
+        options = PlanHostFilter.entries.map { it.wire to it.label },
+        selected = state.hostShown.wire,
+        onSelect = { onSelect(PlanHostFilter.from(it)) },
+        modifier = Modifier.padding(top = Spacing.s2, bottom = Spacing.s1).testTag("plansHostFilter"),
+        optionTags = listOf("plansHostFilterAll", "plansHostFilterNeighbors", "plansHostFilterBusinesses"),
+    )
+}
+
+/** Nothing for the filter chosen (the design's states table): says so, with a way back to every plan. */
+@Composable
+private fun PlansHostFilterEmpty(
+    state: PlansMapUiState,
+    onShowAll: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s3).testTag("plansHostFilterEmpty"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Text(
+            text =
+                if (state.hostShown == PlanHostFilter.BUSINESSES) {
+                    "No businesses have plans here ${state.window.phrase}."
+                } else {
+                    "No neighbors have plans here ${state.window.phrase}."
+                },
+            style = PantopusTextStyle.small,
+            color = PantopusColors.appTextSecondary,
+        )
+        GhostButton(title = "Show all plans", onClick = onShowAll)
+    }
 }
 
 /** The sheet at its lowest stop (board F1): "This week near you", "See all", the two soonest plans. */
@@ -190,18 +374,22 @@ internal fun ColumnScope.PlansPeekContent(
     onSeeAll: () -> Unit,
     onOpen: (PlanDto) -> Unit,
     onRetry: () -> Unit,
+    onHostFilter: (PlanHostFilter) -> Unit = {},
 ) {
     val all = state.mineShown + state.others
     val sheet = LocalPlanSheet.current
     // The lowest stop shows the title and the soonest plan over the map (as on iOS); the next one waits just below it.
     Column(modifier = Modifier.fillMaxWidth().onSizeChanged { sheet?.reportPeek(it.height) }) {
         PeekTitle(state, all, onSeeAll)
+        PlansHostFilterBar(state, onHostFilter)
         when (state.listStatus) {
             PlansListStatus.Loading -> PlanRowsSkeleton(rows = 2)
             is PlansListStatus.Failed -> PlansFailed(state.listStatus.message, onRetry = onRetry)
             PlansListStatus.Loaded -> {
                 val soonest = all.firstOrNull()
-                if (soonest == null) {
+                if (soonest == null && state.hostFiltered) {
+                    PlansHostFilterEmpty(state, onShowAll = { onHostFilter(PlanHostFilter.ALL) })
+                } else if (soonest == null) {
                     Text(
                         text = "Nothing within 5 miles ${state.window.phrase}. Plans farther away show on the map.",
                         style = PantopusTextStyle.small,
@@ -267,11 +455,15 @@ internal fun PlansListContent(
     onOpenPulse: () -> Unit,
     onOpenConnections: () -> Unit,
     onRetry: () -> Unit,
+    onOpenId: (String) -> Unit = {},
+    onHostFilter: (PlanHostFilter) -> Unit = {},
 ) {
     val sections = remember(state.others, state.mineShown) { daySections(state.others) }
+    val fold = remember(state.window, onOpenId) { PlanFoldScope(state.window, onOpenId) }
     LazyColumn(modifier = Modifier.fillMaxWidth()) {
         item(key = "header") {
             PlansListHeader(state, onBackToMap)
+            PlansHostFilterBar(state, onHostFilter)
         }
         if (state.listStatus is PlansListStatus.Failed && state.list.isEmpty()) {
             item(key = "failed") { PlansFailed(state.listStatus.message, onRetry) }
@@ -288,11 +480,14 @@ internal fun PlansListContent(
         sections.forEach { (title, plans) ->
             item(key = "title-$title") { SectionTitle(title, top = 14.dp) }
             items(plans, key = { "row-${it.id}" }) { plan ->
-                PlanListRow(plan, first = plan == plans.first(), mine = false, onOpen = onOpen)
+                PlanListRow(plan, first = plan == plans.first(), mine = false, onOpen = onOpen, fold = fold)
             }
         }
-        // Only your own plans nearby (as on iOS): say so instead of ending the list in silence.
-        if (sections.isEmpty() && state.listStatus == PlansListStatus.Loaded) {
+        // The filter chosen has nothing here: say so, with a way back to every plan.
+        if (sections.isEmpty() && state.listStatus == PlansListStatus.Loaded && state.hostFiltered) {
+            item(key = "host-empty") { PlansHostFilterEmpty(state, onShowAll = { onHostFilter(PlanHostFilter.ALL) }) }
+        } else if (sections.isEmpty() && state.listStatus == PlansListStatus.Loaded) {
+            // Only your own plans nearby (as on iOS): say so instead of ending the list in silence.
             item(key = "no-others") {
                 Text(
                     text = "No other ${state.kind?.label?.lowercase() ?: "plans"} near you yet.",
@@ -465,7 +660,7 @@ internal fun PlanCardContent(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PlanTypeTag(kind)
+                PlanTypeTag(kind, label = plan.labelText.takeIf { plan.isBusiness })
                 Spacer(modifier = Modifier.weight(1f))
                 CardCloseButton(onClose)
             }
@@ -477,7 +672,15 @@ internal fun PlanCardContent(
             )
             Text(text = cardWhereLine(plan), style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
         }
-        plan.host?.let { host ->
+        plan.business?.let { business ->
+            PlanHostRow(
+                name = business.name ?: plan.host?.displayName ?: "A business",
+                verified = business.verified,
+                caption = hostCaption(plan),
+                avatarUrl = business.avatarUrl,
+                business = true,
+            )
+        } ?: plan.host?.let { host ->
             PlanHostRow(
                 name = host.displayName ?: "Neighbor",
                 verified = host.verifiedAddress,
@@ -546,16 +749,21 @@ private fun CardCloseButton(onClose: () -> Unit) {
     }
 }
 
-/** "Sun, Oct 18 · 1:25–4:45 PM · Near Prune Hill · under 1 mi". */
+/** "Sun, Oct 18 · 1:25–4:45 PM · Near Prune Hill · under 1 mi" (a business's plan names its place, not an area). */
 internal fun cardWhereLine(plan: PlanDto): String =
     listOfNotNull(
         PlanFormat.whenLine(plan),
-        plan.area?.label,
+        if (plan.isBusiness) plan.place?.name ?: plan.area?.label else plan.area?.label,
         PlanFormat.distance(plan.distanceBand),
     ).joinToString(" · ")
 
 /** "Hosted 3 plans · 2 mutual connections" (a playdate host's playdates, from `kind_hosted`, as on iOS). */
 internal fun hostCaption(plan: PlanDto): String {
+    // A business: how many plans it has hosted (the proof line waits for check-in), never connections.
+    plan.business?.let { business ->
+        val hosted = business.plansHosted
+        return if (hosted > 0) "Hosted $hosted plan${if (hosted == 1) "" else "s"}" else "New to hosting"
+    }
     val host = plan.host ?: return ""
     val parts = mutableListOf<String>()
     val playdates = host.kindHosted ?: 0
@@ -596,13 +804,16 @@ internal fun mainAction(plan: PlanDto): PlanMainAction? {
                 // The host's invitation: "I'm in" (as on iOS).
                 plan.myInvite?.isOpen == true && (viewer?.canAsk == true || viewer?.cannotAskReason == "full_use_waitlist") ->
                     PlanMainAction(if (plan.isFull) "Join the waitlist" else "I'm in", isPrimary = true, asks = true)
-                viewer == null -> PlanMainAction("Ask to join", isPrimary = true, asks = true)
-                viewer.canAsk -> PlanMainAction(if (plan.isFull) "Join the waitlist" else "Ask to join", isPrimary = true, asks = true)
+                viewer == null -> PlanMainAction(askWord(plan), isPrimary = true, asks = true)
+                viewer.canAsk -> PlanMainAction(if (plan.isFull) "Join the waitlist" else askWord(plan), isPrimary = true, asks = true)
                 viewer.cannotAskReason == "full_use_waitlist" -> PlanMainAction("Join the waitlist", isPrimary = true, asks = true)
                 else -> null
             }
     }
 }
+
+/** "Join" for a business's plan that lets people in right away (board G3), "Ask to join" otherwise. */
+internal fun askWord(plan: PlanDto): String = if (plan.isBusiness && !plan.hostApproves) "Join" else "Ask to join"
 
 /** What "Invite a neighbor" shares (board F4, the same words as iOS). */
 const val PLANS_INVITE_MESSAGE = "I'm on Pantopus to make small plans with neighbors. Join me."
