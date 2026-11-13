@@ -10,7 +10,7 @@
  *   switches/<name>.json   { v: 1, counties: { "<fips>": { mode: 'off'|'shadow'|'live', withheld: [fact, ...], estimates: true } },
  *                            shared_facts: ["<fips>", ...], similar_homes: ["<fips>", ...],
  *                            appeal_packet: ["<fips>", ...], new_columns: ["<fips>", ...], derived_rows: ["<fips>", ...],
- *                            listed_units: ["<fips>", ...] }
+ *                            listed_units: ["<fips>", ...], past_date: ["<fips>", ...] }
  *
  * `estimates: true` shows a live county's owners a Pantopus estimate (propertyRecords/valueEstimate.js). Without it, none.
  * `shared_facts` names the live counties where an address with several homes on record shows what all of them agree
@@ -27,6 +27,10 @@
  * `listed_units` names the live counties where a record takes the unit number an address list gives it (`listed_unit`,
  * written by a connector whose own file has no unit, identity.js withListedUnits), so a condo's owner finds its own unit
  * instead of several homes. A file without the list has it off everywhere.
+ * `past_date` names the live counties that keep answering from their serving release once it is past its date
+ * (`stale_after`, set by its source's refresh window), with words saying how old it is (homeRecord.js), instead of
+ * answering `stale`, which finds nothing for a Home with no copy yet and for Add Home. A file without the list has it off
+ * everywhere: past its date a county answers `stale`, as before.
  *
  * A county the file names follows the file; any other follows the environment's lists.
  * The file is written by scripts/property-index/switch-county.cjs, by hand. If it can't
@@ -52,6 +56,7 @@ let sharedFacts = new Set();
 let similarHomes = new Set();
 let appealPackets = new Set();
 let listedUnits = new Set();
+let pastDates = new Set();
 // The held facts' lists, in the order they apply (format.js `held`).
 const HELD = ['new_columns', 'derived_rows'];
 let held = {};
@@ -68,6 +73,7 @@ function apply(file) {
   similarHomes = file?.similarHomes || new Set();
   appealPackets = file?.appealPackets || new Set();
   listedUnits = file?.listedUnits || new Set();
+  pastDates = file?.pastDates || new Set();
   held = file?.held || {};
   modes = config.listedModes();
   for (const [fips, entry] of Object.entries(counties)) modes.set(fips, entry.mode);
@@ -86,6 +92,8 @@ function apply(file) {
   if (heldLists.length) now = [named, shared, similar, packets, heldLists];
   const units = [...listedUnits].sort();
   if (units.length) now = [named, shared, similar, packets, heldLists, units];
+  const past = [...pastDates].sort();
+  if (past.length) now = [named, shared, similar, packets, heldLists, units, past];
   now = JSON.stringify(now);
   if (now !== loggedAs && config.enabled()) {
     loggedAs = now;
@@ -98,6 +106,7 @@ function apply(file) {
       ...(packets.length ? { appeal_packet: packets } : {}),
       ...Object.fromEntries(heldLists),
       ...(units.length ? { listed_units: units } : {}),
+      ...(past.length ? { past_date: past } : {}),
     });
   }
 }
@@ -121,8 +130,9 @@ function parseFile(bytes) {
   const similar = Array.isArray(data.similar_homes) ? data.similar_homes.filter((fips) => /^\d{5}$/.test(fips)) : [];
   const packets = Array.isArray(data.appeal_packet) ? data.appeal_packet.filter((fips) => /^\d{5}$/.test(fips)) : [];
   const units = Array.isArray(data.listed_units) ? data.listed_units.filter((fips) => /^\d{5}$/.test(fips)) : [];
+  const past = Array.isArray(data.past_date) ? data.past_date.filter((fips) => /^\d{5}$/.test(fips)) : [];
   const heldLists = Object.fromEntries(HELD.map((name) => [name, new Set(Array.isArray(data[name]) ? data[name].filter((fips) => /^\d{5}$/.test(fips)) : [])]));
-  return { counties: found, sharedFacts: new Set(shared), similarHomes: new Set(similar), appealPackets: new Set(packets), held: heldLists, listedUnits: new Set(units) };
+  return { counties: found, sharedFacts: new Set(shared), similarHomes: new Set(similar), appealPackets: new Set(packets), held: heldLists, listedUnits: new Set(units), pastDates: new Set(past) };
 }
 
 const readFile = reader.switchesFile(config.switchesName, parseFile, READ_EVERY_MS);
@@ -189,6 +199,9 @@ const appealPacketFor = (fips) => similarHomesFor(fips) && appealPackets.has(fip
 /** Whether this county's records take the unit numbers an address list gives them: only a live county the file's list names. */
 const listedUnitsFor = (fips) => modeFor(fips) === 'live' && listedUnits.has(fips);
 
+/** Whether this county answers from its serving release once it is past its date: only a live county the file's list names. */
+const pastDateFor = (fips) => modeFor(fips) === 'live' && pastDates.has(fips);
+
 /** The live counties with similar homes on, for the yearly watch (services/propertyTaxWatch.js). */
 const similarHomesCounties = () => [...similarHomes].filter(similarHomesFor).sort();
 
@@ -219,6 +232,8 @@ function summary() {
   if (heldLists.length) lists = [named, withheld, estimates, shared, similar, packets, heldLists];
   const units = [...listedUnits].sort();
   if (units.length) lists = [named, withheld, estimates, shared, similar, packets, heldLists, units];
+  const past = [...pastDates].sort();
+  if (past.length) lists = [named, withheld, estimates, shared, similar, packets, heldLists, units, past];
   return {
     live: named.filter(([, mode]) => mode === 'live').length,
     shadow: named.filter(([, mode]) => mode === 'shadow').length,
@@ -228,6 +243,7 @@ function summary() {
     ...(packets.length ? { appeal_packet: packets.length } : {}),
     ...Object.fromEntries(heldLists.map(([name, named]) => [name, named.length])),
     ...(units.length ? { listed_units: units.length } : {}),
+    ...(past.length ? { past_date: past.length } : {}),
     // Estimates, shared facts and similar homes join the hash only when a county has them, so servers before and after them agree on a file without any.
     hash: crypto.createHash('sha256').update(JSON.stringify(lists)).digest('hex').slice(0, 12),
   };
@@ -275,4 +291,4 @@ function served(stored) {
   };
 }
 
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served, joinHeld, heldFor, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, appealPacketFor, listedUnitsFor, listed, summary, health };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, joinHeld, heldFor, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, appealPacketFor, listedUnitsFor, pastDateFor, listed, summary, health };

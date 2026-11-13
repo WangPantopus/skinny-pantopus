@@ -31,6 +31,10 @@
 //     --listed-units with --mode live or off: someone who names a unit an address list gives a record (a condo whose own
 //     file has no unit number) finds that home, or gets the several homes there as before
 //     (backend/services/propertyRecords/identity.js withListedUnits). Only the file's listed_units list changes.
+//   node scripts/property-index/switch-county.cjs --past-date --county 53071 --mode live --target production --bucket <name>
+//     --past-date with --mode live or off: once the county's release is past its date (stale_after), the county keeps
+//     answering from it, and Property details and Add Home say how old it is; or it answers nothing new there, as before
+//     (backend/services/propertyRecords/index.js and homeRecord.js). Only the file's past_date list changes.
 //
 // A list changes every county in it or none: one refused county refuses the whole run, and the file is written once.
 // Shadow and live take only a county whose release holds homes; off takes any county.
@@ -59,10 +63,12 @@ const appealPacket = process.argv.includes('--appeal-packet');
 const newColumns = process.argv.includes('--new-columns');
 const derivedRows = process.argv.includes('--derived-rows');
 const listedUnits = process.argv.includes('--listed-units');
+const pastDate = process.argv.includes('--past-date');
 // A list beside the counties' lines, changed by itself: [the file's key, what the log calls it].
 const list = (sharedFacts && ['shared_facts', 'shared facts']) || (similarHomes && ['similar_homes', 'similar homes'])
   || (appealPacket && ['appeal_packet', 'appeal packets']) || (newColumns && ['new_columns', 'new columns'])
-  || (derivedRows && ['derived_rows', 'derived rows']) || (listedUnits && ['listed_units', 'listed units']) || null;
+  || (derivedRows && ['derived_rows', 'derived rows']) || (listedUnits && ['listed_units', 'listed units'])
+  || (pastDate && ['past_date', 'answers past their date']) || null;
 const root = opt('--root');
 const remote = `s3://${opt('--bucket')}/${opt('--prefix') || 'index'}`;
 
@@ -70,7 +76,7 @@ if (!counties.length) refuse('A county is its five-digit FIPS code');
 if (mode && !['off', 'shadow', 'live'].includes(mode)) refuse('A county is off, shadow or live');
 if (!/^[a-z]+$/.test(target)) refuse('Name the environment: production or staging');
 if (estimates && !['on', 'off'].includes(estimates)) refuse('Estimates are on or off');
-if ([sharedFacts, similarHomes, appealPacket, newColumns, derivedRows, listedUnits].filter(Boolean).length > 1) refuse('One list at a time: --shared-facts, --similar-homes, --appeal-packet, --new-columns, --derived-rows or --listed-units');
+if ([sharedFacts, similarHomes, appealPacket, newColumns, derivedRows, listedUnits, pastDate].filter(Boolean).length > 1) refuse('One list at a time: --shared-facts, --similar-homes, --appeal-packet, --new-columns, --derived-rows, --listed-units or --past-date');
 if (list && !['live', 'off'].includes(mode)) refuse(`${list[1][0].toUpperCase()}${list[1].slice(1)} are live or off: pass --mode live or --mode off`);
 if (list && (withhold || estimates)) refuse(`${list[1][0].toUpperCase()}${list[1].slice(1)} change by themselves: leave out --withhold and --estimates`);
 if (!mode && !withhold && !estimates) refuse('Nothing to change: pass --mode, --withhold, --estimates or several');
@@ -176,4 +182,4 @@ if (list) {
     log(`${target}: ${county} ${list[1]} ${namedBefore.get(county)} -> ${mode}; the county is ${line}${line === 'live' ? '' : ', so they show once it is live'}`);
   }
 }
-log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off, estimates on in ${Object.values(file.counties).filter((entry) => entry.estimates).length}, shared facts in ${(file.shared_facts || []).length}, similar homes in ${(file.similar_homes || []).length}, appeal packets in ${(file.appeal_packet || []).length}, new columns in ${(file.new_columns || []).length}, derived rows in ${(file.derived_rows || []).length}, listed units in ${(file.listed_units || []).length}; servers follow within about a minute`);
+log(`${target} now names ${count('live')} live, ${count('shadow')} shadow, ${count('off')} off, estimates on in ${Object.values(file.counties).filter((entry) => entry.estimates).length}, shared facts in ${(file.shared_facts || []).length}, similar homes in ${(file.similar_homes || []).length}, appeal packets in ${(file.appeal_packet || []).length}, new columns in ${(file.new_columns || []).length}, derived rows in ${(file.derived_rows || []).length}, listed units in ${(file.listed_units || []).length}, answers past their date in ${(file.past_date || []).length}; servers follow within about a minute`);

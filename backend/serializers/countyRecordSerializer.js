@@ -551,6 +551,18 @@ const BUILDING_NOTES = {
 };
 const AGREED_NOTE = 'More than one home is on record at this address. These are the details all of its records agree on; anything they differ on isn\u2019t shown.';
 
+/**
+ * A release past its date that still answers (`past_date`, propertyRecords/homeRecord.js dated): the first section says
+ * how old the county's records are, plainly, ahead of any note it has. The footer keeps the source and its date.
+ */
+function withAge(sections, copy) {
+  const date = copy.past_date ? dateLabel(copy.as_of) : null;
+  if (!date || !sections.length) return sections;
+  const age = `These county records are from ${date}, the newest we have. Some details may have changed since.`;
+  const [first, ...rest] = sections;
+  return [{ ...first, note: first.note ? `${age} ${first.note}` : age }, ...rest];
+}
+
 function recordFooter(copy) {
   const date = dateLabel(copy.as_of);
   const source = `From ${copy.publisher}\u2019s ${copy.dataset}`;
@@ -587,7 +599,7 @@ function serializePropertyRecord(copy, estimate = null) {
     const building = titled('building');
     addFacts(building, Object.fromEntries(AGREED_FACTS.filter((name) => facts[name] !== undefined).map((name) => [name, facts[name]])), ['building']);
     if (!building.rows.length) return null;
-    return { sections: [{ id: building.id, title: building.title, rows: building.rows, note: AGREED_NOTE }], footer: recordFooter(copy), as_of: copy.as_of || null };
+    return { sections: withAge([{ id: building.id, title: building.title, rows: building.rows, note: AGREED_NOTE }], copy), footer: recordFooter(copy), as_of: copy.as_of || null };
   }
   const sections = [];
   const house = copy.match === 'exact' && copy.subject?.kind !== 'unit';
@@ -636,7 +648,7 @@ function serializePropertyRecord(copy, estimate = null) {
 
   const shown = sections.filter((section) => section.rows.length > 0).map(({ id, title, rows, note }) => ({ id, title, rows, note }));
   if (!shown.length) return null;
-  return { sections: shown, footer: recordFooter(copy), as_of: copy.as_of || null };
+  return { sections: withAge(shown, copy), footer: recordFooter(copy), as_of: copy.as_of || null };
 }
 
 const factIsMono = (kind) => MONO.has(kind);
