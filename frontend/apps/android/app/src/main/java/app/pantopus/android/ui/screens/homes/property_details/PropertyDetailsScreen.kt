@@ -3,6 +3,10 @@
 
 package app.pantopus.android.ui.screens.homes.property_details
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,12 +31,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -73,6 +79,10 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 /** A.4 / A13.5 — read-mostly property facts with mismatch correction CTA. */
 @Composable
@@ -88,6 +98,15 @@ fun PropertyDetailsScreen(
     val savingFacts by viewModel.savingFacts.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<HouseholdGroupDto?>(null) }
     var reporting by remember { mutableStateOf<PropertyRecordSection?>(null) }
+    val documents by viewModel.documents.collectAsStateWithLifecycle()
+    val foundDocument by viewModel.foundDocument.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // "Add from a document": a PDF from the system picker, read by the server and dropped.
+    val pickDocument =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri != null) scope.launch { viewModel.readDocument(withContext(Dispatchers.IO) { context.pdfBytes(uri) }) }
+        }
 
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
 
@@ -107,7 +126,17 @@ fun PropertyDetailsScreen(
                     report = { reporting = it },
                     answerLayout = viewModel::answerFloorPlan,
                     homeId = viewModel.homeId,
+                    addDocument = { pickDocument.launch(arrayOf("application/pdf")) },
+                    documents = documents,
                 ),
+        )
+    }
+    foundDocument?.let { answer ->
+        DocumentFactsSheet(
+            answer = answer,
+            saving = savingFacts,
+            onSave = { facts, onDone -> viewModel.saveDocumentFacts(facts, onDone) },
+            onDismiss = viewModel::closeDocument,
         )
     }
     editing?.let { group ->
@@ -241,6 +270,14 @@ private fun LoadedBody(
                     household.countyLink?.takeIf { household.questions.isEmpty() }?.let { HouseholdCountyPageLink(it) }
                     household.addDetails.forEach { group ->
                         HouseholdAddDetailsCard(group = group, actions = householdActions)
+                    }
+                    household.documents?.let { offer ->
+                        HouseholdDocumentsCard(
+                            offer = offer,
+                            state = householdActions.documents,
+                            saving = householdActions.saving,
+                            onPick = householdActions.addDocument,
+                        )
                     }
                 }
                 // Verification sources have no clean backend mapping today,
@@ -705,3 +742,23 @@ private fun ErrorBody(
 }
 
 private const val MAP_PLACEHOLDER_TEXT_SP = 10f
+
+/** The picked PDF's bytes, or null when it can't be opened, isn't a PDF or is over the server's 15 MB. */
+private fun Context.pdfBytes(uri: Uri): ByteArray? =
+    runCatching {
+        contentResolver.openInputStream(uri)?.use { input ->
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            var count = input.read(buffer)
+            while (count >= 0 && out.size() <= MAX_DOCUMENT_BYTES) {
+                out.write(buffer, 0, count)
+                count = input.read(buffer)
+            }
+            out.toByteArray().takeIf {
+                it.size in (PDF_MAGIC.size + 1)..MAX_DOCUMENT_BYTES && it.copyOfRange(0, PDF_MAGIC.size).contentEquals(PDF_MAGIC)
+            }
+        }
+    }.getOrNull()
+
+private const val MAX_DOCUMENT_BYTES = 15 * 1024 * 1024
+private val PDF_MAGIC = "%PDF-".toByteArray(Charsets.US_ASCII)

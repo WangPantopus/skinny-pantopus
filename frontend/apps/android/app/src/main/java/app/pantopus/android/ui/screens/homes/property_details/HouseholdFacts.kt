@@ -55,6 +55,13 @@ private const val MAX_NOTE_LENGTH = 500
 // (backend/services/householdFacts.js). All of this comes from what the server sends: a server
 // without it, or someone it isn't for, gets nothing new.
 
+/** Where "Add from a document" stands on this visit (HouseholdDocuments.kt). */
+data class HouseholdDocumentsState(
+    val reading: Boolean = false,
+    val error: String? = null,
+    val notice: String? = null,
+)
+
 /** What the controls ask of the screen. */
 data class HouseholdActions(
     val saving: Boolean = false,
@@ -65,6 +72,9 @@ data class HouseholdActions(
     val answerLayout: (String) -> Unit = {},
     /** The Home, for what this device remembers about it (link and confirm). */
     val homeId: String = "",
+    /** "Add from a document": open the file picker, and where reading stands. */
+    val addDocument: () -> Unit = {},
+    val documents: HouseholdDocumentsState = HouseholdDocumentsState(),
 )
 
 /** "Bedrooms? 1 2 3 4 Other". A tap answers it; Other is the person's own number. Also on Add Home. */
@@ -363,7 +373,7 @@ internal fun HouseholdFactEditorSheet(
 }
 
 @Composable
-private fun FactField(
+internal fun FactField(
     fact: HouseholdFactDto,
     value: String,
     typing: Boolean,
