@@ -1,13 +1,14 @@
 # Plans with businesses: prompts for the step 2 app sessions
 
 November 12, 2026 · Ready to paste. Neither session has been started; the founder
-starts them. Start them only after the step 2 server PR has merged and its backend
-is released, since the apps build against it.
+starts them. The step 2 server PR (#3983) is merged, so they can start once its
+backend release is out.
 
 One prompt for iPhone and one for Android. They can run side by side: they touch
 different folders. Each begins with the same rules.
 
-The server they build against is PR #3983 (step 2) on top of #3976 (step 1).
+The server they build against is #3983 (step 2) on top of #3976 (step 1), both
+merged.
 
 ## The rules both prompts start with
 

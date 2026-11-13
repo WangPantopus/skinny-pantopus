@@ -86,7 +86,7 @@ that line is in the step 2 app prompts.
 
 ### Step 2 · A business hosts (server and web share page; then iOS, Android)
 
-**Server and web share page built: PR #3983.** The iPhone and Android prompts are
+**Server and web share page built: PR #3983, merged November 12.** The iPhone and Android prompts are
 in [05-app-session-prompts.md](05-app-session-prompts.md); the founder starts
 those sessions. What the build decided along the way is in the contract, "Calls
 the build made" (B1 to B10).

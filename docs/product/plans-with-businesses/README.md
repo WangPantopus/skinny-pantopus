@@ -1,7 +1,7 @@
 # Plans with businesses
 
 November 11, 2026, updated November 12 · Status: the first round is built on the
-server. Step 1 is merged (#3976) and step 2 is PR #3983, both behind
+server. Step 1 (#3976) and step 2 (#3983) are merged, both behind
 `plans_business`, off. No phone screen is built, no price exists, and no business
 has been asked.
 

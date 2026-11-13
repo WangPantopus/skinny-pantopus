@@ -1019,7 +1019,7 @@ Designed; the first round of the build started on November 12 (section 0). A ver
 **Built, behind `plans_business`, off (November 12).**
 
 - [x] Step 1, a plan remembers its venue: [#3976](https://github.com/WangPantopus/skinny-pantopus/pull/3976), merged. Nothing is saved until the apps send the place picker's id, which is one line in each app, in the step 2 app prompts.
-- [ ] Step 2 on the server and the web share page, a verified business hosts a free plan: [#3983](https://github.com/WangPantopus/skinny-pantopus/pull/3983). Checked on a private local stack: 115 checks of the business flow, a neighbor's whole flow compared with untouched master (identical with the switch off), invitations, a plan for kids with its own switch on there, the Plans job, and the share page in a browser. Two independent reviews; their fixes are in.
+- [x] Step 2 on the server and the web share page, a verified business hosts a free plan: [#3983](https://github.com/WangPantopus/skinny-pantopus/pull/3983), merged. Checked on a private local stack: 115 checks of the business flow, a neighbor's whole flow compared with untouched master (identical with the switch off), invitations, a plan for kids with its own switch on there, the Plans job, and the share page in a browser. Two independent reviews; their fixes are in.
 - [ ] Step 2 on iPhone and Android: not started. The prompts are in [05-app-session-prompts.md](docs/product/plans-with-businesses/05-app-session-prompts.md); you start those sessions.
 
 **Yours to check from the build** (the contract's "Calls the build made", B1 to B10). The ones you would notice:
