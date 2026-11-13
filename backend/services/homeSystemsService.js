@@ -26,6 +26,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { KINDS: DOCUMENT_KINDS } = require('./householdDocuments/readFacts');
 
 // key → label, typical service life range in years, and whether the
 // system is plausibly original to the building (drives seeding).
@@ -131,6 +132,13 @@ function remainingFraction(age, def) {
   return Math.max(0, Math.min(1, Math.round(frac * 100) / 100));
 }
 
+// A year the household confirmed from its own report (services/householdDocuments) says which report.
+function documentLabel(row, source) {
+  const ref = source === 'resident' && typeof row?.source_ref === 'string' ? row.source_ref : '';
+  const kind = ref.startsWith('document:') ? DOCUMENT_KINDS[ref.slice(9)] : null;
+  return kind ? `From ${kind.source}` : null;
+}
+
 /**
  * Project one stored (or absent) row into the presented shape.
  * `yearBuilt` seeds the estimate when nothing better is on file.
@@ -157,7 +165,7 @@ function projectSystem(def, row, yearBuilt, now = new Date()) {
     status: statusFor(age, def),
     life_remaining: remainingFraction(age, def),
     source: effectiveSource,
-    source_label: installedYear === null ? 'Year unknown' : (SOURCE_LABELS[effectiveSource] || SOURCE_LABELS.estimated),
+    source_label: installedYear === null ? 'Year unknown' : (documentLabel(row, effectiveSource) || SOURCE_LABELS[effectiveSource] || SOURCE_LABELS.estimated),
     confidence: SOURCE_CONFIDENCE[effectiveSource] || 'low',
     source_ref: (row && row.source_ref) || null,
     note: def.note,
