@@ -574,8 +574,11 @@ function serializePropertyRecord(copy, estimate = null) {
   if (!copy || typeof copy !== 'object') return null;
   // Rows the record implies (scripts/property-index/lib/derive.cjs), present only while the county's derived_rows switch is
   // on (propertyRecords/router.js): shown here and nowhere else, so estimates and other screens read the county's own facts.
-  const derived = copy.derived?.facts ? copy.derived.from || {} : null;
-  const facts = derived ? { ...(copy.facts || {}), ...copy.derived.facts } : copy.facts || {};
+  // Only the facts derived for this home carry a source: the county's own rows keep the footer's.
+  const derived = copy.derived?.facts
+    ? Object.fromEntries(Object.keys(copy.derived.facts).map((name) => [name, copy.derived.from?.[name]]).filter(([, from]) => typeof from === 'string'))
+    : null;
+  const facts = derived ? { ...(copy.facts || {}), ...Object.fromEntries(Object.entries(copy.derived.facts).filter(([name]) => derived[name])) } : copy.facts || {};
   const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
   if (copy.match === 'ambiguous') {
     const building = titled('building');
