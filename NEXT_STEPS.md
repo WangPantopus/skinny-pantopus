@@ -989,7 +989,7 @@ The map, the two contracts, the build plan and the session briefs are in [docs/p
 - [ ] An accountant reads the business's own rate, where the business pays the card fee.
 - [ ] Before business file step 3: create the private storage bucket for the catalog and its key, and a Foursquare Places Portal account for the open places data.
 - [ ] After phase A merges: run the customer record's first fill on production. The script prints what it would write first.
-- [ ] Look at the sample board, then the rest ([the list](docs/product/business-graph/06-design.md)).
+- [ ] Look at the other fourteen boards and the drawing calls ([the list](docs/product/business-graph/06-design.md)). The sample, K2, is approved. Seven boards were corrected on November 12.
 
 ## Background backlog
 

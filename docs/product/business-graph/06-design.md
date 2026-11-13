@@ -2,7 +2,9 @@
 
 November 11, 2026 · Status: all fifteen boards are drawn, in light and dark.
 The founder approved the sample (K2) on November 11 and has not yet looked at
-the other fourteen.
+the other fourteen. Seven boards were corrected on November 12 (see
+[Corrections, November 12](#corrections-november-12)); the pictures below are
+the corrected ones.
 
 The boards are on the private Design canvas
 [The business graph](https://claude.ai/artifact/A3Vr8tG3uswcd8C678nKUe), on
@@ -28,8 +30,8 @@ side by side. Sample data is made up; no real business or person appears.
 | K6 | Other ways to prove | Email at your domain; a mailed code; a document | 3 |
 | P1 | The public page | Licence, bond and insurance lines with the state's date; a line that expires soon; a suspended line | 2 |
 | P2 | A review with proof | "Paid customer" on a review | 6 |
-| F1 | The file | "Here is what the public record says about you": each line with source, date, Confirm, Fix, Hide | 4 |
-| F2 | An alert | "Your bond ends in 23 days", in the notices list and as a push | 4 |
+| F1 | The file | "Here is what the public record says about you": each line with source, date, Confirm, Fix, Hide; only lines a measured source carries | 4 |
+| F2 | An alert | "Your bond ends in 22 days", in the notices list and as a push | 4 |
 | M1 | The statement | A month across every feature: sales, who Pantopus brought, what it kept and why, payouts (wide, for the web) | Piece 4 |
 | M2 | The statement on a phone | The same month, folded | Piece 4 |
 | M3 | People you know | The customer list: first name, how they came, what they bought | Piece 3 |
@@ -82,8 +84,13 @@ when a bond ends within 30 days and when the state has suspended the licence.
 
 ![P2 · A review with Paid customer](screens/p2-review-paid-customer.png)
 
-**F1, The file.** Five lines in their four states: confirmed, found, fixed by
-the owner, hidden.
+**F1, The file.** Six lines in five states: confirmed, found, fixed by the
+owner, none found, hidden. Every line is one a measured source carries
+([07-data-design.md](07-data-design.md)): the licence, the bond with its surety
+and the insurance with its insurer from Washington L&I; the phone; the website,
+the category and a second phone from a business listing. No source measured has
+opening hours, so the Hours line says "None found" and asks the owner to add
+them.
 
 ![F1 · The file](screens/f1-the-file.png)
 
@@ -95,7 +102,8 @@ the owner, hidden.
 
 **M1, The statement, on the web.** The sample month adds up: $6,460.00 paid,
 less $20.00 refunded, $944.00 kept by Pantopus and $9.68 in card fees, leaves
-$5,486.32, of which $4,870.32 is paid out and $616.00 is on its way.
+$5,486.32, of which $4,870.32 is paid out and $616.00 is on its way. The
+table's paid and kept are after the refund, and the board says so under it.
 
 ![M1 · The statement, on the web](screens/m1-the-statement-web.png)
 
@@ -147,6 +155,37 @@ The founder has not seen these. Each is a drawing choice, open until confirmed.
   tab. Each opens from another screen and has a back button.
 - **P1 and K5 are wide boards**, so one picture can hold a screen and its
   other states.
+- **The file names the surety and the insurer** beside the bond and the
+  insurance, and shows an empty Hours line as "None found" with "Add your
+  hours" (added November 12).
+
+## Corrections, November 12
+
+Reading the boards side by side turned up places where they disagreed with
+each other or with the measured data. Fixed on these boards, light and dark:
+
+- **F1 showed lines no source has.** Its Hours ("Monday to Friday, 8 AM to
+  5 PM") and Year started (2009) were labelled "Business listing", but the
+  data design found no source with opening hours and none with a year started
+  for a Washington business. Hours is now "None found" with "Add your hours";
+  Year started is gone. The file gained the surety and the insurer from the
+  state's bond and insurance files, the listing's category, and a hidden
+  second phone as the hidden example.
+- **The same customers now agree on F2, M1, M3, P2 and U1.** Priya paid once,
+  for a task on November 7 (M3 and U1 had said three times, last by invoice).
+  Maya, the business's own invoice customer, paid the invoice in F2. Sam wrote
+  the October review that mentions an invoice (it was Dana's, but Dana first
+  paid on November 14, after it). Jordan was first met in October, after his
+  September review, so it rightly has no "Paid customer". F2's "today" is
+  November 12, the day after the business was verified, so the bond ends in 22
+  days.
+- **M2's banner** now says what Pantopus kept on the business's own customers
+  ($683.00), as M1's does.
+- **M1 and M2** say that paid and kept are after the $20.00 refund; the table
+  totals $6,440.00 against $6,460.00 paid.
+- **K6's chosen option** is business violet, as the rest of the wizard is, not
+  the person blue. Its note now says plainly that without a matching record the
+  page isn't marked verified, in place of "counts toward your standing".
 
 ## Rules the boards keep
 

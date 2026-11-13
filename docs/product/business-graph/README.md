@@ -47,8 +47,9 @@ Beside this folder:
   statement covers every feature from its first day.
 - **Open:** the shared contract's calls S1 to S9; the business file contract's
   calls B1 to B9, among them the second new table, `PublicBusinessRecord`.
-- **Not done:** the screens (one sample comes first); the lawyer's and
-  accountant's reads; the by-hand test with crews; any build.
+- **Not done:** the founder's look at fourteen of the fifteen boards (all are
+  drawn; the sample, K2, is approved); the lawyer's and accountant's reads; the
+  by-hand test with crews; any build.
 
 The founder's steps are in [NEXT_STEPS](../../../NEXT_STEPS.md), "The business
 graph".
