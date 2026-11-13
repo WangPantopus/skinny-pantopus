@@ -79,7 +79,7 @@ final class MomentsComposerModel {
     var hasConnections: Bool?
     /// "Post with no location" on the location card: posting goes on with location off.
     var choseNoLocation = false
-    /// "Show height" (board H1, `+Height`): the Moment says how high above sea level it was made.
+    /// "Show elevation" (board H1, `+Height`): the Moment says how high above sea level it was made.
     var showHeight = false
     /// When the album photo or video was taken (any time); nil for the camera, a text card, or a file that never said.
     private(set) var takenAt: Date?

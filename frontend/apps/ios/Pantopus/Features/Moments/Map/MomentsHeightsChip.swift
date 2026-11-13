@@ -2,9 +2,9 @@
 //  MomentsHeightsChip.swift
 //  Pantopus
 //
-//  Under the Moments map's top row, at the left (board H2): the "Heights"
+//  Under the Moments map's top row, at the left (board H2): the "Elevation"
 //  chip, which turns the pins' height tags on and off, and beside it the
-//  key's five colours, which open the key ("Height above sea level") and
+//  key's five colours, which open the key ("Elevation above sea level") and
 //  close it again. The board's key is a card at the bottom of the map; the
 //  real map's bottom holds Play all, +, the row of faces and the cards, so
 //  the key opens here instead and goes when the map is touched.
@@ -45,7 +45,7 @@ struct MomentsHeightsBar: View {
                 // The mountains are wider than they are tall: room for them, so they don't touch the word.
                 Icon(.mountain, size: 15, strokeWidth: 2.25, color: on ? .white : Theme.Color.appText)
                     .frame(width: 24)
-                Text("Heights")
+                Text("Elevation")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(on ? .white : Theme.Color.appText)
                 if on { Icon(.check, size: 13, strokeWidth: 2.75, color: .white) }
@@ -57,7 +57,7 @@ struct MomentsHeightsBar: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Heights")
+        .accessibilityLabel("Elevation")
         .accessibilityValue(on ? "On" : "Off")
         .accessibilityHint("Shows how high above sea level each Moment was made")
         .accessibilityAddTraits(.isToggle)
@@ -93,7 +93,7 @@ struct MomentsHeightsBar: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Height colors")
+        .accessibilityLabel("Elevation colors")
         .accessibilityValue(viewModel.heightsKeyOpen ? "Open" : "Closed")
         .accessibilityHint("Shows what each color means")
         .accessibilityIdentifier("moments.heights.keyButton")
@@ -104,11 +104,11 @@ struct MomentsHeightsBar: View {
     static let drop: CGFloat = 44
 }
 
-/// Board H2's key: "Height above sea level", a bar per band with where it starts, and flying.
+/// Board H2's key: "Elevation above sea level", a bar per band with where it starts, and flying.
 private struct MomentsHeightKey: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Height above sea level")
+            Text("Elevation above sea level")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
             HStack(alignment: .top, spacing: Spacing.s1) {
@@ -130,7 +130,7 @@ private struct MomentsHeightKey: View {
         .momentsGlass(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Height above sea level: " + MomentHeightBand.allCases.map(\.spoken).joined(separator: "; "))
+        .accessibilityLabel("Elevation above sea level: " + MomentHeightBand.allCases.map(\.spoken).joined(separator: "; "))
         .accessibilityHint("Closes")
         .accessibilityIdentifier("moments.heights.key")
     }

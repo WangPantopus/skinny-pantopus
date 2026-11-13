@@ -312,7 +312,7 @@ public struct MomentsMapResponse: Decodable, Sendable {
     public let rings: [MomentRingDTO]
     /// Connections' (and your own) Moments with no location, one ring per person, whatever the area (contract v3.4).
     public let unplaced: [MomentRingDTO]
-    /// Heights are on for you (contract v3.9): the map offers "Heights". False from a server before it.
+    /// Heights are on for you (contract v3.9): the map offers "Elevation". False from a server before it.
     public let heightsOn: Bool
 
     private enum CodingKeys: String, CodingKey {
@@ -362,7 +362,7 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
     public let pickWithinM: Double?
     /// Whether you have a connection (contract v3.4): a Moment with no location needs one. Nil from an older server.
     public let hasConnections: Bool?
-    /// The sheet may offer "Show height" here (contract v3.8): heights are on for you and it isn't your home.
+    /// The sheet may offer "Show elevation" here (contract v3.8): heights are on for you and it isn't your home.
     public let canShowHeight: Bool
 
     private enum CodingKeys: String, CodingKey {

@@ -54,7 +54,7 @@ struct MomentsHeightRail: Equatable {
 
     /// What VoiceOver reads for the rail.
     var spoken: String {
-        var parts = ["Height scale, 0 to \(top.formatted()) feet"]
+        var parts = ["Elevation scale, 0 to \(top.formatted()) feet"]
         parts.append("this Moment at \(showing.height.feet.formatted()) feet")
         parts += others.map { "\($0.author.shortName) at \($0.height.feet.formatted()) feet" }
         if let you { parts.append("you at \(you.formatted()) feet") }
@@ -113,7 +113,8 @@ struct MomentsViewerHeightTag: View {
         // The viewer is always dark; the tag is white, with the light colours.
         .environment(\.colorScheme, .light)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Height: " + height.spoken)
+        // A flight's number is an altitude, not an elevation: its own words say so.
+        .accessibilityLabel(height.flying ? height.spoken.capitalizedFirst : "Elevation: " + height.spoken)
         .accessibilityIdentifier("moments.viewer.height")
     }
 }
@@ -249,6 +250,13 @@ extension MomentsViewer {
     /// Where the phone's rail starts under the stage's top, and how long it is: under the header, above the caption.
     static let railTop: CGFloat = 126
     static let railBelow: CGFloat = 180
+}
+
+private extension String {
+    /// "posted in flight at 34,000 feet" as a sentence of its own.
+    var capitalizedFirst: String {
+        prefix(1).uppercased() + dropFirst()
+    }
 }
 
 private extension Double {

@@ -44,14 +44,14 @@ struct MomentsHeightFrame: Equatable {
 /// pin later, where a change to the view model isn't seen: reading it there left the tags as they were until
 /// something else redrew the map.
 struct MomentsHeightTagPlan: Equatable {
-    /// "Heights" is on.
+    /// "Elevation" is on.
     let shown: Bool
     /// The rings that carry a tag, and where round the ring it sits.
     let sides: [String: MomentsPinTag.Side]
 
     static let off = MomentsHeightTagPlan(shown: false, sides: [:])
 
-    /// What VoiceOver adds to a ring: its height while "Heights" is on, drawn or not.
+    /// What VoiceOver adds to a ring: its height while "Elevation" is on, drawn or not.
     func spoken(_ ring: MomentRingDTO) -> MomentShownHeight? {
         shown ? ring.shownHeight : nil
     }

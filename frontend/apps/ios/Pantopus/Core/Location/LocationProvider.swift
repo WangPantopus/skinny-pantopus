@@ -24,7 +24,7 @@ public struct UserCoordinate: Sendable, Hashable {
 }
 
 /// How high a fix, or an album photo, says the phone was: metres above sea level, with how far off that may be and
-/// the phone's speed when the source says. A Moment's "Show height" sends it.
+/// the phone's speed when the source says. A Moment's "Show elevation" sends it.
 public struct HeightReading: Sendable, Hashable {
     public let meters: Double
     public let accuracyMeters: Double?
