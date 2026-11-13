@@ -142,7 +142,7 @@ data class MomentsMapResponse(
     val rings: List<MomentRingDto> = emptyList(),
     /** Connections' (and your own) Moments with no location, one ring per person, whatever the area (contract v3.4). */
     val unplaced: List<MomentRingDto> = emptyList(),
-    /** Heights are on for you (contract v3.9): the map offers "Heights". False from a server before it. */
+    /** Heights are on for you (contract v3.9): the map offers "Elevation". False from a server before it. */
     @Json(name = "heights_on") val heightsOn: Boolean = false,
 )
 
@@ -188,7 +188,7 @@ data class MomentPlacePreviewDto(
     @Json(name = "pick_within_m") val pickWithinM: Int? = null,
     /** Whether you have a connection (contract v3.4): a Moment with no location needs one. Null from an older server. */
     @Json(name = "has_connections") val hasConnections: Boolean? = null,
-    /** The sheet may offer "Show height" here (contract v3.8): heights are on for you and it isn't your home. */
+    /** The sheet may offer "Show elevation" here (contract v3.8): heights are on for you and it isn't your home. */
     @Json(name = "can_show_height") val canShowHeight: Boolean = false,
 )
 
@@ -235,12 +235,12 @@ data class CreateMomentBody(
     @Json(name = "taken_at") val takenAt: String? = null,
     /** A venue picked in the place picker around the pin (its `osm:` id, contract v3.3): the Moment pins there. */
     @Json(name = "venue_id") val venueId: String? = null,
-    /** "Show height" was on (contract v3.8); left out otherwise. */
+    /** "Show elevation" was on (contract v3.8); left out otherwise. */
     val altitude: MomentAltitudeBody? = null,
 )
 
 /**
- * "Show height" (contract v3.8): how high above sea level the fix, or the album photo, says the Moment was made, with
+ * "Show elevation" (contract v3.8): how high above sea level the fix, or the album photo, says the Moment was made, with
  * how far off that may be and the phone's speed (which tells a flight from a mountain) when the phone knows them.
  */
 @JsonClass(generateAdapter = true)

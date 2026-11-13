@@ -650,7 +650,7 @@ private fun NoLocationRow(
 }
 
 /**
- * "Show height" (board H1): how high above sea level the phone, or the album photo, says this is, as everyone will read
+ * "Show elevation" (board H1): how high above sea level the phone, or the album photo, says this is, as everyone will read
  * it (rounded to 10 ft). Only on the sheet where it may be shown ([MomentsComposeUiState.offersHeight]).
  */
 @Composable
@@ -670,7 +670,7 @@ private fun HeightRow(
                 .clickable(role = Role.Switch) { onShowHeight(!on) }
                 .testTag("moments.post.height")
                 .clearAndSetSemantics {
-                    contentDescription = "Show height. $line"
+                    contentDescription = "Show elevation. $line"
                     role = Role.Switch
                     selected = on
                 },
@@ -678,7 +678,7 @@ private fun HeightRow(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(text = "Show height", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appText)
+            Text(text = "Show elevation", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appText)
             Text(text = line, fontSize = 12.5.sp, lineHeight = 16.sp, color = PantopusColors.appTextSecondary)
         }
         Switch(

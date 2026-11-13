@@ -57,8 +57,8 @@ import app.pantopus.android.ui.theme.pantopusShadow
  * own meaning (sky to green while new, gray once watched), so the band's color is on the tag, always with the number.
  * Crowded spots and rings fanned out round one spot carry none yet.
  *
- * Under the map's top row, at the left: the "Heights" chip turns the tags on and off (kept on the phone, per account;
- * they start on), and beside it the key's five colors open the key ("Height above sea level") and close it again. The
+ * Under the map's top row, at the left: the "Elevation" chip turns the tags on and off (kept on the phone, per account;
+ * they start on), and beside it the key's five colors open the key ("Elevation above sea level") and close it again. The
  * board's key is a card at the bottom of the map; the real map's bottom holds Play all, +, the row of faces and the
  * cards, so the key opens here instead and goes when the map is moved. All of it shows only while the map's answer
  * says heights are on for you (`heights_on`, contract v3.9).
@@ -72,7 +72,7 @@ internal class MomentsHeightsActions(
 )
 
 /**
- * What the map's pins need to know about height tags: whether "Heights" is on, and the west and east edges of the
+ * What the map's pins need to know about height tags: whether "Elevation" is on, and the west and east edges of the
  * map when it last settled (null before it has). Tags are laid out like a map's own labels: each takes the place after
  * its ring if nothing is there, else before it, else over it (board F1 draws them on either side), and where none of
  * the three has room (another pin, another tag, the edge of the map) it isn't drawn until the map is zoomed in. So
@@ -179,10 +179,10 @@ private fun HeightsChip(
                 .padding(horizontal = 14.dp)
                 .testTag("moments.heights.chip")
                 .clearAndSetSemantics {
-                    contentDescription = "Heights"
+                    contentDescription = "Elevation"
                     stateDescription = if (on) "On" else "Off"
                     role = Role.Switch
-                    onClick(label = if (on) "Hide heights" else "Show heights") {
+                    onClick(label = if (on) "Hide elevation" else "Show elevation") {
                         onToggle()
                         true
                     }
@@ -191,7 +191,7 @@ private fun HeightsChip(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         PantopusIconImage(icon = PantopusIcon.Mountain, contentDescription = null, size = 17.dp, tint = ink)
-        Text(text = "Heights", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1)
+        Text(text = "Elevation", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1)
         if (on) PantopusIconImage(icon = PantopusIcon.Check, contentDescription = null, size = 14.dp, strokeWidth = 2.75f, tint = ink)
     }
 }
@@ -211,7 +211,7 @@ private fun HeightKeyButton(
                 .padding(horizontal = Spacing.s3)
                 .testTag("moments.heights.keyButton")
                 .clearAndSetSemantics {
-                    contentDescription = "Height colors"
+                    contentDescription = "Elevation colors"
                     stateDescription = if (open) "Open" else "Closed"
                     role = Role.Button
                     onClick(label = if (open) "Close" else "Show what each color means") {
@@ -236,10 +236,10 @@ private fun HeightKeyButton(
     }
 }
 
-/** Board H2's key: "Height above sea level", a bar per band with where it starts, and flying. */
+/** Board H2's key: "Elevation above sea level", a bar per band with where it starts, and flying. */
 @Composable
 private fun HeightKey(onClose: () -> Unit) {
-    val spoken = "Height above sea level: " + MomentHeightBand.entries.joinToString("; ") { it.spoken }
+    val spoken = "Elevation above sea level: " + MomentHeightBand.entries.joinToString("; ") { it.spoken }
     Column(
         modifier =
             Modifier
@@ -263,7 +263,7 @@ private fun HeightKey(onClose: () -> Unit) {
                 },
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(text = "Height above sea level", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+        Text(text = "Elevation above sea level", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
             MomentHeightBand.entries.forEach { band ->
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {

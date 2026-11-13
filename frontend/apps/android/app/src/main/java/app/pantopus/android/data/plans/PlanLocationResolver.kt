@@ -107,7 +107,7 @@ class PlanLocationResolver
             return PlanGpsFix(coordinate.latitude, coordinate.longitude, Instant.now())
         }
 
-        /** How high the fix [newFix] just gave says the phone is, above sea level (a Moment's "Show height"). */
+        /** How high the fix [newFix] just gave says the phone is, above sea level (a Moment's "Show elevation"). */
         suspend fun fixHeight(): HeightReading? = if (hasLocationPermission()) gps.cachedHeight() else null
 
         private suspend fun fromGps(timeoutMs: Long = FIX_TIMEOUT_MS): PlanLocation? {

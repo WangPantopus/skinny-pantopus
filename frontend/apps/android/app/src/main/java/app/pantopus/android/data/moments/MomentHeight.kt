@@ -9,7 +9,7 @@ import kotlin.math.roundToInt
 
 /**
  * The server's rules for a Moment's height (`shownAltitude` in backend/services/moments/momentStore.js), mirrored, so
- * the Post sheet offers "Show height" only for a reading the server will keep and shows the number everyone will read.
+ * the Post sheet offers "Show elevation" only for a reading the server will keep and shows the number everyone will read.
  */
 object MomentHeight {
     private const val MIN_METERS = -500.0

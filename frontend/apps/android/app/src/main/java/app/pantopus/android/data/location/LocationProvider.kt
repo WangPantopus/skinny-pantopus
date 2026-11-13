@@ -27,7 +27,7 @@ data class UserCoordinate(
 
 /**
  * How high a fix, or an album photo, says the phone was: metres above mean sea level, with how far off that may be and
- * the phone's speed when the source says. A Moment's "Show height" sends it.
+ * the phone's speed when the source says. A Moment's "Show elevation" sends it.
  */
 data class HeightReading(
     val meters: Double,
@@ -52,7 +52,7 @@ interface LocationProvider {
 
     /**
      * The height of the fix [cachedCoordinate] answers with, above mean sea level; null when the phone has none it can
-     * vouch for. Worked out only when asked (a Moment's "Show height"), so no other location read pays for it.
+     * vouch for. Worked out only when asked (a Moment's "Show elevation"), so no other location read pays for it.
      */
     suspend fun cachedHeight(): HeightReading? = null
 }

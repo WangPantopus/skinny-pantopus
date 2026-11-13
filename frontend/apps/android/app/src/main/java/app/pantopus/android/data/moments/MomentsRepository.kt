@@ -70,7 +70,7 @@ class MomentsRepository
 
         private val _heightsOn = MutableStateFlow(false)
 
-        /** Heights are on for you, as the last map read said (contract v3.9): the map offers "Heights". */
+        /** Heights are on for you, as the last map read said (contract v3.9): the map offers "Elevation". */
         val heightsOn: StateFlow<Boolean> = _heightsOn.asStateFlow()
 
         private val _watched = MutableStateFlow<Set<String>>(emptySet())

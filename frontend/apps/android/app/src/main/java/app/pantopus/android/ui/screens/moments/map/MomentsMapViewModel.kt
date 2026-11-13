@@ -163,7 +163,7 @@ data class MomentsMapUiState(
     val spot: MomentsSpot? = null,
     /** Moment heights (`MomentsHeights.kt`): on for you, as the map's answer says. */
     val heightsOn: Boolean = false,
-    /** The "Heights" chip turned the pins' tags off (kept on the phone, per account; they start on). */
+    /** The "Elevation" chip turned the pins' tags off (kept on the phone, per account; they start on). */
     val heightTagsOff: Boolean = false,
     /** The color key under the chip is open. */
     val heightKeyOpen: Boolean = false,
@@ -195,7 +195,7 @@ class MomentsMapViewModel
         private val feature: MomentsFeature,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
-        /** The "Heights" chip's last choice on this phone, per account (`MomentsHeights.kt`). */
+        /** The "Elevation" chip's last choice on this phone, per account (`MomentsHeights.kt`). */
         private val choices = context.getSharedPreferences(HEIGHTS_PREFS, Context.MODE_PRIVATE)
         private val heightTagsOffKey: String? =
             (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id?.let { "$it.heightTagsOff" }
@@ -428,7 +428,7 @@ class MomentsMapViewModel
             _state.update { it.copy(spot = null) }
         }
 
-        /** The "Heights" chip: the pins' tags on or off, kept on the phone per account. The key goes with the tags. */
+        /** The "Elevation" chip: the pins' tags on or off, kept on the phone per account. The key goes with the tags. */
         fun toggleHeightTags() {
             val off = !_state.value.heightTagsOff
             _state.update { it.copy(heightTagsOff = off, heightKeyOpen = it.heightKeyOpen && !off) }

@@ -339,7 +339,7 @@ class IconTest {
             "circle-dashed",
             "volume-2",
             "volume-x",
-            // Moment heights: the "Heights" chip and a Moment's height.
+            // Moment heights: the "Elevation" chip and a Moment's height.
             "mountain",
         )
 
