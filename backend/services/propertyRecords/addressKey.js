@@ -248,8 +248,10 @@ const LETTERED_HOUSE = /^(?:BLOQUE\s+|BLQ\s+)?([A-Z]{1,2})-?\s?(\d+[A-Z]?)\s+(.+
 const BLOCK_HOUSE = /^(?:BLOQUE|BLQ)\s+(\d+)\s*[-#]?\s*(\d+[A-Z]?)\s+(.+)$/;
 // A road and its kilometer: CARR 123 KM 5.2, CARR 123 KM 5 HM 2.
 const KILOMETER = /^((?:CARR|CARRETERA|RD|ROUTE|PR)\s*-?\s*\d+[A-Z]?(?:\s+R\d+)?)\s+(?:KM|K)\s*([\d.]+)(?:\s+(?:HM|H)\s*(\d+))?$/;
-// The house number and any half: "123", "123 1/2", "123A", "12-34"; Wisconsin's grid: "N89W16785".
-const HOUSE = /^(\d+[A-Z]?(?:-\d+[A-Z]?)?|[NSEW]\d+\s?[NSEW]\d+)(?:\s+(\d\/\d))?\s+(.+)$/;
+// The house number and any half: "123", "123 1/2", "123A", "12-34"; Wisconsin's grid: "N89W16785"; a grid number with one
+// direction: "N1234" (Eagle County CO writes it after the street name, so a person types it first). Tried last, so it reads
+// only lines that read as nothing otherwise.
+const HOUSE = /^(\d+[A-Z]?(?:-\d+[A-Z]?)?|[NSEW]\d+\s?[NSEW]\d+|[NSEW]\d+)(?:\s+(\d\/\d))?\s+(.+)$/;
 const POST_OFFICE_BOX = /^(?:P ?O ?BOX|POST OFFICE BOX|POB|BOX|APARTADO|APDO)\s*#?\s*([A-Z0-9-]+)$/;
 const ROUTE_BOX = /^((?:RR|R R|RURAL ROUTE|RURAL RTE|RFD|R F D|RT|RTE|ROUTE|HC|HCR|H C R|HIGHWAY CONTRACT ROUTE|HIGHWAY CONTRACT|STAR ROUTE))\s*(\d+)\s+(?:BOX|BX)\s*#?\s*([A-Z0-9-]+(?:\s[A-Z])?)$/;
 // PSC 3 BOX 1234, CMR 450 BOX 123, UNIT 2050 BOX 4190, OMC 1 BOX 3, OPC 1 BOX 3 (as USPS writes some, through Google).
