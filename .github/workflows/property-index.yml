@@ -155,7 +155,7 @@ jobs:
 
   publish:
     name: Build and publish
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && inputs.action != 'switch' && inputs.action != 'shared-facts' && inputs.action != 'similar-homes' && inputs.action != 'appeal-packet' && inputs.action != 'listed-units'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && inputs.action != 'switch' && inputs.action != 'shared-facts' && inputs.action != 'similar-homes' && inputs.action != 'appeal-packet' && inputs.action != 'listed-units' && inputs.action != 'new-columns' && inputs.action != 'derived-rows'
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     environment: property-index
