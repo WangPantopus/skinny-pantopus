@@ -339,6 +339,8 @@ class IconTest {
             "circle-dashed",
             "volume-2",
             "volume-x",
+            // Moment heights: the "Heights" chip and a Moment's height.
+            "mountain",
         )
 
     @Test

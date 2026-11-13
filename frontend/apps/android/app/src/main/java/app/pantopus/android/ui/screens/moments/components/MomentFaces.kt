@@ -250,6 +250,9 @@ private val PinShadow = PantopusElevation(Color.Black, 0.30f, 3.dp, 0.dp, 2.dp)
 /** Where a map pin's point is, from its top: the overlay places that spot on the Moment's location. */
 val MOMENT_PIN_ANCHOR_FROM_TOP: Dp = 71.dp
 
+/** A map pin's width, which is also its ring's height (the tail is below): a height tag sits level with the ring. */
+val MOMENT_PIN_WIDTH: Dp = 64.dp
+
 /**
  * A ring on the map (board M1): a 64 × 72 pin in the surface color with the face inside the ring and the check of a
  * verified resident at its lower right. [seen] holds each Moment's watched state, oldest first. With a [preview] the
