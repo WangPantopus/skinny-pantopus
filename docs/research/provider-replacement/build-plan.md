@@ -406,6 +406,14 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
   reconciled; then remove Lob's key and webhook.
 - **Size:** S.
 
+## WP17-WP25. Proposed November 11
+
+The founder raised the bar on November 11 to every row of Property details for every address. The packages that would
+reach it are proposed in [full-page-plan.md](full-page-plan.md#7-proposed-packages): refresh safety (WP17), Clark
+County's full page (WP18), derived rows (WP19), unread columns and the two scores (WP20), measured rows (WP21), ZIP+4
+(WP22), a licensed copy (WP23), public layers past the page (WP24) and household documents (WP25). The rules above apply
+to each. None has started; each waits for the founder's yes, and WP21-WP23 for decisions D13-D15.
+
 ## What this plan can't verify on its own
 
 Hosted services and their data (key presence, stored copies), live vendor answers and billing, physical

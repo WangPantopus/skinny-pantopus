@@ -1,6 +1,6 @@
 # Replacing ATTOM, Smarty and Lob: research, design and build plan
 
-November 5, 2026; updated November 7. PR #3418, merged on the founder's OK. This package is the research, design and plan.
+November 5, 2026; updated November 7 and November 11. PR #3418, merged on the founder's OK. This package is the research, design and plan.
 The build is under way ([HANDOFF.md](HANDOFF.md)), and nothing is decided beyond what [decisions.md](decisions.md) marks as
 the founder's. This package merges PR #3418 (national coverage, sources, prices,
 the ATTOM flow, unit floor plans) and PR #3433 (code audit, the 46-field test by property type, identity contract,
@@ -47,7 +47,9 @@ can be Pantopus's own. Details: [architecture.md](architecture.md).
 
 The founder decided the goal, nationwide scope, no paid ATTOM plan, replace nothing until proven, the seven corrections
 from the #3433 review, on November 6 D1, D2, D5 and P1 and the bar: really exceed these three services, and on November 7
-landing built work first and D9. Open, with recommendations: D6-D8, D10-D12 and proposals P2-P5. All in [decisions.md](decisions.md).
+landing built work first and D9. On November 11 the founder raised the bar to every row of Property details for every
+address; the review and proposed plan are in [full-page-plan.md](full-page-plan.md). Open, with recommendations:
+D6-D8, D10-D17 and proposals P2-P6. All in [decisions.md](decisions.md).
 
 ## How to read this package
 
@@ -66,6 +68,7 @@ landing built work first and D9. Open, with recommendations: D6-D8, D10-D12 and 
 | [parity-and-acceptance.md](parity-and-acceptance.md) | Truth sets, exact-unit precision, service objectives, sample design, how a switch is made | Proving a package |
 | [reliability.md](reliability.md) | Measured speed against the service objectives, and every failure row and drill with its result (November 7) | Checking an objective, or rerunning a drill |
 | [build-plan.md](build-plan.md) | Work packages WP0-WP16 with files, switches, gates, checks, rollout and rollback | Building |
+| [full-page-plan.md](full-page-plan.md) | The November 11 review: every Property details row measured across storage, what the plan can't reach, five labeled layers, and proposed packages WP17-WP25 | Deciding what comes next |
 | [cost-and-rights.md](cost-and-rights.md) | Costs, prices, the rights register and Google retention plans | Anything that costs money or keeps data |
 | [public-records-requests.md](public-records-requests.md) | Requests for the 41 large counties without a free file, prices found, and why not to scrape lookup sites | Sending requests or buying a file |
 | [statewide-inventory.md](statewide-inventory.md) | Every state's and territory's statewide parcel, assessment and building-fact files, ranked by homes gained beyond storage | Adding statewide sources (WP7) |

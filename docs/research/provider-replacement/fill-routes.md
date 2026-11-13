@@ -82,6 +82,11 @@ about $74-$199 a month at today's volume. Filling all 30M homes that way would c
 isn't a fit. Any vendor fact would carry the vendor's name, never appear as a county record, and need the founder's
 signature (D2 keeps resellers out until then).
 
+**Correction, November 11:** the $450,000 figure assumed one request per home. RentCast bills per request, and one
+request returns up to 500 records, so the 30M homes are about 60,000 requests, about $1,000 at its listed prices, and
+every home in the country about $5,000. Whether to use a licensed copy at all is decision D13:
+[full-page-plan.md](full-page-plan.md#51-a-licensed-copy-costs-about-5000-not-450000).
+
 ## How a fill works (built November 7)
 
 - A county's own file is joined to the records already in storage by parcel number. Only facts a record lacks are
