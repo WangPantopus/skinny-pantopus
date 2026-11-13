@@ -4,7 +4,10 @@
 //
 //  Nearby Plans sits behind two server flags (Plans build brief, section 3),
 //  both off by default: `plans` (everything) and `plans_playdates`
-//  (playdates, on top of `plans`). The app reads them at launch and on
+//  (playdates, on top of `plans`). A third, `plans_business` (Plans with
+//  businesses), only decides what the app shows outside Plans' own answers:
+//  the team permissions "Post plans" and "Run plans". Inside Plans the server
+//  decides, by sending a business's plan or not. The app reads them at launch and on
 //  foreground through `GET /api/feature-flags/:flagName`, which honors
 //  `enabled_for_internal_team` and `beta_user_ids`, so pilot testers can have
 //  Plans before everyone else.
@@ -28,6 +31,8 @@ final class PlansFlags {
     private(set) var plans = false
     /// Playdates are on too (never without `plans`).
     private(set) var playdates = false
+    /// Plans with businesses is on too (never without `plans`).
+    private(set) var business = false
 
     /// Checks closer together than this reuse the last answer.
     static let recheckAfter: TimeInterval = 30
@@ -49,7 +54,7 @@ final class PlansFlags {
         guard let newAccount else {
             account = nil
             lastChecked = nil
-            apply(plans: false, playdates: false)
+            apply(plans: false, playdates: false, business: false)
             return
         }
         if newAccount != account {
@@ -91,25 +96,32 @@ final class PlansFlags {
         let api = injectedAPI ?? APIClient.shared
         async let plansAnswer = Self.read("plans", api: api)
         async let playdatesAnswer = Self.read("plans_playdates", api: api)
-        let answers = await (plans: plansAnswer, playdates: playdatesAnswer)
+        async let businessAnswer = Self.read("plans_business", api: api)
+        let answers = await (plans: plansAnswer, playdates: playdatesAnswer, business: businessAnswer)
         // An account switch while the check ran: its answers aren't this account's.
         guard account == checked else { return }
         let plansOn = answers.plans ?? plans
         let playdatesOn = answers.playdates ?? playdates
+        let businessOn = answers.business ?? business
         if answers.plans != nil || answers.playdates != nil { lastChecked = Date() }
-        apply(plans: plansOn, playdates: plansOn && playdatesOn)
-        defaults.set([plans, playdates], forKey: Self.key(checked))
+        apply(plans: plansOn, playdates: plansOn && playdatesOn, business: plansOn && businessOn)
+        defaults.set([plans, playdates, business], forKey: Self.key(checked))
     }
 
     private func restore(for account: String) {
         let saved = defaults.array(forKey: Self.key(account)) as? [Bool] ?? []
         let plansOn = saved.first ?? false
-        apply(plans: plansOn, playdates: plansOn && saved.dropFirst().first == true)
+        apply(
+            plans: plansOn,
+            playdates: plansOn && saved.dropFirst().first == true,
+            business: plansOn && saved.dropFirst(2).first == true
+        )
     }
 
-    private func apply(plans plansOn: Bool, playdates playdatesOn: Bool) {
+    private func apply(plans plansOn: Bool, playdates playdatesOn: Bool, business businessOn: Bool) {
         if plans != plansOn { plans = plansOn }
         if playdates != playdatesOn { playdates = playdatesOn }
+        if business != businessOn { business = businessOn }
     }
 
     /// The flag's answer, or nil when it couldn't be read (offline, 5xx).
