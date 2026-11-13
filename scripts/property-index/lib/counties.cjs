@@ -179,4 +179,4 @@ function loadCounties(work) {
   return { locate, names: new Map(counties.map((county) => [county.fips, county.name])) };
 }
 
-module.exports = { loadCounties };
+module.exports = { loadCounties, readDbf, readShp, inRings };
