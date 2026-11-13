@@ -5,6 +5,7 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.plans.AcceptRequestBody
 import app.pantopus.android.data.api.models.plans.AskToJoinBody
 import app.pantopus.android.data.api.models.plans.AskToJoinResponse
+import app.pantopus.android.data.api.models.plans.BusinessPlansResponse
 import app.pantopus.android.data.api.models.plans.CancelPlanBody
 import app.pantopus.android.data.api.models.plans.CreatePlanBody
 import app.pantopus.android.data.api.models.plans.FeatureFlagResponse
@@ -120,6 +121,15 @@ interface PlansApi {
      */
     @GET("api/plans/host-as")
     suspend fun hostAs(): HostAsResponse
+
+    /**
+     * `GET /api/businesses/:id/plans` (Plans with businesses, B6): the business's upcoming plans for its page. Empty
+     * for anyone its plans don't exist for; 404 while Plans is off. Route `backend/routes/businesses.js:4650`.
+     */
+    @GET("api/businesses/{id}/plans")
+    suspend fun businessPlans(
+        @Path("id") businessUserId: String,
+    ): BusinessPlansResponse
 
     /** `POST /api/plans` (201 with the detail). */
     @POST("api/plans")

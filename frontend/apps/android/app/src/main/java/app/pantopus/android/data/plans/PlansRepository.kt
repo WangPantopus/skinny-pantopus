@@ -331,6 +331,17 @@ class PlansRepository
         suspend fun hostAs(): List<HostAsBusinessDto> =
             (safeApiCall { api.hostAs() } as? NetworkResult.Success)?.data?.businesses.orEmpty()
 
+        /**
+         * A business's upcoming plans for its page (B6). Empty while Plans or the switch is off, for a business with
+         * none, and on any failure: the page then shows no section at all.
+         */
+        suspend fun businessPlans(businessUserId: String): List<PlanDto> {
+            val session = cacheSession()
+            val items = (safeApiCall { api.businessPlans(businessUserId) } as? NetworkResult.Success)?.data?.items.orEmpty()
+            items.forEach { rememberCard(it, session) }
+            return items
+        }
+
         suspend fun create(body: CreatePlanBody): NetworkResult<PlanDto> {
             val session = cacheSession()
             return write { api.create(body) }.also { rememberResult(it, session) }

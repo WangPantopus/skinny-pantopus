@@ -114,6 +114,9 @@ class PlanDetailViewModel
 
         /** An email or text invitation's token (`?invite=`): the plan opens it for this account first. */
         private val inviteToken: String? = savedStateHandle.get<String>(PlansRoutes.INVITE_KEY)?.takeIf(String::isNotBlank)
+
+        /** How the person came to a business's plan, when the app knows (`business_page`), sent with the ask. */
+        private val via: String? = savedStateHandle.get<String>(PlansRoutes.VIA_KEY)?.takeIf { it == PlansRoutes.VIA_BUSINESS_PAGE }
         private var inviteClaimed = false
 
         private val _ui = MutableStateFlow(PlanDetailUi(viewerId = feature.viewerId))
@@ -376,7 +379,7 @@ class PlanDetailViewModel
                         )
                     } else {
                         AskToJoinBody(partySize = draft.partySize, note = draft.note.trim().takeIf(String::isNotEmpty))
-                    }
+                    }.copy(via = via.takeIf { plan.business != null })
                 when (val result = repository.ask(planId, body)) {
                     is NetworkResult.Success -> {
                         val status = PlanRequestStatus.from(result.data.request?.status)

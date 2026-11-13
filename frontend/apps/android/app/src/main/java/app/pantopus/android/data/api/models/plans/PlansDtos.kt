@@ -704,6 +704,13 @@ data class HostAsBusinessDto(
     @Json(name = "limits") val limits: HostAsLimitsDto = HostAsLimitsDto(),
 )
 
+/** `GET /api/businesses/:id/plans` (B6): the business's upcoming plans, soonest first and not folded. */
+@JsonClass(generateAdapter = true)
+data class BusinessPlansResponse(
+    @Json(name = "items") val items: List<PlanDto> = emptyList(),
+    @Json(name = "plans_hosted") val plansHosted: Int = 0,
+)
+
 /** `GET /api/plans/host-as`: empty for nearly everyone; "Host as" shows only when it isn't. */
 @JsonClass(generateAdapter = true)
 data class HostAsResponse(
