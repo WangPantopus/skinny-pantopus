@@ -38,6 +38,7 @@ import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.PlanViewerStanding
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
 import app.pantopus.android.data.plans.standing
@@ -61,7 +62,6 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.roundToInt
-import app.pantopus.android.data.plans.isBusiness
 
 /** Height of the map at the top of a plan page (boards J1 to J9, H9). */
 val PLAN_MAP_HEIGHT: Dp = 236.dp

@@ -40,6 +40,7 @@ import app.pantopus.android.data.plans.KidsAgeBand
 import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.isAtHome
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
@@ -62,7 +63,6 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
-import app.pantopus.android.data.plans.isBusiness
 
 /** H10: the people who asked to join a plan you host. */
 @Composable

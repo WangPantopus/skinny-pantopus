@@ -27,11 +27,13 @@ import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanRequestStatus
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.hostApproves
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenBusiness
 import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
 import app.pantopus.android.ui.screens.plans.components.PlanBannerTone
@@ -45,19 +47,17 @@ import app.pantopus.android.ui.screens.plans.components.PlanTextButton
 import app.pantopus.android.ui.screens.plans.components.PlanTypeTag
 import app.pantopus.android.ui.screens.plans.components.planCard
 import app.pantopus.android.ui.screens.plans.map.PlanListRow
+import app.pantopus.android.ui.screens.plans.map.askWord
 import app.pantopus.android.ui.screens.plans.map.hostCaption
 import app.pantopus.android.ui.screens.plans.map.planH2
 import app.pantopus.android.ui.screens.plans.map.planH4
+import app.pantopus.android.ui.screens.plans.opensPlanBusiness
 import app.pantopus.android.ui.screens.plans.opensPlanProfile
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
-import app.pantopus.android.data.plans.isBusiness
-import app.pantopus.android.ui.screens.plans.LocalPlanOpenBusiness
-import app.pantopus.android.ui.screens.plans.opensPlanBusiness
-import app.pantopus.android.ui.screens.plans.map.askWord
 
 /** The host's first name for sentences ("Sam approves each person"). */
 internal val PlanDto.hostFirst: String get() = PlanFormat.hostName(this)

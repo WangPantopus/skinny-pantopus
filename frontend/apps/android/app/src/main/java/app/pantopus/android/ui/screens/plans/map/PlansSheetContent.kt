@@ -29,7 +29,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -43,19 +45,27 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
+import app.pantopus.android.data.api.models.plans.PlanMoreTimeDto
+import app.pantopus.android.data.api.models.plans.PlanMoreTimesDto
 import app.pantopus.android.data.plans.PlanFormat
+import app.pantopus.android.data.plans.PlanHostFilter
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.PlanViewerStanding
 import app.pantopus.android.data.plans.PlanWindow
 import app.pantopus.android.data.plans.hostApproves
 import app.pantopus.android.data.plans.isAtHome
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
@@ -65,6 +75,8 @@ import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.components.LocalPlanSheet
+import app.pantopus.android.ui.screens.plans.components.PLAN_BUSINESS_SPOKEN
+import app.pantopus.android.ui.screens.plans.components.PLAN_FREE
 import app.pantopus.android.ui.screens.plans.components.PlanDivider
 import app.pantopus.android.ui.screens.plans.components.PlanHostRow
 import app.pantopus.android.ui.screens.plans.components.PlanIconTile
@@ -73,6 +85,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanOverline
 import app.pantopus.android.ui.screens.plans.components.PlanRow
 import app.pantopus.android.ui.screens.plans.components.PlanRowEnd
 import app.pantopus.android.ui.screens.plans.components.PlanScopeLine
+import app.pantopus.android.ui.screens.plans.components.PlanSegmented
 import app.pantopus.android.ui.screens.plans.components.PlanSpotsCaption
 import app.pantopus.android.ui.screens.plans.components.PlanSpotsMeter
 import app.pantopus.android.ui.screens.plans.components.PlanStackButton
@@ -91,19 +104,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.semantics.stateDescription
-import app.pantopus.android.data.api.models.plans.PlanMoreTimeDto
-import app.pantopus.android.data.api.models.plans.PlanMoreTimesDto
-import app.pantopus.android.data.plans.PlanHostFilter
-import app.pantopus.android.data.plans.isBusiness
-import app.pantopus.android.ui.screens.plans.components.PLAN_BUSINESS_SPOKEN
-import app.pantopus.android.ui.screens.plans.components.PLAN_FREE
-import app.pantopus.android.ui.screens.plans.components.PlanSegmented
 
 /** h4 on the boards: 17/22 semibold. */
 internal val planH4 = PantopusTextStyle.body.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)

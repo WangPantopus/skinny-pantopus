@@ -36,6 +36,7 @@ import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.PlanViewerStanding
 import app.pantopus.android.data.plans.hasPrivatePart
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planState
 import app.pantopus.android.data.plans.standing
@@ -49,11 +50,10 @@ import app.pantopus.android.ui.screens.place.HubVerificationTarget
 import app.pantopus.android.ui.screens.plans.components.PlanTextButton
 import app.pantopus.android.ui.screens.plans.map.PlanRowsSkeleton
 import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.launch
-import app.pantopus.android.data.plans.isBusiness
-import app.pantopus.android.ui.theme.PantopusIcon
 
 /** The report reasons a plan offers (the posts report queue's vocabulary), in iOS's order. */
 private val reportReasons =

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanPersonDto
 import app.pantopus.android.data.plans.PlanFormat
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.ui.components.GhostButton
@@ -51,7 +52,6 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
-import app.pantopus.android.data.plans.isBusiness
 
 /**
  * J7: you're in. The exact place, the host's note, the people going and the group chat, only for people who are

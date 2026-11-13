@@ -29,6 +29,8 @@ import app.pantopus.android.data.plans.KidsAgeBand
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanViewerStanding
+import app.pantopus.android.data.plans.hostApproves
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.standing
@@ -47,8 +49,6 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
-import app.pantopus.android.data.plans.isBusiness
-import app.pantopus.android.data.plans.hostApproves
 
 /** The most people one request can bring (brief section 4: party size 1 to 4). */
 private const val MAX_PARTY = 4

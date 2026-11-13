@@ -15,8 +15,8 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanHostFilter
 import app.pantopus.android.data.plans.PlanKind
-import app.pantopus.android.data.plans.PlanLocation
 import app.pantopus.android.data.plans.PlanListChoices
+import app.pantopus.android.data.plans.PlanLocation
 import app.pantopus.android.data.plans.PlanLocationResolver
 import app.pantopus.android.data.plans.PlanOrigin
 import app.pantopus.android.data.plans.PlanState
