@@ -19,6 +19,7 @@ const { verifiedUserIds } = require('./planViewer');
 const { localDisplayNames } = require('../../utils/identityProfiles');
 const { loadChatPeople } = require('../chatPeople');
 const rules = require('./planRules');
+const planBusiness = require('./planBusiness');
 const { canReadPostModeration, postScopeAccess } = require('../pulse/readAccess');
 
 // planInvites requires this module; it is read when called.
@@ -30,6 +31,8 @@ const PLAN_COLUMNS = [
   'area_label', 'city', 'details', 'guest_note', 'place_name', 'place_address', 'place_latitude',
   'place_longitude', 'place_home_id', 'place_ref', 'timezone', 'status', 'cancel_note', 'chat_room_id',
   'chat_closed_at', 'host_summary_sent_at', 'created_at', 'updated_at', 'cancelled_at', 'ended_at',
+  // Plans with businesses: empty on a neighbor's plan.
+  'business_user_id', 'posted_by_user_id', 'business_location_id', 'label', 'guests_can_invite',
 ].join(', ');
 const PLAN_SELECT = `${PLAN_COLUMNS}, post:Post!inner(${POST_COLUMNS})`;
 const REQUEST_COLUMNS = [
@@ -70,6 +73,16 @@ function displayName(user) {
   if (words.length === 1) return words[0];
   const last = words[words.length - 1].replace(/[^\p{L}\p{N}]/gu, '');
   return last ? `${words[0]} ${last[0].toUpperCase()}.` : words[0];
+}
+
+/** The name a plan's host goes by: a business's own name whole, a person's as "Sam R.". */
+function hostName(plan, host) {
+  return plan.business_user_id ? (plan.business?.name || 'A business') : displayName(host);
+}
+
+/** The host's picture: a business's own for a business's plan, else the photo the person shows neighbors. */
+function hostAvatar(plan, host) {
+  return plan.business_user_id ? (plan.business?.avatar_url || null) : avatarUrl(host);
 }
 
 function firstName(user) {
@@ -127,14 +140,22 @@ function exactPoint(plan) {
  * The host always may. Cancelled and ended plans stay visible by id so
  * people can see what happened; the lists and the map leave them out.
  */
-function isVisibleTo(plan, viewer) {
+function isVisibleTo(plan, viewer, { involved = false } = {}) {
   if (!plan || !plan.post) return false;
-  if (!canReadPostModeration(plan.post, viewer.id, viewer.role === 'admin')) return false;
+  // A business's plan exists only for a viewer with the switch, in an app that can draw it, while the business
+  // may still host (planBusiness.shownTo). That goes for the business's own team too. Once the business may no
+  // longer host, only the people already involved keep reading it, so a guest can leave and the team can cancel:
+  // whoever runs it, and anyone `involved` (the caller knows they are in or waiting).
+  const runsIt = planBusiness.runsPlan(plan, viewer);
+  if (plan.business_user_id && !planBusiness.shownTo(plan, viewer, { involved: runsIt || involved })) return false;
+  // A held or removed plan is read by its author; for a business's plan that is whoever runs it.
+  if (!canReadPostModeration(plan.post, runsIt ? String(plan.post.user_id) : viewer.id, viewer.role === 'admin')) return false;
   const reviewingHeld = plan.post.moderation_state === 'held' && viewer.role === 'admin';
   if (!reviewingHeld && plan.post.read_scope != null && !viewer.scopeAccess?.allows(plan.post)) return false;
   const hostId = String(plan.host_user_id);
-  if (hostId === viewer.id) return true;
-  if (plan.kind === 'playdate' && !viewer.seesPlaydates) return false;
+  if (runsIt) return true;
+  // A neighbor's playdate needs the playdates switch. A business's session for kids has its own (shownTo).
+  if (plan.kind === 'playdate' && !plan.business_user_id && !viewer.seesPlaydates) return false;
   if (viewer.blockedUserIds.has(hostId)) return false;
   if (viewer.mutedUserIds.has(hostId)) return false;
   if (viewer.hiddenPostIds.has(plan.post_id)) return false;
@@ -148,7 +169,7 @@ async function loadPlanRows(postIds) {
   if (ids.length === 0) return [];
   const { data, error } = await supabaseAdmin.from('Plan').select(PLAN_SELECT).in('post_id', ids);
   if (error) throw new Error(`Failed to load plans: ${error.message}`);
-  return data || [];
+  return planBusiness.attachBusinessHosts(data || []);
 }
 
 async function loadPlanRow(postId) {
@@ -180,10 +201,12 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
     // The viewer's own open invitation to each plan, and for plans they host, how their invitations stand.
     myInviteByPlan: new Map(),
     inviteCountsByPlan: new Map(),
+    // A venue's later plans, folded under its soonest one (listNearby): the lead plan's id → the others.
+    moreTimesByPlan: new Map(),
   };
   if (planIds.length === 0) return ctx;
 
-  const hostedIds = plans.filter((p) => String(p.host_user_id) === viewer.id).map((p) => p.post_id);
+  const hostedIds = plans.filter((p) => planBusiness.runsPlan(p, viewer)).map((p) => p.post_id);
   const [activeRequests, myRequests, openCount, hostedRows, myHistory, myInvites, inviteCounts] = await Promise.all([
     supabaseAdmin.from('PlanRequest').select(REQUEST_COLUMNS).in('post_id', planIds).in('status', ACTIVE_REQUEST_STATUSES),
     supabaseAdmin.from('PlanRequest').select(REQUEST_COLUMNS).in('post_id', planIds).eq('user_id', viewer.id),
@@ -230,10 +253,11 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
     }
   }
   // The host sees, for each person in, whether they've hosted them before and how many plans they've joined.
-  const hostedPeople = withPeople
-    ? plans.filter((plan) => String(plan.host_user_id) === viewer.id)
-      .flatMap((plan) => (ctx.requestsByPlan.get(plan.post_id) || []).filter((r) => r.status === 'accepted').map((r) => String(r.user_id)))
-    : [];
+  const hostedPlans = withPeople ? plans.filter((plan) => planBusiness.runsPlan(plan, viewer)) : [];
+  const hostedPeople = hostedPlans
+    .flatMap((plan) => (ctx.requestsByPlan.get(plan.post_id) || []).filter((r) => r.status === 'accepted').map((r) => String(r.user_id)));
+  // "Hosted before" is about the plan's host: the business, for a plan the viewer runs for one.
+  const statsHostId = hostedPlans[0] ? String(hostedPlans[0].host_user_id) : viewer.id;
   const [users, names, people, verified, mutual, answerMinutes, peopleStats] = await Promise.all([
     supabaseAdmin.from('User').select(USER_COLUMNS).in('id', [...userIds]),
     localDisplayNames([...userIds]),
@@ -241,7 +265,7 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
     verifiedUserIds([...userIds]),
     mutualConnectionCounts(viewer.id, hostIds),
     typicalAnswerMinutes(hostIds),
-    requesterStats(viewer.id, hostedPeople),
+    requesterStats(statsHostId, hostedPeople),
   ]);
   if (users.error) throw new Error(`Failed to load people: ${users.error.message}`);
   for (const user of users.data || []) {
@@ -369,7 +393,7 @@ function waitlistOrder(requests) {
 }
 
 function viewerRole(plan, viewer, myRequest) {
-  if (String(plan.host_user_id) === viewer.id) return 'host';
+  if (planBusiness.runsPlan(plan, viewer)) return 'host';
   if (myRequest?.status === 'accepted') return 'guest';
   return 'none';
 }
@@ -389,6 +413,8 @@ function nearestLocationMeters(plan, viewer) {
 /** Which automatic rule would let this viewer in right now, if any. */
 function matchingAutoRule(plan, viewer, ctx) {
   const autoRules = Array.isArray(plan.auto_rules) ? plan.auto_rules : [];
+  // A business's plan has one rule: "right away, anyone" (for kids' sessions too), or the business approves each.
+  if (plan.business_user_id) return autoRules.includes('open') ? 'open' : null;
   if (autoRules.length === 0 || plan.kind === 'playdate') return null;
   if (autoRules.includes('hosted_before') && ctx.hostedByHost.has(String(plan.host_user_id))) return 'hosted_before';
   if (plan.place_kind === 'home') return null;
@@ -406,7 +432,7 @@ function matchingAutoRule(plan, viewer, ctx) {
  */
 function askEligibility(plan, viewer, ctx, { myRequest, spotsLeft, state }) {
   const no = (reason) => ({ can_ask: false, cannot_ask_reason: reason });
-  if (String(plan.host_user_id) === viewer.id) return no(null);
+  if (planBusiness.runsPlan(plan, viewer)) return no(null);
   if (myRequest && ACTIVE_REQUEST_STATUSES.includes(myRequest.status)) return no(null);
   if (state === 'cancelled' || state === 'ended') return no('ended');
   if (!rules.isAskingOpen(plan, startsAt(plan), endsAt(plan))) return no('ended');
@@ -490,7 +516,8 @@ function buildCard(plan, viewer, ctx) {
   const spotsLeft = Math.max(0, plan.spots - going);
   const waitlist = waitlistOrder(requests);
   const state = rules.planState(plan, startsAt(plan), endsAt(plan), now);
-  const hideTime = plan.kind === 'playdate' && !isIn;
+  // A neighbor's playdate keeps its time until the family is in. A business's session for kids is a public class.
+  const hideTime = plan.kind === 'playdate' && !isIn && !plan.business_user_id;
   const area = areaPoint(plan);
   const local = rules.localParts(startsAt(plan), rules.timezoneForPlan(plan));
   const myWaitIndex = myRequest?.status === 'waitlisted'
@@ -519,14 +546,14 @@ function buildCard(plan, viewer, ctx) {
       city: plan.city || null,
       latitude: area ? area.latitude : null,
       longitude: area ? area.longitude : null,
-      precision: plan.kind === 'playdate' ? 'neighborhood' : 'area',
+      precision: plan.kind === 'playdate' && !plan.business_user_id ? 'neighborhood' : 'area',
     },
     distance_band: distanceFrom && area ? rules.distanceBandFromMeters(rules.distanceMeters(distanceFrom, area)) : null,
     place_kind: plan.place_kind,
     host: {
       user_id: hostId,
-      display_name: displayName(host),
-      avatar_url: avatarUrl(host),
+      display_name: hostName(plan, host),
+      avatar_url: hostAvatar(plan, host),
       verified_address: ctx.verified.has(hostId),
       plans_hosted: ctx.hostedCount.get(hostId) || 0,
       kind_hosted: ctx.hostedKindCount.get(`${hostId}:${plan.kind}`) || 0,
@@ -570,7 +597,78 @@ function buildCard(plan, viewer, ctx) {
       cant_make_it: counts.declined || 0,
     };
   }
+  if (plan.business_user_id) addBusinessFields(card, plan, viewer, ctx);
   return card;
+}
+
+/**
+ * What a business's plan adds to its card (the build contract's section 5.4). Only ever sent to a viewer the
+ * plan is shown to (isVisibleTo), so only to an app that asked for it; a neighbor's plan gets none of these keys.
+ * The place is public for a business's plan: it is the business's own address.
+ */
+function addBusinessFields(card, plan, viewer, ctx) {
+  const exact = exactPoint(plan);
+  card.business = planBusiness.publicBusiness(plan, { plansHosted: ctx.hostedCount.get(String(plan.host_user_id)) || 0 });
+  const label = planBusiness.labelView(plan);
+  card.label = label ? label.key : null;
+  card.label_text = label ? label.text : null;
+  card.place = {
+    name: plan.place_name || plan.area_label,
+    address: plan.place_address || null,
+    latitude: exact.latitude,
+    longitude: exact.longitude,
+  };
+  if (viewer.origin) card.distance_band = rules.distanceBandFromMeters(rules.distanceMeters(viewer.origin, exact));
+  // Free until paid spots are built: null is "Free".
+  card.price = null;
+  card.guests_can_invite = Boolean(plan.guests_can_invite);
+  card.more_times = moreTimesView(ctx.moreTimesByPlan?.get(plan.post_id));
+}
+
+const MORE_TIMES_SHOWN = 6;
+
+/** A venue's later plans folded under its soonest: how many, and the first few as short lines. */
+function moreTimesView(others) {
+  if (!others || others.length === 0) return null;
+  return {
+    count: others.length,
+    items: others.slice(0, MORE_TIMES_SHOWN).map((plan) => {
+      const label = planBusiness.labelView(plan);
+      return {
+        id: plan.post_id,
+        title: plan.post.title,
+        label: label ? label.key : null,
+        label_text: label ? label.text : null,
+        starts_at: startsAt(plan),
+        timezone: rules.timezoneForPlan(plan),
+      };
+    }),
+  };
+}
+
+/**
+ * One row and one pin for a venue: of a business's plans at one of its locations, the soonest leads and the
+ * later ones fold under it. `plans` is soonest first; neighbors' plans pass through untouched.
+ * @returns {{ plans: object[], more: Map<string, object[]> }} the list without the folded plans, and each
+ *   lead plan's id → the plans folded under it
+ */
+function foldVenues(plans) {
+  const leads = new Map();
+  const more = new Map();
+  const kept = [];
+  for (const plan of plans) {
+    if (!plan.business_user_id) { kept.push(plan); continue; }
+    const venue = `${plan.business_user_id}:${plan.business_location_id}`;
+    const lead = leads.get(venue);
+    if (!lead) {
+      leads.set(venue, plan);
+      kept.push(plan);
+    } else {
+      if (!more.has(lead.post_id)) more.set(lead.post_id, []);
+      more.get(lead.post_id).push(plan);
+    }
+  }
+  return { plans: kept, more };
 }
 
 /** PlanDetail: the card plus the private parts, only for the host and people who are in. */
@@ -597,8 +695,8 @@ function buildDetail(plan, viewer, ctx) {
 
   const people = [{
     user_id: hostId,
-    display_name: displayName(host),
-    avatar_url: avatarUrl(host),
+    display_name: hostName(plan, host),
+    avatar_url: hostAvatar(plan, host),
     party_size: 1,
     verified_address: ctx.verified.has(hostId),
     is_host: true,
@@ -630,12 +728,24 @@ function buildDetail(plan, viewer, ctx) {
       entry.hosted_before = stats.hosted_before;
       entry.plans_joined = stats.plans_joined;
       entry.new_to_pantopus = isNewAccount(person);
+      if (plan.business_user_id) {
+        // A business's team sees less than a neighbor host: a first name, who is coming, and whether they have
+        // been before. Never a last initial, how far away they live, their address standing or what else they
+        // have joined.
+        entry.display_name = firstName(person);
+        entry.verified_address = false;
+        entry.distance_band = null;
+        entry.plans_joined = 0;
+        entry.new_to_pantopus = false;
+      }
     }
     people.push(entry);
   }
   card.people = people;
-  card.chat_room_id = plan.chat_room_id || null;
-  card.chat_open = Boolean(plan.chat_room_id) && !plan.chat_closed_at && plan.status !== 'cancelled';
+  // A business's team is not in its plan's chat yet (planChat.ensureRoom): the room is the guests'.
+  const hasChat = Boolean(plan.chat_room_id) && !(plan.business_user_id && viewerIsHost);
+  card.chat_room_id = hasChat ? plan.chat_room_id : null;
+  card.chat_open = hasChat && !plan.chat_closed_at && plan.status !== 'cancelled';
   if (plan.status === 'cancelled') card.cancel_note = plan.cancel_note || null;
   return card;
 }
@@ -690,8 +800,11 @@ function boundingBox(point, radiusMeters) {
   };
 }
 
-/** Open plans whose public area point is inside the box. */
-async function queryOpenPlansInBox(box, { kinds, scopeAccess } = {}) {
+/**
+ * Open plans whose public area point is inside the box. Businesses' plans are read only with `biz` (a viewer
+ * they exist for: `viewer.biz`), and come back with their business attached.
+ */
+async function queryOpenPlansInBox(box, { kinds, scopeAccess, biz = false } = {}) {
   let query = supabaseAdmin
     .from('Plan')
     .select(PLAN_SELECT)
@@ -705,10 +818,11 @@ async function queryOpenPlansInBox(box, { kinds, scopeAccess } = {}) {
     .lte('post.longitude', box.east)
     .limit(500);
   if (kinds && kinds.length > 0) query = query.in('kind', kinds);
+  if (!biz) query = query.is('business_user_id', null);
   query = (scopeAccess || await postScopeAccess(null)).query(query, 'post');
   const { data, error } = await query;
   if (error) throw new Error(`Failed to load nearby plans: ${error.message}`);
-  return data || [];
+  return biz ? planBusiness.attachBusinessHosts(data || []) : data || [];
 }
 
 function encodeCursor(plan) {
@@ -731,12 +845,27 @@ function soonestFirst(a, b) {
   return (new Date(startsAt(a)) - new Date(startsAt(b))) || String(a.post_id).localeCompare(String(b.post_id));
 }
 
-/** GET /api/plans: the list under the map, soonest first, within 5 miles of the point. */
-async function listNearby(viewer, { point, window = 'week', kinds = [], cursor = null }) {
+/** Who hosts: `all`, `neighbors` or `businesses` (the list's filter). Anything else is `all`. */
+function hostFilter(value) {
+  return value === 'neighbors' || value === 'businesses' ? value : 'all';
+}
+
+function hostedBy(plan, host) {
+  if (host === 'neighbors') return !plan.business_user_id;
+  if (host === 'businesses') return Boolean(plan.business_user_id);
+  return true;
+}
+
+/**
+ * GET /api/plans: the list under the map, soonest first, within 5 miles of the point. Neighbors' and
+ * businesses' plans share the one order; nothing moves a plan up. For a viewer businesses' plans exist for,
+ * `host` filters by who hosts, and a venue's later plans fold under its soonest.
+ */
+async function listNearby(viewer, { point, window = 'week', kinds = [], cursor = null, host = 'all' }) {
   const box = boundingBox(point, rules.LIST_RADIUS_METERS);
-  const rows = await queryOpenPlansInBox(box, { kinds, scopeAccess: viewer.scopeAccess });
+  const rows = await queryOpenPlansInBox(box, { kinds, scopeAccess: viewer.scopeAccess, biz: viewer.biz });
   const after = decodeCursor(cursor);
-  const matching = rows
+  const inWindow = rows
     .filter((plan) => isVisibleTo(plan, viewer))
     .filter((plan) => {
       const area = areaPoint(plan);
@@ -744,7 +873,10 @@ async function listNearby(viewer, { point, window = 'week', kinds = [], cursor =
       return d != null && d <= rules.LIST_RADIUS_METERS;
     })
     .filter((plan) => windowMatches(plan, window))
-    .sort(soonestFirst)
+    .sort(soonestFirst);
+  const wanted = viewer.biz ? hostFilter(host) : 'all';
+  const folded = foldVenues(inWindow.filter((plan) => hostedBy(plan, wanted)));
+  const matching = folded.plans
     .filter((plan) => {
       if (!after) return true;
       const t = new Date(startsAt(plan)).getTime();
@@ -753,6 +885,7 @@ async function listNearby(viewer, { point, window = 'week', kinds = [], cursor =
 
   const page = matching.slice(0, PAGE_SIZE);
   const ctx = await loadCardContext(page, viewer);
+  ctx.moreTimesByPlan = folded.more;
   const items = page.map((plan) => buildCard(plan, viewer, ctx));
   const nextCursor = matching.length > PAGE_SIZE ? encodeCursor(page[page.length - 1]) : null;
 
@@ -760,13 +893,16 @@ async function listNearby(viewer, { point, window = 'week', kinds = [], cursor =
   if (items.length === 0 && !after) {
     nearestElsewhere = await findNearestElsewhere(viewer, point, { window, kinds });
   }
-  return { items, next_cursor: nextCursor, nearest_elsewhere: nearestElsewhere };
+  const result = { items, next_cursor: nextCursor, nearest_elsewhere: nearestElsewhere };
+  // The app shows the All / Neighbors / Businesses filter only once a business has a plan here.
+  if (viewer.biz) result.has_business_plans = inWindow.some((plan) => plan.business_user_id);
+  return result;
 }
 
 /** For the empty list (F4): the closest town with plans within 15 miles, as a count and a band. */
 async function findNearestElsewhere(viewer, point, { window, kinds }) {
   try {
-    const rows = await queryOpenPlansInBox(boundingBox(point, 15 * rules.MILE_METERS), { kinds, scopeAccess: viewer.scopeAccess });
+    const rows = await queryOpenPlansInBox(boundingBox(point, 15 * rules.MILE_METERS), { kinds, scopeAccess: viewer.scopeAccess, biz: viewer.biz });
     const byCity = new Map();
     for (const plan of rows) {
       if (!isVisibleTo(plan, viewer) || !windowMatches(plan, window)) continue;
@@ -796,7 +932,10 @@ async function findNearestElsewhere(viewer, point, { window, kinds }) {
 async function listMine(viewer) {
   const nowIso = new Date().toISOString();
   const recentIso = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-  const [hosting, requests, invitedIds] = await Promise.all([
+  // The plans of the businesses the viewer posts or runs plans for, read apart from their own so that neither
+  // crowds the other out of its limit (buildCard gives the host's card only for the ones they run).
+  const businessIds = [...new Set([...(viewer.businessPost || []), ...(viewer.businessManage || [])])];
+  const [hosting, requests, invitedIds, businessHosting] = await Promise.all([
     supabaseAdmin.from('Plan').select(PLAN_SELECT)
       .eq('host_user_id', viewer.id)
       .in('status', ['open', 'ended'])
@@ -808,14 +947,26 @@ async function listMine(viewer) {
       .in('status', ACTIVE_REQUEST_STATUSES)
       .limit(200),
     invites().invitedPlanIds(viewer.id),
+    businessIds.length === 0 ? { data: [] } : supabaseAdmin.from('Plan').select(PLAN_SELECT)
+      .in('business_user_id', businessIds)
+      .in('status', ['open', 'ended'])
+      .gt('post.event_end_date', recentIso)
+      .order('created_at', { ascending: false })
+      .limit(200),
   ]);
   if (hosting.error) throw new Error(`Failed to load your plans: ${hosting.error.message}`);
   if (requests.error) throw new Error(`Failed to load your requests: ${requests.error.message}`);
+  if (businessHosting.error) throw new Error(`Failed to load your business's plans: ${businessHosting.error.message}`);
 
-  const requestedRows = await loadPlanRows([...(requests.data || []).map((r) => r.post_id), ...invitedIds]);
+  // The plans the viewer is in or waiting on: they keep reading those even when a business may no longer host.
+  const involvedIds = new Set((requests.data || []).map((r) => r.post_id));
+  const requestedRows = await loadPlanRows([...involvedIds, ...invitedIds]);
   const all = new Map();
-  for (const plan of [...(hosting.data || []), ...requestedRows]) all.set(plan.post_id, plan);
-  const visible = [...all.values()].filter((plan) => isVisibleTo(plan, viewer) && plan.status !== 'cancelled');
+  for (const plan of [...(hosting.data || []), ...await planBusiness.attachBusinessHosts(businessHosting.data || []), ...requestedRows]) {
+    all.set(plan.post_id, plan);
+  }
+  const visible = [...all.values()]
+    .filter((plan) => isVisibleTo(plan, viewer, { involved: involvedIds.has(plan.post_id) }) && plan.status !== 'cancelled');
   const ctx = await loadCardContext(visible, viewer);
 
   const out = {
@@ -848,6 +999,49 @@ async function listMine(viewer) {
 }
 
 /**
+ * Is this viewer in, or waiting on, this business's plan? Asked only in the rare state where it matters: the
+ * plan's business may no longer host, and the viewer would otherwise lose a plan they still have to leave.
+ * No read for a neighbor's plan, a business in good standing, or a viewer businesses' plans don't exist for.
+ */
+async function isInvolved(plan, viewer) {
+  if (!plan || !plan.business_user_id || !viewer.biz || planBusiness.shownTo(plan, viewer)) return false;
+  const { data, error } = await supabaseAdmin.from('PlanRequest').select('id')
+    .eq('post_id', plan.post_id).eq('user_id', viewer.id).in('status', ACTIVE_REQUEST_STATUSES).limit(1);
+  if (error) throw new Error(`Failed to load your request: ${error.message}`);
+  return Boolean(data && data.length);
+}
+
+const BUSINESS_PAGE_PLANS = 20;
+
+/**
+ * GET /api/businesses/:id/plans: a business's upcoming plans for its page (board B6), soonest first, as cards.
+ * Only what this viewer may see: nothing without the switch, from an app that can't draw them, or once the
+ * business may no longer host. `plans_hosted` counts the plans it has finished.
+ */
+async function listForBusiness(viewer, businessUserId) {
+  const empty = { items: [], plans_hosted: 0 };
+  if (!viewer.biz || !isUuid(businessUserId)) return empty;
+  const { data, error } = await supabaseAdmin.from('Plan').select(PLAN_SELECT)
+    .eq('business_user_id', businessUserId)
+    .eq('status', 'open')
+    .is('post.archived_at', null)
+    .eq('post.moderation_state', 'live')
+    .gt('post.event_end_date', new Date().toISOString())
+    .limit(100);
+  if (error) throw new Error(`Failed to load the business's plans: ${error.message}`);
+  const visible = (await planBusiness.attachBusinessHosts(data || []))
+    .filter((plan) => isVisibleTo(plan, viewer))
+    .sort(soonestFirst)
+    .slice(0, BUSINESS_PAGE_PLANS);
+  if (visible.length === 0) return empty;
+  const ctx = await loadCardContext(visible, viewer);
+  return {
+    items: visible.map((plan) => buildCard(plan, viewer, ctx)),
+    plans_hosted: ctx.hostedCount.get(String(businessUserId)) || 0,
+  };
+}
+
+/**
  * GET /api/plans/:id: PlanDetail for the host and people who are in, PlanCard
  * for everyone else who may see it, null (404) otherwise.
  */
@@ -855,7 +1049,7 @@ async function getForViewer(postId, viewer) {
   if (!isUuid(postId)) return { plan: null, body: null };
   const plan = await loadPlanRow(postId);
   if (!plan) return { plan: null, body: null };
-  if (!isVisibleTo(plan, viewer)) return { plan, body: null };
+  if (!isVisibleTo(plan, viewer, { involved: await isInvolved(plan, viewer) })) return { plan, body: null };
   const ctx = await loadCardContext([plan], viewer, { withPeople: true });
   return { plan, body: buildDetail(plan, viewer, ctx) };
 }
@@ -867,6 +1061,8 @@ module.exports = {
   ACTIVE_REQUEST_STATUSES,
   OPEN_REQUEST_STATUSES,
   displayName,
+  hostName,
+  hostAvatar,
   firstName,
   avatarUrl,
   withLocalAvatar,
@@ -878,6 +1074,7 @@ module.exports = {
   iso,
   isUuid,
   isVisibleTo,
+  isInvolved,
   loadPlanRow,
   loadPlanRows,
   loadCardContext,
@@ -898,4 +1095,9 @@ module.exports = {
   queryOpenPlansInBox,
   windowMatches,
   boundingBox,
+  soonestFirst,
+  listForBusiness,
+  foldVenues,
+  hostFilter,
+  hostedBy,
 };

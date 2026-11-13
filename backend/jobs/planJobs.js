@@ -28,8 +28,9 @@ const rules = require('../services/plans/planRules');
 const planService = require('../services/plans/planService');
 const planChat = require('../services/plans/planChat');
 const planNotify = require('../services/plans/planNotifications');
+const planBusiness = require('../services/plans/planBusiness');
 const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
-const { activeRequests, waitingRequests, userNames, firstOf } = require('../services/plans/planActions');
+const { activeRequests, waitingRequests, userNames, firstOf, cancelForGoneBusiness } = require('../services/plans/planActions');
 
 const PLAN_NOTICE_TYPES = [
   'plan_request', 'plan_accepted', 'plan_declined', 'plan_reminder', 'plan_changed',
@@ -47,9 +48,13 @@ const STILL_COMING_MIN_GAP_MS = HOUR_MS;
 
 const iso = (d) => new Date(d).toISOString();
 
+/** What each plan's host is called in a notice: a person's first name, a business's own name. */
 async function hostFirstNames(plans) {
-  const names = await userNames(plans.map((p) => p.host_user_id));
-  return (plan) => firstOf(names.get(String(plan.host_user_id)));
+  await planBusiness.attachBusinessHosts(plans);
+  const names = await userNames(plans.filter((p) => !p.business_user_id).map((p) => p.host_user_id));
+  return (plan) => (plan.business_user_id
+    ? plan.business?.name || 'The host'
+    : firstOf(names.get(String(plan.host_user_id))));
 }
 
 // ── 1. Held pushes ───────────────────────────────────────────
@@ -348,16 +353,50 @@ async function sendHostSummaries() {
       spotsLeft: Math.max(0, plan.spots - going),
       requestsCount: (await waitingRequests(plan, requests)).length,
     };
-    // The letter takes the push's place; one that can't be written leaves the push to go as before.
-    const letter = asLetter ? await planNotify.hostSummaryLetter({ ...summary, roundAt: cutoff }) : null;
+    // The letter takes the push's place; one that can't be written leaves the push to go as before. A business's
+    // account has no mailbox anyone opens: its team gets the notice.
+    const letter = asLetter && !plan.business_user_id ? await planNotify.hostSummaryLetter({ ...summary, roundAt: cutoff }) : null;
     if (!letter) await planNotify.hostSummary(summary);
     sent += 1;
   }
   return sent;
 }
 
+/**
+ * Plans with businesses: a business that has left Pantopus has nobody to run its plans. Its open ones are
+ * cancelled and the people in, waiting or invited are told. Costs one small read a tick, and finds nothing while
+ * no business hosts a plan.
+ */
+async function cancelGoneBusinessPlans() {
+  const { data, error } = await supabaseAdmin
+    .from('Plan')
+    .select(planService.PLAN_SELECT)
+    .eq('status', 'open')
+    .not('business_user_id', 'is', null)
+    .gt('post.event_end_date', new Date().toISOString())
+    .limit(300);
+  if (error) throw new Error(`Failed to read businesses' plans: ${error.message}`);
+  let cancelled = 0;
+  for (const plan of await planBusiness.attachBusinessHosts(data || [])) {
+    if (plan.business) continue;
+    try {
+      if (await cancelForGoneBusiness(plan)) cancelled += 1;
+    } catch (err) {
+      logger.warn('plans.tick.gone_business_cancel_failed', { planId: plan.post_id, error: err.message });
+    }
+  }
+  return cancelled;
+}
+
 async function runPlansTick() {
   const released = await releaseHeldPushes();
+  // Before the reminders: nobody is reminded of a plan whose business has left.
+  let goneCancelled = 0;
+  try {
+    goneCancelled = await cancelGoneBusinessPlans();
+  } catch (err) {
+    logger.warn('plans.tick.gone_business_failed', { error: err.message });
+  }
   const lifecycle = await closeAskingAndEnd();
   // Before reminders: asked again at a plan's reminder time, the reminder isn't sent as well.
   const askedAgain = await sendStillComingReminders();
@@ -386,8 +425,9 @@ async function runPlansTick() {
   }
   const result = {
     released, ...lifecycle, askedAgain, reminders, summaries, ...(nudges ? { nudges } : {}), ...(alerts ? { alerts } : {}), ...(repeats ? { repeats } : {}),
+    ...(goneCancelled ? { goneCancelled } : {}),
   };
-  if (released || askedAgain || reminders || summaries || lifecycle.expiredCount || lifecycle.endedCount || lifecycle.closedCount
+  if (released || askedAgain || reminders || summaries || goneCancelled || lifecycle.expiredCount || lifecycle.endedCount || lifecycle.closedCount
     || (nudges && nudges.sent) || alerts || repeats) {
     logger.info('plans.tick', result);
   }

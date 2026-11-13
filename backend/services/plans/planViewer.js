@@ -103,7 +103,9 @@ function parseGps(raw) {
 }
 
 /**
- * @param {{ id: string, role?: string }} user  req.user
+ * @param {{ id: string, role?: string, plansBiz?: boolean }} user  req.user. `plansBiz`: the request said the app
+ *   can draw a business's plan (`biz=1`, set by the Plans routes). Without it, and for every job and nudge, a
+ *   business's plan does not exist for this viewer, and nothing about businesses is read.
  * @param {{ gps?: object, point?: { latitude: number, longitude: number } }} [opts]
  *   gps: a fix the app sent with this request (counts as a location for 5 minutes);
  *   point: where the app is looking from (the map or list center), used for distances
@@ -111,7 +113,9 @@ function parseGps(raw) {
  */
 async function loadViewer(user, opts = {}) {
   const userId = String(user.id);
-  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess, sportsFlag, invitesFlag] = await Promise.all([
+  const bizMarker = user.plansBiz === true;
+  const planBusiness = require('./planBusiness');
+  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess, sportsFlag, invitesFlag, bizFlag, bizKidsFlag] = await Promise.all([
     isFeatureEnabled('plans_playdates', user),
     getMuteAndHideFilters(userId),
     loadHomes(userId),
@@ -119,7 +123,12 @@ async function loadViewer(user, opts = {}) {
     postScopeAccess(userId),
     isFeatureEnabled('plans_sports', user),
     isFeatureEnabled('plans_invites', user),
+    bizMarker ? isFeatureEnabled(planBusiness.FLAG, user) : false,
+    bizMarker ? isFeatureEnabled(planBusiness.KIDS_FLAG, user) : false,
   ]);
+  // Plans with businesses: on only for a person who has the switch, in an app that can draw a business's plan.
+  const biz = Boolean(bizMarker && bizFlag);
+  const team = await planBusiness.teamRolesOf(userId, { enabled: biz });
   const gps = parseGps(opts.gps);
   const verified = homes.some((home) => home.verified);
 
@@ -158,6 +167,13 @@ async function loadViewer(user, opts = {}) {
     sportsFlag: Boolean(sportsFlag),
     // Hosts can invite people (planInvites.js).
     invitesFlag: Boolean(invitesFlag),
+    // Plans with businesses (planBusiness.js): whether a business's plan exists for this viewer, whether one
+    // for kids does, and the businesses whose plans they post or run.
+    biz,
+    bizKids: Boolean(biz && bizKidsFlag),
+    bizMarker,
+    businessPost: team.post,
+    businessManage: team.manage,
     sports: filters.sports || {},
     homes,
     savedPlaces,

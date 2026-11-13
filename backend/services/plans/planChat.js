@@ -34,7 +34,16 @@ function leaveSockets(io, userId, roomId) {
   for (const socketId of sockets) io?.sockets?.sockets?.get(socketId)?.leave(roomId);
 }
 
-/** The plan's room, made at the first acceptance with the host as its owner. */
+/**
+ * The plan's room, made at the first acceptance with the host as its owner.
+ *
+ * A business's plan: the room is the guests'. The business's account is NOT put in it. A room a business is in
+ * belongs to the business inbox (routes/chats.js), which every team member who may write in the business's task
+ * chats can open, read and be pushed from, whatever their Plans permissions, with guests' full display names.
+ * So until Plans has its own rule for the team in a plan's chat, the team is out of it: the business's lines
+ * ("Lacamas Pickleball Club changed the place") still appear, written here as the plan's host, which the room's
+ * write rule allows without a seat in the room.
+ */
 async function ensureRoom(plan, { io = null } = {}) {
   if (plan.chat_room_id) return plan.chat_room_id;
   const { data: room, error } = await supabaseAdmin
@@ -65,7 +74,7 @@ async function ensureRoom(plan, { io = null } = {}) {
     return plan.chat_room_id;
   }
   plan.chat_room_id = room.id;
-  await addMember(room.id, plan.host_user_id, { role: 'owner', io });
+  if (!plan.business_user_id) await addMember(room.id, plan.host_user_id, { role: 'owner', io });
   // Everyone already in joins too (the room opens with the first acceptance).
   const { data: inAlready } = await supabaseAdmin
     .from('PlanRequest').select('user_id').eq('post_id', plan.post_id).eq('status', 'accepted');

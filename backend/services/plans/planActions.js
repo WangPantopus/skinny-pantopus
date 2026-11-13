@@ -23,6 +23,8 @@ const planPlace = require('./planPlace');
 const planChat = require('./planChat');
 const planNotify = require('./planNotifications');
 const planInvites = require('./planInvites');
+const planBusiness = require('./planBusiness');
+const businessActing = require('../businessActing');
 const { findGame } = require('./planGames');
 
 class PlanError extends Error {
@@ -53,14 +55,36 @@ const nowIso = () => new Date().toISOString();
 async function loadVisiblePlan(postId, viewer) {
   if (!planService.isUuid(postId)) fail(404, 'not_found', "This plan isn't available.");
   const plan = await planService.loadPlanRow(postId);
-  if (!plan || !planService.isVisibleTo(plan, viewer)) fail(404, 'not_found', "This plan isn't available.");
+  // Someone in or waiting on a business's plan keeps it after the business may no longer host, so they can leave.
+  if (!plan || !planService.isVisibleTo(plan, viewer, { involved: await planService.isInvolved(plan, viewer) })) {
+    fail(404, 'not_found', "This plan isn't available.");
+  }
   return plan;
 }
 
 async function loadHostedPlan(postId, viewer) {
   const plan = await loadVisiblePlan(postId, viewer);
-  if (String(plan.host_user_id) !== viewer.id) fail(403, 'not_host', 'Only the host can do that.');
+  // A neighbor's plan: its host. A business's plan: the team members who run its plans (planBusiness.runsPlan).
+  if (!planBusiness.runsPlan(plan, viewer)) fail(403, 'not_host', 'Only the host can do that.');
   return plan;
+}
+
+/**
+ * What a plan's host is called in a notice or a chat line: a person's first name, a business's own name. It is
+ * read from the plan, never from whoever is acting, so a staff member running a business's plan is never named.
+ */
+async function hostFirstOf(plan) {
+  if (plan.business_user_id) return plan.business?.name || 'The host';
+  const id = String(plan.host_user_id);
+  return firstOf((await userNames([id])).get(id));
+}
+
+/** The audit line for something done to a business's plan by one of its team. Nothing for a neighbor's plan. */
+function auditBusinessPlan(plan, viewer, action, metadata = {}) {
+  if (!plan.business_user_id) return Promise.resolve();
+  return businessActing.audit({
+    businessUserId: plan.business_user_id, actorUserId: viewer.id, action, targetType: 'plan', targetId: plan.post_id, metadata,
+  });
 }
 
 async function activeRequests(postId) {
@@ -120,20 +144,20 @@ function partyLabel(name, partySize) {
 
 /** The response body after a write: PlanDetail or PlanCard for the person who wrote. */
 async function planBodyFor(postId, viewer) {
-  const fresh = await loadViewer({ id: viewer.id, role: viewer.role }, { gps: viewer.gps, point: viewer.origin });
+  const fresh = await loadViewer({ id: viewer.id, role: viewer.role, plansBiz: viewer.bizMarker }, { gps: viewer.gps, point: viewer.origin });
   const { body } = await planService.getForViewer(postId, fresh);
   return body;
 }
 
 // ── Validation ───────────────────────────────────────────────
 
-function validateTimes(startsAt, endsAt, { allowPastStart = false } = {}) {
+function validateTimes(startsAt, endsAt, { allowPastStart = false, maxDaysAhead = rules.LIMITS.maxDaysAhead } = {}) {
   const start = new Date(startsAt).getTime();
   const end = new Date(endsAt).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end)) fail(422, 'validation', 'Choose when the plan starts and ends.');
   const now = Date.now();
   if (!allowPastStart && start < now - rules.LIMITS.startGraceMinutes * 60 * 1000) fail(422, 'validation', "A plan can't start in the past.");
-  if (start > now + rules.LIMITS.maxDaysAhead * 24 * 60 * 60 * 1000) fail(422, 'validation', 'Plans can start up to 14 days ahead.');
+  if (start > now + maxDaysAhead * 24 * 60 * 60 * 1000) fail(422, 'validation', `Plans can start up to ${maxDaysAhead} days ahead.`);
   const minutes = (end - start) / 60000;
   if (minutes < rules.LIMITS.minDurationMinutes) fail(422, 'validation', 'A plan lasts at least 15 minutes.');
   if (minutes > rules.LIMITS.maxDurationMinutes) fail(422, 'validation', 'A plan lasts at most 8 hours.');
@@ -337,20 +361,24 @@ async function assertHostLimits(userId) {
 async function checkedPlanInput(viewer, input) {
   const kind = input.kind;
   if (!rules.KINDS.includes(kind)) fail(422, 'validation', 'Choose what kind of plan this is.');
-  if (kind === 'playdate' && !viewer.playdatesFlag) fail(404, 'not_found', "Playdates aren't available yet.");
+  // Posting as a business (`host_as`): who may, for which business, where, and what it is called
+  // (planBusiness.checkedHostAs). Null for a neighbor's own plan, which is checked exactly as before.
+  const hostAs = input.host_as != null ? await planBusiness.checkedHostAs(viewer, input) : null;
+  if (!hostAs && kind === 'playdate' && !viewer.playdatesFlag) fail(404, 'not_found', "Playdates aren't available yet.");
 
   const title = cleanTitle(input.title);
   const about = cleanText(input.about, 500, 'About') || '';
   const guestNote = cleanText(input.guest_note, 500, 'The note');
-  validateTimes(input.starts_at, input.ends_at);
+  validateTimes(input.starts_at, input.ends_at, hostAs ? { maxDaysAhead: rules.BUSINESS_LIMITS.maxDaysAhead } : {});
   const spots = Number(input.spots);
   if (!Number.isInteger(spots) || spots < 1 || spots > 30) fail(422, 'validation', 'Spots can be 1 to 30.');
-  const place = resolvePlace(viewer, kind, input.place);
-  assertHostNear(viewer, place);
-  const autoRules = normalizeAutoRules(kind, place.kind, input.auto_rules);
+  // A business's plan is at one of its own locations: no home guard and no 3-mile rule.
+  const place = hostAs ? hostAs.place : resolvePlace(viewer, kind, input.place);
+  if (!hostAs) assertHostNear(viewer, place);
+  const autoRules = hostAs ? hostAs.autoRules : normalizeAutoRules(kind, place.kind, input.auto_rules);
   // Since November 7 no plan asks for a verified address, whatever this says (askEligibility). A playdate keeps
-  // 'verified' because the table's plan_playdate_rules check requires it.
-  const joinRequirement = kind === 'playdate' ? 'verified'
+  // 'verified' because the table's plan_playdate_rules check requires it of a neighbor's.
+  const joinRequirement = hostAs ? 'located' : kind === 'playdate' ? 'verified'
     : (oneOf(input.join_requirement, ['located', 'verified'], 'who can ask') || 'located');
   const resolvedGame = viewer.sportsFlag && kind === 'watch_party'
     ? await require('./planGames').resolveGame(input.details?.game?.id, input.details?.game?.team) : null;
@@ -358,8 +386,9 @@ async function checkedPlanInput(viewer, input) {
     fail(409, 'game_unavailable', 'This game is no longer available. Choose another game or enter your own.');
   }
   const details = normalizeDetails(kind, input.details, resolvedGame);
-  await assertHostLimits(viewer.id);
-  return { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details };
+  if (hostAs) await planBusiness.assertBusinessLimits(hostAs.business.id);
+  else await assertHostLimits(viewer.id);
+  return { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details, hostAs };
 }
 
 /**
@@ -402,21 +431,32 @@ async function previewPlan(user, input) {
 
 async function createPlan(user, input) {
   const viewer = await loadViewer(user, { gps: input.gps });
-  const repeat = await recentSamePlan(viewer.id, input);
+  // A second tap on the same "Post plan": a neighbor's is caught before the checks, as before; a business's
+  // after them, once the person is known to post for that business.
+  const repeat = input.host_as == null ? await recentSamePlan(viewer.id, input) : null;
   if (repeat) return planBodyFor(repeat, viewer);
-  const { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details } = await checkedPlanInput(viewer, input);
+  const { kind, title, about, guestNote, spots, place, autoRules, joinRequirement, details, hostAs } = await checkedPlanInput(viewer, input);
+  // The host: the person, or the business they post for. The business's own account is the plan's host and its
+  // post's author, so nothing a guest reads names the staff member (who is kept in posted_by_user_id).
+  const hostId = hostAs ? hostAs.business.id : viewer.id;
+  if (hostAs) {
+    const again = await recentSamePlan(hostId, input);
+    if (again) return planBodyFor(again, viewer);
+  }
 
   const area = planPlace.areaPointFor(kind, place.latitude, place.longitude);
-  const fallbackCity = place.home?.city || viewer.homes.find((h) => h.city)?.city || null;
+  // What the area is called when the map can't name it: the host's own city, or for a business's plan the
+  // location's (never the home city of the staff member posting).
+  const fallbackCity = hostAs ? place.city : place.home?.city || viewer.homes.find((h) => h.city)?.city || null;
   const { label, city } = await planPlace.areaLabelFor(area, { fallbackCity });
   const timezone = planPlace.timezoneFor(place.latitude, place.longitude);
   const startsAt = new Date(input.starts_at).toISOString();
   const endsAt = new Date(input.ends_at).toISOString();
-  const placeRef = await placeRefOf(place);
+  const placeRef = hostAs ? place.ref : await placeRefOf(place);
 
   const { data: post, error: postError } = await supabaseAdmin.from('Post').insert({
-    user_id: viewer.id,
-    author_user_id: viewer.id,
+    user_id: hostId,
+    author_user_id: hostId,
     title,
     content: about,
     post_type: 'event',
@@ -430,6 +470,9 @@ async function createPlan(user, input) {
     effective_longitude: area.longitude,
     location_name: label,
     location_address: null,
+    // A plan's post row is never shown as a post: it carries the plan's words, time and area for Plans alone.
+    // A business's is written the same way, under the business's account, with none of the fields that list a
+    // post on a business's page or its team's posts screen.
     post_as: 'personal',
     audience: 'nearby',
     distribution_targets: ['plans'],
@@ -447,7 +490,14 @@ async function createPlan(user, input) {
 
   const { error: planError } = await supabaseAdmin.from('Plan').insert({
     post_id: post.id,
-    host_user_id: viewer.id,
+    host_user_id: hostId,
+    ...(hostAs ? {
+      business_user_id: hostId,
+      posted_by_user_id: viewer.id,
+      business_location_id: place.business_location_id,
+      label: hostAs.label,
+      guests_can_invite: hostAs.guestsCanInvite,
+    } : {}),
     kind,
     spots,
     auto_rules: autoRules,
@@ -471,7 +521,11 @@ async function createPlan(user, input) {
     throw new Error(`Failed to save the plan: ${planError.message}`);
   }
 
-  recordFunnelEvent('plan_created', { userId: viewer.id, meta: { plan_id: post.id, kind } });
+  recordFunnelEvent('plan_created', { userId: viewer.id, meta: { plan_id: post.id, kind, ...(hostAs ? { business: true } : {}) } });
+  if (hostAs) {
+    await auditBusinessPlan({ business_user_id: hostId, post_id: post.id }, viewer, 'plans.post', { kind, label: hostAs.label });
+    return planBodyFor(post.id, viewer);
+  }
   if (planService.isUuid(input.hosted_again_from)) {
     const { data: earlier } = await supabaseAdmin.from('Plan').select('post_id')
       .eq('post_id', input.hosted_again_from).eq('host_user_id', viewer.id).maybeSingle();
@@ -524,7 +578,10 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
     const startsAt = patch.starts_at !== undefined ? patch.starts_at : plan.post.event_date;
     const endsAt = patch.ends_at !== undefined ? patch.ends_at : plan.post.event_end_date;
     const startChanged = new Date(startsAt).getTime() !== new Date(plan.post.event_date).getTime();
-    validateTimes(startsAt, endsAt, { allowPastStart: state === 'live' && !startChanged });
+    validateTimes(startsAt, endsAt, {
+      allowPastStart: state === 'live' && !startChanged,
+      ...(plan.business_user_id ? { maxDaysAhead: rules.BUSINESS_LIMITS.maxDaysAhead } : {}),
+    });
     postUpdate.event_date = new Date(startsAt).toISOString();
     postUpdate.event_end_date = new Date(endsAt).toISOString();
     const shift = Math.abs(new Date(startsAt).getTime() - new Date(plan.post.event_date).getTime()) / 60000;
@@ -532,16 +589,23 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
   }
 
   let placeKind = plan.place_kind;
-  if (patch.place !== undefined) {
-    const place = resolvePlace(viewer, plan.kind, patch.place, { moving: true });
-    assertHostNear(viewer, place);
+  // A business's plan moves only between the business's own locations (`business_location_id`).
+  if (plan.business_user_id && patch.place !== undefined) {
+    fail(422, 'validation', "A business's plan meets at one of the business's own locations.");
+  }
+  const movingBusiness = Boolean(plan.business_user_id) && patch.business_location_id !== undefined;
+  if (patch.place !== undefined || movingBusiness) {
+    const place = movingBusiness
+      ? await planBusiness.placeAt(plan.business, patch.business_location_id)
+      : resolvePlace(viewer, plan.kind, patch.place, { moving: true });
+    if (!movingBusiness) assertHostNear(viewer, place);
     placeKind = place.kind;
     placeChanged = place.kind !== plan.place_kind
       || String(place.home_id || '') !== String(plan.place_home_id || '')
       || rules.distanceMeters(place, { latitude: plan.place_latitude, longitude: plan.place_longitude }) > 25
       || (place.name || '') !== (plan.place_name || '');
     const area = planPlace.areaPointFor(plan.kind, place.latitude, place.longitude);
-    const fallbackCity = place.home?.city || plan.city || null;
+    const fallbackCity = movingBusiness ? place.city : place.home?.city || plan.city || null;
     const { label, city } = await planPlace.areaLabelFor(area, { fallbackCity });
     Object.assign(planUpdate, {
       place_kind: place.kind,
@@ -551,7 +615,8 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
       place_longitude: place.longitude,
       place_home_id: place.home_id,
       // The key follows the place: a move to a place typed by hand, or to a home, clears it.
-      place_ref: await placeRefOf(place),
+      place_ref: movingBusiness ? place.ref : await placeRefOf(place),
+      ...(movingBusiness ? { business_location_id: place.business_location_id } : {}),
       area_label: label,
       city,
       timezone: planPlace.timezoneFor(place.latitude, place.longitude),
@@ -575,10 +640,16 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
     spotsGrew = spots > plan.spots;
     planUpdate.spots = spots;
   }
-  if (patch.auto_rules !== undefined || patch.place !== undefined) {
+  if (plan.business_user_id) {
+    if (patch.auto_rules !== undefined) planUpdate.auto_rules = planBusiness.checkedAutoRules(patch.auto_rules);
+    if (patch.label !== undefined) planUpdate.label = planBusiness.checkedLabel(plan.kind, patch.label);
+    if (patch.guests_can_invite !== undefined) {
+      planUpdate.guests_can_invite = planBusiness.checkedGuestsCanInvite(patch.guests_can_invite) === true;
+    }
+  } else if (patch.auto_rules !== undefined || patch.place !== undefined) {
     planUpdate.auto_rules = normalizeAutoRules(plan.kind, placeKind, patch.auto_rules !== undefined ? patch.auto_rules : plan.auto_rules);
   }
-  if (patch.join_requirement !== undefined && plan.kind !== 'playdate') {
+  if (patch.join_requirement !== undefined && plan.kind !== 'playdate' && !plan.business_user_id) {
     planUpdate.join_requirement = oneOf(patch.join_requirement, ['located', 'verified'], 'who can ask');
   }
   if (patch.details !== undefined) {
@@ -626,20 +697,21 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
         })
         .eq('post_id', postId).eq('status', 'accepted');
       if (error) throw new Error(`Failed to ask "Still coming?": ${error.message}`);
-      const hostFirst = firstOf((await userNames([viewer.id])).get(viewer.id));
+      const hostFirst = await hostFirstOf(updated);
       for (const request of accepted) {
         await planNotify.changed({ plan: updated, request, hostFirst, timeMoved, placeChanged });
       }
       if (updated.chat_room_id) {
         // "Sam moved the plan to Sunday at 2:00 PM", in the push's words.
         const when = planNotify.whenText(updated.post.event_date, updated.timezone, { long: true, at: true });
-        await planChat.systemLine(updated.chat_room_id, viewer.id,
+        await planChat.systemLine(updated.chat_room_id, updated.host_user_id,
           timeMoved && placeChanged ? `${hostFirst} moved the plan to ${when}, at a new place`
             : timeMoved ? `${hostFirst} moved the plan to ${when}` : `${hostFirst} changed the place`);
       }
     }
   }
   if (spotsGrew) await offerOpenSpots(updated, { io });
+  await auditBusinessPlan(plan, viewer, 'plans.edit', { fields: [...Object.keys(postUpdate), ...Object.keys(planUpdate)] });
   return planBodyFor(postId, viewer);
 }
 
@@ -653,14 +725,25 @@ async function cancelPlan(user, postId, { note, sports_revision: sportsRevision 
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
   if (state === 'ended') fail(409, 'ended', 'This plan is already over.');
   const cancelNote = cleanText(note, 280, 'The note');
-  const stamp = nowIso();
+  if (await cancelOpenPlan(plan, { hostFirst: await hostFirstOf(plan), cancelNote })) {
+    await auditBusinessPlan(plan, viewer, 'plans.cancel');
+  }
+  return planBodyFor(postId, viewer);
+}
 
+/**
+ * Cancels an open plan and tells everyone: the people waiting stop waiting, the chat gets its line and closes,
+ * and the people who were in, waiting or invited get the notice. False when the plan wasn't open any more.
+ */
+async function cancelOpenPlan(plan, { hostFirst, cancelNote }) {
+  const postId = plan.post_id;
+  const stamp = nowIso();
   const requests = await activeRequests(postId);
   const { data: cancelled, error } = await supabaseAdmin.from('Plan')
     .update({ status: 'cancelled', cancelled_at: stamp, cancel_note: cancelNote, updated_at: stamp })
     .eq('post_id', postId).eq('status', 'open').select('post_id');
   if (error) throw new Error(`Failed to cancel: ${error.message}`);
-  if (!cancelled || cancelled.length === 0) return planBodyFor(postId, viewer);
+  if (!cancelled || cancelled.length === 0) return false;
 
   // People still waiting stop waiting; people who were in keep their place in the record.
   const { error: expireError } = await supabaseAdmin.from('PlanRequest')
@@ -668,9 +751,8 @@ async function cancelPlan(user, postId, { note, sports_revision: sportsRevision 
     .eq('post_id', postId).in('status', ['pending', 'waitlisted']);
   if (expireError) logger.warn('plans.cancel.expire_failed', { postId, error: expireError.message });
 
-  const hostFirst = firstOf((await userNames([viewer.id])).get(viewer.id));
   if (plan.chat_room_id) {
-    await planChat.systemLine(plan.chat_room_id, viewer.id, `${hostFirst} cancelled the plan`);
+    await planChat.systemLine(plan.chat_room_id, plan.host_user_id, `${hostFirst} cancelled the plan`);
   }
   await planChat.closeRoom(plan);
   const updated = await planService.loadPlanRow(postId);
@@ -678,7 +760,21 @@ async function cancelPlan(user, postId, { note, sports_revision: sportsRevision 
     await planNotify.cancelled({ plan: updated, request, hostFirst, note: cancelNote, wasIn: request.status === 'accepted' });
   }
   await planInvites.notifyCancelled(updated, hostFirst, cancelNote);
-  return planBodyFor(postId, viewer);
+  return true;
+}
+
+const BUSINESS_GONE_NOTE = 'This business is no longer on Pantopus.';
+
+/**
+ * A business that has left Pantopus (its account is no longer a business) has nobody to run its plans, so the
+ * ones still open are cancelled and everyone in, waiting or invited is told (the Plans tick calls this). A
+ * business that is only unpublished, unverified or switched off keeps its plans: they are hidden from new
+ * people, and its team can still cancel them.
+ * @param {object} plan  a plan row with `business` attached and null (planBusiness.attachBusinessHosts)
+ */
+async function cancelForGoneBusiness(plan) {
+  if (!plan || !plan.business_user_id || plan.business) return false;
+  return cancelOpenPlan(plan, { hostFirst: 'The host', cancelNote: BUSINESS_GONE_NOTE });
 }
 
 // ── Capacity, rules and the waitlist ─────────────────────────
@@ -713,6 +809,8 @@ async function ruleFor(plan, userId) {
   const invite = (await planInvites.viewerInvites(String(userId), [plan.post_id])).get(plan.post_id);
   if (invite && invite.status === 'accepted' && !invite.needs_host_ok) return 'invite';
   const autoRules = Array.isArray(plan.auto_rules) ? plan.auto_rules : [];
+  // A business's plan: "right away, anyone", or the business approves each (planService.matchingAutoRule).
+  if (plan.business_user_id) return autoRules.includes('open') ? 'open' : null;
   if (plan.kind === 'playdate' || autoRules.length === 0) return null;
   if (autoRules.includes('hosted_before')) {
     const stats = await planService.requesterStats(plan.host_user_id, [userId]);
@@ -767,7 +865,7 @@ async function admit(plan, request, { byRule, hostFirst, io, viaWaitlist = false
  */
 async function offerOpenSpots(plan, { io = null } = {}) {
   if (!rules.isAskingOpen(plan, plan.post.event_date, plan.post.event_end_date)) return;
-  const hostFirst = firstOf((await userNames([plan.host_user_id])).get(String(plan.host_user_id)));
+  const hostFirst = await hostFirstOf(plan);
   for (let round = 0; round < 30; round += 1) {
     const requests = await activeRequests(plan.post_id);
     const spotsLeft = plan.spots - planService.seatsTaken(plan, requests);
@@ -849,7 +947,9 @@ async function requestResult(postId, viewer, requestId) {
 async function askToJoin(user, postId, body, { io = null } = {}) {
   const viewer = await loadViewer(user, { gps: body.gps });
   const plan = await loadVisiblePlan(postId, viewer);
-  if (String(plan.host_user_id) === viewer.id) fail(409, 'host', "You're hosting this plan.");
+  if (planBusiness.runsPlan(plan, viewer)) fail(409, 'host', "You're hosting this plan.");
+  // A business that may no longer host takes nobody new, and nobody waiting moves up by asking again.
+  if (plan.business_user_id && !planBusiness.hostsNow(plan)) fail(409, 'ended', REASON_ERRORS.ended[1]);
   const ctx = await planService.loadCardContext([plan], viewer);
   const mine = ctx.myRequestByPlan.get(postId) || null;
   const waiting = mine && (mine.status === 'pending' || mine.status === 'waitlisted');
@@ -898,7 +998,10 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
     status,
     decided_by: decidedBy,
     decided_at: decidedBy ? stamp : null,
-    distance_band: requesterBand(plan, viewer, { invited: Boolean(invite) }),
+    // A business never learns how far away a guest lives: nothing is saved for its plans.
+    distance_band: plan.business_user_id ? null : requesterBand(plan, viewer, { invited: Boolean(invite) }),
+    // How the guest arrived at a business's plan (planBusiness.wayInFor). Null on a neighbor's plan.
+    ...(plan.business_user_id ? { way_in: await planBusiness.wayInFor(plan, viewer.id, body.via, { invite }) } : {}),
     queued_at: stamp,
     reconfirm_requested_at: null,
     reconfirmed: null,
@@ -932,10 +1035,12 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
     request = data;
   }
 
-  recordFunnelEvent('plan_requested', { userId: viewer.id, meta: { plan_id: postId, kind: plan.kind, status: request.status } });
+  recordFunnelEvent('plan_requested', { userId: viewer.id, meta: {
+    plan_id: postId, kind: plan.kind, status: request.status, ...(plan.business_user_id ? { business: true, way_in: row.way_in } : {}),
+  } });
   if (invite) await planInvites.markAccepted(plan, viewer.id, request);
-  const names = await userNames([viewer.id, plan.host_user_id]);
-  const hostFirst = firstOf(names.get(String(plan.host_user_id)));
+  const names = await userNames([viewer.id]);
+  const hostFirst = await hostFirstOf(plan);
   if (request.status === 'accepted') {
     const overflow = await enforceCapacity(plan);
     if (!overflow.has(request.id)) {
@@ -997,8 +1102,9 @@ async function listRequests(user, postId) {
     userNames(userIds),
     loadChatPeople(userIds),
     verifiedUserIds(userIds),
-    planService.requesterStats(viewer.id, userIds),
-    planService.mutualConnectionCounts(viewer.id, userIds),
+    planService.requesterStats(plan.host_user_id, userIds),
+    // Connections are a person's: a business's team sees none.
+    plan.business_user_id ? new Map() : planService.mutualConnectionCounts(viewer.id, userIds),
     userIds.length
       ? supabaseAdmin.from('PlanInvite').select('invitee_user_id, channel, email, needs_host_ok')
         .eq('post_id', postId).in('invitee_user_id', userIds).neq('status', 'cancelled')
@@ -1013,18 +1119,23 @@ async function listRequests(user, postId) {
     const id = String(r.user_id);
     const row = userRows.get(id);
     const stat = stats.get(id) || { plans_joined: 0, hosted_before: false };
+    // A business's team sees less than a neighbor host: a first name, who is coming and their note, and whether
+    // they have been before. Never a last initial, how far away they live, their address standing, their
+    // connections or what else they have joined.
+    const forBusiness = Boolean(plan.business_user_id);
     return {
       id: r.id,
       user: {
         user_id: id,
-        display_name: names.get(id) || 'A neighbor',
+        display_name: forBusiness ? firstOf(names.get(id)) : names.get(id) || 'A neighbor',
         avatar_url: planService.avatarUrl(planService.withLocalAvatar(row || { id }, people)),
-        verified_address: verified.has(id),
-        distance_band: r.distance_band || null,
-        plans_joined: stat.plans_joined,
+        verified_address: forBusiness ? false : verified.has(id),
+        distance_band: forBusiness ? null : r.distance_band || null,
+        plans_joined: forBusiness ? 0 : stat.plans_joined,
         mutual_connections: mutual.get(id) || 0,
         hosted_before: stat.hosted_before,
-        new_to_pantopus: Boolean(row?.created_at) && Date.now() - new Date(row.created_at).getTime() < 30 * 24 * 60 * 60 * 1000,
+        new_to_pantopus: forBusiness ? false
+          : Boolean(row?.created_at) && Date.now() - new Date(row.created_at).getTime() < 30 * 24 * 60 * 60 * 1000,
       },
       party_size: r.party_size,
       note: r.note || null,
@@ -1047,8 +1158,7 @@ async function decide(user, postId, requestId, action, body = {}, { io = null } 
   const plan = await loadHostedPlan(postId, viewer);
   const request = await loadRequest(requestId, postId);
   const stamp = nowIso();
-  const names = await userNames([viewer.id, request.user_id]);
-  const hostFirst = firstOf(names.get(viewer.id));
+  const hostFirst = await hostFirstOf(plan);
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
 
   if (action === 'accept') {
@@ -1101,6 +1211,7 @@ async function decide(user, postId, requestId, action, body = {}, { io = null } 
     fail(404, 'not_found', 'Unknown action.');
   }
   const { data: after } = await supabaseAdmin.from('PlanRequest').select('id, status').eq('id', request.id).maybeSingle();
+  await auditBusinessPlan(plan, viewer, `plans.${action}`, { request_id: request.id });
   return { request: after || { id: request.id, status: request.status }, plan: await planBodyFor(postId, viewer) };
 }
 
@@ -1147,7 +1258,7 @@ async function giveFeedback(user, postId, { answer, note }) {
   if (!['great', 'ok', 'not_right'].includes(answer)) fail(422, 'validation', 'Choose how it went.');
   const viewer = await loadViewer(user);
   const plan = await loadVisiblePlan(postId, viewer);
-  if (String(plan.host_user_id) === viewer.id) fail(403, 'host', 'Hosts don’t rate their own plans.');
+  if (planBusiness.runsPlan(plan, viewer)) fail(403, 'host', 'Hosts don’t rate their own plans.');
   const mine = await myAcceptedRequest(viewer, postId);
   const state = rules.planState(plan, plan.post.event_date, plan.post.event_end_date);
   if (state === 'upcoming') fail(409, 'not_started', 'You can say how it went once it starts.');
@@ -1174,7 +1285,7 @@ async function giveFeedback(user, postId, { answer, note }) {
 async function reportPlan(user, postId, { reason, details }) {
   const viewer = await loadViewer(user);
   const plan = await loadVisiblePlan(postId, viewer);
-  if (String(plan.host_user_id) === viewer.id) fail(403, 'host', "You can't report your own plan.");
+  if (planBusiness.runsPlan(plan, viewer)) fail(403, 'host', "You can't report your own plan.");
   const { REPORT_REASONS } = require('../postReportService');
   if (!REPORT_REASONS.includes(reason)) fail(422, 'validation', 'Choose a reason.');
   await filePostReport({ postId, userId: viewer.id, reason, details: cleanText(details, 1000, 'Details') });
@@ -1183,6 +1294,8 @@ async function reportPlan(user, postId, { reason, details }) {
 
 module.exports = {
   PlanError,
+  hostFirstOf,
+  cancelForGoneBusiness,
   createPlan,
   previewPlan,
   editPlan,

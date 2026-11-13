@@ -44,6 +44,7 @@ const ALL_PERMS = [
   'ads.view', 'ads.manage',
   'finance.view', 'finance.manage',
   'insights.view', 'sensitive.view',
+  'plans.post', 'plans.manage',
 ];
 
 // ============================================================

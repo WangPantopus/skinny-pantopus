@@ -42,6 +42,9 @@ async function publicPlan(postId) {
   if (plan.post.read_scope != null
     && (plan.post.read_scope !== 'public' || plan.post.allow_external_share === false)) return null;
   if (!(await isFeatureEnabled('plans', plan.host_user_id))) return null;
+  // A business's plan has a public page only while the business may host: verified with a published page, and
+  // with the switch on (plan.business, attached by loadPlanRow). Its session for kids needs the kids' switch too.
+  if (plan.business_user_id) return publicBusinessPlan(plan);
   if (plan.kind === 'playdate') {
     if (!(await isFeatureEnabled('plans_playdates', plan.host_user_id))) return null;
     return { kind: 'playdate', city: plan.city || null };
@@ -49,7 +52,11 @@ async function publicPlan(postId) {
 
   const viewer = anonymousViewer();
   const ctx = await planService.loadCardContext([plan], viewer);
-  const card = planService.buildCard(plan, viewer, ctx);
+  return publicCard(planService.buildCard(plan, viewer, ctx));
+}
+
+/** What anyone, signed out, may read of a plan's card: the area, never a point, the place or the people. */
+function publicCard(card) {
   return {
     id: card.id,
     kind: card.kind,
@@ -78,6 +85,35 @@ async function publicPlan(postId) {
     state: card.state,
     asking_closes_at: card.asking_closes_at,
     share_url: card.share_url,
+  };
+}
+
+/**
+ * The signed-out card of a business's plan (board D6): the same card, plus the business, what it calls the plan,
+ * and the place by name and street address, which is the business's own. A business's session for kids is a
+ * public class, so it gets the whole card where a neighbor's playdate gets only its city. No price yet: a
+ * business's plan is free until paid spots are built (`price: null`).
+ */
+async function publicBusinessPlan(plan) {
+  const business = plan.business;
+  if (!business || !business.ok) return null;
+  if (plan.kind === 'playdate' && !business.kids_ok) return null;
+  const viewer = anonymousViewer();
+  const ctx = await planService.loadCardContext([plan], viewer);
+  const card = planService.buildCard(plan, viewer, ctx);
+  return {
+    ...publicCard(card),
+    business: card.business ? {
+      name: card.business.name,
+      avatar_url: card.business.avatar_url,
+      verified: card.business.verified,
+      page_url: card.business.page_url,
+      plans_hosted: card.business.plans_hosted,
+    } : null,
+    label: card.label,
+    label_text: card.label_text,
+    place: card.place ? { name: card.place.name, address: card.place.address } : null,
+    price: card.price,
   };
 }
 

@@ -55,6 +55,11 @@ const ICON_BY_KIND = {
 // ── Words ────────────────────────────────────────────────────
 
 function noun(plan) {
+  // A business's plan goes by what the business called it: "clinic", "open play", "kids' class".
+  if (plan.business_user_id) {
+    const label = require('./planBusiness').labelView(plan);
+    if (label) return label.text.toLowerCase();
+  }
   switch (plan.kind) {
     case 'watch_party': return 'watch party';
     case 'playdate': return 'playdate';
@@ -260,7 +265,25 @@ async function updateMetadata(row, patch) {
  * @param {Date|null} [opts.holdUntil] hold the push until then at least (bundles)
  * @param {string|null} [opts.idempotencyKey] a notice sent once: a second one with the key is not created (null)
  */
-async function notify({ userId, type, title, body, link, plan, metadata = {}, recipientIsIn = false, holdUntil = null, idempotencyKey = null }) {
+async function notify(opts) {
+  // What a host hears about a business's plan goes to the business's team: the members who run its plans. The
+  // business's own account has no phone, and nobody signs in as it.
+  if (opts.plan?.business_user_id && String(opts.userId) === String(opts.plan.business_user_id)) {
+    const staff = await require('./planBusiness').staffToNotify(opts.plan);
+    const rows = [];
+    for (const staffId of staff) {
+      rows.push(await notifyOne({
+        ...opts,
+        userId: staffId,
+        idempotencyKey: opts.idempotencyKey ? `${opts.idempotencyKey}:${staffId}` : null,
+      }));
+    }
+    return rows.find(Boolean) || null;
+  }
+  return notifyOne(opts);
+}
+
+async function notifyOne({ userId, type, title, body, link, plan, metadata = {}, recipientIsIn = false, holdUntil = null, idempotencyKey = null }) {
   try {
     const category = CATEGORY_BY_TYPE[type] || null;
     const fullMetadata = {
@@ -316,12 +339,22 @@ async function notify({ userId, type, title, body, link, plan, metadata = {}, re
  * Someone asked a plan the host approves. The first ask in 10 minutes pushes with Accept/Decline; later ones bundle.
  * `invitedEmail`: they opened the host's email invitation to that address from an account it isn't verified for.
  */
-async function requestReceived({ plan, request, requesterUser, hostFirst, requesterFirst, invitedEmail = null }) {
+async function requestReceived(opts) {
+  // A business's plan: each team member who runs its plans has their own notice and their own bundle.
+  const hosts = opts.plan.business_user_id
+    ? await require('./planBusiness').staffToNotify(opts.plan)
+    : [opts.plan.host_user_id];
+  let first = null;
+  for (const hostId of hosts) first = (await requestReceivedBy(hostId, opts)) || first;
+  return first;
+}
+
+async function requestReceivedBy(hostId, { plan, request, hostFirst, requesterFirst, invitedEmail = null }) {
   const tenMinutesAgo = new Date(Date.now() - BUNDLE_WINDOW_MS).toISOString();
   const { data: recent } = await supabaseAdmin
     .from('Notification')
     .select('id, created_at, metadata')
-    .eq('user_id', plan.host_user_id)
+    .eq('user_id', hostId)
     .eq('type', 'plan_request')
     .gte('created_at', tenMinutesAgo)
     .contains('metadata', { plan_id: plan.post_id })
@@ -333,8 +366,8 @@ async function requestReceived({ plan, request, requesterUser, hostFirst, reques
     when, partyText(plan, request, requesterFirst), bandText(request.distance_band),
     invitedEmail ? `Opened your invitation to ${invitedEmail}` : null,
   ].filter(Boolean);
-  return notify({
-    userId: plan.host_user_id,
+  return notifyOne({
+    userId: hostId,
     type: 'plan_request',
     title: `${requesterFirst} asked to join your ${noun(plan)}`,
     body: parts.join(' · '),

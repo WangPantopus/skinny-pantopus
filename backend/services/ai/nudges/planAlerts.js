@@ -38,6 +38,8 @@ async function newPlans(now) {
   const { data, error } = await supabaseAdmin.from('Plan')
     .select(planService.PLAN_SELECT)
     .eq('status', 'open')
+    // A business's plan is told only to an app that can draw it; a nudge can't know that, so it stays out.
+    .is('business_user_id', null)
     .gte('created_at', new Date(now - POSTED_WITHIN_MS).toISOString())
     .order('created_at', { ascending: true })
     .limit(PLANS_PER_TICK);

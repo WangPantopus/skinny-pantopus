@@ -26,6 +26,13 @@ const { KINDS, WINDOWS } = require('../services/plans/planRules');
 
 const router = express.Router();
 router.use(verifyToken, requireFeatureFlag('plans'));
+// `biz=1` on a request: this app can draw a business's plan (Plans with businesses). Without it, on every
+// route here, a business's plan does not exist, which is what keeps one from reaching an older app that would
+// draw it as a neighbor's. Read by services/plans/planViewer.js.
+router.use((req, _res, next) => {
+  if (req.user) req.user.plansBiz = req.query.biz === '1';
+  next();
+});
 
 function fail(res, status, error, message) {
   return res.status(status).json({ error, message });
@@ -84,7 +91,10 @@ router.get('/', async (req, res) => {
     let kinds = kindsFromQuery(req.query.kinds);
     if (!viewer.seesPlaydates) kinds = kinds.filter((k) => k !== 'playdate');
     if (req.query.kinds && kinds.length === 0) return res.json({ items: [], next_cursor: null, nearest_elsewhere: null });
-    const result = await planService.listNearby(viewer, { point, window, kinds, cursor: req.query.cursor || null });
+    // host=all|neighbors|businesses: the list's filter, for a viewer businesses' plans exist for.
+    const result = await planService.listNearby(viewer, {
+      point, window, kinds, cursor: req.query.cursor || null, host: planService.hostFilter(req.query.host),
+    });
     return res.json(result);
   } catch (err) {
     return serverError(res, err, 'list', req);
@@ -120,6 +130,18 @@ router.get('/games', async (req, res) => {
     return res.json({ games: planGames.upcomingGames(Date.now(), { near }) });
   } catch (err) {
     return serverError(res, err, 'games', req);
+  }
+});
+
+// GET /api/plans/host-as: the businesses this person may post a plan for, each with the locations it can meet at,
+// the kinds a business posts and the labels each may carry. `{ businesses: [] }` for nearly everyone, and always
+// without `biz=1`; the apps show "Host as" only when it isn't empty.
+router.get('/host-as', async (req, res) => {
+  try {
+    const viewer = await loadViewer(req.user);
+    return res.json(await require('../services/plans/planBusiness').hostAsChoices(viewer));
+  } catch (err) {
+    return serverError(res, err, 'host_as', req);
   }
 });
 

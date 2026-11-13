@@ -40,6 +40,7 @@ const ALL_PERMS = [
   'ads.view', 'ads.manage',
   'finance.view', 'finance.manage',
   'insights.view', 'sensitive.view',
+  'plans.post', 'plans.manage',
 ];
 
 // A failed read can't show that someone is off the team, holds a lower role or has no explicit deny, so a check

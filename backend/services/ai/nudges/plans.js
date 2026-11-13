@@ -359,6 +359,8 @@ async function weatherWatch(now) {
     .from('Plan')
     .select(planService.PLAN_SELECT)
     .eq('status', 'open')
+    // The assistant's nudges for hosts are for people: a business's plans are left to its team's own notices.
+    .is('business_user_id', null)
     .in('kind', OUTDOOR_KINDS)
     .gt('post.event_date', new Date(now).toISOString())
     .lte('post.event_date', new Date(now + 48 * HOUR_MS).toISOString())
@@ -415,6 +417,8 @@ async function requestsWaiting(now) {
     .from('Plan')
     .select(planService.PLAN_SELECT)
     .eq('status', 'open')
+    // The assistant's nudges for hosts are for people: a business's plans are left to its team's own notices.
+    .is('business_user_id', null)
     .lte('post.event_date', new Date(now + ASKING_CLOSES_WITHIN_MS + 30 * 60 * 1000).toISOString())
     .gt('post.event_end_date', new Date(now).toISOString())
     .limit(300);
@@ -570,6 +574,8 @@ async function afterPlans(now) {
     .from('Plan')
     .select(planService.PLAN_SELECT)
     .eq('status', 'ended')
+    // The assistant's nudges for hosts are for people: a business's plans are left to its team's own notices.
+    .is('business_user_id', null)
     .lte('ended_at', new Date(now - AFTER_END_MS).toISOString())
     .gt('ended_at', new Date(now - AFTER_END_LATEST_MS).toISOString())
     .limit(200);
@@ -719,7 +725,7 @@ async function gameMoves(now) {
   let sent = 0;
   for (let offset = 0; ; offset += 300) {
     const { data, error } = await supabaseAdmin.from('Plan').select(planService.PLAN_SELECT)
-      .eq('kind', 'watch_party').eq('status', 'open').gt('post.event_date', new Date(now).toISOString())
+      .eq('kind', 'watch_party').eq('status', 'open').is('business_user_id', null).gt('post.event_date', new Date(now).toISOString())
       .order('post_id').range(offset, offset + 299);
     if (error) throw new Error(error.message);
     for (const plan of data || []) {
