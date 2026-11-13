@@ -574,11 +574,14 @@ function serializePropertyRecord(copy, estimate = null) {
   if (!copy || typeof copy !== 'object') return null;
   // Rows the record implies (scripts/property-index/lib/derive.cjs), present only while the county's derived_rows switch is
   // on (propertyRecords/router.js): shown here and nowhere else, so estimates and other screens read the county's own facts.
-  // Only the facts derived for this home carry a source: the county's own rows keep the footer's.
-  const derived = copy.derived?.facts
-    ? Object.fromEntries(Object.keys(copy.derived.facts).map((name) => [name, copy.derived.from?.[name]]).filter(([, from]) => typeof from === 'string'))
-    : null;
-  const facts = derived ? { ...(copy.facts || {}), ...Object.fromEntries(Object.entries(copy.derived.facts).filter(([name]) => derived[name])) } : copy.facts || {};
+  // Only the facts derived for this home (or its building) carry a source: the county's own rows keep the footer's.
+  const from = copy.derived?.from || {};
+  const sourced = (held) => Object.fromEntries(Object.entries(held || {}).filter(([name]) => typeof from[name] === 'string'));
+  const derivedFacts = sourced(copy.derived?.facts);
+  const derivedBuilding = sourced(copy.derived?.building);
+  const derived = copy.derived ? Object.fromEntries([...Object.keys(derivedBuilding), ...Object.keys(derivedFacts)].map((name) => [name, from[name]])) : null;
+  const facts = { ...(copy.facts || {}), ...derivedFacts };
+  const buildingFacts = copy.building || Object.keys(derivedBuilding).length ? { ...(copy.building || {}), ...derivedBuilding } : undefined;
   const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
   if (copy.match === 'ambiguous') {
     const building = titled('building');
@@ -593,7 +596,7 @@ function serializePropertyRecord(copy, estimate = null) {
     const unit = new Section('unit', 'Your unit');
     addFacts(unit, facts, ['building', 'utilities', 'parking', 'construction'], (fact) => fact.scope === 'unit', derived);
     const building = new Section('building', 'Building');
-    addFacts(building, { ...copy.building, ...facts }, ['building', 'construction'], (fact) => fact.scope === 'building', derived);
+    addFacts(building, { ...buildingFacts, ...facts }, ['building', 'construction'], (fact) => fact.scope === 'building', derived);
     sections.push(unit, building);
   } else if (copy.match === 'building_only') {
     const building = new Section('building', 'Building');
@@ -611,9 +614,9 @@ function serializePropertyRecord(copy, estimate = null) {
   const lot = titled('lot');
   // A condo's account lists the complex's common land: never the unit's lot.
   const commonLand = copy.subject?.kind === 'unit' || copy.match === 'building_only';
-  addFacts(lot, { ...copy.building, ...facts }, ['lot'], (fact) => !(commonLand && fact.label !== 'Zoning' && fact.scope === 'parcel'), derived);
+  addFacts(lot, { ...buildingFacts, ...facts }, ['lot'], (fact) => !(commonLand && fact.label !== 'Zoning' && fact.scope === 'parcel'), derived);
   const records = titled('records');
-  addFacts(records, { ...copy.building, ...facts }, ['records'], (fact) => copy.match !== 'building_only' || fact.scope === 'parcel', derived);
+  addFacts(records, { ...buildingFacts, ...facts }, ['records'], (fact) => copy.match !== 'building_only' || fact.scope === 'parcel', derived);
   // Pantopus's own ID for the home, where ATTOM's record showed its ID.
   if (copy.match === 'exact' && copy.subject?.id) records.add('pantopus_id', 'Pantopus ID', String(copy.subject.id), true);
   sections.push(lot, records);

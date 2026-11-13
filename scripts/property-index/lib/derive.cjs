@@ -24,7 +24,12 @@ const SWITCH = 'derived_rows';
 // Counts where a county's 0 is its answer: none.
 const ZERO_MEANS_NONE = [['fireplaces', 'fireplace count'], ['half_baths', 'half-bath count']];
 
-function deriveFacts(records) {
+/**
+ * The other unit of a lot and the type's words, into the record's facts as before; with a county (build.cjs), also the
+ * rows it implies (deriveRows), held off screens. Returns { held_from: { derived_rows: { <fact>: words } } } when any is
+ * held, for the county's entry (format.js `held_from`); nothing otherwise.
+ */
+function deriveFacts(records, county = null, { work = null } = {}) {
   for (const { kind, home_type: homeType, facts, restricted } of records) {
     if (restricted || !facts) continue;
     if (facts.lot_sqft > 0 && !(facts.lot_acres > 0)) facts.lot_acres = Number((facts.lot_sqft / ACRE).toFixed(4));
@@ -32,6 +37,9 @@ function deriveFacts(records) {
     const words = TYPE_WORDS[`${kind}:${homeType}`];
     if (words && !facts.property_type) facts.property_type = words;
   }
+  if (!county) return undefined;
+  const from = deriveRows(records, county, { work });
+  return Object.keys(from).length ? { held_from: { [SWITCH]: from } } : undefined;
 }
 
 /**
