@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
-import type { AddHomeCountyCheck, CountyPage, CountyRecordSection, FloorPlanSuggestion, HouseholdCountyCheck, HouseholdFact, HouseholdFactChange, HouseholdGroup, HouseholdPart, HouseholdQuestion } from '@pantopus/api';
+import type { AddHomeCountyCheck, CountyPage, CountyRecordSection, DocumentFact, DocumentFactsAnswer, FloorPlanSuggestion, HouseholdCountyCheck, HouseholdDocumentsOffer, HouseholdFact, HouseholdFactChange, HouseholdGroup, HouseholdPart, HouseholdQuestion } from '@pantopus/api';
 import { ExternalLink } from 'lucide-react';
 import ModalShell from '@/components/ui/ModalShell';
 import { toast } from '@/components/ui/toast-store';
@@ -246,6 +246,102 @@ function FactEditor({ group, busy, onClose, onSave, checkGroup }: {
   );
 }
 
+/** "From your papers": a PDF of the home's own report, read for facts the household then checks. */
+function DocumentsCard({ offer, reading, busy, onPick }: {
+  offer: HouseholdDocumentsOffer;
+  reading: boolean;
+  busy: boolean;
+  onPick: (file: File) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <section className="space-y-3 rounded-[28px] border border-app-border bg-app-surface px-5 py-4 shadow-sm">
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-app-text">{offer.title}</h3>
+        <p className="text-sm text-app-text-secondary">{offer.lead}</p>
+      </div>
+      <input ref={input} type="file" accept="application/pdf,.pdf" className="sr-only" tabIndex={-1} aria-hidden="true"
+        onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) onPick(file); }} />
+      <button type="button" disabled={busy || reading} onClick={() => input.current?.click()} className={chipClass(false)}>
+        {reading ? 'Reading your report…' : offer.action}
+      </button>
+    </section>
+  );
+}
+
+type DocumentChoice = 'keep' | 'fix' | 'skip';
+const DOCUMENT_CHOICES: Array<[DocumentChoice, string]> = [['keep', 'Right'], ['fix', 'Fix'], ['skip', 'Skip']];
+
+/** One fact the report states, with where it says it: Right keeps it, Fix keeps the household's own value, Skip drops it. */
+function DocumentFactRow({ fact, choice, draft, busy, onChoose, onDraft }: {
+  fact: DocumentFact;
+  choice: DocumentChoice | undefined;
+  draft: string | undefined;
+  busy: boolean;
+  onChoose: (choice: DocumentChoice) => void;
+  onDraft: (value: string) => void;
+}) {
+  return (
+    <div role="group" aria-label={fact.label} className="space-y-2 border-b border-app-border pb-4 last:border-b-0 last:pb-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="text-sm font-medium text-app-text-strong">{fact.label}</span>
+        <span className="text-sm font-semibold text-app-text">{fact.value}</span>
+      </div>
+      {fact.note ? <p className="text-xs text-app-text-muted">{fact.note}</p> : null}
+      <p className="text-xs text-app-text-secondary">{fact.source}</p>
+      <div className="flex flex-wrap gap-2">
+        {DOCUMENT_CHOICES.map(([value, label]) => (
+          <button key={value} type="button" disabled={busy} aria-pressed={choice === value} onClick={() => onChoose(value)} className={chipClass(choice === value)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {choice === 'fix' ? (
+        <FactField fact={{ ...fact, label: 'What it should say', note: null, can_undo: false }} draft={draft} onDraft={onDraft} onUndo={() => undefined} busy={busy} />
+      ) : null}
+    </div>
+  );
+}
+
+/** "Check what we found": each fact the report states, kept only when the household says so. */
+function DocumentFactsDialog({ answer, busy, onClose, onSave }: {
+  answer: DocumentFactsAnswer;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (facts: Array<{ key: string; value: string }>) => void;
+}) {
+  const [choices, setChoices] = useState<Record<string, DocumentChoice>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  if (answer.message) {
+    return (
+      <ModalShell open onClose={onClose} onCancel={onClose} cancelLabel="Close" title={answer.title} subtitle={answer.subtitle}
+        submitLabel="OK" onSubmit={onClose}>
+        <p className="text-sm text-app-text-secondary">{answer.message}</p>
+      </ModalShell>
+    );
+  }
+  const kept = answer.facts.flatMap((fact) => {
+    const choice = choices[fact.key];
+    if (choice === 'keep') return [{ key: fact.key, value: fact.current }];
+    const value = drafts[fact.key]?.trim();
+    return choice === 'fix' && value ? [{ key: fact.key, value }] : [];
+  });
+  return (
+    <ModalShell open onClose={onClose} onCancel={onClose} cancelLabel="Cancel" title="Check what we found" subtitle={`${answer.title} · ${answer.subtitle}`}
+      submitLabel={kept.length ? `Save ${kept.length}` : 'Save'} onSubmit={() => onSave(kept)} submitDisabled={!kept.length} submitting={busy} maxWidth="max-w-xl">
+      <div className="space-y-4">
+        <p className="text-sm text-app-text-secondary">{answer.lead}</p>
+        {answer.facts.map((fact) => (
+          <DocumentFactRow key={fact.key} fact={fact} choice={choices[fact.key]} draft={drafts[fact.key]} busy={busy}
+            onChoose={(choice) => setChoices((current) => ({ ...current, [fact.key]: choice }))}
+            onDraft={(value) => setDrafts((current) => ({ ...current, [fact.key]: value }))} />
+        ))}
+        {answer.missing ? <p className="text-xs text-app-text-muted">{answer.missing}</p> : null}
+      </div>
+    </ModalShell>
+  );
+}
+
 function ReportProblem({ section, homeId, onClose, onReported }: {
   section: CountyRecordSection;
   homeId: string;
@@ -305,6 +401,8 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<HouseholdGroup | null>(null);
   const [reporting, setReporting] = useState<CountyRecordSection | null>(null);
+  const [reading, setReading] = useState(false);
+  const [found, setFound] = useState<DocumentFactsAnswer | null>(null);
   const groups = household?.groups ?? [];
   // Link and confirm: the county's page and "Is this right?" sit in a card of their own, so the link isn't drawn twice.
   const check = household?.county_check && household.county_page ? household.county_check : null;
@@ -318,6 +416,33 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
     } catch {
       toast.error("Couldn't save that. Check it and try again.");
       return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // "Add from a document": the server reads the file and keeps nothing; the household checks what it found.
+  const readDocument = async (file: File) => {
+    setReading(true);
+    try {
+      setFound(await api.homes.readDocumentFacts(homeId, file));
+    } catch (error) {
+      toast.error(error instanceof Error && error.message ? error.message : "Couldn't read that file. Please try again.");
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const saveDocument = async (facts: Array<{ key: string; value: string }>) => {
+    if (!found) return;
+    setBusy(true);
+    try {
+      const saved = await api.homes.saveDocumentFacts(homeId, { kind: found.kind, facts });
+      await onChanged();
+      setFound(null);
+      toast.success(saved.message);
+    } catch (error) {
+      toast.error(error instanceof Error && error.message ? error.message : "Couldn't save that. Check it and try again.");
     } finally {
       setBusy(false);
     }
@@ -424,6 +549,7 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
           <button type="button" disabled={busy} onClick={() => setEditing(group)} className={chipClass(false)}>{group.fix}</button>
         </section>
       ))}
+      {household?.documents ? <DocumentsCard offer={household.documents} reading={reading} busy={busy} onPick={(file) => void readDocument(file)} /> : null}
     </>
   );
 
@@ -431,6 +557,7 @@ export function useHouseholdFacts({ homeId, household, sections, onChanged }: {
     <>
       {editing ? <FactEditor key={editing.id} group={editing} busy={busy} onClose={() => setEditing(null)} onSave={save} checkGroup={check && editing.id === check.group ? check.group : undefined} /> : null}
       {reporting ? <ReportProblem section={reporting} homeId={homeId} onClose={() => setReporting(null)} onReported={() => void onChanged()} /> : null}
+      {found ? <DocumentFactsDialog answer={found} busy={busy} onClose={() => setFound(null)} onSave={(facts) => void saveDocument(facts)} /> : null}
     </>
   );
 
