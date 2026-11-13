@@ -7,8 +7,12 @@ the other fourteen. Seven boards were corrected on November 12 (see
 the corrected ones.
 
 The boards are on the private Design canvas
-[The business graph](https://claude.ai/artifact/A3Vr8tG3uswcd8C678nKUe), on
-two pages, Light and Dark. The pictures below are the light boards.
+[The business graph](https://claude.ai/artifact/Gq18dcioJ5str1jDVBt9pU), on
+two pages, Light and Dark, with the November 12 corrections. The pictures below
+are the light boards. The first canvas,
+[made November 11](https://claude.ai/artifact/A3Vr8tG3uswcd8C678nKUe), still
+shows the boards from before the corrections: no session could publish to it
+once the sessions that made it had ended.
 
 ## How they are made
 
