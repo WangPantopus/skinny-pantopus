@@ -37,8 +37,11 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_27.1.app
 
+      # This job holds the store signing keys, so the actions GitHub doesn't publish itself are pinned to
+      # the commit the 2.1.2 release ran on November 12, 2026: a tag or branch can be moved to other code,
+      # a commit can't. To update one, replace the commit and its version comment together.
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           ruby-version: "3.2"
           bundler-cache: true
