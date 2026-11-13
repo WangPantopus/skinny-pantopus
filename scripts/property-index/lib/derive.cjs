@@ -85,17 +85,35 @@ function deriveRows(records, county, { work = null } = {}) {
     counts[fact] = (counts[fact] || 0) + 1;
     return true;
   }
+  /** Words for a fact a connector held itself; a second source for it is left out like any other. */
+  function labelHeld(fact, words) {
+    if (from[fact] && from[fact] !== words) return false;
+    from[fact] = words;
+    counts[fact] = (counts[fact] || 0) + 1;
+    return true;
+  }
+  /** Holds a value beside a fact the county already states (a county's own 0), without touching its facts. */
+  function holdBeside(record, fact, value, words) {
+    if (!labelHeld(fact, words)) return false;
+    record.held = record.held || {};
+    record.held[SWITCH] = record.held[SWITCH] || {};
+    record.held[SWITCH][fact] = value;
+    return true;
+  }
   const subdivision = subdivisionReader(records, county);
   const uses = useCodeWords({ ...county, publisher: office });
   for (const record of records) {
     const { facts } = record;
     if (record.restricted || !facts) continue;
-    // A connector keeps a county's 0 only where the county describes the building; it reads "None" (decision 4).
+    // A county's 0 reads "None" (decision 4), only on a building it describes. A connector holds a 0 it newly keeps in
+    // held.derived_rows itself (so the record's facts, which Today's house shape reads, stay as they were); a 0 already in
+    // the facts stays there too, and is held as well. Either way it shows only while the switch is on.
+    const described = facts.living_sqft > 0 || facts.gross_sqft > 0;
     for (const [fact, words] of ZERO_MEANS_NONE) {
-      if (facts[fact] === 0) {
-        delete facts[fact];
-        hold(record, fact, 0, `From ${office}’s ${words}`);
-      }
+      const heldZero = record.held?.[SWITCH]?.[fact] === 0;
+      if (heldZero && !described) delete record.held[SWITCH][fact];
+      else if (heldZero) labelHeld(fact, `From ${office}’s ${words}`);
+      else if (facts[fact] === 0 && described) holdBeside(record, fact, 0, `From ${office}’s ${words}`);
     }
     if (facts.legal_description) {
       hold(record, 'lot_number', wholeLot(facts.legal_description), `From ${office}’s legal description`);
@@ -117,6 +135,10 @@ function deriveRows(records, county, { work = null } = {}) {
     return namesTheCounty(record.facts.municipality, county) ? 'reword' : null;
   };
   if (work) addMunicipalities(records, county, work, hold, sortKey, asks);
+  for (const record of records) {
+    if (record.held?.[SWITCH] && !Object.keys(record.held[SWITCH]).length) delete record.held[SWITCH];
+    if (record.held && !Object.keys(record.held).length) delete record.held;
+  }
   log(`${county.fips}: derived rows held: ${Object.entries(counts).map(([fact, n]) => `${fact} ${n}`).join(', ') || 'none'}`);
   return from;
 }
