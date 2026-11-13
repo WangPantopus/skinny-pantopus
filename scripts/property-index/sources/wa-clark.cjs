@@ -544,4 +544,8 @@ async function build({ work, today = new Date() }) {
   }];
 }
 
-module.exports = { build, CODE_WORDS };
+// The tax lots layer's own shapes, by the account each record carries as its parcel number: what lib/measure.cjs measures a
+// lot's area and counts its buildings on (measured rows, held off until the county's measured_rows switch is on).
+const parcelShapes = { url: TAXLOTS_URL, fields: ['Prop_id'], key: (row) => (row.Prop_id ? String(row.Prop_id) : null), publisher: 'Clark County' };
+
+module.exports = { build, CODE_WORDS, parcelShapes };
