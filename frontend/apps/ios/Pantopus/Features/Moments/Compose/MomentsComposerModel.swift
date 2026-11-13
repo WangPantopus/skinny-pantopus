@@ -79,6 +79,8 @@ final class MomentsComposerModel {
     var hasConnections: Bool?
     /// "Post with no location" on the location card: posting goes on with location off.
     var choseNoLocation = false
+    /// "Show height" (board H1, `+Height`): the Moment says how high above sea level it was made.
+    var showHeight = false
     /// When the album photo or video was taken (any time); nil for the camera, a text card, or a file that never said.
     private(set) var takenAt: Date?
     /// The rest of what was picked together in the library, in the order picked (`+Several`): each takes the sheet
@@ -110,14 +112,17 @@ final class MomentsComposerModel {
     /// The fix the camera and text card pin at.
     @ObservationIgnored private var fix: (coordinate: UserCoordinate, at: Date)?
     /// Where and when a library photo or video was taken.
-    @ObservationIgnored private var capture: MediaCaptureLocation?
+    @ObservationIgnored private(set) var capture: MediaCaptureLocation?
+    /// How high the fix, and the library photo or video, say it was (`+Height`).
+    @ObservationIgnored var fixHeight: HeightReading?
+    @ObservationIgnored var captureHeight: HeightReading?
     @ObservationIgnored private var preparation: Task<(String, MomentPreparedMedia)?, Never>?
     /// One id per text card sent to the Post sheet: tapping Post again after a lost answer returns the same Moment.
     @ObservationIgnored private var textRequestId = UUID().uuidString
     /// `start` runs once: a fold can show the composer again, and the place and choices must stay as they are.
     @ObservationIgnored private var started = false
     private let location: any LocationProviding
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
 
     init(location: any LocationProviding = DeviceLocationProvider.shared, defaults: UserDefaults = .standard) {
         self.location = location
@@ -172,6 +177,7 @@ final class MomentsComposerModel {
             return
         }
         fix = (coordinate, Date())
+        fixHeight = location.cachedHeight()
         locating = .located
         await preview(latitude: coordinate.latitude, longitude: coordinate.longitude)
         previewSettled = true
@@ -230,6 +236,7 @@ final class MomentsComposerModel {
         error = nil
         let taken = asset.creationDate ?? Date()
         takenAt = asset.creationDate
+        captureHeight = asset.location.flatMap(HeightReading.init)
         var point = asset.location.map {
             MediaCaptureLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude, capturedAt: taken)
         }
@@ -455,25 +462,9 @@ extension MomentsComposerModel {
             placeKey: pickedVenue == nil && !noLocationOn ? pickedPlace.flatMap { $0.key == placeChoices.first?.key ? nil : $0.key } : nil,
             // An album item pinned where you are says when it was taken (a capture pin carries its own).
             takenAt: kind != .text && capture == nil ? takenAt.map(MomentTime.string) : nil,
-            venueId: noLocationOn ? nil : pickedVenue?.placeId
+            venueId: noLocationOn ? nil : pickedVenue?.placeId,
+            altitude: shownHeight
         )
-    }
-
-    // MARK: - The last choices
-
-    /// The sheet opens with the last "How long" and "Who sees it" (kept on the
-    /// phone, per account). "Show the area instead" always starts off.
-    private func restoreChoices() {
-        guard let account = Self.account else { return }
-        let savedHours = defaults.integer(forKey: Self.hoursKey(account))
-        if [1, 6, 24, 48].contains(savedHours) { hours = savedHours }
-        if let saved = defaults.string(forKey: Self.audienceKey(account)).flatMap(MomentAudience.init(rawValue:)) { audience = saved }
-    }
-
-    private func saveChoices() {
-        guard let account = Self.account else { return }
-        defaults.set(hours, forKey: Self.hoursKey(account))
-        defaults.set(audience.rawValue, forKey: Self.audienceKey(account))
     }
 
     /// The pin: where a library item was taken, else a fix at most four and a half minutes old.
@@ -486,6 +477,7 @@ extension MomentsComposerModel {
         if fix == nil || Date().timeIntervalSince(fix?.at ?? .distantPast) > 270,
            let fresh = await location.requestCurrent(timeoutSeconds: 6) {
             fix = (fresh, Date())
+            fixHeight = location.cachedHeight()
         }
         guard let fix, Date().timeIntervalSince(fix.at) <= 290 else { return nil }
         return MomentLocationBody(source: .gps, latitude: fix.coordinate.latitude, longitude: fix.coordinate.longitude, at: fix.at)

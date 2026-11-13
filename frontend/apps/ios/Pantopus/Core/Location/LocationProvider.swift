@@ -23,6 +23,20 @@ public struct UserCoordinate: Sendable, Hashable {
     }
 }
 
+/// How high a fix, or an album photo, says the phone was: metres above sea level, with how far off that may be and
+/// the phone's speed when the source says. A Moment's "Show height" sends it.
+public struct HeightReading: Sendable, Hashable {
+    public let meters: Double
+    public let accuracyMeters: Double?
+    public let speedMps: Double?
+
+    public init(meters: Double, accuracyMeters: Double?, speedMps: Double?) {
+        self.meters = meters
+        self.accuracyMeters = accuracyMeters
+        self.speedMps = speedMps
+    }
+}
+
 /// How long an automatic Pulse read (the list, the map's first markers) or opening Plans
 /// waits for a fix it doesn't have to ask for. They fall back to the person's own place, so
 /// a slow GPS acquisition must not hold them up. With no Home to fall back to, the list and
@@ -39,12 +53,19 @@ public protocol LocationProviding: AnyObject, Sendable {
     func requestCurrent(timeoutSeconds: TimeInterval) async -> UserCoordinate?
     /// True when a fix can be requested without the system asking for permission first.
     @MainActor var canLocateWithoutAsking: Bool { get }
+    /// The height of the fix `cachedCoordinate()` answers with; nil when the phone has none it vouches for.
+    @MainActor func cachedHeight() -> HeightReading?
 }
 
 public extension LocationProviding {
     /// Fixed providers (previews, tests) never prompt.
     @MainActor var canLocateWithoutAsking: Bool {
         true
+    }
+
+    /// Fixed providers (previews, tests) have no height.
+    @MainActor func cachedHeight() -> HeightReading? {
+        nil
     }
 }
 
