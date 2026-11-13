@@ -72,6 +72,10 @@ come before step 3 and are not in this round.
 
 ### Step 1 · Remember the venue (server; apps only if needed)
 
+**Built: PR #3976, merged November 12.** The server saves the venue key when an
+app sends the place picker's id as `place.place_id`. Neither app sends it yet;
+that line is in the step 2 app prompts.
+
 - One migration: `Plan.place_ref`.
 - `createPlan` and `editPlan` save the picker's `place_id`.
 - The funnel report gains plans and guests per venue.
@@ -81,6 +85,11 @@ come before step 3 and are not in this round.
   conversation: "74 people came to your café through Pantopus last month."
 
 ### Step 2 · A business hosts (server and web share page; then iOS, Android)
+
+**Server and web share page built: PR #3983.** The iPhone and Android prompts are
+in [05-app-session-prompts.md](05-app-session-prompts.md); the founder starts
+those sessions. What the build decided along the way is in the contract, "Calls
+the build made" (B1 to B10).
 
 Server:
 

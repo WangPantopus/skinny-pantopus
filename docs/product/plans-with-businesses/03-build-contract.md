@@ -48,6 +48,23 @@ open until the founder confirms it.
 | C8 | A refunded card fee is Pantopus's cost | The card company keeps its fee on a refund. Pantopus absorbs it in the first build and counts it |
 | C9 | Old app builds never see a business's plan | The server sends business plans only to a request that says it can draw them (section 5.1) |
 
+### Calls the build made (steps 1 and 2, November 12)
+
+Made while building, from what the code is. Each is the founder's to change.
+
+| | Call | Why |
+| --- | --- | --- |
+| B1 | The business is the plan's host. `Plan.host_user_id` is the business's own account, and the staff member who posted is kept in `posted_by_user_id` | Every screen, notice and chat line that names a host then names the business with no special case. A code path somebody missed stops a staff member doing something; it cannot show a guest a staff member's name |
+| B2 | `plans.post` and `plans.manage` go to the owner, admins and editors by default | There is no "manager" role: the roles are owner, admin, editor, staff and viewer. Staff and viewers get neither. An owner can still grant or refuse either one person by person |
+| B3 | A plan meets only at a storefront, an office or a warehouse that is on the map | A location of unknown type, a service area, a mailing address or a business working from a home may be someone's home (rule 3) |
+| B4 | The business's team sees a guest's first name only, and no distance, address standing, connections or other plans | The design's sixth principle, applied to the people list, the requests list and the invitation lists |
+| B5 | The assistant's nudges and "Plans you'd like" leave a business's plan out | A nudge can't know whether the person's app can draw it (C9). The doors that bring guests are step 4 |
+| B6 | A plan's hidden post row is written under the business's account like any plan's, with none of the fields that list a post on a business's page | So a plan never shows up as a post on the page or in the team's posts list |
+| B7 | The business's team is not in a plan's chat yet. The room is the guests', and the business's own lines appear in it ("Lacamas Pickleball Club changed the place") | A room the business's account is in belongs to the business inbox, which any team member who may write in the business's task chats can open, whatever their Plans permissions, and which pushes them each guest's message with the guest's display name. The team joins a plan's chat when Plans has its own rule for it: `plans.manage`, first names, and no inbox. Planned with the roster in step 3 |
+| B8 | When a business may no longer host (unpublished, no longer verified, or its switch turned off), its plans are hidden from everyone new, and the people already in or waiting, and the team, keep reading them | So a guest can still leave and the team can still cancel. Nobody new can find or join one, and asking again from the waitlist is refused |
+| B9 | When a business leaves Pantopus (its account is no longer a business), the Plans job cancels its open plans and tells the people in, waiting or invited | Nobody is left on its team to run them |
+| B10 | A notice about a business's plan that is sent without a request (an invitation, the team's news) goes only to a person who has the switch | A notice must not open a plan the person's app answers 404 for. An invited address still gets its email, which opens the web page |
+
 ## 3. Rules that hold everywhere
 
 1. **A neighbor's plan is unchanged.** No new field is required on any existing
@@ -81,7 +98,8 @@ and the current server ignore them.
 | Column | Type | Meaning |
 | --- | --- | --- |
 | `place_ref` | `text` | The shared key for a place, in one of the forms of the shared contract, section 3.1. For a neighbor's plan at a public place it is the picker's id, such as `osm:node/123`. For a business's plan it is the location's own `place_ref` when it has one, and null until then. Step 1. The picker already sends `place_id` (`planPlaces.js:237`); a plan does not save it today |
-| `business_user_id` | `uuid`, references `User(id)` | The business hosting. Null on a neighbor's plan. `host_user_id` stays the person who posted |
+| `business_user_id` | `uuid`, references `User(id)`, deleted with it | The business hosting. Null on a neighbor's plan. For a business's plan `host_user_id` is the same account (B1) |
+| `posted_by_user_id` | `uuid`, references `User(id)`, set null when they are deleted | The staff member who posted it. Sent only to the business's own team |
 | `business_location_id` | `uuid`, no foreign key | The business location used. The plan keeps its own copy of the point and address, as `place_home_id` does |
 | `label` | `text` | The label key the business chose (section 4.4) |
 | `price_cents` | `integer`, 100 to 50000 | The price of one spot. Null means free |
@@ -91,11 +109,16 @@ and the current server ignore them.
 
 Checks:
 
-- `plan_price_needs_business`: `price_cents IS NULL OR business_user_id IS NOT NULL`.
-- `plan_business_public`: `business_user_id IS NULL OR place_kind = 'public'`.
-- `plan_guest_invites_business`: `NOT guests_can_invite OR business_user_id IS NOT NULL`.
+- `plan_business_is_host`: `business_user_id IS NULL OR business_user_id = host_user_id`.
+- `plan_business_public`: a business's plan is at a public place and names its
+  location (`business_location_id`).
+- `plan_business_fields`: on a neighbor's plan `posted_by_user_id`,
+  `business_location_id` and `label` are empty and `guests_can_invite` is false.
+- `plan_label_form`: a label is a short lowercase key.
 - `auto_rules` gains the value `open` ("right away, anyone"), allowed only where
-  `business_user_id IS NOT NULL`.
+  `business_user_id IS NOT NULL` (`plan_open_needs_business`).
+- Step 3 adds `plan_price_needs_business`:
+  `price_cents IS NULL OR business_user_id IS NOT NULL`.
 - `plan_playdate_rules` is widened so it applies only where
   `business_user_id IS NULL`. Today it forces a playdate to approve by hand; a
   business's kids' class may let families in right away.
@@ -137,8 +160,10 @@ those earlier requests too.
   shape of `20261025160000_plans_sports_flag.sql`.
 - `FunnelEvent` types (section 11), widened as `20261031190000_plan_invites.sql`
   did.
-- Business permissions `plans.post` and `plans.manage`, added to the owner, admin
-  and manager presets. `finance.view` already exists and gates the statement.
+- Business permissions `plans.post` and `plans.manage`: two values added to the
+  `business_permission` list, and role defaults that give both to admins and
+  editors (B2). Owners hold every permission. `finance.view` already exists and
+  gates the statement.
 - `PlanInvite.host_user_id` already names whoever sent the invitation. A guest's
   "Bring a friend" invitation uses the same table with the guest's id there; no
   column is added. The rule that only the host invites (`planInvites.js:175`)
@@ -190,20 +215,39 @@ Without `biz=1` the lists, the map, the detail route and "Plans you'd like" beha
 as if the plan did not exist (404 on its id). This is how `v=2` keeps old builds
 on today's sports answers. Only app builds that can draw G1 to G6 send `biz=1`.
 
+`biz=1` is read from the query string: on every route under `/api/plans` (reads
+and writes), on `GET /api/posts/map`, and on `GET /api/businesses/:id/plans`. An
+app that can draw a business's plan sends it on all of them. The business's own
+team needs it too: without it they see none of their plans. Jobs and nudges have
+no request, so a business's plan does not exist for them either (B5).
+
+The viewer's side (1 and 3) always holds. The business's side (2) decides who
+can find and join a plan; the people already in or waiting, and the team, keep
+reading it after the business stops qualifying (B8).
+
 ### 5.2 Changed routes
 
-- `GET /api/plans`, `GET /api/plans/mine`, the map pins: accept `biz=1` and
-  `host=all|neighbors|businesses` (default `all`). With `biz=1`, a venue's later
-  plans in the window are folded: its soonest plan is the row and carries
-  `more_times`.
+- `GET /api/plans`, `GET /api/plans/mine`, the map pins: accept `biz=1`. The list
+  and the pins also take `host=all|neighbors|businesses` (default `all`). With
+  `biz=1`, a venue's later plans in the window are folded: its soonest plan is
+  the row, or the pin, and carries `more_times`. The list's answer also carries
+  `has_business_plans`, true when a business has a plan in the area and window
+  whatever the filter says: the app shows the filter only then. "My plans" lists
+  a business's plans under `hosting` for the team members who run them.
+- A business's map pin is at its exact place for everyone, and adds `business`
+  (`user_id`, `name`, `verified`), `label`, `label_text`, `place_name` and
+  `more_times` (a number).
 - `GET /api/plans/:id`: the card and detail gain the fields in 5.4.
 - `POST /api/plans`: accepts `host_as`, `business_location_id`, `label`,
   `price_cents`, `guests_can_invite`, `repeat`. Section 5.5.
 - `PATCH /api/plans/:id`: a business's plan can change its title, about, note,
-  spots (never below seats taken) and time. Moving the time by more than 30
-  minutes asks everyone "Still coming?" as today, and a guest who says no is
-  refunded in full whatever the deadline. The price and the location cannot change
-  once anyone has paid.
+  spots (never below seats taken), time, `label`, `auto_rules` and
+  `guests_can_invite`, and can move to another of the business's own locations
+  with `business_location_id`. A `place` is refused: a business's plan never
+  meets at a place typed by hand. Moving the time by more than 30 minutes, or the
+  place, asks everyone "Still coming?" as today, and from step 3 a guest who says
+  no is refunded in full whatever the deadline. The price and the location cannot
+  change once anyone has paid.
 - `POST /api/plans/:id/requests`: on a paid plan, starts a payment. Section 5.6.
 - `DELETE /api/plans/:id/requests/mine`: on a paid plan, refunds by the rule and
   answers with the refund.
@@ -218,11 +262,11 @@ on today's sports answers. Only app builds that can draw G1 to G6 send `biz=1`.
 
 | Route | Who | What |
 | --- | --- | --- |
-| `GET /api/plans/host-as` | Signed in | The businesses the person may post for, each with its locations and whether it can take payments. Empty for nearly everyone; the apps show "Host as" only when it isn't |
+| `GET /api/plans/host-as` | Signed in | `{ businesses: [{ user_id, name, avatar_url, verified, kinds: [{ kind, name, labels: [{ key, text }] }], locations: [{ id, label, is_primary, address, latitude, longitude }], limits: { spots_max, days_ahead } }] }`: the businesses the person may post for. Empty for nearly everyone, and always without `biz=1`; the apps show "Host as" only when it isn't. Whether a business can take payments is added in step 3 |
 | `POST /api/plans/:id/requests/mine/confirm` | The guest | Re-reads the payment and answers with the request. The app calls it when the payment sheet closes |
 | `GET /api/plans/:id/roster` | Staff with `plans.manage` | Guests with first name, party size, note, `way_in`, `new_to_business`, `checked_in_at`, paid total |
 | `POST /api/plans/:id/roster/:requestId/check-in` | Staff with `plans.manage` | Sets or clears `checked_in_at` |
-| `GET /api/businesses/:id/plans` | Anyone who can see the page | Upcoming plans and the proof line, for the business page |
+| `GET /api/businesses/:id/plans` | Signed in, with `biz=1` | `{ items: PlanCard[], plans_hosted }`: the business's upcoming plans, soonest first and not folded, for the business page. Empty for anyone its plans don't exist for. The proof line is step 3 |
 | `GET /api/businesses/:id/plans/statement?month=YYYY-MM` | Staff with `finance.view` | The statement (section 11.2) |
 | `GET /api/plans/near-me` | Signed in | The one "Near you this week" card and the "New here" three, or nothing |
 
@@ -236,17 +280,24 @@ on today's sports answers. Only app builds that can draw G1 to G6 send `biz=1`.
     "proof": { "came": 118, "went_well_in_10": 9 }
   },
   "label": "clinic",
+  "label_text": "Clinic",
   "place": { "name": "Example Pickleball Club", "address": "410 Example Street, Camas", "latitude": 0, "longitude": 0 },
   "price": { "cents": 1800, "currency": "USD", "per": "person" },
   "refund": { "until": "2026-11-20T18:00:00Z", "rule": "full_until_24h" },
   "how_people_get_in": "automatic",
   "known_going": { "count": 2, "people": [{ "display_name": "Maya", "avatar_url": null }] },
-  "more_times": { "count": 3 },
+  "more_times": { "count": 3, "items": [{ "id": "…", "title": "Open play", "label": "open_play", "label_text": "Open play", "starts_at": "…", "timezone": "America/Los_Angeles" }] },
   "guests_can_invite": true
 }
 ```
 
-- `business` is null on a neighbor's plan, and then none of the others appear.
+- A neighbor's plan has none of these keys. A business's plan has `business`,
+  `label`, `label_text`, `place`, `price`, `guests_can_invite` and `more_times`.
+- **As built in step 2:** `price` is `null`, which reads "Free"; `proof` is
+  `null`; `refund` and `known_going` are not sent yet (steps 3 and 4).
+  `more_times` is `null` unless the venue has later plans in the list's window;
+  `items` holds the first six.
+- `viewer.auto_rule` is `"open"` on a plan that lets anyone in right away.
 - `place` on a card is public only for a business's plan. A neighbor's plan keeps
   `area` on the card and `place` in the detail for people who are in.
 - `proof` is null until 20 checked-in guests have answered.
@@ -275,9 +326,14 @@ on today's sports answers. Only app builds that can draw G1 to G6 send `biz=1`.
 6. `repeat: { "weekly_until": "YYYY-MM-DD" }` makes one plan a week up to that
    date, at most 12, all with one `series_id`. Each is a full plan with its own
    requests, chat and payments.
-7. The `Post` row is written as today, with `post_as` and the author fields set
-   so the business, not the staff member, is the public author. The plan's chat is
-   written in as the business, as `chatBusinessAccess.js` does for tasks.
+7. The business's account is the plan's host and the author of its hidden `Post`
+   row, which is written like any plan's (B1, B6). The plan's chat is the guests'
+   room: the business's own lines appear in it, and neither the business's
+   account nor any team member is in it yet (B7). The team's view of the plan
+   carries no `chat_room_id`.
+8. One audit line in the business's log for each thing a team member does to a
+   plan: `plans.post`, `plans.edit`, `plans.cancel`, `plans.accept`,
+   `plans.decline`, `plans.remove`.
 
 Refusals: the helper's `404 business_not_found`, `403 not_your_business`,
 `403 not_allowed`, `403 business_not_verified` and
@@ -354,6 +410,12 @@ Saved as `way_in` when the request is created. The app sends what it knows in
 
 C3: if any own way holds, the basis is `own`, whatever `via` says.
 
+**As built in step 2.** The ways that exist are checked: `own_invite` and
+`own_link` (the guest holds an invitation to the plan; every invitation to a
+business's plan is the business's until "Bring a friend" is built), `follower`,
+and `business_page` (taken from `via`). Anything else is saved as `map_list`
+until its screen is built in step 4. A neighbor's plan saves no way in.
+
 ### 6.3 Refunds
 
 | What happens | Refund |
@@ -407,8 +469,10 @@ design.
 | `plan_payout_sent` | Business | A plan's payout is sent | New |
 | `plan_statement_ready` | Business | The first of the month | New |
 
-A notice to a business goes to the staff who hold `plans.manage`, and opens the
-plan as the business.
+A notice to a business goes to the staff who hold `plans.manage` and have the
+switch (B10), and opens the plan as the business. Nothing is sent to the
+business's own account. Each team member's asks bundle on their own, as a
+neighbor host's do.
 
 ## 8. Jobs
 
@@ -423,6 +487,9 @@ Elsewhere:
 
 5. The payment transfer job treats a `plan_payment` by section 6.4 and sends
    `plan_payout_sent`.
+
+Built in step 2, in the same tick: the open plans of a business that has left
+Pantopus are cancelled and the people in them are told (B9).
 6. A monthly job on the first, 9 AM in each business's zone, sends
    `plan_statement_ready`. The statement itself is computed on request.
 
@@ -556,9 +623,24 @@ Only the founder does these.
 - Whether deleting a business with unpaid-out plan payments is refused. The
   account-deletion rules and their test decide; a new reference to `User` must not
   break them.
-- Whether the apps send `place_id` when a plan is posted, or only read it in the
-  picker. If not, step 1 needs one line in each app.
-- Whether a `self_attested` business shows "Verified" anywhere today. C1 assumes
-  it does not.
+- Answered: neither app sends `place_id` when a plan is posted. The server
+  accepts it as `place.place_id` since step 1; sending it is one line in each
+  app, in the step 2 app work.
+- Answered: a `self_attested` business shows "Verified" nowhere today.
+- Answered: deleting a business account deletes its plans; deleting the staff
+  member who posted one leaves the plan with the business. Before paid spots, a
+  business with unpaid plan money must not be deletable.
+- A backend rolled back to a build from before step 2 would show a business's
+  plan as a neighbor's, to every app. Before rolling back that far, cancel the
+  business plans that are open.
+- Whether staff (the role) should post or run plans by default (B2).
+- `way_in: business_page` is taken on the app's word in step 2. Nothing depends
+  on it while plans are free. Before step 3 it must be checked on the server, or
+  it moves to the Pantopus rate.
+- A block between a guest and one team member personally is not applied to the
+  business's notices to that member. The lists already hide such a guest from
+  that member.
+- The team's lists carry a guest's account id, which the app needs to invite or
+  answer them. A team member could use it to open that person's profile.
 - Whether people who book and cancel repeatedly need a limit. The first build
   counts refunds and absorbed card fees and sets no limit.

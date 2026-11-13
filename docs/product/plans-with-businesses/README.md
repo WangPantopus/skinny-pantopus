@@ -1,7 +1,9 @@
 # Plans with businesses
 
-November 11, 2026 · Status: designed and written down. Nothing is built, no
-session is started, and no business has been asked.
+November 11, 2026, updated November 12 · Status: the first round is built on the
+server. Step 1 is merged (#3976) and step 2 is PR #3983, both behind
+`plans_business`, off. No phone screen is built, no price exists, and no business
+has been asked.
 
 A verified business hosts a plan in Plans, at its own place, free or with a price
 on each spot. Guests pay in the app. Pantopus keeps a fee from the business's
@@ -16,6 +18,7 @@ own. A neighbor's own plan is unchanged.
 | [02-design.md](02-design.md) | What every screen shows and the rules it keeps, with a picture of each board |
 | [03-build-contract.md](03-build-contract.md) | What the server, the web and the apps build against: data, routes, money, notices, "done when" |
 | [04-build-plan.md](04-build-plan.md) | The seven steps, the switches, who builds what, the checks, the traps |
+| [05-app-session-prompts.md](05-app-session-prompts.md) | The prompts for the iPhone and Android sessions of step 2, ready to paste |
 | [screens/](screens/) | The 22 light boards as pictures |
 
 The boards, in light and dark, are on the private Design canvas
@@ -38,7 +41,12 @@ for themselves.
 - **Taken as accepted, not confirmed one by one:** the proposal's six decisions,
   D1 to D6.
 - **Open:** the contract's nine calls, C1 to C9, and its open questions.
-- **Not done:** the lawyer's and accountant's reads, the by-hand test, any build.
+- **Said by the founder on November 12:** go for the first round (steps 1 and 2
+  on the server and the web share page, a free plan only), with four of the
+  contract's calls taken as written (C1, C5, C6, C9).
+- **Decided by the build, for the founder to check:** the contract's B1 to B10.
+- **Not done:** the lawyer's and accountant's reads, the by-hand test, the phone
+  screens, and everything about money.
 
 The founder's steps are in [NEXT_STEPS](../../../NEXT_STEPS.md), "Plans with
 businesses".

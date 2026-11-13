@@ -1016,7 +1016,21 @@ Designed; the first round of the build started on November 12 (section 0). A ver
 - [ ] Before bars are invited: a lawyer's read of the Washington rule on bar promotions (WAC 314-52-110).
 - [ ] Before real people: the privacy policy, the data inventory and the store privacy labels.
 
-**Not built.** All of it. No business has been asked whether it wants this.
+**Built, behind `plans_business`, off (November 12).**
+
+- [x] Step 1, a plan remembers its venue: [#3976](https://github.com/WangPantopus/skinny-pantopus/pull/3976), merged. Nothing is saved until the apps send the place picker's id, which is one line in each app, in the step 2 app prompts.
+- [ ] Step 2 on the server and the web share page, a verified business hosts a free plan: [#3983](https://github.com/WangPantopus/skinny-pantopus/pull/3983). Checked on a private local stack: 114 checks of the business flow, a neighbor's whole flow compared with untouched master (identical with the switch off), invitations, the Plans job, and the share page in a browser.
+- [ ] Step 2 on iPhone and Android: not started. The prompts are in [05-app-session-prompts.md](docs/product/plans-with-businesses/05-app-session-prompts.md); you start those sessions.
+
+**Yours to check from the build** (the contract's "Calls the build made", B1 to B10). The ones you would notice:
+
+- [ ] Admins and editors post and run a business's plans by default; staff and viewers don't. There is no "manager" role.
+- [ ] The business's team is not in a plan's chat yet. Guests chat among themselves and see the business's own lines. The team joins when Plans has its own rule for it, planned with the roster in step 3.
+- [ ] The team sees a guest's first name only.
+- [ ] Only a storefront, an office or a warehouse can host a plan. A business whose location is of unknown type has to fix the location first.
+- [ ] On the web share page, the board's last line, "A neighbor's plan still shows only its area here.", is shown as drawn. Say if that was a note to you and should come off.
+
+**Not built.** The phone screens, paid spots and everything about money, the doors, repeats, and the web desk. No business has been asked whether it wants this.
 
 ## Background backlog
 
