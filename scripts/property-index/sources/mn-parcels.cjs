@@ -63,9 +63,21 @@ function storiesFrom(style) {
   return named ? STORY_WORDS[named[1]] : null;
 }
 
+// Some counties (St. Louis: 21,414 addresses) put the street's own direction in the house number's prefix or suffix as well, "E"
+// beside "East": those letters are the street's, and glued to the number they leave an address nobody types. A prefix or suffix
+// that names another direction, or none, stays part of the number.
+const DIRECTIONS = { N: 'NORTH', S: 'SOUTH', E: 'EAST', W: 'WEST', NE: 'NORTHEAST', NW: 'NORTHWEST', SE: 'SOUTHEAST', SW: 'SOUTHWEST' };
+function streetsOwn(letters, direction) {
+  const short = String(letters ?? '').trim().toUpperCase();
+  const street = String(direction ?? '').toUpperCase().replace(/[\s.-]/g, '');
+  return Boolean(DIRECTIONS[short]) && (street === short || street === DIRECTIONS[short]);
+}
+
 function fromRow(row, fips, county) {
   const unit = realUnit(row.sub_id1) ? [row.sub_type1, row.sub_id1].map((part) => String(part ?? '').trim()).filter(Boolean).join(' ') : '';
-  const parsed = parts({ number: `${row.anumberpre || ''}${row.anumber || ''}`, numberSuffix: row.anumbersuf || '', pre: row.st_pre_dir || '', name: [row.st_pre_typ, row.st_name].filter(Boolean).join(' '), suffix: row.st_pos_typ || '', post: row.st_pos_dir || '', unit });
+  const prefix = streetsOwn(row.anumberpre, row.st_pre_dir) ? '' : row.anumberpre || '';
+  const numberSuffix = streetsOwn(row.anumbersuf, row.st_pos_dir) ? '' : row.anumbersuf || '';
+  const parsed = parts({ number: `${prefix}${row.anumber || ''}`, numberSuffix, pre: row.st_pre_dir || '', name: [row.st_pre_typ, row.st_name].filter(Boolean).join(' '), suffix: row.st_pos_typ || '', post: row.st_pos_dir || '', unit });
   const parcel = word(row.county_pin) || word(row.state_pin);
   if (!parsed || !parcel) return null;
   const [kind, homeType] = useOf(row, parsed.unit);

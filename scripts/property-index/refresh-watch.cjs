@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The refresh watch, after every build run of .github/workflows/property-index.yml: what each source and county did, every
-// live county near the date its record stops being served (stale_after), and every scheduled source whose run never came
+// county a source served that its build no longer gives (publish.cjs never sees those, so they'd go on serving unnoticed),
+// every live county near the date its record stops being served (stale_after), and every scheduled source whose run never came
 // (GitHub starts scheduled runs late, and drops some or replaces a waiting one). Its tables go in the run's summary. It ends
 // the run red, so GitHub sends its usual failed-run email, when a live county is RED_DAYS or fewer from its date (or past it),
 // when a scheduled source's run is overdue, or when a live county's source is on no schedule. Each source's last try is kept
@@ -10,7 +11,8 @@
 //   node scripts/property-index/refresh-watch.cjs --root <local index> ...   the same on a local copy
 //   node scripts/property-index/refresh-watch.cjs --check-schedule   (pull requests) every scheduled list names connectors that exist, each once
 //     --outcomes  the build loop's builds.tsv (source, build exit, publish exit) and publish.cjs's counties.jsonl (--outcomes)
-//     --red  a scheduled run: what needs someone fails the run. A run started by hand (a builder's) says the same as warnings.
+//     --red  a scheduled run: what needs someone fails the run (a live county near its date or gone from its source's build, a
+//            missed scheduled build, a live county's source on no schedule). A run started by hand says the same as warnings.
 //     --now <time>  as if it were then (to check a local copy)
 'use strict';
 
@@ -151,6 +153,12 @@ function watch(opts) {
   const counties = store.states().flatMap((state) => Object.values(state.jurisdictions || {}));
   const switches = store.json(switchesPath('production')) || { counties: {} };
   const live = new Set(Object.entries(switches.counties || {}).filter(([, county]) => county.mode === 'live').map(([fips]) => fips));
+  // A county its source's build no longer gives at all (every row without an address, say): only sources that built and whose
+  // publish said something, so a publish that failed outright isn't read as every county gone.
+  const toldOf = new Set(outcomes.map((line) => line.fips));
+  const spoke = new Set(outcomes.map((line) => line.source));
+  const builtWhole = new Set(builds.filter(({ source, build }) => !build && spoke.has(source)).map(({ source }) => source));
+  const notGiven = counties.filter((county) => county.status !== 'withdrawn' && builtWhole.has(county.source) && !toldOf.has(county.fips));
   const attempts = store.json(ATTEMPTS) || { sources: {} };
   const errors = [];
   const warnings = [];
@@ -176,6 +184,7 @@ function watch(opts) {
       run: opts.run || null,
       refused: lines.filter((line) => line.outcome === 'refused').map((line) => line.fips),
       kept_back: lines.filter((line) => line.outcome === 'kept back').map((line) => line.fips),
+      not_given: notGiven.filter((county) => county.source === source).map((county) => county.fips),
     };
     return [source, result, count('published'), count('unchanged'), count('kept back'), count('refused')];
   });
@@ -183,6 +192,10 @@ function watch(opts) {
   const refusals = outcomes.filter((line) => line.outcome === 'refused' || line.outcome === 'kept back');
   if (refusals.length) {
     summary.push(...table(['County', 'Source', 'What happened', 'Why'], refusals.map((line) => [`${line.name || line.fips} ${line.state} (${line.fips})${live.has(line.fips) ? ', live' : ''}`, line.source, line.outcome, line.why || ''])));
+  }
+  if (notGiven.length) {
+    summary.push('### Counties this run\'s build no longer gives', '', 'Each keeps serving its older release until its date. Its source built without it: read why in the build\'s log.', '',
+      ...table(['County', 'Source', 'Serving, dated', 'Stops serving'], notGiven.map((county) => [`${county.name} ${county.state} (${county.fips})${live.has(county.fips) ? ', live' : ''}`, county.source, county.as_of, county.stale_after])));
   }
 
   // Scheduled sources: when each scheduled build last came, and whether this source has been tried since.
@@ -230,6 +243,11 @@ function watch(opts) {
   for (const [source, { counties: count, live: liveCount }] of unscheduled) {
     const line = `${source} serves ${count} ${count === 1 ? 'county' : 'counties'}${liveCount ? ` (${liveCount} live)` : ''} and is on no schedule`;
     if (liveCount) errors.push({ line });
+    else warnings.push(line);
+  }
+  for (const county of notGiven) {
+    const line = `${county.name} ${county.state} (${county.fips})${live.has(county.fips) ? ', live,' : ''} is no longer in ${county.source}'s build; its ${county.as_of} release serves until ${county.stale_after}`;
+    if (live.has(county.fips)) errors.push({ line });
     else warnings.push(line);
   }
   // GitHub shows the first ten of each kind on the run's page: the counties nearest their date first, then the missed builds.
