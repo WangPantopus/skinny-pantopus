@@ -27,35 +27,49 @@ public struct CreateBusinessWizardView: View {
         self.onOpenBusiness = onOpenBusiness
     }
 
+    /// The scroll target each step puts on its error sentence.
+    static let submitErrorID = "createBusinessSubmitError"
+
     public var body: some View {
-        WizardShell(model: viewModel, identity: .business, scrollResetID: viewModel.currentStep) {
-            stepContent
-        }
-        .onChange(of: viewModel.pendingEvent) { _, event in
-            handle(event)
-        }
-        .onChange(of: viewModel.currentStep) { _, step in
-            Analytics.track(.screenCreateBusinessStepViewed(
-                stepNumber: step.stepNumber,
-                stepName: step.rawValue
-            ))
-        }
-        .onAppear {
-            Analytics.track(.screenCreateBusinessStepViewed(
-                stepNumber: viewModel.currentStep.stepNumber,
-                stepName: viewModel.currentStep.rawValue
-            ))
-        }
-        .alert("Business created", isPresented: $showsCreationWarning) {
-            Button("Open business") {
-                guard let businessId = createdBusinessId else { return }
-                createdBusinessId = nil
-                onOpenBusiness(businessId)
+        ScrollViewReader { proxy in
+            WizardShell(model: viewModel, identity: .business, scrollResetID: viewModel.currentStep) {
+                stepContent
             }
-        } message: {
-            Text(viewModel.creationWarning ?? "")
+            // The error sits under the step's last section, often behind the bottom buttons. Bring it
+            // into view and read it out, so a refused Publish doesn't look like nothing happened.
+            .onChange(of: viewModel.submitError) { _, error in
+                guard let error else { return }
+                Task { @MainActor in
+                    withAnimation { proxy.scrollTo(Self.submitErrorID, anchor: .bottom) }
+                    AccessibilityNotification.Announcement(error).post()
+                }
+            }
+            .onChange(of: viewModel.pendingEvent) { _, event in
+                handle(event)
+            }
+            .onChange(of: viewModel.currentStep) { _, step in
+                Analytics.track(.screenCreateBusinessStepViewed(
+                    stepNumber: step.stepNumber,
+                    stepName: step.rawValue
+                ))
+            }
+            .onAppear {
+                Analytics.track(.screenCreateBusinessStepViewed(
+                    stepNumber: viewModel.currentStep.stepNumber,
+                    stepName: viewModel.currentStep.rawValue
+                ))
+            }
+            .alert("Business created", isPresented: $showsCreationWarning) {
+                Button("Open business") {
+                    guard let businessId = createdBusinessId else { return }
+                    createdBusinessId = nil
+                    onOpenBusiness(businessId)
+                }
+            } message: {
+                Text(viewModel.creationWarning ?? "")
+            }
+            .accessibilityIdentifier("createBusinessWizard")
         }
-        .accessibilityIdentifier("createBusinessWizard")
     }
 
     @ViewBuilder
@@ -86,6 +100,21 @@ public struct CreateBusinessWizardView: View {
             }
         }
         viewModel.acknowledgePendingEvent()
+    }
+}
+
+/// The sentence a step shows when a check or the server refuses it. It carries `submitErrorID`, so the wizard can
+/// scroll to it on any step.
+struct CreateBusinessSubmitError: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.Color.error)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("createBusinessSubmitError")
+            .id(CreateBusinessWizardView.submitErrorID)
     }
 }
 

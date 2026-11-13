@@ -26,11 +26,7 @@ struct ConfirmStep: View {
                 .accessibilityIdentifier("createBusinessLogoWarning")
         }
         if let submitError = viewModel.submitError, viewModel.currentStep == .confirm {
-            Text(submitError)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.error)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("createBusinessSubmitError")
+            CreateBusinessSubmitError(message: submitError)
         }
     }
 

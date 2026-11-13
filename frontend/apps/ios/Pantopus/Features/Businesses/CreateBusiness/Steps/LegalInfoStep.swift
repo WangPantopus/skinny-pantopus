@@ -69,11 +69,7 @@ struct LegalInfoStep: View {
             )
         }
         if let submitError = viewModel.submitError, viewModel.currentStep == .legalInfo {
-            Text(submitError)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.error)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("createBusinessSubmitError")
+            CreateBusinessSubmitError(message: submitError)
         }
     }
 
