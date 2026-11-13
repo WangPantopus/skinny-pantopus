@@ -8,6 +8,9 @@
  *
  *   queue  asked for, and no release: the next counties to build, by what people asked for
  *   ready  asked for, with a release, and not live: what going live would start answering
+ *   stale_soon  live counties STALE_SOON_DAYS or fewer from the date their release stops being served (stale_after), or past
+ *          it: the reader then answers "stale", and Add Home finds no record there. Nearest first. A refresh that brings a newer
+ *          file moves the date (.github/workflows/property-index.yml; its refresh watch says the same after every build).
  */
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
@@ -19,6 +22,7 @@ const { stateOfCounty } = require('./addressKey');
 
 const UNANSWERED = ['off', 'no_record', 'ambiguous'];
 const DAY_MS = 24 * 60 * 60 * 1000;
+const STALE_SOON_DAYS = 30;
 const isCounty = (place) => /^\d{5}$/.test(place);
 
 function blankRow(place) {
@@ -94,6 +98,9 @@ function serversFrom(rows) {
   return { servers, servers_disagree: new Set(servers.map((server) => server.hash)).size > 1 };
 }
 
+/** Whole days from today (UTC) to a release's stale_after; below zero once past it. */
+const daysLeft = (staleAfter, now) => Math.floor((Date.parse(`${staleAfter}T00:00:00Z`) - Date.parse(`${counts.dayOf(now)}T00:00:00Z`)) / DAY_MS);
+
 const byUnanswered = (a, b) => b.unanswered - a.unanswered || b.searches_unanswered - a.searches_unanswered || String(a.fips).localeCompare(String(b.fips));
 
 /**
@@ -119,7 +126,10 @@ async function loadReport({ days = 7, until = new Date() } = {}) {
     row.name = county?.name || names.get(row.fips) || null;
     // Unknown when the index can't be read here, which isn't the same as no release.
     row.has_release = states.has(row.state) ? Boolean(county) : null;
-    if (county) Object.assign(row, { release: county.release, as_of: county.as_of, records: county.records ?? null, source_status: county.status });
+    if (county) {
+      Object.assign(row, { release: county.release, as_of: county.as_of, stale_after: county.stale_after || null, source: county.source || null, records: county.records ?? null, source_status: county.status });
+      if (county.stale_after) row.days_left = daysLeft(county.stale_after, new Date());
+    }
   }
   const counties = list.filter((row) => row.fips).sort(byUnanswered);
   const asked = counties.filter((row) => row.unanswered > 0);
@@ -136,9 +146,10 @@ async function loadReport({ days = 7, until = new Date() } = {}) {
     attom_calls: vendors.attom || 0,
     queue: asked.filter((row) => row.has_release === false),
     ready: asked.filter((row) => row.has_release && row.mode !== 'live'),
+    stale_soon: counties.filter((row) => row.mode === 'live' && Number.isFinite(row.days_left) && row.days_left <= STALE_SOON_DAYS).sort((a, b) => a.days_left - b.days_left),
     counties,
     no_county: list.filter((row) => !row.fips).sort(byUnanswered),
   };
 }
 
-module.exports = { loadReport };
+module.exports = { loadReport, STALE_SOON_DAYS };

@@ -1,16 +1,18 @@
 /**
- * Once a day: yesterday's county lookups and vendor calls, into the log (counts only).
+ * Once a day: yesterday's county lookups and vendor calls, into the log (counts only), and the live counties near
+ * the date their records stop being served (a warn line when any).
  * The whole report is GET /api/admin/property-records/report and
  * scripts/eval/property-records-report.js; the rows behind it stay 45 days.
  */
 
 const logger = require('../utils/logger');
 const counts = require('../services/propertyRecords/counts');
-const { loadReport } = require('../services/propertyRecords/report');
+const { loadReport, STALE_SOON_DAYS } = require('../services/propertyRecords/report');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TOP = 25;
 const brief = (rows) => rows.slice(0, TOP).map(({ fips, state, unanswered, searches_unanswered: searches }) => ({ fips, state, unanswered, searches }));
+const dated = (rows) => rows.map(({ fips, state, name, source, as_of: asOf, stale_after: staleAfter, days_left: daysLeft }) => ({ fips, state, name, source, as_of: asOf, stale_after: staleAfter, days_left: daysLeft }));
 
 async function propertyRecordsDaily() {
   const report = await loadReport({ days: 1, until: new Date(Date.now() - DAY_MS) });
@@ -22,7 +24,15 @@ async function propertyRecordsDaily() {
     build_next: brief(report.queue),
     ready_to_go_live: brief(report.ready),
     no_county: brief(report.no_county),
+    stale_soon: dated(report.stale_soon),
   });
+  if (report.stale_soon.length) {
+    logger.warn('property_records.stale_soon', {
+      within_days: STALE_SOON_DAYS,
+      past: report.stale_soon.filter((row) => row.days_left < 0).length,
+      counties: dated(report.stale_soon),
+    });
+  }
   if (report.attom_calls) {
     logger.warn('property_records.attom_called', {
       day: report.to,
