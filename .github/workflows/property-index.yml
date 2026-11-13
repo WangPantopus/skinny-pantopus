@@ -1,14 +1,18 @@
 name: Property Index
 
 # Pantopus's own index of public county property records (backend/services/propertyRecords, scripts/property-index),
-# published to private storage. Weekly for Clark County's weekly file, monthly for the rest, and by hand, with the
-# labeled national estimates in their own index beside it, by hand (they change yearly). This
-# repository is public, so its logs and uploaded artifacts are too: a real county's run prints counts only and uploads
-# nothing here, and only master can reach the storage key. A pull request builds a made-up county and publishes nothing.
+# published to private storage. Weekly for Clark County's weekly file and the counties whose records stop serving 60 days
+# after their date, monthly for the rest, and by hand, with the labeled national estimates in their own index beside it,
+# by hand (they change yearly). After every build, the refresh watch says in the run's summary which live counties are
+# near the date their records stop serving and which scheduled builds never came, and fails the run when one needs
+# someone. This repository is public, so its logs and uploaded artifacts are too: a real county's run prints counts only
+# and uploads nothing here, and only master can reach the storage key. A pull request builds a made-up county and
+# publishes nothing.
 
 on:
   schedule:
-    # Clark County writes its file on Tuesdays.
+    # Wednesdays: Clark County writes its file on Tuesdays, and the live counties whose records stop serving 60 days after
+    # their date (Stark first) get about eight tries before then. A run publishes only a county whose file changed.
     - cron: "23 13 * * 3"
     - cron: "41 14 9 * *"
     # The statewide files, in groups that fit one run. Not tx-stratmap: its site refuses GitHub's servers.
@@ -23,6 +27,9 @@ on:
     - cron: "17 3 17 * *"
     - cron: "17 3 18 * *"
     - cron: "17 3 19 * *"
+    # The statewide files, then the county connectors, that joined the schedule in November.
+    - cron: "17 3 20 * *"
+    - cron: "17 3 21 * *"
     # FHFA's yearly price index: out by the end of March, and a second try in May.
     - cron: "29 5 12 4,5 *"
   workflow_dispatch:
@@ -37,7 +44,7 @@ on:
         required: false
         default: "wa-clark"
       moved:
-        description: "County FIPS moving from a statewide file to a connector of their own, space separated (build): only their record counts compare with what's serving"
+        description: "County FIPS changing source, as from a statewide file to a connector of their own, space separated (build): a county another source serves is refused unless named here, and only their record counts compare with what's serving"
         required: false
         default: ""
       county:
@@ -110,6 +117,7 @@ jobs:
           node scripts/property-index/build.cjs --source synthetic --out "$RUNNER_TEMP/property-index"
           node scripts/property-index/check-synthetic.cjs "$RUNNER_TEMP/property-index"
           node scripts/property-index/gaps.cjs --root "$RUNNER_TEMP/property-index" --all
+          node scripts/property-index/refresh-watch.cjs --check-schedule
       # The real connectors need the network and their real files, which a pull request never reads. They must still load.
       - name: Every connector loads
         run: |
@@ -147,7 +155,7 @@ jobs:
 
   publish:
     name: Build and publish
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && inputs.action != 'switch' && inputs.action != 'shared-facts' && inputs.action != 'similar-homes' && inputs.action != 'appeal-packet' && inputs.action != 'listed-units'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && inputs.action != 'switch' && inputs.action != 'shared-facts' && inputs.action != 'similar-homes' && inputs.action != 'appeal-packet' && inputs.action != 'listed-units' && inputs.action != 'new-columns' && inputs.action != 'derived-rows'
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     environment: property-index
@@ -171,7 +179,7 @@ jobs:
       - name: Build and publish
         if: (github.event_name != 'workflow_dispatch' && github.event.schedule != '29 5 12 4,5 *') || inputs.action == 'build'
         env:
-          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-allegheny pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'co-denver co-adams dc-dc ok-oklahoma ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-miami-dade fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || (github.event.schedule == '17 3 18 * *' && 'tx-cameron tx-nueces tx-taylor tx-kaufman tx-grayson tx-liberty tx-atascosa tx-bell tx-gregg tx-bastrop tx-smith tx-brazos tx-johnson tx-ector wa-skagit nc-lincoln') || (github.event.schedule == '17 3 19 * *' && 'ca-sonoma pa-berks va-chesterfield mo-st-charles co-boulder va-henrico sc-york mo-st-louis-county nc-cumberland pa-cumberland wa-kitsap') || 'tx-dallas fl-roll' }}
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'oh-stark wa-clark pa-cumberland ok-oklahoma co-adams co-denver dc-dc fl-miami-dade pa-allegheny co-boulder wa-kitsap') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || (github.event.schedule == '17 3 13 * *' && 'ca-los-angeles ca-san-bernardino ca-riverside ca-san-diego ca-san-francisco ca-san-joaquin ca-contra-costa') || (github.event.schedule == '17 3 14 * *' && 'il-cook pa-philadelphia pa-montgomery mi-oakland mi-detroit oh-franklin oh-cuyahoga oh-summit oh-montgomery oh-hamilton') || (github.event.schedule == '17 3 15 * *' && 'ok-tulsa mo-jackson ne-douglas tn-davidson nm-bernalillo fl-broward fl-hillsborough fl-sarasota fl-seminole nc-mecklenburg nc-guilford nc-wake') || (github.event.schedule == '17 3 16 * *' && 'or-rlis or-deschutes wa-pierce wi-milwaukee wi-madison mn-ramsey ny-monroe ga-dekalb va-charlottesville') || (github.event.schedule == '17 3 17 * *' && 'tx-bexar tx-travis tx-collin tx-denton tx-fort-bend tx-montgomery tx-hidalgo') || (github.event.schedule == '17 3 18 * *' && 'tx-cameron tx-nueces tx-taylor tx-kaufman tx-grayson tx-liberty tx-atascosa tx-bell tx-gregg tx-bastrop tx-smith tx-brazos tx-johnson tx-ector wa-skagit nc-lincoln') || (github.event.schedule == '17 3 19 * *' && 'ca-sonoma pa-berks va-chesterfield mo-st-charles va-henrico sc-york mo-st-louis-county nc-cumberland') || (github.event.schedule == '17 3 20 * *' && 'wi-parcels wa-parcels co-parcels id-parcels vt-parcels ny-rolls ny-county-files') || (github.event.schedule == '17 3 21 * *' && 'nv-clark ca-solano ca-napa co-broomfield co-mesa fl-alachua fl-leon fl-martin fl-osceola fl-st-johns ia-woodbury mn-scott nc-carteret nc-iredell nc-onslow nc-sampson oh-delaware oh-fairfield oh-greene va-montgomery va-roanoke wa-walla-walla') || 'tx-dallas fl-roll' }}
           # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
           # Only a run someone starts by hand, and only when they say so.
@@ -182,14 +190,31 @@ jobs:
           SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && inputs.county || '' }}
         run: |
           status=0
+          # Each source's build and publish, and what happened to each county, for the refresh watch.
+          outcomes="$RUNNER_TEMP/refresh-outcomes"
+          mkdir -p "$outcomes"
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
+            built=0
+            published=0
             # What built still publishes; the run ends failed so someone looks.
-            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || status=1
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS ${MOVED:+--moved "$MOVED"} ${SHRINK:+--accept-shrink-for "$SHRINK"} || status=1
+            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || built=$?
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH $ACCEPT_FALLS ${MOVED:+--moved "$MOVED"} ${SHRINK:+--accept-shrink-for "$SHRINK"} --outcomes "$outcomes/counties.jsonl" || published=$?
+            printf '%s\t%s\t%s\n' "$source" "$built" "$published" >> "$outcomes/builds.tsv"
+            if [ "$built" != 0 ] || [ "$published" != 0 ]; then status=1; fi
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done
           exit $status
+      # What each source and county did, every live county within 30 days of the date its record stops serving, every scheduled
+      # build that never came, and stored sources on no schedule, in this run's summary (scripts/property-index/refresh-watch.cjs).
+      # A scheduled run fails, so GitHub emails, when a live county is 14 days or less from that date, a scheduled build is
+      # overdue, or a live county's source is on no schedule; a run started by hand says the same as warnings. Each source's
+      # last try goes to refresh/attempts.json beside the releases.
+      - name: Refresh watch
+        if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.action == 'build') || (github.event_name == 'schedule' && github.event.schedule != '29 5 12 4,5 *')) }}
+        env:
+          RED: ${{ github.event_name == 'schedule' && '--red' || '' }}
+        run: node scripts/property-index/refresh-watch.cjs --bucket "$PROPERTY_INDEX_BUCKET" --outcomes "$RUNNER_TEMP/refresh-outcomes" --run "$GITHUB_RUN_ID" $RED
       # Each county's value model, fitted from the release it serves: for counties published before releases carried one
       # (blank: those), or after the model changes (all). No release changes and nothing goes live.
       - name: Fit value models
