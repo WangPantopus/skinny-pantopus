@@ -5,9 +5,11 @@ package app.pantopus.android.data.api.services
 import app.pantopus.android.data.api.models.plans.AcceptRequestBody
 import app.pantopus.android.data.api.models.plans.AskToJoinBody
 import app.pantopus.android.data.api.models.plans.AskToJoinResponse
+import app.pantopus.android.data.api.models.plans.BusinessPlansResponse
 import app.pantopus.android.data.api.models.plans.CancelPlanBody
 import app.pantopus.android.data.api.models.plans.CreatePlanBody
 import app.pantopus.android.data.api.models.plans.FeatureFlagResponse
+import app.pantopus.android.data.api.models.plans.HostAsResponse
 import app.pantopus.android.data.api.models.plans.MyPlansResponse
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanFeedbackBody
@@ -112,6 +114,22 @@ interface PlansApi {
         @Query("gps_longitude") gpsLongitude: Double? = null,
         @Query("gps_timestamp") gpsTimestamp: String? = null,
     ): Response<PlanDto>
+
+    /**
+     * `GET /api/plans/host-as`: the businesses this person may post a plan for, with their locations, kinds, labels and
+     * limits (Plans with businesses). `{ businesses: [] }` for nearly everyone. Route `backend/routes/plans.js:138`.
+     */
+    @GET("api/plans/host-as")
+    suspend fun hostAs(): HostAsResponse
+
+    /**
+     * `GET /api/businesses/:id/plans` (Plans with businesses, B6): the business's upcoming plans for its page. Empty
+     * for anyone its plans don't exist for; 404 while Plans is off. Route `backend/routes/businesses.js:4650`.
+     */
+    @GET("api/businesses/{id}/plans")
+    suspend fun businessPlans(
+        @Path("id") businessUserId: String,
+    ): BusinessPlansResponse
 
     /** `POST /api/plans` (201 with the detail). */
     @POST("api/plans")

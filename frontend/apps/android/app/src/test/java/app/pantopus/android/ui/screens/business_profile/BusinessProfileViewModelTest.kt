@@ -66,6 +66,7 @@ class BusinessProfileViewModelTest {
             profiles = profiles,
             businessPages = businessPages,
             savedStateHandle = SavedStateHandle(mapOf(BUSINESS_PROFILE_BUSINESS_ID_KEY to "biz-1")),
+            plans = mockk { coEvery { businessPlans(any()) } returns emptyList() },
         )
 
     private fun sampleDetail(): BusinessDetailResponse =

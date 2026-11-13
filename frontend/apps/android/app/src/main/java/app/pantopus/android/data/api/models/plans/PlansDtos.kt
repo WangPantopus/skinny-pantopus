@@ -361,7 +361,13 @@ data class PlanGpsInput(
     @Json(name = "timestamp") val timestamp: String,
 )
 
-/** `POST /api/plans` body. */
+/** `host_as` in the create body: the business the plan is posted for (Plans with businesses). */
+@JsonClass(generateAdapter = true)
+data class PlanHostAsInput(
+    @Json(name = "business_user_id") val businessUserId: String,
+)
+
+/** `POST /api/plans` body. A business's plan sends [hostAs], [businessLocationId] and [label], and no [place]. */
 @Suppress("LongParameterList")
 @JsonClass(generateAdapter = true)
 data class CreatePlanBody(
@@ -370,7 +376,7 @@ data class CreatePlanBody(
     @Json(name = "about") val about: String? = null,
     @Json(name = "starts_at") val startsAt: String,
     @Json(name = "ends_at") val endsAt: String,
-    @Json(name = "place") val place: PlanPlaceInput,
+    @Json(name = "place") val place: PlanPlaceInput? = null,
     @Json(name = "spots") val spots: Int,
     @Json(name = "auto_rules") val autoRules: List<String> = emptyList(),
     @Json(name = "join_requirement") val joinRequirement: String,
@@ -379,6 +385,11 @@ data class CreatePlanBody(
     @Json(name = "gps") val gps: PlanGpsInput? = null,
     /** A5 "Host again": the plan this one copies (records the funnel). */
     @Json(name = "hosted_again_from") val hostedAgainFrom: String? = null,
+    @Json(name = "host_as") val hostAs: PlanHostAsInput? = null,
+    /** One of the business's own locations (`host_as` only). */
+    @Json(name = "business_location_id") val businessLocationId: String? = null,
+    /** What guests see it called: a key from the kind's list (`host_as` only). */
+    @Json(name = "label") val label: String? = null,
 )
 
 /** `PATCH /api/plans/:id` body: only the fields being changed (nulls are left out). */
@@ -394,6 +405,9 @@ data class UpdatePlanBody(
     @Json(name = "auto_rules") val autoRules: List<String>? = null,
     @Json(name = "details") val details: PlanDetailsDto? = null,
     @Json(name = "guest_note") val guestNote: String? = null,
+    /** A business's plan: move it to another of the business's own locations (never a `place`). */
+    @Json(name = "business_location_id") val businessLocationId: String? = null,
+    @Json(name = "label") val label: String? = null,
 )
 
 /** `POST /api/plans/:id/cancel` body. */
@@ -643,4 +657,62 @@ data class PublicPlanDto(
 data class FeatureFlagResponse(
     @Json(name = "flagName") val flagName: String? = null,
     @Json(name = "enabled") val enabled: Boolean = false,
+)
+
+/** One label a business may give a plan of this kind (`{ key, text }`): "clinic" reads "Clinic". */
+@JsonClass(generateAdapter = true)
+data class HostAsLabelDto(
+    @Json(name = "key") val key: String,
+    @Json(name = "text") val text: String = "",
+)
+
+/** A kind a business may post, with what it reads for a business ("Sports") and its labels. */
+@JsonClass(generateAdapter = true)
+data class HostAsKindDto(
+    @Json(name = "kind") val kind: String,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "labels") val labels: List<HostAsLabelDto> = emptyList(),
+)
+
+/** One of the business's locations a plan can meet at. */
+@JsonClass(generateAdapter = true)
+data class HostAsLocationDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "label") val label: String? = null,
+    @Json(name = "is_primary") val isPrimary: Boolean = false,
+    @Json(name = "address") val address: String? = null,
+    @Json(name = "latitude") val latitude: Double? = null,
+    @Json(name = "longitude") val longitude: Double? = null,
+)
+
+/** A business's limits on a plan: spots and how far ahead. */
+@JsonClass(generateAdapter = true)
+data class HostAsLimitsDto(
+    @Json(name = "spots_max") val spotsMax: Int = 30,
+    @Json(name = "days_ahead") val daysAhead: Int = 60,
+)
+
+/** A business this person may post a plan for. */
+@JsonClass(generateAdapter = true)
+data class HostAsBusinessDto(
+    @Json(name = "user_id") val userId: String,
+    @Json(name = "name") val name: String = "",
+    @Json(name = "avatar_url") val avatarUrl: String? = null,
+    @Json(name = "verified") val verified: Boolean = false,
+    @Json(name = "kinds") val kinds: List<HostAsKindDto> = emptyList(),
+    @Json(name = "locations") val locations: List<HostAsLocationDto> = emptyList(),
+    @Json(name = "limits") val limits: HostAsLimitsDto = HostAsLimitsDto(),
+)
+
+/** `GET /api/businesses/:id/plans` (B6): the business's upcoming plans, soonest first and not folded. */
+@JsonClass(generateAdapter = true)
+data class BusinessPlansResponse(
+    @Json(name = "items") val items: List<PlanDto> = emptyList(),
+    @Json(name = "plans_hosted") val plansHosted: Int = 0,
+)
+
+/** `GET /api/plans/host-as`: empty for nearly everyone; "Host as" shows only when it isn't. */
+@JsonClass(generateAdapter = true)
+data class HostAsResponse(
+    @Json(name = "businesses") val businesses: List<HostAsBusinessDto> = emptyList(),
 )

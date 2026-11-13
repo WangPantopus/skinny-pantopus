@@ -58,6 +58,7 @@ class BusinessTeamViewModelTest {
             repo = repo,
             networkMonitor = networkMonitor,
             savedStateHandle = SavedStateHandle(mapOf(BUSINESS_TEAM_ID_KEY to "biz_1")),
+            plansFeature = mockk(relaxed = true),
         )
 
     private val accessOwner =

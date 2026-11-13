@@ -41,6 +41,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanTextButton
 import app.pantopus.android.ui.screens.plans.components.PlanTile
 import app.pantopus.android.ui.screens.plans.components.PlanWhenCard
 import app.pantopus.android.ui.screens.plans.detail.PlanPlainScaffold
+import app.pantopus.android.ui.screens.plans.host.BusinessWhereField
 import app.pantopus.android.ui.screens.plans.host.PlacePickerState
 import app.pantopus.android.ui.screens.plans.host.PublicPlacePicker
 import app.pantopus.android.ui.screens.plans.host.placeCaption
@@ -105,9 +106,13 @@ fun PlanChangeScreen(
             }
         }
         if (ui.canChangePlace) WhereField(ui, onClick = viewModel::openPlaces)
+        // A business's plan: one of its own locations (board B2), never a place picked here.
+        ui.business?.takeIf { ui.canChangeLocation }?.let { business ->
+            BusinessWhereField(business, ui.newLocationId ?: ui.currentLocationId, onPick = viewModel::pickLocation)
+        }
         ui.error?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error) }
         if (ui.asksStillComing) {
-            StillComingWarning(ui.peopleIn, placeChanged = ui.newPlace != null)
+            StillComingWarning(ui.peopleIn, placeChanged = ui.newPlace != null || ui.locationMoved)
             NotificationPreview(ui)
         }
     }
@@ -220,15 +225,17 @@ private fun StillComingWarning(
 @Composable
 private fun NotificationPreview(ui: PlanChangeUi) {
     val plan = ui.plan ?: return
-    val host = PlanFormat.firstName(plan.host?.displayName)
+    // A business is named in full, as its notices name it.
+    val host = PlanFormat.hostName(plan)
     val noun = PlanFormat.noun(plan)
+    val placeMoved = ui.newPlace != null || ui.locationMoved
     val start = ui.start ?: return
     val now = "Now ${PlanFormat.dayAt(start.atZone(PlanFormat.zone(plan.timezone)))}"
     // The push the server sends (board H11), word for word.
     val (title, body) =
         when {
-            ui.timeMoved && ui.newPlace != null -> "$host changed the $noun" to "$now, at a new place. Still coming?"
-            ui.newPlace != null -> "$host changed the place" to "It's at a new place now. Still coming?"
+            ui.timeMoved && placeMoved -> "$host changed the $noun" to "$now, at a new place. Still coming?"
+            placeMoved -> "$host changed the place" to "It's at a new place now. Still coming?"
             else -> "$host moved the $noun" to "$now. Still coming?"
         }
     PlanField(label = "What they'll get") {

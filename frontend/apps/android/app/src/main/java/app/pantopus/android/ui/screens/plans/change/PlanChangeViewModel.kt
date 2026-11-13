@@ -3,6 +3,7 @@ package app.pantopus.android.ui.screens.plans.change
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.plans.HostAsBusinessDto
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceInput
@@ -60,7 +61,18 @@ data class PlanChangeUi(
     val saving: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false,
+    /** A business's plan (Plans with businesses): its business as the viewer may post for it, with its locations. */
+    val business: HostAsBusinessDto? = null,
+    /** The plan's location among them (matched by its point), and the one chosen instead; null while unchanged. */
+    val currentLocationId: String? = null,
+    val newLocationId: String? = null,
 ) {
+    /** A business's plan moves only between the business's own locations, and only when it has more than one. */
+    val canChangeLocation: Boolean get() = business != null && business.locations.size > 1
+
+    /** The location moved: everyone in is asked "Still coming?", as for a new place. */
+    val locationMoved: Boolean get() = newLocationId != null && newLocationId != currentLocationId
+
     /** People in, not counting the host; a party counts in full ("Alex + 1" is two), as on iOS and board H11. */
     val peopleIn: Int get() = plan?.people.orEmpty().filter { !it.isHost }.sumOf { it.partySize.coerceAtLeast(1) }
 
@@ -73,7 +85,7 @@ data class PlanChangeUi(
         }
 
     /** Moving the start more than 30 minutes, or the place, asks everyone in "Still coming?" (brief section 5). */
-    val asksStillComing: Boolean get() = peopleIn > 0 && (timeMoved || newPlace != null)
+    val asksStillComing: Boolean get() = peopleIn > 0 && (timeMoved || newPlace != null || locationMoved)
 
     /**
      * A public plan can move to another public place; a plan at home keeps its place (as on iOS). A business's plan
@@ -90,7 +102,7 @@ data class PlanChangeUi(
             return if (area.latitude != null && area.longitude != null) area.latitude to area.longitude else null
         }
 
-    val changed: Boolean get() = start != originalStart || end != originalEnd || newPlace != null
+    val changed: Boolean get() = start != originalStart || end != originalEnd || newPlace != null || locationMoved
 
     private companion object {
         const val STILL_COMING_MINUTES = 30
@@ -123,6 +135,13 @@ class PlanChangeViewModel
                         val zone = PlanFormat.zone(plan.timezone)
                         val start = PlanFormat.instant(plan.startsAt)?.atZone(zone)?.toLocalDateTime()
                         val end = PlanFormat.instant(plan.endsAt)?.atZone(zone)?.toLocalDateTime()
+                        // A business's plan: its locations, when the viewer may post for the business (the owner and
+                        // editors may; someone who only runs plans keeps its place).
+                        val business = plan.business?.userId?.let { id -> repository.hostAs().firstOrNull { it.userId == id } }
+                        val current =
+                            business?.locations?.firstOrNull {
+                                it.latitude == plan.place?.latitude && it.longitude == plan.place?.longitude
+                            }
                         _ui.update {
                             PlanChangeUi(
                                 plan = plan,
@@ -131,6 +150,8 @@ class PlanChangeViewModel
                                 originalEnd = end,
                                 start = start,
                                 end = end,
+                                business = business,
+                                currentLocationId = current?.id,
                             )
                         }
                     }
@@ -149,6 +170,11 @@ class PlanChangeViewModel
 
         fun setEnd(value: LocalDateTime) {
             _ui.update { it.copy(end = value, error = null) }
+        }
+
+        /** A business's plan: another of the business's own locations. */
+        fun pickLocation(id: String) {
+            _ui.update { it.copy(newLocationId = id.takeIf { picked -> picked != it.currentLocationId }, error = null) }
         }
 
         // ---- Where (H6 over H11, public plans only) ----
@@ -303,6 +329,7 @@ class PlanChangeViewModel
                                     placeId = it.placeId,
                                 )
                             },
+                        businessLocationId = ui.newLocationId.takeIf { ui.locationMoved },
                     )
                 when (val result = repository.update(planId, body)) {
                     is NetworkResult.Success -> _ui.update { it.copy(saving = false, saved = true) }

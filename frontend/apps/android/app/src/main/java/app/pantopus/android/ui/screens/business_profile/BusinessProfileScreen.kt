@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.BizBannerHeader
@@ -118,6 +119,8 @@ fun BusinessProfileScreen(
     onOpenWebsite: (String) -> Unit = {},
     onBook: () -> Unit = {},
     onEdit: () -> Unit = {},
+    /** Opens one of the business's upcoming plans (Plans with businesses, B6). */
+    onOpenPlan: (String) -> Unit = {},
     viewModel: BusinessProfileViewModel = hiltViewModel(),
     savedPlacesStore: SavedPlacesStoreViewModel = hiltViewModel(),
 ) {
@@ -125,6 +128,7 @@ fun BusinessProfileScreen(
     val toast by viewModel.toastMessage.collectAsStateWithLifecycle()
     val showOverflow by viewModel.showOverflow.collectAsStateWithLifecycle()
     val namedPage by viewModel.namedPage.collectAsStateWithLifecycle()
+    val upcomingPlans by viewModel.upcomingPlans.collectAsStateWithLifecycle()
     val savedPlaces by savedPlacesStore.saved.collectAsStateWithLifecycle()
     val pendingSave by savedPlacesStore.pendingSave.collectAsStateWithLifecycle()
     val undo by savedPlacesStore.undo.collectAsStateWithLifecycle()
@@ -198,6 +202,8 @@ fun BusinessProfileScreen(
                         onReport = { showReportSheet = true },
                         onRetryReviews = viewModel::retryReviews,
                         onDockHeightChanged = { dockHeightPx = it },
+                        upcomingPlans = upcomingPlans,
+                        onOpenPlan = onOpenPlan,
                     )
                 }
         }
@@ -333,6 +339,9 @@ internal fun BusinessProfileLoadedFrame(
     onRetryReviews: () -> Unit = {},
     // The dock's height in px whenever it changes, so the host keeps its toasts above it.
     onDockHeightChanged: (Int) -> Unit = {},
+    // The business's upcoming plans (B6); the owner preview has none, so its page is unchanged.
+    upcomingPlans: List<PlanDto> = emptyList(),
+    onOpenPlan: (String) -> Unit = {},
 ) {
     // The page ends clear of the dock: 132dp as designed, more once large text makes the dock taller.
     var dockHeightPx by remember { mutableIntStateOf(0) }
@@ -363,7 +372,15 @@ internal fun BusinessProfileLoadedFrame(
                         .padding(top = 14.dp, bottom = pageBottom),
             ) {
                 BusinessProfileNamedPageSection(state = namedPage)
-                Sections(content, onContact = onContact, onShare = onShare, onReport = onReport, onRetryReviews = onRetryReviews)
+                Sections(
+                    content,
+                    onContact = onContact,
+                    onShare = onShare,
+                    onReport = onReport,
+                    onRetryReviews = onRetryReviews,
+                    upcomingPlans = upcomingPlans,
+                    onOpenPlan = onOpenPlan,
+                )
             }
         }
 
@@ -412,6 +429,8 @@ private fun Sections(
     onShare: () -> Unit,
     onReport: () -> Unit,
     onRetryReviews: () -> Unit,
+    upcomingPlans: List<PlanDto> = emptyList(),
+    onOpenPlan: (String) -> Unit = {},
 ) {
     if (content.isNewlyClaimed) {
         JustOpenedNote(isVerified = content.header.isVerified, modifier = Modifier.padding(bottom = Spacing.s1))
@@ -420,6 +439,9 @@ private fun Sections(
         categories = content.categories,
         modifier = Modifier.padding(top = if (content.isNewlyClaimed) Spacing.s2 else Spacing.s0),
     )
+
+    // Plans with businesses (B6): its upcoming plans, right under the page's top, only when there are any.
+    BusinessUpcomingPlans(upcomingPlans, onOpenPlan)
 
     // About
     SectionHeader(title = "About")

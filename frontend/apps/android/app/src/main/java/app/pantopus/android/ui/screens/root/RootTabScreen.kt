@@ -5449,6 +5449,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onShare = { text -> appContext.shareText(text, "Share business") },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
+                        onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId, via = PlansRoutes.VIA_BUSINESS_PAGE)) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }
@@ -5496,6 +5497,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onShare = { text -> appContext.shareText(text, "Share business") },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
+                        onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId, via = PlansRoutes.VIA_BUSINESS_PAGE)) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }

@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -60,8 +61,10 @@ internal fun HostDetailsStep(
     onBack: () -> Unit,
 ) {
     val kind = ui.draft.kind ?: return
+    val business = ui.business
     HostStepScaffold(
-        title = kind.label,
+        // A business's kinds read for a business ("Sports", board B2).
+        title = business?.kinds?.firstOrNull { it.kind == kind.wire }?.name?.takeIf(String::isNotBlank) ?: kind.label,
         step = "2 of 3",
         leadingClose = false,
         onLeading = onBack,
@@ -70,15 +73,87 @@ internal fun HostDetailsStep(
             HostFooterButton(title = "Preview", onClick = vm::preview)
         },
     ) {
-        when (kind) {
-            PlanKind.WATCH_PARTY -> WatchFields(ui, vm)
-            PlanKind.PLAYDATE -> PlaydateFields(ui, vm)
-            PlanKind.PICKUP_GAME -> PickupFields(ui, vm)
-            PlanKind.WALK_COFFEE -> WalkFields(ui, vm)
-            PlanKind.STUDY_GROUP -> StudyFields(ui, vm)
+        when {
+            business != null -> BusinessFields(ui, vm)
+            else -> NeighborFields(kind, ui, vm)
         }
     }
 }
+
+/** A neighbor's own plan: H2 to H5 by kind, as they have always been. */
+@Composable
+private fun ColumnScope.NeighborFields(
+    kind: PlanKind,
+    ui: HostUi,
+    vm: HostFlowViewModel,
+) {
+    when (kind) {
+        PlanKind.WATCH_PARTY -> WatchFields(ui, vm)
+        PlanKind.PLAYDATE -> PlaydateFields(ui, vm)
+        PlanKind.PICKUP_GAME -> PickupFields(ui, vm)
+        PlanKind.WALK_COFFEE -> WalkFields(ui, vm)
+        PlanKind.STUDY_GROUP -> StudyFields(ui, vm)
+    }
+}
+
+/**
+ * B2, a business's plan: what guests see it called, the title, when, where (one of its own locations), spots and who
+ * gets in. No price and no repeats in this step; no neighbor's choices (home, place search, rules).
+ */
+@Composable
+private fun ColumnScope.BusinessFields(
+    ui: HostUi,
+    vm: HostFlowViewModel,
+) {
+    val draft = ui.draft
+    val business = ui.business ?: return
+    PlanField(label = "What guests see it called", modifier = Modifier.testTag("planBusinessLabels")) {
+        PlanChoiceGroup(
+            choices = ui.labels.map { PlanChoice(it.key, it.text) },
+            isSelected = { it.id == draft.label },
+            onSelect = { choice -> vm.pickLabel(choice.id) },
+            tagPrefix = "planBusinessLabels",
+        )
+    }
+    if (draft.kind == PlanKind.STUDY_GROUP) {
+        PlanField(label = "Subject") {
+            PlanTextArea(value = draft.subject, onValue = vm::setSubject, placeholder = "SAT math", label = "Subject", singleLine = true)
+        }
+    }
+    TitleField(draft.title, vm::setTitle, placeholder = "Beginner pickleball clinic")
+    WhenField(ui, vm)
+    BusinessWhereField(business, draft.locationId, onPick = vm::pickLocation)
+    PlanStepperRow(
+        title = "Spots",
+        caption = "Guests see how many are left",
+        value = draft.spots,
+        range = 1..business.limits.spotsMax,
+        onChange = { value -> vm.edit { it.copy(spots = value) } },
+    )
+    PlanField(label = "Who gets in") {
+        PlanSegmented(
+            options = listOf(WHO_OPEN to "Right away", WHO_APPROVE to "I approve each"),
+            selected = if (draft.approveEach) WHO_APPROVE else WHO_OPEN,
+            onSelect = { choice -> vm.edit { it.copy(approveEach = choice == WHO_APPROVE) } },
+            modifier = Modifier.testTag("planWhoGetsIn"),
+            optionTags = listOf("planWhoGetsIn.$WHO_OPEN", "planWhoGetsIn.$WHO_APPROVE"),
+        )
+    }
+    NoteField(draft.note, label = "Note for people who are in", placeholder = "Check in at the front desk.") { text ->
+        vm.edit { it.copy(note = text) }
+    }
+    PlanField(label = "About · everyone sees this") {
+        PlanTextArea(
+            value = draft.about,
+            onValue = { text -> vm.edit { it.copy(about = text.take(ABOUT_MAX)) } },
+            placeholder = "Learn the serve, the score and the kitchen line with a coach.",
+            label = "About, everyone sees this",
+        )
+    }
+}
+
+private const val WHO_OPEN = "open"
+private const val WHO_APPROVE = "approve"
 
 /** H2: watch party. */
 @Composable

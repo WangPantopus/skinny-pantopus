@@ -8,11 +8,13 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.businesses.BusinessDetailResponse
 import app.pantopus.android.data.api.models.businesses.BusinessHoursDto
 import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
+import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessPagesRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
+import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.ui.screens.businesses.page_blocks.BusinessPageBlock
 import app.pantopus.android.ui.screens.contentdetail.GigOpenChatEvent
@@ -84,6 +86,7 @@ class BusinessProfileViewModel
         private val profiles: ProfileRepository,
         private val businessPages: BusinessPagesRepository,
         savedStateHandle: SavedStateHandle,
+        private val plans: PlansRepository,
     ) : ViewModel() {
         /**
          * The business id. A `/b/:username` link opens with the username, which
@@ -113,6 +116,16 @@ class BusinessProfileViewModel
 
         private val _toastMessage = MutableStateFlow<String?>(null)
         val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
+
+        private val _upcomingPlans = MutableStateFlow<List<PlanDto>>(emptyList())
+
+        /**
+         * The business's upcoming plans (Plans with businesses, B6), from their own read. Empty while it loads, when
+         * there are none, on a failure and for anyone without the switch: the section then isn't drawn at all.
+         */
+        val upcomingPlans: StateFlow<List<PlanDto>> = _upcomingPlans.asStateFlow()
+
+        private var plansJob: Job? = null
 
         private val _showOverflow = MutableStateFlow(false)
         val showOverflow: StateFlow<Boolean> = _showOverflow.asStateFlow()
@@ -247,6 +260,7 @@ class BusinessProfileViewModel
                 is NetworkResult.Success -> {
                     val payload = detail.data
                     readReviews()
+                    readPlans()
                     val publicResponse =
                         payload.business.username
                             ?.takeIf { it.isNotEmpty() }
@@ -272,6 +286,7 @@ class BusinessProfileViewModel
          */
         private fun refreshQuietly() {
             readReviews()
+            readPlans()
             quietJob?.cancel()
             quietJob =
                 viewModelScope.launch {
@@ -325,6 +340,17 @@ class BusinessProfileViewModel
                             is NetworkResult.Failure -> reviewsAfterFailure(result.error)
                         }
                     publish()
+                }
+        }
+
+        /** B6: the business's upcoming plans; none (or a failed read) hides the section. */
+        private fun readPlans() {
+            plansJob?.cancel()
+            val id = businessId
+            plansJob =
+                viewModelScope.launch {
+                    val items = plans.businessPlans(id)
+                    _upcomingPlans.value = items
                 }
         }
 
