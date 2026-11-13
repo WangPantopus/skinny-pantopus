@@ -38,7 +38,7 @@ struct MomentsMapTopBar: View {
         }
     }
 
-    /// The top row, and under it "Heights" while heights are on for you (`MomentsHeightsChip.swift`).
+    /// The top row, and under it "Elevation" while heights are on for you (`MomentsHeightsChip.swift`).
     private var row: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             topRow

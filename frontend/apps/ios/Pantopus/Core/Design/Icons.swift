@@ -261,7 +261,7 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
     case folderPlus = "folder-plus"
     case piggyBank = "piggy-bank"
     case plane
-    // Moment heights: the "Heights" chip on the Moments map, and a Moment's height in the viewer.
+    // Moment heights: the "Elevation" chip on the Moments map, and a Moment's height in the viewer.
     case mountain
     case receiptText = "receipt-text"
     case paperclip

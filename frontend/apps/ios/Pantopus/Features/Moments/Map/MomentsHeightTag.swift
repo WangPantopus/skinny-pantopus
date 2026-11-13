@@ -112,7 +112,7 @@ extension MomentRingPin {
 }
 
 extension MomentsMapView {
-    /// The tag a ring's pin carries: none while "Heights" is off, none where it has no room, and none on the ring
+    /// The tag a ring's pin carries: none while "Elevation" is off, none where it has no room, and none on the ring
     /// playing in the card beside the map (the open iPhone Duo draws that pin bigger, in a halo).
     func heightTag(for ring: MomentRingDTO, plan: MomentsHeightTagPlan) -> MomentsPinTag? {
         guard let side = plan.sides[ring.id], !isPlaying(ring), let height = ring.shownHeight else { return nil }

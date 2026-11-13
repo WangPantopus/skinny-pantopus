@@ -2,7 +2,7 @@
 //  MomentHeightDTOs.swift
 //  Pantopus
 //
-//  "Show height" on a Moment (contract v3.8): what the phone sends with the
+//  "Show elevation" on a Moment (contract v3.8): what the phone sends with the
 //  post, and the server's rules for a reading, kept here so the Post sheet
 //  offers the switch only for a height the server will keep and shows the
 //  number everyone will read. Beside `MomentsDTOs.swift`, which has no room.

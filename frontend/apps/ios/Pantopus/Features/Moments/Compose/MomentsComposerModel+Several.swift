@@ -65,7 +65,7 @@ extension MomentsComposerModel {
         "pantopus.moments.lastShowHeight.\(account)"
     }
 
-    /// The sheet opens with the last "How long", "Who sees it" and "Show height" (kept on the phone, per account).
+    /// The sheet opens with the last "How long", "Who sees it" and "Show elevation" (kept on the phone, per account).
     /// "Show the area instead" always starts off.
     func restoreChoices() {
         guard let account = Self.account else { return }

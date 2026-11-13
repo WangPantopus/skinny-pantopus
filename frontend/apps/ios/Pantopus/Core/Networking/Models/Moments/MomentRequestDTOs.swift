@@ -70,7 +70,7 @@ public struct MomentCreateBody: Encodable, Sendable, Hashable {
     public var takenAt: String?
     /// A venue picked in the place picker around the pin (its `osm:` id, contract v3.3): the Moment pins there.
     public var venueId: String?
-    /// "Show height" was on (contract v3.8, `MomentHeightDTOs.swift`); left out otherwise.
+    /// "Show elevation" was on (contract v3.8, `MomentHeightDTOs.swift`); left out otherwise.
     public var altitude: MomentAltitudeBody?
 
     private enum CodingKeys: String, CodingKey {
