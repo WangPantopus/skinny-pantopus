@@ -28,11 +28,7 @@ struct ProfileStep: View {
         logoSection
 
         if let submitError = viewModel.submitError, viewModel.currentStep == .profile {
-            Text(submitError)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Color.error)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("createBusinessSubmitError")
+            CreateBusinessSubmitError(message: submitError)
         }
     }
 
