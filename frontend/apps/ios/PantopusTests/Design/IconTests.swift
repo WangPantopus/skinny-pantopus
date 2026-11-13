@@ -122,7 +122,9 @@ final class IconTests: XCTestCase {
         "cloud-moon", "cloud-fog", "cloud-snow", "cloud-hail", "cloud-lightning",
         // Moments: the tab, a video's sound on and off, the camera's front/back switch; on the iPhone Duo's table,
         // the previous and next Moment.
-        "circle-dashed", "volume-2", "volume-x", "switch-camera", "skip-back", "skip-forward"
+        "circle-dashed", "volume-2", "volume-x", "switch-camera", "skip-back", "skip-forward",
+        // Moment heights: the "Heights" chip and a Moment's height.
+        "mountain"
     ]
 
     func testInventoryMatches() {

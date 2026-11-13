@@ -116,9 +116,19 @@ final class MomentsMapViewModel {
     private(set) var placeRequest: MomentsPlaceRequest?
     /// When a finger last touched the map itself (`MomentsMapFinger.swift`): a camera that settles just after was
     /// moved by hand. Nil on the open iPhone Duo, where a crowded spot's list stays until it is closed.
-    @ObservationIgnored var fingerOnMapAt: Date?
+    /// A touch on the map also closes the height key.
+    @ObservationIgnored var fingerOnMapAt: Date? {
+        didSet { closeHeightsKey() }
+    }
+
     /// The map has just opened on you: its first read looks around once (`MomentsMapViewModel+Moves.swift`).
     @ObservationIgnored var looksAround = false
+    /// Moment heights (`MomentsHeightsChip.swift`): on for you, as the map's answer says; the chip turned the
+    /// tags off; the colour key is open; the map the tags were last laid out on.
+    var heightsOn = false
+    var heightTagsOff = false
+    var heightsKeyOpen = false
+    var heightTagsFrame: MomentsHeightFrame?
     /// The clock the end times are read against; moved on each read and each minute.
     private(set) var now = Date()
     /// Where the camera last settled.
@@ -245,6 +255,7 @@ final class MomentsMapViewModel {
             await self?.load()
         }
         nameArea(at: region.center)
+        placeHeightTags(in: region)
         if let focus, !visibleRings.contains(where: { focus.ringIds.contains($0.id) }) { self.focus = nil }
         closeSpotIfSplit(span: span)
     }
@@ -263,6 +274,7 @@ final class MomentsMapViewModel {
             let all = reply.rings + reply.unplaced
             watched = watched.filter { id in all.contains { ring in ring.moments.contains { $0.id == id && !$0.seen } } }
             rings = all
+            heightsAnswered(reply.heightsOn)
             loaded = true
             loadFailed = false
             lookAroundIfOpening()
