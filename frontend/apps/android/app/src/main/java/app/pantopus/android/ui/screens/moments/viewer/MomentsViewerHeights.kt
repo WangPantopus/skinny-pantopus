@@ -86,7 +86,7 @@ data class MomentHeightRail(
             val number = NumberFormat.getIntegerInstance()
             val names = others.map { "${it.author.firstName ?: it.author.name ?: "Someone"} at ${number.format(it.height.feet)} feet" }
             return (
-                listOf("Height scale, 0 to ${number.format(top)} feet", "this Moment at ${number.format(showing.height.feet)} feet") +
+                listOf("Elevation scale, 0 to ${number.format(top)} feet", "this Moment at ${number.format(showing.height.feet)} feet") +
                     names +
                     listOfNotNull(you?.let { "you at ${number.format(it)} feet" })
             ).joinToString(", ")
@@ -125,7 +125,11 @@ internal fun MomentViewerHeightTag(
                 .height(32.dp)
                 .padding(horizontal = Spacing.s3)
                 .testTag("moments.viewer.height")
-                .clearAndSetSemantics { contentDescription = "Height: ${height.spoken}" },
+                // A flight's number is an altitude, not an elevation: its own words say so.
+                .clearAndSetSemantics {
+                    contentDescription =
+                        if (height.flying) height.spoken.replaceFirstChar { it.uppercase() } else "Elevation: ${height.spoken}"
+                },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {

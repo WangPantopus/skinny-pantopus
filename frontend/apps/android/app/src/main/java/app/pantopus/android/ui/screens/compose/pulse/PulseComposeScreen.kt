@@ -429,7 +429,7 @@ internal class PickedPlace(
     val mayBeHidden: Boolean,
     height: () -> HeightReading? = { null },
 ) {
-    /** How high the file says it was taken (a photo's own tag); read only when asked, for a Moment's "Show height". */
+    /** How high the file says it was taken (a photo's own tag); read only when asked, for a Moment's "Show elevation". */
     val height: HeightReading? by lazy(height)
 }
 

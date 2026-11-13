@@ -525,7 +525,7 @@ enum class PantopusIcon(
     PiggyBank("piggy-bank"),
     Plane("plane"),
 
-    // Moment heights: the "Heights" chip on the Moments map, and a Moment's height in the viewer.
+    // Moment heights: the "Elevation" chip on the Moments map, and a Moment's height in the viewer.
     Mountain("mountain"),
     ReceiptText("receipt-text"),
     Paperclip("paperclip"),

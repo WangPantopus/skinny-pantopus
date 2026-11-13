@@ -660,7 +660,7 @@ private fun MomentsTopChrome(
 ) {
     Column(modifier = modifier) {
         MomentsTopRow(state, onOpenMenu, onBackFromSpot, onUseLocation, onUseHome, Modifier.onSizeChanged { onRowHeight(it.height) })
-        // Under the row while heights are on for you: the "Heights" chip and its key (`MomentsHeights.kt`).
+        // Under the row while heights are on for you: the "Elevation" chip and its key (`MomentsHeights.kt`).
         MomentsHeightsBar(
             state = state,
             onToggle = heights.onToggle,

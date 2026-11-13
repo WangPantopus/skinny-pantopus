@@ -127,7 +127,7 @@ fun MomentsMapOverlay(
     mapReady: Boolean = true,
     camera: () -> CameraPosition = { cameraState.position },
     layoutKey: () -> Any? = { null },
-    /** With "Heights" on, a single pin whose newest Moment carries a height shows it beside the ring (board H2). */
+    /** With "Elevation" on, a single pin whose newest Moment carries a height shows it beside the ring (board H2). */
     heights: MomentHeightTagPlan = MomentHeightTagPlan(),
 ) {
     val zoom by remember(cameraState) { derivedStateOf { (camera().zoom * 2f).roundToInt() / 2f } }
@@ -218,7 +218,7 @@ private fun MomentTagSide?.ringIn(
 @Composable
 private fun RingItem(
     ring: MomentRingUi,
-    /** What TalkBack reads: the ring's height while "Heights" is on, drawn or not. */
+    /** What TalkBack reads: the ring's height while "Elevation" is on, drawn or not. */
     height: MomentShownHeight?,
     /** Where the tag is drawn; null for none. */
     tag: MomentTagSide?,

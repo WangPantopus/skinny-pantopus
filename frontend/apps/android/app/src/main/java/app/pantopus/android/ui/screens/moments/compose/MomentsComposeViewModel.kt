@@ -58,7 +58,7 @@ data class ComposePin(
     /** The fix's time (`gps`) or the capture time (`capture`). */
     val at: Instant,
     val capture: Boolean,
-    /** How high the fix, or the library photo, says this is; read only where "Show height" may be offered. */
+    /** How high the fix, or the library photo, says this is; read only where "Show elevation" may be offered. */
     val height: HeightReading? = null,
 )
 
@@ -123,7 +123,7 @@ data class MomentsComposeUiState(
     val noLocation: Boolean = false,
     /** Whether you have a connection (place-preview's `has_connections`); null until known. */
     val hasConnections: Boolean? = null,
-    /** "Show height" (board H1): the Moment says how high above sea level it was made. Kept for your next Moments. */
+    /** "Show elevation" (board H1): the Moment says how high above sea level it was made. Kept for your next Moments. */
     val showHeight: Boolean = false,
 ) {
     val kind: String
@@ -182,11 +182,11 @@ data class MomentsComposeUiState(
     /** "Taken Oct 3" on the Post sheet: an album photo or video taken more than a day ago (everyone will see it). */
     val takenLine: String? get() = takenAt?.takeIf { media != null && takenLongAgo(it) }?.let { takenLabel(it) }
 
-    /** The feet the "Show height" row shows and everyone will read; null with no reading the server would keep. */
+    /** The feet the "Show elevation" row shows and everyone will read; null with no reading the server would keep. */
     val heightFeet: Int? get() = pin?.height?.let { MomentHeight.feet(it.meters, it.accuracyMeters, it.speedMps) }
 
     /**
-     * The "Show height" row is on the sheet: only where the server allows it (heights are on for you and the spot
+     * The "Show elevation" row is on the sheet: only where the server allows it (heights are on for you and the spot
      * isn't your home), for an exact pin, with a reading. Never for an area or with no location.
      */
     val offersHeight: Boolean get() = place?.canShowHeight == true && !showArea && !noLocationOn && heightFeet != null
@@ -268,7 +268,7 @@ class MomentsComposeViewModel
         }
 
         /**
-         * How high the fix just taken says the phone is, read only where the server says "Show height" may be offered:
+         * How high the fix just taken says the phone is, read only where the server says "Show elevation" may be offered:
          * while heights are off for the person, nothing new runs.
          */
         private suspend fun fixHeightFor(place: MomentPlacePreviewDto?): HeightReading? =
@@ -629,7 +629,7 @@ class MomentsComposeViewModel
                         // An album item pinned where you are says when it was taken (a capture pin carries its own).
                         takenAt = current.takenAt?.toString()?.takeIf { current.media != null && !usable.capture },
                         venueId = current.pickedVenue?.placeId,
-                        // The height of the pin that is sent, while "Show height" is on the sheet and switched on.
+                        // The height of the pin that is sent, while "Show elevation" is on the sheet and switched on.
                         altitude = current.copy(pin = usable).shownHeight,
                     )
                 when (val result = repository.create(body)) {
@@ -649,7 +649,7 @@ class MomentsComposeViewModel
             }
         }
 
-        /** The next sheet opens with this one's "How long", "Who sees it" and "Show height" (on this phone, per account). */
+        /** The next sheet opens with this one's "How long", "Who sees it" and "Show elevation" (on this phone, per account). */
         private fun saveChoices(posted: MomentsComposeUiState) {
             val saved = choices.edit().putInt("$accountId.hours", posted.hours).putString("$accountId.audience", posted.audience)
             // Only a sheet that offered the switch says what the person wants.
@@ -657,7 +657,7 @@ class MomentsComposeViewModel
             saved.apply()
         }
 
-        /** The pin for a fix taken again at Post, with its height where "Show height" may be offered. */
+        /** The pin for a fix taken again at Post, with its height where "Show elevation" may be offered. */
         private suspend fun freshPin(
             fix: PlanGpsFix,
             place: MomentPlacePreviewDto?,

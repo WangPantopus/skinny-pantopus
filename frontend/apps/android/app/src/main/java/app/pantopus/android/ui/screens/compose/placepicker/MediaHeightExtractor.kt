@@ -5,7 +5,7 @@ import app.pantopus.android.data.location.HeightReading
 import java.io.ByteArrayInputStream
 
 /**
- * Reads how high a picked photo says it was taken, for a Moment's "Show height". Beside [MediaLocationExtractor],
+ * Reads how high a picked photo says it was taken, for a Moment's "Show elevation". Beside [MediaLocationExtractor],
  * which reads where; failure-silent the same way (no height: no row on the Post sheet).
  */
 object MediaHeightExtractor {
