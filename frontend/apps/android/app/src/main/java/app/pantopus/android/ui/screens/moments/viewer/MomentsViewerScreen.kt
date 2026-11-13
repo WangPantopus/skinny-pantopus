@@ -665,6 +665,11 @@ fun MomentsViewerScreen(
                     MomentTakenPill(label = taken, modifier = Modifier.padding(start = 58.dp, top = 2.dp))
                 }
             }
+            // How high it was made, down the right edge (`MomentsViewerHeights.kt`). It takes no touch, and gives way
+            // to a reply being written, as the caption does.
+            state.heightRail?.takeIf { !typing && !reacting }?.let { rail ->
+                MomentsViewerHeights(rail = rail, modifier = Modifier.fillMaxSize().statusBarsPadding().padding(bottom = BOTTOM_BAR))
+            }
         }
 
         // While typing or choosing a reaction, the Moment dims and the quick reactions come up (board V4).
