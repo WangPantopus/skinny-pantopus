@@ -57,6 +57,13 @@ public enum HomesEndpoints {
     }
 
     /// `POST /api/homes/:id/floor-plan-answer`: "Is this your layout?". A no reaches review and nothing shown changes.
+    /// `POST /api/homes/:id/document-facts`: the facts the household kept from its own report. Route
+    /// `backend/routes/home.js` (`/:id/document-facts`, services/householdDocuments). The report itself was read and
+    /// dropped by `MultipartUploader.readDocumentFacts`.
+    public static func saveDocumentFacts(homeId: String, request: DocumentFactsSaveRequest) -> Endpoint {
+        Endpoint(method: .post, path: "/api/homes/\(homeId)/document-facts", body: request)
+    }
+
     public static func answerFloorPlan(homeId: String, answer: String) -> Endpoint {
         Endpoint(method: .post, path: "/api/homes/\(homeId)/floor-plan-answer", body: FloorPlanAnswerRequest(answer: answer))
     }
