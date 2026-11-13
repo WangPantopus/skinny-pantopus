@@ -78,8 +78,9 @@ function geodatabase(folder) {
   return null;
 }
 
-async function* build({ work }) {
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+async function* build({ work, compare = null }) {
+  // A county build comparing its own record with this file (lib/agreement.cjs) asks for counties it otherwise leaves out.
+  const only = compare || (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   const about = await (await fetch(ITEM, { signal: AbortSignal.timeout(60000) })).json();
   if (!about.modified) throw new Error('The Geoportal\'s item no longer says when it changed');
   const asOf = new Date(about.modified).toISOString().slice(0, 10);
@@ -100,7 +101,7 @@ async function* build({ work }) {
     const named = String(row.COUNTY_NM ?? '').trim();
     const code = String(row.FIPS_NR ?? '').trim() || (/^\d{1,3}$/.test(named) ? named : '');
     const fips = `53${code.slice(-3).padStart(3, '0')}`;
-    if (!/^53\d{3}$/.test(fips) || SKIPPED.has(fips) || (only.length && !only.includes(fips))) continue;
+    if (!/^53\d{3}$/.test(fips) || (SKIPPED.has(fips) && !compare) || (only.length && !only.includes(fips))) continue;
     if (!NAMES[fips.slice(2)]) continue;
     if (!counties.has(fips)) counties.set(fips, { name: `${NAMES[fips.slice(2)]} County`, records: new Map(), noAddress: 0 });
     const county = counties.get(fips);

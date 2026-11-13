@@ -18,9 +18,12 @@ const { writeRelease } = require('./lib/release.cjs');
 const { buildModel } = require('./lib/value-model.cjs');
 const { markSharedDeeds } = require('./lib/shared-deeds.cjs');
 const { deriveFacts } = require('./lib/derive.cjs');
+const { STATE_FILES, compareRecords } = require('./lib/agreement.cjs');
 const { log } = require('./lib/log.cjs');
 
-const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'parent', 'roster', 'restricted', 'key']);
+const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'held', 'parent', 'roster', 'restricted', 'key']);
+// The lists a record's held facts may sit under (format.js `held`, router.js).
+const HELD_LISTS = new Set(['new_columns', 'derived_rows']);
 const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip']);
 
 function parseArgs(argv) {
@@ -42,6 +45,19 @@ function assertAllowed(records) {
     for (const key of Object.keys(record.address)) if (!ADDRESS_KEYS.has(key)) throw new Error(`An address has the field ${key}`);
     for (const key of Object.keys(record.facts || {})) if (!FACTS[key]) throw new Error(`A record has the fact ${key}`);
     if (record.restricted && Object.keys(record.facts || {}).length) throw new Error('A restricted record carries facts');
+    for (const [list, facts] of Object.entries(record.held || {})) {
+      if (!HELD_LISTS.has(list)) throw new Error(`A record holds facts under ${list}`);
+      if (record.restricted) throw new Error('A restricted record holds facts');
+      for (const key of Object.keys(facts)) if (!FACTS[key]) throw new Error(`A record holds the fact ${key}`);
+    }
+  }
+}
+
+/** A county's `held_from`: words for facts of a known list, never anything else. */
+function assertHeldFrom(heldFrom) {
+  for (const [list, words] of Object.entries(heldFrom || {})) {
+    if (!HELD_LISTS.has(list)) throw new Error(`A county says where facts under ${list} come from`);
+    for (const [key, text] of Object.entries(words)) if (!FACTS[key] || typeof text !== 'string') throw new Error(`A county's held_from names ${key}`);
   }
 }
 
@@ -51,6 +67,32 @@ function releaseId(asOf, built) {
 
 function addDays(date, days) {
   return new Date(Date.parse(date) + days * 86400000).toISOString().slice(0, 10);
+}
+
+/**
+ * The agreement score: the county's records against its state file's for the same county, built here only to compare
+ * and never published (lib/agreement.cjs). A comparison that fails leaves the release as it is, without one.
+ * PROPERTY_INDEX_COMPARE=off skips it.
+ */
+async function agreementOf(fips, records, { work, built, source }) {
+  const pair = STATE_FILES[fips];
+  if (!pair || pair === source || process.env.PROPERTY_INDEX_COMPARE === 'off') return null;
+  try {
+    // eslint-disable-next-line global-require
+    const other = require(`./sources/${pair}.cjs`);
+    for await (const county of await other.build({ work: path.join(work, `compare-${pair}`), today: built, compare: [fips] })) {
+      if (county.fips !== fips) continue;
+      deriveFacts(county.records);
+      const agreement = compareRecords(records, county.records, county, fips);
+      log(`${fips}: ${agreement.matched} of ${agreement.homes} homes found in ${pair} (${county.as_of}); ${Object.keys(agreement.rows).length} rows compared`);
+      return agreement;
+    }
+    log(`${fips}: ${pair} has no records for it to compare`);
+  } catch (err) {
+    const ours = err.constructor === Error && !/JSON|Unexpected/.test(err.message);
+    log(`${fips}: the comparison with ${pair} was skipped: ${ours ? err.message : err.name}`);
+  }
+  return null;
 }
 
 async function main() {
@@ -66,12 +108,20 @@ async function main() {
     const { records, stale_after_days: staleAfterDays, extra_zips: extraZips = [], ...about } = county;
     // parse() also says which form an address came in (addressKey.js). A record keeps only its parts.
     for (const { address } of records) delete address.form;
-    deriveFacts(records);
+    // deriveFacts may say, per list of held facts, where each came from in words (format.js `held_from`).
+    const derived = deriveFacts(records);
+    const heldFrom = derived?.held_from || about.held_from ? { ...about.held_from, ...derived?.held_from } : null;
+    assertHeldFrom(heldFrom);
     const shared = markSharedDeeds(records);
     if (shared) log(`${about.fips}: ${shared} homes' last sales are one deed for several homes`);
     assertAllowed(records);
     const release = releaseId(about.as_of, built);
     const report = writeRelease(opts.out, { fips: about.fips, release }, records);
+    const agreement = await agreementOf(about.fips, records, { work, built, source: path.basename(opts.source) });
+    if (agreement) {
+      report.agreement = agreement;
+      fs.writeFileSync(path.join(opts.out, 'releases', about.fips, release, 'report.json'), JSON.stringify(report));
+    }
     // What this file's sales say about its values, measured here so it moves with the release (lib/value-model.cjs).
     const valueModel = buildModel(records, about.fips, about.as_of);
     // A source with no property ZIP says which ZIP codes reach its county (lib/zcta.cjs).
@@ -90,6 +140,7 @@ async function main() {
       zips: [...zips].sort(),
       cities: [...cities].sort(),
       records: report.records,
+      ...(heldFrom ? { held_from: heldFrom } : {}),
       ...(valueModel ? { value_model: valueModel } : {}),
     }));
     // Which accounts it holds, for the next release's retention check.

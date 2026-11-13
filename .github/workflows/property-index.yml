@@ -28,9 +28,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or shared-facts, with county and mode live or off (an address with several homes on record shows what all its records agree on); or similar-homes, with county and mode live or off (a house's owner sees its county value beside similar houses on its street); or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file); or models (refit each county's value model from the release it serves); or gaps (the missing-facts ledger, which follows every publish by itself: county names counties, all redoes every one, blank does releases without one)"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live; or shared-facts, with county and mode live or off (an address with several homes on record shows what all its records agree on); or similar-homes, with county and mode live or off (a house's owner sees its county value beside similar houses on its street); or new-columns / derived-rows, with county and mode live or off (a live county shows the columns its connector newly reads / the rows derived from its record, held off until then); or estimates, or floor-points, the floor by location (sources are state codes); or area-trends (FHFA's yearly file); or models (refit each county's value model from the release it serves); or gaps (the missing-facts ledger, which follows every publish by itself: county names counties, all redoes every one, blank does releases without one)"
         type: choice
-        options: [build, rollback, switch, shared-facts, similar-homes, appeal-packet, estimates, floor-points, area-trends, models, gaps]
+        options: [build, rollback, switch, shared-facts, similar-homes, appeal-packet, new-columns, derived-rows, estimates, floor-points, area-trends, models, gaps]
         default: build
       sources:
         description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates, floor-points)"
@@ -41,7 +41,7 @@ on:
         required: false
         default: ""
       county:
-        description: "County FIPS (rollback); one or a comma separated list (switch, shared-facts, similar-homes, appeal-packet, models; all refits every county; build with accept_falls: the counties allowed to publish far fewer records, never a live one)"
+        description: "County FIPS (rollback); one or a comma separated list (switch, shared-facts, similar-homes, appeal-packet, new-columns, derived-rows, models; all refits every county; build with accept_falls: the counties allowed to publish far fewer records, never a live one)"
         required: false
         default: ""
       state:
@@ -49,12 +49,12 @@ on:
         required: false
         default: ""
       target:
-        description: "The environment that follows the change (switch, shared-facts, similar-homes, appeal-packet)"
+        description: "The environment that follows the change (switch, shared-facts, similar-homes, appeal-packet, new-columns, derived-rows)"
         type: choice
         options: [staging, production]
         default: staging
       mode:
-        description: "off, shadow or live; blank keeps it (switch). live or off (shared-facts, similar-homes, appeal-packet)"
+        description: "off, shadow or live; blank keeps it (switch). live or off (shared-facts, similar-homes, appeal-packet, new-columns, derived-rows)"
         required: false
         default: ""
       withhold:
@@ -89,7 +89,7 @@ permissions:
 # replaced by a newer one, so several counties go in one run's list, not in a loop of runs. The missing-facts ledger by hand only
 # reads releases and writes its own files, so it has its own line and never replaces a waiting build.
 concurrency:
-  group: property-index-${{ github.event_name == 'pull_request' && github.ref || ((inputs.action == 'switch' || inputs.action == 'shared-facts' || inputs.action == 'similar-homes' || inputs.action == 'appeal-packet') && 'switch') || (inputs.action == 'estimates' && 'estimates') || (inputs.action == 'floor-points' && 'floor-points') || (inputs.action == 'rollback' && 'rollback') || (inputs.action == 'gaps' && 'gaps') || 'publish' }}
+  group: property-index-${{ github.event_name == 'pull_request' && github.ref || ((inputs.action == 'switch' || inputs.action == 'shared-facts' || inputs.action == 'similar-homes' || inputs.action == 'appeal-packet' || inputs.action == 'new-columns' || inputs.action == 'derived-rows') && 'switch') || (inputs.action == 'estimates' && 'estimates') || (inputs.action == 'floor-points' && 'floor-points') || (inputs.action == 'rollback' && 'rollback') || (inputs.action == 'gaps' && 'gaps') || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -119,7 +119,7 @@ jobs:
 
   switch:
     name: Switch a county
-    if: github.event_name == 'workflow_dispatch' && (inputs.action == 'switch' || inputs.action == 'shared-facts' || inputs.action == 'similar-homes' || inputs.action == 'appeal-packet') && github.ref == 'refs/heads/master'
+    if: github.event_name == 'workflow_dispatch' && (inputs.action == 'switch' || inputs.action == 'shared-facts' || inputs.action == 'similar-homes' || inputs.action == 'appeal-packet' || inputs.action == 'new-columns' || inputs.action == 'derived-rows') && github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: property-index
@@ -142,7 +142,7 @@ jobs:
           WITHHOLD: ${{ inputs.withhold }}
           ESTIMATES: ${{ inputs.estimates }}
           # shared-facts, similar-homes and appeal-packet each change only their own list in the file, never the county's own line.
-          LIST: ${{ (inputs.action == 'shared-facts' && '--shared-facts') || (inputs.action == 'similar-homes' && '--similar-homes') || (inputs.action == 'appeal-packet' && '--appeal-packet') || '' }}
+          LIST: ${{ (inputs.action == 'shared-facts' && '--shared-facts') || (inputs.action == 'similar-homes' && '--similar-homes') || (inputs.action == 'appeal-packet' && '--appeal-packet') || (inputs.action == 'new-columns' && '--new-columns') || (inputs.action == 'derived-rows' && '--derived-rows') || '' }}
         run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --estimates "$ESTIMATES" --bucket "$PROPERTY_INDEX_BUCKET" $LIST
 
   publish:

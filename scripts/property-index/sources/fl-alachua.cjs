@@ -7,6 +7,7 @@
 const path = require('node:path');
 const { download, zipTable, zipDates } = require('../lib/tables.cjs');
 const { number, positive } = require('../lib/values.cjs');
+const { holdFacts } = require('../lib/held.cjs');
 const { fillHomes, bathFacts, describe, monthOf } = require('../lib/fill.cjs');
 const { log } = require('../lib/log.cjs');
 const { countyRoll } = require('./fl-roll.cjs');
@@ -32,6 +33,12 @@ const WALLS = {
   'REINF CONCRETE': 'Reinforced concrete',
 };
 const said = (desc) => /^\d+-(.+)$/.exec(String(desc || '').trim())?.[1]?.trim();
+
+// The Property Appraiser's words for a home's air conditioning and heating (its HVAC and HC&V lines), plainer.
+const SYSTEMS = {
+  cooling: { CENTRAL: 'Central air conditioning', 'WIND/WALL UNIT': 'Window or wall units', NONE: 'None' },
+  heating: { 'FORCED AIR': 'Forced air', CONVECTION: 'Convection', 'RADIANT WATER': 'Radiant water', NONE: 'None' },
+};
 
 async function* build({ work, today }) {
   const zip = path.join(work, 'fl-alachua', 'cama.zip');
@@ -61,12 +68,17 @@ async function* build({ work, today }) {
       // A wall line's units are its share of the walls: the largest share is the home's walls.
       const share = number(row.Imprv_Attr_Units) || 0;
       if (!improvement.walls || share > improvement.walls.share) improvement.walls = { words: WALLS[words], share };
+    } else if (row.Imprv_Attribute === 'HVAC' || row.Imprv_Attribute === 'HC&V') {
+      // Read since the county went live (held below): its air conditioning ("03-CENTRAL", "02-WIND/WALL UNIT", "01-NONE") and
+      // its heating and ventilation ("04-FORCED AIR", "02-CONVECTION", "01-NONE"), in its own words.
+      const key = row.Imprv_Attribute === 'HVAC' ? 'cooling' : 'heating';
+      improvement[key] = key in improvement ? null : (SYSTEMS[key][words] || null);
     }
   }
   const dwellings = new Map();
-  for (const { parcel, heated, stories, bedrooms, baths, roof, walls } of improvements.values()) {
+  for (const { parcel, heated, stories, bedrooms, baths, roof, walls, cooling, heating } of improvements.values()) {
     const facts = {
-      bedrooms, ...bathFacts(baths, 10), stories, living_sqft: heated && heated < 30000 ? heated : null, roof_cover: roof, exterior_walls: walls?.words,
+      bedrooms, ...bathFacts(baths, 10), stories, living_sqft: heated && heated < 30000 ? heated : null, roof_cover: roof, exterior_walls: walls?.words, cooling, heating,
     };
     if (!dwellings.has(parcel)) dwellings.set(parcel, []);
     dwellings.get(parcel).push(facts);
@@ -75,6 +87,8 @@ async function* build({ work, today }) {
   const roll = await countyRoll(work, FIPS, today);
   const counts = fillHomes(roll.records, dwellings);
   log(describe(COUNTY, counts));
+  // Off the county's screens until its new_columns switch is on (lib/held.cjs).
+  holdFacts(roll.records, ['cooling', 'heating']);
   yield {
     ...roll,
     name: COUNTY,
