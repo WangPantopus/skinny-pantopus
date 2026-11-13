@@ -38,6 +38,11 @@ function words(text) {
   return String(text).toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
+/** A place's name for comparing: "CITY OF GROVE CITY", "Grove City" and "GROVE-CITY" all read GROVECITY. */
+function placeWords(text) {
+  return String(text || '').toUpperCase().replace(/^(CITY|VILLAGE|TOWN) OF /, '').replace(/[^A-Z0-9]/g, '');
+}
+
 /** "Cranberry township" reads "Cranberry Township"; a New England town or a village reads as its name. */
 function subdivisionName(row) {
   const name = row.NAME.replace(/\s*\(balance\)$/i, '').trim();
@@ -150,6 +155,23 @@ function edgesBeside(area, x, y) {
   return false;
 }
 
+/** Every place's name in the state and every subdivision's in the county, as placeWords reads them (their tables only). */
+function placeNames(work, state, countyFips) {
+  const code = STATE_FIPS[state];
+  const names = new Set();
+  if (!code) return names;
+  for (const layer of ['place', 'cousub']) {
+    const base = `tl_${YEAR}_${code}_${layer}`;
+    const zip = path.join(work, 'tiger', `${base}.zip`);
+    download(`https://www2.census.gov/geo/tiger/TIGER${YEAR}/${layer.toUpperCase()}/${base}.zip`, zip);
+    for (const row of readDbf(execFileSync('unzip', ['-p', zip, `${base}.dbf`], { maxBuffer: 1024 * 1024 * 1024 }))) {
+      if (layer === 'cousub' && row.COUNTYFP !== countyFips.slice(2)) continue;
+      names.add(placeWords(layer === 'cousub' ? subdivisionName(row) : row.NAME.replace(/\s*\(balance\)$/i, '')));
+    }
+  }
+  return names;
+}
+
 /**
  * Where a point is: { name } for a city, town or "Unincorporated <County>", null when it can't say.
  * A point inside one area but within the margin of any area's line says nothing.
@@ -238,7 +260,8 @@ function addMunicipalities(records, county, work, hold, sortKey, asks = (record)
     return;
   }
   const locate = locator(work, county.state, county.name, county.fips);
-  const counts = { city: 0, town: 0, unincorporated: 0, reworded: 0, county_disagrees: 0, unsure: 0, no_point: 0, points_differ: 0 };
+  const names = homes.some((record) => asks(record) === 'district') ? placeNames(work, county.state, county.fips) : new Set();
+  const counts = { city: 0, town: 0, unincorporated: 0, reworded: 0, county_disagrees: 0, district_reworded: 0, district_names_a_place: 0, unsure: 0, no_point: 0, points_differ: 0 };
   for (const record of homes) {
     const a = record.address;
     const candidates = (points.get(keys.get(record)) || []).filter(([pre, suffix, post, zip]) => (!a.pre || !pre || pre === a.pre)
@@ -254,8 +277,20 @@ function addMunicipalities(records, county, work, hold, sortKey, asks = (record)
     if (unsure) { counts.unsure += 1; continue; }
     if (found.size !== 1) { counts.points_differ += 1; continue; }
     const at = JSON.parse([...found][0]);
+    const ask = asks(record);
+    // A county whose municipality field holds a tax or planning district (derive.cjs DISTRICT_MUNICIPALITIES; founder, Nov 13,
+    // "Yes, both"): where the county's words name no city, town or township at all ("COLUMBUS-WORTHINGTON CSD", "GREATER
+    // EAST SIDE"), the city or town at the point, or "Unincorporated <County>" outside them. Words that name one ("CITY OF
+    // COLUMBUS", "MAPLEWOOD", "PRAIRIE TOWNSHIP") stay the county's, even where the point says otherwise.
+    if (ask === 'district') {
+      const said = placeWords(record.facts.municipality);
+      if (names.has(said) || /TOWNSHIP$/.test(said)) { counts.district_names_a_place += 1; continue; }
+      counts.district_reworded += 1;
+      hold(record, 'municipality', at.name, `From ${BOUNDARIES}`, { rewording: true });
+      continue;
+    }
     // A county that names itself says the home is in no city: only the limits agreeing reword it.
-    if (asks(record) === 'reword') {
+    if (ask === 'reword') {
       if (at.kind !== 'unincorporated') { counts.county_disagrees += 1; continue; }
       counts.reworded += 1;
       hold(record, 'municipality', at.name, `From ${BOUNDARIES}`, { rewording: true });

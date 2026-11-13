@@ -28,6 +28,11 @@ const ZERO_MEANS_NONE = [['fireplaces', 'fireplace count'], ['half_baths', 'half
 // unlisted (Dane County WI: 41,173 homes). 'living': the county's living area is its floors added up on every home, so the
 // record carries only the first (Clark County NV: TOTSQFT = FLR1SQFT + FLR2SQFT on all 763,199 homes with a first floor).
 const FLOOR_LISTS = { 'wi-madison': 'floors', 'nv-clark': 'living' };
+// Sources whose municipality field holds a district, not a city: Franklin County OH's Auditor writes the tax district
+// ("COLUMBUS-WORTHINGTON CSD", "PLAIN TWP-NEW ALBANY CORP"), Ramsey County MN names St. Paul's planning districts ("GREATER
+// EAST SIDE"). The city or town at the home's point is held as a rewording (places.cjs); the county's words stay in its
+// record. Approved by the founder on Nov 13 ("Yes, both").
+const DISTRICT_MUNICIPALITIES = new Set(['oh-franklin', 'mn-ramsey']);
 // Split and bi-level homes: their floors don't give a story count (a lower level can sit in the county's basement columns).
 const SPLIT_LEVELS = /SPLIT|BI-?LEVEL|TRI-?LEVEL|MULTI-?LEVEL/i;
 
@@ -149,10 +154,12 @@ function deriveRows(records, county, { work = null } = {}) {
     }
   }
   // The city or town limits that hold the home's point: for a home whose county names no municipality, and, reworded, for one
-  // whose county names itself ("Clark County") where the limits agree it's in no city.
+  // whose county names itself ("Clark County") where the limits agree it's in no city, or names a district
+  // (DISTRICT_MUNICIPALITIES) that isn't the city or town there.
   const asks = (record) => {
     if (record.facts.municipality === undefined) return 'fill';
-    return namesTheCounty(record.facts.municipality, county) ? 'reword' : null;
+    if (namesTheCounty(record.facts.municipality, county)) return 'reword';
+    return DISTRICT_MUNICIPALITIES.has(county.source) ? 'district' : null;
   };
   if (work) addMunicipalities(records, county, work, hold, sortKey, asks);
   for (const record of records) {
