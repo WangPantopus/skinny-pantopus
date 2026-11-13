@@ -34,6 +34,18 @@ function deriveFacts(records) {
   }
 }
 
+/**
+ * The office that keeps the record, for "From <office>'s legal description": a state's copy names the county office it
+ * copies ("Gunnison County Assessor, through the State of Colorado (OIT)", "Florida Department of Revenue and the Alachua
+ * County Property Appraiser"); the copy's own publisher stays in the footer.
+ */
+function officeOf(publisher) {
+  const name = String(publisher || '').trim();
+  const through = name.split(/,\s+through\s+/i)[0];
+  const and = / and (the [A-Z].*)$/.exec(through);
+  return and ? and[1] : through;
+}
+
 /** A county's own name, for a jurisdiction field that names the county: "CLARK COUNTY", "Clark Co", "Clark". */
 const plain = (text) => String(text || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 function namesTheCounty(value, county) {
@@ -50,7 +62,7 @@ function namesTheCounty(value, county) {
 function deriveRows(records, county, { work = null } = {}) {
   const from = {};
   const counts = {};
-  const office = county.publisher;
+  const office = officeOf(county.publisher);
   /** Holds a derived value for a fact the record leaves empty (or, for the county's own name as its city, rewords it). */
   function hold(record, fact, value, words, { rewording = false } = {}) {
     const stated = record.facts[fact] !== undefined || record.held?.new_columns?.[fact] !== undefined;
@@ -66,7 +78,7 @@ function deriveRows(records, county, { work = null } = {}) {
     return true;
   }
   const subdivision = subdivisionReader(records, county);
-  const uses = useCodeWords(county);
+  const uses = useCodeWords({ ...county, publisher: office });
   for (const record of records) {
     const { facts } = record;
     if (record.restricted || !facts) continue;
@@ -101,4 +113,4 @@ function deriveRows(records, county, { work = null } = {}) {
   return from;
 }
 
-module.exports = { deriveFacts, deriveRows, namesTheCounty, SWITCH };
+module.exports = { deriveFacts, deriveRows, namesTheCounty, officeOf, SWITCH };
