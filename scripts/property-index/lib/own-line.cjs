@@ -6,8 +6,12 @@
 const { parse, sortKey } = require('../../../backend/services/propertyRecords/addressKey');
 const { resolve } = require('../../../backend/services/propertyRecords/identity');
 
-/** The extra records: each home its own line finds nothing for, or finds another record for, filed again at that line. */
-function alsoAtOwnLine(records) {
+/**
+ * The extra records: each home its own line finds nothing for, or finds another record for, filed again at that line. With
+ * `onlyWrong`, only a home whose own line finds another home's record (the worst answer); a line that finds nothing or a building
+ * is left as it is.
+ */
+function alsoAtOwnLine(records, { onlyWrong = false } = {}) {
   const byKey = new Map();
   for (const record of records) {
     const key = sortKey(record.address);
@@ -22,6 +26,7 @@ function alsoAtOwnLine(records) {
     const answer = resolve({ ...own, zip: record.address.zip, city: record.address.city }, byKey.get(sortKey(own)) || []);
     // Found, or already asked which home: nothing to add.
     if ((answer.match === 'exact' && answer.record.id === record.id) || answer.match === 'ambiguous') continue;
+    if (onlyWrong && answer.match !== 'exact') continue;
     delete own.form;
     twins.push({ ...record, address: { ...own, city: record.address.city, zip: record.address.zip } });
   }
