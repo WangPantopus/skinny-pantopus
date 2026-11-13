@@ -6,7 +6,8 @@
 //
 //   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--bulk] [--min-retention 0.995] [--republish] [--accept-falls]
 //     [--accept-falls-for "<fips> ..."]
-//     --bulk  uploads every county's release at once, which a whole state of them needs; a refused county's files just go unused
+//     --bulk  uploads every county's release at once, which a whole state of them needs, but those of counties left as they
+//             serve (unchanged, or rolled back); a refused county's files just go unused
 //     --moved "<fips> ..."  counties moving from a statewide file to a connector of their own: ids and facts are another file's, so only the record count compares
 //     --republish  someone decided: a file that was rolled back may serve again, and a new build of the file serving
 //                  replaces it (a scheduled run never passes this)
@@ -76,8 +77,9 @@ function createStore({ bucket, prefix }) {
     putFile(file, name) {
       aws(['cp', file, url(name)]);
     },
-    putDir(dir, name) {
-      aws(['cp', dir, url(name), '--recursive']);
+    /** A folder's files, but those under the subfolders named in `skipped`. */
+    putDir(dir, name, skipped = []) {
+      aws(['cp', dir, url(name), '--recursive', ...skipped.flatMap((folder) => ['--exclude', `${folder}/*`])]);
     },
     putJson(name, data) {
       const file = path.join(scratch, 'write');
@@ -177,10 +179,30 @@ function liveCounties(store) {
   return live;
 }
 
+/**
+ * Why a county's new build stays unpublished whatever its checks say (`kept`), or a line on why it goes on to them anyway.
+ * The source hasn't published anything new since the release serving.
+ * A run someone starts by hand publishes anyway: a new build of the same file can hold new address keys.
+ * So does a scheduled one when the reader has changed since and no longer finds the release's homes.
+ * The registry's builds list their rows by source: one source more or fewer, or more or fewer rows from one, is new too.
+ * The file someone rolled back stays back until the source publishes a newer one or someone says otherwise.
+ */
+function leftAsServing(store, entry, serving, { republish, records }) {
+  if (!serving || republish) return {};
+  let note = null;
+  if (serving.as_of === entry.as_of && serving.status === 'active') {
+    const drift = records && readsDifferently(store, serving);
+    if (!drift && sameSources(serving, entry)) return { kept: `${entry.fips}: unchanged since ${entry.as_of}` };
+    note = drift ? `${entry.fips}: unchanged since ${entry.as_of}, but in the release serving ${drift}`
+      : `${entry.fips}: dated ${entry.as_of} like the release serving, but its sources gave other rows`;
+  }
+  if (serving.rolled_back_as_of === entry.as_of) return { kept: `${entry.fips}: ${entry.as_of} was rolled back, not publishing it again` };
+  return { note };
+}
+
 function publish(store, { out, prefix, republish, acceptFalls = false, acceptFallsFor = [], acceptShrinkFor = [], bulk = false, minRetention, moved }) {
   // The national floor's estimates (--prefix index/estimates) are counted, not held to the reader's answers.
   const records = prefix === 'index';
-  if (bulk) store.putDir(path.join(out, 'releases'), 'releases');
   const dir = path.join(out, 'counties');
   const entries = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
   const byState = new Map();
@@ -188,34 +210,23 @@ function publish(store, { out, prefix, republish, acceptFalls = false, acceptFal
     if (!byState.has(entry.state)) byState.set(entry.state, []);
     byState.get(entry.state).push(entry);
   }
+  const stateFiles = new Map([...byState.keys()].map((state) => [state, readState(store, state)]));
+  const decided = new Map(entries.map((entry) => [entry.fips, leftAsServing(store, entry, stateFiles.get(entry.state).jurisdictions[entry.fips], { republish, records })]));
+  // Every release at once, which a whole state of them needs; not those of builds that stay unpublished whatever their checks
+  // say, so a run leaves no unused copies of counties it didn't change. A refused county's files go unused but stay to read.
+  if (bulk) store.putDir(path.join(out, 'releases'), 'releases', entries.filter((entry) => decided.get(entry.fips).kept).map((entry) => `${entry.fips}/${entry.release}`));
   let refused = 0;
   const live = acceptShrinkFor.length ? liveCounties(store) : new Set();
   for (const fips of acceptShrinkFor.filter((name) => live.has(name))) console.log(`::error::${fips} is live: the shrink override never applies to it.`);
   for (const [state, built] of byState) {
-    const stateFile = readState(store, state);
+    const stateFile = stateFiles.get(state);
     const rolledBackBefore = Object.fromEntries(Object.entries(stateFile.jurisdictions).map(([fips, county]) => [fips, county.rolled_back_at]));
     let changed = false;
     for (const entry of built) {
       const serving = stateFile.jurisdictions[entry.fips];
-      // The source hasn't published anything new since the release serving.
-      // A run someone starts by hand publishes anyway: a new build of the same file can hold new address keys.
-      // So does a scheduled one when the reader has changed since and no longer finds the release's homes.
-      // The registry's builds list their rows by source: one source more or fewer, or more or fewer rows from one, is new too.
-      if (serving && serving.as_of === entry.as_of && serving.status === 'active' && !republish) {
-        const drift = records && readsDifferently(store, serving);
-        const read = sameSources(serving, entry);
-        if (!drift && read) {
-          log(`${entry.fips}: unchanged since ${entry.as_of}`);
-          continue;
-        }
-        if (drift) log(`${entry.fips}: unchanged since ${entry.as_of}, but in the release serving ${drift}`);
-        else log(`${entry.fips}: dated ${entry.as_of} like the release serving, but its sources gave other rows`);
-      }
-      // The file someone rolled back stays back until the source publishes a newer one or someone says otherwise.
-      if (serving?.rolled_back_as_of === entry.as_of && !republish) {
-        log(`${entry.fips}: ${entry.as_of} was rolled back, not publishing it again`);
-        continue;
-      }
+      const { kept, note } = decided.get(entry.fips);
+      if (kept || note) log(kept || note);
+      if (kept) continue;
       const shrinkable = (acceptFalls || acceptFallsFor.includes(entry.fips)) && acceptShrinkFor.includes(entry.fips) && !live.has(entry.fips);
       const { found, falls } = problems(store, entry, serving, out, minRetention, moved, records, shrinkable);
       if (found.length || (falls.length && !acceptFalls && !acceptFallsFor.includes(entry.fips))) {
