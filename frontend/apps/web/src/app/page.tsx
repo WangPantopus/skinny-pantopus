@@ -54,7 +54,7 @@ const serif = localFont({
 // differently and the hero moved when the font landed. A Courier New face with Plex Mono's advance stands in.
 const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--home-mono', display: 'swap', adjustFontFallback: false });
 
-const TITLE = 'Pantopus · Your home and neighborhood, connected';
+const TITLE = 'Pantopus · Real life, connected';
 const DESCRIPTION =
   'See what’s true about your address, keep your household’s everyday on track, and make small plans with people nearby. Free to look, no account needed.';
 

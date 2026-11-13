@@ -128,7 +128,7 @@ export default function HomeHero() {
 
       <div className={styles.heroMain}>
         <div className={styles.heroCopy}>
-          <span className={styles.heroEyebrow}>Your home and neighborhood, connected</span>
+          <span className={styles.heroEyebrow}>Real life, connected</span>
           <h1 className={styles.heroTitle}>
             Your <span className={styles.heroTitleEnd}>place, <em>alive.</em></span>
           </h1>
