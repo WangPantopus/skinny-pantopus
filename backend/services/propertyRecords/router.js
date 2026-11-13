@@ -10,7 +10,7 @@
  *   switches/<name>.json   { v: 1, counties: { "<fips>": { mode: 'off'|'shadow'|'live', withheld: [fact, ...], estimates: true } },
  *                            shared_facts: ["<fips>", ...], similar_homes: ["<fips>", ...],
  *                            appeal_packet: ["<fips>", ...], new_columns: ["<fips>", ...], derived_rows: ["<fips>", ...],
- *                            listed_units: ["<fips>", ...], past_date: ["<fips>", ...] }
+ *                            measured_rows: ["<fips>", ...], listed_units: ["<fips>", ...], past_date: ["<fips>", ...] }
  *
  * `estimates: true` shows a live county's owners a Pantopus estimate (propertyRecords/valueEstimate.js). Without it, none.
  * `shared_facts` names the live counties where an address with several homes on record shows what all of them agree
@@ -22,8 +22,11 @@
  * `new_columns` and `derived_rows` name the live counties whose release's held facts show: facts a release carries
  * under `held` (format.js) because they would change what a live county shows, kept off its screens until it's named
  * here. new_columns: columns its connector newly reads (WP20), joined to the copy's facts; derived_rows: rows derived
- * from the record itself (WP19), served beside them as `copy.derived` for Property details only (joinHeld). A file
- * without the lists shows none of them, and a copy's `held` and `held_from` never leave this file.
+ * from the record itself (WP19), served beside them as `copy.derived` for Property details only (joinHeld).
+ * `measured_rows` names the live counties whose homes show figures measured from public aerial data for rows the record
+ * leaves empty (WP21, scripts/property-index/lib/measure.cjs: a building's footprint from its outline), served as
+ * `copy.measured` for Property details only, each labeled with the survey and the year it was measured. A file without
+ * the lists shows none of them, and a copy's `held` and `held_from` never leave this file.
  * `listed_units` names the live counties where a record takes the unit number an address list gives it (`listed_unit`,
  * written by a connector whose own file has no unit, identity.js withListedUnits), so a condo's owner finds its own unit
  * instead of several homes. A file without the list has it off everywhere.
@@ -58,7 +61,7 @@ let appealPackets = new Set();
 let listedUnits = new Set();
 let pastDates = new Set();
 // The held facts' lists, in the order they apply (format.js `held`).
-const HELD = ['new_columns', 'derived_rows'];
+const HELD = ['new_columns', 'derived_rows', 'measured_rows'];
 let held = {};
 let modes = config.listedModes();
 let liveStates = new Set();
@@ -257,7 +260,9 @@ const heldFor = (fips) => (modeFor(fips) === 'live' ? HELD.filter((name) => held
  * neither ever reaches a screen. new_columns joins the copy's own facts (the county's columns, read later); derived_rows
  * never does: it goes to `copy.derived` ({ facts, building?, from }, `from` being each fact's source words from the
  * county's `held_from`), which only Property details draws, so readers of a copy's facts (estimates, the house's
- * shape) see the county's own record. A derived 0 (a county's "None") is kept.
+ * shape) see the county's own record. A derived 0 (a county's "None") is kept. measured_rows goes to `copy.measured`
+ * ({ facts, from }) the same way, its words taking each fact's year (`held.measured_years`) where they say {year}; a fact
+ * whose words need a year it doesn't have isn't served.
  * @param {object} copy     a stored copy
  * @param {string[]} names  the lists that show, in order
  */
@@ -275,6 +280,18 @@ function joinHeld(copy, names) {
       from: { ...(words.derived_rows || {}) },
     };
   }
+  if (names.includes('measured_rows') && kept.measured_rows?.facts) {
+    const years = kept.measured_years?.facts || {};
+    const facts = {};
+    const from = {};
+    for (const [name, value] of Object.entries(kept.measured_rows.facts)) {
+      const said = words.measured_rows?.[name];
+      if (typeof said !== 'string' || (said.includes('{year}') && !years[name])) continue;
+      facts[name] = value;
+      from[name] = said.replace('{year}', String(years[name]));
+    }
+    if (Object.keys(facts).length) out.measured = { facts, from };
+  }
   return out;
 }
 
@@ -288,6 +305,7 @@ function served(stored) {
     facts: without(copy.facts, withheld),
     ...(copy.building ? { building: without(copy.building, withheld) } : {}),
     ...(copy.derived ? { derived: { ...copy.derived, facts: without(copy.derived.facts, withheld), ...(copy.derived.building ? { building: without(copy.derived.building, withheld) } : {}) } } : {}),
+    ...(copy.measured ? { measured: { ...copy.measured, facts: without(copy.measured.facts, withheld) } } : {}),
   };
 }
 

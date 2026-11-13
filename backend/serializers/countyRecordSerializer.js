@@ -501,6 +501,9 @@ function serializeCountyRecord(attomPayload, avm = null) {
 
 // ── A Home's own copy of its county record ──────────────────
 
+// The county's figures a measured one stands in for: shown, they keep the measured one off the page.
+const MEASURED_GIVES_WAY = { outline_sqft: ['ground_floor_sqft'], lot_sqft: ['lot_acres'], lot_acres: ['lot_sqft'] };
+
 function factValue(kind, value) {
   if (kind === 'stories') {
     const n = positive(value);
@@ -591,9 +594,21 @@ function serializePropertyRecord(copy, estimate = null) {
   const sourced = (held) => Object.fromEntries(Object.entries(held || {}).filter(([name]) => typeof from[name] === 'string'));
   const derivedFacts = sourced(copy.derived?.facts);
   const derivedBuilding = sourced(copy.derived?.building);
-  const derived = copy.derived ? Object.fromEntries([...Object.keys(derivedBuilding), ...Object.keys(derivedFacts)].map((name) => [name, from[name]])) : null;
-  const facts = { ...(copy.facts || {}), ...derivedFacts };
+  let derived = copy.derived ? Object.fromEntries([...Object.keys(derivedBuilding), ...Object.keys(derivedFacts)].map((name) => [name, from[name]])) : null;
+  let facts = { ...(copy.facts || {}), ...derivedFacts };
   const buildingFacts = copy.building || Object.keys(derivedBuilding).length ? { ...(copy.building || {}), ...derivedBuilding } : undefined;
+  // Figures measured from public aerial data (scripts/property-index/lib/measure.cjs), present only while the county's
+  // measured_rows switch is on: each only where neither the record nor a derived row has it, and never beside the figure it
+  // stands in for (a building's footprint isn't shown where the county states its ground floor area). Each says what it
+  // was measured from and when, under its value, as a derived row does.
+  const measuredFrom = copy.measured?.from || {};
+  const stated = (name) => facts[name] !== undefined || buildingFacts?.[name] !== undefined;
+  const measured = Object.entries(copy.measured?.facts || {})
+    .filter(([name]) => typeof measuredFrom[name] === 'string' && !stated(name) && !(MEASURED_GIVES_WAY[name] || []).some(stated));
+  if (measured.length) {
+    facts = { ...facts, ...Object.fromEntries(measured) };
+    derived = { ...(derived || {}), ...Object.fromEntries(measured.map(([name]) => [name, measuredFrom[name]])) };
+  }
   const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
   if (copy.match === 'ambiguous') {
     const building = titled('building');
