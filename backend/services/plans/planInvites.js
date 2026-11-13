@@ -193,8 +193,14 @@ async function hostedPlanRow(postId, viewer) {
   return plan;
 }
 
+/** A business that may no longer host invites nobody: the invitation would open a plan that isn't there. */
+function hostMayInvite(plan) {
+  return !plan.business_user_id || require('./planBusiness').hostsNow(plan);
+}
+
 function assertInvitable(plan, viewer) {
   if (!viewer.invitesFlag) fail(404, 'not_found', "Invitations aren't available right now.");
+  if (!hostMayInvite(plan)) fail(409, 'ended', "This plan isn't open to new people right now.");
   if (plan.status === 'cancelled') fail(409, 'ended', 'This plan was cancelled.');
   if (!isOpenForAnswers(plan)) fail(409, 'ended', 'This plan has started, so invitations are closed.');
 }
@@ -298,7 +304,7 @@ async function hostView(plan, rows) {
 async function listForHost(user, postId) {
   const { viewer, plan } = await hostPlan(user, postId);
   const view = await hostView(plan, await loadInvites(postId));
-  return { ...view, can_invite: Boolean(viewer.invitesFlag) && isOpenForAnswers(plan) };
+  return { ...view, can_invite: Boolean(viewer.invitesFlag) && isOpenForAnswers(plan) && hostMayInvite(plan) };
 }
 
 // ── People the host can invite ───────────────────────────────
@@ -651,7 +657,7 @@ async function cancelInvite(user, postId, inviteId) {
   const { error: updateError } = await supabaseAdmin.from('PlanInvite')
     .update({ status: 'cancelled', updated_at: nowIso() }).eq('id', row.id).in('status', ['pending', 'declined']);
   if (updateError) throw new Error(`Failed to cancel the invitation: ${updateError.message}`);
-  return { ...(await hostView(plan, await loadInvites(postId))), can_invite: isOpenForAnswers(plan) };
+  return { ...(await hostView(plan, await loadInvites(postId))), can_invite: isOpenForAnswers(plan) && hostMayInvite(plan) };
 }
 
 // ── The person invited ───────────────────────────────────────

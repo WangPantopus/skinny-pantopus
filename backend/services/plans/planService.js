@@ -591,7 +591,9 @@ function buildCard(plan, viewer, ctx) {
     const counts = ctx.inviteCountsByPlan?.get(plan.post_id) || { pending: 0, accepted: 0, declined: 0 };
     card.invites = {
       can_invite: Boolean(viewer.invitesFlag) && plan.status === 'open'
-        && rules.isAskingOpen(plan, startsAt(plan), endsAt(plan), now),
+        && rules.isAskingOpen(plan, startsAt(plan), endsAt(plan), now)
+        // A business that may no longer host invites nobody (planInvites.assertInvitable).
+        && (!plan.business_user_id || planBusiness.hostsNow(plan)),
       invited: counts.pending || 0,
       said_yes: counts.accepted || 0,
       cant_make_it: counts.declined || 0,
@@ -1005,8 +1007,12 @@ async function listMine(viewer) {
  */
 async function isInvolved(plan, viewer) {
   if (!plan || !plan.business_user_id || !viewer.biz || planBusiness.shownTo(plan, viewer)) return false;
+  // Nothing to look up where the answer can't change: the viewer's own side doesn't hold, or they run the plan.
+  if (!planBusiness.shownTo(plan, viewer, { involved: true }) || planBusiness.runsPlan(plan, viewer)) return false;
+  // Once the plan is cancelled, the people who were still waiting may read what happened too.
+  const statuses = plan.status === 'cancelled' ? [...ACTIVE_REQUEST_STATUSES, 'expired'] : ACTIVE_REQUEST_STATUSES;
   const { data, error } = await supabaseAdmin.from('PlanRequest').select('id')
-    .eq('post_id', plan.post_id).eq('user_id', viewer.id).in('status', ACTIVE_REQUEST_STATUSES).limit(1);
+    .eq('post_id', plan.post_id).eq('user_id', viewer.id).in('status', statuses).limit(1);
   if (error) throw new Error(`Failed to load your request: ${error.message}`);
   return Boolean(data && data.length);
 }

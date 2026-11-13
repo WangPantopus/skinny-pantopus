@@ -368,22 +368,29 @@ async function sendHostSummaries() {
  * no business hosts a plan.
  */
 async function cancelGoneBusinessPlans() {
-  const { data, error } = await supabaseAdmin
-    .from('Plan')
-    .select(planService.PLAN_SELECT)
-    .eq('status', 'open')
-    .not('business_user_id', 'is', null)
-    .gt('post.event_end_date', new Date().toISOString())
-    .limit(300);
-  if (error) throw new Error(`Failed to read businesses' plans: ${error.message}`);
+  const PAGE = 300;
+  const upcoming = new Date().toISOString();
   let cancelled = 0;
-  for (const plan of await planBusiness.attachBusinessHosts(data || [])) {
-    if (plan.business) continue;
-    try {
-      if (await cancelForGoneBusiness(plan)) cancelled += 1;
-    } catch (err) {
-      logger.warn('plans.tick.gone_business_cancel_failed', { planId: plan.post_id, error: err.message });
+  // Every open business plan, a page at a time in a fixed order, so none is skipped however many there are.
+  for (let from = 0; from < 20 * PAGE; from += PAGE) {
+    const { data, error } = await supabaseAdmin
+      .from('Plan')
+      .select(planService.PLAN_SELECT)
+      .eq('status', 'open')
+      .not('business_user_id', 'is', null)
+      .gt('post.event_end_date', upcoming)
+      .order('post_id')
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`Failed to read businesses' plans: ${error.message}`);
+    for (const plan of await planBusiness.attachBusinessHosts(data || [])) {
+      if (plan.business !== null) continue;
+      try {
+        if (await cancelForGoneBusiness(plan)) cancelled += 1;
+      } catch (err) {
+        logger.warn('plans.tick.gone_business_cancel_failed', { planId: plan.post_id, error: err.message });
+      }
     }
+    if (!data || data.length < PAGE) break;
   }
   return cancelled;
 }

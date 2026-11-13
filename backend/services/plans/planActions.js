@@ -605,7 +605,7 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
       || rules.distanceMeters(place, { latitude: plan.place_latitude, longitude: plan.place_longitude }) > 25
       || (place.name || '') !== (plan.place_name || '');
     const area = planPlace.areaPointFor(plan.kind, place.latitude, place.longitude);
-    const fallbackCity = movingBusiness ? place.city : place.home?.city || plan.city || null;
+    const fallbackCity = movingBusiness ? place.city || plan.city || null : place.home?.city || plan.city || null;
     const { label, city } = await planPlace.areaLabelFor(area, { fallbackCity });
     Object.assign(planUpdate, {
       place_kind: place.kind,
@@ -773,7 +773,9 @@ const BUSINESS_GONE_NOTE = 'This business is no longer on Pantopus.';
  * @param {object} plan  a plan row with `business` attached and null (planBusiness.attachBusinessHosts)
  */
 async function cancelForGoneBusiness(plan) {
-  if (!plan || !plan.business_user_id || plan.business) return false;
+  // Only a row whose business was looked up and found gone: `business` is null. A row nobody attached one to
+  // (undefined) is left alone.
+  if (!plan || !plan.business_user_id || plan.business !== null) return false;
   return cancelOpenPlan(plan, { hostFirst: 'The host', cancelNote: BUSINESS_GONE_NOTE });
 }
 

@@ -121,13 +121,19 @@ function hostsNow(plan) {
  */
 async function peopleShown(plan, userIds) {
   const ids = [...new Set((userIds || []).filter(Boolean).map(String))];
-  if (!plan.business_user_id) return new Set(ids);
+  if (!plan.business_user_id || ids.length === 0) return new Set(ids);
+  // Each person's own role, as their requests carry it, so the switch is read for them exactly as planViewer
+  // reads it (a switch turned on for Pantopus staff counts here too). A failed read shows the plan to nobody.
+  const { data, error } = await supabaseAdmin.from('User').select('id, role').in('id', ids);
+  if (error) {
+    logger.warn('plans.business.people_shown_unavailable', { planId: plan.post_id, error: error.message });
+    return new Set();
+  }
   const shown = new Set();
-  await Promise.all(ids.map(async (id) => {
-    const person = { id, role: 'user' };
+  await Promise.all((data || []).map(async (person) => {
     if (!(await isFeatureEnabled(FLAG, person))) return;
     if (plan.kind === 'playdate' && !(await isFeatureEnabled(KIDS_FLAG, person))) return;
-    shown.add(id);
+    shown.add(String(person.id));
   }));
   return shown;
 }
