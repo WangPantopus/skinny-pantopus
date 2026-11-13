@@ -7,8 +7,9 @@ backend release is out.
 One prompt for iPhone and one for Android. They can run side by side: they touch
 different folders. Each begins with the same rules.
 
-The server they build against is #3983 (step 2) on top of #3976 (step 1), both
-merged.
+The server they build against is #3983 (step 2) on top of #3976 (step 1). Both
+were merged to master on November 12, before the staging-first rule, and `dev`
+has them.
 
 ## The rules both prompts start with
 
@@ -34,9 +35,12 @@ merged.
 > - The founder allowed this build's sessions to use subagents on Opus 5.5 at
 >   Extra reasoning (November 12). Keep the design decisions and the real-app
 >   checks yourself.
-> - Keep each PR small. Merge your own PR after green CI and the real-app check,
->   through the shared merge queue. Never put keys, tokens or real people's
->   details in Git, a PR or chat.
+> - Keep each PR small. Staging first (the founder's rule since November 12,
+>   AGENTS.md "Staging first"): branch from `origin/dev`, open every PR with
+>   `gh pr create --base dev`, and merge your own PR into `dev` after green CI
+>   and the real-app check. Never merge or push to master: the founder checks
+>   staging and promotes `dev` to master. Never put keys, tokens or real
+>   people's details in Git, a PR or chat.
 > - Only the founder cuts store builds, turns `plans_business` on, or changes
 >   anything hosted.
 

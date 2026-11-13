@@ -41,8 +41,12 @@ to anyone until both that person and the business have the switch.
 Each step is one server session (which also takes the web), then one iOS and one
 Android session in parallel once the server PR is merged. Sessions are started by
 the founder from prompts written when the founder says go. Each works in its own
-worktree and branch, verifies in the real apps, and merges its own PRs through
-the shared queue after green checks. On November 12 the founder allowed this
+worktree and branch, verifies in the real apps, and merges its own PRs after
+green checks. Since November 12 (the founder's staging-first rule) that means
+into `dev`: a session branches from `origin/dev`, opens its PRs with
+`--base dev`, and never merges to master; the founder checks staging and
+promotes `dev` to master. Steps 1 and 2 on the server were merged to master
+earlier the same evening, before that rule. On November 12 the founder allowed this
 build's sessions to use subagents on Opus 5.5 at Extra reasoning; a session keeps
 the design decisions and the real-app checks itself.
 
