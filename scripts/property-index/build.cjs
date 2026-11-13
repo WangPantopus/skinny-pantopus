@@ -109,7 +109,8 @@ async function main() {
     // parse() also says which form an address came in (addressKey.js). A record keeps only its parts.
     for (const { address } of records) delete address.form;
     // deriveFacts may say, per list of held facts, where each came from in words (format.js `held_from`).
-    const derived = deriveFacts(records);
+    // The rows the record implies, held off screens until the county's derived_rows switch is on (lib/derive.cjs).
+    const derived = deriveFacts(records, { source: path.basename(opts.source), ...about }, { work });
     const heldFrom = derived?.held_from || about.held_from ? { ...about.held_from, ...derived?.held_from } : null;
     assertHeldFrom(heldFrom);
     const shared = markSharedDeeds(records);

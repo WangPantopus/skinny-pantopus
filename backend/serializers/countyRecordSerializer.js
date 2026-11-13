@@ -371,7 +371,7 @@ class Section {
     this.note = null;
   }
 
-  add(id, label, value, mono, group) {
+  add(id, label, value, mono, group, tag = null) {
     if (!value || !label || this.rows.length >= MAX_ROWS) return false;
     if (this.rows.some((row) => row.label === label)) return false;
     if (group) {
@@ -380,7 +380,8 @@ class Section {
       shown.add(value);
       this.groups.set(group, shown);
     }
-    this.rows.push({ id, label, value, mono });
+    // `tag` says where a row came from when it isn't the footer's source; the apps draw it under the value.
+    this.rows.push(tag ? { id, label, value, mono, tag } : { id, label, value, mono });
     return true;
   }
 }
@@ -508,11 +509,17 @@ function factValue(kind, value) {
   return format(kind, value);
 }
 
-/** Adds the facts of these table groups that `keep` allows, in the table's order. */
-function addFacts(section, facts, groups, keep = () => true) {
+/**
+ * Adds the facts of these table groups that `keep` allows, in the table's order. `derived` names the rows the record
+ * implies rather than states (scripts/property-index/lib/derive.cjs), each with what it came from, which shows under its
+ * value; a county's 0 among them reads "None".
+ */
+function addFacts(section, facts, groups, keep = () => true, derived = null) {
   for (const [name, fact] of Object.entries(FACTS)) {
     if (!groups.includes(fact.section) || !fact.label || facts?.[name] === undefined || !keep(fact)) continue;
-    section.add(name, fact.label, factValue(fact.format, facts[name]), MONO.has(fact.format));
+    const from = typeof derived?.[name] === 'string' ? derived[name] : null;
+    const none = from && facts[name] === 0 && fact.format === 'count';
+    section.add(name, fact.label, none ? 'None' : factValue(fact.format, facts[name]), MONO.has(fact.format) && !none, undefined, from);
   }
 }
 
@@ -566,6 +573,8 @@ function recordFooter(copy) {
 function serializePropertyRecord(copy, estimate = null) {
   if (!copy || typeof copy !== 'object') return null;
   const facts = copy.facts || {};
+  // Rows the record implies, present only while the county's derived_rows switch is on (propertyRecords/router.js).
+  const derived = copy.derived || null;
   const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
   if (copy.match === 'ambiguous') {
     const building = titled('building');
@@ -578,19 +587,19 @@ function serializePropertyRecord(copy, estimate = null) {
 
   if (copy.match === 'exact' && copy.subject?.kind === 'unit') {
     const unit = new Section('unit', 'Your unit');
-    addFacts(unit, facts, ['building', 'utilities', 'parking', 'construction'], (fact) => fact.scope === 'unit');
+    addFacts(unit, facts, ['building', 'utilities', 'parking', 'construction'], (fact) => fact.scope === 'unit', derived);
     const building = new Section('building', 'Building');
-    addFacts(building, { ...copy.building, ...facts }, ['building', 'construction'], (fact) => fact.scope === 'building');
+    addFacts(building, { ...copy.building, ...facts }, ['building', 'construction'], (fact) => fact.scope === 'building', derived);
     sections.push(unit, building);
   } else if (copy.match === 'building_only') {
     const building = new Section('building', 'Building');
-    addFacts(building, facts, ['building', 'construction'], (fact) => fact.scope === 'building');
+    addFacts(building, facts, ['building', 'construction'], (fact) => fact.scope === 'building', derived);
     building.note = BUILDING_NOTES[copy.reason] || BUILDING_NOTES.unit_not_recorded;
     sections.push(building);
   } else if (house) {
     for (const id of ['building', 'construction', 'utilities', 'parking']) {
       const section = titled(id);
-      addFacts(section, facts, [id]);
+      addFacts(section, facts, [id], undefined, derived);
       sections.push(section);
     }
   }
@@ -598,9 +607,9 @@ function serializePropertyRecord(copy, estimate = null) {
   const lot = titled('lot');
   // A condo's account lists the complex's common land: never the unit's lot.
   const commonLand = copy.subject?.kind === 'unit' || copy.match === 'building_only';
-  addFacts(lot, { ...copy.building, ...facts }, ['lot'], (fact) => !(commonLand && fact.label !== 'Zoning' && fact.scope === 'parcel'));
+  addFacts(lot, { ...copy.building, ...facts }, ['lot'], (fact) => !(commonLand && fact.label !== 'Zoning' && fact.scope === 'parcel'), derived);
   const records = titled('records');
-  addFacts(records, { ...copy.building, ...facts }, ['records'], (fact) => copy.match !== 'building_only' || fact.scope === 'parcel');
+  addFacts(records, { ...copy.building, ...facts }, ['records'], (fact) => copy.match !== 'building_only' || fact.scope === 'parcel', derived);
   // Pantopus's own ID for the home, where ATTOM's record showed its ID.
   if (copy.match === 'exact' && copy.subject?.id) records.add('pantopus_id', 'Pantopus ID', String(copy.subject.id), true);
   sections.push(lot, records);
