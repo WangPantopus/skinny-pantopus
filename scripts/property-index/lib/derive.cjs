@@ -4,8 +4,8 @@
 //
 // deriveRows adds the rows the record implies but doesn't state (full-page-plan.md, section 7, WP19): a lot number or a
 // subdivision its legal description plainly names, "Garage: Yes" where it gives a garage area, the class and subtype its use
-// code means in a code list the state or county publishes, and the city or town whose official limits hold the home's
-// address point. Each fills only a row the county leaves empty, says what it came from, and waits in the record's
+// code means in a code list the state or county publishes, stories and gross area from the floor areas a county lists, and
+// the city or town whose official limits hold the home's address point. Each fills only a row the county leaves empty, says what it came from, and waits in the record's
 // `held.derived_rows` until the county is on the switch file's `derived_rows` list, so a republish changes no live page.
 
 const { sortKey } = require('../../../backend/services/propertyRecords/addressKey');
@@ -23,6 +23,13 @@ const TYPE_WORDS = {
 const SWITCH = 'derived_rows';
 // Counts where a county's 0 is its answer: none.
 const ZERO_MEANS_NONE = [['fireplaces', 'fireplace count'], ['half_baths', 'half-bath count']];
+// Sources whose files list each floor's area and state neither a story count nor a gross area for homes (plan 5.5;
+// measured Nov 13). 'floors': the record's ground and second floor areas must add up to its living area, so no floor goes
+// unlisted (Dane County WI: 41,173 homes). 'living': the county's living area is its floors added up on every home, so the
+// record carries only the first (Clark County NV: TOTSQFT = FLR1SQFT + FLR2SQFT on all 763,199 homes with a first floor).
+const FLOOR_LISTS = { 'wi-madison': 'floors', 'nv-clark': 'living' };
+// Split and bi-level homes: their floors don't give a story count (a lower level can sit in the county's basement columns).
+const SPLIT_LEVELS = /SPLIT|BI-?LEVEL|TRI-?LEVEL|MULTI-?LEVEL/i;
 
 /**
  * The other unit of a lot and the type's words, into the record's facts as before; with a county (build.cjs), also the
@@ -120,6 +127,19 @@ function deriveRows(records, county, { work = null } = {}) {
       if (subdivision) hold(record, 'subdivision', subdivision(facts.legal_description), `From ${office}’s legal description`);
     }
     if (facts.garage_sqft > 0) hold(record, 'garage', 'Yes', `From ${office}’s garage area`);
+    // Stories and gross area from the county's own floor areas, where it lists each floor (FLOOR_LISTS). One listed floor
+    // holding all the living area is one story; two floors don't say whether the upper one is a full or a half story, so
+    // they give none. The gross area is the floors and the basement added up (a garage isn't: the files don't say it's
+    // part of the house). A house's or townhouse's own floors only: a unit's would read as its building's (facts.js).
+    const floorList = FLOOR_LISTS[county.source];
+    if (floorList && record.kind === 'property' && facts.ground_floor_sqft > 0 && facts.living_sqft > 0) {
+      const floors = floorList === 'living' ? facts.living_sqft : facts.ground_floor_sqft + (facts.second_floor_sqft || 0);
+      if (floors === facts.living_sqft) {
+        const words = `From ${office}’s floor areas`;
+        if (facts.ground_floor_sqft === facts.living_sqft && !SPLIT_LEVELS.test(facts.style || '')) hold(record, 'stories', 1, words);
+        hold(record, 'gross_sqft', floors + (facts.basement_sqft || 0), words);
+      }
+    }
     if (uses) {
       const meant = uses.words(facts);
       if (meant) {
