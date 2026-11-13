@@ -41,6 +41,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanTextButton
 import app.pantopus.android.ui.screens.plans.components.PlanTile
 import app.pantopus.android.ui.screens.plans.components.PlanWhenCard
 import app.pantopus.android.ui.screens.plans.detail.PlanPlainScaffold
+import app.pantopus.android.ui.screens.plans.host.BusinessWhereField
 import app.pantopus.android.ui.screens.plans.host.PlacePickerState
 import app.pantopus.android.ui.screens.plans.host.PublicPlacePicker
 import app.pantopus.android.ui.screens.plans.host.placeCaption
@@ -105,9 +106,13 @@ fun PlanChangeScreen(
             }
         }
         if (ui.canChangePlace) WhereField(ui, onClick = viewModel::openPlaces)
+        // A business's plan: one of its own locations (board B2), never a place picked here.
+        ui.business?.takeIf { ui.canChangeLocation }?.let { business ->
+            BusinessWhereField(business, ui.newLocationId ?: ui.currentLocationId, onPick = viewModel::pickLocation)
+        }
         ui.error?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error) }
         if (ui.asksStillComing) {
-            StillComingWarning(ui.peopleIn, placeChanged = ui.newPlace != null)
+            StillComingWarning(ui.peopleIn, placeChanged = ui.newPlace != null || ui.locationMoved)
             NotificationPreview(ui)
         }
     }

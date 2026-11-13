@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.businesses.BusinessSeatDto
 import app.pantopus.android.data.api.models.businesses.BusinessTeamMemberDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.businesses.BusinessTeamRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.ui.screens.shared.list_of_rows.GradientPair
@@ -98,8 +99,19 @@ class BusinessTeamViewModel
         private val repo: BusinessTeamRepository,
         networkMonitor: NetworkMonitor,
         savedStateHandle: SavedStateHandle,
+        private val plansFeature: PlansFeature,
     ) : ViewModel() {
         val businessId: String = savedStateHandle[BUSINESS_TEAM_ID_KEY] ?: ""
+
+        private val _showsPlansPermissions = MutableStateFlow(false)
+
+        /** The permissions sheet lists "Post plans" and "Run plans" only while `plans_business` is on for the viewer. */
+        val showsPlansPermissions: StateFlow<Boolean> = _showsPlansPermissions.asStateFlow()
+
+        /** Reads the Plans with businesses switch once the sheet is about to open. */
+        fun checkPlansPermissions() {
+            viewModelScope.launch { _showsPlansPermissions.value = plansFeature.businessOn() }
+        }
 
         /** Connectivity for the offline banner. */
         val isOnline: StateFlow<Boolean> = networkMonitor.isOnline

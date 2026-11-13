@@ -35,6 +35,9 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 
 /*
  * Plans with businesses, board P1: the few parts a business's plan adds. Each says one thing: a business is hosting.
@@ -161,3 +164,36 @@ fun PlanPriceChip(
 
 /** "Free": what a business's plan with no price reads (the chip, and TalkBack). */
 const val PLAN_FREE = "Free"
+
+/**
+ * "What guests see" (boards B2 preview and B3): a business's plan as its card reads, label and "Free", title, when and
+ * spots, and its place with the street address (public for a business's plan).
+ */
+@Composable
+fun PlanGuestsSeeCard(
+    kind: PlanKind,
+    label: String?,
+    title: String,
+    whenText: String,
+    spots: Int,
+    place: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth().planCard().padding(Spacing.s4).semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PlanTypeTag(kind, label = label)
+            Spacer(modifier = Modifier.weight(1f))
+            PlanPriceChip()
+        }
+        Text(text = title, style = PantopusTextStyle.h3, color = PantopusColors.appText)
+        Text(
+            text = "$whenText · $spots ${if (spots == 1) "spot" else "spots"}",
+            style = PantopusTextStyle.small,
+            color = PantopusColors.appTextStrong,
+        )
+        Text(text = place, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+    }
+}

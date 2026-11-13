@@ -71,7 +71,17 @@ object BusinessPermissionCatalog {
             BusinessPermissionOption("insights.view", "View insights", "Money"),
         )
 
-    val groupOrder = listOf("Profile & pages", "Catalog & gigs", "Customers", "Team", "Money")
+    /**
+     * Plans with businesses: post a plan as the business, and run its plans (accept, change, cancel). Shown only to an
+     * owner who has `plans_business`, so the sheet is unchanged while the feature is off.
+     */
+    val plansOptions =
+        listOf(
+            BusinessPermissionOption("plans.post", "Post plans", "Plans"),
+            BusinessPermissionOption("plans.manage", "Run plans", "Plans"),
+        )
+
+    val groupOrder = listOf("Profile & pages", "Catalog & gigs", "Customers", "Plans", "Team", "Money")
 }
 
 private sealed interface PermissionsLoad {
@@ -94,7 +104,10 @@ fun ManagePermissionsSheet(
     loadPermissions: suspend () -> Result<List<String>>,
     toggle: suspend (String, Boolean) -> Boolean,
     onDismiss: () -> Unit,
+    /** Adds "Post plans" and "Run plans" (Plans with businesses); off unless the viewer has the switch. */
+    showsPlans: Boolean = false,
 ) {
+    val catalog = if (showsPlans) BusinessPermissionCatalog.options + BusinessPermissionCatalog.plansOptions else BusinessPermissionCatalog.options
     var load by remember { mutableStateOf<PermissionsLoad>(PermissionsLoad.Loading) }
     var granted by remember { mutableStateOf<Set<String>>(emptySet()) }
     var inFlight by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -153,7 +166,7 @@ fun ManagePermissionsSheet(
                             color = PantopusColors.appTextSecondary,
                         )
                         BusinessPermissionCatalog.groupOrder.forEach { group ->
-                            val options = BusinessPermissionCatalog.options.filter { it.group == group }
+                            val options = catalog.filter { it.group == group }
                             if (options.isNotEmpty()) {
                                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                                     Text(

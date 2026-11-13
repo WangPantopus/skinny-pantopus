@@ -79,6 +79,9 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import java.time.LocalDateTime
 import java.time.ZoneId
+import app.pantopus.android.data.api.models.plans.HostAsBusinessDto
+import app.pantopus.android.ui.screens.plans.components.PlanGuestsSeeCard
+import app.pantopus.android.ui.screens.plans.components.PlanLockLine
 
 /**
  * H6: choose a public place (or "You're here now" for a pickup game, or your place where it's allowed). Pickup games
@@ -751,7 +754,66 @@ internal fun HostPreviewStep(
             HostFooterButton(title = "Post plan", onClick = onPost, loading = ui.posting)
         },
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+        val business = ui.business
+        if (business != null) {
+            BusinessPreview(ui, kind, business)
+        } else {
+            NeighborPreview(ui, kind)
+        }
+    }
+}
+
+/**
+ * A business's plan before posting (board B2's Preview): what guests see, the place included, since a business's
+ * place is public; the note is for people who are in.
+ */
+@Composable
+private fun BusinessPreview(
+    ui: HostUi,
+    kind: PlanKind,
+    business: HostAsBusinessDto,
+) {
+    val draft = ui.draft
+    val start = draft.start ?: return
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4), modifier = Modifier.testTag("planBusinessPreview")) {
+        PlanOverline("What guests see")
+        PlanGuestsSeeCard(
+            kind = kind,
+            label = ui.labels.firstOrNull { it.key == draft.label }?.text,
+            title = draft.title.trim(),
+            whenText = PlanFormat.whenLine(start.atZone(ui.zone), draft.end?.atZone(ui.zone), long = true),
+            spots = draft.spots,
+            place = listOfNotNull(locationTitle(business, ui.location), ui.location?.address).joinToString(" · "),
+        )
+        PlanLockLine(
+            if (draft.approveEach) "You approve each person who asks." else "Anyone gets in right away, until the spots fill.",
+            icon = PantopusIcon.Users,
+        )
+        if (draft.note.isNotBlank()) {
+            PlanOverline("People who are in also see", modifier = Modifier.padding(top = Spacing.s1))
+            PlanFormCard {
+                PlanOptionRow(first = true) {
+                    PantopusIconImage(icon = PantopusIcon.Lock, contentDescription = null, size = 18.dp, tint = PantopusColors.appTextSecondary)
+                    Text(
+                        text = "Your note: “${draft.note.trim()}”",
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appText,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** H7: a neighbor's plan, as it has always been previewed. */
+@Composable
+private fun NeighborPreview(
+    ui: HostUi,
+    kind: PlanKind,
+) {
+    val draft = ui.draft
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
             PlanOverline("What neighbors see")
             NeighborsCard(ui, kind)
             PlanOverline(
@@ -828,7 +890,6 @@ internal fun HostPreviewStep(
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextSecondary,
             )
-        }
     }
 }
 

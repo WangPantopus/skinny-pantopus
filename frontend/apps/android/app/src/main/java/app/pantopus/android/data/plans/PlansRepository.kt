@@ -7,6 +7,7 @@ import app.pantopus.android.data.api.models.plans.AskToJoinBody
 import app.pantopus.android.data.api.models.plans.AskToJoinResponse
 import app.pantopus.android.data.api.models.plans.CancelPlanBody
 import app.pantopus.android.data.api.models.plans.CreatePlanBody
+import app.pantopus.android.data.api.models.plans.HostAsBusinessDto
 import app.pantopus.android.data.api.models.plans.MyPlansResponse
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanFeedbackBody
@@ -322,6 +323,13 @@ class PlansRepository
                 is PlanRead.Failed -> NetworkResult.Failure(read.error)
                 is PlanRead.Locked, PlanRead.Missing -> NetworkResult.Failure(NetworkError.NotFound)
             }
+
+        /**
+         * The businesses this person may post a plan for (Plans with businesses, board B1). Empty for nearly everyone,
+         * and on any failure: "Host as" then simply doesn't show.
+         */
+        suspend fun hostAs(): List<HostAsBusinessDto> =
+            (safeApiCall { api.hostAs() } as? NetworkResult.Success)?.data?.businesses.orEmpty()
 
         suspend fun create(body: CreatePlanBody): NetworkResult<PlanDto> {
             val session = cacheSession()

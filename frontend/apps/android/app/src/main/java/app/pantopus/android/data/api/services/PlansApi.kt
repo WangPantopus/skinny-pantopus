@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.plans.AskToJoinResponse
 import app.pantopus.android.data.api.models.plans.CancelPlanBody
 import app.pantopus.android.data.api.models.plans.CreatePlanBody
 import app.pantopus.android.data.api.models.plans.FeatureFlagResponse
+import app.pantopus.android.data.api.models.plans.HostAsResponse
 import app.pantopus.android.data.api.models.plans.MyPlansResponse
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanFeedbackBody
@@ -112,6 +113,13 @@ interface PlansApi {
         @Query("gps_longitude") gpsLongitude: Double? = null,
         @Query("gps_timestamp") gpsTimestamp: String? = null,
     ): Response<PlanDto>
+
+    /**
+     * `GET /api/plans/host-as`: the businesses this person may post a plan for, with their locations, kinds, labels and
+     * limits (Plans with businesses). `{ businesses: [] }` for nearly everyone. Route `backend/routes/plans.js:138`.
+     */
+    @GET("api/plans/host-as")
+    suspend fun hostAs(): HostAsResponse
 
     /** `POST /api/plans` (201 with the detail). */
     @POST("api/plans")

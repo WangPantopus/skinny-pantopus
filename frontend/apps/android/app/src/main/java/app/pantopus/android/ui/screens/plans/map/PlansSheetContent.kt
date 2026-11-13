@@ -104,6 +104,9 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import app.pantopus.android.ui.screens.plans.components.PlanGuestsSeeCard
+import app.pantopus.android.ui.screens.plans.components.PlanFormCard
+import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
 
 /** h4 on the boards: 17/22 semibold. */
 internal val planH4 = PantopusTextStyle.body.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -1033,6 +1036,105 @@ private fun Modifier.reportsFit(scroll: ScrollState): Modifier {
 
 /** The area pill's choices. */
 internal val windowChoices = listOf(PlanWindow.NOW, PlanWindow.TODAY, PlanWindow.WEEK, PlanWindow.WEEKEND)
+
+/**
+ * Posted as a business (board B3): what guests see, then how to bring the business's own customers: its link,
+ * invitations by email, and people who came before (the last two are today's invite sheet). No rates line: step 2
+ * has no price.
+ */
+@Composable
+internal fun PlanPostedBusinessContent(
+    plan: PlanDto,
+    onCopyLink: () -> Unit,
+    onSeePlan: () -> Unit,
+    onDone: () -> Unit,
+    onInvite: (() -> Unit)?,
+) {
+    val kind = plan.planKind ?: return
+    val scroll = rememberScrollState()
+    Column(
+        modifier = Modifier.fillMaxWidth().reportsFit(scroll).verticalScroll(scroll).testTag("planPostedBusiness"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s4),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Your ${plan.labelText?.lowercase(Locale.US) ?: "plan"} is posted",
+                style = planH2,
+                color = PantopusColors.appText,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(text = PlanFormat.whenLine(plan, long = true), style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            PlanOverline("What guests see")
+            PlanGuestsSeeCard(
+                kind = kind,
+                label = plan.labelText,
+                title = plan.title,
+                whenText = PlanFormat.whenLine(plan, long = true),
+                spots = plan.spots,
+                place = listOfNotNull(plan.place?.name, plan.place?.address).joinToString(" · "),
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            PlanOverline("Bring your regulars")
+            PlanFormCard {
+                RegularsRow(
+                    first = true,
+                    icon = PantopusIcon.Link,
+                    title = "Copy your link",
+                    caption = "For your site, your texts, your front desk",
+                    onClick = onCopyLink,
+                    tag = "planPostedCopyLink",
+                )
+                if (onInvite != null) {
+                    RegularsRow(
+                        first = false,
+                        icon = PantopusIcon.Mail,
+                        title = "Invite by email",
+                        caption = "Paste your customer list",
+                        onClick = onInvite,
+                        tag = "planPostedInviteEmail",
+                    )
+                    RegularsRow(
+                        first = false,
+                        icon = PantopusIcon.Users,
+                        title = "Invite people who came before",
+                        caption = "People who came to your plans",
+                        onClick = onInvite,
+                        tag = "planPostedInvitePeople",
+                    )
+                }
+            }
+        }
+        PrimaryButton(title = "See your plan", onClick = onSeePlan, modifier = Modifier.height(50.dp))
+        PlanTextButton(title = "Done", onClick = onDone)
+        Spacer(modifier = Modifier.height(Spacing.s2))
+    }
+}
+
+@Composable
+private fun RegularsRow(
+    first: Boolean,
+    icon: PantopusIcon,
+    title: String,
+    caption: String,
+    onClick: () -> Unit,
+    tag: String,
+) {
+    PlanOptionRow(
+        first = first,
+        onClick = onClick,
+        modifier = Modifier.testTag(tag).semantics(mergeDescendants = true) { role = Role.Button },
+    ) {
+        PlanIconTile(icon = icon, background = PantopusColors.primary100, tint = PantopusColors.primary700, size = 36.dp, glyph = 18.dp, corner = 10.dp)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold), color = PantopusColors.appText)
+            Text(text = caption, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+        }
+        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
+    }
+}
 
 /** Posted (board H8): the plan is on the map, with a way to invite friends. */
 @Composable
