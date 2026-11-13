@@ -128,7 +128,13 @@ internal fun rowEnd(
         plan.standing == PlanViewerStanding.NONE && plan.myInvite?.status == "pending" ->
             PlanRowEnd.Status("Invited", PantopusIcon.UserPlus, PantopusColors.primary600)
         mine -> PlanRowEnd.Chevron
-        // A business's row shows its price where a neighbor's shows spots (board G2): "Free" in step 2.
+        else -> spotsEnd(plan)
+    }
+
+/** A plan the viewer has no part in: how many are going or spots left; a business's shows its price instead (G2). */
+private fun spotsEnd(plan: PlanDto): PlanRowEnd =
+    when {
+        // "Free" in step 2 (no price exists yet).
         plan.isBusiness && !plan.isFull -> if (plan.price == null) PlanRowEnd.Price(PLAN_FREE) else PlanRowEnd.None
         plan.planState == PlanState.LIVE -> PlanRowEnd.Note("${plan.goingCount} going")
         plan.isFull -> PlanRowEnd.Note("Full")
@@ -451,6 +457,7 @@ private const val PEEK_ROWS = 2
  * The list pulled up (board F2): your plans, today, tomorrow, the rest of the week, then Pulse and Connections. With the
  * Pulse redesign off the list ends at the plans: Nearby is its own tab beside Plans, and it has Pulse and Connections.
  */
+@Suppress("LongParameterList")
 @Composable
 internal fun PlansListContent(
     state: PlansMapUiState,

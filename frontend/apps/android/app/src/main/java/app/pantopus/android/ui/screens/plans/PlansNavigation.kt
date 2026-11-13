@@ -17,6 +17,7 @@ import app.pantopus.android.ui.screens.plans.change.PlanChangeScreen
 import app.pantopus.android.ui.screens.plans.detail.PlanDetailScreen
 import app.pantopus.android.ui.screens.plans.host.HostFlowScreen
 import app.pantopus.android.ui.screens.plans.requests.PlanRequestsScreen
+import androidx.compose.runtime.Composable
 
 /** The Plans pages' routes. Kept out of `RootTabScreen` so the two grow without merge conflicts. */
 object PlansRoutes {
@@ -105,6 +106,19 @@ fun Modifier.opensPlanBusiness(
         this
     }
 
+/** The Plans pages' ways out to a person's profile and a business's page. */
+@Composable
+private fun PlansLocals(
+    external: PlansExternalRoutes,
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(
+        LocalPlanOpenProfile provides external.openProfile,
+        LocalPlanOpenBusiness provides external.openBusiness,
+        content = content,
+    )
+}
+
 /** Registers every Plans page. Call inside the root `NavHost`. */
 fun NavGraphBuilder.plansRoutes(
     nav: NavHostController,
@@ -130,10 +144,7 @@ fun NavGraphBuilder.plansRoutes(
                 },
             ),
     ) {
-        CompositionLocalProvider(
-            LocalPlanOpenProfile provides external.openProfile,
-            LocalPlanOpenBusiness provides external.openBusiness,
-        ) {
+        PlansLocals(external) {
             PlanDetailScreen(
                 onBack = { if (!nav.popBackStack()) external.openNearby() },
                 onOpenPlan = { id -> nav.navigate(PlansRoutes.plan(id)) },
@@ -151,10 +162,7 @@ fun NavGraphBuilder.plansRoutes(
         route = PlansRoutes.REQUESTS,
         arguments = listOf(navArgument(PlansRoutes.PLAN_ID_KEY) { type = NavType.StringType }),
     ) {
-        CompositionLocalProvider(
-            LocalPlanOpenProfile provides external.openProfile,
-            LocalPlanOpenBusiness provides external.openBusiness,
-        ) {
+        PlansLocals(external) {
             PlanRequestsScreen(onBack = { if (!nav.popBackStack()) external.openNearby() })
         }
     }

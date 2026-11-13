@@ -25,19 +25,17 @@ class PlansBizInterceptor : Interceptor {
     companion object {
         const val PARAM = "biz"
 
+        private val PLANS = Regex("^/api/plans(/.*)?$")
+        private val BUSINESS_PLANS = Regex("^/api/businesses/[^/]+/plans$")
+        private const val MAP = "/api/posts/map"
+
         /** True for the routes that read `biz=1`: Plans, the map's Plans layer and a business's plans. */
         fun wantsBiz(
             path: String,
             layers: String?,
-        ): Boolean {
-            val segments = path.trim('/').split('/')
-            if (segments.size < 2 || segments[0] != "api") return false
-            return when (segments[1]) {
-                "plans" -> true
-                "posts" -> segments.getOrNull(2) == "map" && segments.size == 3 && layers?.split(',')?.contains("plans") == true
-                "businesses" -> segments.size == 4 && segments[3] == "plans"
-                else -> false
-            }
-        }
+        ): Boolean =
+            PLANS.matches(path) ||
+                BUSINESS_PLANS.matches(path) ||
+                (path == MAP && layers?.split(',')?.contains("plans") == true)
     }
 }
