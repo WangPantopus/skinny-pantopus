@@ -5,7 +5,8 @@
 // published, and writes the counts into the release report; coverage.cjs prints them. Counts only, never a home.
 //
 // The same home: the same parcel number (letters and digits, leading zeros dropped), else the same address and unit
-// (without the ZIP, which many county files lack), each only where it names one home on both sides. The same thing: what Property details would show from either one
+// (without the ZIP, which many county files lack), else the same number, street name and unit, each only where it names
+// one home on both sides. The same thing: what Property details would show from either one
 // (years and counts exact, areas to the square foot, money to the dollar, acres to the hundredth, words ignoring case,
 // spacing and punctuation). A value is compared only for the same value year, a sale price only for a sale on the same
 // date or in the same month. Only facts both files fill are compared, and only where both show something. Words are
@@ -59,6 +60,8 @@ const parcelKey = (record) => {
 };
 // No ZIP: many county files have none, and a key that repeats within the county names no home, so it's dropped (unique).
 const addressKey = ({ address: a }) => (a?.number && a?.name ? [a.number, a.pre, a.name, a.suffix, a.post, a.unit, a.building].map((part) => part || '').join('|') : null);
+// Last, the number, street name and unit alone, for files that write a street's type or direction differently ("RD", none).
+const looseKey = ({ address: a }) => (a?.number && a?.name ? [a.number, a.name, a.unit, a.building].map((part) => part || '').join('|') : null);
 
 /** Each key that names exactly one home. */
 function unique(records, keyOf) {
@@ -84,7 +87,8 @@ const factsOf = (record) => (record.held?.new_columns ? { ...record.facts, ...re
 function compareRecords(records, others, other, fips = null) {
   const skip = SAME_SOURCE[fips] || new Set();
   const mine = homes(records);
-  const theirs = homes(others);
+  // Any record of the second file may be the home: a statewide file often keeps one kind for every parcel ("other").
+  const theirs = others.filter((record) => !record.restricted && record.facts);
   const pairs = [];
   const used = new Set();
   const byParcel = unique(theirs, parcelKey);
@@ -96,10 +100,14 @@ function compareRecords(records, others, other, fips = null) {
     used.add(record).add(match);
   }
   const byParcelCount = pairs.length;
-  const byAddress = unique(theirs.filter((record) => !used.has(record)), addressKey);
-  for (const [key, record] of unique(mine.filter((record) => !used.has(record)), addressKey)) {
-    const match = record && byAddress.get(key);
-    if (match) pairs.push([record, match]);
+  for (const keyOf of [addressKey, looseKey]) {
+    const byAddress = unique(theirs.filter((record) => !used.has(record)), keyOf);
+    for (const [key, record] of unique(mine.filter((record) => !used.has(record)), keyOf)) {
+      const match = record && byAddress.get(key);
+      if (!match) continue;
+      pairs.push([record, match]);
+      used.add(record).add(match);
+    }
   }
   const rows = {};
   const vocabulary = {};
