@@ -19,6 +19,9 @@ struct HouseholdActions {
     var answerLayout: (String) -> Void = { _ in }
     /// The Home, for what this device remembers about it (link and confirm).
     var homeId: String = ""
+    /// "Add from a document": open the file picker, and where reading stands.
+    var addDocument: () -> Void = {}
+    var documents = HouseholdDocumentsState()
 }
 
 private let otherChip = "__other"
