@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.location.HeightReading
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.PASSIVE_LOCATION_TIMEOUT_MILLIS
 import app.pantopus.android.data.location.ViewingLocationRepository
@@ -105,6 +106,9 @@ class PlanLocationResolver
             val coordinate = gps.requestCurrent(FIX_TIMEOUT_MS) ?: gps.cachedCoordinate() ?: return null
             return PlanGpsFix(coordinate.latitude, coordinate.longitude, Instant.now())
         }
+
+        /** How high the fix [newFix] just gave says the phone is, above sea level (a Moment's "Show height"). */
+        suspend fun fixHeight(): HeightReading? = if (hasLocationPermission()) gps.cachedHeight() else null
 
         private suspend fun fromGps(timeoutMs: Long = FIX_TIMEOUT_MS): PlanLocation? {
             val coordinate = gps.cachedCoordinate() ?: gps.requestCurrent(timeoutMs) ?: return null

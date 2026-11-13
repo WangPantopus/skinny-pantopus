@@ -26,6 +26,16 @@ data class UserCoordinate(
 )
 
 /**
+ * How high a fix, or an album photo, says the phone was: metres above mean sea level, with how far off that may be and
+ * the phone's speed when the source says. A Moment's "Show height" sends it.
+ */
+data class HeightReading(
+    val meters: Double,
+    val accuracyMeters: Double? = null,
+    val speedMps: Double? = null,
+)
+
+/**
  * Provider interface — abstracted so view-models can inject a fixed
  * coordinate in tests without dragging in FusedLocationProviderClient.
  */
@@ -39,6 +49,12 @@ interface LocationProvider {
      * permission returns null and clears the provider's cache.
      */
     suspend fun requestCurrent(timeoutMillis: Long = 4_000L): UserCoordinate?
+
+    /**
+     * The height of the fix [cachedCoordinate] answers with, above mean sea level; null when the phone has none it can
+     * vouch for. Worked out only when asked (a Moment's "Show height"), so no other location read pays for it.
+     */
+    suspend fun cachedHeight(): HeightReading? = null
 }
 
 /**
