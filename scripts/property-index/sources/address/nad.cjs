@@ -4,7 +4,7 @@
 // Rights: rights.cjs. Only the columns below are read; rows are in file order, grouped by state.
 
 const path = require('node:path');
-const { download, zipTable, zipMembers } = require('../../lib/tables.cjs');
+const { download, zipTable, zipMembers, zipDates } = require('../../lib/tables.cjs');
 
 const DOWNLOAD_URL = 'https://data.transportation.gov/download/fc2s-wawr/application%2Fx-zip-compressed';
 const COLUMNS = ['AddNum_Pre', 'AddNo_Full', 'St_PreMod', 'St_PreDir', 'St_PreTyp', 'St_PreSep', 'St_Name', 'St_PosTyp', 'St_PosDir', 'St_PosMod', 'Building', 'Floor', 'Unit', 'Room', 'SubAddress',
@@ -34,9 +34,16 @@ function houseNumber(row) {
   return pre && full === `${pre}-${pre}` && row.State !== 'NY' && row.State !== 'HI' ? pre : row.AddNo_Full;
 }
 
+// The download is always the newest release, so its date comes from the file read: release 24's description dates it
+// 2026-09-30 (the zip stamps its file 2026-09-14), and a later release is dated by its file's stamp in the zip. A new quarterly
+// release so dates every county it reaches anew, and the monthly run publishes them.
+const DESCRIBED = new Map([['TXT/NAD_r24.txt', '2026-09-30']]);
+let datedAs = null;
+
 function asOf() {
-  // The file's description states its date; the release number in the member name is what changes.
-  return process.env.NAD_AS_OF || '2026-09-30';
+  if (process.env.NAD_AS_OF) return process.env.NAD_AS_OF;
+  if (!datedAs) throw new Error('The NAD release is dated after its rows are read');
+  return datedAs;
 }
 
 /**
@@ -49,6 +56,8 @@ async function* rows({ work, states = null }) {
   // Zip64 and Deflate64: the Linux unzip reads it; the Mac's doesn't.
   const member = zipMembers(zip).find((name) => /NAD.*\.txt$/i.test(name));
   if (!member) throw new Error('The NAD zip no longer has its text file');
+  datedAs = DESCRIBED.get(member) || zipDates(zip).get(member);
+  if (!datedAs) throw new Error('The NAD zip states no date for its text file');
   const today = new Date().toISOString().slice(0, 10);
   for await (const row of zipTable(zip, member, COLUMNS, { encoding: 'utf8' })) {
     // A row naming no state is placed by its point (build-registry.cjs).

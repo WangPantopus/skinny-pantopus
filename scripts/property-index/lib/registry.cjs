@@ -139,4 +139,17 @@ function mergeCounty(rows, ranks) {
   return records;
 }
 
-module.exports = { mergeCounty };
+/**
+ * Whether a county's new build read the same rows from each source as the release serving. A county is dated by its newest
+ * source, and points and OpenAddresses are dated by the run's day, so two runs on one day date different builds alike: Larimer
+ * CO's first build (8 records) and the one with Loveland's points (50,154) both read 2026-11-08, and the second counted as
+ * unchanged. A source new to the county, one gone, or one with more or fewer rows is a change. Entries that don't list rows by
+ * source (the property index's) compare by date alone.
+ */
+function sameSources(serving, entry) {
+  if (!serving?.sources || !entry?.sources) return true;
+  const names = Object.keys(entry.sources);
+  return names.length === Object.keys(serving.sources).length && names.every((name) => serving.sources[name] === entry.sources[name]);
+}
+
+module.exports = { mergeCounty, sameSources };
