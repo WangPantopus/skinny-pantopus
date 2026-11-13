@@ -19,12 +19,15 @@ const { buildModel } = require('./lib/value-model.cjs');
 const { markSharedDeeds } = require('./lib/shared-deeds.cjs');
 const { deriveFacts } = require('./lib/derive.cjs');
 const { STATE_FILES, compareRecords } = require('./lib/agreement.cjs');
+const { dropPlaceholders } = require('./lib/placeholders.cjs');
 const { log } = require('./lib/log.cjs');
 
 const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'held', 'parent', 'roster', 'restricted', 'key']);
 // The lists a record's held facts may sit under (format.js `held`, router.js).
 const HELD_LISTS = new Set(['new_columns', 'derived_rows']);
-const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip']);
+// `listed_unit`: a unit number an address list gives a record whose own file has none. The server reads it only for a county
+// on its switch file's listed_units list (backend/services/propertyRecords/router.js).
+const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip', 'listed_unit']);
 
 function parseArgs(argv) {
   const opts = {};
@@ -108,8 +111,12 @@ async function main() {
     const { records, stale_after_days: staleAfterDays, extra_zips: extraZips = [], ...about } = county;
     // parse() also says which form an address came in (addressKey.js). A record keeps only its parts.
     for (const { address } of records) delete address.form;
+    // A county's placeholder text ("[NONE]", "N/A", a lone "-") is no answer: read as empty before anything uses it.
+    const placeholders = dropPlaceholders(records);
+    if (Object.keys(placeholders).length) log(`${about.fips}: placeholder text read as empty: ${Object.entries(placeholders).map(([fact, n]) => `${fact} ${n}`).join(', ')}`);
     // deriveFacts may say, per list of held facts, where each came from in words (format.js `held_from`).
-    const derived = deriveFacts(records);
+    // The rows the record implies, held off screens until the county's derived_rows switch is on (lib/derive.cjs).
+    const derived = deriveFacts(records, { source: path.basename(opts.source), ...about }, { work });
     const heldFrom = derived?.held_from || about.held_from ? { ...about.held_from, ...derived?.held_from } : null;
     assertHeldFrom(heldFrom);
     const shared = markSharedDeeds(records);

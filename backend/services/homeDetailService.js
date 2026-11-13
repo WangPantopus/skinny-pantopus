@@ -350,7 +350,10 @@ async function propertyDetail(homeId, actorId, { sharedFacts = false } = {}) {
     const home = { ...columns, ...householdFacts.shownColumns(raw, record?.copy) };
     if (record) {
       const shared = sharedFacts && !record.copy ? record.shared || null : null;
-      const county = record.copy ? serializePropertyRecord(record.copy, await valueEstimate.forCopy(record.copy, raw)) : serializePropertyRecord(shared);
+      // Rows the record implies show only to a build that draws a row's source under it (`vocabulary=2`, the same
+      // builds that ask for shared facts): any other build gets the county's own rows, as it always has.
+      const shown = record.copy && !sharedFacts && record.copy.derived ? { ...record.copy, derived: undefined } : record.copy;
+      const county = shown ? serializePropertyRecord(shown, await valueEstimate.forCopy(record.copy, raw)) : serializePropertyRecord(shared);
       // A county that stopped publishing says so; the estimate is for homes no record ever covered.
       if (!county && record.lookup !== 'pending' && record.reason !== 'withdrawn') {
         const floor = await estimateAnswer(home, raw, { homeId, home: columns, raw, access, actorId, problems });

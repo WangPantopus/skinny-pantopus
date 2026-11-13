@@ -8,7 +8,10 @@
 // Fields: each home against a second publication of the same data, where one exists. It proves the connector read,
 // joined and scaled each column right. Whether the source is right is for a person (property-hand-check-sheet.js).
 //
-//   node backend/scripts/eval/property-state-check.js --out <build dir> [--work <downloads>] [--fields <check name>]
+//   node backend/scripts/eval/property-state-check.js --out <build dir> [--work <downloads>] [--fields <check name>] [--listed-units]
+//
+// --listed-units asks with the switch file's listed_units on for every county (identity.js withListedUnits), and asks each
+// home with a listed unit for that unit: everything else must answer as it does without it.
 'use strict';
 
 const fs = require('fs');
@@ -16,7 +19,7 @@ const path = require('path');
 const { openRelease } = require('./lib/propertyRelease');
 const { layerRows, socrataRows, cached } = require('../../../scripts/property-index/lib/services.cjs');
 const { parse, sortKey, zip5 } = require('../../services/propertyRecords/addressKey');
-const { resolve, onStreet, inZip } = require('../../services/propertyRecords/identity');
+const { resolve, onStreet, inZip, withListedUnits } = require('../../services/propertyRecords/identity');
 
 // What the founder allowed an address with several homes to show, written here apart from identity.js's own list.
 const ALLOWED_AGREED = ['year_built', 'living_sqft', 'bedrooms', 'bathrooms'];
@@ -37,6 +40,7 @@ function agreedHolds(query, records, agreed) {
 const opt = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
 const out = opt('--out');
 const work = opt('--work') || path.join(out, 'work');
+const listedUnits = process.argv.includes('--listed-units');
 
 const table = (title, rows) => {
   const total = Object.values(rows).reduce((sum, n) => sum + n, 0);
@@ -52,7 +56,8 @@ function identity(fips, totals) {
   };
   // Each ask twice: shared facts off, as served today, and on. The answer stays the same apart from what it agrees on.
   const ask = (query) => {
-    const records = release.at(sortKey(query));
+    const stored = release.at(sortKey(query));
+    const records = listedUnits ? withListedUnits(stored) : stored;
     const off = resolve(query, records);
     const on = resolve(query, records, { sharedFacts: true });
     const { agreed, ...rest } = on;
@@ -80,6 +85,10 @@ function identity(fips, totals) {
       else if (answer.record.id === record.id) bump(part, 'exact, right record');
       else if (answer.record.facts.parcel_number === record.facts.parcel_number) bump(part, 'exact, right record');
       else bump(part, 'EXACT, WRONG RECORD');
+    }
+    if (listedUnits && record.address.listed_unit && !record.address.unit) {
+      const answer = ask({ ...record.address, unit: record.address.listed_unit });
+      bump('Listed units', answer.match === 'exact' && answer.record.id === record.id ? 'exact, this unit' : (answer.match === 'exact' ? 'EXACT, WRONG UNIT' : label(answer)));
     }
     if (record.kind === 'unit' && record.address.unit) {
       const answer = ask({ ...record.address });
