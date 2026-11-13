@@ -137,6 +137,11 @@ const LABELS = {
 const UNDER = { heating_fuel: 'hvac' };
 
 const clean = (text) => text.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+// Words of advice or of homes in general, not a description of this one ("typical lifespan of asphalt roofs").
+const GENERAL = /\b(?:typical(?:ly)?|lifespan|life span|life expectancy|average life|recommend(?:ed|s)?|should|may|might|budget|consider|usually|generally)\b/i;
+// A line about another home: a neighbor, a comparable sale, or another street address.
+const ELSEWHERE = /\b(?:neighbou?r(?:ing|s)?|next door|adjacent (?:home|house|property|lot)|comparable|comps?\s*#?\d)\b/i;
+const OTHER_ADDRESS = /\b(\d{2,6}[a-z]?)\s+(?:[NSEW]{1,2}\.?\s+)?(?:[A-Z][\w'.-]*\s+){1,4}(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Court|Ct|Way|Boulevard|Blvd|Place|Pl|Circle|Cir|Terrace|Ter|Parkway|Pkwy|Trail|Trl|Loop|Highway|Hwy)\b/g;
 const number = (text) => Number(String(text).replace(/,/g, ''));
 
 /** The line's pieces split where a wide gap separates them: two label and value pairs side by side read apart. */
@@ -198,7 +203,7 @@ function parseDate(raw, today) {
 function reportDate(lines, kind, today) {
   const labels = [...DATE_LABELS[kind], ...DATE_LABELS.inspection, ...DATE_LABELS.appraisal];
   for (const label of labels) {
-    const pattern = new RegExp(`${label}\\s*[:\\-–]?\\s*(?:\\w+day,?\\s*)?${DATE}`, 'i');
+    const pattern = new RegExp(`${label}(?:\\s+on)?\\s*[:\\-–]?\\s*(?:\\w+day,?\\s*)?${DATE}`, 'i');
     for (const line of lines) {
       const match = line.text.match(pattern);
       const day = match && parseDate(match[1], today);
@@ -293,6 +298,7 @@ function described(lines, kind) {
           const match = text && text.match(LABELS[key]);
           if (!match) continue;
           const said = match[1].slice(0, 80);
+          if (GENERAL.test(said)) continue;
           let value;
           if (key === 'plumbing') {
             const all = WORDS.plumbing.filter(([, pattern]) => pattern.test(said)).map(([word]) => word);
@@ -429,13 +435,35 @@ const YEAR = /\b(?:manufactur(?:ed|e date|e year|ing date)|installed|install(?:a
 
 const NEW_YEAR = /\b(?:new|newer)\b[^.]{0,40}?\b((?:19|20)\d{2})\b/i;
 
-/** The part of a line about this system: its sentence, cut at commas when the sentence names another system too. */
+/**
+ * The parts of a line about this system: each sentence that names it, cut at commas when the sentence names another
+ * system too. None when every such sentence is shared with another system.
+ */
 function aboutSystem(text, subject) {
-  const sentence = text.split(/(?<=[.;!?])\s+/).find((candidate) => subject.test(candidate));
-  if (!sentence) return null;
-  const others = SUBJECTS.filter((other) => other !== subject && other.test(sentence));
-  if (!others.length) return sentence;
-  return sentence.split(/,\s+|\s+and\s+/).find((part) => subject.test(part) && !others.some((other) => other.test(part))) || null;
+  const parts = [];
+  for (const sentence of text.split(/(?<=[.;!?])\s+/).filter((candidate) => subject.test(candidate))) {
+    const others = SUBJECTS.filter((other) => other !== subject && other.test(sentence));
+    if (!others.length) parts.push(sentence);
+    else {
+      const part = sentence.split(/,\s+|\s+and\s+/).find((piece) => subject.test(piece) && !others.some((other) => other.test(piece)));
+      if (part) parts.push(part);
+    }
+  }
+  return parts;
+}
+
+/** A year this text states (or an age it states, counted back from the report's year), as a found fact. */
+function yearIn(text, line, reportYear) {
+  const stated = text.match(YEAR) || text.match(NEW_YEAR);
+  if (stated) {
+    const year = Number(stated[1]);
+    if (year < 1900 || year > (reportYear || new Date().getUTCFullYear())) return null;
+    return { value: year, page: line.page, quote: quoteOf(line, line.text.indexOf(stated[0])) };
+  }
+  const aged = text.match(AGE);
+  if (!aged || !reportYear) return null;
+  const age = Number(aged[1] || aged[2]);
+  return age <= AGE_YEARS ? { value: reportYear - age, page: line.page, quote: quoteOf(line, line.text.indexOf(aged[0])), age } : null;
 }
 
 /** Each system's year: stated, or its stated age counted back from the report's date, read under that system's name. */
@@ -447,22 +475,22 @@ function systemYears(lines, date) {
     lines.forEach((line, index) => {
       if (!system.subject.test(line.text)) return;
       // The system's own words on its line, then a few lines after it, until another system starts.
-      for (let next = index; next < Math.min(lines.length, index + 6); next += 1) {
+      // Each sentence of its own line that names it: a line about two water heaters gives two answers.
+      const own = aboutSystem(line.text, system.subject);
+      let said = false;
+      for (const text of own) {
+        const hit = yearIn(text, line, reportYear);
+        if (hit) found.push(hit);
+        said = said || Boolean(hit);
+      }
+      if (said || !own.length) return;
+      for (let next = index + 1; next < Math.min(lines.length, index + 6); next += 1) {
         const candidate = lines[next];
-        if (next > index && SUBJECTS.some((subject) => subject.test(candidate.text))) break;
+        if (SUBJECTS.some((subject) => subject.test(candidate.text))) break;
         if (key === 'electrical_panel' && /sub ?-?panel/i.test(candidate.text)) continue;
-        const text = next === index ? aboutSystem(candidate.text, system.subject) : candidate.text;
-        if (!text) break;
-        const stated = text.match(YEAR) || text.match(NEW_YEAR);
-        if (stated) {
-          const year = Number(stated[1]);
-          if (year >= 1900 && year <= (reportYear || new Date().getUTCFullYear())) found.push({ value: year, page: candidate.page, quote: quoteOf(candidate, candidate.text.indexOf(stated[0])) });
-          break;
-        }
-        const aged = text.match(AGE);
-        if (aged && reportYear) {
-          const age = Number(aged[1] || aged[2]);
-          if (age <= AGE_YEARS) found.push({ value: reportYear - age, page: candidate.page, quote: quoteOf(candidate, candidate.text.indexOf(aged[0])), age });
+        const hit = yearIn(candidate.text, candidate, reportYear);
+        if (hit) {
+          found.push(hit);
           break;
         }
       }
@@ -538,8 +566,11 @@ function readFacts(pages, { address, today = new Date() }) {
   const kind = kindOf(text);
   const date = reportDate(lines, kind, today);
   if (!namesAddress(text, address)) return { kind, date, namesAddress: false, systems: {}, facts: {}, missing: [] };
-  const systems = systemYears(lines, date);
-  const facts = { ...counts(lines, kind), ...described(lines, kind), ...systemDetails(lines) };
+  const house = words(String(address).split(',')[0])[0];
+  const here = lines.filter((line) => !ELSEWHERE.test(line.text)
+    && ![...line.text.matchAll(OTHER_ADDRESS)].some((match) => match[1].toLowerCase() !== house));
+  const systems = systemYears(here, date);
+  const facts = { ...counts(here, kind), ...described(here, kind), ...systemDetails(here) };
   const missing = Object.entries(SYSTEMS).filter(([key, system]) => system.missing && !systems[key]).map(([, system]) => system.missing);
   return { kind, date, namesAddress: true, systems, facts, missing };
 }
