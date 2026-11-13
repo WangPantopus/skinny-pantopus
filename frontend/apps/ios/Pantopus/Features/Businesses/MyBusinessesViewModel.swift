@@ -150,8 +150,10 @@ struct BusinessCardModel: Identifiable, Hashable {
             member.initials?.nonEmpty ?? "?"
         }
 
-        let tier = m.profile?.identityVerificationTier
-        verified = BusinessCardModel.isVerified(tier: tier)
+        verified = BusinessCardModel.isVerified(
+            status: m.profile?.verificationStatus,
+            tier: m.profile?.identityVerificationTier
+        )
         pending = !verified
 
         openChats = m.stats?.openChats ?? 0
@@ -165,8 +167,16 @@ struct BusinessCardModel: Identifiable, Hashable {
         }
     }
 
-    /// Anything above `bi0_unverified` (and non-nil) earns the verified mark.
-    static func isVerified(tier: String?) -> Bool {
+    /// Verified the way the server counts it (plans, the founding offer,
+    /// invoices): `verification_status` is `document_verified` or
+    /// `government_verified`. Self-attested or unverified reads as pending.
+    /// The identity tier is only a fallback for a server that doesn't send the
+    /// status: a document approval sets both, but a business verified before
+    /// it did (or by hand) still has `bi0_unverified`.
+    static func isVerified(status: String?, tier: String?) -> Bool {
+        if let status = status?.nonEmpty {
+            return status == "document_verified" || status == "government_verified"
+        }
         guard let tier = tier?.nonEmpty else { return false }
         return tier != "bi0_unverified"
     }

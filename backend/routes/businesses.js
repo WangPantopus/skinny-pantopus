@@ -978,9 +978,11 @@ router.get('/my-businesses', verifyToken, async (req, res) => {
     const businessIds = (memberships || []).map(m => m.business_user_id);
     let profiles = [];
     if (businessIds.length > 0) {
+      // verification_status is what the server checks (plans, founding offer, invoices); the apps' verified
+      // mark reads it too. The identity tier stays for older app builds, which read only that.
       const { data: profileData } = await supabaseAdmin
         .from('BusinessProfile')
-        .select('business_user_id, business_type, categories, is_published, logo_file_id, banner_file_id, description, identity_verification_tier')
+        .select('business_user_id, business_type, categories, is_published, logo_file_id, banner_file_id, description, identity_verification_tier, verification_status')
         .in('business_user_id', businessIds);
       profiles = profileData || [];
     }

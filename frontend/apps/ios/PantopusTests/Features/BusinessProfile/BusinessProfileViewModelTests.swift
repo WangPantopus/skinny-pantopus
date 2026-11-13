@@ -65,7 +65,7 @@ final class BusinessProfileViewModelTests: XCTestCase {
         "service_area": "Serves Cambridge & Somerville",
         "founding_badge": true,
         "is_published": true,
-        "verification_status": "address_verified",
+        "verification_status": "document_verified",
         "identity_verification_tier": "bi1_basic",
         "primary_location": {
           "id": "loc-1",

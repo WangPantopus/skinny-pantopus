@@ -407,7 +407,11 @@ class BusinessOwnerViewModel
                 publicProfile = publicProfile,
                 canPostAsBusiness = access.allows(BusinessPermission.PROFILE_EDIT),
                 foundingOffer = foundingOffer,
-                isVerified = MyBusinessesViewModel.isVerified(dashboard.profile?.identityVerificationTier),
+                isVerified =
+                    MyBusinessesViewModel.isVerified(
+                        dashboard.profile?.verificationStatus,
+                        dashboard.profile?.identityVerificationTier,
+                    ),
                 access = access,
             )
         }

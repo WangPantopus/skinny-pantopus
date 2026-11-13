@@ -102,7 +102,7 @@ class BusinessProfileViewModelTest {
                             legacyDisplayText = "Serves Cambridge & Somerville",
                         ),
                     isPublished = true,
-                    verificationStatus = "address_verified",
+                    verificationStatus = "document_verified",
                     identityVerificationTier = "bi1_basic",
                     primaryLocation =
                         BusinessLocationDto(
