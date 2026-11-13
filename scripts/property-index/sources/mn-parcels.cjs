@@ -12,6 +12,21 @@ const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
 const SERVICE = 'https://enterprise.gisdata.mn.gov/aghost/rest/services/us_mn_state_mngeo/plan_parcels_open/FeatureServer';
+
+// The service's own list says which layer is which: MnGeo renumbered them in November 2026 (the parcels went from 1 to 0).
+async function stateLayers() {
+  const { layers = [] } = await getJson(`${SERVICE}?f=json`, 'The state\'s layer list');
+  const find = (test, what) => {
+    const layer = layers.find(({ name }) => test(String(name || '')));
+    if (!layer) throw new Error(`The state's service no longer lists ${what}`);
+    return `${SERVICE}/${layer.id}`;
+  };
+  return {
+    table: find((name) => /metadata/i.test(name), 'its county table'),
+    parcels: find((name) => /parcel/i.test(name) && !/metadata/i.test(name), 'its parcels'),
+  };
+}
+
 // Counties read by their own connector.
 const OWN_CONNECTOR = new Set(['27123', '27139']);
 const COLUMNS = ['county_pin', 'state_pin', 'anumberpre', 'anumber', 'anumbersuf', 'st_pre_dir', 'st_pre_typ', 'st_name', 'st_pos_typ', 'st_pos_dir', 'sub_type1', 'sub_id1', 'sub_id2', 'zip', 'ctu_name', 'postcomm', 'co_name', 'acres_deed', 'acres_poly',
@@ -89,7 +104,8 @@ function fromRow(row, fips, county) {
 
 async function* build({ work }) {
   const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
-  const table = await getJson(`${SERVICE}/0/query?${new URLSearchParams({ where: '1=1', outFields: 'countyfips,countyname,acqdate,gac_open_approval', returnGeometry: 'false', f: 'json' })}`, 'The county table');
+  const layers = await stateLayers();
+  const table = await getJson(`${layers.table}/query?${new URLSearchParams({ where: '1=1', outFields: 'countyfips,countyname,acqdate,gac_open_approval', returnGeometry: 'false', f: 'json' })}`, 'The county table');
   const counties = (table.features || []).map((feature) => feature.attributes).filter((row) => String(row.gac_open_approval).toLowerCase() === 'true');
   log(`${counties.length} counties opted in`);
   if (counties.length < 40) throw new Error(`Only ${counties.length} counties are marked open`);
@@ -100,7 +116,7 @@ async function* build({ work }) {
     const records = [];
     const seen = new Set();
     let noAddress = 0;
-    const rows = cached(path.join(work, 'mn-parcels', `${fips}.jsonl.gz`), () => layerRows(`${SERVICE}/1`, COLUMNS, { where: `co_name = '${name.replace(/'/g, "''")}'`, oid: 'objectid' }));
+    const rows = cached(path.join(work, 'mn-parcels', `${fips}.jsonl.gz`), () => layerRows(layers.parcels, COLUMNS, { where: `co_name = '${name.replace(/'/g, "''")}'`, oid: 'objectid' }));
     for await (const row of rows) {
       const record = fromRow(row, fips, county);
       if (!record) noAddress += 1;
@@ -121,4 +137,4 @@ async function* build({ work }) {
   }
 }
 
-module.exports = { build };
+module.exports = { build, stateLayers };

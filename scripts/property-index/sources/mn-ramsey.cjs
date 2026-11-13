@@ -11,12 +11,12 @@ const { year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
+const { stateLayers } = require('./mn-parcels.cjs');
 
 const FIPS = '27123';
 const COUNTY = 'Ramsey County';
 const DOMAIN = 'data.ramseycountymn.gov';
 const TABLE = '4fwy-py9e';
-const STATE_PARCELS = 'https://enterprise.gisdata.mn.gov/aghost/rest/services/us_mn_state_mngeo/plan_parcels_open/FeatureServer/1';
 const COLUMNS = ['pin', 'rolltype', 'assessment_year', 'street_address_1', 'street_address_2', 'municipality', 'land_use_code', 'living_units', 'total_acres', 'land_value', 'building_value', 'total_market_value', 'sumlandsqft', 'dwelling_year_built', 'sumressqftlivingarea', 'bedrooms', 'full_baths', 'half_baths', 'combldg_year_built', 'latest_sale_date', 'sale_price', 'primary_classification', 'dwelling_cards'];
 
 function useOf(code, hasUnit) {
@@ -91,7 +91,8 @@ async function* build({ work }) {
   log(`assessment year ${latest}`);
   const states = new Map();
   let units = 0;
-  for await (const row of cached(path.join(work, 'mn-ramsey', 'state.jsonl.gz'), () => layerRows(STATE_PARCELS, ['county_pin', 'sub_id1', 'zip4', 'lot', 'plat_name', 'home_style', 'garage', 'heating', 'cooling'], { where: "co_name = 'Ramsey'", oid: 'objectid' }))) {
+  const { parcels } = await stateLayers();
+  for await (const row of cached(path.join(work, 'mn-ramsey', 'state.jsonl.gz'), () => layerRows(parcels, ['county_pin', 'sub_id1', 'zip4', 'lot', 'plat_name', 'home_style', 'garage', 'heating', 'cooling'], { where: "co_name = 'Ramsey'", oid: 'objectid' }))) {
     states.set(word(row.county_pin), row);
     if (row.sub_id1) units += 1;
   }
