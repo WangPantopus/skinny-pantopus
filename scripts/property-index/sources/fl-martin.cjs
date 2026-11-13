@@ -8,6 +8,7 @@
 const path = require('node:path');
 const { download, zipTable, zipMembers, zipDates } = require('../lib/tables.cjs');
 const { number, positive, word } = require('../lib/values.cjs');
+const { holdFacts } = require('../lib/held.cjs');
 const { fillHomes, bathFacts, describe, monthOf } = require('../lib/fill.cjs');
 const { log } = require('../lib/log.cjs');
 const { countyRoll } = require('./fl-roll.cjs');
@@ -37,6 +38,11 @@ const table = (zip) => {
   return member;
 };
 
+// The Property Appraiser's quality words, written short in its export ("Avg+", "VGd"), in full. "Needs Review" says nothing.
+const QUALITY = {
+  Low: 'Low', Fair: 'Fair', 'Fr+': 'Fair plus', Avg: 'Average', 'Avg+': 'Average plus', Gd: 'Good', 'Gd+': 'Good plus', VGd: 'Very good', 'VGd+': 'Very good plus', Exc: 'Excellent', 'Exc+': 'Excellent plus',
+};
+
 async function* build({ work, today }) {
   const master = path.join(work, 'fl-martin', 'master.zip');
   const improvements = path.join(work, 'fl-martin', 'improvements.zip');
@@ -44,7 +50,7 @@ async function* build({ work, today }) {
   download(IMPROVEMENTS, improvements);
   // Each property's buildings: a home's parcel has one dwelling building, of one living unit.
   const buildings = new Map();
-  for await (const row of zipTable(improvements, table(improvements), ['PropertyID', 'BuildingTypeDescription', 'ResidentialUnits', 'StoryHeight', 'ExteriorWallDescription', 'RoofCoverDescription', 'HeatDescription'], { delimiter: '|', quoted: false })) {
+  for await (const row of zipTable(improvements, table(improvements), ['PropertyID', 'BuildingTypeDescription', 'ResidentialUnits', 'StoryHeight', 'ExteriorWallDescription', 'RoofCoverDescription', 'HeatDescription', 'QualityDescription', 'PercentAirConditioned'], { delimiter: '|', quoted: false })) {
     if (!buildings.has(row.PropertyID)) buildings.set(row.PropertyID, []);
     buildings.get(row.PropertyID).push(row);
   }
@@ -69,12 +75,17 @@ async function* build({ work, today }) {
       exterior_walls: WALLS[home.ExteriorWallDescription] || null,
       roof_cover: ROOFS[home.RoofCoverDescription] || null,
       heating: home.HeatDescription === 'Central Warm Air' ? 'Central warm air' : null,
+      // Read since the county went live (held below): the building's quality and how much of it is air conditioned.
+      quality: QUALITY[String(home.QualityDescription || '').trim()] || null,
+      cooling: positive(home.PercentAirConditioned) ? 'Air conditioning' : null,
     }]);
   }
   log(`${COUNTY}: ${dwellings.size} one-dwelling homes in the Property Appraiser's exports; ${several} parcels with more than one dwelling building left out`);
   const roll = await countyRoll(work, FIPS, today);
   const counts = fillHomes(roll.records, dwellings);
   log(describe(COUNTY, counts));
+  // Off the county's screens until its new_columns switch is on (lib/held.cjs).
+  holdFacts(roll.records, ['quality', 'cooling']);
   yield {
     ...roll,
     name: COUNTY,

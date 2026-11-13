@@ -63,13 +63,35 @@ function factsWhere(facts, keep) {
   return Object.fromEntries(Object.entries(facts || {}).filter(([name]) => keep(FACTS[name])));
 }
 
+const BUILDING_FIGURES = (fact) => (fact.scope === 'building' || fact.scope === 'parcel') && !fact.value;
+
+/**
+ * A record's held facts (format.js `held`), and its building's, kept by the same rules as its own facts. They stay off
+ * screens until router.served() finds the county on that list. Null with none.
+ */
+function heldCopy(record, building, keep) {
+  const held = {};
+  for (const [name, facts] of Object.entries(record.held || {})) {
+    const kept = keep ? factsWhere(facts, keep) : facts;
+    if (Object.keys(kept).length) held[name] = { facts: kept };
+  }
+  for (const [name, facts] of Object.entries(building?.held || {})) {
+    const kept = factsWhere(facts, BUILDING_FIGURES);
+    if (Object.keys(kept).length) held[name] = { ...held[name], building: kept };
+  }
+  return Object.keys(held).length ? held : null;
+}
+
 /** The copy a Home keeps of a lookup's answer; null when the answer has nothing to keep. */
 function copyFromAnswer(answer, address) {
   if (!MATCHED.has(answer.match)) return null;
   const { county, record } = answer;
   let facts = record.facts;
-  if (answer.match === 'building_only') facts = factsWhere(facts, (fact) => (fact.scope === 'building' || fact.scope === 'parcel') && !fact.value);
-  if (answer.match === 'parcel_only') facts = factsWhere(facts, (fact) => fact.scope === 'parcel' || fact.value);
+  let keep = null;
+  if (answer.match === 'building_only') keep = BUILDING_FIGURES;
+  if (answer.match === 'parcel_only') keep = (fact) => fact.scope === 'parcel' || fact.value;
+  if (keep) facts = factsWhere(facts, keep);
+  const held = heldCopy(record, answer.building, keep);
   return {
     schema: SCHEMA,
     match: answer.match,
@@ -86,10 +108,13 @@ function copyFromAnswer(answer, address) {
     title: county.title || 'County records',
     // Words a publisher's terms ask to go wherever it's named as the source ("provided as is, without warranty").
     ...(county.notice ? { notice: county.notice } : {}),
+    // Where each held fact of a list came from, in words, when it isn't the county's own column (format.js `held_from`).
+    ...(county.held_from ? { held_from: county.held_from } : {}),
     stored_at: new Date().toISOString(),
     address_stamp: addressStamp(address),
     facts,
-    ...(answer.building ? { building: factsWhere(answer.building.facts, (fact) => (fact.scope === 'building' || fact.scope === 'parcel') && !fact.value) } : {}),
+    ...(answer.building ? { building: factsWhere(answer.building.facts, BUILDING_FIGURES) } : {}),
+    ...(held ? { held } : {}),
   };
 }
 

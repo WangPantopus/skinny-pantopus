@@ -9,6 +9,7 @@ const { parse } = require('../../../backend/services/propertyRecords/addressKey'
 const { download, zipDates, zipTable } = require('../lib/tables.cjs');
 const { year, isoDate, monthDate, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
@@ -119,7 +120,13 @@ function fromRow(row, place, { building, transfer }) {
     facts.sale_price = positive(transfer.STATED_VALUE);
     put(facts, 'sale_date', transfer.date);
   }
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: place.city, zip: place.zip }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: place.city, zip: place.zip }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): the export
+  // now writes central air as "1-AC/HEAT" or "0-No AC", which the Y test above no longer finds.
+  const air = String(building?.CENTRAL_AIR || '').trim();
+  if (building && home && /^1-AC\b/i.test(air)) hold(record, 'cooling', 'Central air conditioning');
+  else if (building && home && /^0-No AC$/i.test(air)) hold(record, 'cooling', 'None');
+  return record;
 }
 
 async function* build({ work }) {

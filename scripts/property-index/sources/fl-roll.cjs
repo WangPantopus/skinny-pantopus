@@ -185,11 +185,12 @@ async function buildCounty(work, year, [name, number, fips]) {
 const rollYear = (today) => (today.getMonth() >= 9 ? today.getFullYear() : today.getFullYear() - 1);
 
 // One county at a time, so the state fits in memory. PROPERTY_INDEX_ONLY limits a run to some FIPS codes.
-async function* build({ work, today = new Date() }) {
+async function* build({ work, today = new Date(), compare = null }) {
   const year = rollYear(today);
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+  // A county build comparing its own record with this file (lib/agreement.cjs) asks for counties it otherwise leaves out.
+  const only = compare || (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   for (const county of COUNTIES) {
-    if (OWN_CONNECTOR.has(county[2]) || (only.length && !only.includes(county[2]))) continue;
+    if ((OWN_CONNECTOR.has(county[2]) && !compare) || (only.length && !only.includes(county[2]))) continue;
     // One county's trouble doesn't hold up the others: they publish, and the run ends failed so someone looks.
     let built = null;
     try {

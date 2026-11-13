@@ -9,6 +9,7 @@ const path = require('node:path');
 const { layerRows, cached } = require('../lib/services.cjs');
 const { streetParts, year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
@@ -16,7 +17,7 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '51161';
 const COUNTY = 'Roanoke County';
 const LAYER = 'https://services1.arcgis.com/VlZ73DcE2ya6FnSK/arcgis/rest/services/Parcels_Hosted/FeatureServer/0';
-const COLUMNS = ['ParcelID', 'Address_Number', 'Prefix_Directional', 'Street_Name', 'Street_Suffix', 'Post_Directional', 'Unit_Number', 'Unit_Type', 'Zip_City', 'Zip_Code', 'Calc_Acreage', 'Subdivision', 'LegalDescription', 'Neighborhood', 'SaleDateYMD1', 'SalePrice1', 'SaleValidityDescription1', 'SumAllCardsBuildingOnlyValue', 'SumAllCardsTotalMarketValue', 'TaxYearForValue', 'MaxOfCardNumber', 'BuildingTypeDescription', 'YearBuilt', 'TotalFinSqFt', 'StyleDescr', 'TotalBedrooms', 'TotalFullBaths', 'TotalHalfBaths', 'AirConditionTypeDesc', 'FoundationTypeDescr', 'RoofCoverDescr', 'ExteriorWallDescrPrimary', 'HeatTypeDescr', 'HeatFuelDescr'];
+const COLUMNS = ['ParcelID', 'Address_Number', 'Prefix_Directional', 'Street_Name', 'Street_Suffix', 'Post_Directional', 'Unit_Number', 'Unit_Type', 'Zip_City', 'Zip_Code', 'Calc_Acreage', 'Subdivision', 'LegalDescription', 'Neighborhood', 'SaleDateYMD1', 'SalePrice1', 'SaleValidityDescription1', 'SumAllCardsBuildingOnlyValue', 'SumAllCardsTotalMarketValue', 'TaxYearForValue', 'MaxOfCardNumber', 'BuildingTypeDescription', 'YearBuilt', 'TotalFinSqFt', 'StyleDescr', 'TotalBedrooms', 'TotalFullBaths', 'TotalHalfBaths', 'AirConditionTypeDesc', 'FoundationTypeDescr', 'RoofCoverDescr', 'ExteriorWallDescrPrimary', 'HeatTypeDescr', 'HeatFuelDescr', 'FirePlaceDescr'];
 
 // The building type of the parcel's card. A patio home is a small single-family house; a townhouse apartment is a rental building.
 function useOf(type, unit, row) {
@@ -81,7 +82,12 @@ function fromRow(row) {
     put(facts, 'sale_price', positive(row.SalePrice1));
     put(facts, 'sale_date', isoDate(row.SaleDateYMD1));
   }
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: String(row.Zip_City ?? '').replace(/\s+/g, ' ').trim().toUpperCase(), zip: zipCode(row.Zip_Code) }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: String(row.Zip_City ?? '').replace(/\s+/g, ' ').trim().toUpperCase(), zip: zipCode(row.Zip_Code) }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): the
+  // county writes a home's fireplaces in words, "1 FIREPLACE", "2 FIREPLACES".
+  const fireplaces = /^(\d+) FIREPLACES?$/.exec(String(row.FirePlaceDescr ?? '').replace(/\s+/g, ' ').trim().toUpperCase());
+  if (home && fireplaces && Number(fireplaces[1]) <= 10) hold(record, 'fireplaces', Number(fireplaces[1]));
+  return record;
 }
 
 async function* build({ work, today }) {

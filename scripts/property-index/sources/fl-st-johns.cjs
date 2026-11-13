@@ -8,6 +8,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { download, zipDates } = require('../lib/tables.cjs');
 const { tableRows } = require('../lib/mdb.cjs');
+const { holdFacts } = require('../lib/held.cjs');
 const { fillHomes, bathFacts, describe, monthOf } = require('../lib/fill.cjs');
 const { log } = require('../lib/log.cjs');
 const { countyRoll } = require('./fl-roll.cjs');
@@ -27,9 +28,9 @@ async function* build({ work, today }) {
   execFileSync('unzip', ['-o', '-q', zip, DATABASE, '-d', dir]);
   const file = path.join(dir, DATABASE);
   const buildings = new Map();
-  for (const row of tableRows(file, 'BldView', ['strap', 'num', 'impr_tp', 'heat_ar', 'status_cd'])) {
+  for (const row of tableRows(file, 'BldView', ['strap', 'num', 'impr_tp', 'heat_ar', 'status_cd', 'qa_dscr'])) {
     if (!DWELLING.has(String(row.impr_tp || '').trim()) || row.status_cd) continue;
-    buildings.set(`${row.strap}|${row.num}`, { parcel: String(row.strap).trim(), heated: row.heat_ar, counts: {} });
+    buildings.set(`${row.strap}|${row.num}`, { parcel: String(row.strap).trim(), heated: row.heat_ar, quality: String(row.qa_dscr || '').replace(/\s+/g, ' ').trim() || null, counts: {} });
   }
   // One line per kind of count: BR bedrooms, BT baths (a half bath as .5), SH floors. A kind said twice says nothing.
   for (const row of tableRows(file, 'StructElemViewUnit', ['strap', 'bld_num', 'tp', 'uts'])) {
@@ -38,13 +39,15 @@ async function* build({ work, today }) {
     if (building) building.counts[kind] = kind in building.counts ? null : row.uts;
   }
   const dwellings = new Map();
-  for (const { parcel, heated, counts } of buildings.values()) {
+  for (const { parcel, heated, quality, counts } of buildings.values()) {
     const { BR: beds, BT: baths, SH: floors } = counts;
     const facts = {
       bedrooms: beds > 0 && beds <= 15 && Number.isInteger(beds) ? beds : null,
       ...bathFacts(baths, 20),
       stories: floors >= 1 && floors <= 6 && (floors * 2) % 1 === 0 ? floors : null,
       living_sqft: heated > 0 && heated < 30000 ? Math.round(heated) : null,
+      // Read since the county went live (held below): the building's quality in the Appraiser's own words.
+      quality,
     };
     if (!dwellings.has(parcel)) dwellings.set(parcel, []);
     dwellings.get(parcel).push(facts);
@@ -53,6 +56,8 @@ async function* build({ work, today }) {
   const roll = await countyRoll(work, FIPS, today);
   const counts = fillHomes(roll.records, dwellings);
   log(describe(COUNTY, counts));
+  // Off the county's screens until its new_columns switch is on (lib/held.cjs).
+  holdFacts(roll.records, ['quality']);
   yield {
     ...roll,
     name: COUNTY,

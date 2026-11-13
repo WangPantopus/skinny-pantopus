@@ -7,13 +7,14 @@ const path = require('node:path');
 const { layerRows, cached } = require('../lib/services.cjs');
 const { streetParts, year, isoDate, zipCode } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '29183';
 const COUNTY = 'St. Charles County';
 const LAYER = 'https://gis-dev.sccmo.org/scc_gis/rest/services/open_data/Tax_Information_o/FeatureServer/0';
-const COLUMNS = ['OBJECTID', 'Parcel_ID', 'SitusNumber', 'SitusName', 'SitusZip', 'Municipality', 'PropType', 'OccCode', 'YearBuilt', 'TotalArea', 'Bedrooms', 'Bathrooms', 'HalfBathrooms', 'TotalRooms', 'Parcel_Acres', 'TotalMarketValue', 'Subdivision'];
+const COLUMNS = ['OBJECTID', 'Parcel_ID', 'SitusNumber', 'SitusName', 'SitusZip', 'Municipality', 'PropType', 'OccCode', 'YearBuilt', 'TotalArea', 'Bedrooms', 'Bathrooms', 'HalfBathrooms', 'TotalRooms', 'Parcel_Acres', 'TotalMarketValue', 'Subdivision', 'GarageStalls'];
 
 // The county's property types, and its occupancy codes: A for attached homes, D for detached.
 function useOf(type, occupancy) {
@@ -54,7 +55,12 @@ function fromRow(row) {
   if (kind === 'building') put(facts, 'gross_sqft', positive(row.TotalArea));
   put(facts, 'lot_acres', positive(row.Parcel_Acres));
   put(facts, 'market_value', positive(row.TotalMarketValue));
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: String(word(row.Municipality) || '').toUpperCase(), zip: zipCode(row.SitusZip) }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: String(word(row.Municipality) || '').toUpperCase(), zip: zipCode(row.SitusZip) }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): the
+  // Assessor's count of garage stalls, a home's parking spaces. A zero says nothing.
+  const stalls = positive(row.GarageStalls);
+  if (home && stalls && stalls <= 20 && Number.isInteger(stalls)) hold(record, 'parking_spaces', stalls);
+  return record;
 }
 
 async function* build({ work, today }) {

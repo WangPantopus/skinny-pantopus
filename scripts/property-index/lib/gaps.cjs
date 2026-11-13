@@ -190,4 +190,4 @@ const RULE = {
   sets: SETS,
 };
 
-module.exports = { FIELDS, KINDS, SETS, RULE, kindOf, gapsOf, buildingFacts, filled, addressLine, suppressed, takedownsId, STRUCTURE };
+module.exports = { FIELDS, KINDS, SETS, RULE, kindOf, gapsOf, buildingFacts, filled, shown, addressLine, suppressed, takedownsId, STRUCTURE };

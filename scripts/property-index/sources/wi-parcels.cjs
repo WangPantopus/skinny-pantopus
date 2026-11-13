@@ -62,8 +62,9 @@ function geodatabase(folder) {
   return null;
 }
 
-async function* build({ work }) {
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+async function* build({ work, compare = null }) {
+  // A county build comparing its own record with this file (lib/agreement.cjs) asks for counties it otherwise leaves out.
+  const only = compare || (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   const dir = path.join(work, 'wi-parcels');
   const zip = path.join(dir, 'parcels.zip');
   download(FILE, zip);
@@ -77,7 +78,7 @@ async function* build({ work }) {
   for (const row of rows(table[1], COLUMNS)) {
     const fips = String(row.PARCELFIPS ?? '').trim().padStart(3, '0');
     const code = `55${fips}`;
-    if (!/^55\d{3}$/.test(code) || OWN_CONNECTOR.has(code) || (only.length && !only.includes(code))) continue;
+    if (!/^55\d{3}$/.test(code) || (OWN_CONNECTOR.has(code) && !compare) || (only.length && !only.includes(code))) continue;
     if (!counties.has(code)) counties.set(code, { name: `${String(row.CONAME || '').trim().toLowerCase().replace(/(^|\s)\S/g, (first) => first.toUpperCase())} County`, records: new Map(), noAddress: 0 });
     const county = counties.get(code);
     const record = fromRow(row, code, county.name);
