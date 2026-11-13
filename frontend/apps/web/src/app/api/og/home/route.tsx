@@ -41,7 +41,7 @@ export async function GET() {
           </div>
           <div style={{ fontSize: 96, fontWeight: 700, letterSpacing: -3, lineHeight: 1, marginTop: 56 }}>Your place, alive.</div>
           <div style={{ fontSize: 30, color: '#C9D3E3', marginTop: 24, maxWidth: 640, lineHeight: 1.3 }}>
-            Your home and neighborhood, connected. Free to look, no account needed.
+            Real life, connected. Free to look, no account needed.
           </div>
         </div>
       </div>
