@@ -59,7 +59,8 @@ async function lookup(address, { serves = (fips) => router.modeFor(fips) === 'li
     if (county.status === 'withdrawn') return { match: 'unsupported', reason: 'withdrawn', ...facts };
     if (county.stale_after && Date.now() > Date.parse(county.stale_after)) return { match: 'stale', reason: 'release_past_date', ...facts };
     if (suppressions?.hashes?.includes(suppressionHash(suppressions.salt, fips, query))) return { match: 'restricted', ...facts };
-    const records = await reader.recordsAt(fips, county.release, sortKey(parsed));
+    const stored = await reader.recordsAt(fips, county.release, sortKey(parsed));
+    const records = router.listedUnitsFor(fips) ? identity.withListedUnits(stored) : stored;
     return { ...identity.resolve(query, records, { sharedFacts: router.sharedFactsFor(fips) }), ...facts };
   }));
   answers.sort((a, b) => MATCH_RANK[a.match] - MATCH_RANK[b.match]);

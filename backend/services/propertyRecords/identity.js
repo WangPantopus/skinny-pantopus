@@ -196,4 +196,16 @@ function resolve(address, records, { sharedFacts = false } = {}) {
   return ambiguous(parcels, requested, 'several_parcels');
 }
 
-module.exports = { resolve, onStreet, inZip, AGREED_FACTS };
+/**
+ * The records, and each record with a unit number an address list gives it (`listed_unit`) a second time with that unit as
+ * its own, for a county whose switch file lists it (router.js `listed_units`). The record stays as it was too, so it's one
+ * home filed with and without a unit: only someone who names its listed unit gets a different answer (that home), and
+ * every other ask answers as before. Without the switch `listed_unit` is never read.
+ */
+function withListedUnits(records) {
+  const listed = records.filter((record) => record.address?.listed_unit && !record.address.unit);
+  if (!listed.length) return records;
+  return [...records, ...listed.map((record) => ({ ...record, address: { ...record.address, unit: record.address.listed_unit } }))];
+}
+
+module.exports = { resolve, onStreet, inZip, withListedUnits, AGREED_FACTS };

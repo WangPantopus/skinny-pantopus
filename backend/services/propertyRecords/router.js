@@ -9,7 +9,7 @@
  *
  *   switches/<name>.json   { v: 1, counties: { "<fips>": { mode: 'off'|'shadow'|'live', withheld: [fact, ...], estimates: true } },
  *                            shared_facts: ["<fips>", ...], similar_homes: ["<fips>", ...],
- *                            appeal_packet: ["<fips>", ...] }
+ *                            appeal_packet: ["<fips>", ...], listed_units: ["<fips>", ...] }
  *
  * `estimates: true` shows a live county's owners a Pantopus estimate (propertyRecords/valueEstimate.js). Without it, none.
  * `shared_facts` names the live counties where an address with several homes on record shows what all of them agree
@@ -18,6 +18,9 @@
  * (similarHomes.js). A file without the list has that off everywhere too.
  * `appeal_packet` names the counties, among those with similar homes on, where an owner whose home is valued above them
  * can get the appeal packet (services/appealPacket.js). A file without the list has it off everywhere.
+ * `listed_units` names the live counties where a record takes the unit number an address list gives it (`listed_unit`,
+ * written by a connector whose own file has no unit, identity.js withListedUnits), so a condo's owner finds its own unit
+ * instead of several homes. A file without the list has it off everywhere.
  *
  * A county the file names follows the file; any other follows the environment's lists.
  * The file is written by scripts/property-index/switch-county.cjs, by hand. If it can't
@@ -42,6 +45,7 @@ let counties = {};
 let sharedFacts = new Set();
 let similarHomes = new Set();
 let appealPackets = new Set();
+let listedUnits = new Set();
 let modes = config.listedModes();
 let liveStates = new Set();
 let anyShadowCounty = false;
@@ -54,6 +58,7 @@ function apply(file) {
   sharedFacts = file?.sharedFacts || new Set();
   similarHomes = file?.similarHomes || new Set();
   appealPackets = file?.appealPackets || new Set();
+  listedUnits = file?.listedUnits || new Set();
   modes = config.listedModes();
   for (const [fips, entry] of Object.entries(counties)) modes.set(fips, entry.mode);
   const listed = [...modes];
@@ -67,6 +72,8 @@ function apply(file) {
   if (similar.length) now = [named, shared, similar];
   const packets = [...appealPackets].sort();
   if (packets.length) now = [named, shared, similar, packets];
+  const units = [...listedUnits].sort();
+  if (units.length) now = [named, shared, similar, packets, units];
   now = JSON.stringify(now);
   if (now !== loggedAs && config.enabled()) {
     loggedAs = now;
@@ -77,6 +84,7 @@ function apply(file) {
       ...(shared.length ? { shared_facts: shared } : {}),
       ...(similar.length ? { similar_homes: similar } : {}),
       ...(packets.length ? { appeal_packet: packets } : {}),
+      ...(units.length ? { listed_units: units } : {}),
     });
   }
 }
@@ -94,7 +102,8 @@ function parseFile(bytes) {
   const shared = Array.isArray(data.shared_facts) ? data.shared_facts.filter((fips) => /^\d{5}$/.test(fips)) : [];
   const similar = Array.isArray(data.similar_homes) ? data.similar_homes.filter((fips) => /^\d{5}$/.test(fips)) : [];
   const packets = Array.isArray(data.appeal_packet) ? data.appeal_packet.filter((fips) => /^\d{5}$/.test(fips)) : [];
-  return { counties: found, sharedFacts: new Set(shared), similarHomes: new Set(similar), appealPackets: new Set(packets) };
+  const units = Array.isArray(data.listed_units) ? data.listed_units.filter((fips) => /^\d{5}$/.test(fips)) : [];
+  return { counties: found, sharedFacts: new Set(shared), similarHomes: new Set(similar), appealPackets: new Set(packets), listedUnits: new Set(units) };
 }
 
 const readFile = reader.switchesFile(config.switchesName, parseFile, READ_EVERY_MS);
@@ -158,6 +167,9 @@ const similarHomesFor = (fips) => modeFor(fips) === 'live' && similarHomes.has(f
 /** Whether an owner in this county can get the appeal packet: only where similar homes are on and the file's list names the county. */
 const appealPacketFor = (fips) => similarHomesFor(fips) && appealPackets.has(fips);
 
+/** Whether this county's records take the unit numbers an address list gives them: only a live county the file's list names. */
+const listedUnitsFor = (fips) => modeFor(fips) === 'live' && listedUnits.has(fips);
+
 /** The live counties with similar homes on, for the yearly watch (services/propertyTaxWatch.js). */
 const similarHomesCounties = () => [...similarHomes].filter(similarHomesFor).sort();
 
@@ -184,6 +196,8 @@ function summary() {
   if (similar.length) lists = [named, withheld, estimates, shared, similar];
   const packets = [...appealPackets].sort();
   if (packets.length) lists = [named, withheld, estimates, shared, similar, packets];
+  const units = [...listedUnits].sort();
+  if (units.length) lists = [named, withheld, estimates, shared, similar, packets, units];
   return {
     live: named.filter(([, mode]) => mode === 'live').length,
     shadow: named.filter(([, mode]) => mode === 'shadow').length,
@@ -191,6 +205,7 @@ function summary() {
     ...(shared.length ? { shared_facts: shared.length } : {}),
     ...(similar.length ? { similar_homes: similar.length } : {}),
     ...(packets.length ? { appeal_packet: packets.length } : {}),
+    ...(units.length ? { listed_units: units.length } : {}),
     // Estimates, shared facts and similar homes join the hash only when a county has them, so servers before and after them agree on a file without any.
     hash: crypto.createHash('sha256').update(JSON.stringify(lists)).digest('hex').slice(0, 12),
   };
@@ -203,4 +218,4 @@ function served(copy) {
   return { ...copy, facts: without(copy.facts, withheld), ...(copy.building ? { building: without(copy.building, withheld) } : {}) };
 }
 
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, appealPacketFor, listed, summary, health };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, appealPacketFor, listedUnitsFor, listed, summary, health };

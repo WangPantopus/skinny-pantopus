@@ -21,7 +21,9 @@ const { deriveFacts } = require('./lib/derive.cjs');
 const { log } = require('./lib/log.cjs');
 
 const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'parent', 'roster', 'restricted', 'key']);
-const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip']);
+// `listed_unit`: a unit number an address list gives a record whose own file has none. The server reads it only for a county
+// on its switch file's listed_units list (backend/services/propertyRecords/router.js).
+const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip', 'listed_unit']);
 
 function parseArgs(argv) {
   const opts = {};
