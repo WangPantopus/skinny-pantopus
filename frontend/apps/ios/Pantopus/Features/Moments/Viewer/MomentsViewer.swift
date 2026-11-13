@@ -285,6 +285,12 @@ extension MomentsViewer {
             }
             .opacity(model.holding || zooming ? 0 : 1)
             .animation(.easeOut(duration: 0.15), value: model.holding || zooming)
+            // How high it was made, down the right edge (`MomentsViewerHeights.swift`): there with the header.
+            if let rail = model.heightRail(you: ownHeight) {
+                let top = geo.safeAreaInsets.top + Self.railTop
+                MomentsViewerHeights(rail: rail, top: top, length: max(mediaHeight - Self.railBelow - top, 120))
+                    .opacity(model.holding || zooming || isReplying ? 0 : 1)
+            }
         }
         .ignoresSafeArea()
         .onChange(of: geo.safeAreaInsets.bottom, initial: true) { _, inset in homeInset = inset }
