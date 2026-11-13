@@ -14,9 +14,11 @@ const HOMES = new Set(['property', 'unit']);
  *   (a parcel number that repeats from town to town)
  * @param {(facts: object, found: object) => boolean} [options.agrees]   Whether the file's dwelling is the record's home: a count both
  *   give that differs means one of them is about another building, so neither is changed
+ * @param {string[]} [options.only]   The facts this file may add, when it's trusted for some and not others (an older file's bath counts
+ *   but not its bedrooms); its other counts still decide whether it agrees
  * @returns {{ homes: number, filled: number, several: number, differ: number, facts: Object<string, number> }} counts for the log
  */
-function fillHomes(records, dwellings, { keyOf = (record) => record.facts.parcel_number, agrees = () => true } = {}) {
+function fillHomes(records, dwellings, { keyOf = (record) => record.facts.parcel_number, agrees = () => true, only = null } = {}) {
   const counts = { homes: 0, filled: 0, several: 0, differ: 0, facts: {} };
   for (const record of records) {
     const { kind, facts, restricted } = record;
@@ -34,7 +36,7 @@ function fillHomes(records, dwellings, { keyOf = (record) => record.facts.parcel
     }
     let added = 0;
     for (const [fact, value] of Object.entries(found[0])) {
-      if (value === null || value === undefined || facts[fact] !== undefined) continue;
+      if (value === null || value === undefined || facts[fact] !== undefined || (only && !only.includes(fact))) continue;
       if (fact === 'stories' && kind === 'unit') continue;
       facts[fact] = value;
       counts.facts[fact] = (counts.facts[fact] || 0) + 1;
