@@ -75,6 +75,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.posts.EarlierPostDto
+import app.pantopus.android.data.location.HeightReading
 import app.pantopus.android.data.posts.PostCameraPhotos
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
@@ -86,6 +87,7 @@ import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.compose.placepicker.MediaCaptureLocation
+import app.pantopus.android.ui.screens.compose.placepicker.MediaHeightExtractor
 import app.pantopus.android.ui.screens.compose.placepicker.MediaLocationExtractor
 import app.pantopus.android.ui.screens.compose.placepicker.PlacePickerSheet
 import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
@@ -422,7 +424,14 @@ private fun readUploadBytes(
 }
 
 /** Where a picked file was taken, as far as Android shows it, and whether Android may be hiding that. */
-internal class PickedPlace(val captured: MediaCaptureLocation?, val mayBeHidden: Boolean)
+internal class PickedPlace(
+    val captured: MediaCaptureLocation?,
+    val mayBeHidden: Boolean,
+    height: () -> HeightReading? = { null },
+) {
+    /** How high the file says it was taken (a photo's own tag); read only when asked, for a Moment's "Show height". */
+    val height: HeightReading? by lazy(height)
+}
 
 internal fun readPickedPlace(
     context: Context,
@@ -433,7 +442,11 @@ internal fun readPickedPlace(
         mime.startsWith("image/") -> {
             val picked = readBytes(context.contentResolver, uri, maxAttachmentBytes(mime))
             val captured = picked?.let(MediaLocationExtractor::fromImageBytes)
-            PickedPlace(captured, mayBeHidden = captured == null && picked?.let(MediaLocationExtractor::hasHiddenLocation) == true)
+            PickedPlace(
+                captured,
+                mayBeHidden = captured == null && picked?.let(MediaLocationExtractor::hasHiddenLocation) == true,
+                height = { picked?.takeIf { captured != null }?.let(MediaHeightExtractor::fromImageBytes) },
+            )
         }
         // A video's hidden location leaves no mark, so any video without one may be hiding it.
         mime.startsWith("video/") -> MediaLocationExtractor.fromVideoUri(context, uri).let { PickedPlace(it, mayBeHidden = it == null) }

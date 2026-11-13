@@ -223,6 +223,7 @@ fun MomentsComposeScreen(
                     onPlace = viewModel::pickPlace,
                     onFindPlace = { viewModel.findPlace(true) },
                     onNoLocation = viewModel::setNoLocation,
+                    onShowHeight = viewModel::setShowHeight,
                 )
         }
         // The place picker (the Pulse composer's) around the Moment's pin: venues within reach of it, and search.
@@ -681,6 +682,7 @@ private fun ReviewStep(
     onPlace: (String) -> Unit,
     onFindPlace: () -> Unit,
     onNoLocation: (Boolean) -> Unit,
+    onShowHeight: (Boolean) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         when (val media = state.media) {
@@ -751,6 +753,7 @@ private fun ReviewStep(
             onPlace = onPlace,
             onFindPlace = onFindPlace,
             onNoLocation = onNoLocation,
+            onShowHeight = onShowHeight,
         )
     }
 }

@@ -176,6 +176,8 @@ data class MomentPlacePreviewDto(
     @Json(name = "pick_within_m") val pickWithinM: Int? = null,
     /** Whether you have a connection (contract v3.4): a Moment with no location needs one. Null from an older server. */
     @Json(name = "has_connections") val hasConnections: Boolean? = null,
+    /** The sheet may offer "Show height" here (contract v3.8): heights are on for you and it isn't your home. */
+    @Json(name = "can_show_height") val canShowHeight: Boolean = false,
 )
 
 /** One name the Post sheet offers for the pin: [key] goes back as `place_key`, never the words. */
@@ -221,6 +223,19 @@ data class CreateMomentBody(
     @Json(name = "taken_at") val takenAt: String? = null,
     /** A venue picked in the place picker around the pin (its `osm:` id, contract v3.3): the Moment pins there. */
     @Json(name = "venue_id") val venueId: String? = null,
+    /** "Show height" was on (contract v3.8); left out otherwise. */
+    val altitude: MomentAltitudeBody? = null,
+)
+
+/**
+ * "Show height" (contract v3.8): how high above sea level the fix, or the album photo, says the Moment was made, with
+ * how far off that may be and the phone's speed (which tells a flight from a mountain) when the phone knows them.
+ */
+@JsonClass(generateAdapter = true)
+data class MomentAltitudeBody(
+    val meters: Double,
+    @Json(name = "accuracy_m") val accuracyM: Double? = null,
+    @Json(name = "speed_mps") val speedMps: Double? = null,
 )
 
 @JsonClass(generateAdapter = true)
