@@ -7,6 +7,9 @@
  *   ADDRESS_REGISTRY_LIVE_STATES    State codes whose Add Home and Place use the registry's units.
  *   ADDRESS_REGISTRY_COORDINATES    'on': the daily job replaces Google coordinates older than 30 days in live states with
  *                                   registry points. 'shadow': it counts what it would replace and changes nothing. Anything else: off.
+ *   ADDRESS_REGISTRY_STREET_READINGS 'on': where nothing is on record at a line, its street is read the other ways too (MILL CREEK
+ *                                   RD as MILL, type CREEK), only where the county has no street under the name the person used
+ *                                   (registryLookup.js). For every caller of the registry, estimates and floor plans included. Off by default.
  *
  * A state on both lists is live. Storage and keys are the property index's (config/propertyRecords.js).
  */
@@ -24,6 +27,7 @@ const url = env('ADDRESS_REGISTRY_URL') || (manifestUrl ? `${manifestUrl}/regist
 const shadow = stateList('ADDRESS_REGISTRY_SHADOW_STATES');
 const live = stateList('ADDRESS_REGISTRY_LIVE_STATES');
 const coordinates = env('ADDRESS_REGISTRY_COORDINATES').toLowerCase();
+const streetReadings = env('ADDRESS_REGISTRY_STREET_READINGS').toLowerCase() === 'on';
 
 /** 'off', 'shadow' or 'live' for a state. Nothing is on without a registry to read. */
 function modeFor(state) {
@@ -34,6 +38,6 @@ function modeFor(state) {
 
 const coordinatesMode = () => (url && (coordinates === 'on' || coordinates === 'shadow') ? coordinates : 'off');
 
-if (url) logger.info('address_registry.config', { shadow: [...shadow], live: [...live], coordinates: coordinatesMode() });
+if (url) logger.info('address_registry.config', { shadow: [...shadow], live: [...live], coordinates: coordinatesMode(), street_readings: streetReadings });
 
-module.exports = { url, modeFor, coordinatesMode };
+module.exports = { url, modeFor, coordinatesMode, streetReadings };

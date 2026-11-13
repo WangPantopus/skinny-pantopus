@@ -36,7 +36,8 @@ function reader() {
  * @returns {Promise<object>} registryLookup.js's answer
  */
 function lookup(address, { serves = (state) => config.modeFor(state) === 'live' } = {}) {
-  return answer(address, { stateFile: reader().stateFile, recordsAt: reader().recordsAt, suppressions: reader().suppressions, serves });
+  return answer(address, { stateFile: reader().stateFile, recordsAt: reader().recordsAt, recordsNear: reader().recordsNear, suppressions: reader().suppressions, serves },
+    { streetReadings: config.streetReadings });
 }
 
 /** lookup(), answering "can't say" rather than holding up a screen. Null when storage can't be read or takes too long. */
@@ -70,6 +71,7 @@ async function shadow(address) {
       reason: result.reason || null,
       kind: result.subject?.kind || null,
       units: result.unit_count ?? null,
+      read_as: result.read_as || null,
       ms: Date.now() - started,
     });
   } catch (err) {

@@ -3,6 +3,7 @@
 // registry release: right after it's merged, before it's published. Prints and saves counts per state; no address ever.
 //
 //   node scripts/property-index/registry-t2.cjs --out <dir> --state WA --truth <dir> --report <file> [--units <dir of county index releases>]
+//     [--street-readings]  answer as a server with ADDRESS_REGISTRY_STREET_READINGS on does (registryLookup.js); off as servers are by default
 //   node scripts/property-index/registry-t2.cjs --summary <dir of reports>
 //
 // What each part proves:
@@ -53,12 +54,17 @@ function parseArgs(argv) {
     else if (argv[i] === '--units') opts.units = argv[++i];
     else if (argv[i] === '--summary') opts.summary = argv[++i];
     else if (argv[i] === '--dev') opts.dev = true;
+    else if (argv[i] === '--street-readings') opts.streetReadings = true;
     else throw new Error('Unknown argument: see the top of registry-t2.cjs');
   }
   return opts;
 }
 
 const hashOf = (text) => crypto.createHash('sha256').update(text).digest();
+
+// The registry's answer, read as the servers read it (main() sets whether streets are read the other ways too).
+const asked = { streetReadings: false };
+const ask = (address, read) => answer(address, read, asked);
 
 /** Every row of a federal layer, page by page, kept on disk for the run. */
 async function truthRows(dir) {
@@ -123,6 +129,17 @@ function localRegistry(out, state) {
       const index = findBlock(open(fips, release).manifest.keys, key);
       return index < 0 ? [] : block(fips, release, index).filter((record) => record.key === key);
     },
+    // As reader.js: the number's block, and the block on each side when the street runs into it.
+    recordsNear: async (fips, release, key) => {
+      const { keys } = open(fips, release).manifest;
+      const index = findBlock(keys, key);
+      if (index < 0) return [];
+      const street = key.slice(0, key.indexOf('\u0000') + 1);
+      const wanted = [index];
+      if (index > 0 && keys[index].startsWith(street)) wanted.unshift(index - 1);
+      if (index + 1 < keys.length && keys[index + 1].startsWith(street)) wanted.push(index + 1);
+      return wanted.flatMap((at) => block(fips, release, at)).filter((record) => record.key.startsWith(street));
+    },
   };
   return { read, counties, open, block };
 }
@@ -147,7 +164,7 @@ async function premises(report, truth, state, read, dev) {
     shared.set(at, (shared.get(at) || 0) + 1);
   }
   for (const { row } of mine) {
-    const found = await answer({ line1: row.line1, city: row.city, state, zip: row.zip }, read);
+    const found = await ask({ line1: row.line1, city: row.city, state, zip: row.zip }, read);
     part.n += 1;
     if (found.match === 'unsupported' || found.match === 'stale') {
       part[found.reason === 'unreadable_address' ? 'unreadable' : 'no_record'] += 1;
@@ -187,7 +204,7 @@ async function controls(report, registry, state) {
           const units = here.filter((record) => record.kind === 'unit' && record.address.zip === where.zip && record.address.pre === where.pre && record.address.suffix === where.suffix && record.address.post === where.post && !record.address.building);
           if (units.length >= 2 && counts.adjacent < PER_PART_PER_COUNTY) {
             const [one, two] = units.slice(0, 2).map((record) => record.address.unit);
-            const [a, b] = await Promise.all([one, two].map((unit) => answer({ line1: fullLine, unit: `APT ${unit}`, city: where.city, state, zip: where.zip }, registry.read)));
+            const [a, b] = await Promise.all([one, two].map((unit) => ask({ line1: fullLine, unit: `APT ${unit}`, city: where.city, state, zip: where.zip }, registry.read)));
             counts.adjacent += 1;
             report.adjacent.n += 1;
             const right = a.match === 'exact' && b.match === 'exact' && a.subject.id !== b.subject.id && a.record.address.unit === one && b.record.address.unit === two;
@@ -199,7 +216,7 @@ async function controls(report, registry, state) {
           if (building.roster?.length && counts.invalid < PER_PART_PER_COUNTY) {
             // A number no building here lists. Made up here, and only ever asked of our own files.
             const madeUp = `${'9'.repeat(Math.max(...building.roster.map((unit) => unit.length)) + 1)}7`;
-            const found = await answer({ line1: fullLine, unit: madeUp, city: where.city, state, zip: where.zip }, registry.read);
+            const found = await ask({ line1: fullLine, unit: madeUp, city: where.city, state, zip: where.zip }, registry.read);
             counts.invalid += 1;
             report.invalid.n += 1;
             if (found.match === 'exact') report.invalid.wrong += 1;
@@ -209,7 +226,7 @@ async function controls(report, registry, state) {
         if (homes.length === 1 && here.length === 1 && counts.towers < PER_PART_PER_COUNTY) {
           const where = homes[0].address;
           const fullLine = [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' ');
-          const found = await answer({ line1: fullLine, unit: 'APT 9997', city: where.city, state, zip: where.zip }, registry.read);
+          const found = await ask({ line1: fullLine, unit: 'APT 9997', city: where.city, state, zip: where.zip }, registry.read);
           counts.towers += 1;
           report.towers.n += 1;
           if (found.match === 'exact') report.towers.wrong += 1;
@@ -230,7 +247,7 @@ async function controls(report, registry, state) {
             const bare = `${base.number} ${base.name}`;
             // A name ending in a street word reads as another street once its type is left off; that isn't this line.
             if (parse(bare, '', { state, zip })?.name !== base.name) continue;
-            const found = await answer({ line1: bare, city: group[0].address.city, state, zip }, registry.read);
+            const found = await ask({ line1: bare, city: group[0].address.city, state, zip }, registry.read);
             counts.ambiguous += 1;
             report.ambiguous.n += 1;
             if (found.match === 'exact') report.ambiguous.wrong += 1;
@@ -254,7 +271,7 @@ async function unitLinks(report, unitsDir, state, read) {
       // municipality rather than the postal city.
       if (!where?.unit || !address.zip) continue;
       // As the roll writes it, building and all: "A9" alone reads as building A, unit 9.
-      const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), unit: where.building ? `BLDG ${where.building} ${where.unit}` : where.unit, city: address.city, state, zip: address.zip }, read);
+      const found = await ask({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), unit: where.building ? `BLDG ${where.building} ${where.unit}` : where.unit, city: address.city, state, zip: address.zip }, read);
       report.unit_links.n += 1;
       if (found.match === 'exact' && found.subject.kind === 'unit') {
         // A building letter can sit in the unit on one side and in its own column on the other: A101 and BLDG A UNIT 101.
@@ -269,7 +286,7 @@ async function unitLinks(report, unitsDir, state, read) {
       const address = JSON.parse(line);
       const where = parts(address);
       if (!where || !address.zip) continue;
-      const found = await answer({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), city: address.city, state, zip: address.zip }, read);
+      const found = await ask({ line1: [where.number, where.pre, where.name, where.suffix, where.post].filter(Boolean).join(' '), city: address.city, state, zip: address.zip }, read);
       report.roll_homes.n += 1;
       if (found.match === 'exact' || found.match === 'building_only') report.roll_homes.reached += 1;
       else if (found.match === 'ambiguous') report.roll_homes.asked += 1;
@@ -334,6 +351,7 @@ async function main() {
     summarize(opts.summary);
     return;
   }
+  asked.streetReadings = Boolean(opts.streetReadings);
   const registry = localRegistry(opts.out, opts.state);
   const blank = (extra = {}) => ({ n: 0, wrong: 0, ...extra });
   const report = {
