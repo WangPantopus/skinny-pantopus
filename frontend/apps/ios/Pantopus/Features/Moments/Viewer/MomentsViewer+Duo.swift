@@ -165,6 +165,7 @@ extension MomentsViewer {
                     compact: isReplying,
                     showsButtons: headerButtons,
                     onBack: isCard ? onBack : nil,
+                    onAuthor: authorAction,
                     onSound: { model.muted.toggle() },
                     onMore: { showsMenu = true },
                     onClose: { model.close() }

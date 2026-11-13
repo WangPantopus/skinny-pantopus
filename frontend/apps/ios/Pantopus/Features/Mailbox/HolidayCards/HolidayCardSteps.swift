@@ -525,6 +525,8 @@ struct HolidayCardWriteStep: View {
     @State private var showBack = true
     /// The pad for signing beside FROM is up (plan 8.2).
     @State private var signing = false
+    /// The "Help me write it" sheet is up.
+    @State private var helping = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -566,6 +568,9 @@ struct HolidayCardWriteStep: View {
                     .foregroundStyle(count >= cards.messageLimit ? MailPaper.wax : HolidayCardDesk.muted(scheme))
                     .accessibilityIdentifier("sendCardCount")
             }
+            if cards.noteHelp, let recipient = viewModel.recipient {
+                noteHelpRow(recipient)
+            }
             // The card's own photo and greeting (memories plan steps 4 and 7): one person's card only, while the server
             // takes them.
             let onePerson = viewModel.recipient?.entries == nil
@@ -605,6 +610,39 @@ struct HolidayCardWriteStep: View {
                 onDone: { viewModel.signature = $0 },
                 onTyped: { viewModel.signature = nil }
             )
+            .presentationDetents([.medium, .large])
+            .presentationBackground(MailPaper.cardPaper(nil))
+        }
+    }
+
+    /// "Help me write it": three notes from Pantopus AI to pick from; the one picked lands on the back, face up.
+    private func noteHelpRow(_ recipient: HolidayCardRecipient) -> some View {
+        let help = viewModel.noteHelp
+        let names = recipient.noteHelpNames
+        let count = recipient.noteHelpCount
+        return HolidayCardNoteHelpRow(help: help, message: viewModel.message) {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            help.opened(for: HolidayCardNoteHelp.cardKey(design: design.id, names: names, count: count))
+            helping = true
+        } onUndo: {
+            if let before = help.undo() { viewModel.message = before }
+        }
+        .sheet(isPresented: $helping) {
+            HolidayCardNoteHelpSheet(
+                help: help,
+                forWhom: HolidayCardNoteHelp.forLine(names: names, count: count),
+                startsFromNote: !help.ownWords(viewModel.message).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                limit: cards.messageLimit
+            ) {
+                Task {
+                    await help.write(
+                        design: design.id, names: names, count: count, message: viewModel.message, limit: cards.messageLimit
+                    )
+                }
+            } onUse: { text in
+                showBack = true
+                viewModel.message = help.use(text, message: viewModel.message)
+            }
             .presentationDetents([.medium, .large])
             .presentationBackground(MailPaper.cardPaper(nil))
         }

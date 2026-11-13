@@ -39,6 +39,7 @@ const LAUNCH_FEATURE_KEYS = [
   'holiday_cards', // 12. Christmas cards sent through Mail (2026-10-30); needs `mailbox` on too
   'card_table', // 13. The Christmas card on the table: full screen, sharing, sending by link, public card pages (2026-11-06); needs `mailbox` and `holiday_cards` on too
   'holiday_card_memories', // 14. A card's own photo and voice greeting (memories plan 2026-11-02, built 2026-11-10); needs `mailbox` on too
+  'card_note_help', // 15. "Help me write it" on a Christmas card: three AI-written notes to pick from and edit (2026-11-11); needs `mailbox` and `holiday_cards` on too
 ];
 
 function isLaunchFeatureEnabled(key) {

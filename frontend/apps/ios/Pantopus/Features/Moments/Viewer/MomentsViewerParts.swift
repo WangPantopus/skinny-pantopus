@@ -64,6 +64,8 @@ struct MomentsViewerHeader: View {
     var onBack: (@MainActor () -> Void)?
     /// The place is a button that shows it on the map (the phone's viewer over the Moments tab; not a Moment with no location).
     var onPlace: (() -> Void)?
+    /// The face and the name open that person's profile (not on your own Moment, nor the Pantopus account's).
+    var onAuthor: (() -> Void)?
     let onSound: () -> Void
     let onMore: () -> Void
     let onClose: () -> Void
@@ -82,26 +84,30 @@ struct MomentsViewerHeader: View {
                 .accessibilityLabel("Back to the list")
                 .accessibilityIdentifier("moments.viewer.backToSpot")
             }
-            Group {
-                // Your own face is the one your ring shows on the map: your picture, else your initials.
-                if let author {
-                    MomentAvatar(author: author, size: 36)
-                } else if isMine {
-                    MomentSelfFace(author: author, size: 36)
+            opensAuthor(id: "moments.viewer.face") {
+                Group {
+                    // Your own face is the one your ring shows on the map: your picture, else your initials.
+                    if let author {
+                        MomentAvatar(author: author, size: 36)
+                    } else if isMine {
+                        MomentSelfFace(author: author, size: 36)
+                    }
                 }
+                // Light fill and dark initials with a white edge, as the boards draw it over a dark picture.
+                .environment(\.colorScheme, .light)
+                .overlay { if isMine || author != nil { Circle().stroke(Color.white, lineWidth: 1.5) } }
             }
-            // Light fill and dark initials with a white edge, as the boards draw it over a dark picture.
-            .environment(\.colorScheme, .light)
-            .overlay { if isMine || author != nil { Circle().stroke(Color.white, lineWidth: 1.5) } }
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 5) {
-                    Text(isMine ? "Your Moment" : author?.name ?? "")
-                        .font(.system(size: 15, weight: .semibold))
-                        .lineLimit(1)
-                    if author?.verified == true, !isMine {
-                        MomentVerifiedCheck(size: 14, border: 0)
-                            .accessibilityLabel("Verified resident")
-                            .accessibilityHidden(false)
+                opensAuthor(id: "moments.viewer.name") {
+                    HStack(spacing: 5) {
+                        Text(isMine ? "Your Moment" : author?.name ?? "")
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                        if author?.verified == true, !isMine {
+                            MomentVerifiedCheck(size: 14, border: 0)
+                                .accessibilityLabel("Verified resident")
+                                .accessibilityHidden(false)
+                        }
                     }
                 }
                 HStack(spacing: 0) {
@@ -134,6 +140,7 @@ struct MomentsViewerHeader: View {
                 .accessibilityIdentifier("moments.viewer.meta")
                 .accessibilityActions {
                     if let onPlace, !place.isEmpty { Button("Show on the map", action: onPlace) }
+                    if let onAuthor, !compact { Button("Open profile", action: onAuthor) }
                 }
             }
             .foregroundStyle(.white)
@@ -168,6 +175,18 @@ struct MomentsViewerHeader: View {
         .padding(.leading, Spacing.s3)
         .padding(.trailing, showsButtons ? Spacing.s1 : Spacing.s3)
         .frame(height: 48)
+    }
+
+    /// The face or the name as a button to the author's profile, when there is one to open.
+    @ViewBuilder
+    private func opensAuthor(id: String, @ViewBuilder label: () -> some View) -> some View {
+        if let onAuthor, !compact {
+            Button(action: onAuthor) { label().contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(id)
+        } else {
+            label()
+        }
     }
 
     /// A white header button: close at 24 pt, the others at 22 (board V1).

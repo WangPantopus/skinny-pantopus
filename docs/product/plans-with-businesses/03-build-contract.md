@@ -1,8 +1,11 @@
 # Plans with businesses: the contract between the server, the web and the apps
 
-November 11, 2026 · Status: a draft contract. Nothing is built, and no build
-starts until the founder says so. Read against master `8f7ac268e8`. It follows the
-[proposal](01-proposal.md) and the [design](02-design.md).
+November 11, 2026, updated November 12 · Status: the contract the build follows.
+On November 12 the founder said go for the first round: steps 1 and 2 on the
+server and the web share page, with a free plan only (the
+[build plan](04-build-plan.md) has the order). Paid spots are not approved yet.
+Read against master `8f7ac268e8`. It follows the [proposal](01-proposal.md) and
+the [design](02-design.md).
 
 Where this says "today", the code was read. Where it says "new", nothing exists.
 
@@ -12,6 +15,13 @@ A verified business hosts a plan at one of its own locations, free or with a
 price on each spot. A guest joins and pays in the app. Pantopus keeps a fee from
 the business's payout, at a rate set by how the guest arrived. Everything rides on
 the Plans tables, routes and screens that exist; a neighbor's plan is untouched.
+
+**The shared pieces.** On November 11 the founder approved four pieces that every
+business feature shares (`docs/product/business-graph/02-shared-pieces-contract.md`,
+PR #3965, called "the shared contract" below). Four places here stand on them:
+who may post for a business (5.5), the key for a place (4.1), who is new to a
+business and how a sale is recorded (4.2), and the statement (11.2). Where this
+contract and the shared one differ on those, the shared one decides.
 
 ## 2. Decisions
 
@@ -57,7 +67,9 @@ open until the founder confirms it.
 7. **Privacy as in the design.** A business's staff get no address, distance,
    phone, email or last name from any Plans route.
 8. **Additive data only.** Added columns and widened checks. No new table in
-   steps 1 to 4. No applied migration is edited.
+   Plans. The shared `BusinessCustomer` table belongs to the shared contract and
+   is built in the business graph's phase A, before Plans step 3. No applied
+   migration is edited.
 
 ## 4. Data
 
@@ -68,7 +80,7 @@ and the current server ignore them.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
-| `place_ref` | `text` | The picker's id for a public place, such as `osm:n/123`. Step 1. The picker already sends `place_id` (`planPlaces.js:237`); a plan does not save it today |
+| `place_ref` | `text` | The shared key for a place, in one of the forms of the shared contract, section 3.1. For a neighbor's plan at a public place it is the picker's id, such as `osm:node/123`. For a business's plan it is the location's own `place_ref` when it has one, and null until then. Step 1. The picker already sends `place_id` (`planPlaces.js:237`); a plan does not save it today |
 | `business_user_id` | `uuid`, references `User(id)` | The business hosting. Null on a neighbor's plan. `host_user_id` stays the person who posted |
 | `business_location_id` | `uuid`, no foreign key | The business location used. The plan keeps its own copy of the point and address, as `place_home_id` does |
 | `label` | `text` | The label key the business chose (section 4.4) |
@@ -96,7 +108,7 @@ Index: `(business_user_id, status)` where `business_user_id IS NOT NULL`.
 | --- | --- | --- |
 | `way_in` | `text` | How the guest arrived (section 6.2). Saved for free plans too |
 | `brought_by_user_id` | `uuid` | The guest whose invitation or link it was |
-| `new_to_business` | `boolean` | True if the guest had never been in a plan of this business |
+| `new_to_business` | `boolean` | True if the business had no record of the guest when they joined. Read from `isNewToBusiness` (the shared `BusinessCustomer` record), so a guest who has already paid this business an invoice is not new. Step 3 |
 | `payment_id` | `uuid`, references `Payment(id)` | Null on a free plan |
 | `unit_price_cents`, `paid_cents` | `integer` | The price of a spot when they paid, and the total |
 | `fee_basis` | `text`: `pantopus` or `own` | Which rate applied |
@@ -108,6 +120,14 @@ Index: `(business_user_id, status)` where `business_user_id IS NOT NULL`.
 
 `status` gains `paying`: the spot is held while the card is confirmed. It counts
 as a taken seat. Every existing status keeps its meaning.
+
+**The shared record.** A joined or paid request calls `recordBusinessContact`
+(shared contract, section 4.2). A paid one's `Payment` row also carries
+`sold_type = 'plan_spot'`, `sold_id`, `fee_pct`, `fee_basis` and `payout_after`,
+and its fee is priced by `priceSale` (shared contract, section 5). Step 2 ships
+before the shared record exists: until then a guest who joins a free business
+plan is saved on the request only (`way_in`), and the record's first fill reads
+those earlier requests too.
 
 ### 4.3 Other additive changes
 
@@ -240,8 +260,10 @@ on today's sports answers. Only app builds that can draw G1 to G6 send `biz=1`.
 
 `POST /api/plans` with `host_as: { "business_user_id": "…" }`:
 
-1. The person has `plans.post` on the business (`checkBusinessPermission`).
-2. The business passes C1. A kids' kind also needs `plans_business_kids`.
+1. The person may act for the business: `actingForBusiness`
+   (`backend/services/businessActing.js`, the shared helper) with `plans.post`
+   and `needsVerified`. Its refusals are answered as they are.
+2. `needsVerified` is C1. A kids' kind also needs `plans_business_kids`.
 3. `business_location_id` is one of its active locations. The plan copies the
    location's name, address and point. The home guard and the 3-mile check do not
    run.
@@ -257,9 +279,10 @@ on today's sports answers. Only app builds that can draw G1 to G6 send `biz=1`.
    so the business, not the staff member, is the public author. The plan's chat is
    written in as the business, as `chatBusinessAccess.js` does for tasks.
 
-Refusals: `403 not_your_business`, `403 business_not_verified`,
-`409 payouts_not_ready`, `422 validation` (location, label, price),
-`429 too_many_plans`.
+Refusals: the helper's `404 business_not_found`, `403 not_your_business`,
+`403 not_allowed`, `403 business_not_verified` and
+`503 business_check_unavailable`; then `409 payouts_not_ready`,
+`422 validation` (location, label, price) and `429 too_many_plans`.
 
 ### 5.6 Joining a paid plan
 
@@ -454,7 +477,11 @@ and the card fees Pantopus absorbed.
 
 ### 11.2 The statement
 
-Computed from `PlanRequest` rows of the business's plans that ended in the month.
+The statement is the business's shared one (shared contract, section 5.4), which
+lists every kind of sale. The Plans figures below are its `plan_spot` part. Where
+the two differ the shared contract decides, including the month a sale counts in
+(the month it was paid). The Plans part is computed from `PlanRequest` rows of the
+business's plans.
 
 ```json
 {

@@ -1,6 +1,6 @@
 # Handoff: replacing ATTOM, Smarty and Lob
 
-Updated November 7, 2026 (UTC). Live status is on the coordinator's board, outside Git.
+Updated November 11, 2026 (UTC). Live status is on the coordinator's board, outside Git.
 
 ## State
 
@@ -14,8 +14,13 @@ Updated November 7, 2026 (UTC). Live status is on the coordinator's board, outsi
   them on.
 - **Private storage (P1) exists:** bucket `pantopus-property-index` in us-west-2, public access blocked; GitHub Actions
   writes through the `master`-only environment `property-index`; the reader key can read only under `index/`.
+- **November 8:** the build paused. 69 counties are live (16.0M homes); 741 counties are in storage (50.2M homes).
+- **November 11:** the founder raised the bar to every row of Property details for every address, research and plan
+  first. [full-page-plan.md](full-page-plan.md) measures every row across storage and proposes WP17-WP25; decisions
+  D13-D17 and P6 are open. Nothing in it has started.
 - **WP1 is done:** #3439, #3445, #3446 and #3447 merged.
-- **Running:** a build coordinator session holds the board; builder sessions cover WP2, WP3 with WP4, WP5, WP6, WP7 and WP13, and sessions for WP8, WP9, WP10, WP11 and WP12 start as their dependencies land. Live status is on the board, outside Git.
+- **Running:** nothing since the pause. WP2-WP5, WP7-WP9 and WP11-WP13 are built; WP10 (county connectors) and WP6
+  (address registry) have handoffs to resume from. Live status is on the board, outside Git.
 
 ## Verified, and not
 
@@ -28,12 +33,15 @@ Updated November 7, 2026 (UTC). Live status is on the coordinator's board, outsi
 ## Waiting on the founder
 
 1. ATTOM: the steps are on the founder's private list, outside Git.
-2. The plans each builder sends, and D6-D12 and P2-P5 as packages reach them.
-3. Google's CASS billing SKU and the production key; Lob's live key and return address.
+2. The plans each builder sends, and D6-D17 and P2-P6 as packages reach them.
+3. The steps in [full-page-plan.md](full-page-plan.md#8-waiting-on-the-founder): the Texas publish, switches, letters,
+   small purchases and hand checks.
+4. Google's CASS billing SKU and the production key; Lob's live key and return address.
 
 ## Next steps for whoever continues
 
-1. Read the coordinator's board in the shared notes folder and check PR, CI and queue state.
+1. Read the coordinator's board in the shared notes folder and check PR, CI and queue state. Read
+   [full-page-plan.md](full-page-plan.md) for what is proposed next; start none of it without the founder's yes.
 2. Follow [build-plan.md](build-plan.md)'s rules and verification recipe. Wave 2 (WP5 first; then WP6-WP9) and wave 3 (WP10,
    WP11, WP12) follow; the retirements run with the founder after their gates pass.
 3. Research done November 7: one-home lookups on county sites ([lookup-sites.md](lookup-sites.md), a recommendation for

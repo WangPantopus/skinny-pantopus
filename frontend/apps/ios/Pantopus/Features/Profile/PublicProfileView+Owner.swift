@@ -48,6 +48,7 @@ extension PublicProfileView {
                         tagline: payload.header.tagline,
                         bio: payload.stats.bio,
                         privateNameNote: owner.privateAccountNameLine,
+                        momentsUserId: payload.profile.id,
                         onTrustTap: { showTrustExplainer = true },
                         actions: { ownerActions }
                     )

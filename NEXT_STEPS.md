@@ -341,12 +341,20 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Plans asks for no verified address. Anyone on Pantopus sees playdates, asks to join one and hosts one, like the other kinds; invitations and playdate links open for them too. What stays: a playdate meets in a public place within 3 miles of where the host lives or is now, families within about 3 miles ask with their kids' ages, the host approves each family, parents stay and only ages are shared. A verified address still shows the "Verified" badge and still lets verified neighbors in right away where the host chose that (never for playdates). This replaces the verified-address part of the October 12, October 20 and October 31 decisions.
 - [ ] The apps on phones today (2.0.12 and earlier) still send someone without a verified address from the playdate card to "Verify your address" until the next store builds. Seeing playdates, asking to join, invitations and playdate links work for them as soon as the backend is deployed.
 
+**Made by the founder on November 11 (help writing a Christmas card).** You asked whether Pantopus AI should design Christmas cards. The recommendation was no AI pictures this season and an AI helper for the note instead; you said "Yes, plan it", then "Yes, build it".
+
+- [x] "Help me write it" on the card's write step: one optional line to mention, three notes (heartfelt, light, brief) within the 300 letters, pick one and edit it, Undo. It never invents memories or facts about the people, follows the picture's mood, and writes in the sender's language. The card carries no "written by AI" mark, like AI-assisted posts.
+- [x] A new launch key, `card_note_help`, on the server only, which needs `mailbox` and `holiday_cards` on too. It starts off. No new table and no migration.
+- [x] A list still sends one note to everyone, so for three or more people the helper writes a note that names no one. A different note per person is not built.
+- [ ] Not this season: AI-made card pictures. "Draw our photo in this card's style" would need a picture vendor and your decision on sending family photos to it.
+
 **Made by the founder on November 11 (Plans with businesses).** You asked for an evaluation of Plans and whether Pantopus can work with businesses on a model that makes money for both. To the proposal you said yes, asked what justifies a 15% fee, and then said: don't build it, draw the design and write the documents, and make sure people can still plan for themselves. Progress is in the Plans with businesses section below.
 
 - [x] Design it and write it down, no build: a verified business hosts a plan at its own place, free or with a price on each spot; guests pay in the app; Pantopus keeps a fee from the business's payout. The [proposal, design, build contract and build plan](docs/product/plans-with-businesses/README.md) and the [22 boards](https://claude.ai/artifact/W7CYVbCejsR9oP5BUdLTMv) are done.
 - [x] A neighbor's own plan stays exactly as it is: the same composer, kinds, ask and accept, private place and chat, free, with no card. The design holds every board to this, and the build plan checks it on every PR.
 - [ ] Confirm the six decisions the documents take as accepted (you said yes to the proposal; none was confirmed one by one): paid spots lead and venues host free; kids' activities and sports clinics first, in Camas, Washougal and Vancouver; 15% on a guest Pantopus brings (10% for the first 50 founding businesses) and 5% plus the card fee on the business's own guest (founding: the card fee only, for a year); verified businesses only; a full refund until 24 hours before, and whenever the business cancels; by hand first, then the build in steps.
-- [ ] Confirm the nine calls the contract makes (C1 to C9 in its section 2). The two that matter most: the fee follows how the guest arrived every time, not only on a first visit; and plans for children get their own switch, off until a lawyer has read the rules.
+- [ ] Confirm the other five calls the contract makes (C2, C3, C4, C7 and C8 in its section 2). The one that matters most: the fee follows how the guest arrived every time, not only on a first visit.
+- [x] November 12: you said go for the first round of the build ("Yes, start"). In it: the documents brought up to date, the two shared server pieces Plans needs (who may act for a business, and one key for a place), Plans step 1 (a plan remembers its venue) and step 2 on the server and the web share page (a verified business posts a free plan), then the prompts for the iPhone and Android sessions. All of it is behind `plans_business`, off. For these steps you took four of the contract's calls as written: only document-verified or government-verified businesses host (C1); children's plans get their own switch, off (C5); 1 to 30 spots (C6); old app builds never see a business's plan (C9). You also allowed this build's sessions to use subagents on Opus 5.5 at Extra reasoning. Not approved: paid spots, and the money decisions that go with them.
 
 **Still open. The brief builds the default until you decide.**
 
@@ -873,6 +881,16 @@ Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`
   - [ ] Worth a thought, not needed: cards by email keep today's limits (3 new addresses a week, the same address once in 30 days). Links have only the one-card-a-day limit.
 - [ ] After the store release, not before (agents): add `/cards/*` to `apple-app-site-association` and Android's link filters, so a shared card link opens the app. Older apps would open a page they don't know.
 
+**Help me write it (added November 11).** Behind `card_note_help`, which is off. The server and the web came first; progress here.
+
+- [x] Server: `POST /api/ai/draft/card-note` beside the letter-opening helper, on the same Claude setup, request log and 30-an-hour limit per person; `GET /api/mailbox/cards` says `note_help` while it can be used.
+- [x] Web: the button under the card, the panel, Use this one, Undo, Try again. Checked in a browser against a local server with real Claude calls: one person, a list of three, starting from the sender's own words, an unkind request (refused, the card untouched), a reload mid-draft, the card sent and read in the other person's mailbox, and the key off (no button, 404). Checked on the route alone: Spanish, a loss in the family, a nativity card, a link in the request (refused).
+- [x] iPhone: the same button, with the notes in a sheet. Checked in the simulator against a local server with real Claude calls: one person (three notes, Use this one, Undo, Try again, editing), the draft kept across a relaunch, the card sent and read back from the server, a list of three ("names no one"), an unkind request (refused, the card untouched), and the key off (no button).
+- [x] Android: the same button, with the notes in a sheet. Checked in the emulator against a local server with real Claude calls: one person (three notes, Use this one, Undo, Try again, editing), the keyboard's Go key and a hardware Enter, the card sent and read back from the server, a list of three ("names no one"), an unkind request (refused, the card untouched), Back closing only the sheet, and the key off (no button).
+- [ ] Founder: switch `card_note_help` on for the production backend and worker (`LAUNCH_FEATURES`). The web shows the button at once; phones need store builds that carry it.
+- [ ] Founder: the privacy policy's section 5 now names card notes; it still waits on the Anthropic retention confirmation noted there.
+- [ ] Not verified anywhere: production, real phones, screen readers speaking aloud.
+
 ## Mail and card design (added November 11)
 
 The founder approved the [design plan](docs/product/mail-cards-design-plan-2026-11-09.md) and its eight decisions on
@@ -978,7 +996,7 @@ Tells a verified homeowner whether their home costs more than it should, from re
 
 ## Plans with businesses (added November 11)
 
-Designed, not built (section 0). A verified business hosts a plan in Plans at its own place, with a price on each spot; a neighbor's plan is unchanged. Everything is in [docs/product/plans-with-businesses](docs/product/plans-with-businesses/README.md); the boards are on the [Plans with businesses canvas](https://claude.ai/artifact/W7CYVbCejsR9oP5BUdLTMv) (private).
+Designed; the first round of the build started on November 12 (section 0). A verified business hosts a plan in Plans at its own place, with a price on each spot; a neighbor's plan is unchanged. Everything is in [docs/product/plans-with-businesses](docs/product/plans-with-businesses/README.md); the boards are on the [Plans with businesses canvas](https://claude.ai/artifact/W7CYVbCejsR9oP5BUdLTMv) (private).
 
 **Written.**
 
@@ -989,9 +1007,10 @@ Designed, not built (section 0). A verified business hosts a plan in Plans at it
 
 **Yours to do.**
 
-- [ ] Confirm the decisions (section 0).
+- [ ] Confirm the decisions that are still open (section 0): the six from the proposal, and the five money calls.
 - [ ] Step 0, by hand, no code: three businesses (a kids' activity, a sports clinic, a café or bar) each host a weekly plan from the owner's own account for four weeks; a paid one collects by business invoice. Count plans, asks, who came and who came back.
-- [ ] Say go for the build, one step at a time. Each server step has a migration, and merging it applies it to production.
+- [x] Say go for the first round (November 12): steps 1 and 2 on the server, a free plan only.
+- [ ] Say go for each later step. Each server step has a migration, and merging it applies it to production.
 - [ ] Before paid spots: one real charge, refund, delayed payout and bank payout on the live payment account, and an accountant's answer on sales tax for classes in Washington.
 - [ ] Before plans for children: a lawyer's read on businesses hosting children's sessions.
 - [ ] Before bars are invited: a lawyer's read of the Washington rule on bar promotions (WAC 314-52-110).
@@ -1019,3 +1038,13 @@ The plan, decisions and status are in [docs/research/provider-replacement/](docs
 - [ ] `ADDRESS_POSTAL_PROVIDER=google` in staging, then production with the Google key.
 - [ ] PostGrid test account and the written questions to PostGrid and Lob; the real-mail pilot ([pilot](docs/research/provider-replacement/mail-pilot.md)).
 
+
+## Moment heights (added November 12)
+
+A Moment can say how high above sea level it was posted, and the map shows it. The handoff, the 22 design boards, the build plan and the rules for not breaking the released apps are in [docs/product/moment-heights/HANDOFF.md](docs/product/moment-heights/HANDOFF.md).
+
+- [x] Step 1, the server: keeps and returns a height, behind the switch `moment_heights` (off). Merged as [#3969](https://github.com/WangPantopus/skinny-pantopus/pull/3969) and released on November 12. The 2.1.2 iPhone and Android apps were run against it with the switch off and on.
+- [ ] Your OK for step 2: the "Show height" switch on the Post sheet, on iPhone and Android.
+- [ ] Your answers to the open questions in the handoff's section 10 (the name "The Climb", a dark map after sunset on Android, a table for personal bests).
+- [ ] Turn `moment_heights` on in production: your own account first, on a test build, then everyone, and not before the map step is in a store build.
+- [ ] Retake, the year picture and tonight's sky are designs only. Nothing about them is approved to build.

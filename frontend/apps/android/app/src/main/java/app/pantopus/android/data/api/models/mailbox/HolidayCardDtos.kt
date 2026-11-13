@@ -41,6 +41,36 @@ data class HolidayCardsResponse(
     val signature: CardSignatureBox? = null,
     /** What can go into a card besides the note (launch key `holiday_card_memories`); absent from an older server. */
     val media: HolidayCardMediaRules? = null,
+    /** "Help me write it" can be used now (the server's launch key `card_note_help`); absent: no button. */
+    @Json(name = "note_help") val noteHelp: Boolean = false,
+)
+
+/** One note "Help me write it" offers: a way of saying it (`heartfelt`, `light` or `brief`) and the words. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardNoteIdea(
+    val tone: String = "",
+    val text: String = "",
+)
+
+/** The answer of `POST /api/ai/draft/card-note`: up to three notes to pick from. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardNoteIdeas(
+    val notes: List<HolidayCardNoteIdea> = emptyList(),
+)
+
+/**
+ * The body of `POST /api/ai/draft/card-note`: the picture picked, the first names the card is to as the screen shows them
+ * (none for an address or a link), how many people it goes to (past two, the note names no one), what to mention, what's
+ * on the card so far, and the notes already shown ("Try again").
+ */
+@JsonClass(generateAdapter = true)
+data class HolidayCardNoteHelpBody(
+    val design: String,
+    val to: List<String>,
+    val count: Int,
+    val hint: String? = null,
+    val note: String? = null,
+    @Json(name = "passed_over") val passedOver: List<String>? = null,
 )
 
 /** `media` on `GET /api/mailbox/cards`: whether a photo and a voice greeting can be added now, and their limits. */

@@ -23,6 +23,8 @@ final class MomentsWatchSession: Identifiable {
     var replyText = ""
     var showsReactions = false
     var showsSeenBy = false
+    /// The profile opened from the header's face or name, or from a Seen by row: the Moment waits under it.
+    var profile: MomentsViewerProfile?
     /// On a table, the big pause button (board T1): it stays paused until it's tapped again. Off the table it plays on
     /// (the viewer clears it).
     var paused = false

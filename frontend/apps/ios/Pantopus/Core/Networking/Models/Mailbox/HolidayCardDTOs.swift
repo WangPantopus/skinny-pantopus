@@ -71,9 +71,13 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// Which of a card's own photo and voice can be added now (launch key `holiday_card_memories`); nil from older
     /// servers.
     public let media: HolidayCardMediaSpec?
+    /// "Help me write it" can be used now (the server's launch key `card_note_help`); false from older servers and
+    /// with the key off: no button.
+    public let noteHelp: Bool
 
     private enum CodingKeys: String, CodingKey {
         case open, holiday, year, designs, collections, arrivals, today, stamps, signature, media
+        case noteHelp = "note_help"
         case maxRecipients = "max_recipients"
         case postageEnabled = "postage_enabled"
         case closesOn = "closes_on"
@@ -109,6 +113,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         maxRecipients = max(1, (try? c.decodeIfPresent(Int.self, forKey: .maxRecipients)) ?? 1)
         signature = try? c.decodeIfPresent(HolidayCardSignatureSpec.self, forKey: .signature)
         media = try? c.decodeIfPresent(HolidayCardMediaSpec.self, forKey: .media)
+        noteHelp = (try? c.decodeIfPresent(Bool.self, forKey: .noteHelp)) ?? false
     }
 
     /// "Add a photo" shows (the server takes one now, and this build carries the memories), unless no bought stamp
@@ -734,5 +739,53 @@ public struct MailCard: Decodable, Sendable, Hashable {
         signature = try? c.decodeIfPresent(CardSignature.self, forKey: .signature)
         photo = sealed ? nil : try? c.decodeIfPresent(CardPhoto.self, forKey: .photo)
         voice = sealed ? nil : try? c.decodeIfPresent(CardVoice.self, forKey: .voice)
+    }
+}
+
+// MARK: - "Help me write it"
+
+/// One note "Help me write it" offers: a way of saying it (`heartfelt`, `light` or `brief`) and the words, within the
+/// card's letter limit.
+public struct HolidayCardNoteIdea: Decodable, Sendable, Hashable, Identifiable {
+    public let tone: String
+    public let text: String
+
+    public var id: String {
+        tone
+    }
+}
+
+/// The answer of `POST /api/ai/draft/card-note`: up to three notes to pick from.
+public struct HolidayCardNoteIdeasResponse: Decodable, Sendable, Hashable {
+    public let notes: [HolidayCardNoteIdea]
+}
+
+/// The body of `POST /api/ai/draft/card-note`.
+public struct HolidayCardNoteHelpBody: Encodable, Sendable {
+    /// The picture they picked.
+    public let design: String
+    /// The first names the card is to, as the screen shows them (none for an address or a link).
+    public let to: [String]
+    /// How many people the card goes to: past two, the note names no one.
+    public let count: Int
+    /// "Anything to mention?"
+    public let hint: String?
+    /// What's on the card so far.
+    public let note: String?
+    /// The notes already shown ("Try again"), so the next ones differ.
+    public let passedOver: [String]?
+
+    public init(design: String, to: [String], count: Int, hint: String?, note: String?, passedOver: [String]?) {
+        self.design = design
+        self.to = to
+        self.count = count
+        self.hint = hint
+        self.note = note
+        self.passedOver = passedOver
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case design, to, count, hint, note
+        case passedOver = "passed_over"
     }
 }

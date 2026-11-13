@@ -81,7 +81,9 @@ public struct ConversationRow: View {
     private var avatar: some View {
         switch content.variant {
         case .dm:
+            // A one-to-one row's id is the other person's: their circle wears the Moments ring and plays them.
             DMAvatarView(content: content)
+                .momentsRing(of: content.id, lineWidth: 2.5)
         case .aiAssistant:
             ChatAIAvatar(size: 44)
         case let .group(extras, extraCount):

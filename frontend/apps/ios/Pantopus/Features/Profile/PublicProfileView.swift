@@ -511,6 +511,7 @@ public struct PublicProfileView: View {
                         ),
                         tagline: payload.header.tagline,
                         bio: payload.stats.bio,
+                        momentsUserId: payload.profile.id,
                         onTrustTap: { showTrustExplainer = true },
                         actions: { localActions(for: payload) }
                     )

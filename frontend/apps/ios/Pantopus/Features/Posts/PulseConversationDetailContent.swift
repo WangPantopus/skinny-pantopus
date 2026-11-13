@@ -88,7 +88,8 @@ struct PulseConversationDetailContent: View {
                 timeAndLocality: card.meta,
                 intent: .from(purpose: nil, postType: content.post.type),
                 onAvatarTap: authorProfileTap,
-                pulseCard: card
+                pulseCard: card,
+                momentsUserId: card.authorId
             )
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 if !card.text.isEmpty {

@@ -346,6 +346,8 @@ import app.pantopus.android.ui.screens.mailbox.vault.VaultListScreen
 import app.pantopus.android.ui.screens.marketplace.MarketplaceScreen
 import app.pantopus.android.ui.screens.membership.MembershipDetailScreen
 import app.pantopus.android.ui.screens.moments.MomentOpenHolder
+import app.pantopus.android.ui.screens.moments.MomentRingsEntry
+import app.pantopus.android.ui.screens.moments.MomentRingsHolder
 import app.pantopus.android.ui.screens.moments.MomentsExternalRoutes
 import app.pantopus.android.ui.screens.moments.MomentsGateViewModel
 import app.pantopus.android.ui.screens.moments.MomentsRoutes
@@ -2554,6 +2556,20 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         }
     SideEffect { MomentOpenHolder.current = if (momentsOn) openMoment else null }
     DisposableEffect(Unit) { onDispose { MomentOpenHolder.current = null } }
+    // A profile picture wears its person's Moments ring, and a tap on a ringed picture plays them.
+    val momentRings =
+        remember(navController, momentsGate) {
+            MomentRingsEntry(rings = momentsGate.peopleRings, watched = momentsGate.watched, want = momentsGate::wantRing) { ring ->
+                // On a profile opened from the viewer, a ring opens no second viewer: the Moment under it is one Back away.
+                val watching = runCatching { navController.getBackStackEntry(MomentsRoutes.WATCH) }.isSuccess
+                if (!watching) {
+                    momentsGate.queueRing(ring)
+                    navController.navigate(MomentsRoutes.WATCH) { launchSingleTop = true }
+                }
+            }
+        }
+    SideEffect { MomentRingsHolder.current = if (momentsOn) momentRings else null }
+    DisposableEffect(Unit) { onDispose { MomentRingsHolder.current = null } }
     // The Place tab's root sits at the bottom of the stack for the whole session. Its host holds the session's
     // current home, which the homes sheet, links and Add Home set, so they reach it from here.
     val placeRootEntry =
@@ -3270,7 +3286,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 momentsRoutes(
                     nav = navController,
-                    external = MomentsExternalRoutes(openMap = { navController.navigateToRootTab(PantopusRoute.Moments) }),
+                    external =
+                        MomentsExternalRoutes(
+                            openMap = { navController.navigateToRootTab(PantopusRoute.Moments) },
+                            openProfile = { userId, business ->
+                                val page = if (business) ChildRoutes.businessProfile(userId) else ChildRoutes.publicProfile(userId)
+                                navController.navigate(page)
+                            },
+                        ),
                 )
 
                 composable(PantopusRoute.Plans.path) {

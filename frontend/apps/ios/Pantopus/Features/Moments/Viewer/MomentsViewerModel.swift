@@ -308,8 +308,9 @@ final class MomentsViewerModel {
                 rings[ringIndex].moments[index].seen = true
             }
         }
-        // Grey on the map at once; the server keeps it watched.
+        // Grey on the map and around their profile picture at once; the server keeps it watched.
         onWatched([id])
+        MomentsPeopleRings.shared.watched(id)
         guard !isMine else { return }
         Task { try? await MomentsAPI.send(MomentsEndpoints.view(id: id)) }
     }
@@ -437,6 +438,7 @@ extension MomentsViewerModel {
         let currentRingId = ring?.id
         let before = rings.prefix(ringIndex).filter { $0.author.id != id }.count
         rings.removeAll { $0.author.id == id }
+        MomentsPeopleRings.shared.hide(id)
         guard !rings.isEmpty else { return lingerThenClose() }
         ringIndex = min(before, rings.count - 1)
         if ring?.id != currentRingId {

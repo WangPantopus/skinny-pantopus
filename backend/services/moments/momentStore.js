@@ -5,7 +5,10 @@
 //     state: 'uploading' | 'checking' | 'live', media: {...} | null, check: {...} | null, purged_at,
 //     label_kind, notify: { sent_at } | { skipped } (services/moments/momentNotify.js),
 //     taken_at (a photo or video from the album taken more than a day before it was posted: everyone reads when),
-//     venue_id (the venue the author picked in the place picker, its `osm:` id) }
+//     venue_id (the venue the author picked in the place picker, its `osm:` id),
+//     altitude_ft, flying (the height above sea level the author chose to show, rounded to 10 ft, and whether they
+//       were in the air; behind the `moment_heights` flag; never kept for a Moment at home, shown as an area or
+//       with no location: shownAltitude) }
 // A Moment with no location (location_source 'none', founder 2026-11-11) has no point and no place: it goes to the
 // author's connections only, never on the map; they find it in the map's row of faces (GET /map `unplaced`).
 // Its place label is location_name (what everyone reads), its audience Post.audience ('nearby' | 'connections').
@@ -16,6 +19,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const feedService = require('../feedService');
+const { getFlag, isFeatureEnabled } = require('../featureFlagService');
 const { loadChatPeople } = require('../chatPeople');
 const { verifiedResidentUserIds } = require('../../utils/identityProfiles');
 const { applyLocationPrecision, MAX_DISPLAY_OFFSET_DEGREES, snapToNeighborhoodCells } = require('../../utils/locationPrivacy');
@@ -36,6 +40,19 @@ const TAKEN_SHOWN_AFTER_MS = 24 * HOUR_MS;
 const EARLIEST_TAKEN_MS = Date.UTC(2000, 0, 1);
 // A phone's clock may run a little ahead of the server's.
 const CLOCK_SKEW_MS = 2 * 60 * 1000;
+// "Show height" (behind the `moment_heights` flag): a Moment may say how high above sea level it was posted. The phone
+// sends metres; everyone reads feet rounded to HEIGHT_STEP_FT, so the number never tells one floor from the next.
+const HEIGHTS_FLAG = 'moment_heights';
+const FEET_PER_M = 3.28084;
+const HEIGHT_STEP_FT = 10;
+// Below the Dead Sea's shore or above where airliners fly, the reading is wrong: it isn't shown.
+const MIN_ALTITUDE_M = -500;
+const MAX_ALTITUDE_M = 15000;
+// A reading the phone itself says may be off by more than this isn't shown (a seat by a plane's window gets more room).
+const MAX_ALTITUDE_ERROR_M = 60;
+const MAX_ALTITUDE_ERROR_FLYING_M = 150;
+// Nothing on the ground goes this fast (60 m/s is about 134 mph): the Moment was posted from the air.
+const FLYING_SPEED_MPS = 60;
 const MAX_RINGS = 300;
 const MAX_MAP_ROWS = 2000;
 // A box wider than this (the whole state and beyond) shows no rings; the map asks again closer in.
@@ -207,6 +224,35 @@ async function viewerMarks(viewerId, ids) {
   };
 }
 
+/**
+ * The height a Moment shows, { altitude_ft, flying }, or null. What was kept at posting is checked again here, so a
+ * Moment at home, shown as an area or with no location never says how high it was.
+ */
+function shownHeight(row) {
+  const m = meta(row);
+  if (!Number.isFinite(m.altitude_ft) || m.at_home || m.show_area || !hasPlace(row)) return null;
+  return { altitude_ft: m.altitude_ft, flying: Boolean(m.flying) };
+}
+
+/**
+ * Whether `viewer` (an id, or { id, role }) has heights: off for everyone until the founder turns the flag on. Every
+ * Moments read asks, so while the flag is off, or on only for named people, it costs no read of its own (the flag
+ * row is kept for a minute); only the internal-team tier looks up the person's role.
+ */
+async function heightsOn(viewer) {
+  try {
+    const flag = await getFlag(HEIGHTS_FLAG);
+    if (!flag) return false;
+    if (flag.enabled_globally) return true;
+    const id = typeof viewer === 'string' ? viewer : viewer?.id;
+    if (id && (flag.beta_user_ids || []).includes(id)) return true;
+    return flag.enabled_for_internal_team ? await isFeatureEnabled(HEIGHTS_FLAG, viewer) : false;
+  } catch (error) {
+    logger.warn('moments.heights_flag_failed', { error: error.message });
+    return false;
+  }
+}
+
 function briefOf(row, seen) {
   return { id: row.id, kind: meta(row).kind, created_at: row.created_at, expires_at: row.story_expires_at, seen };
 }
@@ -215,8 +261,10 @@ function briefOf(row, seen) {
  * A Moment as CONTRACT "Moment" for `viewerId`. `links` holds signed links by storage key; `own` adds the author's
  * counts (`reactionCounts` from reactionCountsFor).
  */
-function serializeMoment(row, { author, viewerId, seen = false, myReaction = null, links = new Map(), reactionCounts = null }) {
+function serializeMoment(row, { author, viewerId, seen = false, myReaction = null, links = new Map(), reactionCounts = null,
+  heights = false }) {
   const m = meta(row);
+  const high = heights ? shownHeight(row) : null;
   const own = row.user_id === viewerId;
   const state = momentState(row);
   const point = displayedPoint(row);
@@ -245,6 +293,9 @@ function serializeMoment(row, { author, viewerId, seen = false, myReaction = nul
     expires_at: row.story_expires_at,
     hours: m.hours,
     taken_at: m.kind === 'text' ? null : (m.taken_at || null),
+    // Feet above sea level, when the author chose "Show height" (null otherwise); `flying`: posted from the air.
+    altitude_ft: high ? high.altitude_ft : null,
+    flying: Boolean(high?.flying),
     seen: own ? true : Boolean(seen),
     my_reaction: own ? null : myReaction,
     viewer_count: own ? Number(row.view_count) || 0 : null,
@@ -278,11 +329,12 @@ async function serializeMoments(rows, viewerId) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const ownIds = rows.filter((r) => r.user_id === viewerId).map((r) => r.id);
-  const [authors, marks, links, counts] = await Promise.all([
+  const [authors, marks, links, counts, heights] = await Promise.all([
     loadAuthors(rows.map((r) => r.user_id)),
     viewerMarks(viewerId, ids),
     media.signedLinks(undefined, linkKeys(rows.filter((r) => momentState(r) !== 'ended'))),
     reactionCountsFor(ownIds),
+    heightsOn(viewerId),
   ]);
   return rows.map((row) => serializeMoment(row, {
     author: authors.get(String(row.user_id)),
@@ -291,6 +343,7 @@ async function serializeMoments(rows, viewerId) {
     myReaction: marks.reactions.get(row.id) || null,
     links,
     reactionCounts: counts.get(row.id) || null,
+    heights,
   }));
 }
 
@@ -483,14 +536,17 @@ async function ringsOf(viewerId, shown, { keyOf = ringKey, previews = true } = {
     members.sort((a, b) => Date.parse(a.row.created_at) - Date.parse(b.row.created_at));
     return { key, members, newest: members[members.length - 1] };
   }).sort((a, b) => Date.parse(b.newest.row.created_at) - Date.parse(a.newest.row.created_at)).slice(0, MAX_RINGS);
-  const [authors, marks, thumbs] = await Promise.all([
+  const [authors, marks, thumbs, heights] = await Promise.all([
     loadAuthors(kept.map(({ newest }) => newest.row.user_id)),
     viewerMarks(viewerId, kept.flatMap(({ members }) => members.map(({ row }) => row.id))),
     previews ? previewLinks(kept.map(({ newest }) => newest)) : new Map(),
+    heightsOn(viewerId),
   ]);
   return kept.map(({ key, members, newest }) => {
     const mine = newest.row.user_id === viewerId;
     const moments = members.map(({ row }) => briefOf(row, mine || marks.seen.has(row.id)));
+    // The ring is as high as its newest Moment says it is (apps float the pin there); null when it doesn't say.
+    const high = heights ? shownHeight(newest.row) : null;
     return {
       id: key,
       author: authors.get(String(newest.row.user_id)),
@@ -500,6 +556,8 @@ async function ringsOf(viewerId, shown, { keyOf = ringKey, previews = true } = {
         ? { no_location: true }
         : { latitude: newest.point.latitude, longitude: newest.point.longitude }),
       place_label: newest.row.location_name || null,
+      altitude_ft: high ? high.altitude_ft : null,
+      flying: Boolean(high?.flying),
       moments,
       unseen_count: moments.filter((m) => !m.seen).length,
       newest_at: newest.row.created_at,
@@ -613,7 +671,7 @@ async function viewersOf(row) {
 
 /** The Post row a new Moment is stored as. */
 function newMomentRow({ userId, accountType, kind, hours, audience, showArea, atHome, caption, text, background,
-  location, labels, labelKind = null, createdAt, takenAt = null, venueId = null }) {
+  location, labels, labelKind = null, createdAt, takenAt = null, venueId = null, altitude = null }) {
   const now = createdAt ? new Date(createdAt) : new Date();
   const live = kind === 'text';
   return {
@@ -656,6 +714,7 @@ function newMomentRow({ userId, accountType, kind, hours, audience, showArea, at
         ...(labelKind ? { label_kind: labelKind } : {}),
         ...(takenAt && kind !== 'text' ? { taken_at: takenAt } : {}),
         ...(venueId ? { venue_id: venueId } : {}),
+        ...(altitude ? { altitude_ft: altitude.altitude_ft, ...(altitude.flying ? { flying: true } : {}) } : {}),
         location_source: location.source,
         state: live ? 'live' : 'uploading',
         media: null,
@@ -673,6 +732,25 @@ function takenAtShown(value, now = Date.now()) {
   const taken = Date.parse(value || '');
   if (!Number.isFinite(taken) || taken < EARLIEST_TAKEN_MS || taken > now + CLOCK_SKEW_MS) return null;
   return now - taken > TAKEN_SHOWN_AFTER_MS ? new Date(taken).toISOString() : null;
+}
+
+/**
+ * The height a new Moment keeps, { altitude_ft, flying }, or null. `reading` is what the phone sent with "Show height"
+ * on: { meters, accuracy_m, speed_mps } (metres above sea level; the last two optional). Nothing is kept for a
+ * Moment at home, shown as an area or with no location (a height would narrow down where it is), nor for a reading
+ * that can't be right or that the phone says is too rough. A bad reading never fails the post: it is left out.
+ */
+function shownAltitude(reading, { atHome = false, showArea = false, unplaced = false } = {}) {
+  if (!reading || atHome || showArea || unplaced) return null;
+  const meters = Number(reading.meters);
+  if (!Number.isFinite(meters) || meters < MIN_ALTITUDE_M || meters > MAX_ALTITUDE_M) return null;
+  const speed = Number(reading.speed_mps);
+  const flying = Number.isFinite(speed) && speed >= FLYING_SPEED_MPS;
+  const error = reading.accuracy_m == null ? null : Number(reading.accuracy_m);
+  if (error != null && (!Number.isFinite(error) || error < 0
+    || error > (flying ? MAX_ALTITUDE_ERROR_FLYING_M : MAX_ALTITUDE_ERROR_M))) return null;
+  // `|| 0`: a few feet below the sea rounds to 0, never to -0.
+  return { altitude_ft: Math.round((meters * FEET_PER_M) / HEIGHT_STEP_FT) * HEIGHT_STEP_FT || 0, flying };
 }
 
 /**
@@ -833,6 +911,6 @@ module.exports = {
   KINDS, HOURS, BACKGROUNDS, AUDIENCES, DAILY_LIMIT, HOUR_MS, MOMENT_SELECT,
   fail, meta, hasEnded, momentState, displayedPoint, viewerContext, canSee, loadAuthors, loadMoment,
   serializeMoments, openMoment, openMoments, mapRings, unplacedRings, peopleRings, MAX_PEOPLE, connectionIds, unseenPeople, wentLiveAt, ownMoments, viewersOf,
-  newMomentRow, takenAtShown, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
+  newMomentRow, takenAtShown, shownAltitude, heightsOn, HEIGHTS_FLAG, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
   filesHeld, purgeFiles, deleteMoment,
 };

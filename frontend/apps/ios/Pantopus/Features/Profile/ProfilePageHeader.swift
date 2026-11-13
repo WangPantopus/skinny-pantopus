@@ -45,6 +45,8 @@ struct ProfilePageHeader<Actions: View>: View {
     let bio: String?
     /// Your own profile: "Your account name, Rowan Park-Lee, stays private."
     var privateNameNote: String?
+    /// Whose profile this is: the picture wears their Moments ring while they have Moments to watch, and plays them.
+    var momentsUserId: String?
     /// Opens the "what verified means" explainer; nil leaves the line as text.
     var onTrustTap: (@MainActor () -> Void)?
     @ViewBuilder let actions: () -> Actions
@@ -99,6 +101,7 @@ struct ProfilePageHeader<Actions: View>: View {
 
     private func avatar(size: CGFloat) -> some View {
         ProfileAvatarDisc(name: name, showsInitials: showsInitials, imageURL: avatarURL, color: color, size: size)
+            .momentsRing(of: momentsUserId, lineWidth: 3, gap: 3)
     }
 
     private var nameAndHandle: some View {

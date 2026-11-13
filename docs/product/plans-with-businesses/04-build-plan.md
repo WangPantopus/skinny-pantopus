@@ -1,8 +1,11 @@
 # Plans with businesses: the build plan
 
-November 11, 2026 · Status: a plan. No session is started and nothing is built.
+November 11, 2026, updated November 12 · Status: the first round is being built.
 The founder asked on November 11 for the design and the documents, not the build.
-This says how the build would run when the founder says go. It builds the
+On November 12 the founder said go for the first round: the two shared pieces
+Plans needs, then steps 1 and 2 on the server and the web share page, with a free
+plan only, and then the prompts for the iPhone and Android sessions. Paid spots
+(step 3) are not approved yet. This says how the build runs. It builds the
 [contract](03-build-contract.md) to the [design](02-design.md).
 
 ## What people get, step by step
@@ -38,8 +41,24 @@ to anyone until both that person and the business have the switch.
 Each step is one server session (which also takes the web), then one iOS and one
 Android session in parallel once the server PR is merged. Sessions are started by
 the founder from prompts written when the founder says go. Each works in its own
-worktree and branch, does all of its own work with no subagents, verifies in the
-real apps, and merges its own PRs through the shared queue after green checks.
+worktree and branch, verifies in the real apps, and merges its own PRs through
+the shared queue after green checks. On November 12 the founder allowed this
+build's sessions to use subagents on Opus 5.5 at Extra reasoning; a session keeps
+the design decisions and the real-app checks itself.
+
+### Before step 1 · The two shared pieces Plans needs (server)
+
+From the business graph plan (PR #3965), whose phase A comes before Plans:
+
+- **A1, acting for a business:** `actingForBusiness` in
+  `backend/services/businessActing.js`. Posting as a business (step 2) is its
+  first user in this round. Moving the invoice route onto it is the business
+  graph's own step and is not part of this round.
+- **A2, the key for a place:** `place_ref` on `BusinessLocation` and
+  `backend/services/placeRefs.js`.
+
+The other two (A3, the `Payment` columns, and A4, the `BusinessCustomer` table)
+come before step 3 and are not in this round.
 
 ### Step 0 · By hand (the founder; no code)
 

@@ -8,8 +8,10 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import app.pantopus.android.data.api.models.moments.MomentRingDto
 import app.pantopus.android.ui.screens.moments.compose.MomentsComposeScreen
 import app.pantopus.android.ui.screens.moments.viewer.MomentsViewerScreen
+import kotlinx.coroutines.flow.StateFlow
 
 /** The Moments pages' routes. Kept out of `RootTabScreen` so the two grow without merge conflicts, as Plans' are. */
 object MomentsRoutes {
@@ -36,10 +38,28 @@ object MomentOpenHolder {
     var current: ((momentId: String, onEnded: () -> Unit) -> Unit)? by mutableStateOf(null)
 }
 
+/**
+ * Set by `RootTabScreen` while Moments is on: the rings around profile pictures. [rings] holds the ring of each person
+ * who has Moments the signed-in person may see, by account id; [want] says a circle showing that person is on screen;
+ * [play] opens the viewer on a person's ring. Null while Moments is off and outside the tabs: no rings are drawn.
+ */
+class MomentRingsEntry(
+    val rings: StateFlow<Map<String, MomentRingDto>>,
+    val watched: StateFlow<Set<String>>,
+    val want: (userId: String) -> Unit,
+    val play: (MomentRingDto) -> Unit,
+)
+
+object MomentRingsHolder {
+    var current: MomentRingsEntry? by mutableStateOf(null)
+}
+
 /** Where Moments hands off to the rest of the app. */
 data class MomentsExternalRoutes(
     /** Back to the Moments map, closing the Moments pages over it. */
     val openMap: () -> Unit,
+    /** A person's profile, or a business's page (`business`), over the viewer. */
+    val openProfile: (userId: String, business: Boolean) -> Unit = { _, _ -> },
 )
 
 /** Registers every Moments page. Call inside the root `NavHost`. */
@@ -48,7 +68,7 @@ fun NavGraphBuilder.momentsRoutes(
     external: MomentsExternalRoutes,
 ) {
     composable(MomentsRoutes.WATCH) {
-        MomentsViewerScreen(onClose = { if (!nav.popBackStack()) external.openMap() })
+        MomentsViewerScreen(onClose = { if (!nav.popBackStack()) external.openMap() }, onOpenProfile = external.openProfile)
     }
     composable(
         route = MomentsRoutes.COMPOSE,

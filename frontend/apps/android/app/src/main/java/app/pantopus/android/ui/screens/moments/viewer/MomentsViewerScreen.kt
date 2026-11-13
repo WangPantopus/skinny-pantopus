@@ -134,6 +134,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import app.pantopus.android.data.api.models.moments.MomentAuthorDto
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.moments.MomentViewerDto
 import app.pantopus.android.data.moments.MomentGallerySaver
@@ -188,6 +189,8 @@ private val REPORT_REASONS = pulseReportReasons.map { (key, label) -> key to if 
 @Composable
 fun MomentsViewerScreen(
     onClose: () -> Unit,
+    /** Opens a person's profile, or a business's page (`business`), over the viewer: Back returns to the Moment. */
+    onOpenProfile: (userId: String, business: Boolean) -> Unit = { _, _ -> },
     viewModel: MomentsViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -654,6 +657,8 @@ fun MomentsViewerScreen(
                         confirmingBlock = true
                     },
                     onPlace = if (ring?.ring?.noLocation == false) viewModel::showPlace else null,
+                    // The face and the name open the author's profile; your own Moment's header opens nothing.
+                    onAuthor = ring?.ring?.author?.takeIf { !mine }?.profileOpener(onOpenProfile),
                 )
                 // A photo or video taken more than a day before it was posted says when (contract v3.3), under the name.
                 takenLabel(moment?.takenAt)?.takeIf { state.load is ViewerLoad.Ready }?.let { taken ->
@@ -832,6 +837,12 @@ fun MomentsViewerScreen(
             state = state,
             saveNote = saveNote,
             onDismiss = { seenByOpen = false },
+            onOpenViewer = { watcher ->
+                watcher.profileOpener(onOpenProfile)?.let { open ->
+                    seenByOpen = false
+                    open()
+                }
+            },
             onSave = {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && !context.canWriteStorage()) {
                     storage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -1129,8 +1140,12 @@ private fun ViewerHeader(
     onBlock: () -> Unit,
     /** The place is a button that shows it on the map; none for a Moment with no location or a page coming in. */
     onPlace: (() -> Unit)? = null,
+    /** The face and the name open the author's profile; none on your own Moment, the Pantopus account's or a page coming in. */
+    onAuthor: (() -> Unit)? = null,
 ) {
     val ring = state.ring?.ring
+    val opensAuthor =
+        if (onAuthor != null) Modifier.clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onAuthor) else Modifier
     val moment = state.moment
     val brief = state.brief
     Row(
@@ -1145,9 +1160,18 @@ private fun ViewerHeader(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 // Your own Moment wears the face your ring does.
-                MomentFace(author = ring.author, size = 36.dp, initialsSize = 13.sp)
+                MomentFace(
+                    author = ring.author,
+                    size = 36.dp,
+                    initialsSize = 13.sp,
+                    modifier = Modifier.clip(CircleShape).then(opensAuthor).testTag("moments.viewer.face"),
+                )
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(
+                        modifier = opensAuthor.testTag("moments.viewer.name"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
                         Text(
                             text = if (mine) "Your Moment" else ring.author.name ?: ring.author.firstName ?: "",
                             color = Color.White,
@@ -1503,6 +1527,7 @@ private fun SeenBySheet(
     state: MomentsViewerUiState,
     saveNote: String?,
     onDismiss: () -> Unit,
+    onOpenViewer: (MomentAuthorDto) -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -1593,7 +1618,9 @@ private fun SeenBySheet(
                     )
                 else ->
                     LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
-                        items(viewers?.viewers.orEmpty(), key = { it.user.id }) { viewer -> ViewerRow(viewer) }
+                        items(viewers?.viewers.orEmpty(), key = { it.user.id }) { viewer ->
+                            ViewerRow(viewer, onOpen = { onOpenViewer(viewer.user) })
+                        }
                     }
             }
             Spacer(Modifier.height(Spacing.s6))
@@ -1625,14 +1652,22 @@ private fun SheetButton(
     }
 }
 
+/** The profile [onOpenProfile] opens for this face; none for the Pantopus account. */
+private fun MomentAuthorDto.profileOpener(onOpenProfile: (String, Boolean) -> Unit): (() -> Unit)? =
+    if (kind == "pantopus" || id.isBlank()) null else ({ onOpenProfile(id, kind == "business") })
+
 @Composable
-private fun ViewerRow(viewer: MomentViewerDto) {
+private fun ViewerRow(
+    viewer: MomentViewerDto,
+    onOpen: () -> Unit,
+) {
     val reactionName = QUICK_REACTIONS.firstOrNull { it.first == viewer.reaction }?.second
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .height(58.dp)
+                .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onOpen)
                 .padding(horizontal = Spacing.s5)
                 .testTag("moments.seenBy.row.${viewer.user.id}")
                 .semantics(mergeDescendants = true) {},

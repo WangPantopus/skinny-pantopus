@@ -559,6 +559,7 @@ fun PulsePostDetailLoadedContent(
                         } else {
                             { onOpenProfile(content.post.userId) }
                         },
+                    momentsUserId = if (businessAuthor != null) businessAuthor.businessPageId else content.post.userId,
                 )
                 content.status?.let { status ->
                     PostStatusPill(

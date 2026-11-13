@@ -81,6 +81,17 @@ interface MomentsApi {
         @Query("ids") ids: String,
     ): MomentsMineResponse
 
+    /**
+     * `GET /api/moments/people?ids=a,b,c` (contract v3.7): who among these people (account ids, up to 100) has live
+     * Moments the caller may see, one ring per person: the ring around a profile picture. Someone with nothing to see
+     * is left out. A server from before it answers 404.
+     * Route `backend/routes/moments.js` (people).
+     */
+    @GET("api/moments/people")
+    suspend fun people(
+        @Query("ids") ids: String,
+    ): MomentsMapResponse
+
     /** `GET /api/moments/:id`: 410 `MOMENT_ENDED` once it has ended, 404 when it isn't visible. */
     @GET("api/moments/{id}")
     suspend fun moment(

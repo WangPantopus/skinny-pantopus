@@ -30,6 +30,7 @@ import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.components.StatusChipVariant
 import app.pantopus.android.ui.components.VerifiedBadge
+import app.pantopus.android.ui.screens.moments.components.momentsRing
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Radii
@@ -95,6 +96,8 @@ fun PostAuthorHeader(
     intent: PostIntent,
     intentLabel: String = intent.label,
     onAvatarTap: (() -> Unit)? = null,
+    /** The author's account: the photo wears their Moments ring while they have Moments to watch. */
+    momentsUserId: String? = null,
 ) {
     Row(
         modifier =
@@ -124,6 +127,7 @@ fun PostAuthorHeader(
         ) {
             AvatarWithIdentityRing(
                 name = displayName,
+                modifier = Modifier.momentsRing(momentsUserId),
                 imageUrl = avatarUrl,
                 identity = identity,
                 ringProgress = 1f,

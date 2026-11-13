@@ -173,6 +173,8 @@ sealed interface RowLeading {
         val background: AvatarBackground,
         val size: AvatarBadgeSize,
         val verified: Boolean = false,
+        /** The person this picture shows: it wears their Moments ring, and a tap on a ringed picture plays them. */
+        val momentsUserId: String? = null,
     ) : RowLeading
 
     /** Rounded thumbnail (56dp or 64dp) used by Offers and Pets. */
