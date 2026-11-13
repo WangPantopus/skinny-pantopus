@@ -298,6 +298,18 @@ closed cleanly and reconnected. A new API or worker that failed readiness, and
 a release stopped with SIGTERM, ended with the old API still serving and no
 failed request. A host restart brought back the proxy and the live API.
 
+## Release flow: staging first
+
+All new code merges to `dev` first; `master` stays the default branch and is
+production. PRs target `dev` (`gh pr create --base dev`). Each `dev` merge runs
+CI and, when it passes, releases the backend to staging. The founder checks
+staging, then opens and merges one `dev` → `master` pull request, as a merge
+commit so both branches keep one history; its CI on `master` releases
+production. A fix the founder sends straight to `master` is merged back into
+`dev` at once. `master` stays GitHub's default branch because `workflow_run`
+releases run in the default branch's context and the `production` environment
+accepts only `master`.
+
 ## Required check and permissions
 
 Protect `master` with required check `CI OK`, strict up-to-date branches, and
