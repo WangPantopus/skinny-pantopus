@@ -24,6 +24,9 @@ import app.pantopus.android.data.api.models.homes.CreatePollRequest
 import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.DeleteEmergencyResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
+import app.pantopus.android.data.api.models.homes.DocumentFactsAnswerDto
+import app.pantopus.android.data.api.models.homes.DocumentFactsSaveRequest
+import app.pantopus.android.data.api.models.homes.DocumentFactsSavedResponse
 import app.pantopus.android.data.api.models.homes.FloorPlanAnswerRequest
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
 import app.pantopus.android.data.api.models.homes.GetHomeBillsResponse
@@ -182,6 +185,25 @@ interface HomesApi {
         @Path("id") id: String,
         @Body body: RecordProblemRequest,
     ): HouseholdWriteResponse
+
+    /**
+     * "Add from a document": a PDF of the home's inspection report, appraisal or listing sheet (part `file`). The server
+     * reads it in memory and keeps nothing; the answer lists the facts it states. Route `backend/routes/home.js`
+     * (`/:id/document-facts/read`, services/householdDocuments).
+     */
+    @Multipart
+    @POST("api/homes/{id}/document-facts/read")
+    suspend fun readDocumentFacts(
+        @Path("id") id: String,
+        @Part file: MultipartBody.Part,
+    ): DocumentFactsAnswerDto
+
+    /** The facts the household kept from its report. Route `backend/routes/home.js` (`/:id/document-facts`). */
+    @POST("api/homes/{id}/document-facts")
+    suspend fun saveDocumentFacts(
+        @Path("id") id: String,
+        @Body body: DocumentFactsSaveRequest,
+    ): DocumentFactsSavedResponse
 
     /** "Is this your layout?", for a unit its building's sheet names. A no reaches review, and nothing shown changes. */
     @POST("api/homes/{id}/floor-plan-answer")

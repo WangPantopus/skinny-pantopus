@@ -5,6 +5,9 @@ package app.pantopus.android.ui.screens.homes.property_details
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.ai.readerMessage
+import app.pantopus.android.data.api.models.homes.DocumentFactValue
+import app.pantopus.android.data.api.models.homes.DocumentFactsAnswerDto
 import app.pantopus.android.data.api.models.homes.HouseholdFactChange
 import app.pantopus.android.data.api.models.homes.HouseholdPartDto
 import app.pantopus.android.data.api.models.homes.PropertyCountyRecordDto
@@ -69,6 +72,12 @@ class PropertyDetailsViewModel
         private val _savingFacts = MutableStateFlow(false)
         val savingFacts: StateFlow<Boolean> = _savingFacts.asStateFlow()
 
+        /** "Add from a document": where reading the household's report stands, and what it found. */
+        private val _documents = MutableStateFlow(HouseholdDocumentsState())
+        val documents: StateFlow<HouseholdDocumentsState> = _documents.asStateFlow()
+        private val _foundDocument = MutableStateFlow<DocumentFactsAnswerDto?>(null)
+        val foundDocument: StateFlow<DocumentFactsAnswerDto?> = _foundDocument.asStateFlow()
+
         /** Founder decision 3: who may see this screen from the store's copy, and what leaves with the screen. */
         private val gate = gates.create(homeId, listOf(HomeStoreKeys.propertyDetails(homeId)))
         private var readGeneration = 0L
@@ -119,6 +128,52 @@ class PropertyDetailsViewModel
                 _savingFacts.value = false
                 if (saved) read(force = true)
                 onDone(saved)
+            }
+        }
+
+        /**
+         * The picked PDF's bytes (null when it couldn't be opened or is over the limit), read by the server and dropped;
+         * the answer opens "Check what we found".
+         */
+        fun readDocument(pdf: ByteArray?) {
+            if (_documents.value.reading) return
+            if (pdf == null) {
+                _documents.value = HouseholdDocumentsState(error = "Couldn't open that file. Choose a PDF of 15 MB or less.")
+                return
+            }
+            _documents.value = HouseholdDocumentsState(reading = true)
+            viewModelScope.launch {
+                when (val result = homesRepository.readDocumentFacts(homeId, pdf)) {
+                    is NetworkResult.Success -> {
+                        _documents.value = HouseholdDocumentsState()
+                        _foundDocument.value = result.data
+                    }
+                    is NetworkResult.Failure -> _documents.value = HouseholdDocumentsState(error = result.error.readerMessage())
+                }
+            }
+        }
+
+        fun closeDocument() {
+            _foundDocument.value = null
+        }
+
+        /** The facts the household kept from its report, then the page as the server shows it. */
+        fun saveDocumentFacts(
+            facts: List<DocumentFactValue>,
+            onDone: (Boolean) -> Unit,
+        ) {
+            val found = _foundDocument.value ?: return
+            if (_savingFacts.value || facts.isEmpty()) return
+            _savingFacts.value = true
+            viewModelScope.launch {
+                val result = homesRepository.saveDocumentFacts(homeId, found.kind, facts)
+                _savingFacts.value = false
+                if (result is NetworkResult.Success) {
+                    _documents.value = HouseholdDocumentsState(notice = result.data.message)
+                    _foundDocument.value = null
+                    read(force = true)
+                }
+                onDone(result is NetworkResult.Success)
             }
         }
 
@@ -280,6 +335,7 @@ class PropertyDetailsViewModel
                                 countyPage = it.countyPage,
                                 countyCheck = it.countyCheck,
                                 floorPlan = it.floorPlan,
+                                documents = it.documents,
                             )
                         },
                 )

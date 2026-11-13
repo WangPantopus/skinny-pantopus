@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.property_details
 import app.pantopus.android.data.api.models.homes.FloorPlanLayoutDto
 import app.pantopus.android.data.api.models.homes.HouseholdCountyCheckDto
 import app.pantopus.android.data.api.models.homes.HouseholdCountyPageDto
+import app.pantopus.android.data.api.models.homes.HouseholdDocumentsOfferDto
 import app.pantopus.android.data.api.models.homes.HouseholdFactDto
 import app.pantopus.android.data.api.models.homes.HouseholdGroupDto
 import app.pantopus.android.data.api.models.homes.HouseholdQuestionDto
@@ -59,6 +60,8 @@ data class PropertyHouseholdContent(
     val countyCheck: HouseholdCountyCheckDto? = null,
     /** "Is this your layout?", for a unit its building's sheet names. */
     val floorPlan: FloorPlanLayoutDto? = null,
+    /** "From your papers": a PDF of the home's own report, read for facts the household checks. */
+    val documents: HouseholdDocumentsOfferDto? = null,
 ) {
     /** The county's page as a link of its own: not when "Is this right?" draws it in its card. */
     val countyLink: HouseholdCountyPageDto? get() = countyPage?.takeIf { countyCheck == null }
