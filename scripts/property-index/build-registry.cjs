@@ -87,7 +87,6 @@ async function split(opts) {
   for (const id of opts.sources) {
     // eslint-disable-next-line global-require
     const source = require(`./sources/address/${path.basename(id)}.cjs`);
-    about[source.id] = { as_of: source.asOf() };
     const counts = { rows: 0, kept: 0, no_point: 0, unreadable: 0, no_county: 0, other_state: 0 };
     for await (const row of source.rows({ work: opts.work, states: opts.states })) {
       counts.rows += 1;
@@ -131,7 +130,9 @@ async function split(opts) {
         cityKey(row.city), zip5(row.zip), row.lng, row.lat, row.quality, row.use || '', index]);
     }
     partitions.close();
-    log(`${source.id}: ${Object.entries(counts).map(([name, n]) => `${name} ${n}`).join(', ')}`);
+    // Dated after its rows: a source downloading its newest file knows which file that was only once it's read (nad.cjs).
+    about[source.id] = { as_of: source.asOf() };
+    log(`${source.id} (as of ${about[source.id].as_of}): ${Object.entries(counts).map(([name, n]) => `${name} ${n}`).join(', ')}`);
   }
   fs.writeFileSync(path.join(opts.work, 'partitions.json'), JSON.stringify({ sources: sourceNames, about, names: [...counties.names] }));
 }

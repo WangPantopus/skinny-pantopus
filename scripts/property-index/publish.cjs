@@ -27,6 +27,7 @@ const { execFileSync } = require('node:child_process');
 const { FORMAT, statePath, releasePath, switchesPath } = require('../../backend/services/propertyRecords/format');
 const { log } = require('./lib/log.cjs');
 const { selfFind, described, MIN_SELF_FIND } = require('./lib/self-find.cjs');
+const { sameSources } = require('./lib/registry.cjs');
 
 // A new release may lose this much without someone looking at it.
 const MIN_RECORD_SHARE = 0.9;
@@ -199,13 +200,16 @@ function publish(store, { out, prefix, republish, acceptFalls = false, acceptFal
       // The source hasn't published anything new since the release serving.
       // A run someone starts by hand publishes anyway: a new build of the same file can hold new address keys.
       // So does a scheduled one when the reader has changed since and no longer finds the release's homes.
+      // The registry's builds list their rows by source: one source more or fewer, or more or fewer rows from one, is new too.
       if (serving && serving.as_of === entry.as_of && serving.status === 'active' && !republish) {
         const drift = records && readsDifferently(store, serving);
-        if (!drift) {
+        const read = sameSources(serving, entry);
+        if (!drift && read) {
           log(`${entry.fips}: unchanged since ${entry.as_of}`);
           continue;
         }
-        log(`${entry.fips}: unchanged since ${entry.as_of}, but in the release serving ${drift}`);
+        if (drift) log(`${entry.fips}: unchanged since ${entry.as_of}, but in the release serving ${drift}`);
+        else log(`${entry.fips}: dated ${entry.as_of} like the release serving, but its sources gave other rows`);
       }
       // The file someone rolled back stays back until the source publishes a newer one or someone says otherwise.
       if (serving?.rolled_back_as_of === entry.as_of && !republish) {

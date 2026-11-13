@@ -15,6 +15,7 @@ const { execFileSync } = require('node:child_process');
 const { releasePath, statePath } = require('../../backend/services/propertyRecords/format');
 const { registryId } = require('../../backend/services/propertyRecords/registryFormat');
 const { log } = require('./lib/log.cjs');
+const { sameSources } = require('./lib/registry.cjs');
 
 const SAME_POINT_METERS = 10;
 const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
@@ -82,9 +83,9 @@ function main() {
     const entry = JSON.parse(fs.readFileSync(path.join(out, 'counties', name), 'utf8'));
     const previous = serving[entry.fips];
     if (!previous) continue;
-    // publish.cjs leaves a county whose sources haven't changed as it serves, so its new build is never published: reading the
-    // release serving (a whole county from storage) would be for nothing.
-    if (!republish && previous.as_of === entry.as_of && previous.status === 'active') {
+    // publish.cjs leaves a county whose sources haven't changed (same date, same rows from each) as it serves, so its new build is
+    // never published: reading the release serving (a whole county from storage) would be for nothing.
+    if (!republish && previous.as_of === entry.as_of && previous.status === 'active' && sameSources(previous, entry)) {
       totals.unchanged += 1;
       continue;
     }
