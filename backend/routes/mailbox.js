@@ -2139,11 +2139,12 @@ router.get('/cards', verifyToken, async (req, res) => {
 
 /**
  * GET /api/mailbox/cards/designs
- * Public (no sign-in; launch key card_table): the season's pictures for the public card pages (/cards, /cards/<slug>).
+ * Public (no sign-in; on with Christmas cards): the season's pictures for the public card pages (/cards, /cards/<slug>),
+ * where the Christmas card ads send people (founder, November 13: the pages open without the rest of card_table).
  * Only what's printed on a card anyway, never anyone's card. Cached an hour.
  */
 router.get('/cards/designs', (req, res) => {
-  if (!cardTableOn()) return sendCardsOff(res);
+  if (!cardsOn()) return sendCardsOff(res);
   res.set('Cache-Control', 'public, max-age=3600');
   return res.json({
     year: holidayCards.SEASON.year,
