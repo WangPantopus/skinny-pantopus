@@ -139,7 +139,20 @@ VALUES
   ('viewer', 'finance.view',     false),
   ('viewer', 'finance.manage',   false),
   ('viewer', 'insights.view',    false),
-  ('viewer', 'sensitive.view',   false)
+  ('viewer', 'sensitive.view',   false),
+
+  -- ============================================================
+  -- PLANS (Plans with businesses) — admin and editor post and run the business's plans
+  -- (the same rows as supabase/migrations/20261113061000_plans_business.sql)
+  -- ============================================================
+  ('admin', 'plans.post',        true),
+  ('admin', 'plans.manage',      true),
+  ('editor', 'plans.post',       true),
+  ('editor', 'plans.manage',     true),
+  ('staff', 'plans.post',        false),
+  ('staff', 'plans.manage',      false),
+  ('viewer', 'plans.post',       false),
+  ('viewer', 'plans.manage',     false)
 
 ON CONFLICT ("role_base", "permission") DO UPDATE
   SET "allowed" = EXCLUDED."allowed";

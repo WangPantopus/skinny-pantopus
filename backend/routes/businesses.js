@@ -4641,6 +4641,25 @@ router.post('/:businessId/posts', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /:businessId/plans[?biz=1]
+ * The business's upcoming plans for its page (Plans with businesses, board B6): `{ items: PlanCard[], plans_hosted }`,
+ * soonest first. Empty unless the viewer has the switch, the app says it can draw a business's plan (`biz=1`),
+ * and the business may still host; 404 while Plans itself is off for the viewer. services/plans/planService.js
+ * decides what each viewer may see.
+ */
+router.get('/:businessId/plans', verifyToken, require('../middleware/requireFeatureFlag')('plans'), async (req, res) => {
+  try {
+    const { loadViewer } = require('../services/plans/planViewer');
+    const planService = require('../services/plans/planService');
+    const viewer = await loadViewer({ ...req.user, plansBiz: req.query.biz === '1' });
+    res.json(await planService.listForBusiness(viewer, req.params.businessId));
+  } catch (err) {
+    logger.error('Error fetching business plans', { error: err.message, businessId: req.params.businessId });
+    res.status(500).json({ error: 'Failed to fetch plans' });
+  }
+});
+
+/**
  * GET /:businessId/posts
  * Get posts authored by this business.
  */

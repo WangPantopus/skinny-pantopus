@@ -155,6 +155,23 @@ function person(entry) {
   return entry ? { user_id: entry.user_id, display_name: entry.display_name, avatar_url: entry.avatar_url } : null;
 }
 
+/**
+ * A person as the plan's host sees them in the invitation lists. A business's team sees a first name only
+ * (planService.buildDetail gives the same for the people who are in).
+ */
+function personFor(plan, entry) {
+  const shown = person(entry);
+  return shown && plan.business_user_id ? { ...shown, display_name: actions().firstOf(shown.display_name) } : shown;
+}
+
+/**
+ * Whose invitation it is: the plan's host. For a neighbor's plan that is the person inviting; for a business's
+ * plan it is the business, whoever on its team sent it, so an invitation never names a staff member.
+ */
+function inviterId(plan, viewer) {
+  return plan.business_user_id ? String(plan.host_user_id) : viewer.id;
+}
+
 async function loadInvites(postId) {
   const { data, error } = await supabaseAdmin.from('PlanInvite').select(INVITE_COLUMNS)
     .eq('post_id', postId).neq('status', 'cancelled').order('created_at', { ascending: true }).limit(500);
@@ -172,12 +189,18 @@ async function hostedPlanRow(postId, viewer) {
   if (!planService.isUuid(postId)) fail(404, 'not_found', "This plan isn't available.");
   const plan = await planService.loadPlanRow(postId);
   if (!plan || !planService.isVisibleTo(plan, viewer)) fail(404, 'not_found', "This plan isn't available.");
-  if (String(plan.host_user_id) !== viewer.id) fail(403, 'not_host', 'Only the host can do that.');
+  if (!require('./planBusiness').runsPlan(plan, viewer)) fail(403, 'not_host', 'Only the host can do that.');
   return plan;
+}
+
+/** A business that may no longer host invites nobody: the invitation would open a plan that isn't there. */
+function hostMayInvite(plan) {
+  return !plan.business_user_id || require('./planBusiness').hostsNow(plan);
 }
 
 function assertInvitable(plan, viewer) {
   if (!viewer.invitesFlag) fail(404, 'not_found', "Invitations aren't available right now.");
+  if (!hostMayInvite(plan)) fail(409, 'ended', "This plan isn't open to new people right now.");
   if (plan.status === 'cancelled') fail(409, 'ended', 'This plan was cancelled.');
   if (!isOpenForAnswers(plan)) fail(409, 'ended', 'This plan has started, so invitations are closed.');
 }
@@ -248,7 +271,7 @@ async function hostView(plan, rows) {
       id: row.id,
       channel: row.channel,
       state,
-      person: named && userId ? person(people.get(userId)) : null,
+      person: named && userId ? personFor(plan, people.get(userId)) : null,
       email: row.channel === 'email' ? row.email : null,
       email_failed: row.channel === 'email' && ['failed', 'skipped'].includes(row.email_status),
       // The ask waiting for the host's yes (state asked): the ordinary accept or decline.
@@ -281,7 +304,7 @@ async function hostView(plan, rows) {
 async function listForHost(user, postId) {
   const { viewer, plan } = await hostPlan(user, postId);
   const view = await hostView(plan, await loadInvites(postId));
-  return { ...view, can_invite: Boolean(viewer.invitesFlag) && isOpenForAnswers(plan) };
+  return { ...view, can_invite: Boolean(viewer.invitesFlag) && isOpenForAnswers(plan) && hostMayInvite(plan) };
 }
 
 // ── People the host can invite ───────────────────────────────
@@ -310,7 +333,8 @@ async function knownPeople(hostId) {
 async function peopleToInvite(user, postId, q) {
   const { viewer, plan } = await hostPlan(user, postId);
   if (!viewer.invitesFlag) fail(404, 'not_found', "Invitations aren't available right now.");
-  const reasons = await knownPeople(viewer.id);
+  // A business invites the people who came to its plans before; a staff member's own connections aren't its.
+  const reasons = await knownPeople(inviterId(plan, viewer));
   for (const id of viewer.blockedUserIds) reasons.delete(String(id));
   const ids = [...reasons.keys()];
   const [people, rows, requests] = await Promise.all([
@@ -329,13 +353,17 @@ async function peopleToInvite(user, postId, q) {
   for (const id of ids) {
     const entry = people.get(id);
     if (!entry) continue;
-    if (query && !entry.search_name.includes(query) && !entry.display_name.toLowerCase().includes(query)) continue;
+    // A business's team sees first names, so it searches first names: a last name must not be found by trying.
+    const matches = plan.business_user_id
+      ? actions().firstOf(entry.display_name).toLowerCase().includes(query)
+      : entry.search_name.includes(query) || entry.display_name.toLowerCase().includes(query);
+    if (query && !matches) continue;
     const requestStatus = requestByUser.get(id);
     let state = null;
     if (requestStatus === 'accepted') state = 'in';
     else if (requestStatus === 'pending' || requestStatus === 'waitlisted') state = 'asked';
     else if (invitedIds.has(id)) state = 'invited';
-    out.push({ ...person(entry), reason: reasons.get(id), state });
+    out.push({ ...personFor(plan, entry), reason: reasons.get(id), state });
   }
   const reasonOrder = { both: 0, came_before: 1, connection: 2 };
   out.sort((a, b) => ((a.state ? 1 : 0) - (b.state ? 1 : 0))
@@ -446,7 +474,10 @@ async function deliverEmailInvite(plan, viewer, row, token, hostFirst) {
   const { data: claimed } = await supabaseAdmin.from('PlanInvite')
     .update({ invitee_user_id: memberId, claimed_at: nowIso(), updated_at: nowIso() })
     .eq('id', row.id).is('invitee_user_id', null).select(INVITE_COLUMNS);
-  if (claimed && claimed.length) await planNotify.invited({ plan, invite: claimed[0], userId: memberId, hostFirst });
+  // The address got its email either way. The notice in the app is only for someone the plan exists for.
+  if (claimed && claimed.length && (await require('./planBusiness').peopleShown(plan, [memberId])).has(memberId)) {
+    await planNotify.invited({ plan, invite: claimed[0], userId: memberId, hostFirst });
+  }
 }
 
 /** Account invitees who'd hear about it: not blocked either way, not muting the host, not hiding the plan. */
@@ -505,7 +536,7 @@ async function createInvites(user, postId, body = {}) {
   }
   if (newEmails.length > 0) {
     const { count, error } = await supabaseAdmin.from('PlanInvite').select('id', { count: 'exact', head: true })
-      .eq('host_user_id', viewer.id).eq('channel', 'email').gt('created_at', new Date(Date.now() - DAY_MS).toISOString());
+      .eq('host_user_id', inviterId(plan, viewer)).eq('channel', 'email').gt('created_at', new Date(Date.now() - DAY_MS).toISOString());
     if (error) throw new Error(`Failed to count invitations: ${error.message}`);
     if ((count || 0) + newEmails.length > LIMITS.emailsPerHostPerDay) {
       fail(429, 'too_many_invites', `You can invite ${LIMITS.emailsPerHostPerDay} people by email a day. Try again tomorrow.`);
@@ -514,7 +545,8 @@ async function createInvites(user, postId, body = {}) {
 
   const results = [];
   const hostEmail = normalizeEmail(user.email);
-  const known = newAccounts.length ? await knownPeople(viewer.id) : new Map();
+  const known = newAccounts.length ? await knownPeople(inviterId(plan, viewer)) : new Map();
+  const shown = await require('./planBusiness').peopleShown(plan, newAccounts);
   const { data: requestRows, error: requestError } = await supabaseAdmin.from('PlanRequest')
     .select('user_id, status').eq('post_id', postId);
   if (requestError) throw new Error(`Failed to load requests: ${requestError.message}`);
@@ -526,9 +558,10 @@ async function createInvites(user, postId, body = {}) {
     if (id === viewer.id) { results.push({ user_id: id, outcome: 'host' }); continue; }
     if (!newAccounts.includes(id)) { results.push({ user_id: id, outcome: 'already_invited' }); continue; }
     if (inPlan.has(id)) { results.push({ user_id: id, outcome: 'already_in' }); continue; }
-    if (!known.has(id) || viewer.blockedUserIds.has(id)) { results.push({ user_id: id, outcome: 'unavailable' }); continue; }
+    // For a business's plan, only someone the plan exists for (their own switch) can be invited by account.
+    if (!known.has(id) || viewer.blockedUserIds.has(id) || !shown.has(id)) { results.push({ user_id: id, outcome: 'unavailable' }); continue; }
     const { data, error } = await supabaseAdmin.from('PlanInvite')
-      .insert({ post_id: postId, host_user_id: viewer.id, channel: 'account', invitee_user_id: id })
+      .insert({ post_id: postId, host_user_id: inviterId(plan, viewer), channel: 'account', invitee_user_id: id })
       .select(INVITE_COLUMNS).single();
     if (error) {
       if (error.code === '23505') { results.push({ user_id: id, outcome: 'already_invited' }); continue; }
@@ -540,14 +573,14 @@ async function createInvites(user, postId, body = {}) {
   }
 
   // People by email.
-  const hostFirst = actions().firstOf((await actions().userNames([viewer.id])).get(viewer.id));
+  const hostFirst = await actions().hostFirstOf(plan);
   const emailed = [];
   for (const email of emails) {
     if (email === hostEmail) { results.push({ email, outcome: 'host' }); continue; }
     if (!newEmails.includes(email)) { results.push({ email, outcome: 'already_invited' }); continue; }
     const token = newToken();
     const { data, error } = await supabaseAdmin.from('PlanInvite')
-      .insert({ post_id: postId, host_user_id: viewer.id, channel: 'email', email, token_hash: hashToken(token) })
+      .insert({ post_id: postId, host_user_id: inviterId(plan, viewer), channel: 'email', email, token_hash: hashToken(token) })
       .select(INVITE_COLUMNS).single();
     if (error) {
       if (error.code === '23505') { results.push({ email, outcome: 'already_invited' }); continue; }
@@ -598,11 +631,12 @@ async function createLinkInvite(user, postId, body = {}) {
   }
   const token = newToken();
   const { data, error } = await supabaseAdmin.from('PlanInvite')
-    .insert({ post_id: postId, host_user_id: viewer.id, channel: 'link', token_hash: hashToken(token) })
+    .insert({ post_id: postId, host_user_id: inviterId(plan, viewer), channel: 'link', token_hash: hashToken(token) })
     .select('id').single();
   if (error) throw new Error(`Failed to make the invitation: ${error.message}`);
   recordFunnelEvent('plan_invited', { userId: viewer.id, meta: { plan_id: postId, kind: plan.kind, channel: 'link' } });
-  const ask = planNotify.noun(plan) === 'coffee' ? 'Want to get coffee' : `Want to come to my ${planNotify.noun(plan)}`;
+  const whose = plan.business_user_id ? 'our' : 'my';
+  const ask = planNotify.noun(plan) === 'coffee' ? 'Want to get coffee' : `Want to come to ${whose} ${planNotify.noun(plan)}`;
   return {
     invite_id: data.id,
     url: inviteUrl(postId, token),
@@ -623,7 +657,7 @@ async function cancelInvite(user, postId, inviteId) {
   const { error: updateError } = await supabaseAdmin.from('PlanInvite')
     .update({ status: 'cancelled', updated_at: nowIso() }).eq('id', row.id).in('status', ['pending', 'declined']);
   if (updateError) throw new Error(`Failed to cancel the invitation: ${updateError.message}`);
-  return { ...(await hostView(plan, await loadInvites(postId))), can_invite: isOpenForAnswers(plan) };
+  return { ...(await hostView(plan, await loadInvites(postId))), can_invite: isOpenForAnswers(plan) && hostMayInvite(plan) };
 }
 
 // ── The person invited ───────────────────────────────────────
@@ -757,7 +791,7 @@ async function claimInvite(user, postId, token) {
     .eq('token_hash', hashToken(token)).eq('post_id', postId).maybeSingle();
   if (error) throw new Error(`Failed to load the invitation: ${error.message}`);
   if (!row || row.status === 'cancelled') fail(404, 'invite_unavailable', 'This invitation isn’t available anymore.');
-  if (String(plan.host_user_id) === viewer.id) return { plan: await planBody(postId, viewer) };
+  if (require('./planBusiness').runsPlan(plan, viewer)) return { plan: await planBody(postId, viewer) };
   if (row.invitee_user_id && String(row.invitee_user_id) !== viewer.id) {
     // The address's verified owner takes their invitation back from whoever opened a forwarded copy.
     const owner = row.channel === 'email' && row.needs_host_ok && (await hasVerifiedEmail(user, row.email));
@@ -886,8 +920,10 @@ async function notifyCancelled(plan, hostFirst, note) {
   if (error || !data) return;
   const { data: requests } = await supabaseAdmin.from('PlanRequest').select('user_id').eq('post_id', plan.post_id);
   const asked = new Set((requests || []).map((r) => String(r.user_id)));
-  for (const id of new Set(data.map((r) => String(r.invitee_user_id)))) {
-    if (asked.has(id)) continue;
+  const invitees = [...new Set(data.map((r) => String(r.invitee_user_id)))];
+  const shown = await require('./planBusiness').peopleShown(plan, invitees);
+  for (const id of invitees) {
+    if (asked.has(id) || !shown.has(id)) continue;
     await planNotify.cancelled({ plan, request: { id: null, user_id: id }, hostFirst, note, wasIn: false });
   }
 }
@@ -904,9 +940,13 @@ async function publicInvite(postId, token) {
     .select('id, host_user_id, channel, email, status, invitee_user_id')
     .eq('token_hash', hashToken(token)).eq('post_id', postId).maybeSingle();
   if (error || !row) return null;
-  const hostName = (await actions().userNames([row.host_user_id])).get(String(row.host_user_id));
+  // A business's invitation is from the business, by its own name; a neighbor's is from the person who sent it.
+  const plan = await planService.loadPlanRow(postId);
+  const hostName = plan && plan.business_user_id
+    ? await actions().hostFirstOf(plan)
+    : actions().firstOf((await actions().userNames([row.host_user_id])).get(String(row.host_user_id)));
   return {
-    host_first_name: actions().firstOf(hostName),
+    host_first_name: hostName,
     available: row.status !== 'cancelled',
     channel: row.channel,
     email_hint: row.channel === 'email' ? emailHint(row.email) : null,

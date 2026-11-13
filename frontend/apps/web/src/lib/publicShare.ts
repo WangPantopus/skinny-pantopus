@@ -132,7 +132,11 @@ export const fetchPublicBookingByToken = cache(
   }
 );
 
-/** A Nearby Plans share link: the plan's public card (area only), or `{ kind: 'playdate', city }`. */
+/**
+ * A Nearby Plans share link: the plan's public card (area only), or `{ kind: 'playdate', city }`. A business's plan
+ * (board D6) is the same card plus `business`, `label`, `label_text`, `place` and `price`, and comes as the whole
+ * card for a playdate too (a kids' class); a neighbor's plan has none of those keys.
+ */
 export type PublicPlan = {
   id?: string;
   kind: 'watch_party' | 'playdate' | 'pickup_game' | 'walk_coffee' | 'study_group';
@@ -156,7 +160,26 @@ export type PublicPlan = {
   city?: string | null;
   /** With ?invite=<token>: whose invitation it is, and for an email invitation a hint of the address it went to. */
   invite?: PublicPlanInvite;
+  /** A business's plan: the business that hosts it (`host.display_name` is its name too). */
+  business?: PublicPlanBusiness | null;
+  /** A business's plan: what it calls the plan, a key from a fixed list per kind, and the words to show for it. */
+  label?: string | null;
+  label_text?: string | null;
+  /** A business's plan: its place by name and street address, the business's own. Never a point. */
+  place?: { name: string; address: string | null } | null;
+  /** A business's plan: null is Free. */
+  price?: PublicPlanPrice | null;
 };
+
+export type PublicPlanBusiness = {
+  name: string;
+  avatar_url: string | null;
+  verified: boolean;
+  page_url: string | null;
+  plans_hosted: number;
+};
+
+export type PublicPlanPrice = { cents: number; currency: string; per: 'person' | 'family' };
 
 export type PublicPlanInvite = {
   host_first_name: string;

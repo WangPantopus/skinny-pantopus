@@ -24,9 +24,11 @@ DO $$ BEGIN
     WHERE role_base = 'admin' AND permission = 'ownership.manage' AND allowed) THEN
     RAISE EXCEPTION 'Baseline introduced new permission grants';
   END IF;
-  -- Exactly the reviewed business role defaults (20261020210000_business_role_defaults.sql): 116 rows, 64 grants.
+  -- Exactly the reviewed business role defaults: 124 rows, 68 grants. 116 rows and 64 grants come from
+  -- 20261020210000_business_role_defaults.sql; 20261113061000_plans_business.sql adds plans.post and plans.manage
+  -- (granted to admin and editor, refused to staff and viewer).
   IF (SELECT md5(string_agg(role_base || ':' || permission || '=' || allowed, ',' ORDER BY role_base, permission))
-    FROM public."BusinessRolePermission") IS DISTINCT FROM '4f0bc6a5ebc79250adaa8fa2eb3c6603' THEN
+    FROM public."BusinessRolePermission") IS DISTINCT FROM '966b7adf622c8e5e935762c8c5682980' THEN
     RAISE EXCEPTION 'Business role defaults differ from the reviewed matrix';
   END IF;
   IF NOT EXISTS (SELECT FROM public."PostCategoryTTL" WHERE post_type = 'personal_update' AND ttl_days = 7) THEN

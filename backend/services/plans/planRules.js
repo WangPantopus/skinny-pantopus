@@ -55,6 +55,41 @@ const LIMITS = Object.freeze({
   startGraceMinutes: 10,
 });
 
+// ── A business's plans (Plans with businesses, the build contract's sections 4.4 and 4.5) ──
+
+// A business posts more, and further ahead, than a neighbor. Spots stay 1 to 30: a class of more is not a small plan.
+const BUSINESS_LIMITS = Object.freeze({
+  upcomingPlansPerHost: 40,
+  newPlansPerDay: 20,
+  maxDaysAhead: 60,
+});
+
+// What the five kinds read for a business ("Host as" in the composer).
+const BUSINESS_KIND_NAMES = Object.freeze({
+  watch_party: 'Watch party',
+  playdate: 'For kids',
+  pickup_game: 'Sports',
+  walk_coffee: 'Walk or coffee',
+  study_group: 'Study',
+});
+
+// What a business may call its plan, per kind: the key that is saved, and the words guests read. A fixed list
+// and no free text, so a label can't become an ad. The plan keeps its kind's color, glyph and pin.
+const BUSINESS_LABELS = Object.freeze({
+  watch_party: { watch_party: 'Watch party', trivia_night: 'Trivia night', game_night: 'Game night' },
+  playdate: { kids_class: "Kids' class", open_play: 'Open play', story_time: 'Story time', camp_day: 'Camp day' },
+  pickup_game: { clinic: 'Clinic', open_play: 'Open play', league_night: 'League night', pickup_game: 'Pickup game' },
+  walk_coffee: { meetup: 'Meetup', tasting: 'Tasting', group_walk: 'Group walk', run_club: 'Run club' },
+  study_group: { tutoring: 'Tutoring', test_prep: 'Test prep', workshop: 'Workshop' },
+});
+
+// How a guest arrived at a business's plan (PlanRequest.way_in), by who brought them. The fee of a paid spot
+// follows this; a free plan saves it too, so a business can see where its guests come from.
+const WAYS_IN = Object.freeze({
+  pantopus: ['map_list', 'plans_you_like', 'today', 'new_here', 'friend', 'assistant'],
+  own: ['own_invite', 'own_link', 'follower', 'come_back', 'business_page'],
+});
+
 const DEFAULT_TIMEZONE = 'UTC';
 const { timezoneFromCoordinates } = require('../../utils/timezone');
 
@@ -190,6 +225,10 @@ module.exports = {
   STUDY_STYLES,
   WINDOWS,
   LIMITS,
+  BUSINESS_LIMITS,
+  BUSINESS_KIND_NAMES,
+  BUSINESS_LABELS,
+  WAYS_IN,
   MILE_METERS,
   HOST_RADIUS_METERS,
   ASK_RADIUS_METERS,

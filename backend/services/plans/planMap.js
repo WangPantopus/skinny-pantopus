@@ -45,7 +45,8 @@ async function planPins(user, box, query = {}) {
   const gps = gpsLat != null && gpsLng != null && query.gps_timestamp
     ? { latitude: gpsLat, longitude: gpsLng, timestamp: String(query.gps_timestamp) }
     : null;
-  const viewer = await loadViewer(user, { point, gps });
+  // `biz=1`: this app can draw a business's pin (Plans with businesses); see routes/plans.js.
+  const viewer = await loadViewer({ ...user, plansBiz: query.biz === '1' }, { point, gps });
 
   const asked = String(query.kinds || '').split(',').map((k) => k.trim()).filter((k) => rules.KINDS.includes(k));
   let kinds = asked.length ? asked : rules.KINDS;
@@ -58,17 +59,26 @@ async function planPins(user, box, query = {}) {
   const pad = 0.02;
   const rows = await planService.queryOpenPlansInBox({
     south: box.south - pad, north: box.north + pad, west: box.west - pad, east: box.east + pad,
-  }, { kinds, scopeAccess: viewer.scopeAccess });
-  const candidates = rows
+  }, { kinds, scopeAccess: viewer.scopeAccess, biz: viewer.biz });
+  // One pin for a venue: a business's later plans there fold under its soonest (the list does the same), and
+  // the list's filter (host=all|neighbors|businesses) filters the pins too.
+  const wanted = viewer.biz ? planService.hostFilter(query.host) : 'all';
+  const folded = planService.foldVenues(rows
     .filter((plan) => planService.isVisibleTo(plan, viewer))
-    .filter((plan) => planService.windowMatches(plan, window));
+    .filter((plan) => planService.windowMatches(plan, window))
+    .filter((plan) => planService.hostedBy(plan, wanted))
+    .sort(planService.soonestFirst));
+  const candidates = folded.plans;
   const ctx = await planService.loadCardContext(candidates, viewer);
+  ctx.moreTimesByPlan = folded.more;
 
   const pins = [];
   for (const plan of candidates) {
     const card = planService.buildCard(plan, viewer, ctx);
     const isIn = card.viewer.role === 'host' || card.viewer.role === 'guest';
-    const shown = isIn ? planService.exactPoint(plan) : planService.areaPoint(plan);
+    // A business's plan is at the business's own address, which is public: its pin is exact for everyone.
+    const exact = isIn || Boolean(card.business);
+    const shown = exact ? planService.exactPoint(plan) : planService.areaPoint(plan);
     if (!inBox(shown, box)) continue;
     pins.push({
       layer_type: 'plan',
@@ -76,7 +86,7 @@ async function planPins(user, box, query = {}) {
       kind: card.kind,
       latitude: shown.latitude,
       longitude: shown.longitude,
-      precision: isIn ? 'exact' : card.area.precision,
+      precision: exact ? 'exact' : card.area.precision,
       title: card.title,
       starts_at: card.starts_at,
       ends_at: card.ends_at,
@@ -92,6 +102,14 @@ async function planPins(user, box, query = {}) {
       state: card.state,
       viewer_role: card.viewer.role,
       viewer_request_status: card.viewer.request_status,
+      // Only on a business's pin: who hosts, what they call it, and how many more times this week.
+      ...(card.business ? {
+        business: { user_id: card.business.user_id, name: card.business.name, verified: card.business.verified },
+        label: card.label,
+        label_text: card.label_text,
+        place_name: card.place.name,
+        more_times: card.more_times ? card.more_times.count : 0,
+      } : {}),
     });
   }
   pins.sort((a, b) => String(a.starts_on).localeCompare(String(b.starts_on)) || String(a.id).localeCompare(String(b.id)));
