@@ -28,7 +28,7 @@ const POST_COLUMNS = 'id, user_id, title, content, event_date, event_end_date, l
 const PLAN_COLUMNS = [
   'post_id', 'host_user_id', 'kind', 'spots', 'auto_rules', 'join_requirement', 'place_kind',
   'area_label', 'city', 'details', 'guest_note', 'place_name', 'place_address', 'place_latitude',
-  'place_longitude', 'place_home_id', 'timezone', 'status', 'cancel_note', 'chat_room_id',
+  'place_longitude', 'place_home_id', 'place_ref', 'timezone', 'status', 'cancel_note', 'chat_room_id',
   'chat_closed_at', 'host_summary_sent_at', 'created_at', 'updated_at', 'cancelled_at', 'ended_at',
 ].join(', ');
 const PLAN_SELECT = `${PLAN_COLUMNS}, post:Post!inner(${POST_COLUMNS})`;

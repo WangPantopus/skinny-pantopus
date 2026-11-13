@@ -159,6 +159,7 @@ async function repostInput(latest, start, end, user) {
       : {
         kind: 'public', name: latest.place_name, address: latest.place_address,
         latitude: Number(latest.place_latitude), longitude: Number(latest.place_longitude),
+        place_id: latest.place_ref || undefined,
       },
     auto_rules: Array.isArray(latest.auto_rules) ? latest.auto_rules : [],
     join_requirement: latest.join_requirement,

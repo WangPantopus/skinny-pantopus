@@ -13,6 +13,8 @@
 //                 every beacon (EDDM cards, invite postcards) → CAC per route
 //   plans         Nearby Plans: hosted → viewed → asked → in → went well,
 //                 repeat hosts, auto-rule accepts, the same per plan kind
+//   plan_venues   plans and guests per public place a host chose from the
+//                 picker (Plan.place_ref), busiest first
 //
 // Rates are per DISTINCT visitor (anon_id) when the beacons carried one,
 // so a visitor who reloads five times is one preview. Event totals are
@@ -31,6 +33,7 @@ const ID_BATCH_SIZE = 200;
 const MAX_ACTIVATION_CHECKS = 1000;
 const PILOT_EVENT_TYPES = ['session_open', 'reminder_sent', 'reminder_action', 'suggestion_decision'];
 const PILOT_DIMENSIONS = ['kind', 'action', 'decision', 'trigger'];
+const MAX_VENUES = 50;
 const WEEK_MS = 7 * 86400000;
 const NO_ROUTE = '(direct)';
 // Nearby Plans as one ladder (the event → its step). `attended` is a guest
@@ -371,17 +374,66 @@ async function loadActivation(since, now) {
   return { ...summary, truncated, matured_rate: truncated ? null : summary.matured_rate };
 }
 
+/**
+ * Pure: plans and guests per venue. A venue is a public place a host chose from the picker (Plan.place_ref);
+ * a guest is a seat someone holds at a plan there (party sizes; one per family at a playdate). Busiest first.
+ * A venue is a public place, so its name is returned; no person is.
+ */
+function summarizePlanVenues(plans, requests) {
+  const seats = new Map();
+  const kinds = new Map((plans || []).map((plan) => [plan.post_id, plan.kind]));
+  for (const request of requests || []) {
+    if (request.status !== 'accepted' || !kinds.has(request.post_id)) continue;
+    const size = kinds.get(request.post_id) === 'playdate' ? 1 : Math.min(Math.max(Number(request.party_size) || 1, 1), 4);
+    seats.set(request.post_id, (seats.get(request.post_id) || 0) + size);
+  }
+  const venues = new Map();
+  for (const plan of plans || []) {
+    if (!plan.place_ref) continue;
+    if (!venues.has(plan.place_ref)) {
+      venues.set(plan.place_ref, { place_ref: plan.place_ref, name: plan.place_name || null, city: plan.city || null, plans: 0, guests: 0 });
+    }
+    const venue = venues.get(plan.place_ref);
+    venue.plans += 1;
+    venue.guests += seats.get(plan.post_id) || 0;
+  }
+  return [...venues.values()]
+    .sort((a, b) => b.guests - a.guests || b.plans - a.plans || a.place_ref.localeCompare(b.place_ref))
+    .slice(0, MAX_VENUES);
+}
+
+/**
+ * The venues of plans posted in the window that weren't cancelled. A failed read leaves the block empty and
+ * the rest of the report standing: the ladder is what the report is for.
+ */
+async function loadPlanVenues(since, now) {
+  try {
+    const plans = await readPages(() => supabaseAdmin.from('Plan').select('post_id, kind, place_ref, place_name, city, status, created_at')
+      .not('place_ref', 'is', null).neq('status', 'cancelled')
+      .gte('created_at', since).lte('created_at', new Date(now).toISOString())
+      .order('created_at', { ascending: false }).order('post_id'));
+    const ids = plans.rows.map((plan) => plan.post_id);
+    const requests = ids.length === 0 ? { rows: [] } : await readForIds(ids, (batch) => supabaseAdmin.from('PlanRequest')
+      .select('id, post_id, party_size, status').in('post_id', batch).eq('status', 'accepted'));
+    return summarizePlanVenues(plans.rows, requests.rows);
+  } catch (err) {
+    logger.warn('funnelReport: plan venues unavailable', { error: err.message });
+    return [];
+  }
+}
+
 async function loadFunnelSummary({ days = 30 } = {}) {
   const d = Math.min(365, Math.max(1, Number(days) || 30));
   const now = Date.now();
   const since = new Date(now - d * 86400000).toISOString();
-  const [events, activation] = await Promise.all([
+  const [events, activation, planVenues] = await Promise.all([
     readPages(() => supabaseAdmin.from('FunnelEvent').select('event_type, anon_id, user_id, meta, created_at')
       .gte('created_at', since).lte('created_at', new Date(now).toISOString())
       .order('created_at', { ascending: false }).order('id')),
     loadActivation(since, now),
+    loadPlanVenues(since, now),
   ]);
-  return { days: d, since, ...summarizeFunnel(events.rows), truncated: events.truncated, activation };
+  return { days: d, since, ...summarizeFunnel(events.rows), truncated: events.truncated, activation, plan_venues: planVenues };
 }
 
-module.exports = { summarizeFunnel, summarizeActivation, loadFunnelSummary, MAX_ROWS, NO_ROUTE };
+module.exports = { summarizeFunnel, summarizeActivation, summarizePlanVenues, loadFunnelSummary, MAX_ROWS, NO_ROUTE };

@@ -274,7 +274,21 @@ function resolvePlace(viewer, kind, place, { moving = false } = {}) {
     longitude,
     home_id: null,
     home: null,
+    // The picker's id for the place, as the app sent it. Nothing is saved from it until placeRefOf has checked it.
+    picked_id: typeof place.place_id === 'string' ? place.place_id.slice(0, 64) : null,
   };
+}
+
+/**
+ * The key a plan keeps for its place (Plan.place_ref): the picker's own id for a public place the host chose
+ * from the list, checked against what the picker listed there. Null at a home, and for a place typed or
+ * dropped on the map by hand.
+ */
+async function placeRefOf(place) {
+  if (!place || place.kind !== 'public' || !place.picked_id) return null;
+  return require('./planPlaces').pickedPlaceRef({
+    placeId: place.picked_id, latitude: place.latitude, longitude: place.longitude,
+  });
 }
 
 /**
@@ -398,6 +412,7 @@ async function createPlan(user, input) {
   const timezone = planPlace.timezoneFor(place.latitude, place.longitude);
   const startsAt = new Date(input.starts_at).toISOString();
   const endsAt = new Date(input.ends_at).toISOString();
+  const placeRef = await placeRefOf(place);
 
   const { data: post, error: postError } = await supabaseAdmin.from('Post').insert({
     user_id: viewer.id,
@@ -447,6 +462,7 @@ async function createPlan(user, input) {
     place_latitude: place.latitude,
     place_longitude: place.longitude,
     place_home_id: place.home_id,
+    place_ref: placeRef,
     timezone,
     status: 'open',
   });
@@ -534,6 +550,8 @@ async function editPlan(user, postId, patch, { io = null } = {}) {
       place_latitude: place.latitude,
       place_longitude: place.longitude,
       place_home_id: place.home_id,
+      // The key follows the place: a move to a place typed by hand, or to a home, clears it.
+      place_ref: await placeRefOf(place),
       area_label: label,
       city,
       timezone: planPlace.timezoneFor(place.latitude, place.longitude),
