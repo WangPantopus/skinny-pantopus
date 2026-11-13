@@ -236,7 +236,8 @@ final class MomentsComposerModel {
         error = nil
         let taken = asset.creationDate ?? Date()
         takenAt = asset.creationDate
-        captureHeight = asset.location.flatMap(HeightReading.init)
+        // Photos reads exactly 0 m for a photo or video whose file has no height: that is not a height.
+        captureHeight = asset.location.flatMap { $0.altitude == 0 ? nil : HeightReading($0) }
         var point = asset.location.map {
             MediaCaptureLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude, capturedAt: taken)
         }

@@ -199,13 +199,14 @@ private extension UserCoordinate {
 
 extension HeightReading {
     /// What a Core Location fix, or an album photo's location, says about height. `altitude` is above sea level.
-    /// Nil without a height Core Location vouches for: a negative `verticalAccuracy` means there is none. A negative
+    /// Nil without a height Core Location vouches for: a negative `verticalAccuracy` means there is none. An accuracy
+    /// of exactly 0 is what Photos gives for every album photo (it doesn't know), so it is left out. A negative
     /// `speed` means it isn't known.
     init?(_ location: CLLocation) {
         guard location.altitude.isFinite, location.verticalAccuracy.isFinite, location.verticalAccuracy >= 0 else { return nil }
         self.init(
             meters: location.altitude,
-            accuracyMeters: location.verticalAccuracy,
+            accuracyMeters: location.verticalAccuracy > 0 ? location.verticalAccuracy : nil,
             speedMps: location.speed.isFinite && location.speed >= 0 ? location.speed : nil
         )
     }
