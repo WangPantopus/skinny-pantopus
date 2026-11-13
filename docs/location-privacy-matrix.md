@@ -216,7 +216,8 @@ taken. Others see only what the author chose on the Post sheet, which shows the 
   own details (`altitude_ft`, `store.shownAltitude`), and nothing for a Moment at home, shown as an area or with no
   location, for a reading that can't be right or that the phone says is rough, or while the flag is off for the
   author. No speed is kept, only whether the Moment was posted from the air (`flying`). Viewers get the height only
-  while the flag is on for them (`GET /api/moments/…`, and each ring of `GET /api/moments/map`).
+  while the flag is on for them (`GET /api/moments/…`, and each ring of `GET /api/moments/map`). The map answer's
+  `heights_on` says only whether the flag is on for the caller.
 - **Files carry no location:** photo EXIF and video location tags are removed on upload (`photoMetadata.js`,
   `videoMetadata.js`); files sit in private storage behind 15-minute signed links and are deleted 7 days after the
   Moment ends (sooner when its author deletes it) unless a report holds them. Deleting the account deletes all of

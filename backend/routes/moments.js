@@ -323,14 +323,20 @@ const mapSchema = Joi.object({
   zoom: Joi.number().min(0).max(25),
 });
 
-/** GET /map — the rings in view: live Moments the caller may see, blocks and mutes removed. */
+/**
+ * GET /map — the rings in view: live Moments the caller may see, blocks and mutes removed. `heights_on` says whether
+ * Moment heights are on for the caller (the `moment_heights` flag), so an app can offer its "Heights" control even
+ * where no ring in view carries a height; it says nothing about anyone else.
+ */
 router.get('/map', async (req, res) => {
   try {
     const box = parseBody(mapSchema, req.query);
     if (box.south >= box.north || box.west >= box.east) throw store.fail(400, 'MOMENT_INVALID', 'Send a map area with south < north and west < east.');
     // `unplaced`: connections' Moments with no location (and the caller's own), for the row of faces, whatever the box.
-    const [rings, unplaced] = await Promise.all([store.mapRings(req.user.id, box), store.unplacedRings(req.user.id)]);
-    res.json({ rings, unplaced });
+    const [rings, unplaced, heights] = await Promise.all([
+      store.mapRings(req.user.id, box), store.unplacedRings(req.user.id), store.heightsOn(req.user),
+    ]);
+    res.json({ rings, unplaced, heights_on: heights });
   } catch (error) {
     sendError(res, error, 'map');
   }
