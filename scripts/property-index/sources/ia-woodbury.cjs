@@ -71,8 +71,29 @@ const cityOf = (value) => {
 };
 
 // The assessors' short words, in full; any other stays as they wrote it.
-const SHORT = { Asph: 'Asphalt', Mtl: 'Metal', Wd: 'Wood', 'Rub Memb': 'Rubber membrane', Alum: 'Aluminum', Brk: 'Brick', 'Wd Lap': 'Wood lap', 'Vert Wd': 'Vertical wood', Asb: 'Asbestos' };
-const plain = (text) => (text && SHORT[text]) || text;
+// The assessors publish no legend for their material words. A word they write in full keeps its own wording; one they
+// write short, where it has only one reading ("Wd Lap", "Stl"), is spelled out; a misspelling of one plain word is
+// corrected. Anything else (two readings, a word for another part of the house, "Other") shows nothing.
+const SHORT = {
+  ASPH: 'asphalt', MTL: 'metal', WD: 'wood', STL: 'steel', ALUM: 'aluminum', BRK: 'brick', ASB: 'asbestos', CONC: 'concrete',
+  'WD LAP': 'wood lap', 'VERT WD': 'vertical wood', 'WD SHAKE': 'wood shake', 'TILE VEN': 'tile veneer', 'SIM STN': 'simulated stone',
+  'COMP SDG': 'composite siding', 'C BLK': 'concrete block', 'IMIT BRK': 'imitation brick', 'IMIT STN': 'imitation stone', PERMASTN: 'Permastone',
+  FBGLS: 'fiberglass', 'BLTUP COMP': 'built-up composition', 'RUB MEMB': 'rubber membrane', 'PARTICAL BOARD': 'particle board',
+};
+const FULL = new Set(['VINYL', 'COMPOSITE SIDING', 'CEMENT BOARD', 'STUCCO', 'LOG', 'SLATE', 'STONE', 'TILE', 'METAL']);
+// What each row may say: a wall material is never a roof's, and a roof's cover never a wall's.
+const WALL = new Set(['VINYL', 'COMPOSITE SIDING', 'CEMENT BOARD', 'STUCCO', 'LOG', 'SLATE', 'STONE', 'METAL', 'WD', 'STL', 'ALUM', 'BRK', 'ASB', 'CONC',
+  'WD LAP', 'VERT WD', 'WD SHAKE', 'TILE VEN', 'SIM STN', 'COMP SDG', 'C BLK', 'IMIT BRK', 'IMIT STN', 'PERMASTN', 'PARTICAL BOARD']);
+const COVER = new Set(['ASPH', 'MTL', 'WD', 'ASB', 'SLATE', 'TILE', 'STUCCO', 'FBGLS', 'BLTUP COMP', 'RUB MEMB']);
+const SHAPES = new Set(['GABLE', 'HIP', 'FLAT', 'SHED', 'GAMBREL', 'MANSARD', 'DOME']);
+const sentence = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** The county's material words in plain words, each part allowed in this row, or null. "Wd Lap / Vinyl": "Wood lap, vinyl". */
+function materials(text, allowed) {
+  const parts = String(text || '').split(/\s*\/\s*/).map((part) => part.replace(/\s+/g, ' ').trim().toUpperCase()).filter(Boolean);
+  if (!parts.length || !parts.every((part) => allowed.has(part))) return null;
+  return sentence(parts.map((part) => SHORT[part] || part.toLowerCase()).join(', '));
+}
 
 function fromRow(row) {
   const site = siteOf(row);
@@ -129,10 +150,13 @@ function fromRow(row) {
   // Columns read since the county went live: held off its screens until its new_columns switch is on (lib/held.cjs).
   // The walls and roof are the assessors' own words; the roof column says its cover, then its shape ("Asph / Gable").
   if (home || kind === 'building') {
-    hold(record, 'exterior_walls', plain(word(row.extwalls)));
-    const [cover, shape] = String(row.roof || '').split(' / ').map((part) => word(part));
-    if (cover && !/^other$/i.test(cover)) hold(record, 'roof_cover', plain(cover));
-    if (shape && !/^other$/i.test(shape)) hold(record, 'roof_shape', shape);
+    hold(record, 'exterior_walls', materials(row.extwalls, WALL));
+    // The roof column is its cover, then its shape ("Asph / Gable"); anything else in it is left out.
+    const roof = String(row.roof || '').split(/\s*\/\s*/).map((part) => part.replace(/\s+/g, ' ').trim().toUpperCase());
+    if (roof.length === 2) {
+      hold(record, 'roof_cover', materials(roof[0], COVER));
+      if (SHAPES.has(roof[1])) hold(record, 'roof_shape', sentence(roof[1].toLowerCase()));
+    }
   }
   if (home) {
     // main_ac is 1 where the main building has air conditioning; a 0 may be no answer, so it says nothing.
