@@ -30,12 +30,24 @@ const CELL = 0.02;
 const NOT_ON_THE_HOME = new Set(['geocoded']);
 // A government's own kinds of place: active, partly consolidated or consolidated with another.
 const WORKING = new Set(['A', 'B', 'C']);
+// Incorporated places that are cities: C1-C7, and C8, a consolidated city's balance (Nashville-Davidson, Butte-Silver Bow,
+// Athens-Clarke County, Augusta-Richmond County, Milford CT), which the Census Bureau marks fictitious (F) because its
+// consolidated government runs it. Washington DC is C5 with no government of its own (N): the District is its government.
+// C9 is an inactive place (a ghost town): not a city. Census-designated places (U1, U2) and military areas (M2) never count.
+const CITY_CLASSES = /^C[1-8]$/;
+// A consolidated city's balance reads as the city: "Nashville-Davidson metropolitan government (balance)" is Nashville-Davidson.
+const CONSOLIDATED = /\s+(metropolitan|unified|consolidated) government$/i;
 // The twelve states whose towns and townships serve as municipalities (the Census Bureau's own list). Elsewhere a township
 // isn't a city: Cook County calls a home in Maine Township "unincorporated", and so does this.
 const TOWN_STATES = new Set(['CT', 'ME', 'MA', 'MI', 'MN', 'NH', 'NJ', 'NY', 'PA', 'RI', 'VT', 'WI']);
 
 function words(text) {
   return String(text).toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
+}
+
+/** A city's name: a consolidated city's balance reads as the city (CONSOLIDATED). */
+function placeName(row) {
+  return row.NAME.replace(/\s*\(balance\)$/i, '').replace(CONSOLIDATED, '').trim();
 }
 
 /** A place's name for comparing: "CITY OF GROVE CITY", "Grove City" and "GROVE-CITY" all read GROVECITY. */
@@ -166,7 +178,7 @@ function placeNames(work, state, countyFips) {
     download(`https://www2.census.gov/geo/tiger/TIGER${YEAR}/${layer.toUpperCase()}/${base}.zip`, zip);
     for (const row of readDbf(execFileSync('unzip', ['-p', zip, `${base}.dbf`], { maxBuffer: 1024 * 1024 * 1024 }))) {
       if (layer === 'cousub' && row.COUNTYFP !== countyFips.slice(2)) continue;
-      names.add(placeWords(layer === 'cousub' ? subdivisionName(row) : row.NAME.replace(/\s*\(balance\)$/i, '')));
+      names.add(placeWords(layer === 'cousub' ? subdivisionName(row) : placeName(row)));
     }
   }
   return names;
@@ -177,7 +189,7 @@ function placeNames(work, state, countyFips) {
  * A point inside one area but within the margin of any area's line says nothing.
  */
 function locator(work, state, countyName, countyFips) {
-  const places = shapes(work, 'place', state).filter(({ row }) => /^C/.test(row.CLASSFP) && WORKING.has(row.FUNCSTAT));
+  const places = shapes(work, 'place', state).filter(({ row }) => CITY_CLASSES.test(row.CLASSFP));
   // Every county subdivision of this county: together they cover it, so a point in none of them is on an edge.
   const subdivisions = shapes(work, 'cousub', state).filter(({ row }) => row.COUNTYFP === countyFips.slice(2));
   const nearPlaces = indexed(places);
@@ -201,7 +213,7 @@ function locator(work, state, countyName, countyFips) {
   return (x, y) => {
     const place = inside(nearPlaces, x, y);
     if (place.unsure) return null;
-    if (place.area) return { name: place.area.row.NAME.replace(/\s*\(balance\)$/i, '').trim(), kind: 'city' };
+    if (place.area) return { name: placeName(place.area.row), kind: 'city' };
     // Where no subdivision of the county is a government (Washington's census divisions), their lines change nothing.
     if (towns) {
       const subdivision = inside(nearSubdivisions, x, y);
