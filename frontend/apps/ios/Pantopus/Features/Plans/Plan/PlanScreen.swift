@@ -173,13 +173,9 @@ struct PlanScreen: View {
                         revealToken: viewModel.revealToken
                     )
                     // J1/J2 promise the place; J5/J6 carry no chip (the boards).
-                    if viewModel.plan?.place == nil, viewModel.mode == .browsing {
-                        PlanScopeChip(text: card.kind == .playdate
-                            ? "Exact place and time shared when you're in"
-                            : "Exact place shared when you're in")
-                            .padding(.leading, Spacing.s4)
-                            .padding(.bottom, 34)
-                    }
+                    PlanHeaderChip(card: card, place: viewModel.plan?.place, mode: viewModel.mode)
+                        .padding(.leading, Spacing.s4)
+                        .padding(.bottom, 34)
                 }
                 PlanScreenSections(
                     viewModel: viewModel,
@@ -242,8 +238,8 @@ struct PlanScreen: View {
             if viewModel.mode != .hosting {
                 Menu {
                     Button("Report this plan", role: .destructive) { showsReport = true }
-                    Button("Block \(PlanCardLines.firstName(card.host.displayName))", role: .destructive) {
-                        confirmation = .blockHost(name: card.host.displayName)
+                    Button("Block \(PlanCardLines.hostName(card))", role: .destructive) {
+                        confirmation = .blockHost(name: PlanCardLines.hostName(card))
                     }
                 } label: {
                     PlanGlassIcon(icon: .moreHorizontal)
@@ -261,7 +257,7 @@ struct PlanScreen: View {
         let calendar = PlanFormat.calendar(for: card.timezone)
         let when = PlanFormat.rowWhen(state: card.state, start: card.startsAtDate, end: card.endsAtDate, calendar: calendar)
             ?? PlanFormat.dayPart(card.dayPart)
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         let place = viewModel.plan?.place?.name ?? (card.placeKind == .home ? "\(host)'s place" : card.area.label)
         chatRoute = PlanChatRoute(
             roomId: room,

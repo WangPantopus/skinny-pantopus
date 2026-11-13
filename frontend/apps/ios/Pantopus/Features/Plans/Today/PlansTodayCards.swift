@@ -154,7 +154,7 @@ struct PlansTodayCards: View {
     // MARK: - A1
 
     private func goingCard(_ card: PlanCardDTO) -> some View {
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         let short = shortTitle(card)
         // "Movie night at Morgan's" already says whose place it is (as on Android).
         let title = card.placeKind == .home && !short.localizedCaseInsensitiveContains("\(host)'s") ? "\(short) at \(host)'s" : short

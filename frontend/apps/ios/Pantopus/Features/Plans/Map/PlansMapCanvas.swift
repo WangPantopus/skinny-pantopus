@@ -86,6 +86,8 @@ struct PlansMapCanvas: View {
     private var areas: [PlansArea] {
         viewModel.pins.compactMap { pin in
             guard viewModel.kindFilter == nil || pin.kind == viewModel.kindFilter else { return nil }
+            // A business's place is exact and public: its pin has no area (board G1).
+            guard pin.business == nil, viewModel.shownHostFilter.admits(isBusiness: false) else { return nil }
             let isSelected = pin.id == selectedId
             guard isSelected || (pin.kind == .playdate && !pin.isExactPoint) else { return nil }
             return PlansArea(
@@ -116,15 +118,18 @@ struct PlansMapCanvas: View {
             dayPart: pin.dayPart,
             calendar: calendar
         )
+        // "Sat 10:00 · 4 times": a venue's soonest plan carries its later ones (board G1).
+        let times = pin.moreTimes > 0 ? " · \(pin.moreTimes + 1) times" : ""
         return PlanPinLook(
             kind: pin.kind,
             // "Your plan · Sun 1:25", as the posted pin reads (board H8) and Android's.
-            tag: pin.isHosting && selected ? "Your plan · \(tag)" : tag,
+            tag: (pin.isHosting && selected ? "Your plan · \(tag)" : tag) + times,
             isSelected: selected,
             isDimmed: selectedId != nil && !selected,
             isFull: pin.isFull && !pin.isIn && !pin.isHosting,
             isLive: pin.state == .live,
-            badge: badge
+            badge: badge,
+            isBusiness: pin.business != nil
         )
     }
 
@@ -136,7 +141,10 @@ struct PlansMapCanvas: View {
             PlanPinView(look: look(for: pin))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(PlansPinSpeech.label(for: pin, card: card(for: pin.id), center: viewModel.center))
+        .accessibilityLabel(
+            PlansPinSpeech.label(for: pin, card: card(for: pin.id), center: viewModel.center)
+                + (pin.business.map { ", hosted by \($0.name)" } ?? "")
+        )
         .accessibilityHint(pinHint)
         .accessibilityIdentifier("planPin.\(pin.id)")
     }

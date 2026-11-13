@@ -97,7 +97,7 @@ struct PlanTitleBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            if showsTag { PlanTypeTag(kind: card.kind) }
+            if showsTag { PlanCardTag(card: card) }
             Text(card.title)
                 .planFont(.h2)
                 .foregroundStyle(Theme.Color.appText)
@@ -206,10 +206,11 @@ enum PlanScreenLines {
 
     /// "Near Prune Hill · about 1 mi · at Sam's place" / "· a public place".
     static func whereLine(_ card: PlanCardDTO) -> String {
+        if card.isBusiness { return PlanCardLines.businessWhere(card) }
         var parts = [card.area.label]
         if let distance = PlanFormat.distance(card.distanceBand) { parts.append(distance) }
         switch card.placeKind {
-        case .home: parts.append("at \(PlanCardLines.firstName(card.host.displayName))'s place")
+        case .home: parts.append("at \(PlanCardLines.hostName(card))'s place")
         case .publicPlace: parts.append("a public place")
         case nil: break
         }
@@ -244,16 +245,7 @@ struct PlanBrowsingSection: View {
 
     var body: some View {
         PlanTitleBlock(card: card)
-        Button {
-            if let id = card.host.userId { onOpenHost(id) }
-        } label: {
-            PlanCardBox(padding: 14) {
-                PlanHostRow(host: card.host, kind: card.kind, showsChevron: card.host.userId != nil)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(card.host.userId == nil)
-        .accessibilityHint("Opens their profile")
+        PlanHostCard(card: card, onOpenHost: onOpenHost)
         PlanSpotsBlock(card: card, trailing: card.kind == .playdate ? nil : "Names show once you're in")
         if card.kind == .playdate {
             PlanNote(
@@ -270,7 +262,7 @@ struct PlanBrowsingSection: View {
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 PlanFactRow(icon: .users, text: PlanCardLines.approval(card))
-                PlanFactRow(icon: .shieldCheck, text: "Free, and for adults")
+                if !card.isBusiness { PlanFactRow(icon: .shieldCheck, text: "Free, and for adults") }
             }
         }
     }
@@ -308,11 +300,11 @@ struct PlanRequestedSection: View {
             tone: .neutral,
             icon: .clock,
             title: "Requested",
-            message: PlanCardLines.answersWithin(card.host).map { "\($0) We'll tell you." }
-                ?? "We'll tell you when \(PlanCardLines.firstName(card.host.displayName)) answers."
+            message: PlanCardLines.answersWithin(card).map { "\($0) We'll tell you." }
+                ?? "We'll tell you when \(PlanCardLines.hostName(card)) answers."
         )
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            PlanTypeTag(kind: card.kind)
+            PlanCardTag(card: card)
             Text(card.title).planFont(.h2).foregroundStyle(Theme.Color.appText).fixedSize(horizontal: false, vertical: true)
             Text(PlanCardLines.whenWhere(card, long: true))
                 .planFont(.small)
@@ -374,10 +366,10 @@ struct PlanWaitlistSection: View {
             // Only an automatic plan lets the next person in by itself; otherwise the host decides.
             message: card.howPeopleGetIn == "automatic"
                 ? "If someone can't make it, you're in. We'll tell you right away."
-                : "If someone can't make it, \(PlanCardLines.firstName(card.host.displayName)) can let you in. We'll tell you right away."
+                : "If someone can't make it, \(PlanCardLines.hostName(card)) can let you in. We'll tell you right away."
         )
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            PlanTypeTag(kind: card.kind)
+            PlanCardTag(card: card)
             Text(card.title).planFont(.h2).foregroundStyle(Theme.Color.appText).fixedSize(horizontal: false, vertical: true)
             Text(PlanCardLines.whenWhere(card, long: true))
                 .planFont(.small)
@@ -491,7 +483,7 @@ struct PlanClosedSection: View {
     private var message: String? {
         guard card.state == .cancelled else { return nil }
         if isHost { return "Everyone who was in or waiting was told. The pin is off the map." }
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         if let note { return "\(host) cancelled it: \u{201C}\(note)\u{201D}" }
         return "\(host) cancelled it."
     }

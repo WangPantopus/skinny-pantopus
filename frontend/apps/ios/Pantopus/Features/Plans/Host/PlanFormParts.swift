@@ -101,6 +101,8 @@ struct PlanSegmented<Value: Hashable>: View {
     let options: [(Value, String)]
     @Binding var selection: Value
     let label: String
+    /// Test ids, one per option in order (Plans with businesses' filter and "Who gets in").
+    var identifiers: [String]?
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -119,7 +121,7 @@ struct PlanSegmented<Value: Hashable>: View {
     }
 
     private var segments: some View {
-        ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+        ForEach(Array(options.enumerated()), id: \.offset) { index, option in
             let isOn = option.0 == selection
             Button { selection = option.0 } label: {
                 Text(option.1)
@@ -138,7 +140,16 @@ struct PlanSegmented<Value: Hashable>: View {
             .buttonStyle(.plain)
             .accessibilityLabel(option.1)
             .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+            .planIdentifier(identifiers.flatMap { $0.indices.contains(index) ? $0[index] : nil })
         }
+    }
+}
+
+extension View {
+    /// A test id when there is one; nothing otherwise.
+    @ViewBuilder
+    func planIdentifier(_ id: String?) -> some View {
+        if let id { accessibilityIdentifier(id) } else { self }
     }
 }
 

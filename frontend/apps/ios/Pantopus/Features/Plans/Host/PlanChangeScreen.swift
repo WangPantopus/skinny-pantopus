@@ -160,7 +160,7 @@ struct PlanChangeScreen: View {
     /// The push the server sends, word for word (board H11; Android shows the same).
     private func pushWords(_ card: PlanCardDTO) -> (title: String, body: String) {
         let calendar = PlanFormat.calendar(for: card.timezone)
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         let noun = PlanCardLines.noun(card)
         let now = "Now \(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar))"
         if newPlace != nil, timeMoved(card) { return ("\(host) changed the \(noun)", "\(now), at a new place. Still coming?") }

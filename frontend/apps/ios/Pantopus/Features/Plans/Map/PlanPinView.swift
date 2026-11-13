@@ -23,6 +23,8 @@ struct PlanPinLook: Equatable {
     var isFull = false
     var isLive = false
     var badge: Badge?
+    /// A business hosts it: the business badge, where no status badge sits (board P1).
+    var isBusiness = false
 
     enum Badge: Equatable {
         /// You're in: green check.
@@ -65,7 +67,11 @@ struct PlanPinView: View {
                 Circle().fill(Color.clear).frame(width: 44, height: 44).contentShape(Circle())
                 if look.isLive { halo }
                 head
-                if let badge = look.badge { badgeView(badge) }
+                if let badge = look.badge {
+                    badgeView(badge)
+                } else if look.isBusiness {
+                    PlanBusinessBadge(size: 15).offset(x: size * 0.47, y: -size * 0.47)
+                }
             }
             .frame(width: size + ring * 2, height: size + ring * 2)
             .frame(height: tipY, alignment: .top)

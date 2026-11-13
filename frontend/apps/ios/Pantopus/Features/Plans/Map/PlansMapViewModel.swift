@@ -48,6 +48,10 @@ final class PlansMapViewModel {
     private(set) var window: PlansWindow = .week
     /// nil is "All".
     private(set) var kindFilter: PlanKind?
+    /// Plans with businesses (board P3): All · Neighbors · Businesses, remembered for the account.
+    private(set) var hostFilter: PlansHostFilter = .all
+    /// A business has a plan in the area and window (`has_business_plans`): the filter shows.
+    private(set) var hasBusinessPlans = false
     private(set) var pins: [PlanPinDTO] = []
     private(set) var cards: [PlanCardDTO] = []
     private(set) var listLoaded = false
@@ -98,6 +102,7 @@ final class PlansMapViewModel {
         self.location = location
         self.defaults = defaults
         mine = PlansStoreReads.peekMine(store: store)
+        hostFilter = defaults.string(forKey: hostFilterKey).flatMap(PlansHostFilter.init(rawValue:)) ?? .all
     }
 
     // MARK: - Starting
@@ -220,6 +225,7 @@ final class PlansMapViewModel {
             )
             cards = snapshot.value.items
             nearestElsewhere = snapshot.value.nearestElsewhere
+            hasBusinessPlans = snapshot.value.hasBusinessPlans
             listLoaded = true
             listError = nil
         } catch is CancellationError {
@@ -313,7 +319,7 @@ final class PlansMapViewModel {
     /// in a cluster.
     func markers(selectedId: String?) -> [PlansMarker] {
         PlansClustering.markers(
-            pins.filter { kindFilter == nil || $0.kind == kindFilter },
+            pins.filter { (kindFilter == nil || $0.kind == kindFilter) && shownHostFilter.admits(isBusiness: $0.business != nil) },
             span: span,
             mapPoints: mapPoints,
             selectedId: selectedId
@@ -322,7 +328,7 @@ final class PlansMapViewModel {
 
     /// The list after the type filter.
     var visibleCards: [PlanCardDTO] {
-        cards.filter { kindFilter == nil || $0.kind == kindFilter }
+        cards.filter { (kindFilter == nil || $0.kind == kindFilter) && shownHostFilter.admits(isBusiness: $0.isBusiness) }
     }
 
     /// Nothing planned this week (F4): no pins, no plans near you, none of yours.
@@ -346,7 +352,7 @@ final class PlansMapViewModel {
 
     /// Your plans after the type filter: the list's "Your plans" follows the chip, as the map and the days do.
     var visibleYourPlans: [PlanCardDTO] {
-        yourPlans.filter { kindFilter == nil || $0.kind == kindFilter }
+        yourPlans.filter { (kindFilter == nil || $0.kind == kindFilter) && shownHostFilter.admits(isBusiness: $0.isBusiness) }
     }
 
     // MARK: - Selection
@@ -404,5 +410,29 @@ final class PlansMapViewModel {
         return homes.lazy.compactMap(\.location).first.map {
             UserCoordinate(latitude: $0.latitude, longitude: $0.longitude, accuracyMeters: 50)
         }
+    }
+}
+
+// MARK: - Plans with businesses: the filter (board P3)
+
+extension PlansMapViewModel {
+    /// All · Neighbors · Businesses. Filters the pins and the list on the phone, as the kind chips do.
+    func setHostFilter(_ filter: PlansHostFilter) {
+        guard filter != hostFilter else { return }
+        hostFilter = filter
+        defaults.set(filter.rawValue, forKey: hostFilterKey)
+        if let selectedId, let pin = pins.first(where: { $0.id == selectedId }),
+           !shownHostFilter.admits(isBusiness: pin.business != nil) {
+            clearSelection()
+        }
+    }
+
+    /// The filter in force: "All" until a business has a plan here, so Plans reads as today.
+    var shownHostFilter: PlansHostFilter {
+        hasBusinessPlans ? hostFilter : .all
+    }
+
+    private var hostFilterKey: String {
+        "pantopus.plans.hostFilter.\(ScreenStore.accountKey)"
     }
 }

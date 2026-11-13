@@ -38,7 +38,8 @@ struct PlanAskSheet: View {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 header
                 if card.kind == .playdate { kids } else { whoIsComing }
-                hello
+                // No "Say hi" on a business's plan that lets people in right away (board G4).
+                if !joinsRightAway { hello }
                 PlanScopeLine(text: scopeSentence)
                 if let failed {
                     Text(failed)
@@ -73,13 +74,18 @@ struct PlanAskSheet: View {
     }
 
     private var hostFirst: String {
-        PlanCardLines.firstName(card.host.displayName)
+        PlanCardLines.hostName(card)
+    }
+
+    /// A business's plan that lets anyone in right away.
+    private var joinsRightAway: Bool {
+        PlanFooter.joinsRightAway(card)
     }
 
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(invited ? "Join \(hostFirst)'s plan" : "Ask \(hostFirst) to join")
+                Text(invited || joinsRightAway ? "Join \(hostFirst)'s plan" : "Ask \(hostFirst) to join")
                     .planFont(.h3)
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
@@ -219,7 +225,13 @@ struct PlanAskSheet: View {
     }
 
     private var scopeSentence: String {
-        card.kind == .playdate
+        // A business's team sees less than a neighbor host (design, principle 6).
+        if card.isBusiness {
+            return joinsRightAway
+                ? "\(hostFirst) sees your first name and how many are coming. Never your address."
+                : "\(hostFirst) sees your first name, how many are coming and your note. Never your address."
+        }
+        return card.kind == .playdate
             ? "\(hostFirst) sees your first name, your verified badge, about how far away you live and your kids' ages. Never their names."
             : "\(hostFirst) sees your first name, your verified badge and about how far away you live. Never your address."
     }
@@ -229,6 +241,7 @@ struct PlanAskSheet: View {
     private var sendTitle: String {
         if previous != nil { return "Update request" }
         if card.isFull { return "Join the waitlist" }
+        if joinsRightAway, !invited { return "Join" }
         return invited ? "I'm in" : "Send request"
     }
 
