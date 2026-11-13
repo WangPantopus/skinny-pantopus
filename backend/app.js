@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
+const crypto = require('crypto');
 const fs = require('fs');
 const dotenvPath = fs.existsSync('.env') ? '.env' : '.env.dev';
 require('dotenv').config({ path: dotenvPath });
@@ -381,8 +382,23 @@ app.get('/health', async (req, res) => {
 
 // ============ APM METRICS ENDPOINT ============
 
+// Timings per route, memory and the day's vendor call counts describe the service's insides, so on a hosted
+// server (staging and production both run as production) only a caller with the internal key reads them;
+// anyone else gets the same 404 as an unknown path. The hosts' nginx refuses this path from the internet as
+// well; this keeps it closed if that rule is ever lost.
+function hasInternalKey(req) {
+  const expected = process.env.INTERNAL_API_KEY;
+  const supplied = req.headers['x-internal-key'];
+  if (!expected || typeof supplied !== 'string') return false;
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 app.get('/api/health/metrics', (req, res) => {
-  // Optionally require admin auth in production
+  if (process.env.NODE_ENV === 'production' && !hasInternalKey(req)) {
+    return res.status(404).json({ error: 'Route not found', path: req.path, method: req.method });
+  }
   res.json({
     uptime_seconds: Math.round(process.uptime()),
     memory_mb: Math.round(process.memoryUsage().rss / 1024 / 1024),

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { clientIpKey } = require('../utils/clientIpKey');
 const verifyToken = require('../middleware/verifyToken');
 const share = require('../services/homeExternalShareService');
 const router = express.Router();
@@ -14,7 +15,9 @@ function optionalVerifiedRecipient(req, res, next) {
   return next();
 }
 
+// Per network (IP, IPv6 by its /64), so one IPv6 client can't step through its own /64 uncounted.
 const viewLimiter = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-7', legacyHeaders: false,
+  keyGenerator: clientIpKey,
   message: { error: 'Too many share requests. Please try again shortly.' } });
 // The web pages send the passcode percent-encoded in a header, so it stays out of
 // URLs and the logs that record them. The query is still read for pages loaded
