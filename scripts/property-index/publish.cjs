@@ -13,9 +13,9 @@
 //     --accept-falls  someone read the refusals and a connector's fix meant them: lower fill and changed account ids publish
 //                     with a warning. An empty file or far fewer records is still refused. Off unless asked for by hand.
 //     --accept-falls-for  the same, for the counties named only
-//     --accept-shrink-for "<fips> ..."  with --accept-falls: the counties named only may also publish far fewer records, when
-//                     a connector's fix drops records that shouldn't exist. Each is logged with both counts; a county live in
-//                     any switch file never takes it (that's the founder's).
+//     --accept-shrink-for "<fips> ..."  with --accept-falls (or --accept-falls-for naming them): the counties named only may
+//                     also publish far fewer records (the registry: addresses), when a fix drops records that shouldn't exist.
+//                     Each is logged with both counts; a county live in any switch file never takes it (that's the founder's).
 //   node scripts/property-index/publish.cjs --rollback <fips> --state <ST> --bucket <name> [--prefix index]
 'use strict';
 
@@ -119,7 +119,8 @@ function problems(store, entry, previous, out, minRetention = MIN_ID_RETENTION, 
   const addressesNow = addresses(entry);
   if (addressesBefore !== null && addressesNow !== null) {
     // The registry counts addresses. Fewer units under them, as when a fix drops units a source made up, needs someone to look.
-    if (addressesNow < addressesBefore * MIN_RECORD_SHARE) found.push(`${addressesNow} addresses, ${addressesBefore} serving`);
+    // Far fewer addresses too, named by hand, as when a fix merges a source's copies of addresses another source already has.
+    if (addressesNow < addressesBefore * MIN_RECORD_SHARE) (shrinkable ? falls : found).push(`${addressesNow} addresses, ${addressesBefore} serving${shrinkable ? ' (named to shrink)' : ''}`);
     else if (report.records < before * MIN_RECORD_SHARE) falls.push(`${report.records} records, ${before} serving`);
   } else if (report.records < before * MIN_RECORD_SHARE) {
     // Named by hand for a connector's fix that drops records that shouldn't exist: someone who looked may accept it.

@@ -39,7 +39,7 @@ on:
         required: false
         default: ""
       county:
-        description: "County FIPS (rollback)"
+        description: "County FIPS (rollback); build with accept_falls: those of its counties, space separated, that may also publish far fewer addresses, after someone read why"
         required: false
         default: ""
       state:
@@ -167,6 +167,8 @@ jobs:
           PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.republish }}
           ACCEPT_FALLS: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls || '' }}
+          # Only named in accept_falls too: as when a fix merges a source's copies of addresses another source already has.
+          ACCEPT_SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.accept_falls && inputs.county || '' }}
         run: bash scripts/property-index/run-registry.sh
       # Counts only: each county's coverage and each state's T2 tallies, for the report job.
       - name: Keep the counts

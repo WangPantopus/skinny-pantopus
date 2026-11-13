@@ -43,6 +43,7 @@ if [ "${REPUBLISH:-false}" = "true" ]; then
   lineage+=(--republish)
 fi
 [ -n "${ACCEPT_FALLS:-}" ] && publishing+=(--accept-falls-for "$ACCEPT_FALLS")
+[ -n "${ACCEPT_SHRINK:-}" ] && publishing+=(--accept-shrink-for "$ACCEPT_SHRINK")
 status=0
 for state in $states; do
   [ -n "${STATES:-}" ] && [[ ",$STATES," != *",$state,"* ]] && continue
