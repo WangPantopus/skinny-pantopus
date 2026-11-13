@@ -24,7 +24,9 @@ const { log } = require('./lib/log.cjs');
 const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'held', 'parent', 'roster', 'restricted', 'key']);
 // The lists a record's held facts may sit under (format.js `held`, router.js).
 const HELD_LISTS = new Set(['new_columns', 'derived_rows']);
-const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip']);
+// `listed_unit`: a unit number an address list gives a record whose own file has none. The server reads it only for a county
+// on its switch file's listed_units list (backend/services/propertyRecords/router.js).
+const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip', 'listed_unit']);
 
 function parseArgs(argv) {
   const opts = {};
