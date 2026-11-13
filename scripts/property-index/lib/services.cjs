@@ -84,6 +84,33 @@ async function* layerAreas(url, outSR, { pageSize = 1000, fields = [] } = {}) {
   }
 }
 
+/**
+ * Each parcel's shape in longitude and latitude, with the columns asked for (a parcel number), in object ID order: for
+ * measuring what stands on a parcel and the parcel's own area (lib/measure.cjs). Rings as the layer draws them: outer rings
+ * clockwise, holes counterclockwise.
+ * @param {string} url       The layer, ending in its number
+ * @param {string[]} fields  The columns to send with each shape
+ * @returns {AsyncGenerator<{ attributes: object, rings: number[][][] }>}
+ */
+async function* layerShapes(url, fields, { where = '1=1', oid = 'OBJECTID', pageSize = 1000 } = {}) {
+  let last = -1;
+  let rows = 0;
+  for (;;) {
+    const query = new URLSearchParams({
+      where: `(${where}) AND ${oid} > ${last}`, outFields: [oid, ...fields].join(','), returnGeometry: 'true', outSR: '4326', geometryPrecision: '7',
+      orderByFields: oid, resultRecordCount: String(pageSize), f: 'json',
+    });
+    const page = await getJson(`${url}/query?${query}`, `A parcel shape page at row ${rows}`);
+    const features = page.features || [];
+    if (!features.length) return;
+    for (const feature of features) {
+      last = Math.max(last, feature.attributes[oid]);
+      rows += 1;
+      if (feature.geometry?.rings?.length) yield { attributes: feature.attributes, rings: feature.geometry.rings };
+    }
+  }
+}
+
 /** A table's rows by page offset, for a table whose object ID column can't be paged on. */
 async function* offsetRows(url, fields, { where = '1=1', orderBy, pageSize = 1000 } = {}) {
   let offset = 0;
@@ -161,4 +188,4 @@ async function* cached(file, source) {
   }
 }
 
-module.exports = { getJson, layerRows, layerAreas, offsetRows, socrataRows, cartoRows, ckanRows, cached };
+module.exports = { getJson, layerRows, layerAreas, layerShapes, offsetRows, socrataRows, cartoRows, ckanRows, cached };

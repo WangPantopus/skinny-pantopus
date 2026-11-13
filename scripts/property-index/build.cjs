@@ -18,13 +18,16 @@ const { writeRelease } = require('./lib/release.cjs');
 const { buildModel } = require('./lib/value-model.cjs');
 const { markSharedDeeds } = require('./lib/shared-deeds.cjs');
 const { deriveFacts } = require('./lib/derive.cjs');
+const { measureFacts } = require('./lib/measure.cjs');
 const { STATE_FILES, compareRecords } = require('./lib/agreement.cjs');
 const { dropPlaceholders } = require('./lib/placeholders.cjs');
 const { log } = require('./lib/log.cjs');
 
 const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'held', 'parent', 'roster', 'restricted', 'key']);
-// The lists a record's held facts may sit under (format.js `held`, router.js).
-const HELD_LISTS = new Set(['new_columns', 'derived_rows']);
+// The lists a record's held facts may sit under (format.js `held`, router.js), and measured_rows' years beside them.
+const HELD_LISTS = new Set(['new_columns', 'derived_rows', 'measured_rows', 'measured_years']);
+// The lists a county may say where facts come from, in words (format.js `held_from`).
+const WORDED_LISTS = new Set(['new_columns', 'derived_rows', 'measured_rows']);
 // `listed_unit`: a unit number an address list gives a record whose own file has none. The server reads it only for a county
 // on its switch file's listed_units list (backend/services/propertyRecords/router.js).
 const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip', 'listed_unit']);
@@ -52,6 +55,7 @@ function assertAllowed(records) {
       if (!HELD_LISTS.has(list)) throw new Error(`A record holds facts under ${list}`);
       if (record.restricted) throw new Error('A restricted record holds facts');
       for (const key of Object.keys(facts)) if (!FACTS[key]) throw new Error(`A record holds the fact ${key}`);
+      if (list === 'measured_years') for (const year of Object.values(facts)) if (!Number.isInteger(year)) throw new Error('A measured year isn\'t a year');
     }
   }
 }
@@ -59,7 +63,7 @@ function assertAllowed(records) {
 /** A county's `held_from`: words for facts of a known list, never anything else. */
 function assertHeldFrom(heldFrom) {
   for (const [list, words] of Object.entries(heldFrom || {})) {
-    if (!HELD_LISTS.has(list)) throw new Error(`A county says where facts under ${list} come from`);
+    if (!WORDED_LISTS.has(list)) throw new Error(`A county says where facts under ${list} come from`);
     for (const [key, text] of Object.entries(words)) if (!FACTS[key] || typeof text !== 'string') throw new Error(`A county's held_from names ${key}`);
   }
 }
@@ -117,7 +121,20 @@ async function main() {
     // deriveFacts may say, per list of held facts, where each came from in words (format.js `held_from`).
     // The rows the record implies, held off screens until the county's derived_rows switch is on (lib/derive.cjs).
     const derived = deriveFacts(records, { source: path.basename(opts.source), ...about }, { work });
-    const heldFrom = derived?.held_from || about.held_from ? { ...about.held_from, ...derived?.held_from } : null;
+    // Figures measured from building outlines and the county's open parcel map, for rows its record leaves empty, held off
+    // screens until the county's measured_rows switch is on (lib/measure.cjs). PROPERTY_INDEX_MEASURE=off skips them.
+    const shapes = typeof source.parcelShapes === 'function' ? source.parcelShapes(about.fips) : source.parcelShapes || null;
+    // A measurement that fails leaves the release as it is, without measured rows: it never stops the county's publish.
+    let measured = null;
+    if (process.env.PROPERTY_INDEX_MEASURE !== 'off') {
+      try {
+        measured = await measureFacts(records, about, { work, parcelShapes: shapes, year: built.getUTCFullYear() });
+      } catch (err) {
+        for (const record of records) if (record.held) { delete record.held.measured_rows; delete record.held.measured_years; if (!Object.keys(record.held).length) delete record.held; }
+        log(`${about.fips}: measured rows skipped: ${err.constructor === Error && !/JSON|Unexpected/.test(err.message) ? err.message : err.name}`);
+      }
+    }
+    const heldFrom = derived?.held_from || about.held_from || measured ? { ...about.held_from, ...derived?.held_from, ...measured } : null;
     assertHeldFrom(heldFrom);
     const shared = markSharedDeeds(records);
     if (shared) log(`${about.fips}: ${shared} homes' last sales are one deed for several homes`);
