@@ -20,6 +20,8 @@ import app.pantopus.android.data.api.models.homes.CreatePollRequest
 import app.pantopus.android.data.api.models.homes.DeleteDocumentResponse
 import app.pantopus.android.data.api.models.homes.DeleteEmergencyResponse
 import app.pantopus.android.data.api.models.homes.DeleteOwnershipClaimResponse
+import app.pantopus.android.data.api.models.homes.DocumentFactValue
+import app.pantopus.android.data.api.models.homes.DocumentFactsSaveRequest
 import app.pantopus.android.data.api.models.homes.FileUploadResponse
 import app.pantopus.android.data.api.models.homes.FloorPlanAnswerRequest
 import app.pantopus.android.data.api.models.homes.GetBillSplitsResponse
@@ -174,6 +176,31 @@ open class HomesRepository
             id: String,
             changes: List<HouseholdFactChange>,
         ) = safeApiCall { api.updateHouseholdFacts(id, HouseholdFactsRequest(changes)) }
+
+        /**
+         * `POST /api/homes/:id/document-facts/read`: the household's PDF, named report.pdf on the way up so the file's own
+         * name stays on the phone. The server reads it and keeps nothing.
+         */
+        open suspend fun readDocumentFacts(
+            id: String,
+            pdf: ByteArray,
+        ) = safeApiCall {
+            api.readDocumentFacts(
+                id,
+                MultipartBody.Part.createFormData(
+                    name = "file",
+                    filename = "report.pdf",
+                    body = pdf.toRequestBody("application/pdf".toMediaTypeOrNull()),
+                ),
+            )
+        }
+
+        /** `POST /api/homes/:id/document-facts`: what the household kept from its report. */
+        open suspend fun saveDocumentFacts(
+            id: String,
+            kind: String,
+            facts: List<DocumentFactValue>,
+        ) = safeApiCall { api.saveDocumentFacts(id, DocumentFactsSaveRequest(kind, facts)) }
 
         /** `POST /api/homes/:id/record-problem`. */
         open suspend fun reportRecordProblem(

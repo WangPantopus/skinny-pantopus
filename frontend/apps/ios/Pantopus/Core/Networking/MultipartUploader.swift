@@ -749,6 +749,26 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// "Add from a document": a PDF of the home's inspection report, appraisal or listing sheet (field `file`;
+    /// `POST /api/homes/:id/document-facts/read`, route `backend/routes/home.js`). The server reads it in memory and
+    /// keeps nothing; the answer lists the facts it states for the household to check.
+    public func readDocumentFacts(homeId: String, file: MultipartFile) async throws -> DocumentFactsAnswerDTO {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent("/api/homes/\(homeId)/document-facts/read")
+        let body = Self.buildBody(boundary: boundary, file: file)
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300:
+            return try JSONDecoder().decode(DocumentFactsAnswerDTO.self, from: data)
+        case 401:
+            throw APIError.unauthorized
+        case 400..<500:
+            throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
+        default:
+            throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
     /// The whole post suggested from the person's photos (JPEGs, field `photos`,
     /// up to 4) and the composer's fields (`postType`, what they've written, the
     /// place) (`POST /api/ai/draft/post-suggestion`; route `backend/routes/ai.js:333`).

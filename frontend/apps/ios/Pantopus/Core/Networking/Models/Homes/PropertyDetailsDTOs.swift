@@ -283,14 +283,75 @@ public struct HouseholdPartDTO: Decodable, Sendable, Hashable {
     public let countyCheck: HouseholdCountyCheckDTO?
     /// "Is this your layout?", for a unit its building's sheet names.
     public let floorPlan: FloorPlanLayoutDTO?
+    /// "Add from a document", for a verified member who can edit (`backend/services/householdDocuments`).
+    public let documents: HouseholdDocumentsOfferDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case sections, groups, questions
+        case sections, groups, questions, documents
         case canEdit = "can_edit"
         case countyPage = "county_page"
         case countyCheck = "county_check"
         case floorPlan = "floor_plan"
     }
+}
+
+/// "From your papers": the card's words, as the server sends them.
+public struct HouseholdDocumentsOfferDTO: Decodable, Sendable, Hashable {
+    public let title: String
+    public let lead: String
+    public let action: String
+}
+
+/// A fact the household's report states, beside what the page shows now (`note`), and where it says it (`source`).
+public struct DocumentFactDTO: Decodable, Sendable, Hashable, Identifiable {
+    public let key: String
+    public let label: String
+    public let value: String?
+    /// What a fix starts from: the report's value.
+    public let current: String
+    public let note: String?
+    /// `number`, `decimal`, `year` or `text`.
+    public let input: String
+    public let unit: String?
+    public let options: [HouseholdAnswerDTO]
+    /// "Page 3: “Manufacture Date: 2018”".
+    public let source: String
+
+    public var id: String {
+        key
+    }
+}
+
+/// What the server read in a report (`POST /api/homes/:id/document-facts/read`). Nothing of it is kept; `message`
+/// says why an answer has no facts.
+public struct DocumentFactsAnswerDTO: Decodable, Sendable, Hashable, Identifiable {
+    public let kind: String
+    public let title: String
+    public let subtitle: String
+    public let lead: String
+    public let facts: [DocumentFactDTO]
+    public let missing: String?
+    public let message: String?
+
+    public var id: String {
+        "\(kind)|\(subtitle)|\(facts.map(\.key).joined(separator: ","))"
+    }
+}
+
+/// The facts the household kept from its report (`POST /api/homes/:id/document-facts`).
+public struct DocumentFactsSaveRequest: Encodable, Sendable {
+    public struct Fact: Encodable, Sendable {
+        public let key: String
+        public let value: String
+    }
+
+    public let kind: String
+    public let facts: [Fact]
+}
+
+/// "Saved 9 facts from your inspection report."
+public struct DocumentFactsSavedResponse: Decodable, Sendable {
+    public let message: String
 }
 
 /// "Is this your layout?" at the foot of the card `sectionId`, or what the household said
