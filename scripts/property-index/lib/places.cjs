@@ -228,8 +228,8 @@ function registryPoints(work, fips, state, wanted) {
  * Each home's municipality from the boundary its registry point sits in, for records whose county doesn't state one.
  * `hold(record, fact, value, from)` keeps it off screens until the county's switch is on (derive.cjs).
  */
-function addMunicipalities(records, county, work, hold, sortKey) {
-  const homes = records.filter((record) => !record.restricted && record.facts && record.facts.municipality === undefined && record.kind !== 'other');
+function addMunicipalities(records, county, work, hold, sortKey, asks = (record) => (record.facts.municipality === undefined ? 'fill' : null)) {
+  const homes = records.filter((record) => !record.restricted && record.facts && record.kind !== 'other' && asks(record));
   if (!homes.length) return;
   const keys = new Map(homes.map((record) => [record, sortKey(record.address)]));
   const points = registryPoints(work, county.fips, county.state, new Set(keys.values()));
@@ -238,7 +238,7 @@ function addMunicipalities(records, county, work, hold, sortKey) {
     return;
   }
   const locate = locator(work, county.state, county.name, county.fips);
-  const counts = { city: 0, town: 0, unincorporated: 0, unsure: 0, no_point: 0, points_differ: 0 };
+  const counts = { city: 0, town: 0, unincorporated: 0, reworded: 0, county_disagrees: 0, unsure: 0, no_point: 0, points_differ: 0 };
   for (const record of homes) {
     const a = record.address;
     const candidates = (points.get(keys.get(record)) || []).filter(([pre, suffix, post, zip]) => (!a.pre || !pre || pre === a.pre)
@@ -254,6 +254,13 @@ function addMunicipalities(records, county, work, hold, sortKey) {
     if (unsure) { counts.unsure += 1; continue; }
     if (found.size !== 1) { counts.points_differ += 1; continue; }
     const at = JSON.parse([...found][0]);
+    // A county that names itself says the home is in no city: only the limits agreeing reword it.
+    if (asks(record) === 'reword') {
+      if (at.kind !== 'unincorporated') { counts.county_disagrees += 1; continue; }
+      counts.reworded += 1;
+      hold(record, 'municipality', at.name, `From ${BOUNDARIES}`, { rewording: true });
+      continue;
+    }
     counts[at.kind] += 1;
     hold(record, 'municipality', at.name, `From ${BOUNDARIES}`);
   }

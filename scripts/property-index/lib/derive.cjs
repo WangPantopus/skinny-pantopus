@@ -55,11 +55,12 @@ function deriveRows(records, county, { work = null } = {}) {
   function hold(record, fact, value, words, { rewording = false } = {}) {
     const stated = record.facts[fact] !== undefined || record.held?.new_columns?.[fact] !== undefined;
     if ((stated && !rewording) || value === null || value === undefined || value === '') return false;
+    // A county's row says one source for every home: a second source for the same fact holds nothing (counted, never shown).
+    if (from[fact] && from[fact] !== words) { counts[`${fact} from a second source, left out`] = (counts[`${fact} from a second source, left out`] || 0) + 1; return false; }
     record.held = record.held || {};
     record.held[SWITCH] = record.held[SWITCH] || {};
     if (record.held[SWITCH][fact] !== undefined) return false;
     record.held[SWITCH][fact] = value;
-    if (from[fact] && from[fact] !== words) throw new Error(`Two sources for the derived ${fact} in ${county.fips}`);
     from[fact] = words;
     counts[fact] = (counts[fact] || 0) + 1;
     return true;
@@ -88,12 +89,14 @@ function deriveRows(records, county, { work = null } = {}) {
         hold(record, 'property_subtype', meant.subtype, uses.from);
       }
     }
-    // A jurisdiction field that names the county means the home is in no city.
-    if (facts.municipality !== undefined && namesTheCounty(facts.municipality, county)) {
-      hold(record, 'municipality', `Unincorporated ${county.name}`, `From ${office}’s jurisdiction`, { rewording: true });
-    }
   }
-  if (work) addMunicipalities(records, county, work, hold, sortKey);
+  // The city or town limits that hold the home's point: for a home whose county names no municipality, and, reworded, for one
+  // whose county names itself ("Clark County") where the limits agree it's in no city.
+  const asks = (record) => {
+    if (record.facts.municipality === undefined) return 'fill';
+    return namesTheCounty(record.facts.municipality, county) ? 'reword' : null;
+  };
+  if (work) addMunicipalities(records, county, work, hold, sortKey, asks);
   log(`${county.fips}: derived rows held: ${Object.entries(counts).map(([fact, n]) => `${fact} ${n}`).join(', ') || 'none'}`);
   return from;
 }
