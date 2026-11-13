@@ -4,8 +4,8 @@
 // build.cjs compares each county that has a state file here with that file, built for the comparison and never
 // published, and writes the counts into the release report; coverage.cjs prints them. Counts only, never a home.
 //
-// The same home: the same parcel number (letters and digits, leading zeros dropped), else the same address and unit,
-// each only where it names one home on both sides. The same thing: what Property details would show from either one
+// The same home: the same parcel number (letters and digits, leading zeros dropped), else the same address and unit
+// (without the ZIP, which many county files lack), each only where it names one home on both sides. The same thing: what Property details would show from either one
 // (years and counts exact, areas to the square foot, money to the dollar, acres to the hundredth, words ignoring case,
 // spacing and punctuation). A value is compared only for the same value year, a sale price only for a sale on the same
 // date or in the same month. Only facts both files fill are compared, and only where both show something. Words are
@@ -57,7 +57,8 @@ const parcelKey = (record) => {
   const text = String(record.facts?.parcel_number ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^0+/, '');
   return text || null;
 };
-const addressKey = ({ address: a }) => (a?.number && a?.name ? [a.number, a.pre, a.name, a.suffix, a.post, a.unit, a.building, a.zip].map((part) => part || '').join('|') : null);
+// No ZIP: many county files have none, and a key that repeats within the county names no home, so it's dropped (unique).
+const addressKey = ({ address: a }) => (a?.number && a?.name ? [a.number, a.pre, a.name, a.suffix, a.post, a.unit, a.building].map((part) => part || '').join('|') : null);
 
 /** Each key that names exactly one home. */
 function unique(records, keyOf) {
