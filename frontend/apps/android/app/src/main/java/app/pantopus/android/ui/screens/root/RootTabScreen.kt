@@ -3378,6 +3378,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             openNearby = { navController.navigateToRootTab(PantopusRoute.Plans) },
                             askPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                             openProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
+                            openBusiness = { businessId -> navController.navigate(ChildRoutes.businessProfile(businessId)) },
                         ),
                 )
                 composable(PantopusRoute.Mail.path) {

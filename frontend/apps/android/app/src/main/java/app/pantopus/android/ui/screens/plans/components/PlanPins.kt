@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.icon
+import app.pantopus.android.ui.screens.plans.planBusinessColors
 import app.pantopus.android.ui.screens.plans.planPinInk
 import app.pantopus.android.ui.screens.plans.planPinRing
 import app.pantopus.android.ui.screens.plans.plansDark
@@ -70,7 +71,7 @@ object PlanPinSize {
 }
 
 /** The small square badge on a pin's shoulder (board P1). */
-enum class PlanPinBadge { None, In, Hosting, Waiting }
+enum class PlanPinBadge { None, In, Hosting, Waiting, Business }
 
 /**
  * The teardrop: a circle with one sharp corner turned to point down (board P1 "never a plain disc or ring: in
@@ -194,6 +195,8 @@ private fun PinBadge(
             PlanPinBadge.In -> Triple(PantopusColors.success, PantopusColors.appTextInverse, PantopusIcon.Check)
             PlanPinBadge.Hosting -> Triple(PantopusColors.primary600, PantopusColors.appTextInverse, PantopusIcon.Flag)
             PlanPinBadge.Waiting -> Triple(PantopusColors.appTextStrong, PantopusColors.appSurface, PantopusIcon.Clock)
+            // A business's plan (board P1): the business badge, solid in the business color.
+            PlanPinBadge.Business -> Triple(planBusinessColors.accent, PantopusColors.appTextInverse, PantopusIcon.Store)
             PlanPinBadge.None -> return
         }
     Box(

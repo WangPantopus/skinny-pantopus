@@ -101,6 +101,13 @@ object PantopusColors {
     val businessDark = Color(0xFF5B21B6)
 
     /**
+     * The business color on a dark theme — `#A78BFA` on `#221833` (Plans with businesses, board P1): the business
+     * shape, its badge and "Verified business" when the app is dark.
+     */
+    val businessOnDark = Color(0xFFA78BFA)
+    val businessBgDark = Color(0xFF221833)
+
+    /**
      * Warm-amber identity pillar — `#B45309`. The "porch tone" accent for
      * support-train and other warm-tinted wizards (A12.11). Tailwind
      * amber-700; pairs with [warmAmberBg] for chips, selected-state

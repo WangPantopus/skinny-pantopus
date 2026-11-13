@@ -81,6 +81,7 @@ import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanLocation
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.PlanViewerStanding
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
 import app.pantopus.android.data.plans.standing
@@ -334,6 +335,7 @@ private fun PlansSheetHost(
                     onSeeAll = { onStop(PlanSheetStop.Full) },
                     onOpen = { actions.onOpenPlan(it.id) },
                     onRetry = viewModel::refresh,
+                    onHostFilter = viewModel::setHostFilter,
                 )
             else ->
                 PlansListContent(
@@ -343,6 +345,8 @@ private fun PlansSheetHost(
                     onOpenPulse = actions.onOpenPulse,
                     onOpenConnections = actions.onOpenConnections,
                     onRetry = viewModel::refresh,
+                    onOpenId = actions.onOpenPlan,
+                    onHostFilter = viewModel::setHostFilter,
                 )
         }
     }
@@ -529,7 +533,7 @@ private fun PlansMap(
         if (state.locationStatus == PlansLocationStatus.Ready) {
             PlansMapOverlay(
                 cameraState = camera,
-                pins = remember(state.pins, state.list, state.mine, state.postedId, state.selectedId) { mapPins(state) },
+                pins = remember(state.pins, state.list, state.mine, state.postedId, state.selectedId, state.hostShown) { mapPins(state) },
                 selectedId = state.selectedId,
                 onPin = { onPin(it.id) },
                 onCluster = { pins ->
@@ -609,7 +613,7 @@ private fun framedBounds(
 /** Pins as the map draws them, with TalkBack words that borrow the list's distance band when the pin has none. */
 private fun mapPins(state: PlansMapUiState): List<MapPin> {
     val cards: Map<String, PlanDto> = (state.list + state.mineAll).associateBy { it.id }
-    return state.pins.mapNotNull { pin ->
+    return state.pinsShown.mapNotNull { pin ->
         val mapPin = pin.toMapPin(cards[pin.id]) ?: return@mapNotNull null
         // H8: the plan just posted reads "Your plan · Sun 1:25", and so does your own pin once you tap it.
         val yours = pin.id == state.postedId || (pin.id == state.selectedId && pin.standing == PlanViewerStanding.HOSTING)
@@ -636,10 +640,12 @@ private fun PlanPinDto.toMapPin(card: PlanDto?): MapPin? {
                 PlanViewerStanding.IN -> PlanPinBadge.In
                 PlanViewerStanding.HOSTING -> PlanPinBadge.Hosting
                 PlanViewerStanding.REQUESTED, PlanViewerStanding.WAITLISTED -> PlanPinBadge.Waiting
-                else -> PlanPinBadge.None
+                // Where the viewer stands wins the shoulder; otherwise a business's pin carries its badge.
+                else -> if (isBusiness) PlanPinBadge.Business else PlanPinBadge.None
             },
-        neighborhood = precision == "neighborhood" || kind == PlanKind.PLAYDATE,
-        areaLabel = if (kind == PlanKind.PLAYDATE) areaLabel ?: card?.area?.label else null,
+        neighborhood = !isBusiness && (precision == "neighborhood" || kind == PlanKind.PLAYDATE),
+        areaLabel = if (kind == PlanKind.PLAYDATE && !isBusiness) areaLabel ?: card?.area?.label else null,
+        exact = isBusiness,
     )
 }
 
@@ -698,7 +704,8 @@ private fun PlansTopChrome(
                 GlassCircleButton(icon = PantopusIcon.ChevronLeft, label = "Back to all plans", onClick = onBackFromCard)
                 Spacer(modifier = Modifier.weight(1f))
                 val inOrHosting = selected?.standing == PlanViewerStanding.IN || selected?.standing == PlanViewerStanding.HOSTING
-                if (!inOrHosting) {
+                // A business's plan is at its own public address: no "area only" promise to make.
+                if (!inOrHosting && selected?.isBusiness != true) {
                     PlanScopeChip(
                         text =
                             if (selected?.planKind == PlanKind.PLAYDATE) {

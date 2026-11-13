@@ -63,6 +63,8 @@ data class PickedPlace(
     val categories: List<String> = emptyList(),
     /** Found by "You're here now": H4 says so under the place's name. */
     val hereNow: Boolean = false,
+    /** The picker's id for a place it listed (`osm:node/123`), sent as `place.place_id`: the venue's key (step 1). */
+    val placeId: String? = null,
 )
 
 /** What H6's "You're here now" row says while it looks, or after it found nothing. */
@@ -718,6 +720,7 @@ class HostFlowViewModel
                         address = picked?.address,
                         latitude = picked?.latitude,
                         longitude = picked?.longitude,
+                        placeId = picked?.placeId,
                     )
                 }
             val rules =

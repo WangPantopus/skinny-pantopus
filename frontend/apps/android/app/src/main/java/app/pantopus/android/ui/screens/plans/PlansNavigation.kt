@@ -2,6 +2,7 @@ package app.pantopus.android.ui.screens.plans
 
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -78,16 +79,45 @@ data class PlansExternalRoutes(
     val askPantopus: ((AIScreenContext) -> Unit)? = null,
     /** A person's profile: the host's, a guest's or a requester's, from their photo and name. */
     val openProfile: ((userId: String) -> Unit)? = null,
+    /** A business's page: the host card of a business's plan (Plans with businesses). */
+    val openBusiness: ((businessUserId: String) -> Unit)? = null,
 )
 
 /** Opens a person's profile from the Plans pages; null leaves people plain. */
 val LocalPlanOpenProfile = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/** Opens a business's page from the Plans pages; null leaves the business's card plain. */
+val LocalPlanOpenBusiness = staticCompositionLocalOf<((String) -> Unit)?> { null }
 
 /** A tap opens [userId]'s profile through [open] (the Plans pages' [LocalPlanOpenProfile]); no change when either is null. */
 fun Modifier.opensPlanProfile(
     userId: String?,
     open: ((String) -> Unit)?,
 ): Modifier = if (userId != null && open != null) clickable(onClickLabel = "Open profile", role = Role.Button) { open(userId) } else this
+
+/** A tap opens the business [businessUserId]'s page through [open] ([LocalPlanOpenBusiness]); no change when either is null. */
+fun Modifier.opensPlanBusiness(
+    businessUserId: String?,
+    open: ((String) -> Unit)?,
+): Modifier =
+    if (businessUserId != null && open != null) {
+        clickable(onClickLabel = "Open the business's page", role = Role.Button) { open(businessUserId) }
+    } else {
+        this
+    }
+
+/** The Plans pages' ways out to a person's profile and a business's page. */
+@Composable
+private fun PlansLocals(
+    external: PlansExternalRoutes,
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(
+        LocalPlanOpenProfile provides external.openProfile,
+        LocalPlanOpenBusiness provides external.openBusiness,
+        content = content,
+    )
+}
 
 /** Registers every Plans page. Call inside the root `NavHost`. */
 fun NavGraphBuilder.plansRoutes(
@@ -114,7 +144,7 @@ fun NavGraphBuilder.plansRoutes(
                 },
             ),
     ) {
-        CompositionLocalProvider(LocalPlanOpenProfile provides external.openProfile) {
+        PlansLocals(external) {
             PlanDetailScreen(
                 onBack = { if (!nav.popBackStack()) external.openNearby() },
                 onOpenPlan = { id -> nav.navigate(PlansRoutes.plan(id)) },
@@ -132,7 +162,7 @@ fun NavGraphBuilder.plansRoutes(
         route = PlansRoutes.REQUESTS,
         arguments = listOf(navArgument(PlansRoutes.PLAN_ID_KEY) { type = NavType.StringType }),
     ) {
-        CompositionLocalProvider(LocalPlanOpenProfile provides external.openProfile) {
+        PlansLocals(external) {
             PlanRequestsScreen(onBack = { if (!nav.popBackStack()) external.openNearby() })
         }
     }

@@ -137,6 +137,8 @@ fun PlanIconTile(
 fun PlanTypeTag(
     kind: PlanKind,
     modifier: Modifier = Modifier,
+    /** What a business calls its plan ("Clinic"), drawn in the kind's colors; the kind's name otherwise. */
+    label: String? = null,
 ) {
     Row(
         modifier =
@@ -151,7 +153,7 @@ fun PlanTypeTag(
     ) {
         PlanSwatch(kind)
         Text(
-            text = kind.label,
+            text = label?.takeIf(String::isNotBlank) ?: kind.label,
             style = PantopusTextStyle.small.copy(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold),
             color = PantopusColors.appText,
         )
@@ -333,6 +335,8 @@ private fun PlanChoiceRow(
 fun PlanScopeChip(
     text: String,
     modifier: Modifier = Modifier,
+    /** The lock of a privacy promise; a business's plan shows its street address with a map pin instead. */
+    icon: PantopusIcon = PantopusIcon.Lock,
 ) {
     Row(
         modifier =
@@ -346,7 +350,7 @@ fun PlanScopeChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        PantopusIconImage(icon = PantopusIcon.Lock, contentDescription = null, size = 14.dp, tint = PantopusColors.appTextStrong)
+        PantopusIconImage(icon = icon, contentDescription = null, size = 14.dp, tint = PantopusColors.appTextStrong)
         Text(
             text = text,
             style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.SemiBold),

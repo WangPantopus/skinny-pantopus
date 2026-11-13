@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanPersonDto
 import app.pantopus.android.data.plans.PlanFormat
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.ui.components.GhostButton
@@ -172,6 +173,22 @@ private fun HostNote(
     }
 }
 
+/** One person in "who's going": "Sam (host)", "you + 1", "Alex + 1"; a business hosting is named in full, never its first word. */
+private fun personWords(
+    person: PlanPersonDto,
+    plan: PlanDto,
+    viewerId: String?,
+    you: String,
+): String {
+    val first = if (person.isHost && plan.isBusiness) plan.hostFirst else PlanFormat.firstName(person.displayName)
+    return when {
+        viewerId != null && person.userId == viewerId -> you
+        person.isHost -> "$first (host)"
+        person.partySize > 1 -> "$first + ${person.partySize - 1}"
+        else -> first
+    }
+}
+
 /** "Sam (host), you + 1, Alex + 1, Jordan and 2 more", with their initials: parties and up to 4 names, as on iOS. */
 @Composable
 private fun PeopleLine(
@@ -182,17 +199,7 @@ private fun PeopleLine(
     if (people.isEmpty()) return
     val myParty = plan.myRequest?.partySize ?: 1
     val you = if (plan.isPlaydate || myParty <= 1) "you" else "you + ${myParty - 1}"
-    val names =
-        people
-            .map { person ->
-                val first = PlanFormat.firstName(person.displayName)
-                when {
-                    viewerId != null && person.userId == viewerId -> you
-                    person.isHost -> "$first (host)"
-                    person.partySize > 1 -> "$first + ${person.partySize - 1}"
-                    else -> first
-                }
-            }.toMutableList()
+    val names = people.map { person -> personWords(person, plan, viewerId, you) }.toMutableList()
     // The server lists everyone in; if this phone's account isn't among them yet, "you" still goes after the host.
     if (you !in names) names.add(if (people.firstOrNull()?.isHost == true) 1 else 0, you)
     val shown = names.take(4)

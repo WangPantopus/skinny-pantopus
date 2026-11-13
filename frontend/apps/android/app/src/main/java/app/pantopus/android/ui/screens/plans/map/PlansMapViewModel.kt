@@ -13,7 +13,9 @@ import app.pantopus.android.data.api.models.plans.PlansSportsDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.plans.PlanFormat
+import app.pantopus.android.data.plans.PlanHostFilter
 import app.pantopus.android.data.plans.PlanKind
+import app.pantopus.android.data.plans.PlanListChoices
 import app.pantopus.android.data.plans.PlanLocation
 import app.pantopus.android.data.plans.PlanLocationResolver
 import app.pantopus.android.data.plans.PlanOrigin
@@ -24,6 +26,7 @@ import app.pantopus.android.data.plans.PlansEvents
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.plans.PlansFlags
 import app.pantopus.android.data.plans.PlansRepository
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -78,14 +81,33 @@ data class PlansMapUiState(
     val postedId: String? = null,
     /** The closest town with plans 5 to 15 miles away, when nothing is near (F4). */
     val elsewhere: PlansElsewhereDto? = null,
+    /** The All / Neighbors / Businesses filter the person chose (Plans with businesses, board G2), remembered. */
+    val hostFilter: PlanHostFilter = PlanHostFilter.ALL,
+    /**
+     * Whether the list says a business has a plan here (`has_business_plans`): null until a list answers. The filter
+     * shows only when true, so Plans looks exactly as before until then.
+     */
+    val hasBusinessPlans: Boolean? = null,
 ) {
+    /** The filter in effect: the person's choice while businesses have plans here, else all. */
+    val hostShown: PlanHostFilter
+        get() = if (hasBusinessPlans == false) PlanHostFilter.ALL else hostFilter
+
+    /** The filter shows under the list's title only once a business has a plan in the area. */
+    val showsHostFilter: Boolean
+        get() = hasBusinessPlans == true
+
+    /** The filter is narrowing the list (and the pins) right now. */
+    val hostFiltered: Boolean
+        get() = showsHostFilter && hostShown != PlanHostFilter.ALL
+
     /** The kinds the chips offer: playdates only while their flag is on. */
     val kinds: List<PlanKind>
         get() = PlanKind.entries.filter { it != PlanKind.PLAYDATE || (flags.playdatesOn && mine?.viewer?.seesPlaydates != false) }
 
-    /** Nothing this week around here (board F4). */
+    /** Nothing this week around here (board F4). A filtered list says so itself, with "Show all plans". */
     val isEmpty: Boolean
-        get() = listStatus == PlansListStatus.Loaded && list.isEmpty() && pins.isEmpty() && mineShown.isEmpty()
+        get() = listStatus == PlansListStatus.Loaded && list.isEmpty() && pins.isEmpty() && mineShown.isEmpty() && !hostFiltered
 
     /** Every plan of the viewer's: invitations waiting for an answer first (as on iOS), then soonest first. */
     val mineAll: List<PlanDto>
@@ -97,15 +119,19 @@ data class PlansMapUiState(
             return (invited + others).distinctBy { it.id }
         }
 
-    /** The viewer's own plans of the kind the chips show ("Your plans" follows the filter like the map). */
+    /** The viewer's own plans of the kind the chips show ("Your plans" follows the filters like the map). */
     val mineShown: List<PlanDto>
-        get() = mineAll.filter { kind == null || it.planKind == kind }
+        get() = mineAll.filter { plan -> (kind == null || plan.planKind == kind) && hostShown.passes(plan.isBusiness) }
+
+    /** The pins the map draws: the All / Neighbors / Businesses filter applies on the phone. */
+    val pinsShown: List<PlanPinDto>
+        get() = if (hostShown == PlanHostFilter.ALL) pins else pins.filter { hostShown.passes(it.isBusiness) }
 
     /** The list without the viewer's own plans (they show under "Your plans"). */
     val others: List<PlanDto>
         get() {
             val own = mineAll.map { it.id }.toSet()
-            return list.filterNot { it.id in own }
+            return list.filterNot { it.id in own }.filter { hostShown.passes(it.isBusiness) }
         }
 }
 
@@ -122,8 +148,9 @@ class PlansMapViewModel
         private val locations: PlanLocationResolver,
         private val feature: PlansFeature,
         private val events: PlansEvents,
+        private val choices: PlanListChoices,
     ) : ViewModel() {
-        private val _state = MutableStateFlow(PlansMapUiState(flags = feature.flags.value))
+        private val _state = MutableStateFlow(PlansMapUiState(flags = feature.flags.value, hostFilter = choices.host))
         val state: StateFlow<PlansMapUiState> = _state.asStateFlow()
 
         private var viewport: PlanViewport? = null
@@ -250,6 +277,16 @@ class PlansMapViewModel
             refreshAll(force = false)
         }
 
+        /**
+         * The list's All / Neighbors / Businesses filter (board G2): it narrows the list and the pins on the phone, as the
+         * kind chips' "Your plans" does, and is remembered. Nothing is read again.
+         */
+        fun setHostFilter(filter: PlanHostFilter) {
+            if (_state.value.hostFilter == filter) return
+            choices.host = filter
+            _state.update { it.copy(hostFilter = filter, selectedId = null, selected = null) }
+        }
+
         /** The area pill's time choice. */
         fun setWindow(window: PlanWindow) {
             if (_state.value.window == window) return
@@ -316,6 +353,7 @@ class PlansMapViewModel
                     list = copy?.items?.let(::visible) ?: it.list,
                     mine = mine ?: it.mine,
                     listStatus = if (copy != null) PlansListStatus.Loaded else it.listStatus,
+                    hasBusinessPlans = if (copy != null) copy.hasBusinessPlans == true else it.hasBusinessPlans,
                 )
             }
             viewport?.let { box ->
@@ -342,11 +380,14 @@ class PlansMapViewModel
                     val mineRead = async { repository.mine(force) }
                     val list = listRead.await()
                     val mine = mineRead.await()
+                    // No business has a plan here: the filter goes away and everything shows.
+                    val businessesHere = list.data?.let { it.hasBusinessPlans == true }
                     _state.update { current ->
                         val items = list.data?.items?.let(::visible)
                         val failure = list.failure
                         current.copy(
                             list = items ?: current.list,
+                            hasBusinessPlans = businessesHere ?: current.hasBusinessPlans,
                             elsewhere = if (items != null) list.data?.nearestElsewhere else current.elsewhere,
                             mine = mine.data ?: current.mine,
                             refreshing = false,

@@ -45,7 +45,7 @@ import retrofit2.http.Query
  * Nearby Plans: every `/api/plans` route of the build brief (section 5), the Plans layer of
  * `GET /api/posts/map`, and the flag read. Every Plans route answers 404 while the `plans` flag is off for the
  * viewer, so the app checks [flag] first and treats a 404 as "not available", never as an error.
- * Routes: `backend/routes/plans.js` (P1).
+ * Routes: `backend/routes/plans.js` (P1). Every request here also carries `biz=1` (`PlansBizInterceptor`).
  */
 interface PlansApi {
     /** `GET /api/feature-flags/:flagName` (`backend/routes/featureFlags.js:30`): `plans` or `plans_playdates`. */

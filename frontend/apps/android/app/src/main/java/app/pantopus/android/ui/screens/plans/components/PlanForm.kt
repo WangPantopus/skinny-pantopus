@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -248,6 +249,8 @@ fun PlanSegmented(
     selected: String,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** A test id per option, in order (the list's host filter); none otherwise. */
+    optionTags: List<String>? = null,
 ) {
     val large = LocalDensity.current.fontScale >= LARGE_TEXT_SCALE
     if (large) {
@@ -268,12 +271,13 @@ fun PlanSegmented(
                 .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        options.forEach { (id, label) ->
+        options.forEachIndexed { index, (id, label) ->
             val on = id == selected
             Box(
                 modifier =
                     Modifier
                         .weight(1f)
+                        .then(optionTags?.getOrNull(index)?.let { Modifier.testTag(it) } ?: Modifier)
                         .heightIn(min = 38.dp)
                         .clip(RoundedCornerShape(Radii.md))
                         .background(if (on) PantopusColors.appSurface else Color.Transparent)

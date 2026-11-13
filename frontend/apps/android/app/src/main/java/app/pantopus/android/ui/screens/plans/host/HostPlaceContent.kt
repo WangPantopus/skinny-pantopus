@@ -646,6 +646,7 @@ internal fun PlanNearbyPlaceDto.toPicked(): PickedPlace? {
         category = category?.split(',')?.firstOrNull()?.trim(),
         distanceMeters = distanceMeters,
         categories = categories.orEmpty().ifEmpty { listOfNotNull(category) },
+        placeId = placeId?.takeIf(String::isNotBlank),
     )
 }
 
