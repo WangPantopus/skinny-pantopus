@@ -22,6 +22,7 @@ const feedService = require('../feedService');
 const { getFlag, isFeatureEnabled } = require('../featureFlagService');
 const { loadChatPeople } = require('../chatPeople');
 const { verifiedResidentUserIds } = require('../../utils/identityProfiles');
+const { PANTOPUS_VERIFIED_STATUSES } = require('../../utils/businessConstants');
 const { applyLocationPrecision, MAX_DISPLAY_OFFSET_DEGREES, snapToNeighborhoodCells } = require('../../utils/locationPrivacy');
 const { shownReaction, reactionSummary } = require('../../utils/postReaction');
 const media = require('./momentMedia');
@@ -180,10 +181,11 @@ async function loadAuthors(userIds) {
   const kinds = new Map(accounts.map((u) => [String(u.id),
     u.account_type === 'curator' ? 'pantopus' : u.account_type === 'business' ? 'business' : 'person']));
   const businessIds = ids.filter((id) => kinds.get(id) === 'business');
-  // A business's check is its verification; if that can't be read, it shows none.
+  // A business's check is Pantopus's verification (a reviewed document or a registry check), never the owner's own
+  // word (self_attested); if that can't be read, it shows none.
   const businesses = await readInBatches(businessIds, (batch) => supabaseAdmin.from('BusinessProfile')
     .select('business_user_id, verification_status').in('business_user_id', batch), 'businesses').catch(() => []);
-  const verifiedBusinesses = new Set(businesses.filter((b) => b.verification_status === 'verified')
+  const verifiedBusinesses = new Set(businesses.filter((b) => PANTOPUS_VERIFIED_STATUSES.has(b.verification_status))
     .map((b) => String(b.business_user_id)));
   const authors = new Map();
   for (const id of ids) {
