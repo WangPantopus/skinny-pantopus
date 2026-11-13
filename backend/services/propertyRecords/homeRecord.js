@@ -14,7 +14,10 @@
  * now: another record replaces it, and several records, none or a suppressed one
  * take it off, since a wrong home's facts are worse than none. Only a lookup that
  * can't say keeps the last copy, shown with its date: an outage, a timeout, a
- * release past its date. A withdrawn source's facts go.
+ * release past its date. A withdrawn source's facts go. Where a county's past_date
+ * switch is on (router.js), a release past its date still answers, and a copy from it
+ * is served with `past_date: true`, so screens say how old it is (provenanceOf,
+ * countyRecordSerializer.js). That mark is never stored on the Home.
  *
  * A lookup holds a screen for a moment at most. Past that the screen says "looking
  * up", the lookup finishes behind it, and a Home that was told so is tried again
@@ -147,7 +150,18 @@ function agreedCopy(answer, address) {
 /** The agreed facts as they may be served now, leaving out any its county withholds. Null when nothing is left. */
 function servedAgreed(answer, address) {
   const shared = router.served(agreedCopy(answer, address));
-  return shared && Object.keys(shared.facts).length ? shared : null;
+  return shared && Object.keys(shared.facts).length ? dated(shared, answer.county) : null;
+}
+
+/**
+ * A copy as screens get it: marked `past_date` when its county's past_date switch is on and the release it came from
+ * is the one serving and past its date (router.js). Never stored, so the switch going off takes the words away at once.
+ * @param {object|null} copy    a served copy
+ * @param {object|null} county  the county's entry in its state's file now (null until this server has read it)
+ */
+function dated(copy, county) {
+  if (!copy || !county || !router.pastDateFor(copy.jurisdiction) || county.release !== copy.release) return copy;
+  return county.stale_after && Date.now() > Date.parse(county.stale_after) ? { ...copy, past_date: true } : copy;
 }
 
 /** "Nov 3, 2026" from "2026-11-03". */
@@ -166,6 +180,8 @@ function provenanceOf(copy) {
       : 'We found the building. Your unit\'s details weren\'t in the county record. ';
   }
   if (copy.match === 'ambiguous') lead = 'More than one home is on record at this address, and all of its records agree on these details. Add your unit if you have one. ';
+  // A release past its date that still answers (dated): how old it is, plainly.
+  const age = copy.past_date ? '. These are the newest county records we have; some details may have changed since.' : '';
   return {
     publisher: copy.publisher,
     dataset: copy.dataset,
@@ -173,7 +189,7 @@ function provenanceOf(copy) {
     // An address's several records: "building", which the apps read as "not your own unit's record".
     scope: { exact: 'unit', building_only: 'building', parcel_only: 'parcel', ambiguous: 'building' }[copy.match],
     method: copy.method,
-    label: `${lead}${source}`,
+    label: `${lead}${source}${age}`,
     title: copy.title || 'County records',
   };
 }
@@ -321,7 +337,7 @@ function liveCopy(home) {
   const stored = storedCopy(home);
   if (!stored || !router.showsCopies(stored.jurisdiction)) return null;
   refreshSoon(home, stored);
-  return setAside(home, stored) ? null : router.served(stored);
+  return setAside(home, stored) ? null : dated(router.served(stored), countyNow(home, stored));
 }
 
 /**
@@ -347,7 +363,7 @@ async function readForHome(home) {
   // Taking a county off its live list takes its copies off the screens too; they stay on the Home for when it comes back.
   if (stored && router.showsCopies(stored.jurisdiction)) {
     refreshSoon(home, stored);
-    if (!setAside(home, stored)) return { copy: router.served(stored), lookup: null };
+    if (!setAside(home, stored)) return { copy: dated(router.served(stored), countyNow(home, stored)), lookup: null };
     if (countyNow(home, stored).status === 'withdrawn') return { copy: null, lookup: 'none', reason: 'withdrawn', jurisdiction: stored.jurisdiction };
     // A release taken back: ask the release in its place, as a Home with no copy would.
   }
@@ -362,7 +378,7 @@ async function readForHome(home) {
       return { copy: null, lookup: 'none', match: answer.match, reason: answer.reason || null, jurisdiction: answer.jurisdiction, ...(shared ? { shared } : {}) };
     }
     await storeCopy(home, copy);
-    return { copy: router.served(copy), lookup: null };
+    return { copy: dated(router.served(copy), answer.county), lookup: null };
   } catch (err) {
     if (!(err instanceof StorageUnavailable)) throw err;
     finishLater(home);
@@ -424,7 +440,7 @@ async function readForAddress(address, { patient = false } = {}) {
       if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
       const copy = copyFromAnswer(answer, address);
       const shared = copy ? null : servedAgreed(answer, address);
-      return { copy: router.served(copy), whole: copy, answer, lookup: copy ? 'found' : 'none', ...(shared ? { shared } : {}) };
+      return { copy: dated(router.served(copy), answer.county), whole: copy, answer, lookup: copy ? 'found' : 'none', ...(shared ? { shared } : {}) };
     } catch (err) {
       if (!(err instanceof StorageUnavailable)) throw err;
       if (Date.now() + FOLLOW_UP_EVERY_MS > until) return { copy: null, whole: null, answer: null, lookup: 'pending' };
