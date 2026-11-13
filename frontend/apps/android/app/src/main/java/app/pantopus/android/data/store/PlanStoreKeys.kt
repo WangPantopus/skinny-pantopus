@@ -32,7 +32,6 @@ object PlanStoreKeys {
         window: String,
         latitude: Double?,
         longitude: Double?,
-        host: String? = null,
     ) = StoreKey<PlanPinsResponse>(
         "api/posts/map",
         mapOf(
@@ -45,7 +44,6 @@ object PlanStoreKeys {
             "window" to window,
             "latitude" to latitude?.toString(),
             "longitude" to longitude?.toString(),
-            "host" to host,
         ),
         kind = StoreKind.NEARBY,
         topics = setOf(TOPIC, "plan:*"),
@@ -60,7 +58,6 @@ object PlanStoreKeys {
         longitude: Double?,
         window: String,
         kinds: String?,
-        host: String? = null,
     ) = StoreKey<PlansListResponse>(
         "api/plans",
         mapOf(
@@ -68,7 +65,6 @@ object PlanStoreKeys {
             "longitude" to longitude?.toString(),
             "window" to window,
             "kinds" to kinds?.takeIf(String::isNotBlank),
-            "host" to host,
         ),
         kind = StoreKind.NEARBY,
         topics = setOf(TOPIC, "plan:*"),

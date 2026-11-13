@@ -243,6 +243,7 @@ private fun PlanFold(
             }
         }
         PlanFoldToggle(
+            planId = planId,
             text = if (open) "Show less" else foldLine(more.count, scope.window),
             open = open,
             onClick = { open = !open },
@@ -267,6 +268,7 @@ internal fun foldLine(
 
 @Composable
 private fun PlanFoldToggle(
+    planId: String,
     text: String,
     open: Boolean,
     onClick: () -> Unit,
@@ -276,7 +278,7 @@ private fun PlanFoldToggle(
             Modifier
                 .heightIn(min = 44.dp)
                 .clickable(role = Role.Button, onClick = onClick)
-                .testTag("planFold")
+                .testTag("planFold.$planId")
                 .semantics(mergeDescendants = true) { stateDescription = if (open) "Open" else "Closed" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -317,7 +319,7 @@ private fun PlanFoldLine(
                 .heightIn(min = 44.dp)
                 .clickable(role = Role.Button, onClick = onClick)
                 .padding(vertical = 12.dp)
-                .testTag("planFoldItem"),
+                .testTag("planFoldItem.${item.id}"),
     )
 }
 
@@ -365,7 +367,7 @@ private fun PlansHostFilterEmpty(
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,
         )
-        GhostButton(title = "Show all plans", onClick = onShowAll)
+        GhostButton(title = "Show all plans", onClick = onShowAll, modifier = Modifier.testTag("plansHostFilterShowAll"))
     }
 }
 

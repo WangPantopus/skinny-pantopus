@@ -73,8 +73,8 @@ enum class PlanWindow(
 
 /**
  * The list's All / Neighbors / Businesses filter (Plans with businesses, board G2). Shown only when the list says a
- * business has a plan in the area; [wire] is the `host=` the list and the pins take. "All" is left out of a request,
- * so it reads exactly as before.
+ * business has a plan in the area. It filters the list and the pins on the phone, as the kind chips do, so the
+ * requests stay as they were (as on iOS); [wire] is how the choice is remembered.
  */
 enum class PlanHostFilter(
     val wire: String,
@@ -85,8 +85,13 @@ enum class PlanHostFilter(
     BUSINESSES("businesses", "Businesses"),
     ;
 
-    /** The `host=` to send: null for "All". */
-    val param: String? get() = wire.takeIf { this != ALL }
+    /** Whether a plan (or pin) a business hosts, or not, passes this filter. */
+    fun passes(business: Boolean): Boolean =
+        when (this) {
+            ALL -> true
+            NEIGHBORS -> !business
+            BUSINESSES -> business
+        }
 
     companion object {
         fun from(wire: String?): PlanHostFilter = entries.firstOrNull { it.wire == wire } ?: ALL

@@ -121,9 +121,12 @@ internal fun PlanAskSheet(
             } else {
                 PartyField(plan, draft, onEdit)
             }
-            HelloField(plan, draft, onEdit)
+            // A business's plan that lets people in right away has no "Say hi" box (design, G4).
+            if (!joinsAtOnce) HelloField(plan, draft, onEdit)
             PlanScopeLine(
-                if (plan.isBusiness) {
+                if (plan.isBusiness && joinsAtOnce) {
+                    "$host sees your first name and how many are coming. Never your address."
+                } else if (plan.isBusiness) {
                     // A business's team sees less than a neighbor host (B4): a first name, how many and the note.
                     "$host sees your first name, how many are coming and your note. Never your address."
                 } else if (plan.isPlaydate) {

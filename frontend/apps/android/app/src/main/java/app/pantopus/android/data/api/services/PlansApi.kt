@@ -73,8 +73,6 @@ interface PlansApi {
         @Query("gps_longitude") gpsLongitude: Double? = null,
         @Query("gps_timestamp") gpsTimestamp: String? = null,
         @Query("layers") layers: String = "plans",
-        /** The list's filter, `neighbors` or `businesses`; left out for all (Plans with businesses). */
-        @Query("host") host: String? = null,
     ): Response<PlanPinsResponse>
 
     /**
@@ -92,8 +90,6 @@ interface PlansApi {
         @Query("gps_latitude") gpsLatitude: Double? = null,
         @Query("gps_longitude") gpsLongitude: Double? = null,
         @Query("gps_timestamp") gpsTimestamp: String? = null,
-        /** The list's filter, `neighbors` or `businesses`; left out for all (Plans with businesses). */
-        @Query("host") host: String? = null,
     ): Response<PlansListResponse>
 
     /** `GET /api/plans/mine`: hosting, going, asked and waitlisted. */

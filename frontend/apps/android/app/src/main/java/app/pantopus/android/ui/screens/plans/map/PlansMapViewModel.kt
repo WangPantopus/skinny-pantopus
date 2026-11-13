@@ -121,21 +121,17 @@ data class PlansMapUiState(
 
     /** The viewer's own plans of the kind the chips show ("Your plans" follows the filters like the map). */
     val mineShown: List<PlanDto>
-        get() =
-            mineAll.filter { plan ->
-                (kind == null || plan.planKind == kind) &&
-                    when (hostShown) {
-                        PlanHostFilter.ALL -> true
-                        PlanHostFilter.NEIGHBORS -> !plan.isBusiness
-                        PlanHostFilter.BUSINESSES -> plan.isBusiness
-                    }
-            }
+        get() = mineAll.filter { plan -> (kind == null || plan.planKind == kind) && hostShown.passes(plan.isBusiness) }
+
+    /** The pins the map draws: the All / Neighbors / Businesses filter applies on the phone. */
+    val pinsShown: List<PlanPinDto>
+        get() = if (hostShown == PlanHostFilter.ALL) pins else pins.filter { hostShown.passes(it.isBusiness) }
 
     /** The list without the viewer's own plans (they show under "Your plans"). */
     val others: List<PlanDto>
         get() {
             val own = mineAll.map { it.id }.toSet()
-            return list.filterNot { it.id in own }
+            return list.filterNot { it.id in own }.filter { hostShown.passes(it.isBusiness) }
         }
 }
 
@@ -281,13 +277,14 @@ class PlansMapViewModel
             refreshAll(force = false)
         }
 
-        /** The list's All / Neighbors / Businesses filter (board G2); it filters the pins too, and is remembered. */
+        /**
+         * The list's All / Neighbors / Businesses filter (board G2): it narrows the list and the pins on the phone, as the
+         * kind chips' "Your plans" does, and is remembered. Nothing is read again.
+         */
         fun setHostFilter(filter: PlanHostFilter) {
             if (_state.value.hostFilter == filter) return
             choices.host = filter
             _state.update { it.copy(hostFilter = filter, selectedId = null, selected = null) }
-            showStoredList()
-            refreshAll(force = false)
         }
 
         /** The area pill's time choice. */
@@ -349,8 +346,7 @@ class PlansMapViewModel
 
         private fun showStoredList() {
             val location = _state.value.location ?: return
-            val host = _state.value.hostShown
-            val copy = repository.listCopy(location.latitude, location.longitude, _state.value.window, kindsParam(), host)
+            val copy = repository.listCopy(location.latitude, location.longitude, _state.value.window, kindsParam())
             val mine = repository.mineCopy()
             _state.update {
                 it.copy(
@@ -361,7 +357,7 @@ class PlansMapViewModel
                 )
             }
             viewport?.let { box ->
-                repository.pinsCopy(box, kindsParam(), _state.value.window, _state.value.hostShown)?.let { pins ->
+                repository.pinsCopy(box, kindsParam(), _state.value.window)?.let { pins ->
                     _state.update { it.copy(pins = visiblePins(pins.markers)) }
                 }
             }
@@ -380,20 +376,12 @@ class PlansMapViewModel
                 viewModelScope.launch {
                     val window = _state.value.window
                     val kinds = kindsParam()
-                    val host = _state.value.hostShown
-                    val listRead = async { repository.list(location.latitude, location.longitude, window, kinds, force, host) }
+                    val listRead = async { repository.list(location.latitude, location.longitude, window, kinds, force) }
                     val mineRead = async { repository.mine(force) }
                     val list = listRead.await()
                     val mine = mineRead.await()
-                    // Asked for a filter but no business has a plan here any more: the filter goes away, and the list
-                    // and pins are read again for all.
+                    // No business has a plan here: the filter goes away and everything shows.
                     val businessesHere = list.data?.let { it.hasBusinessPlans == true }
-                    if (businessesHere == false && host != PlanHostFilter.ALL) {
-                        _state.update { it.copy(hasBusinessPlans = false) }
-                        loadList(force)
-                        loadPins(force, debounce = false)
-                        return@launch
-                    }
                     _state.update { current ->
                         val items = list.data?.items?.let(::visible)
                         val failure = list.failure
@@ -424,7 +412,7 @@ class PlansMapViewModel
             pinsJob =
                 viewModelScope.launch {
                     if (debounce) delay(PIN_DEBOUNCE_MS)
-                    val stored = repository.pins(box, kindsParam(), _state.value.window, force, _state.value.hostShown)
+                    val stored = repository.pins(box, kindsParam(), _state.value.window, force)
                     stored.data?.let { pins -> _state.update { it.copy(pins = visiblePins(pins.markers)) } }
                 }
         }

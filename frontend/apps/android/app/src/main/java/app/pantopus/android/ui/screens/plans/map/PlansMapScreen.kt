@@ -533,7 +533,7 @@ private fun PlansMap(
         if (state.locationStatus == PlansLocationStatus.Ready) {
             PlansMapOverlay(
                 cameraState = camera,
-                pins = remember(state.pins, state.list, state.mine, state.postedId, state.selectedId) { mapPins(state) },
+                pins = remember(state.pins, state.list, state.mine, state.postedId, state.selectedId, state.hostShown) { mapPins(state) },
                 selectedId = state.selectedId,
                 onPin = { onPin(it.id) },
                 onCluster = { pins ->
@@ -613,7 +613,7 @@ private fun framedBounds(
 /** Pins as the map draws them, with TalkBack words that borrow the list's distance band when the pin has none. */
 private fun mapPins(state: PlansMapUiState): List<MapPin> {
     val cards: Map<String, PlanDto> = (state.list + state.mineAll).associateBy { it.id }
-    return state.pins.mapNotNull { pin ->
+    return state.pinsShown.mapNotNull { pin ->
         val mapPin = pin.toMapPin(cards[pin.id]) ?: return@mapNotNull null
         // H8: the plan just posted reads "Your plan · Sun 1:25", and so does your own pin once you tap it.
         val yours = pin.id == state.postedId || (pin.id == state.selectedId && pin.standing == PlanViewerStanding.HOSTING)
