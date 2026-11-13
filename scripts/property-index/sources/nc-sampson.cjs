@@ -11,6 +11,7 @@ const { parse } = require('../../../backend/services/propertyRecords/addressKey'
 const { layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { isHomeSale } = require('../lib/sales.cjs');
@@ -19,7 +20,7 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '37163';
 const COUNTY = 'Sampson County';
 const LAYER = 'https://services3.arcgis.com/fM4kjZmPOS4ay2Ff/arcgis/rest/services/Parcels/FeatureServer/0';
-const COLUMNS = ['PIN', 'CALC_ACRES', 'ACREAGE', 'SALE_PRICE', 'DATE_RECOR', 'PARCEL_ADD', 'USE_DESC', 'ASSESSED_V', 'PARCEL_CLA', 'STYLE', 'CONSTRUCTI', 'STORY_HEIG', 'LIVING_ARE', 'YEAR_BUILT', 'HEAT', 'ROOF', 'FOUNDATION', 'TOTAL_ROOM', 'BEDROOMS', 'FULL_BATH', 'HALF_BATH'];
+const COLUMNS = ['PIN', 'CALC_ACRES', 'ACREAGE', 'SALE_PRICE', 'DATE_RECOR', 'PARCEL_ADD', 'USE_DESC', 'ASSESSED_V', 'PARCEL_CLA', 'STYLE', 'CONSTRUCTI', 'STORY_HEIG', 'LIVING_ARE', 'YEAR_BUILT', 'HEAT', 'ROOF', 'FOUNDATION', 'TOTAL_ROOM', 'BEDROOMS', 'FULL_BATH', 'HALF_BATH', 'SYSTEM'];
 
 // The use column lists the parcel's buildings, the main one first ("RANCH|STORAGE"). A parcel with living area is a home: a mobile home where the
 // main building is one ("DOUBLE WIDE MOHO", "MOBILE HOME"), a house otherwise.
@@ -82,7 +83,13 @@ function fromRow(row) {
     put(facts, 'sale_price', positive(row.SALE_PRICE));
     put(facts, 'sale_date', saleDate);
   }
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: null }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: null }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): the
+  // county's own words for the home's system, "HEAT AND A/C", "A/C ONLY", "HEAT ONLY" or "NONE", say whether it's cooled.
+  const system = String(row.SYSTEM ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
+  if (home && /A\/C/.test(system)) hold(record, 'cooling', 'Air conditioning');
+  else if (home && ['HEAT ONLY', 'NONE'].includes(system)) hold(record, 'cooling', 'None');
+  return record;
 }
 
 async function* build({ work, today }) {

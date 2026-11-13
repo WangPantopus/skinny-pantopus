@@ -204,8 +204,9 @@ async function olderRows(work, name, older) {
 
 const filled = (row) => Object.fromEntries(Object.entries(row).filter(([, value]) => String(value ?? '').trim()));
 
-async function* build({ work }) {
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+async function* build({ work, compare = null }) {
+  // A county build comparing its own record with this file (lib/agreement.cjs) asks for counties it otherwise leaves out.
+  const only = compare || (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   const files = await newestFiles();
   log(`${files.size} county files listed`);
   const about = await getJson(`${BUILDINGS}?f=json`, 'The building layer\'s description');
@@ -220,7 +221,7 @@ async function* build({ work }) {
       continue;
     }
     const fips = `37${String(place * 2 + 1).padStart(3, '0')}`;
-    if (OWN_CONNECTOR.has(fips) || (only.length && !only.includes(fips))) continue;
+    if ((OWN_CONNECTOR.has(fips) && !compare) || (only.length && !only.includes(fips))) continue;
     const buildings = await buildingsOf(work, fips, lists);
     const zip = path.join(work, 'nc-onemap', `${name}.zip`);
     download(`${BUCKET}/${key}`, zip);

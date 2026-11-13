@@ -21,6 +21,8 @@ const COUNTIES = {
   Franklin: '36033', Fulton: '36035', Herkimer: '36043', Jefferson: '36045', Madison: '36053', Nassau: '36059', Niagara: '36063', Orleans: '36073', Saratoga: '36091',
   Schenectady: '36093', Schoharie: '36095', Seneca: '36099', Washington: '36115', Yates: '36123',
 };
+// Monroe has its own connector (ny-monroe.cjs); its towns' rolls are read only to compare that record with (lib/agreement.cjs).
+const COMPARE_ONLY = { Monroe: '36055' };
 const COLUMNS = ['roll_year', 'municipality_name', 'swis_code', 'print_key_code', 'parcel_address_number', 'parcel_address_street', 'parcel_address_suff', 'property_class', 'front', 'depth', 'school_district_name', 'full_market_value', 'assessment_land', 'assessment_total'];
 // "Hempstead", "Glen Cove (city)", "Village of X": the town or city as a person would name it.
 const townName = (name) => String(name ?? '').trim().toUpperCase().replace(/\s*\((CITY|TOWN|VILLAGE)\)$/, '').replace(/^(CITY|TOWN|VILLAGE) OF\s+/, '');
@@ -49,12 +51,13 @@ function fromRoll(row, fips, county) {
   return { id: `pp:${kind}:${fips}:${String(row.swis_code ?? '').trim()}-${printKey}`, kind, home_type: homeType, address: { ...parsed, city: townName(row.municipality_name), zip: '' }, facts };
 }
 
-async function* build({ work }) {
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+async function* build({ work, compare = null }) {
+  // A county build comparing its own record with this file (lib/agreement.cjs) asks for counties it otherwise leaves out.
+  const only = compare || (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   const zips = zipsByCounty(work, ['36']);
   const years = new Map((await getJson(`https://${DATASET[0]}/resource/${DATASET[1]}.json?${new URLSearchParams({ $select: 'county_name,max(roll_year) AS year', $group: 'county_name' })}`, 'The roll years'))
     .map((row) => [row.county_name, Number(row.year)]));
-  for (const [name, fips] of Object.entries(COUNTIES)) {
+  for (const [name, fips] of Object.entries(compare ? { ...COUNTIES, ...COMPARE_ONLY } : COUNTIES)) {
     if (only.length && !only.includes(fips)) continue;
     const rollYear = years.get(name);
     if (!rollYear) throw new Error(`The rolls no longer list ${name}`);

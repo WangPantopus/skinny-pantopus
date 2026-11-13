@@ -9,6 +9,7 @@ const path = require('node:path');
 const { layerRows, cached } = require('../lib/services.cjs');
 const { streetParts, year, isoDate, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { isHomeSale } = require('../lib/sales.cjs');
@@ -17,7 +18,7 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '08014';
 const COUNTY = 'Broomfield County';
 const LAYER = 'https://services1.arcgis.com/vXSRPZbyyOmH9pek/arcgis/rest/services/Parcels/FeatureServer/0';
-const COLUMNS = ['PARCELNUMBER', 'ACCOUNTNUMBER', 'ACCOUNTTYPE', 'ZONING', 'ACTUALYEARBUILT', 'ARCHITECTURESTYLE', 'BATHS', 'BEDROOMS', 'FINALACTUALVALUE', 'IMPROVEMENTSACTUAL', 'LANDACTUAL', 'LEGALSUMMARY', 'LIVINGAREA', 'PARCELSIZE', 'PARCELSIZEUNITOFMEASURE', 'PLATTEDSUBDIVISION', 'PROPERTYUSE', 'ROOFCOVER', 'SALEDOCUMENTTYPE', 'SALEDATE', 'SALEPRICE', 'STORIES', 'SUBAREA_BSMTFN', 'SUBAREA_GARATT', 'SUBAREA_GARDET', 'TAXYEAR', 'UNITS', 'GIS_ACRES', 'SITUS_ADDRESS_NUMBER', 'SITUS_ADDRESS_NUMBER_SUFFIX', 'SITUS_STREET_PREDIRECTIONAL', 'SITUS_STREET_PRETYPE', 'SITUS_STREET_NAME', 'SITUS_STREET_POSTTYPE', 'SITUS_STREET_POSTDIRECTIONAL', 'SITUS_UNIT_TYPE', 'SITUS_UNIT_IDENTIFIER'];
+const COLUMNS = ['PARCELNUMBER', 'ACCOUNTNUMBER', 'ACCOUNTTYPE', 'ZONING', 'ACTUALYEARBUILT', 'ARCHITECTURESTYLE', 'BATHS', 'BEDROOMS', 'FINALACTUALVALUE', 'IMPROVEMENTSACTUAL', 'LANDACTUAL', 'LEGALSUMMARY', 'LIVINGAREA', 'PARCELSIZE', 'PARCELSIZEUNITOFMEASURE', 'PLATTEDSUBDIVISION', 'PROPERTYUSE', 'ROOFCOVER', 'SALEDOCUMENTTYPE', 'SALEDATE', 'SALEPRICE', 'STORIES', 'SUBAREA_BSMTFN', 'SUBAREA_GARATT', 'SUBAREA_GARDET', 'TAXYEAR', 'UNITS', 'GIS_ACRES', 'SITUS_ADDRESS_NUMBER', 'SITUS_ADDRESS_NUMBER_SUFFIX', 'SITUS_STREET_PREDIRECTIONAL', 'SITUS_STREET_PRETYPE', 'SITUS_STREET_NAME', 'SITUS_STREET_POSTTYPE', 'SITUS_STREET_POSTDIRECTIONAL', 'SITUS_UNIT_TYPE', 'SITUS_UNIT_IDENTIFIER', 'PLATTEDLOT'];
 
 // The Assessor's property use words.
 function useOf(use, unit) {
@@ -87,7 +88,12 @@ function fromRow(row) {
     put(facts, 'sale_price', positive(row.SALEPRICE));
     put(facts, 'sale_date', saleDate);
   }
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: null }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: null }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): the lot
+  // the plat gives the parcel, where it names one (a condo unit's lot is the complex's, so it has none).
+  const lot = String(row.PLATTEDLOT ?? '').trim();
+  if (kind !== 'unit' && /^[0-9A-Z-]{1,8}$/i.test(lot) && !/^0+$/.test(lot)) hold(record, 'lot_number', lot.toUpperCase());
+  return record;
 }
 
 async function* build({ work, today }) {

@@ -71,8 +71,9 @@ function fromRow(row, fips, county) {
   return { id: `pp:${kind}:${fips}:${parcel}`, kind, home_type: homeType, address: { ...parsed, city: String(word(row.sitAddCty) || '').toUpperCase(), zip: zipCode(row.sitAddZip) }, facts };
 }
 
-async function* build({ work }) {
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+async function* build({ work, compare = null }) {
+  // A county build comparing its own record with this file (lib/agreement.cjs) asks for counties it otherwise leaves out.
+  const only = compare || (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   const dir = path.join(work, 'co-parcels');
   const zip = path.join(dir, 'parcels.zip');
   download(FILE, zip);
@@ -85,7 +86,7 @@ async function* build({ work }) {
   let newest = null;
   for (const row of rows(table, COLUMNS)) {
     const fips = `08${String(row.countyFips ?? '').trim().padStart(3, '0')}`;
-    if (!/^08\d{3}$/.test(fips) || OWN_CONNECTOR.has(fips) || (only.length && !only.includes(fips))) continue;
+    if (!/^08\d{3}$/.test(fips) || (OWN_CONNECTOR.has(fips) && !compare) || (only.length && !only.includes(fips))) continue;
     const received = isoDate(row.dateReceived);
     if (received && (!newest || received > newest)) newest = received;
     if (!counties.has(fips)) counties.set(fips, { name: `${word(row.countyName)?.replace(/([a-z])([A-Z])/g, '$1 $2') || fips} County`, records: new Map(), noAddress: 0 });

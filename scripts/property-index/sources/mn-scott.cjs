@@ -9,6 +9,7 @@ const { parse } = require('../../../backend/services/propertyRecords/addressKey'
 const { layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { isHomeSale } = require('../lib/sales.cjs');
 const { log } = require('../lib/log.cjs');
@@ -16,7 +17,7 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '27139';
 const COUNTY = 'Scott County';
 const LAYER = 'https://services.arcgis.com/DqIh9WAsIZcPlBEF/arcgis/rest/services/Parcels/FeatureServer/0';
-const COLUMNS = ['PID', 'SchoolDistrict', 'CityDistrict', 'PropertyAddress1', 'PropertyCity', 'PropertyZip', 'PlatName', 'GISAcres', 'DeededAcres', 'Legal1', 'AssessmentYear', 'EMVLand', 'EMVImprove', 'EMVTotal', 'Classification', 'ModelDesc', 'ArchitectureDesc', 'NumBathRooms', 'NumBedrooms', 'YearBuilt', 'AGLASqFt', 'BasementFinishedSqft', 'GarageSqft', 'LastSaleDate', 'LastSalePrice', 'Neighborhood', 'SalesQualifier'];
+const COLUMNS = ['PID', 'SchoolDistrict', 'CityDistrict', 'PropertyAddress1', 'PropertyCity', 'PropertyZip', 'PlatName', 'GISAcres', 'DeededAcres', 'Legal1', 'AssessmentYear', 'EMVLand', 'EMVImprove', 'EMVTotal', 'Classification', 'ModelDesc', 'ArchitectureDesc', 'NumBathRooms', 'NumBedrooms', 'YearBuilt', 'AGLASqFt', 'BasementFinishedSqft', 'GarageSqft', 'LastSaleDate', 'LastSalePrice', 'Neighborhood', 'SalesQualifier', 'PropertyZip4'];
 
 // The Assessor's model names the home; a parcel with none is land (by Minnesota's class: unimproved residential, agricultural) or something else.
 function useOf(model, classification, unit) {
@@ -72,7 +73,12 @@ function fromRow(row) {
     put(facts, 'sale_price', positive(row.LastSalePrice));
     put(facts, 'sale_date', isoDate(row.LastSaleDate));
   }
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...street, city: word(row.PropertyCity) || '', zip: zipCode(row.PropertyZip) }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...street, city: word(row.PropertyCity) || '', zip: zipCode(row.PropertyZip) }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): the
+  // county's own ZIP+4 for the property, where it has one.
+  const plus4 = String(row.PropertyZip4 ?? '').trim();
+  if (zipCode(row.PropertyZip) && /^\d{4}$/.test(plus4) && plus4 !== '0000') hold(record, 'zip_plus4', `${zipCode(row.PropertyZip)}-${plus4}`);
+  return record;
 }
 
 async function* build({ work, today }) {

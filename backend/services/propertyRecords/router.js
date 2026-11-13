@@ -9,7 +9,7 @@
  *
  *   switches/<name>.json   { v: 1, counties: { "<fips>": { mode: 'off'|'shadow'|'live', withheld: [fact, ...], estimates: true } },
  *                            shared_facts: ["<fips>", ...], similar_homes: ["<fips>", ...],
- *                            appeal_packet: ["<fips>", ...] }
+ *                            appeal_packet: ["<fips>", ...], new_columns: ["<fips>", ...], derived_rows: ["<fips>", ...] }
  *
  * `estimates: true` shows a live county's owners a Pantopus estimate (propertyRecords/valueEstimate.js). Without it, none.
  * `shared_facts` names the live counties where an address with several homes on record shows what all of them agree
@@ -18,6 +18,10 @@
  * (similarHomes.js). A file without the list has that off everywhere too.
  * `appeal_packet` names the counties, among those with similar homes on, where an owner whose home is valued above them
  * can get the appeal packet (services/appealPacket.js). A file without the list has it off everywhere.
+ * `new_columns` and `derived_rows` name the live counties whose release's held facts show: facts a release carries
+ * under `held` (format.js) because they would change what a live county shows, kept off its screens until it's named
+ * here. new_columns: columns its connector newly reads (WP20); derived_rows: rows derived from the record itself (WP19).
+ * Applied in that order. A file without the lists shows none of them, and a copy's held facts never leave this file.
  *
  * A county the file names follows the file; any other follows the environment's lists.
  * The file is written by scripts/property-index/switch-county.cjs, by hand. If it can't
@@ -42,6 +46,9 @@ let counties = {};
 let sharedFacts = new Set();
 let similarHomes = new Set();
 let appealPackets = new Set();
+// The held facts' lists, in the order they apply (format.js `held`).
+const HELD = ['new_columns', 'derived_rows'];
+let held = {};
 let modes = config.listedModes();
 let liveStates = new Set();
 let anyShadowCounty = false;
@@ -54,6 +61,7 @@ function apply(file) {
   sharedFacts = file?.sharedFacts || new Set();
   similarHomes = file?.similarHomes || new Set();
   appealPackets = file?.appealPackets || new Set();
+  held = file?.held || {};
   modes = config.listedModes();
   for (const [fips, entry] of Object.entries(counties)) modes.set(fips, entry.mode);
   const listed = [...modes];
@@ -67,6 +75,8 @@ function apply(file) {
   if (similar.length) now = [named, shared, similar];
   const packets = [...appealPackets].sort();
   if (packets.length) now = [named, shared, similar, packets];
+  const heldLists = heldNamed();
+  if (heldLists.length) now = [named, shared, similar, packets, heldLists];
   now = JSON.stringify(now);
   if (now !== loggedAs && config.enabled()) {
     loggedAs = now;
@@ -77,8 +87,14 @@ function apply(file) {
       ...(shared.length ? { shared_facts: shared } : {}),
       ...(similar.length ? { similar_homes: similar } : {}),
       ...(packets.length ? { appeal_packet: packets } : {}),
+      ...Object.fromEntries(heldLists),
     });
   }
+}
+
+/** The held facts' lists that name a county, as [name, [fips, ...]]. */
+function heldNamed() {
+  return HELD.map((name) => [name, [...(held[name] || [])].sort()]).filter(([, named]) => named.length);
 }
 
 /** Only well-formed entries count: a slip in one county's line can't change another's. */
@@ -94,7 +110,8 @@ function parseFile(bytes) {
   const shared = Array.isArray(data.shared_facts) ? data.shared_facts.filter((fips) => /^\d{5}$/.test(fips)) : [];
   const similar = Array.isArray(data.similar_homes) ? data.similar_homes.filter((fips) => /^\d{5}$/.test(fips)) : [];
   const packets = Array.isArray(data.appeal_packet) ? data.appeal_packet.filter((fips) => /^\d{5}$/.test(fips)) : [];
-  return { counties: found, sharedFacts: new Set(shared), similarHomes: new Set(similar), appealPackets: new Set(packets) };
+  const heldLists = Object.fromEntries(HELD.map((name) => [name, new Set(Array.isArray(data[name]) ? data[name].filter((fips) => /^\d{5}$/.test(fips)) : [])]));
+  return { counties: found, sharedFacts: new Set(shared), similarHomes: new Set(similar), appealPackets: new Set(packets), held: heldLists };
 }
 
 const readFile = reader.switchesFile(config.switchesName, parseFile, READ_EVERY_MS);
@@ -184,6 +201,8 @@ function summary() {
   if (similar.length) lists = [named, withheld, estimates, shared, similar];
   const packets = [...appealPackets].sort();
   if (packets.length) lists = [named, withheld, estimates, shared, similar, packets];
+  const heldLists = heldNamed();
+  if (heldLists.length) lists = [named, withheld, estimates, shared, similar, packets, heldLists];
   return {
     live: named.filter(([, mode]) => mode === 'live').length,
     shadow: named.filter(([, mode]) => mode === 'shadow').length,
@@ -191,16 +210,37 @@ function summary() {
     ...(shared.length ? { shared_facts: shared.length } : {}),
     ...(similar.length ? { similar_homes: similar.length } : {}),
     ...(packets.length ? { appeal_packet: packets.length } : {}),
+    ...Object.fromEntries(heldLists.map(([name, named]) => [name, named.length])),
     // Estimates, shared facts and similar homes join the hash only when a county has them, so servers before and after them agree on a file without any.
     hash: crypto.createHash('sha256').update(JSON.stringify(lists)).digest('hex').slice(0, 12),
   };
 }
 
-/** A copy as it may be served now: facts withheld for its county left out. The copy itself is never changed. */
-function served(copy) {
+/** The held facts' lists naming this county, in the order they apply: only a live county. */
+const heldFor = (fips) => (modeFor(fips) === 'live' ? HELD.filter((name) => held[name]?.has(fips)) : []);
+
+/**
+ * A copy's held facts (format.js `held`) joined to its own where its county's list names them, and the rest left out:
+ * the `held` key never reaches a screen.
+ */
+function withHeld(copy) {
+  if (!copy?.held) return copy;
+  const { held: kept, ...rest } = copy;
+  const names = heldFor(copy.jurisdiction).filter((name) => kept[name]);
+  if (!names.length) return rest;
+  return {
+    ...rest,
+    facts: Object.assign({}, copy.facts, ...names.map((name) => kept[name].facts || {})),
+    ...(copy.building ? { building: Object.assign({}, copy.building, ...names.map((name) => kept[name].building || {})) } : {}),
+  };
+}
+
+/** A copy as it may be served now: held facts its county shows joined in, facts withheld for it left out. The copy itself is never changed. */
+function served(stored) {
+  const copy = withHeld(stored);
   const withheld = copy && withholding(copy.jurisdiction);
   if (!withheld) return copy;
   return { ...copy, facts: without(copy.facts, withheld), ...(copy.building ? { building: without(copy.building, withheld) } : {}) };
 }
 
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, appealPacketFor, listed, summary, health };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, heldFor, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, appealPacketFor, listed, summary, health };

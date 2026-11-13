@@ -65,8 +65,9 @@ function fromRow(row, fips, county) {
 
 const USEFUL = (facts) => facts.year_built || facts.market_value;
 
-async function* build({ work }) {
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+async function* build({ work, compare = null }) {
+  // A county build comparing its own record with this file (lib/agreement.cjs) asks for counties it otherwise leaves out.
+  const only = compare || (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   const catalog = await getJson(`${API}/collections_catalog/?search=land%20parcels&limit=50`, 'The state\'s catalog');
   const newest = (catalog.results || []).filter((entry) => entry.name === 'Land Parcels').sort((a, b) => String(b.acquisition_date).localeCompare(String(a.acquisition_date)))[0];
   if (!newest) throw new Error('The state\'s catalog no longer lists land parcels');
@@ -76,7 +77,7 @@ async function* build({ work }) {
   if (files.length < 250) throw new Error(`Only ${files.length} county files are listed`);
 
   for (const file of files) {
-    if (OWN_CONNECTOR.has(file.fips) || (only.length && !only.includes(file.fips))) continue;
+    if ((OWN_CONNECTOR.has(file.fips) && !compare) || (only.length && !only.includes(file.fips))) continue;
     const zip = path.join(work, 'tx-stratmap', `${file.fips}.zip`);
     download(file.url, zip);
     const member = execFileSync('unzip', ['-Z1', zip], { encoding: 'latin1', maxBuffer: 1e7 }).split('\n').find((name) => /^shp\/.*\.dbf$/i.test(name));

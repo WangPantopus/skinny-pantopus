@@ -9,6 +9,7 @@ const { parse } = require('../../../backend/services/propertyRecords/addressKey'
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { isHomeSale } = require('../lib/sales.cjs');
@@ -81,7 +82,12 @@ function fromRow(row) {
     put(facts, 'sale_price', positive(row.SALEPRICE));
     put(facts, 'sale_date', isoDate(row.SALEDATE));
   }
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: zipCode(row.SITUS_ZIP) || null }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: zipCode(row.SITUS_ZIP) || null }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): the story
+  // height is written in words ("2 Stories", "1.5 Stories (Ul 50% Of Lla)"); split levels and bi-levels give no count.
+  const stories = /^(\d(?:\.5)?) Stor(?:y|ies)\b/i.exec(String(row.STORY_HEIG ?? '').trim());
+  if ((home || kind === 'building') && stories) hold(record, 'stories', Number(stories[1]));
+  return record;
 }
 
 async function* build({ work }) {

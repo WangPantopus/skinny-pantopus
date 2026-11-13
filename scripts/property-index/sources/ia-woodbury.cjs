@@ -11,6 +11,7 @@ const path = require('node:path');
 const { layerRows, cached } = require('../lib/services.cjs');
 const { streetParts, year, isoDate, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { isHomeSale } = require('../lib/sales.cjs');
@@ -20,7 +21,7 @@ const FIPS = '19193';
 const COUNTY = 'Woodbury County';
 const LAYER = 'https://services.arcgis.com/kd1jFI4TM5bZHeP8/arcgis/rest/services/parcel_data_public_table_full/FeatureServer/0';
 const AS_OF = '2026-06-25';
-const COLUMNS = ['pin', 'parcel', 'city1_county2', 'addr_num', 'addr_unit', 'addr_stname', 'addr_city', 'sale_price', 'nutc', 'sales_date', 'land_class_descr', 'occupancy_descr', 'land_sq_ft', 'land_acres', 'ZONING', 'vcs_subdiv_descr', 'main_year_built', 'main_style', 'main_area', 'main_tla', 'main_condition', 'total_bedrooms', 'total_rooms_above', 'full_bath_cnt', 'half_bath_cnt', 'fire_cnt', 'attach_garage_sqft', 'det_garage_sqft', 'I_CY_FullLandValue', 'I_CY_FullBuildingValue', 'I_CY_FullDwellingValue', 'I_CY_FullTotalValue', 'I_CY_FullDwellingCount'];
+const COLUMNS = ['pin', 'parcel', 'city1_county2', 'addr_num', 'addr_unit', 'addr_stname', 'addr_city', 'sale_price', 'nutc', 'sales_date', 'land_class_descr', 'occupancy_descr', 'land_sq_ft', 'land_acres', 'ZONING', 'vcs_subdiv_descr', 'main_year_built', 'main_style', 'main_area', 'main_tla', 'main_condition', 'total_bedrooms', 'total_rooms_above', 'full_bath_cnt', 'half_bath_cnt', 'fire_cnt', 'attach_garage_sqft', 'det_garage_sqft', 'extwalls', 'roof', 'main_ac', 'attach_garage_cnt', 'det_garage_cnt', 'I_CY_FullLandValue', 'I_CY_FullBuildingValue', 'I_CY_FullDwellingValue', 'I_CY_FullTotalValue', 'I_CY_FullDwellingCount'];
 
 // The two assessors name single-family homes differently ("Sgl-Fam Dwlg < than 30,000 Land" in Sioux City, "Single-Family / ..." in the county);
 // conversions and duplexes hold two to seven homes, apartments more. A parcel with no occupancy but a home's facts is read as a house.
@@ -68,6 +69,10 @@ const cityOf = (value) => {
   const city = String(value ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
   return CITIES[city] ?? city;
 };
+
+// The assessors' short words, in full; any other stays as they wrote it.
+const SHORT = { Asph: 'Asphalt', Mtl: 'Metal', Wd: 'Wood', 'Rub Memb': 'Rubber membrane', Alum: 'Aluminum', Brk: 'Brick', 'Wd Lap': 'Wood lap', 'Vert Wd': 'Vertical wood', Asb: 'Asbestos' };
+const plain = (text) => (text && SHORT[text]) || text;
 
 function fromRow(row) {
   const site = siteOf(row);
@@ -120,7 +125,22 @@ function fromRow(row) {
     put(facts, 'sale_price', positive(row.sale_price));
     put(facts, 'sale_date', saleDate);
   }
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: cityOf(row.addr_city), zip: null }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: cityOf(row.addr_city), zip: null }, facts };
+  // Columns read since the county went live: held off its screens until its new_columns switch is on (lib/held.cjs).
+  // The walls and roof are the assessors' own words; the roof column says its cover, then its shape ("Asph / Gable").
+  if (home || kind === 'building') {
+    hold(record, 'exterior_walls', plain(word(row.extwalls)));
+    const [cover, shape] = String(row.roof || '').split(' / ').map((part) => word(part));
+    if (cover && !/^other$/i.test(cover)) hold(record, 'roof_cover', plain(cover));
+    if (shape && !/^other$/i.test(shape)) hold(record, 'roof_shape', shape);
+  }
+  if (home) {
+    // main_ac is 1 where the main building has air conditioning; a 0 may be no answer, so it says nothing.
+    if (Number(row.main_ac) === 1) hold(record, 'cooling', 'Air conditioning');
+    const kinds = [positive(row.attach_garage_cnt) && 'Attached', positive(row.det_garage_cnt) && 'Detached'].filter(Boolean);
+    if (kinds.length) hold(record, 'garage', kinds.join(', '));
+  }
+  return record;
 }
 
 async function* build({ work }) {

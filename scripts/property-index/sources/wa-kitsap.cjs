@@ -9,6 +9,7 @@ const { download } = require('../lib/tables.cjs');
 const { csvRows } = require('../lib/csv.cjs');
 const { streetParts, year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
@@ -85,7 +86,11 @@ function fromRow(parcel, { address: place, dwelling, home: manufactured, value }
     put(facts, 'market_building_value', positive(value.impr_av));
     put(facts, 'taxable_value', positive(value.taxable_av));
   }
-  return { id: `pp:${kind}:${FIPS}:${account}`, kind, home_type: homeType, address: { ...address, city: String(word(place.city) || '').toUpperCase(), zip: zipCode(place.zip_code) || null }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${account}`, kind, home_type: homeType, address: { ...address, city: String(word(place.city) || '').toUpperCase(), zip: zipCode(place.zip_code) || null }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): where the
+  // dwelling file says a home's air conditioning is "None", that's the county's answer, not a blank.
+  if (home && dwelling && /^none$/i.test(String(dwelling.air_cond ?? '').trim())) hold(record, 'cooling', 'None');
+  return record;
 }
 
 async function* build({ work, today }) {
