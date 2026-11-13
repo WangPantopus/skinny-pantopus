@@ -168,6 +168,10 @@ function assessorAddress(row) {
 
 async function readFacts(zip, records, today) {
   const unmappedCodes = {};
+  // Where the county describes a building (its living area) and writes 0 fireplaces or half baths, that 0 is its answer:
+  // "None" on Property details, held off screens with the derived rows (lib/derive.cjs, WP19), never in the facts, so
+  // every other screen reads them as before. Only where no building of the account counts any.
+  const zeros = new Map();
   for await (const row of zipTable(zip, 'PropBldgSumInfoVw.txt', ['prop_id', 'BldgStyle', 'YrBlt', 'LivingArea', 'Condition', 'Class', 'Bedrooms', 'FullBaths', 'HalfBaths', 'ThrQtrsBaths', 'Fireplaces'], TABLE)) {
     const record = records.get(row.prop_id);
     if (!record) continue;
@@ -186,6 +190,18 @@ async function readFacts(zip, records, today) {
     put(facts, 'three_quarter_baths', threeQuarter);
     if (full || half || threeQuarter) facts.bathrooms = (full || 0) + 0.75 * (threeQuarter || 0) + 0.5 * (half || 0);
     put(facts, 'fireplaces', positive(row.Fireplaces));
+    if (positive(row.LivingArea)) {
+      for (const [fact, column] of [['fireplaces', 'Fireplaces'], ['half_baths', 'HalfBaths']]) {
+        if (number(row[column]) === 0) (zeros.get(record) || zeros.set(record, new Set()).get(record)).add(fact);
+      }
+    }
+  }
+  for (const [record, said] of zeros) {
+    for (const fact of said) {
+      if (record.facts[fact] !== undefined) continue;
+      record.held = record.held || {};
+      record.held.derived_rows = { ...record.held.derived_rows, [fact]: 0 };
+    }
   }
 
   for await (const row of zipTable(zip, 'PropImpDetailAttrVw.txt', ['prop_id', 'ImpAttr', 'ImpAttrVal'], TABLE)) {
