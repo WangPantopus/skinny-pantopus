@@ -95,6 +95,10 @@ public struct PlanFeedbackBody: Encodable, Sendable {
 // MARK: - Hosting
 
 /// Where the plan is. `homeId` only for `home`; GPS never becomes the pin.
+/// `placeId` is the place picker's id (`osm:node/123`) for a public place picked
+/// from its list; the server keeps it as the plan's venue key (`place_ref`) and
+/// ignores it for a place typed by hand (planActions.js, Plans with businesses
+/// step 1). Left out when nil.
 public struct PlanPlaceBody: Encodable, Sendable, Hashable {
     public let kind: PlanPlaceKind
     public let name: String?
@@ -102,19 +106,30 @@ public struct PlanPlaceBody: Encodable, Sendable, Hashable {
     public let latitude: Double
     public let longitude: Double
     public let homeId: String?
+    public let placeId: String?
 
     enum CodingKeys: String, CodingKey {
         case kind, name, address, latitude, longitude
         case homeId = "home_id"
+        case placeId = "place_id"
     }
 
-    public init(kind: PlanPlaceKind, name: String?, address: String?, latitude: Double, longitude: Double, homeId: String?) {
+    public init(
+        kind: PlanPlaceKind,
+        name: String?,
+        address: String?,
+        latitude: Double,
+        longitude: Double,
+        homeId: String?,
+        placeId: String? = nil
+    ) {
         self.kind = kind
         self.name = name
         self.address = address
         self.latitude = latitude
         self.longitude = longitude
         self.homeId = homeId
+        self.placeId = placeId
     }
 }
 

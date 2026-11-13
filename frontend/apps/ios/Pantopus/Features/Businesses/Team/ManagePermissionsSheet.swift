@@ -30,6 +30,8 @@ enum BusinessPermissionCatalog {
         BusinessPermissionOption(key: "pages.publish", label: "Publish pages", group: "Profile & pages"),
         BusinessPermissionOption(key: "catalog.manage", label: "Manage catalog", group: "Catalog & gigs"),
         BusinessPermissionOption(key: "gigs.manage", label: "Manage gigs", group: "Catalog & gigs"),
+        BusinessPermissionOption(key: "plans.post", label: "Post plans", group: plansGroup),
+        BusinessPermissionOption(key: "plans.manage", label: "Run plans", group: plansGroup),
         BusinessPermissionOption(key: "reviews.respond", label: "Respond to reviews", group: "Customers"),
         BusinessPermissionOption(key: "team.invite", label: "Invite teammates", group: "Team"),
         BusinessPermissionOption(key: "team.manage", label: "Manage team", group: "Team"),
@@ -38,7 +40,17 @@ enum BusinessPermissionCatalog {
     ]
 
     /// Group keys in stable display order.
-    static let groupOrder: [String] = ["Profile & pages", "Catalog & gigs", "Customers", "Team", "Money"]
+    static let groupOrder: [String] = ["Profile & pages", "Catalog & gigs", plansGroup, "Customers", "Team", "Money"]
+
+    /// Plans with businesses: posting a plan as the business and running its
+    /// plans (asks, invitations, changes, cancelling). Shown only while
+    /// `plans_business` is on for the viewer, so the sheet is today's otherwise.
+    static let plansGroup = "Plans"
+
+    /// The groups to draw: Plans only while Plans with businesses is on.
+    static func visibleGroups(plansBusiness: Bool) -> [String] {
+        plansBusiness ? groupOrder : groupOrder.filter { $0 != plansGroup }
+    }
 }
 
 /// Local load state for the sheet.
@@ -129,7 +141,7 @@ public struct ManagePermissionsSheet: View {
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
 
-                ForEach(BusinessPermissionCatalog.groupOrder, id: \.self) { group in
+                ForEach(BusinessPermissionCatalog.visibleGroups(plansBusiness: PlansFlags.shared.business), id: \.self) { group in
                     let options = BusinessPermissionCatalog.options.filter { $0.group == group }
                     if !options.isEmpty {
                         VStack(alignment: .leading, spacing: Spacing.s2) {

@@ -267,7 +267,8 @@ final class PlanComposerModel {
                 address: place.address,
                 latitude: place.latitude,
                 longitude: place.longitude,
-                homeId: nil
+                homeId: nil,
+                placeId: place.placeId
             )
         case .home:
             guard let home else { return nil }

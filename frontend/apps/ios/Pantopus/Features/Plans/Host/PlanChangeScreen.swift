@@ -251,7 +251,8 @@ struct PlanChangeScreen: View {
                 address: newPlace.address,
                 latitude: newPlace.latitude,
                 longitude: newPlace.longitude,
-                homeId: nil
+                homeId: nil,
+                placeId: newPlace.placeId
             )
         }
         Task {
