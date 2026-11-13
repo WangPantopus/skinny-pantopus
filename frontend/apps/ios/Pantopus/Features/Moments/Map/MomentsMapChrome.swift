@@ -38,7 +38,15 @@ struct MomentsMapTopBar: View {
         }
     }
 
+    /// The top row, and under it "Heights" while heights are on for you (`MomentsHeightsChip.swift`).
     private var row: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            topRow
+            MomentsHeightsBar(viewModel: viewModel)
+        }
+    }
+
+    private var topRow: some View {
         // ☰ first and the chat button last (founder decision 2026-11-08).
         HStack(spacing: Spacing.s2) {
             NavigationMenuButton(accessibilityIdentifier: "moments.menu", floating: true)
