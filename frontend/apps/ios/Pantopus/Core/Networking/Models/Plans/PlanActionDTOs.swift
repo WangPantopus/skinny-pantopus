@@ -153,7 +153,8 @@ public struct CreatePlanBody: Encodable, Sendable {
     public let about: String?
     public let startsAt: String
     public let endsAt: String
-    public let place: PlanPlaceBody
+    /// Nil for a business's plan, which meets at one of its locations.
+    public let place: PlanPlaceBody?
     public let spots: Int
     public let autoRules: [PlanAutoRule]
     public let joinRequirement: PlanJoinRequirement
@@ -162,15 +163,22 @@ public struct CreatePlanBody: Encodable, Sendable {
     public let gps: PlanGPSBody?
     /// A5 "Host again": the plan this one repeats.
     public var hostedAgainFrom: String?
+    /// Plans with businesses (contract 5.5): the business it is posted for, one of its
+    /// locations, and the label guests see (a key, "clinic").
+    public var hostAs: PlanHostAsBody?
+    public var businessLocationId: String?
+    public var label: String?
 
     enum CodingKeys: String, CodingKey {
-        case kind, title, about, place, spots, details, gps
+        case kind, title, about, place, spots, details, gps, label
         case startsAt = "starts_at"
         case endsAt = "ends_at"
         case autoRules = "auto_rules"
         case joinRequirement = "join_requirement"
         case guestNote = "guest_note"
         case hostedAgainFrom = "hosted_again_from"
+        case hostAs = "host_as"
+        case businessLocationId = "business_location_id"
     }
 
     public init(
@@ -179,7 +187,7 @@ public struct CreatePlanBody: Encodable, Sendable {
         about: String?,
         startsAt: Date,
         endsAt: Date,
-        place: PlanPlaceBody,
+        place: PlanPlaceBody?,
         spots: Int,
         autoRules: [PlanAutoRule],
         joinRequirement: PlanJoinRequirement,
@@ -215,13 +223,17 @@ public struct UpdatePlanBody: Encodable, Sendable {
     public var autoRules: [PlanAutoRule]?
     public var guestNote: String?
     public var gps: PlanGPSBody?
+    /// A business's plan: what guests see it called, and which of its locations.
+    public var label: String?
+    public var businessLocationId: String?
 
     enum CodingKeys: String, CodingKey {
-        case title, about, place, spots, gps
+        case title, about, place, spots, gps, label
         case startsAt = "starts_at"
         case endsAt = "ends_at"
         case autoRules = "auto_rules"
         case guestNote = "guest_note"
+        case businessLocationId = "business_location_id"
     }
 
     public init() {}

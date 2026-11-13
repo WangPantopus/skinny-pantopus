@@ -33,7 +33,10 @@ struct PlanComposerRoot: View {
 
     var body: some View {
         Group {
-            if let posted = model.posted {
+            if let posted = model.posted, posted.card.isBusiness {
+                // Posted as a business (board B3): bring your regulars.
+                PlanBusinessPostedScreen(plan: posted, onSeePlan: { onFinish(posted.id) }, onDone: { onFinish(nil) })
+            } else if let posted = model.posted {
                 PlanPostedScreen(plan: posted, onSeePlan: { onFinish(posted.id) }, onDone: { onFinish(nil) })
             } else {
                 NavigationStack(path: $path) {
@@ -49,6 +52,7 @@ struct PlanComposerRoot: View {
                         } else {
                             PlanTypePicker(
                                 showsPlaydates: flags.playdates,
+                                model: model,
                                 onClose: { onFinish(nil) },
                                 onPick: { kind in
                                     // Anyone on Pantopus may host a playdate (founder decision, November 7).
@@ -99,6 +103,8 @@ struct PlanComposerRoot: View {
 
 struct PlanTypePicker: View {
     let showsPlaydates: Bool
+    /// The draft: "Host as" (Plans with businesses, board B1) reads and sets its business.
+    var model: PlanComposerModel?
     let onClose: () -> Void
     let onPick: (PlanKind) -> Void
 
@@ -109,6 +115,7 @@ struct PlanTypePicker: View {
             PlanNavBar(title: "Host a plan", leading: .close, trailing: "1 of 3", onLeading: onClose)
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
+                    if let model, !model.hostAsOptions.isEmpty { PlanHostAsSection(model: model) }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("What are you planning?")
                             .planFont(.h1)
@@ -121,7 +128,9 @@ struct PlanTypePicker: View {
                     LazyVGrid(columns: columns, spacing: Spacing.s3) {
                         ForEach(kinds) { kind in card(kind) }
                     }
-                    Text("Plans are free and for adults. Kids come with a parent.")
+                    Text(business == nil
+                        ? "Plans are free and for adults. Kids come with a parent."
+                        : "These are the five kinds of plan neighbors host. Yours keeps the same color and pin.")
                         .planFont(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .multilineTextAlignment(.center)
@@ -138,7 +147,13 @@ struct PlanTypePicker: View {
     }
 
     private var kinds: [PlanKind] {
-        PlanKind.displayOrder.filter { $0 != .playdate || showsPlaydates }
+        // A business posts only the kinds the server lists for it (kids' plans have their own switch).
+        if let business { return PlanKind.displayOrder.filter { business.kind($0) != nil } }
+        return PlanKind.displayOrder.filter { $0 != .playdate || showsPlaydates }
+    }
+
+    private var business: PlanHostAsBusinessDTO? {
+        model?.hostAs
     }
 
     /// Two columns; one at the largest text sizes.
@@ -152,13 +167,13 @@ struct PlanTypePicker: View {
         Button { onPick(kind) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 PlanTile(kind: kind, size: 52, glyph: 28)
-                Text(kind.title).planFont(.h4).foregroundStyle(Theme.Color.appText)
-                Text(Self.blurb(kind))
+                Text(business?.kind(kind)?.name ?? kind.title).planFont(.h4).foregroundStyle(Theme.Color.appText)
+                Text(business == nil ? Self.blurb(kind) : Self.businessBlurb(kind))
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                if kind == .playdate {
+                if kind == .playdate, business == nil {
                     HStack(spacing: Spacing.s2) {
                         Icon(.shieldCheck, size: 14, color: Theme.Color.appTextSecondary)
                         Text("You approve each family")
@@ -178,6 +193,17 @@ struct PlanTypePicker: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("planType.\(kind.rawValue)")
+    }
+
+    /// What each kind is for a business (board B1).
+    static func businessBlurb(_ kind: PlanKind) -> String {
+        switch kind {
+        case .watchParty: "A game on your screens"
+        case .playdate: "A class, open play, story time"
+        case .pickupGame: "A clinic, open play, league night"
+        case .walkCoffee: "A meetup, a tasting, a group walk"
+        case .studyGroup: "Tutoring, test prep, a workshop"
+        }
     }
 
     static func blurb(_ kind: PlanKind) -> String {
