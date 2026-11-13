@@ -41,6 +41,7 @@ const { encodeGeohash, decodeGeohashBbox } = require('../../utils/geohash');
 const { timezoneFromCoordinates } = require('../../utils/timezone');
 const placeSectionCache = require('../placeSectionCache');
 const placesIndex = require('./placesIndex');
+const placeRefs = require('../placeRefs');
 const rules = require('./planRules');
 const { hoursDuring, sunMinutes } = require('./placeHours');
 
@@ -70,6 +71,8 @@ const SECTION_ID = 'plans_places_osm_v1';
 const CELL_PRECISION = 5;
 const PAD_DEGREES = 0.03;
 const SHOW_RADIUS_METERS = 3 * rules.MILE_METERS;
+// A place a host chose is the picker's own row when its id is listed this close to the point they sent.
+const PICKED_MATCH_METERS = 100;
 const MAX_RESULTS = 40;
 const MAX_FACTS = 2;
 const ATTRIBUTION = '© OpenStreetMap contributors';
@@ -590,6 +593,50 @@ async function placesNear({
   return { places, loading, attribution: ATTRIBUTION };
 }
 
+/** The area a point is in, then the eight areas that touch it. */
+function cellsAround(latitude, longitude) {
+  const own = encodeGeohash(latitude, longitude, CELL_PRECISION);
+  const box = decodeGeohashBbox(own);
+  const height = box.maxLat - box.minLat;
+  const width = box.maxLng - box.minLng;
+  const cells = [own];
+  for (const dy of [-1, 0, 1]) {
+    for (const dx of [-1, 0, 1]) {
+      const lat = Math.min(89.9, Math.max(-89.9, latitude + dy * height));
+      const lng = ((longitude + dx * width + 540) % 360) - 180;
+      const cell = encodeGeohash(lat, lng, CELL_PRECISION);
+      if (!cells.includes(cell)) cells.push(cell);
+    }
+  }
+  return cells;
+}
+
+/**
+ * The key (`osm:node/123`) of the place a host chose, when the picker listed that id at that spot; else null.
+ * It reads only the areas the picker has already gathered around the point, and fetches nothing, so a place
+ * the host typed or dropped on the map by hand has no key, and neither has an id nobody was shown there.
+ * Never throws: a plan is posted without its key rather than refused.
+ */
+async function pickedPlaceRef({ placeId, latitude, longitude }) {
+  const ref = placeRefs.namedPlaceRef(placeId);
+  if (!ref || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  const listedIn = async (cell) => {
+    const row = await placeSectionCache.readRow(`geo:${cell}`, SECTION_ID);
+    return (row && Array.isArray(row.payload) ? row.payload : []).find((p) => p && p.place_id === ref) || null;
+  };
+  try {
+    const [own, ...around] = cellsAround(latitude, longitude);
+    // The picker gathers an area with a margin, so the place is nearly always in its own area's list.
+    let listed = await listedIn(own);
+    if (!listed) listed = (await Promise.all(around.map(listedIn))).find(Boolean) || null;
+    if (!listed) return null;
+    return rules.distanceMeters({ latitude, longitude }, listed) <= PICKED_MATCH_METERS ? ref : null;
+  } catch (err) {
+    logger.warn('plans.places.picked_ref_failed', { error: err.message });
+    return null;
+  }
+}
+
 /** The park a court or playground is named after ("Crown Park pickleball courts" → "Crown Park"), or null. */
 function parkNameOf(name) {
   const text = String(name || '').trim();
@@ -601,4 +648,5 @@ function parkNameOf(name) {
 
 module.exports = {
   placesNear, warmAround, toPlaces, parkNameOf, PlacesUnavailableError, ATTRIBUTION, PREFERRED, askServers,
+  pickedPlaceRef,
 };

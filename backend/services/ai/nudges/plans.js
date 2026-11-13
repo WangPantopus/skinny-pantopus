@@ -447,6 +447,7 @@ async function sameNextWeekCard(plan) {
     : {
       kind: 'public', name: plan.place_name, address: plan.place_address || null,
       latitude: Number(plan.place_latitude), longitude: Number(plan.place_longitude),
+      place_id: plan.place_ref || undefined,
     };
   const input = {
     kind: plan.kind,
@@ -481,7 +482,10 @@ async function sameNextWeekCard(plan) {
     spots: checked.spots,
     place: checked.place.kind === 'home'
       ? { kind: 'home', home_id: checked.place.home_id }
-      : { kind: 'public', name: checked.place.name, address: checked.place.address, latitude: checked.place.latitude, longitude: checked.place.longitude },
+      : {
+        kind: 'public', name: checked.place.name, address: checked.place.address, latitude: checked.place.latitude, longitude: checked.place.longitude,
+        ...(checked.place.picked_id ? { place_id: checked.place.picked_id } : {}),
+      },
     auto_rules: checked.autoRules,
     join_requirement: checked.joinRequirement,
     details: checked.details,
