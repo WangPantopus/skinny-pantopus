@@ -517,7 +517,7 @@ function factValue(kind, value) {
 function addFacts(section, facts, groups, keep = () => true, derived = null) {
   for (const [name, fact] of Object.entries(FACTS)) {
     if (!groups.includes(fact.section) || !fact.label || facts?.[name] === undefined || !keep(fact)) continue;
-    const from = typeof derived?.[name] === 'string' ? derived[name] : null;
+    const from = derived && typeof derived[name] === 'string' ? derived[name] : null;
     const none = from && facts[name] === 0 && fact.format === 'count';
     section.add(name, fact.label, none ? 'None' : factValue(fact.format, facts[name]), MONO.has(fact.format) && !none, undefined, from);
   }
@@ -572,9 +572,10 @@ function recordFooter(copy) {
  */
 function serializePropertyRecord(copy, estimate = null) {
   if (!copy || typeof copy !== 'object') return null;
-  const facts = copy.facts || {};
-  // Rows the record implies, present only while the county's derived_rows switch is on (propertyRecords/router.js).
-  const derived = copy.derived || null;
+  // Rows the record implies (scripts/property-index/lib/derive.cjs), present only while the county's derived_rows switch is
+  // on (propertyRecords/router.js): shown here and nowhere else, so estimates and other screens read the county's own facts.
+  const derived = copy.derived?.facts ? copy.derived.from || {} : null;
+  const facts = derived ? { ...(copy.facts || {}), ...copy.derived.facts } : copy.facts || {};
   const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
   if (copy.match === 'ambiguous') {
     const building = titled('building');
