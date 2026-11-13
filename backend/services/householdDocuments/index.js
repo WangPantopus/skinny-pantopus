@@ -19,8 +19,8 @@ const authority = require('../homeDashboardService');
 const householdFacts = require('../householdFacts');
 const homeRecords = require('../propertyRecords/homeRecord');
 const { getSystemsLedger, recordSystem } = require('../homeSystemsService');
-const { pdfPages } = require('./pdfText');
-const { readFacts, KINDS, SYSTEMS } = require('./readFacts');
+const { readDocument } = require('./pdfText');
+const { KINDS, SYSTEMS } = require('./readFacts');
 const logger = require('../../utils/logger');
 
 const MESSAGES = {
@@ -31,6 +31,7 @@ const MESSAGES = {
   NO_FILE: [400, 'Choose a PDF of your report.'],
   NOT_PDF: [415, "That isn't a PDF. Photos and scanned pages can't be read yet: you can type what the report says in Add details."],
   PDF_TOO_LARGE: [413, 'That file is over 15 MB.'],
+  PDF_BUSY: [429, "We're reading other reports right now. Please try again in a minute."],
   PDF_LOCKED: [422, 'This PDF has a password. Save a copy without the password and try again.'],
   PDF_TOO_LONG: [422, 'That PDF has more than 150 pages.'],
   PDF_NO_TEXT: [422, 'This looks like a scan or photos of the pages. For now we can only read PDFs made on a computer: you can type what the report says in Add details.'],
@@ -111,16 +112,16 @@ async function read({ homeId, actorId, bytes }) {
   return authority.withCurrentAccess({ homeId, actorId, permission: 'home.edit' }, async (access) => {
     if (!mayUse(access)) throw failure('HOME_DOCUMENTS_DENIED');
     const home = await readHome(homeId);
-    let pages;
+    let read;
     try {
-      pages = await pdfPages(bytes);
+      read = await readDocument(bytes, { address: home.address });
     } catch (error) {
       logger.info('Home document not read', { homeId, reason: error.code });
       throw failure(MESSAGES[error.code] ? error.code : 'PDF_UNREADABLE');
     }
-    const found = readFacts(pages, { address: home.address });
+    const { found, pages } = read;
     const kind = KINDS[found.kind];
-    const subtitle = [found.date ? `Dated ${dayText(found.date)}` : null, `${pages.length} ${pages.length === 1 ? 'page' : 'pages'}`].filter(Boolean).join(' · ');
+    const subtitle = [found.date ? `Dated ${dayText(found.date)}` : null, `${pages} ${pages === 1 ? 'page' : 'pages'}`].filter(Boolean).join(' · ');
     const answer = {
       kind: found.kind, title: kind.title, subtitle,
       lead: "Tap Right for each fact that's correct, or fix it. Only what you keep is saved, and the file isn't kept.",
