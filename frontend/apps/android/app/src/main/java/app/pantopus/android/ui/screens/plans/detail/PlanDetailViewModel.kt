@@ -368,7 +368,7 @@ class PlanDetailViewModel
             _ui.update { it.copy(ask = draft.copy(sending = true, error = null)) }
             val generation = readGeneration
             viewModelScope.launch {
-                val body =
+                val asked =
                     if (playdate) {
                         AskToJoinBody(
                             partySize = 1,
@@ -379,7 +379,9 @@ class PlanDetailViewModel
                         )
                     } else {
                         AskToJoinBody(partySize = draft.partySize, note = draft.note.trim().takeIf(String::isNotEmpty))
-                    }.copy(via = via.takeIf { plan.business != null })
+                    }
+                // A business's plan opened from its page says so (`via: business_page`); nothing else is sent.
+                val body = asked.copy(via = via.takeIf { plan.business != null })
                 when (val result = repository.ask(planId, body)) {
                     is NetworkResult.Success -> {
                         val status = PlanRequestStatus.from(result.data.request?.status)
