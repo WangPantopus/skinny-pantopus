@@ -1,12 +1,12 @@
-Know what matters for your home, and stay on top of it.
+Real life, connected.
 
-Pantopus starts with your address. See what’s true about it, keep your household’s everyday on track, and make small plans with people nearby.
+Pantopus is one app for the place where your life happens: your home, the people you live with, the plans you make, the mail you get and what’s going on around you. Pan means all. The octopus is one mind with many arms.
 
 There’s more to your address than a pin
 Type any U.S. address to see air and weather right now; flood, wildfire, earthquake and radon; who supplies your water, and its record; and the governments you live inside. Every fact names its source and its scale. Free to look, no account needed.
 
 A little less to keep in your head
-Today puts the weather outside next to what’s due inside. Confirm your pickup day once and get a reminder the evening before. Turn a radon zone into a test-kit task. Briefings come only when there’s something useful.
+Today draws the sky over your home and puts what’s due inside right beside it. Confirm your pickup day once and get a reminder the evening before. Turn a radon zone into a test-kit task. Briefings come only when there’s something useful.
 
 You don’t have to be the household’s memory
 Invite the people you live with. Give a task an owner and a due date, keep documents where the right people can find them, and see when something’s done. For the place you own, rent or share.
@@ -14,13 +14,19 @@ Invite the people you live with. Give a task an owner and a due date, keep docum
 Good company can start with a small plan
 Walk and coffee. A pickup game. A watch party. A study group. Find one nearby, ask to join, and get the exact spot once the host says yes. Invited by a friend? Say you’re in, get directions, add it to your calendar and talk in the plan’s group chat. Playdates have extra rules: a public place and the host’s approval.
 
-Get to know the life around you
-Pulse is the local conversation: questions, useful updates and nearby news, with no crime or suspicious-person alerts. Neighborhood shows how many verified homes are around you, and fills in as neighbors join.
+Feel the pulse around you
+Pulse is what’s happening around you, as a list or a live map: questions, useful updates and nearby news. Calm by design, with no crime or suspicious-person alerts.
+
+Mail, reinvented
+Mail arrives each morning at 7, stamped and sealed, and opens like a real envelope. This season, send a Christmas card that stays sealed until Christmas morning.
+
+Ask Pantopus
+AI that knows your place. It answers with sources, says so when it doesn’t know, and turns an answer into a task or a plan that waits for your tap.
 
 Support Trains
 Organize meals or practical help for someone you care about, share a schedule, and coordinate volunteers.
 
 Clear boundaries
-Neighbors see a first name and a street, never your house number or unit. Looking up an address shows public information; it never opens a household’s tasks or documents. Verification unlocks the features that need it, like messaging verified neighbors. Your address is never sold and never used for ads.
+Other people on Pantopus see a first name and a street, never your house number or unit. Looking up an address shows public information; it never opens a household’s tasks or documents. Verification unlocks the features that need it, like messaging verified residents near you. Your address is never sold and never used for ads.
 
 Home features are U.S.-only for now, and what’s available varies by location.
