@@ -20,6 +20,11 @@ const TYPE_WORDS = {
   'property:house': 'Single family residence', 'property:townhouse': 'Townhouse', 'property:mobile_home': 'Manufactured or mobile home', 'property:condo': 'Condominium',
   'unit:condo': 'Condominium', 'building:condo': 'Condominium building', 'building:multi_unit': 'Multi-family building', 'building:apartment': 'Apartment building',
 };
+// Facts a county writes as its code and its own words together ("10-SINGLE FAMILY", "1-GAS"): the words alone, held as a
+// rewording; the county's value stays in its record. Stark County OH's building type and heat type columns. Approved by the
+// founder on Nov 13 ("Yes, both"). Its land use ("1-FAMILY DWELLING", one family) isn't a code, so it isn't here.
+const CODED_WORDS = { 'oh-stark': ['style', 'heating'] };
+const CODE_THEN_WORDS = /^(?:\d{1,3}|[A-Z]\d)-\s*([A-Z][A-Z0-9 ,/&'-]*[A-Z])$/;
 const SWITCH = 'derived_rows';
 // Counts where a county's 0 is its answer: none.
 const ZERO_MEANS_NONE = [['fireplaces', 'fireplace count'], ['half_baths', 'half-bath count']];
@@ -146,6 +151,10 @@ function deriveRows(records, county, { work = null } = {}) {
         hold(record, 'property_class', meant.class, uses.from);
         hold(record, 'property_subtype', meant.subtype, uses.from);
       }
+    }
+    for (const fact of CODED_WORDS[county.source] || []) {
+      const said = CODE_THEN_WORDS.exec(String(facts[fact] ?? '').trim().toUpperCase());
+      if (said) hold(record, fact, said[1], `From ${office}’s record, without its code number`, { rewording: true });
     }
   }
   // The city or town limits that hold the home's point: for a home whose county names no municipality, and, reworded, for one
