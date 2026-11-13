@@ -8,6 +8,7 @@ const { download, zipDates, zipTable } = require('../lib/tables.cjs');
 const { streetParts, year, isoDate } = require('../lib/addresses.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
+const { hold } = require('../lib/held.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
@@ -17,6 +18,10 @@ const FTP = 'https://arcgisserver.lincolncountync.gov/ftp';
 const IMPROVEMENTS = ['AHPAR_', 'AHACYR', 'AHDESC', 'AHFNAR', 'AHBED_', 'AHBTH_', 'AHHBTH', 'BASEMENTSQFT', 'FINISHEDBASEMENTSQFT', 'FIREPLACECOUNT', 'AIRTYPE', 'AHCOMP'];
 const PARCELS = ['AKPAR_', 'PIN', 'STREETNUM', 'STREETNAME', 'ACRE', 'MAPPEDACRE', 'IMPROVALUE', 'LANDVALUE', 'TOTALVALUE', 'TAXYEAR', 'NEIGHBORHOOD', 'VACANT', 'AKRDC5'];
 const NOT_A_HOME = /STORAGE|BARN|SHED|PAVING|SHORELINE|GARAGE|POOL|FENCE|CARPORT|PORCH|SPACES|COMMERCIAL|OFFICE|STORE|WAREHOUSE|CHURCH|BUILDING|SHOP|CANOPY|DOCK|BOAT|PIER|DECK|TANK|GREENHOUSE|SILO|CABANA/;
+
+// The county's improvement descriptions that name a house's style; its others name a kind of building ("CUSTOM HOME",
+// "MANUFACTURED HOME"), not a style.
+const STYLES = new Set(['RANCH', 'BUNGALOW', 'CAPE COD', 'COLONIAL', 'SPLIT LEVEL', 'SPLIT FOYER', 'CONTEMPORARY', 'CONVENTIONAL', 'CONVENTIONAL (PRE WWII)', 'TUDOR', 'VICTORIAN', 'A-FRAME', 'CHALET', 'LOG', 'TRADITIONAL', 'FARMHOUSE', 'COTTAGE']);
 
 function useOf(words) {
   const w = String(words || '').toUpperCase();
@@ -65,7 +70,16 @@ function fromParcel(row, main, valueYear) {
   put(facts, 'assessed_value', positive(row.TOTALVALUE));
   put(facts, 'assessed_land_value', positive(row.LANDVALUE));
   put(facts, 'assessed_building_value', positive(row.IMPROVALUE));
-  return { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: null }, facts };
+  const record = { id: `pp:${kind}:${FIPS}:${parcel}`, kind, home_type: homeType, address: { ...address, city: '', zip: null }, facts };
+  // Read since the county went live, held off its screens until its new_columns switch is on (lib/held.cjs): the style
+  // its description names, and cooling where its heating-and-air words say the home is cooled ("Heat and A/C",
+  // "Pack. Heat/Cool", "M.H. Cooling", "HVAC").
+  if (main && home) {
+    const style = String(main.AHDESC || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    if (homeType === 'house' && STYLES.has(style)) hold(record, 'style', style);
+    if (/cool|a\/c|\bac\b|hvac/i.test(String(main.AIRTYPE || ''))) hold(record, 'cooling', 'Air conditioning');
+  }
+  return record;
 }
 
 async function* build({ work }) {
