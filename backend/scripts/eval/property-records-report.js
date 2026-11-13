@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Prints the router's report: which counties people asked for and what answered them, the next
- * counties to build, the ones ready to go live, and calls to each vendor. Counts only, no addresses.
+ * counties to build, the ones ready to go live, live counties near the date their records stop being
+ * served, and calls to each vendor. Counts only, no addresses.
  * Run it with the database environment of the server to read. With the property index's settings
  * too (PROPERTY_RECORDS_MANIFEST_URL and the reader key), it also knows which counties have a release.
  *
@@ -44,6 +45,7 @@ async function main() {
 
   section('Build next (asked for, no release)', report.queue, countyLine);
   section('Ready to go live (asked for, release published, not live)', report.ready, countyLine);
+  section('Live counties near the date their records stop being served (30 days or less, or past it)', report.stale_soon, (row) => `  ${row.fips}  ${row.state}  ${String(row.name || '(no name)').padEnd(30)}  ${row.source}  as of ${row.as_of}  stops ${row.stale_after}  ${row.days_left < 0 ? `past by ${-row.days_left} days` : `${row.days_left} days left`}`);
   section('All counties', report.counties, (row) => `${countyLine(row)}  ${row.mode}  answered ${row.answered}  no record ${row.no_record}  several ${row.ambiguous}  waiting ${row.waiting}  attom ${row.attom_calls}${row.as_of ? `  as of ${row.as_of}, ${row.records} records` : ''}${shadowWords(row.shadow)}`);
   section('No county known (a ZIP not on the Census list, or Connecticut)', report.no_county, (row) => `  ${row.state}  unanswered ${row.unanswered}  answered ${row.answered}`);
   process.exit(0);
