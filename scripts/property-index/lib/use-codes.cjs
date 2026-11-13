@@ -82,11 +82,71 @@ function newJersey(code) {
   return name ? { class: name } : null;
 }
 
+// Florida: the Department of Revenue's land use codes (Field 8, DOR_UC, of the 2023 user's guide to its property tax data
+// files, read 2026-11-13 at https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/User%20Guides/
+// 2023%20Users%20guide%20and%20quick%20reference/2023_NAL_SDF_NAP_Users_Guide.pdf). Codes 000-099; property appraisers keep
+// them as the first two digits of their own four-digit codes ("0100", "0407"), which is how the four counties below write
+// them. The residential codes' own words for the subtype; the other groups by the guide's headings, a class only.
+const FL_GROUPS = [[0, 9, 'Residential'], [10, 39, 'Commercial'], [40, 49, 'Industrial'], [50, 69, 'Agricultural'], [70, 79, 'Institutional'],
+  [80, 89, 'Governmental'], [90, 99, 'Miscellaneous']];
+const FL_RESIDENTIAL = {
+  0: 'Vacant residential', 1: 'Single family', 2: 'Mobile homes', 3: 'Multi-family, 10 units or more', 4: 'Condominiums', 5: 'Cooperatives',
+  6: 'Retirement homes not eligible for exemption', 7: 'Miscellaneous residential (migrant camps, boarding homes, etc.)', 8: 'Multi-family, fewer than 10 units',
+  9: 'Residential common elements or areas',
+};
+function florida(code) {
+  const text = String(code || '').trim();
+  const m = /^(\d{2})(\d{2})?$|^0(\d{2})$/.exec(text);
+  if (!m) return null;
+  const n = Number(m[1] ?? m[3]);
+  const group = FL_GROUPS.find(([low, high]) => n >= low && n <= high);
+  if (!group) return null;
+  return FL_RESIDENTIAL[n] !== undefined && group[2] === 'Residential' ? { class: group[2], subtype: FL_RESIDENTIAL[n] } : { class: group[2] };
+}
+
+// Michigan: the State Tax Commission's property class codes (CAMA Data Standards, August 18, 2026, read 2026-11-13 at
+// https://www.michigan.gov/treasury/-/media/Project/Websites/treasury/BLGSS/PSD_CSD/State-Tax-Commission/State-Tax-Commission-Annual-Memorandums/CAMA-Data-Standards.pdf).
+// The real property classes only: [class type, description].
+const MI_CLASSES = {
+  '101': ['Agricultural', 'Agricultural - Improved'],
+  '102': ['Agricultural', 'Agricultural - Vacant'],
+  '103': ['Agricultural', 'Agricultural- Common Element/Assessed with'],
+  '110': ['Agricultural', 'Agricultural - BLL or Taxable Lease'],
+  '201': ['Commercial', 'Commercial - Improved'],
+  '202': ['Commercial', 'Commercial - Vacant'],
+  '203': ['Commercial', 'Commercial - Common Element/Assessed with'],
+  '207': ['Commercial', 'Commercial Condominiums'],
+  '210': ['Commercial', 'Commercial BLL or Taxable Lease'],
+  '301': ['Industrial', 'Industrial - Improved'],
+  '302': ['Industrial', 'Industrial - Vacant'],
+  '303': ['Industrial', 'Industrial - Common Element/Assessed with'],
+  '307': ['Industrial', 'Industrial Condominiums'],
+  '310': ['Industrial', 'Industrial BLL or Taxable Lease'],
+  '401': ['Residential', 'Residential - Improved'],
+  '402': ['Residential', 'Residential - Vacant'],
+  '403': ['Residential', 'Residential - Common Element/Assessed with'],
+  '407': ['Residential', 'Residential Condominiums'],
+  '410': ['Residential', 'Residential BLL or Taxable Lease'],
+  '501': ['Timber Cutover', 'Timber Cutover - Improved'],
+  '502': ['Timber Cutover', 'Timber Cutover - Vacant'],
+  '503': ['Timber Cutover', 'Timber Cutover - Common Element/Assessed'],
+  '601': ['Developmental', 'Developmental - Improved'],
+  '602': ['Developmental', 'Developmental - Vacant'],
+  '603': ['Developmental', 'Developmental - Common Element/Assessed'],
+  '610': ['Developmental', 'Developmental BLL or Taxable Lease'],
+};
+function michigan(code) {
+  const row = MI_CLASSES[String(code || '').trim()];
+  return row ? { class: row[0], subtype: row[1] } : null;
+}
+
 const LISTS = {
   'wa-dor': { read: washington, list: 'the Washington Department of Revenue’s land use codes', field: 'land use code' },
   'ny-orps': { read: newYork, list: 'New York State’s property class codes', field: 'property class code' },
   'tx-ptad': { read: texas, list: 'the Texas Comptroller’s property categories', field: 'state category code' },
   'nj-modiv': { read: newJersey, list: 'New Jersey’s property classes', field: 'property class' },
+  'fl-dor': { read: florida, list: 'the Florida Department of Revenue’s land use codes', field: 'land use code' },
+  'mi-stc': { read: michigan, list: 'the Michigan State Tax Commission’s property classes', field: 'property class code' },
 };
 
 // Connectors whose use code column holds a list's codes, checked against each county's own values (VXDERIVE sample).
@@ -95,6 +155,12 @@ const SOURCES = {
   ...Object.fromEntries(['wa-parcels', 'wa-kitsap', 'wa-skagit', 'wa-pierce', 'wa-clark'].map((source) => [source, 'wa-dor'])),
   ...Object.fromEntries(['ny-parcels', 'ny-rolls', 'ny-county-files', 'ny-monroe'].map((source) => [source, 'ny-orps'])),
   'nj-modiv': 'nj-modiv',
+  // Florida: only where the code's first two digits match each home's own type in the sample (single family 01, mobile 02,
+  // condominium 04, cooperative 05). fl-roll, fl-broward and the other appraiser files carry a county's own code ("00" on
+  // single family homes), so they get none.
+  ...Object.fromEntries(['fl-hillsborough', 'fl-miami-dade', 'fl-sarasota', 'fl-seminole'].map((source) => [source, 'fl-dor'])),
+  // Michigan: Oakland's class codes are the Commission's (401, 407 on its homes); Detroit's five-digit city codes aren't.
+  'mi-oakland': 'mi-stc',
   ...Object.fromEntries(['tx-atascosa', 'tx-bastrop', 'tx-bell', 'tx-bexar', 'tx-brazos', 'tx-cameron', 'tx-collin', 'tx-dallas', 'tx-denton', 'tx-ector',
     'tx-fort-bend', 'tx-grayson', 'tx-gregg', 'tx-harris', 'tx-hidalgo', 'tx-johnson', 'tx-kaufman', 'tx-liberty', 'tx-montgomery', 'tx-nueces', 'tx-smith',
     'tx-tarrant', 'tx-taylor', 'tx-travis'].map((source) => [source, 'tx-ptad'])),
