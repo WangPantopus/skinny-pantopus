@@ -7,7 +7,8 @@ const addressConfig = require('../config/addressVerification');
 const householdClaimConfig = require('../config/householdClaims');
 const verifyToken = require('../middleware/verifyToken');
 const requireAuthority = require('../middleware/requireAuthority');
-const { homeOutboundLimiter } = require('../middleware/rateLimiter');
+const { homeOutboundLimiter, homeDocumentFactsLimiter } = require('../middleware/rateLimiter');
+const multer = require('multer');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
@@ -45,6 +46,8 @@ const recordVocabulary = require('../services/recordVocabulary');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const homeRecords = require('../services/propertyRecords/homeRecord');
 const householdFacts = require('../services/householdFacts');
+const householdDocuments = require('../services/householdDocuments');
+const { MAX_BYTES: DOCUMENT_MAX_BYTES } = require('../services/householdDocuments/pdfText');
 const countyLinks = require('../config/countyLinks');
 const appealPacket = require('../services/appealPacket');
 const floorPlans = require('../services/propertyRecords/floorPlans');
@@ -222,6 +225,15 @@ const updateHomeSchema = Joi.object({
     via: Joi.string().valid('county_page'),
   }).xor('key', 'group')).min(1).max(40),
 }).min(1);
+
+// What a household kept from its own report (services/householdDocuments): a fact key or `system:<key>`, and its value.
+const documentFactsSchema = Joi.object({
+  kind: Joi.string().valid('inspection', 'appraisal', 'listing', 'document').required(),
+  facts: Joi.array().items(Joi.object({
+    key: Joi.string().max(40).required(),
+    value: Joi.alternatives().try(Joi.string().max(80), Joi.number()).required(),
+  })).min(1).max(40).required(),
+});
 
 const floorPlanAnswerSchema = Joi.object({
   answer: Joi.string().valid('yes', 'no', 'undo').required(),
@@ -2143,6 +2155,25 @@ async function commitFactChange(factChange, { homeId, actorId, required }) {
   }
 }
 
+// The same transaction as Settings rechecks current authority after taking the Home lock, preserves address identity,
+// and audits the whole edit. Null when saved; otherwise the answer to send.
+async function saveHomeColumns(homeId, actorId, fields) {
+  const { data, error } = await supabaseAdmin.rpc('update_home_settings', {
+    p_home_id: homeId, p_actor_id: actorId, p_fields: fields, p_preferences: {},
+  });
+  if (error || !data || typeof data.ok !== 'boolean') {
+    return { status: 503, body: { error: 'The home change could not be confirmed. Reload before trying again.' } };
+  }
+  if (!data.ok) {
+    if (data.code === 'HOME_ADDRESS_CHANGE_REQUIRED') {
+      return { status: 409, body: { error: 'The address and unit identify this home. Add a new home for a different address.', code: data.code } };
+    }
+    const status = { HOME_SETTINGS_INVALID: 400, HOME_NOT_FOUND: 404, HOME_SETTINGS_DENIED: 403 }[data.code] || 503;
+    return { status, body: { error: status === 400 ? 'Invalid home details.' : 'Current permission to change this home could not be confirmed.', code: data.code } };
+  }
+  return null;
+}
+
 router.patch('/:id', verifyToken, requireSharedHomeContent, validate(updateHomeSchema), async (req, res) => {
   try {
     const { household_facts: asked, ...fields } = req.body;
@@ -2150,21 +2181,8 @@ router.patch('/:id', verifyToken, requireSharedHomeContent, validate(updateHomeS
     const factChange = await homeDetailService.factChange({ homeId: req.params.id, actorId: req.user.id, asked, fields });
     Object.assign(fields, factChange?.columns);
     if (Object.keys(fields).length) {
-      // The same transaction as Settings rechecks current authority after taking
-      // the Home lock, preserves address identity, and audits the whole edit.
-      const { data, error } = await supabaseAdmin.rpc('update_home_settings', {
-        p_home_id: req.params.id, p_actor_id: req.user.id, p_fields: fields, p_preferences: {},
-      });
-      if (error || !data || typeof data.ok !== 'boolean') {
-        return res.status(503).json({ error: 'The home change could not be confirmed. Reload before trying again.' });
-      }
-      if (!data.ok) {
-        if (data.code === 'HOME_ADDRESS_CHANGE_REQUIRED') {
-          return res.status(409).json({ error: 'The address and unit identify this home. Add a new home for a different address.', code: data.code });
-        }
-        const status = { HOME_SETTINGS_INVALID: 400, HOME_NOT_FOUND: 404, HOME_SETTINGS_DENIED: 403 }[data.code] || 503;
-        return res.status(status).json({ error: status === 400 ? 'Invalid home details.' : 'Current permission to change this home could not be confirmed.', code: data.code });
-      }
+      const refused = await saveHomeColumns(req.params.id, req.user.id, fields);
+      if (refused) return res.status(refused.status).json(refused.body);
     } else if (factChange?.changed.length) {
       await writeAuditLog(req.params.id, req.user.id, 'home_facts_updated', 'Home', req.params.id, { fields: factChange.changed });
     }
@@ -2198,6 +2216,70 @@ router.post('/:id/floor-plan-answer', verifyToken, requireSharedHomeContent, val
     await writeAuditLog(req.params.id, req.user.id, 'home_floor_plan_answer', 'Home', req.params.id, { answer: req.body.answer });
     res.json(result);
   } catch (err) { homeDetailService.sendError(res, err); }
+});
+
+// A household's own report (services/householdDocuments): one PDF, in memory only. It is never written anywhere.
+const receiveDocument = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: DOCUMENT_MAX_BYTES, files: 1, fields: 4, parts: 5, fieldSize: 1024 },
+}).single('file');
+
+function documentUpload(req, res, next) {
+  receiveDocument(req, res, (err) => {
+    if (!err) return next();
+    const code = err.code === 'LIMIT_FILE_SIZE' ? 'PDF_TOO_LARGE' : 'PDF_UNREADABLE';
+    return householdDocuments.sendError(res, householdDocuments.failure(code), homeDetailService.sendError);
+  });
+}
+
+/**
+ * POST /api/homes/:id/document-facts/read
+ * "Add from a document": a verified member's PDF of this home's inspection report, appraisal or listing sheet. It is
+ * read in memory and dropped; the answer lists the facts it states, for the household to check. Nothing is saved.
+ */
+router.post('/:id/document-facts/read', verifyToken, (req, res, next) => {
+  if (!householdDocuments.enabled()) return res.status(404).json({ error: 'Not found', code: 'HOME_DOCUMENTS_OFF' });
+  return next();
+}, requireSharedHomeContent, homeDocumentFactsLimiter, documentUpload, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    res.json(await householdDocuments.read({ homeId: req.params.id, actorId: req.user.id, bytes: req.file?.buffer }));
+  } catch (err) {
+    householdDocuments.sendError(res, err, homeDetailService.sendError);
+  } finally {
+    // The report's bytes go no further than this request.
+    req.file?.buffer?.fill(0);
+    if (req.file) req.file.buffer = null;
+  }
+});
+
+/**
+ * POST /api/homes/:id/document-facts
+ * The facts the household kept from its report: saved as its own entries (as "Fix something" saves them) and, for
+ * the systems' years, in Place's Home systems. Each says which report it came from.
+ */
+router.post('/:id/document-facts', verifyToken, (req, res, next) => {
+  if (!householdDocuments.enabled()) return res.status(404).json({ error: 'Not found', code: 'HOME_DOCUMENTS_OFF' });
+  return next();
+}, requireSharedHomeContent, validate(documentFactsSchema), async (req, res) => {
+  const homeId = req.params.id;
+  const actorId = req.user.id;
+  try {
+    const { asked, systems } = await householdDocuments.prepare({ homeId, actorId, kind: req.body.kind, facts: req.body.facts });
+    const factChange = asked.length ? await homeDetailService.factChange({ homeId, actorId, asked, fields: {} }) : null;
+    if (factChange && Object.keys(factChange.columns).length) {
+      const refused = await saveHomeColumns(homeId, actorId, factChange.columns);
+      if (refused) return res.status(refused.status).json(refused.body);
+    }
+    if (factChange) await commitFactChange(factChange, { homeId, actorId, required: true });
+    await householdDocuments.saveSystems({ homeId, actorId, kind: req.body.kind, systems });
+    await writeAuditLog(homeId, actorId, 'home_document_facts_saved', 'Home', homeId, {
+      kind: req.body.kind, fields: [...(factChange?.changed || []), ...systems.map((system) => `system:${system.key}`)],
+    });
+    res.json({ message: householdDocuments.savedMessage(req.body.kind, req.body.facts.length) });
+  } catch (err) {
+    householdDocuments.sendError(res, err, homeDetailService.sendError);
+  }
 });
 
 /**

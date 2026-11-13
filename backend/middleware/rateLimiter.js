@@ -173,6 +173,16 @@ const homeDocumentUploadLimiter = rateLimit({
   message: { error: 'Too many document uploads. Please try again later.' },
 });
 
+// A household's own report read for facts (services/householdDocuments): a person sends a few, not hundreds.
+const homeDocumentFactsLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 12,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: req => req.user.id,
+  message: { error: 'You have sent a lot of documents. Please try again in an hour.', code: 'HOME_DOCUMENTS_LIMIT' },
+});
+
 /**
  * Limiter for ownership claims and verification endpoints.
  * 10 requests per 15 minutes per user.
@@ -579,6 +589,7 @@ module.exports = {
   homeCreationLimiter,
   homeOutboundLimiter,
   homeDocumentUploadLimiter,
+  homeDocumentFactsLimiter,
   ownershipClaimLimiter,
   identityCheckLimiter,
   homeResidencySubmissionLimiter,

@@ -15,6 +15,7 @@ const { changeNicheData } = require('./homeNicheData');
 const addressReview = require('./addressValidation/addressReviewService');
 const countyPages = require('./countyPages');
 const countyLinks = require('../config/countyLinks');
+const householdDocuments = require('./householdDocuments');
 const logger = require('../utils/logger');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
@@ -292,15 +293,18 @@ async function verifiedWritersAt(homeId, userIds) {
 async function householdPart({ homeId, home, raw, access, actorId, problems, copy = null, countyRecord = null, otherRecord = null, seesEntries = true }) {
   try {
     const canEdit = access.permissions.includes('home.edit');
-    const [verifiedWriters, reports, countyPage, sheet] = await Promise.all([
+    const [verifiedWriters, reports, countyPage, sheet, systems] = await Promise.all([
       verifiedWritersAt(homeId, householdFacts.unverifiedWriters(raw.niche_data, actorId)),
       copy && canEdit ? problems : null,
       canEdit ? countyPages.forHome({ copy, home }) : null,
       householdFacts.isResident(access) ? floorPlans.forHome(raw) : null,
+      // The years in Place's Home systems, with facts from the household's documents (off: none).
+      seesEntries ? householdDocuments.systemsFor(homeId) : null,
     ]);
     return householdFacts.project({ home, nicheData: raw.niche_data, copy, countyRecord, canEdit, viewerId: actorId, verifiedWriters, reports, countyPage,
       // The county's record goes first for everyone, including those who don't see it.
-      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries, countyCheck: countyLinks.enabled() });
+      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries, countyCheck: countyLinks.enabled(),
+      systems, documents: householdDocuments.offer(access) });
   } catch (error) {
     logger.warn('Home household facts unavailable', { homeId, error: error.message });
     return null;

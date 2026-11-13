@@ -33,6 +33,8 @@ const { factValue, factIsMono } = require('../serializers/countyRecordSerializer
 const { changeNicheData } = require('./homeNicheData');
 const { planFacts, planKey, withFloorPlan, PLAN_PROMPT, PLAN_SOURCE_WORD } = require('./propertyRecords/floorPlanFormat');
 const { savedCopyFacts } = require('./ai/attomFacts');
+const householdDocuments = require('../config/householdDocuments');
+const { KINDS: DOCUMENT_KINDS } = require('./householdDocuments/readFacts');
 
 const SCHEMA = 1;
 const MAX_HISTORY = 9;
@@ -50,6 +52,8 @@ const NO_CONTROLS = new Set(['sale']);
 const CHECK_GROUP = 'county_check';
 const CHECK_FACTS = ['year_built', 'living_sqft', 'bedrooms', 'bathrooms'];
 const CHECKED_VIA = 'county_page';
+// From the household's own report (services/householdDocuments): `via` is 'document:<kind>', the kind it was.
+const documentKind = (via) => (typeof via === 'string' && via.startsWith('document:') && DOCUMENT_KINDS[via.slice(9)] ? via.slice(9) : null);
 
 const choices = (...labels) => labels.map((label) => ({ label, value: label }));
 const yearsOf = { input: 'year', first: 'record', conflict: true };
@@ -89,7 +93,33 @@ const CATALOG = {
   garage_sqft: { ...area, first: 'household' },
   carport_sqft: { ...area, first: 'household' },
   pool: { input: 'text', first: 'household', options: choices('In-ground', 'Above-ground', 'None') },
+  // No county file has these; a household's report does (config/householdDocuments.js). Offered while that's on.
+  water_heater: { input: 'text', first: 'household', documents: true, options: choices('Gas tank', 'Electric tank', 'Tankless, gas', 'Tankless, electric', 'Heat pump') },
+  electrical_service: { input: 'number', unit: 'amps', min: 30, max: 2000, first: 'household', documents: true, options: choices('100', '150', '200', '400') },
+  electrical_panel: { input: 'text', first: 'household', documents: true, options: choices('Breakers', 'Fuses') },
+  plumbing: { input: 'text', first: 'household', documents: true, options: choices('Copper', 'PEX', 'CPVC', 'Galvanized steel', 'Polybutylene') },
 };
+// The household's own rows, kept here and not in the record's dictionary (propertyRecords/facts.js), which the county
+// readers share: no county record states them.
+const OWN_FACTS = {
+  water_heater: { section: 'utilities', label: 'Water heater', format: 'text', scope: 'unit' },
+  electrical_service: { section: 'utilities', label: 'Electrical service', format: 'count', scope: 'unit', unit: 'amps' },
+  electrical_panel: { section: 'utilities', label: 'Electrical panel', format: 'text', scope: 'unit' },
+  plumbing: { section: 'utilities', label: 'Water pipes', format: 'text', scope: 'building' },
+};
+const factOf = (key) => FACTS[key] || OWN_FACTS[key];
+// A fact the documents switch adds is offered only while it's on; an entry made then still shows.
+const offered = (key, stored) => !CATALOG[key].documents || householdDocuments.enabled() || Boolean(stored?.[key]);
+// The years a household gave for its home's systems (HomeSystem, Place's Home systems), as Property details rows.
+const SYSTEM_ROWS = {
+  roof: { section: 'construction', label: 'Roof installed', building: true },
+  windows: { section: 'construction', label: 'Windows installed', building: true },
+  hvac: { section: 'utilities', label: 'Heating & cooling installed' },
+  water_heater: { section: 'utilities', label: 'Water heater installed' },
+  electrical_panel: { section: 'utilities', label: 'Electrical panel installed' },
+  sewer_septic: { section: 'utilities', label: 'Sewer or septic installed', building: true },
+};
+const OTHER_SYSTEM_SOURCES = { permit: 'From a permit record', marketplace: 'From a completed job' };
 // Fact → the Home column it writes, for the columns any build can PATCH.
 const COLUMN_FACTS = Object.entries(CATALOG).filter(([, def]) => def.column).map(([key, def]) => [key, def.column]);
 // The columns Add Home filled from ATTOM's copy before a county answered from its record.
@@ -145,6 +175,7 @@ function valueText(key, value) {
   if (value === null || value === undefined) return null;
   if (Number(value) === 0 && CATALOG[key].input !== 'text') return '0';
   if (CATALOG[key].input === 'text') return String(value);
+  if (OWN_FACTS[key]?.unit) return `${factValue(OWN_FACTS[key].format, value)} ${OWN_FACTS[key].unit}`;
   return factValue(FACTS[key].format, value);
 }
 
@@ -165,7 +196,7 @@ function isUnitPage(home, copy, floorPlan = null) {
 }
 
 function groupOf(key, unitPage) {
-  const fact = FACTS[key];
+  const fact = factOf(key);
   if (!unitPage) return fact.section;
   return fact.scope === 'unit' && fact.section !== 'lot' ? 'unit' : null;
 }
@@ -237,6 +268,7 @@ function factStates({ home, nicheData, copy, viewerId, verifiedWriters, floorPla
   const stored = storedFields(nicheData);
   const states = {};
   for (const [key, def] of Object.entries(CATALOG)) {
+    if (!offered(key, stored)) continue;
     const entry = entryFor(stored[key], viewerId, verifiedWriters);
     const sheet = record[key] == null && fromSheet[key] !== undefined;
     const recordValue = sheet ? fromSheet[key] : record[key] ?? null;
@@ -254,7 +286,7 @@ function factStates({ home, nicheData, copy, viewerId, verifiedWriters, floorPla
 }
 
 function householdRow(state) {
-  return { id: state.key, label: FACTS[state.key].label, value: valueText(state.key, state.own), mono: state.def.input !== 'text' && factIsMono(FACTS[state.key].format) };
+  return { id: state.key, label: factOf(state.key).label, value: valueText(state.key, state.own), mono: state.def.input !== 'text' && factIsMono(factOf(state.key).format) };
 }
 
 /** What a fact says now for this household: its own word, the record's, or the Home's column. */
@@ -264,7 +296,7 @@ const currentValue = (state) => state.own ?? state.record ?? state.column;
 const checkedOnPage = (state) => state.entry?.via === CHECKED_VIA && currentValue(state) !== null && sameValue(state.def, state.entry.value, currentValue(state));
 
 /** The record's sections with the household's word in place. The record's own rows are copied, never changed in the copy. */
-function recordView(countyRecord, states, unitPage) {
+function recordView(countyRecord, states, unitPage, systems = null) {
   const sections = countyRecord.sections.map((section) => ({ ...section, rows: section.rows.map((row) => ({ ...row })) }));
   const sectionFor = (id) => {
     let section = sections.find((candidate) => candidate.id === id);
@@ -279,7 +311,7 @@ function recordView(countyRecord, states, unitPage) {
     const row = sections.flatMap((section) => section.rows).find((candidate) => candidate.id === state.key);
     const text = valueText(state.key, state.own);
     if (!row) {
-      sectionFor(groupOf(state.key, unitPage) || FACTS[state.key].section).rows.push({ ...householdRow(state), tag: HOUSEHOLD_TAG });
+      sectionFor(groupOf(state.key, unitPage) || factOf(state.key).section).rows.push({ ...householdRow(state), tag: HOUSEHOLD_TAG });
     } else if (state.def.first === 'household') {
       const source = state.sheet ? PLAN_SOURCE_WORD : 'County record';
       row.note = sameValue(state.def, state.own, state.record) ? `Matches the ${source.toLowerCase()}` : `${source}: ${row.value}`;
@@ -289,8 +321,35 @@ function recordView(countyRecord, states, unitPage) {
       row.note = `Your household: ${text}`;
     }
   }
+  for (const { section, row } of systemRows(systems, unitPage)) sectionFor(section).rows.push(row);
   sections.sort((a, b) => SECTION_ORDER.indexOf(a.id) - SECTION_ORDER.indexOf(b.id));
   return { ...countyRecord, sections };
+}
+
+/**
+ * "Roof installed: 2016" for each system year Place's Home systems keeps from the household, a permit or a job. In the
+ * household's own card (`inCard`) the card's title says whose they are, and each row says when, as the others do.
+ */
+function systemRows(systems, unitPage, inCard = false) {
+  const rows = [];
+  for (const [key, shown] of Object.entries(SYSTEM_ROWS)) {
+    const stored = (systems || []).find((system) => system.system_key === key);
+    const year = Number(stored?.installed_year);
+    if (!stored || !Number.isInteger(year) || !(stored.source === 'resident' || OTHER_SYSTEM_SOURCES[stored.source])) continue;
+    const kind = documentKind(stored.source_ref);
+    const day = stored.updated_at ? dayLabel(stored.updated_at) : null;
+    let note = kind ? `From ${DOCUMENT_KINDS[kind].source}` : OTHER_SYSTEM_SOURCES[stored.source] || (inCard ? 'Updated' : null);
+    if (note && day && (inCard || kind)) note = `${note}${note === 'Updated' ? '' : ' ·'} ${day}`;
+    rows.push({
+      section: unitPage ? (shown.building ? 'building' : 'unit') : shown.section,
+      row: {
+        id: `system_${key}`, label: shown.label, value: String(year), mono: true,
+        tag: stored.source === 'resident' && !inCard ? HOUSEHOLD_TAG : null,
+        note,
+      },
+    });
+  }
+  return rows;
 }
 
 function factForEditor(state) {
@@ -298,16 +357,16 @@ function factForEditor(state) {
   const shown = def.first === 'record' && record !== null ? record : own ?? record ?? column;
   let note = null;
   if (own !== null && record !== null && !sameValue(def, own, record)) {
-    note = def.first === 'household' ? `${sheet ? PLAN_SOURCE_WORD : 'County record'}: ${factValue(FACTS[key].format, record)}` : `Your household: ${valueText(key, own)}`;
+    note = def.first === 'household' ? `${sheet ? PLAN_SOURCE_WORD : 'County record'}: ${factValue(factOf(key).format, record)}` : `Your household: ${valueText(key, own)}`;
   }
   const options = [...(def.options || [])];
   // The county's own wording is one of the answers, so going back to it takes a tap.
   if (def.input === 'text' && record !== null && !options.some((option) => sameValue(def, option.value, record))) {
-    options.unshift({ label: factValue(FACTS[key].format, record), value: String(record) });
+    options.unshift({ label: factValue(factOf(key).format, record), value: String(record) });
   }
   return {
     key,
-    label: FACTS[key].label,
+    label: factOf(key).label,
     value: shown === null ? null : valueText(key, shown),
     current: editorText(own ?? record ?? column),
     note,
@@ -316,6 +375,35 @@ function factForEditor(state) {
     options,
     can_undo: Boolean(entry && entry.action !== 'confirmed'),
   };
+}
+
+/**
+ * A fact a household's report states, as the check screen shows it (services/householdDocuments): the report's
+ * value, what the page shows now beside it, and the same controls as the fact's editor. Null when the value isn't one
+ * this fact takes or the fact isn't offered.
+ */
+function proposalFor(states, key, raw) {
+  const state = states[key];
+  if (!state) return null;
+  const value = parseValue(state.def, raw);
+  if (value === null) return null;
+  const shown = currentValue(state);
+  let note = null;
+  if (shown !== null) {
+    if (sameValue(state.def, value, shown)) note = 'Matches what your page shows';
+    else if (state.own !== null || state.record === null) note = `Your page shows ${valueText(key, shown)}`;
+    else note = `${state.sheet ? PLAN_SOURCE_WORD : 'County record'}: ${factValue(factOf(key).format, state.record)}`;
+  }
+  const editor = factForEditor(state);
+  return {
+    key, label: editor.label, value: valueText(key, value), current: editorText(value), note,
+    input: editor.input, unit: editor.unit, options: editor.options, can_undo: false,
+  };
+}
+
+/** Each fact's standing for someone saving from their report: the county's record only for a verified owner. */
+function statesFor({ home, copy, viewerId }) {
+  return factStates({ home, nicheData: home.niche_data, copy, viewerId, verifiedWriters: new Set() });
 }
 
 function confirmationOf(states) {
@@ -335,7 +423,7 @@ function reportedLine(reports, sectionId) {
 
 /** The questions and controls for someone who can write. `reportable`: the county record's cards; a sheet has its own path to review. */
 function editorParts({ states, sections, unitPage, reports, hasRecord, reportable }) {
-  const offered = Object.values(states).filter((state) => groupOf(state.key, unitPage));
+  const offered = Object.values(states).filter((state) => groupOf(state.key, unitPage) && (!state.def.documents || householdDocuments.enabled()));
   const groups = [];
   const leftover = [];
   for (const id of EDIT_GROUPS) {
@@ -368,11 +456,14 @@ function editorParts({ states, sections, unitPage, reports, hasRecord, reportabl
 }
 
 /** What the household has said, as a card: for a member, and for an owner with no record to set it beside. */
-function entriesCard(states) {
+function entriesCard(states, systems = null) {
   const rows = Object.values(states).filter((state) => state.entry && state.entry.action !== 'confirmed').map((state) => {
     const day = dayLabel(state.entry.at);
-    return { ...householdRow(state), note: day ? `${state.entry.via === CHECKED_VIA ? "Checked on the county's page ·" : 'Updated'} ${day}` : null };
+    const kind = documentKind(state.entry.via);
+    const how = state.entry.via === CHECKED_VIA ? "Checked on the county's page ·" : kind ? `From ${DOCUMENT_KINDS[kind].source} ·` : 'Updated';
+    return { ...householdRow(state), note: day ? `${how} ${day}` : null };
   });
+  rows.push(...systemRows(systems, false, true).map(({ row }) => row));
   return rows.length ? [{ id: 'household', title: HOUSEHOLD_TAG, rows, note: null }] : [];
 }
 
@@ -435,13 +526,14 @@ function layoutPart(floorPlan, nicheData, viewerId, verifiedWriters) {
  * @param {boolean} [args.countyCheck]  Link and confirm is on: with no county record, "Is this right?" for what the county's page shows.
  * @returns {object|null} Null when there's nothing to say to this viewer.
  */
-function project({ home, nicheData, copy, countyRecord, canEdit, viewerId, verifiedWriters, reports = null, countyPage = null, floorPlan = null, otherRecord = null, seesEntries = true, countyCheck = false }) {
+function project({ home, nicheData, copy, countyRecord, canEdit, viewerId, verifiedWriters, reports = null, countyPage = null, floorPlan = null, otherRecord = null, seesEntries = true, countyCheck = false, systems = null, documents = null }) {
   const unitPage = isUnitPage(home, copy, floorPlan);
   const states = seesEntries ? factStates({ home, nicheData, copy, viewerId, verifiedWriters, floorPlan }) : {};
+  const shownSystems = seesEntries ? systems : null;
   const ownRecord = copy && countyRecord ? countyRecord : null;
   const base = floorPlan ? withFloorPlan(ownRecord || otherRecord, floorPlan) : ownRecord;
-  const view = base ? recordView(base, states, unitPage) : null;
-  const sections = view ? [] : entriesCard(states);
+  const view = base ? recordView(base, states, unitPage, shownSystems) : null;
+  const sections = view ? [] : entriesCard(states, shownSystems);
   const layout = layoutPart(floorPlan, nicheData, viewerId, verifiedWriters);
   const shared = { ...(view ? { record_view: view } : {}), sections, ...(layout ? { floor_plan: layout } : {}) };
   if (!canEdit) return view || sections.length ? { can_edit: false, ...shared, groups: [], questions: [], county_page: null } : null;
@@ -449,7 +541,7 @@ function project({ home, nicheData, copy, countyRecord, canEdit, viewerId, verif
   const { groups, questions } = editorParts({ states, sections: view ? view.sections : [], unitPage, reports, hasRecord: Boolean(ownRecord), reportable });
   // Where a county record answers, only the link is new.
   const check = countyCheck && !ownRecord && seesEntries && countyPage?.name ? checkPart(states, countyPage) : null;
-  return { can_edit: true, ...shared, groups, questions, county_page: countyPage, ...(check ? { county_check: check } : {}) };
+  return { can_edit: true, ...shared, groups, questions, county_page: countyPage, ...(check ? { county_check: check } : {}), ...(documents ? { documents } : {}) };
 }
 
 function newEntry({ def, value, action, actorId, via, record, previous, column, verified, at }) {
@@ -477,7 +569,7 @@ function expand(asked, unitPage, states, check = false) {
   const named = new Set(asked.filter((request) => request.key).map((request) => request.key));
   for (const request of asked) {
     if (!request.group) {
-      if (!CATALOG[request.key]) throw failure();
+      if (!CATALOG[request.key] || (CATALOG[request.key].documents && !householdDocuments.enabled())) throw failure();
       out.push(request);
       continue;
     }
@@ -538,10 +630,11 @@ function plan({ home, copy, seesRecord, asked, fields, actorId, floorPlan = null
       const next = columnValue(def, value);
       if (next !== null && !sameValue(def, next, state.column)) columns[def.column] = next;
     }
-    const via = action === 'check' || (check && request.via === CHECKED_VIA && CHECK_FACTS.includes(key)) ? CHECKED_VIA : 'details';
+    let via = action === 'check' || (check && request.via === CHECKED_VIA && CHECK_FACTS.includes(key)) ? CHECKED_VIA : 'details';
+    if (documentKind(request.via)) via = request.via;
     edits.push({ key, value, action: agrees ? 'confirmed' : state.record !== null ? 'corrected' : 'entered', record: state.record, column: state.column, via });
     if (def.conflict && known[key] !== undefined && !sameValue(def, value, known[key])) {
-      conflicts.push({ field: key, section: FACTS[key].section, shown: factValue(FACTS[key].format, known[key]), entered: valueText(key, value) });
+      conflicts.push({ field: key, section: factOf(key).section, shown: factValue(factOf(key).format, known[key]), entered: valueText(key, value) });
     }
   }
   if (!asked) {
@@ -568,8 +661,9 @@ function plan({ home, copy, seesRecord, asked, fields, actorId, floorPlan = null
           if (latest) next[edit.key] = { ...latest, history: rest };
           else delete next[edit.key];
         } else if (!(previous && previous.action === edit.action && sameValue(CATALOG[edit.key], previous.value, edit.value)
-          // The same value checked on the county's page is news: it's kept, and Undo goes back to the entry before.
-          && !(edit.via === CHECKED_VIA && previous.via !== CHECKED_VIA))) {
+          // The same value checked on the county's page, or read in the household's report, is news: it's kept, and
+          // Undo goes back to the entry before.
+          && !((edit.via === CHECKED_VIA || documentKind(edit.via)) && previous.via !== edit.via))) {
           next[edit.key] = newEntry({ def: CATALOG[edit.key], ...edit, actorId, previous, verified: true, at: now });
         }
       }
@@ -672,7 +766,7 @@ function factsWithEntries(facts, nicheData) {
 }
 
 module.exports = {
-  plan, project, fromAddHome, addHomeQuestions, addHomeCheck, factsWithEntries, seesHousehold, isResident, usableFloorPlan, unverifiedWriters, columnAgrees, COLUMN_FACTS,
+  plan, project, fromAddHome, proposalFor, statesFor, documentKind, addHomeQuestions, addHomeCheck, factsWithEntries, seesHousehold, isResident, usableFloorPlan, unverifiedWriters, columnAgrees, COLUMN_FACTS,
   prefilledFromCopy, shownColumns,
   layoutAnswer, layoutColumns, layoutColumnsToClear,
 };
