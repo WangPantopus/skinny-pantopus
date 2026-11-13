@@ -353,12 +353,14 @@ private fun PlansHostFilterEmpty(
         modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.s3).testTag("plansHostFilterEmpty"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
+        // "Other" when the person's own plans of this filter are listed just above.
+        val other = if (state.mineShown.isNotEmpty()) "other " else ""
         Text(
             text =
                 if (state.hostShown == PlanHostFilter.BUSINESSES) {
-                    "No businesses have plans here ${state.window.phrase}."
+                    "No ${other}businesses have plans here ${state.window.phrase}."
                 } else {
-                    "No neighbors have plans here ${state.window.phrase}."
+                    "No ${other}neighbors have plans here ${state.window.phrase}."
                 },
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,

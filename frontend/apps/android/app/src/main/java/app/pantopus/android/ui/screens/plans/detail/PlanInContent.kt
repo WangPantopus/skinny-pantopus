@@ -51,6 +51,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.data.plans.isBusiness
 
 /**
  * J7: you're in. The exact place, the host's note, the people going and the group chat, only for people who are
@@ -185,7 +186,8 @@ private fun PeopleLine(
     val names =
         people
             .map { person ->
-                val first = PlanFormat.firstName(person.displayName)
+                // A business hosting is named in full ("Lacamas Pickleball Club (host)"), never by its first word.
+                val first = if (person.isHost && plan.isBusiness) plan.hostFirst else PlanFormat.firstName(person.displayName)
                 when {
                     viewerId != null && person.userId == viewerId -> you
                     person.isHost -> "$first (host)"

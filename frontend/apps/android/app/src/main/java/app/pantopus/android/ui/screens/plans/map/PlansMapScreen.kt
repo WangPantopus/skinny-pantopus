@@ -704,7 +704,8 @@ private fun PlansTopChrome(
                 GlassCircleButton(icon = PantopusIcon.ChevronLeft, label = "Back to all plans", onClick = onBackFromCard)
                 Spacer(modifier = Modifier.weight(1f))
                 val inOrHosting = selected?.standing == PlanViewerStanding.IN || selected?.standing == PlanViewerStanding.HOSTING
-                if (!inOrHosting) {
+                // A business's plan is at its own public address: no "area only" promise to make.
+                if (!inOrHosting && selected?.isBusiness != true) {
                     PlanScopeChip(
                         text =
                             if (selected?.planKind == PlanKind.PLAYDATE) {
