@@ -53,6 +53,14 @@ function assertAllowed(records) {
   }
 }
 
+/** A county's `held_from`: words for facts of a known list, never anything else. */
+function assertHeldFrom(heldFrom) {
+  for (const [list, words] of Object.entries(heldFrom || {})) {
+    if (!HELD_LISTS.has(list)) throw new Error(`A county says where facts under ${list} come from`);
+    for (const [key, text] of Object.entries(words)) if (!FACTS[key] || typeof text !== 'string') throw new Error(`A county's held_from names ${key}`);
+  }
+}
+
 function releaseId(asOf, built) {
   return `${asOf.replace(/-/g, '')}-${built.toISOString().slice(0, 16).replace(/[-:T]/g, '').slice(4)}`;
 }
@@ -100,7 +108,10 @@ async function main() {
     const { records, stale_after_days: staleAfterDays, extra_zips: extraZips = [], ...about } = county;
     // parse() also says which form an address came in (addressKey.js). A record keeps only its parts.
     for (const { address } of records) delete address.form;
-    deriveFacts(records);
+    // deriveFacts may say, per list of held facts, where each came from in words (format.js `held_from`).
+    const derived = deriveFacts(records);
+    const heldFrom = derived?.held_from || about.held_from ? { ...about.held_from, ...derived?.held_from } : null;
+    assertHeldFrom(heldFrom);
     const shared = markSharedDeeds(records);
     if (shared) log(`${about.fips}: ${shared} homes' last sales are one deed for several homes`);
     assertAllowed(records);
@@ -129,6 +140,7 @@ async function main() {
       zips: [...zips].sort(),
       cities: [...cities].sort(),
       records: report.records,
+      ...(heldFrom ? { held_from: heldFrom } : {}),
       ...(valueModel ? { value_model: valueModel } : {}),
     }));
     // Which accounts it holds, for the next release's retention check.

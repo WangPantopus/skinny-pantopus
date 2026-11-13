@@ -37,7 +37,9 @@ const BLOCK_RAW_BYTES = 32 * 1024;
  * restricted record has `restricted: true` and carries no facts at all.
  * A record may also carry `held: { <list>: { field: value } }`: facts a build read or derived that would change what a
  * live county shows, kept off every screen until the switch file names the county on that list (router.js: new_columns,
- * derived_rows). A server that predates them ignores the key.
+ * derived_rows). A server that predates them ignores the key. The county's state entry may carry `held_from:
+ * { <list>: { field: words } }`, where a list's facts come from somewhere other than the county's own column, in words
+ * for Property details ("From the Census Bureau's 2025 city boundaries").
  */
 const KINDS = new Set(['property', 'unit', 'building', 'parcel', 'other']);
 

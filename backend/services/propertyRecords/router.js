@@ -20,8 +20,9 @@
  * can get the appeal packet (services/appealPacket.js). A file without the list has it off everywhere.
  * `new_columns` and `derived_rows` name the live counties whose release's held facts show: facts a release carries
  * under `held` (format.js) because they would change what a live county shows, kept off its screens until it's named
- * here. new_columns: columns its connector newly reads (WP20); derived_rows: rows derived from the record itself (WP19).
- * Applied in that order. A file without the lists shows none of them, and a copy's held facts never leave this file.
+ * here. new_columns: columns its connector newly reads (WP20), joined to the copy's facts; derived_rows: rows derived
+ * from the record itself (WP19), served beside them as `copy.derived` for Property details only (joinHeld). A file
+ * without the lists shows none of them, and a copy's `held` and `held_from` never leave this file.
  *
  * A county the file names follows the file; any other follows the environment's lists.
  * The file is written by scripts/property-index/switch-county.cjs, by hand. If it can't
@@ -220,27 +221,42 @@ function summary() {
 const heldFor = (fips) => (modeFor(fips) === 'live' ? HELD.filter((name) => held[name]?.has(fips)) : []);
 
 /**
- * A copy's held facts (format.js `held`) joined to its own where its county's list names them, and the rest left out:
- * the `held` key never reaches a screen.
+ * A copy's held facts (format.js `held`) as its county's lists let them show, with `held` and `held_from` left out:
+ * neither ever reaches a screen. new_columns joins the copy's own facts (the county's columns, read later); derived_rows
+ * never does: it goes to `copy.derived` ({ facts, building?, from }, `from` being each fact's source words from the
+ * county's `held_from`), which only Property details draws, so readers of a copy's facts (estimates, the house's
+ * shape) see the county's own record. A derived 0 (a county's "None") is kept.
+ * @param {object} copy     a stored copy
+ * @param {string[]} names  the lists that show, in order
  */
-function withHeld(copy) {
-  if (!copy?.held) return copy;
-  const { held: kept, ...rest } = copy;
-  const names = heldFor(copy.jurisdiction).filter((name) => kept[name]);
-  if (!names.length) return rest;
+function joinHeld(copy, names) {
+  if (!copy || (!copy.held && !copy.held_from)) return copy;
+  const { held: kept = {}, held_from: words = {}, ...out } = copy;
+  if (names.includes('new_columns') && kept.new_columns) {
+    out.facts = { ...copy.facts, ...(kept.new_columns.facts || {}) };
+    if (copy.building) out.building = { ...copy.building, ...(kept.new_columns.building || {}) };
+  }
+  if (names.includes('derived_rows') && kept.derived_rows) {
+    out.derived = {
+      facts: { ...(kept.derived_rows.facts || {}) },
+      ...(kept.derived_rows.building && copy.building ? { building: { ...kept.derived_rows.building } } : {}),
+      from: { ...(words.derived_rows || {}) },
+    };
+  }
+  return out;
+}
+
+/** A copy as it may be served now: the held facts its county shows (joinHeld), then facts withheld for it left out, wherever they sit. The copy itself is never changed. */
+function served(stored) {
+  const copy = joinHeld(stored, stored ? heldFor(stored.jurisdiction) : []);
+  const withheld = copy && withholding(copy.jurisdiction);
+  if (!withheld) return copy;
   return {
-    ...rest,
-    facts: Object.assign({}, copy.facts, ...names.map((name) => kept[name].facts || {})),
-    ...(copy.building ? { building: Object.assign({}, copy.building, ...names.map((name) => kept[name].building || {})) } : {}),
+    ...copy,
+    facts: without(copy.facts, withheld),
+    ...(copy.building ? { building: without(copy.building, withheld) } : {}),
+    ...(copy.derived ? { derived: { ...copy.derived, facts: without(copy.derived.facts, withheld), ...(copy.derived.building ? { building: without(copy.derived.building, withheld) } : {}) } } : {}),
   };
 }
 
-/** A copy as it may be served now: held facts its county shows joined in, facts withheld for it left out. The copy itself is never changed. */
-function served(stored) {
-  const copy = withHeld(stored);
-  const withheld = copy && withholding(copy.jurisdiction);
-  if (!withheld) return copy;
-  return { ...copy, facts: without(copy.facts, withheld), ...(copy.building ? { building: without(copy.building, withheld) } : {}) };
-}
-
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served, heldFor, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, appealPacketFor, listed, summary, health };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, joinHeld, heldFor, withholding, estimatesFor, sharedFactsFor, similarHomesFor, similarHomesCounties, appealPacketFor, listed, summary, health };

@@ -70,8 +70,9 @@ function unique(records, keyOf) {
 }
 
 const homes = (records) => records.filter((record) => !record.restricted && record.facts && kindOf(record));
-// What the record holds, newly read facts still held off its county's screens included (build.cjs).
-const factsOf = (record) => (record.held ? Object.assign({}, record.facts, ...Object.values(record.held)) : record.facts);
+// What the county's record states, newly read columns still held off its screens included (format.js `held`); never
+// derived rows, which say what the record implies rather than what the county wrote.
+const factsOf = (record) => (record.held?.new_columns ? { ...record.facts, ...record.held.new_columns } : record.facts);
 
 /**
  * @param {object[]} records      the county's own records, as they go in its release

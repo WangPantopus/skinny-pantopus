@@ -108,6 +108,8 @@ function copyFromAnswer(answer, address) {
     title: county.title || 'County records',
     // Words a publisher's terms ask to go wherever it's named as the source ("provided as is, without warranty").
     ...(county.notice ? { notice: county.notice } : {}),
+    // Where each held fact of a list came from, in words, when it isn't the county's own column (format.js `held_from`).
+    ...(county.held_from ? { held_from: county.held_from } : {}),
     stored_at: new Date().toISOString(),
     address_stamp: addressStamp(address),
     facts,
