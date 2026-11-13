@@ -81,7 +81,7 @@ object BusinessPermissionCatalog {
             BusinessPermissionOption("plans.manage", "Run plans", "Plans"),
         )
 
-    val groupOrder = listOf("Profile & pages", "Catalog & gigs", "Customers", "Plans", "Team", "Money")
+    val groupOrder = listOf("Profile & pages", "Catalog & gigs", "Plans", "Customers", "Team", "Money")
 }
 
 private sealed interface PermissionsLoad {

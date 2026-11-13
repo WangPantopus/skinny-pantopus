@@ -59,6 +59,7 @@ import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.pantopusShadow
 import kotlinx.coroutines.delay
 import java.time.Instant
+import androidx.compose.ui.platform.testTag
 
 /** Font scale at which chip groups turn into full-width rows (board P2: "at large text"). */
 internal const val LARGE_TEXT_SCALE = 1.3f
@@ -254,8 +255,11 @@ fun PlanChoiceGroup(
     modifier: Modifier = Modifier,
     multiSelect: Boolean = false,
     onLongClick: ((PlanChoice) -> Unit)? = null,
+    /** Each choice's test id is this plus "." and its id (a business's labels); none otherwise. */
+    tagPrefix: String? = null,
 ) {
     val fontScale = LocalDensity.current.fontScale
+    val tagOf: (PlanChoice) -> Modifier = { choice -> tagPrefix?.let { Modifier.testTag("$it.${choice.id}") } ?: Modifier }
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val rows = fontScale >= LARGE_TEXT_SCALE || maxWidth < CHIP_ROWS_WIDTH
         val role = if (multiSelect) Role.Checkbox else Role.RadioButton
@@ -270,7 +274,9 @@ fun PlanChoiceGroup(
             ) {
                 choices.forEachIndexed { index, choice ->
                     if (index > 0) HorizontalDivider(color = PantopusColors.appBorder)
-                    PlanChoiceRow(choice, isSelected(choice), role, { onSelect(choice) }, onLongClick?.let { { it(choice) } })
+                    Box(modifier = tagOf(choice)) {
+                        PlanChoiceRow(choice, isSelected(choice), role, { onSelect(choice) }, onLongClick?.let { { it(choice) } })
+                    }
                 }
             }
         } else {
@@ -282,6 +288,7 @@ fun PlanChoiceGroup(
                     PlanChoiceChip(
                         label = choice.label,
                         selected = isSelected(choice),
+                        modifier = tagOf(choice),
                         enabled = choice.enabled,
                         role = role,
                         onClick = { onSelect(choice) },

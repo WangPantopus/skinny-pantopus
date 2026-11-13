@@ -112,6 +112,7 @@ private fun ColumnScope.BusinessFields(
             choices = ui.labels.map { PlanChoice(it.key, it.text) },
             isSelected = { it.id == draft.label },
             onSelect = { choice -> vm.pickLabel(choice.id) },
+            tagPrefix = "planBusinessLabels",
         )
     }
     if (draft.kind == PlanKind.STUDY_GROUP) {
@@ -135,6 +136,7 @@ private fun ColumnScope.BusinessFields(
             selected = if (draft.approveEach) WHO_APPROVE else WHO_OPEN,
             onSelect = { choice -> vm.edit { it.copy(approveEach = choice == WHO_APPROVE) } },
             modifier = Modifier.testTag("planWhoGetsIn"),
+            optionTags = listOf("planWhoGetsIn.$WHO_OPEN", "planWhoGetsIn.$WHO_APPROVE"),
         )
     }
     NoteField(draft.note, label = "Note for people who are in", placeholder = "Check in at the front desk.") { text ->

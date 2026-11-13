@@ -136,6 +136,7 @@ private fun BusinessLocationChooser(
                             Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 48.dp)
+                                .testTag("planBusinessLocation.${location.id}")
                                 .clickable(role = Role.RadioButton) { onPick(location.id) }
                                 .semantics(mergeDescendants = true) { selected = chosen }
                                 .padding(vertical = 10.dp),

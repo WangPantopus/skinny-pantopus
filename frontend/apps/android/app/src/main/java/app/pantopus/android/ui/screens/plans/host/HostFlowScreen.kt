@@ -250,7 +250,7 @@ private fun HostAsSection(
                     caption = "A plan at your business.",
                     leading = { PlanBusinessShape(size = 36.dp, avatarUrl = business.avatarUrl) },
                     onClick = { onHostAs(business.userId) },
-                    modifier = Modifier.testTag("planHostAsBusiness"),
+                    modifier = Modifier.testTag("planHostAsBusiness.${business.userId}"),
                 )
             }
         }

@@ -89,7 +89,7 @@ internal fun BusinessUpcomingPlans(
                     leading = { PlanKindLeading(plan.planKind) },
                     spoken = listOfNotNull(plan.labelText, plan.title, subtitle, PLAN_FREE.takeIf { plan.price == null }).joinToString(", "),
                     onClick = { onOpenPlan(plan.id) },
-                    modifier = Modifier.testTag("businessPlansRow"),
+                    modifier = Modifier.testTag("businessPlansRow.${plan.id}"),
                 )
             }
         }
