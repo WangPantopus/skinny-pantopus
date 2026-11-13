@@ -34,29 +34,54 @@ function complete(fips, records) {
 const typeOf = (word) => parts({ number: '1', name: 'A', suffix: word })?.suffix || '';
 // Put in only to be read as a type and dropped again.
 const SOME_TYPE = 'RD';
+// A word's direction as the shared reader writes it (WEST is W), or ''.
+const directionOf = (word) => parts({ number: '1', name: 'A', post: word })?.post || '';
+const SPELLED_DIRECTIONS = new Set(['NORTH', 'SOUTH', 'EAST', 'WEST', 'NORTHEAST', 'NORTHWEST', 'SOUTHEAST', 'SOUTHWEST']);
 
 /**
- * The two other readings of a street whose last name word could be its type, worked out again from the person's own line, as
- * the shared reader spells one-word and longer names differently (MILL alone, ML CRK in MILL CREEK RD):
+ * SOUTH ST W, which the shared reader takes for a lettered street (as E AVENUE K: S, then a street called SAINT W), read as the
+ * street named South, type ST, direction W, from the person's own spelled-out words. Null when the line isn't of that shape.
+ */
+function namedForDirection(words, parsed) {
+  const [, last, more] = parsed.name.split(' ');
+  const post = last && !more ? directionOf(last) : '';
+  if (!parsed.pre || parsed.suffix || parsed.post || !post) return null;
+  for (let i = 1; i + 2 < words.length; i += 1) {
+    if (SPELLED_DIRECTIONS.has(words[i]) && directionOf(words[i]) === parsed.pre && typeOf(words[i + 1]) && directionOf(words[i + 2]) === post) {
+      const before = words.slice(1, i).map(directionOf);
+      if (before.length > 1 || before.some((direction) => !direction)) return null;
+      return { ...parsed, pre: before[0] || '', name: words[i], suffix: typeOf(words[i + 1]), post, reading: 'direction_named' };
+    }
+  }
+  return null;
+}
+
+/**
+ * The other readings of a street whose last name word could be its type, or that is named for a direction, worked out again
+ * from the person's own line, as the shared reader spells one-word and longer names differently (MILL alone, ML CRK in MILL
+ * CREEK RD):
  *   type_in_name  MILL CREEK RD asked where the county says MILL, type CREEK: the person's type left out
  *   type_is_name  MILL CREEK asked where the county says MILL CREEK, type RD: the person's type read as part of the name,
  *                 and any type on record taken
+ *   direction_named  SOUTH ST W asked where the county says SOUTH, type ST, W, not the lettered S SAINT W (namedForDirection)
  * A reading counts only when everything else reads as it did: number, directions, unit, building.
  */
 function readings(address, parsed, state) {
   const words = String(address.line1 || '').toUpperCase().replace(/\./g, '').split(/[\s,]+/).filter(Boolean);
   const named = parsed.name.split(' ');
+  const found = [];
+  const direction = namedForDirection(words, parsed);
+  if (direction) found.push(direction);
   // The person's type: the last word that reads as it, after the house number.
   let at = -1;
   for (let i = words.length - 1; i > 0 && at < 0; i -= 1) if (parsed.suffix && typeOf(words[i]) === parsed.suffix) at = i;
-  if (at < 0) return [];
+  if (at < 0) return found;
   const reread = (tokens) => {
     const read = parse(tokens.join(' '), address.unit, { state, zip: address.zip });
     const same = read && read.form === parsed.form && read.number === parsed.number && read.pre === parsed.pre && read.post === parsed.post
       && read.unit === parsed.unit && (read.building || '') === (parsed.building || '') && (read.urbanization || '') === (parsed.urbanization || '');
     return same ? read : null;
   };
-  const found = [];
   if (named.length > 1 && typeOf(named[named.length - 1]) === named[named.length - 1]) {
     const read = reread([...words.slice(0, at), ...words.slice(at + 1)]);
     if (read && read.suffix === named[named.length - 1] && read.name.split(' ').length === named.length - 1) found.push({ ...read, reading: 'type_in_name' });
