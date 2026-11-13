@@ -752,6 +752,13 @@ object PantopusColors {
     val momentFaceVioletBg = Color(0xFFF3E8FF)
     val momentFaceViolet = Color(0xFF7C3AED)
 
+    /** A height band's color (board H2's key), on the map's tag and in the key; always beside the number or a name. */
+    val momentHeightLow = Color(0xFF15803D)
+    val momentHeightHills = Color(0xFF84CC16)
+    val momentHeightMountain = Color(0xFFF59E0B)
+    val momentHeightPeak = Color(0xFFBE123C)
+    val momentHeightFlying = Color(0xFF0284C7)
+
     /** The Pantopus curator's mark on a ring — `#0284C7` on white. */
     val momentBrand = Color(0xFF0284C7)
 

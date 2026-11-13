@@ -68,6 +68,11 @@ class MomentsRepository
         /** The rings of the last map read, newest first as the server sent them. */
         val rings: StateFlow<List<MomentRingDto>> = _rings.asStateFlow()
 
+        private val _heightsOn = MutableStateFlow(false)
+
+        /** Heights are on for you, as the last map read said (contract v3.9): the map offers "Heights". */
+        val heightsOn: StateFlow<Boolean> = _heightsOn.asStateFlow()
+
         private val _watched = MutableStateFlow<Set<String>>(emptySet())
 
         /** Moments watched in this run of the app, recorded or not yet. */
@@ -150,6 +155,7 @@ class MomentsRepository
         /** Sign-out: the next person on this phone starts with no rings, nothing watched and nothing queued. */
         fun clearAccount() {
             _rings.value = emptyList()
+            _heightsOn.value = false
             _watched.value = emptySet()
             _reported.value = emptySet()
             _mapNote.value = null
@@ -194,6 +200,7 @@ class MomentsRepository
                     // Moments with no location ride along (flagged `noLocation`): the strip shows them, the map doesn't.
                     val all = result.data.rings + result.data.unplaced.map { it.copy(noLocation = true) }
                     _rings.value = all
+                    _heightsOn.value = result.data.heightsOn
                     NetworkResult.Success(all)
                 }
                 is NetworkResult.Failure -> result

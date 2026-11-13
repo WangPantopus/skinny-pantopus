@@ -5,8 +5,12 @@ package app.pantopus.android.ui.screens.moments.map
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -30,12 +34,16 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.moments.MomentPosting
+import app.pantopus.android.data.moments.MomentShownHeight
+import app.pantopus.android.data.moments.shownHeight
 import app.pantopus.android.ui.screens.moments.components.MOMENT_CLUSTER_ANCHOR_FROM_TOP
 import app.pantopus.android.ui.screens.moments.components.MOMENT_PIN_ANCHOR_FROM_TOP
+import app.pantopus.android.ui.screens.moments.components.MOMENT_PIN_WIDTH
 import app.pantopus.android.ui.screens.moments.components.MomentClusterBubble
 import app.pantopus.android.ui.screens.moments.components.MomentMapPin
 import app.pantopus.android.ui.screens.moments.components.MomentPostingPin
@@ -69,6 +77,10 @@ private sealed interface MomentItem {
         /** Where a ring sharing its spot with others sits on their circle, in dp from the spot (zoomed in). */
         val dx: Float = 0f,
         val dy: Float = 0f,
+        /** One of a few rings round a shared spot: these carry no height tag yet. */
+        val fanned: Boolean = false,
+        /** Where its height tag sits; null with no height to show, or no room on either side at this zoom. */
+        val tag: MomentTagSide? = null,
     ) : MomentItem {
         override val key: String get() = "ring:${ring.id}"
         override val latitude: Double get() = ring.latitude
@@ -115,18 +127,26 @@ fun MomentsMapOverlay(
     mapReady: Boolean = true,
     camera: () -> CameraPosition = { cameraState.position },
     layoutKey: () -> Any? = { null },
+    /** With "Heights" on, a single pin whose newest Moment carries a height shows it beside the ring (board H2). */
+    heights: MomentHeightTagPlan = MomentHeightTagPlan(),
 ) {
     val zoom by remember(cameraState) { derivedStateOf { (camera().zoom * 2f).roundToInt() / 2f } }
     val density = LocalDensity.current
     // A bubble's "+N" grows with the text size, and so does the room it takes.
     val fontScale = density.fontScale
-    val items = remember(rings, posting, zoom, fontScale) { buildItems(rings, posting, zoom.toDouble(), fontScale.toDouble()) }
+    val tagWidth = rememberTagWidth()
+    val items =
+        remember(rings, posting, zoom, fontScale, heights) {
+            buildItems(rings, posting, zoom.toDouble(), fontScale.toDouble(), heights, tagWidth)
+        }
     val bubbles by rememberUpdatedState(onBubbles)
     LaunchedEffect(items) {
         bubbles(items.filterIsInstance<MomentItem.Group>().flatMapTo(mutableSetOf()) { group -> group.rings.map { it.id } })
     }
     val pxPerDp = density.density
     val pinAnchor = with(density) { MOMENT_PIN_ANCHOR_FROM_TOP.toPx() }
+    val pinWidth = with(density) { MOMENT_PIN_WIDTH.roundToPx() }
+    val tagAbove = with(density) { (MOMENT_HEIGHT_TAG_HEIGHT + MOMENT_HEIGHT_TAG_GAP_ABOVE).roundToPx() }
     val clusterAnchor = with(density) { MOMENT_CLUSTER_ANCHOR_FROM_TOP.toPx() }
     Layout(
         // Rings near an edge never draw over the status bar or the tab bar.
@@ -135,7 +155,8 @@ fun MomentsMapOverlay(
             items.forEach { item ->
                 key(item.key) {
                     when (item) {
-                        is MomentItem.Single -> RingItem(item.ring) { onRing(item.ring) }
+                        is MomentItem.Single ->
+                            RingItem(item.ring, item.ring.ring.shownHeight.takeIf { heights.shown }, item.tag) { onRing(item.ring) }
                         is MomentItem.Group -> ClusterItem(item.rings) { onCluster(item.rings) }
                         is MomentItem.Posting -> PostingItem(item.posting, avatarUrl) { onPosting(item.posting) }
                     }
@@ -157,25 +178,56 @@ fun MomentsMapOverlay(
                 if (point.x !in 0..constraints.maxWidth || point.y !in 0..constraints.maxHeight) return@forEachIndexed
                 val anchorY = if (item is MomentItem.Group) clusterAnchor else pinAnchor
                 val single = item as? MomentItem.Single
+                // A pin with a height tag is bigger than its ring: the ring, not the pair, stands on the spot.
+                val (ringMiddle, over) = single?.tag.ringIn(placeable.width, pinWidth, tagAbove)
                 placeable.place(
-                    x = (point.x - placeable.width / 2f + (single?.dx ?: 0f) * pxPerDp).roundToInt(),
-                    y = (point.y - anchorY + (single?.dy ?: 0f) * pxPerDp).roundToInt(),
+                    x = (point.x - ringMiddle + (single?.dx ?: 0f) * pxPerDp).roundToInt(),
+                    y = (point.y - anchorY - over + (single?.dy ?: 0f) * pxPerDp).roundToInt(),
                 )
             }
         }
     }
 }
 
+/** A height tag's width in dp, from its own words, so a place is only taken where the whole tag fits. */
+@Composable
+private fun rememberTagWidth(): (MomentShownHeight) -> Double {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current.density
+    return remember(measurer, density) {
+        { height -> momentHeightTagChromeDp(height) + measurer.measure(height.text, MOMENT_HEIGHT_TAG_TEXT).size.width / density }
+    }
+}
+
+/**
+ * Where the ring's middle is across a pin drawn [width] px wide with its height tag, and how far the tag pushes the
+ * pin down from the top, for placing the ring on its spot.
+ */
+private fun MomentTagSide?.ringIn(
+    width: Int,
+    pinWidth: Int,
+    tagAbove: Int,
+): Pair<Float, Int> =
+    when (this) {
+        MomentTagSide.AFTER -> pinWidth / 2f to 0
+        MomentTagSide.BEFORE -> width - pinWidth / 2f to 0
+        MomentTagSide.ABOVE -> width / 2f to tagAbove
+        null -> width / 2f to 0
+    }
+
 @Composable
 private fun RingItem(
     ring: MomentRingUi,
+    /** What TalkBack reads: the ring's height while "Heights" is on, drawn or not. */
+    height: MomentShownHeight?,
+    /** Where the tag is drawn; null for none. */
+    tag: MomentTagSide?,
     onTap: () -> Unit,
 ) {
-    MomentMapPin(
-        author = ring.author,
-        seen = ring.seen,
-        // A small look at their newest Moment inside the ring, when the map read one (`MomentPinPreview.kt`).
-        preview = ring.ring.preview,
+    // The tag is inside the ring's own tap, so a tap on it plays the ring as a tap on the pin does.
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MOMENT_HEIGHT_TAG_GAP_ABOVE),
         modifier =
             Modifier
                 .testTag("moments.ring.${ring.id}")
@@ -186,14 +238,34 @@ private fun RingItem(
                     onClick = onTap,
                 )
                 .clearAndSetSemantics {
-                    contentDescription = ring.spoken
+                    contentDescription = ring.spoken(height)
                     role = Role.Button
                     onClick(label = "Watch") {
                         onTap()
                         true
                     }
                 },
-    )
+    ) {
+        if (height != null && tag == MomentTagSide.ABOVE) MomentHeightTag(height = height)
+        Row(horizontalArrangement = Arrangement.spacedBy(MOMENT_HEIGHT_TAG_GAP)) {
+            if (height != null && tag == MomentTagSide.BEFORE) RingHeightTag(height)
+            MomentMapPin(
+                author = ring.author,
+                seen = ring.seen,
+                // A small look at their newest Moment inside the ring, when the map read one (`MomentPinPreview.kt`).
+                preview = ring.ring.preview,
+            )
+            if (height != null && tag == MomentTagSide.AFTER) RingHeightTag(height)
+        }
+    }
+}
+
+/** A pin's tag, level with the middle of the ring (the top 64 dp of the pin; the tail is below). */
+@Composable
+private fun RingHeightTag(height: MomentShownHeight) {
+    Box(modifier = Modifier.height(MOMENT_PIN_WIDTH), contentAlignment = Alignment.Center) {
+        MomentHeightTag(height = height)
+    }
 }
 
 @Composable
@@ -397,7 +469,7 @@ private fun spread(rings: List<MomentRingUi>): List<MomentItem.Single> {
     val radius = spreadRadius(rings.size)
     return rings.mapIndexed { index, ring ->
         val angle = 2 * PI * index / rings.size - PI / 2
-        MomentItem.Single(ring, dx = (radius * cos(angle)).toFloat(), dy = (radius * sin(angle)).toFloat())
+        MomentItem.Single(ring, dx = (radius * cos(angle)).toFloat(), dy = (radius * sin(angle)).toFloat(), fanned = true)
     }
 }
 
@@ -511,11 +583,66 @@ private fun firstOverlap(
     return null
 }
 
+/**
+ * Gives each single pin with a height its tag's place (`MomentHeightTagPlan`): after the ring if nothing is there, else
+ * before it, else over it, else none. [taken] is what every pin, fan and bubble covers; a pin's own frame is told apart by where it
+ * stands. Taken in a steady order (by id), so a pin keeps its side from one read to the next.
+ */
+private fun tagged(
+    singles: List<MomentItem.Single>,
+    taken: List<Frame>,
+    zoom: Double,
+    heights: MomentHeightTagPlan,
+    tagWidth: (MomentShownHeight) -> Double,
+): List<MomentItem.Single> {
+    if (!heights.shown) return singles
+    val edges = heights.edges?.let { (west, east) -> worldDp(0.0, west, zoom).first to worldDp(0.0, east, zoom).first }
+    val tags = mutableListOf<Frame>()
+    val sides = mutableMapOf<String, MomentTagSide>()
+    singles.filterNot { it.fanned }.sortedBy { it.ring.id }.forEach { single ->
+        val height = single.ring.ring.shownHeight ?: return@forEach
+        val (x, y) = worldDp(single.latitude, single.longitude, zoom)
+        val own = pinFrame(x, y)
+        val width = tagWidth(height)
+        val reach = PIN_HALF_WIDTH_DP + TAG_GAP_DP
+        // Level with the middle of the ring, which is 39 dp above the pin's point.
+        val top = y - TAG_MIDDLE_ABOVE_DP - TAG_HEIGHT_DP / 2
+        val after = Frame(x + reach, top, x + reach + width, top + TAG_HEIGHT_DP)
+        val before = Frame(x - reach - width, top, x - reach, top + TAG_HEIGHT_DP)
+        val over = y - PIN_ABOVE_DP - TAG_GAP_ABOVE_DP
+        val above = Frame(x - width / 2, over - TAG_HEIGHT_DP, x + width / 2, over)
+        val free =
+            listOf(MomentTagSide.AFTER to after, MomentTagSide.BEFORE to before, MomentTagSide.ABOVE to above).firstOrNull { (_, tag) ->
+                val inside = edges == null || (tag.left >= edges.first + TAG_EDGE_DP && tag.right <= edges.second - TAG_EDGE_DP)
+                inside && taken.none { it != own && it.touches(tag) } && tags.none { it.touches(tag) }
+            } ?: return@forEach
+        tags += free.second
+        sides[single.ring.id] = free.first
+    }
+    return singles.map { single -> sides[single.ring.id]?.takeUnless { single.fanned }?.let { single.copy(tag = it) } ?: single }
+}
+
+/** Whether a tag at [tag] would sit on this frame, with a little space kept clear round it. */
+private fun Frame.touches(tag: Frame): Boolean =
+    left < tag.right + TAG_SPACE_DP &&
+        right > tag.left - TAG_SPACE_DP &&
+        top < tag.bottom + TAG_SPACE_DP &&
+        bottom > tag.top - TAG_SPACE_DP
+
+private const val TAG_GAP_DP = 3.0
+private const val TAG_GAP_ABOVE_DP = 2.0
+private const val TAG_HEIGHT_DP = 24.0
+private const val TAG_MIDDLE_ABOVE_DP = 39.0
+private const val TAG_SPACE_DP = 1.0
+private const val TAG_EDGE_DP = 6.0
+
 private fun buildItems(
     rings: List<MomentRingUi>,
     posting: List<MomentPosting>,
     zoom: Double,
     fontScale: Double,
+    heights: MomentHeightTagPlan = MomentHeightTagPlan(),
+    tagWidth: (MomentShownHeight) -> Double = { 0.0 },
 ): List<MomentItem> {
     val positions = rings.associate { it.id to worldDp(it.latitude, it.longitude, zoom) }
     val used = mutableSetOf<String>()
@@ -542,6 +669,10 @@ private fun buildItems(
         }
     }
     // Watched rings under new ones, your posting Moment on top.
-    val ordered = singles.sortedBy { it.ring.anyNew }
+    // The tags are measured where the pins stand on screen: at the map's own zoom, not the rounded one.
+    val exact = heights.zoom?.toDouble() ?: zoom
+    val standing = if (exact == zoom) positions else rings.associate { it.id to worldDp(it.latitude, it.longitude, exact) }
+    val taken = groups.map { frameOf(it, standing, zoom, fontScale) }
+    val ordered = tagged(singles.sortedBy { it.ring.anyNew }, taken, exact, heights, tagWidth)
     return bubbles + ordered + posting.map { MomentItem.Posting(it) }
 }

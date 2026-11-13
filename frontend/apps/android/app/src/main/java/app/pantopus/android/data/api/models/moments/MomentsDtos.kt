@@ -53,6 +53,13 @@ data class MomentRingDto(
     val mine: Boolean = false,
     /** A small look at the newest Moment, for the pin (contract v3.6); null without one and from an older server. */
     val preview: MomentRingPreviewDto? = null,
+    /**
+     * How high its newest Moment was made, in feet above sea level, and whether in flight (contract v3.8,
+     * `MomentHeight.kt`); none unless heights are on for you and its author showed it. A number either way it is
+     * written (4390 or 4390.0).
+     */
+    @Json(name = "altitude_ft") val altitudeFt: Double? = null,
+    val flying: Boolean = false,
 )
 
 /**
@@ -125,6 +132,9 @@ data class MomentDto(
     @Json(name = "taken_at") val takenAt: String? = null,
     /** Posted with no location (contract v3.4): no point or place, connections only. */
     @Json(name = "no_location") val noLocation: Boolean = false,
+    /** How high it was made, in feet above sea level, and whether in flight (contract v3.8); `height` is the picture's. */
+    @Json(name = "altitude_ft") val altitudeFt: Double? = null,
+    val flying: Boolean = false,
 )
 
 @JsonClass(generateAdapter = true)
@@ -132,6 +142,8 @@ data class MomentsMapResponse(
     val rings: List<MomentRingDto> = emptyList(),
     /** Connections' (and your own) Moments with no location, one ring per person, whatever the area (contract v3.4). */
     val unplaced: List<MomentRingDto> = emptyList(),
+    /** Heights are on for you (contract v3.9): the map offers "Heights". False from a server before it. */
+    @Json(name = "heights_on") val heightsOn: Boolean = false,
 )
 
 @JsonClass(generateAdapter = true)
