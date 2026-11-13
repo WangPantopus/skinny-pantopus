@@ -5,10 +5,12 @@
 // .github/workflows/property-index.yml with the AWS key of its master-only environment.
 //
 //   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--bulk] [--min-retention 0.995] [--republish] [--accept-falls]
-//     [--accept-falls-for "<fips> ..."]
+//     [--accept-falls-for "<fips> ..."] [--outcomes <file>]
 //     --bulk  uploads every county's release at once, which a whole state of them needs, but those of counties left as they
 //             serve (unchanged, or rolled back); a refused county's files just go unused
-//     --moved "<fips> ..."  counties moving from a statewide file to a connector of their own: ids and facts are another file's, so only the record count compares
+//     --moved "<fips> ..."  counties moving from a statewide file to a connector of their own: ids and facts are another file's, so only the record count compares.
+//             A county serving from one source never takes a build from another unless it's named here, so a statewide file can't take back a county
+//             that has its own connector.
 //     --republish  someone decided: a file that was rolled back may serve again, and a new build of the file serving
 //                  replaces it (a scheduled run never passes this)
 //     --accept-falls  someone read the refusals and a connector's fix meant them: lower fill and changed account ids publish
@@ -17,6 +19,8 @@
 //     --accept-shrink-for "<fips> ..."  with --accept-falls (or --accept-falls-for naming them): the counties named only may
 //                     also publish far fewer records (the registry: addresses), when a fix drops records that shouldn't exist.
 //                     Each is logged with both counts; a county live in any switch file never takes it (that's the founder's).
+//     --outcomes <file>  adds one line per county built: published, unchanged, kept back or refused, and why (counts only), for the
+//                     run's refresh watch (refresh-watch.cjs)
 //   node scripts/property-index/publish.cjs --rollback <fips> --state <ST> --bucket <name> [--prefix index]
 'use strict';
 
@@ -54,6 +58,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--bulk') opts.bulk = true;
     else if (argv[i] === '--min-retention') opts.minRetention = Number(argv[++i]);
     else if (argv[i] === '--moved') opts.moved = argv[++i].split(/\s+/).filter(Boolean);
+    else if (argv[i] === '--outcomes') opts.outcomes = argv[++i];
     else throw new Error('Unknown argument');
   }
   if (!opts.bucket || !(opts.out || (opts.rollback && opts.state))) throw new Error('usage: see the top of publish.cjs');
@@ -200,7 +205,13 @@ function leftAsServing(store, entry, serving, { republish, records }) {
   return { note };
 }
 
-function publish(store, { out, prefix, republish, acceptFalls = false, acceptFallsFor = [], acceptShrinkFor = [], bulk = false, minRetention, moved }) {
+/** A line for the run's refresh watch: what happened to one county's build. */
+function outcomeOf(entry, outcome, why = null) {
+  return { fips: entry.fips, state: entry.state, name: entry.name || null, source: entry.source || null, release: entry.release, as_of: entry.as_of || null, outcome, why };
+}
+
+function publish(store, { out, prefix, republish, acceptFalls = false, acceptFallsFor = [], acceptShrinkFor = [], bulk = false, minRetention, moved = [], outcomes }) {
+  const told = (lines) => { if (outcomes && lines.length) fs.appendFileSync(outcomes, lines.map((line) => `${JSON.stringify(line)}\n`).join('')); };
   // The national floor's estimates (--prefix index/estimates) are counted, not held to the reader's answers.
   const records = prefix === 'index';
   const dir = path.join(out, 'counties');
@@ -222,16 +233,29 @@ function publish(store, { out, prefix, republish, acceptFalls = false, acceptFal
     const stateFile = stateFiles.get(state);
     const rolledBackBefore = Object.fromEntries(Object.entries(stateFile.jurisdictions).map(([fips, county]) => [fips, county.rolled_back_at]));
     let changed = false;
+    const ready = [];
     for (const entry of built) {
       const serving = stateFile.jurisdictions[entry.fips];
       const { kept, note } = decided.get(entry.fips);
       if (kept || note) log(kept || note);
-      if (kept) continue;
+      if (kept) {
+        told([outcomeOf(entry, kept.includes('rolled back') ? 'kept back' : 'unchanged', kept.slice(entry.fips.length + 2))]);
+        continue;
+      }
+      // A county another source serves (its own connector, or a statewide file) changes source only when someone names it.
+      if (serving?.source && entry.source && serving.source !== entry.source && !moved.includes(entry.fips)) {
+        refused += 1;
+        const why = `${serving.source} serves it, not ${entry.source}; name it in moved to change its source`;
+        console.log(`::error::${entry.fips} ${entry.release} refused: ${why}. The previous release keeps serving.`);
+        told([outcomeOf(entry, 'refused', why)]);
+        continue;
+      }
       const shrinkable = (acceptFalls || acceptFallsFor.includes(entry.fips)) && acceptShrinkFor.includes(entry.fips) && !live.has(entry.fips);
       const { found, falls } = problems(store, entry, serving, out, minRetention, moved, records, shrinkable);
       if (found.length || (falls.length && !acceptFalls && !acceptFallsFor.includes(entry.fips))) {
         refused += 1;
         console.log(`::error::${entry.fips} ${entry.release} refused: ${[...found, ...falls].join('; ')}. The previous release keeps serving.`);
+        told([outcomeOf(entry, 'refused', [...found, ...falls].join('; '))]);
         continue;
       }
       if (falls.length) console.log(`::warning::${entry.fips} ${entry.release} accepted by hand: ${falls.join('; ')}.`);
@@ -239,6 +263,7 @@ function publish(store, { out, prefix, republish, acceptFalls = false, acceptFal
       if (!bulk) store.putDir(path.join(out, name), name);
       stateFile.jurisdictions[entry.fips] = { ...entry, previous: serving?.release || null, previous_as_of: serving?.as_of || null };
       changed = true;
+      ready.push(outcomeOf(entry, 'published', falls.length ? `accepted by hand: ${falls.join('; ')}` : null));
       log(`${entry.fips}: ${entry.release} ready (${entry.records} records)`);
     }
     if (changed) {
@@ -248,6 +273,7 @@ function publish(store, { out, prefix, republish, acceptFalls = false, acceptFal
       }
       store.putJson(statePath(state), withMaps({ ...stateFile, updated_at: new Date().toISOString() }, stateFile.jurisdictions));
       log(`${state}: switched over`);
+      told(ready);
     }
   }
   if (refused) process.exitCode = 1;
