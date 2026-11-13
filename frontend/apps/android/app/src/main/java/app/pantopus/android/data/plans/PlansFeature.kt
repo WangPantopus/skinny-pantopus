@@ -74,8 +74,7 @@ class PlansFeature
          * Whether `plans_business` (Plans with businesses) is on for the signed-in person, read when asked: the team's
          * "Post plans" and "Run plans" permissions show only then. False while Plans is off and on any failure.
          */
-        suspend fun businessOn(): Boolean =
-            isOn && runCatching { api.flag(BUSINESS_FLAG).enabled }.getOrDefault(false)
+        suspend fun businessOn(): Boolean = isOn && runCatching { api.flag(BUSINESS_FLAG).enabled }.getOrDefault(false)
 
         /** The signed-in person's id (to tell "you" apart in a plan's people), or null while signed out. */
         val viewerId: String? get() = userId

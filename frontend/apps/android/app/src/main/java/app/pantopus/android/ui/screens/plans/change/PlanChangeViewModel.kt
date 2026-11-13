@@ -102,7 +102,7 @@ data class PlanChangeUi(
             return if (area.latitude != null && area.longitude != null) area.latitude to area.longitude else null
         }
 
-    val changed: Boolean get() = start != originalStart || end != originalEnd || newPlace != null
+    val changed: Boolean get() = start != originalStart || end != originalEnd || newPlace != null || locationMoved
 
     private companion object {
         const val STILL_COMING_MINUTES = 30

@@ -1,3 +1,5 @@
+@file:Suppress("PackageNaming")
+
 package app.pantopus.android.ui.screens.business_profile
 
 import androidx.compose.foundation.clickable
@@ -87,7 +89,13 @@ internal fun BusinessUpcomingPlans(
                     end = PlanRowEnd.Price(PLAN_FREE).takeIf { plan.price == null } ?: PlanRowEnd.None,
                     first = index == 0,
                     leading = { PlanKindLeading(plan.planKind) },
-                    spoken = listOfNotNull(plan.labelText, plan.title, subtitle, PLAN_FREE.takeIf { plan.price == null }).joinToString(", "),
+                    spoken =
+                        listOfNotNull(
+                            plan.labelText,
+                            plan.title,
+                            subtitle,
+                            PLAN_FREE.takeIf { plan.price == null },
+                        ).joinToString(", "),
                     onClick = { onOpenPlan(plan.id) },
                     modifier = Modifier.testTag("businessPlansRow.${plan.id}"),
                 )

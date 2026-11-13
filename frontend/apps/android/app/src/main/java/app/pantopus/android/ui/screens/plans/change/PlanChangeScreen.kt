@@ -225,15 +225,17 @@ private fun StillComingWarning(
 @Composable
 private fun NotificationPreview(ui: PlanChangeUi) {
     val plan = ui.plan ?: return
-    val host = PlanFormat.firstName(plan.host?.displayName)
+    // A business is named in full, as its notices name it.
+    val host = PlanFormat.hostName(plan)
     val noun = PlanFormat.noun(plan)
+    val placeMoved = ui.newPlace != null || ui.locationMoved
     val start = ui.start ?: return
     val now = "Now ${PlanFormat.dayAt(start.atZone(PlanFormat.zone(plan.timezone)))}"
     // The push the server sends (board H11), word for word.
     val (title, body) =
         when {
-            ui.timeMoved && ui.newPlace != null -> "$host changed the $noun" to "$now, at a new place. Still coming?"
-            ui.newPlace != null -> "$host changed the place" to "It's at a new place now. Still coming?"
+            ui.timeMoved && placeMoved -> "$host changed the $noun" to "$now, at a new place. Still coming?"
+            placeMoved -> "$host changed the place" to "It's at a new place now. Still coming?"
             else -> "$host moved the $noun" to "$now. Still coming?"
         }
     PlanField(label = "What they'll get") {

@@ -300,16 +300,16 @@ private fun PlansSheetHost(
                         onInvite = if (selected.invites?.canInvite == true) ({ inviting = selected }) else null,
                     )
                 } else {
-                PlanPostedContent(
-                    plan = selected,
-                    onShare = { context.sharePlanLink(selected) },
-                    onSeePlan = {
-                        viewModel.dismissPosted()
-                        actions.onOpenPlan(selected.id)
-                    },
-                    onDone = viewModel::dismissPosted,
-                    onInvite = if (selected.invites?.canInvite == true) ({ inviting = selected }) else null,
-                )
+                    PlanPostedContent(
+                        plan = selected,
+                        onShare = { context.sharePlanLink(selected) },
+                        onSeePlan = {
+                            viewModel.dismissPosted()
+                            actions.onOpenPlan(selected.id)
+                        },
+                        onDone = viewModel::dismissPosted,
+                        onInvite = if (selected.invites?.canInvite == true) ({ inviting = selected }) else null,
+                    )
                 }
             state.locationStatus == PlansLocationStatus.Missing ->
                 PlansNoLocationContent(
@@ -978,6 +978,7 @@ private fun android.content.Context.openAppSettings() {
 }
 
 /** The system share sheet with a plan's link (the web preview shows the area only). */
+
 /** B3's "Copy your link": the plan's link on the clipboard, for the business's site, texts or front desk. */
 private fun android.content.Context.copyPlanLink(plan: PlanDto) {
     val url = plan.shareUrl ?: return

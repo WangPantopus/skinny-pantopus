@@ -30,16 +30,23 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.plans.components.LARGE_TEXT_SCALE
+import app.pantopus.android.ui.screens.plans.components.PlanAvatar
+import app.pantopus.android.ui.screens.plans.components.PlanBusinessShape
+import app.pantopus.android.ui.screens.plans.components.PlanFormCard
 import app.pantopus.android.ui.screens.plans.components.PlanLockLine
+import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
+import app.pantopus.android.ui.screens.plans.components.PlanOverline
 import app.pantopus.android.ui.screens.plans.components.PlanScopeLine
 import app.pantopus.android.ui.screens.plans.components.PlanTile
 import app.pantopus.android.ui.screens.plans.components.planCard
@@ -48,16 +55,9 @@ import app.pantopus.android.ui.screens.plans.detail.PlanRoundButton
 import app.pantopus.android.ui.screens.plans.map.planH4
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
+import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.unit.sp
-import app.pantopus.android.ui.screens.plans.components.PlanAvatar
-import app.pantopus.android.ui.screens.plans.components.PlanBusinessShape
-import app.pantopus.android.ui.screens.plans.components.PlanFormCard
-import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
-import app.pantopus.android.ui.screens.plans.components.PlanOverline
-import app.pantopus.android.ui.theme.PantopusIconImage
 
 /**
  * Host a plan: pick a type (H1), fill in its details (H2 to H5), choose a place (H6), preview (H7) and post. Posting

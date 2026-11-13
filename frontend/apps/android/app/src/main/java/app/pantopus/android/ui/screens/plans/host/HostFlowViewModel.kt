@@ -6,7 +6,11 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.plans.CreatePlanBody
+import app.pantopus.android.data.api.models.plans.HostAsBusinessDto
+import app.pantopus.android.data.api.models.plans.HostAsLabelDto
+import app.pantopus.android.data.api.models.plans.HostAsLocationDto
 import app.pantopus.android.data.api.models.plans.PlanDetailsDto
+import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanGameDto
 import app.pantopus.android.data.api.models.plans.PlanGpsInput
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
@@ -47,11 +51,6 @@ import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
-import app.pantopus.android.data.api.models.plans.HostAsBusinessDto
-import app.pantopus.android.data.api.models.plans.HostAsLabelDto
-import app.pantopus.android.data.api.models.plans.HostAsLocationDto
-import app.pantopus.android.data.api.models.plans.PlanHostAsInput
-import app.pantopus.android.data.api.models.plans.PlanDto
 
 /** The host flow's steps (boards H1, H2 to H5, H7) and the place picker (H6) over them. */
 enum class HostStep { Type, Details, Place, Preview }
@@ -178,6 +177,9 @@ data class HostUi(
  * family (no verified address since November 7); study groups meet in public places too; at home the host approves each person,
  * with "people I've hosted" the only rule allowed; anyone nearby is only for pickup games and walks.
  */
+// The whole host flow (H1 to H8) in one place, now with posting for a business (B1, B2), whose drafts live in
+// HostBusinessDrafts.kt; splitting the flow's state across view-models would make its steps harder to follow.
+@Suppress("LargeClass")
 @HiltViewModel
 class HostFlowViewModel
     @Inject
@@ -223,10 +225,14 @@ class HostFlowViewModel
         private suspend fun copyFrom(planId: String) {
             val plan = (repository.plan(planId) as? NetworkResult.Success)?.data ?: return
             // A business's plan is copied as the business's, or not at all: never as a neighbor's at its address.
-            if (plan.business != null) {
-                copyBusinessPlan(plan)
-                return
-            }
+            if (plan.business != null) copyBusinessPlan(plan) else copyNeighborPlan(planId, plan)
+        }
+
+        /** A neighbor's own plan, a week on (A5). */
+        private fun copyNeighborPlan(
+            planId: String,
+            plan: PlanDto,
+        ) {
             againFrom = planId
             val kind = PlanKind.from(plan.kind) ?: return
             val zone = PlanFormat.zone(plan.timezone)
@@ -683,128 +689,21 @@ class HostFlowViewModel
         /** B2: one of the business's own locations. */
         fun pickLocation(id: String) = edit { it.copy(locationId = id) }
 
-        /** A business's plan of [kind]: its first label, its main location, eight spots, in right away (board B2). */
+        /** A business's plan of [kind] (board B2): see [businessDraft]. */
         private fun chooseForBusiness(
             business: HostAsBusinessDto,
             kind: PlanKind,
             start: LocalDateTime,
         ) {
-            val labels = business.kinds.firstOrNull { it.kind == kind.wire }?.labels.orEmpty()
-            val location = business.locations.firstOrNull { it.isPrimary } ?: business.locations.firstOrNull()
-            val hours = if (kind == PlanKind.WATCH_PARTY || kind == PlanKind.STUDY_GROUP) 2L else 1L
-            val draft =
-                HostDraft(
-                    kind = kind,
-                    spots = BUSINESS_SPOTS.coerceAtMost(business.limits.spotsMax),
-                    approveEach = false,
-                    hostAs = business.userId,
-                    label = labels.firstOrNull()?.key,
-                    locationId = location?.id,
-                    start = start,
-                    end = start.plusHours(hours),
-                )
-            _ui.update { it.copy(step = HostStep.Details, draft = draft, error = null) }
+            _ui.update { it.copy(step = HostStep.Details, draft = businessDraft(business, kind, start), error = null) }
         }
 
-        /** "Host again" for a business's plan: the same label and place a week on, posted as the business again. */
+        /** "Host again" for a business's plan: posted as the business again, or not at all. */
         private fun copyBusinessPlan(plan: PlanDto) {
             val business = _ui.value.businesses.firstOrNull { it.userId == plan.business?.userId } ?: return
-            val kind = PlanKind.from(plan.kind) ?: return
-            val zone = PlanFormat.zone(plan.timezone)
-            var start = PlanFormat.instant(plan.startsAt)?.atZone(zone)?.toLocalDateTime() ?: return
-            var end = PlanFormat.instant(plan.endsAt)?.atZone(zone)?.toLocalDateTime() ?: start.plusHours(1)
-            val now = LocalDateTime.now(zone)
-            while (!start.isAfter(now)) {
-                start = start.plusWeeks(1)
-                end = end.plusWeeks(1)
-            }
-            // The card carries the place's point, not its location id: the location at that point, else the main one.
-            val location =
-                business.locations.firstOrNull { it.latitude == plan.place?.latitude && it.longitude == plan.place?.longitude }
-                    ?: business.locations.firstOrNull { it.isPrimary }
-                    ?: business.locations.firstOrNull()
-            _ui.update {
-                it.copy(
-                    zone = zone,
-                    step = HostStep.Details,
-                    hostAsChoice = business.userId,
-                    draft =
-                        HostDraft(
-                            kind = kind,
-                            title = plan.title,
-                            titleEdited = true,
-                            about = plan.about.orEmpty(),
-                            start = start,
-                            end = end,
-                            spots = plan.spots.coerceIn(1, business.limits.spotsMax),
-                            approveEach = plan.howPeopleGetIn != "automatic" && PlanAutoRule.OPEN !in plan.autoRules.orEmpty(),
-                            note = plan.place?.note.orEmpty(),
-                            subject = plan.details?.subject.orEmpty(),
-                            studyStyle = PlanStudyStyle.from(plan.details?.studyStyle),
-                            hostAs = business.userId,
-                            label = plan.label,
-                            locationId = location?.id,
-                        ),
-                )
-            }
+            val (zone, draft) = copiedBusinessDraft(plan, business) ?: return
+            _ui.update { it.copy(zone = zone, step = HostStep.Details, hostAsChoice = business.userId, draft = draft) }
         }
-
-        /** What a business's draft still needs (board B2), or null. */
-        private fun validateForBusiness(
-            draft: HostDraft,
-            business: HostAsBusinessDto,
-        ): String? {
-            val now = LocalDateTime.now(_ui.value.zone)
-            val start = draft.start
-            val end = draft.end
-            val minutes = if (start != null && end != null) Duration.between(start, end).toMinutes() else 0
-            val days = business.limits.daysAhead.toLong()
-            return when {
-                draft.label == null -> "Choose what guests see it called."
-                draft.title.isBlank() -> "Give your plan a title."
-                start == null || end == null -> "Pick when it starts and ends."
-                start.isBefore(now.minusMinutes(1)) -> "Pick a time that hasn't passed."
-                start.isAfter(now.plusDays(days)) -> "A business's plans can start up to $days days from now."
-                minutes < MIN_MINUTES -> "A plan lasts at least 15 minutes."
-                minutes > MAX_MINUTES -> "A plan lasts at most 8 hours."
-                draft.kind == PlanKind.STUDY_GROUP && draft.subject.cleanSubject().isEmpty() -> "Add what you're studying."
-                business.locations.none { it.id == draft.locationId } -> "Choose one of your business's locations."
-                else -> null
-            }
-        }
-
-        /**
-         * `POST /api/plans` as the business (the contract's section 5.5): `host_as`, one of its locations, the label,
-         * and who gets in (`open` for right away, none to approve each). No place, no GPS: the server copies the
-         * location's address. The kind's own facts are left to the server's defaults, except a study group's subject.
-         */
-        private fun businessBody(
-            kind: PlanKind,
-            draft: HostDraft,
-            ui: HostUi,
-            business: HostAsBusinessDto,
-        ): CreatePlanBody =
-            CreatePlanBody(
-                kind = kind.wire,
-                title = draft.title.trim(),
-                about = draft.about.trim().takeIf(String::isNotEmpty),
-                startsAt = draft.start!!.atZone(ui.zone).toInstant().toString(),
-                endsAt = draft.end!!.atZone(ui.zone).toInstant().toString(),
-                place = null,
-                spots = draft.spots,
-                autoRules = if (draft.approveEach) emptyList() else listOf(PlanAutoRule.OPEN),
-                joinRequirement = "located",
-                details =
-                    if (kind == PlanKind.STUDY_GROUP) {
-                        PlanDetailsDto(subject = draft.subject.cleanSubject(), studyStyle = draft.studyStyle.wire)
-                    } else {
-                        null
-                    },
-                guestNote = draft.note.trim().takeIf(String::isNotEmpty),
-                hostAs = PlanHostAsInput(business.userId),
-                businessLocationId = draft.locationId,
-                label = draft.label,
-            )
 
         // ---- H7 ----
 
@@ -865,7 +764,7 @@ class HostFlowViewModel
                 val business = ui.business
                 val body =
                     if (business != null) {
-                        businessBody(kind, draft, ui, business)
+                        businessCreateBody(kind, draft, ui.zone, business)
                     } else {
                         val fix = locations.gpsFix()
                         buildBody(kind, draft, ui, fix?.let { PlanGpsInput(it.latitude, it.longitude, it.at.toString()) })
@@ -955,7 +854,7 @@ class HostFlowViewModel
             }
 
         private fun validate(draft: HostDraft): String? {
-            _ui.value.businesses.firstOrNull { it.userId == draft.hostAs }?.let { return validateForBusiness(draft, it) }
+            _ui.value.businesses.firstOrNull { it.userId == draft.hostAs }?.let { return businessDraftProblem(draft, it, _ui.value.zone) }
             val now = LocalDateTime.now(_ui.value.zone)
             val start = draft.start
             val end = draft.end
@@ -984,8 +883,6 @@ class HostFlowViewModel
             }
 
         private companion object {
-            /** A business's plan starts with eight spots (board B2). */
-            const val BUSINESS_SPOTS = 8
             const val TITLE_MAX = 80
             const val SUBJECT_MAX = 60
             const val PICKUP_LEAD_MINUTES = 15L

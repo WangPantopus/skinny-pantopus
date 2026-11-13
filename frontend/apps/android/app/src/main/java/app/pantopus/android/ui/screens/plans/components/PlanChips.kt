@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -59,7 +60,6 @@ import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.pantopusShadow
 import kotlinx.coroutines.delay
 import java.time.Instant
-import androidx.compose.ui.platform.testTag
 
 /** Font scale at which chip groups turn into full-width rows (board P2: "at large text"). */
 internal const val LARGE_TEXT_SCALE = 1.3f

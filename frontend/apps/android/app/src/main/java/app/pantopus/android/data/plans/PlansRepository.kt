@@ -328,8 +328,7 @@ class PlansRepository
          * The businesses this person may post a plan for (Plans with businesses, board B1). Empty for nearly everyone,
          * and on any failure: "Host as" then simply doesn't show.
          */
-        suspend fun hostAs(): List<HostAsBusinessDto> =
-            (safeApiCall { api.hostAs() } as? NetworkResult.Success)?.data?.businesses.orEmpty()
+        suspend fun hostAs(): List<HostAsBusinessDto> = (safeApiCall { api.hostAs() } as? NetworkResult.Success)?.data?.businesses.orEmpty()
 
         /**
          * A business's upcoming plans for its page (B6). Empty while Plans or the switch is off, for a business with

@@ -8,13 +8,13 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.businesses.BusinessDetailResponse
 import app.pantopus.android.data.api.models.businesses.BusinessHoursDto
 import app.pantopus.android.data.api.models.businesses.BusinessPublicResponse
+import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.businesses.BusinessPagesRepository
 import app.pantopus.android.data.businesses.BusinessesRepository
 import app.pantopus.android.data.plans.PlansRepository
-import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.ui.screens.businesses.page_blocks.BusinessPageBlock
 import app.pantopus.android.ui.screens.contentdetail.GigOpenChatEvent

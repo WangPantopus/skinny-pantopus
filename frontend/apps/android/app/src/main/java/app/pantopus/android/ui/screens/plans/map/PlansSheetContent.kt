@@ -78,9 +78,12 @@ import app.pantopus.android.ui.screens.plans.components.LocalPlanSheet
 import app.pantopus.android.ui.screens.plans.components.PLAN_BUSINESS_SPOKEN
 import app.pantopus.android.ui.screens.plans.components.PLAN_FREE
 import app.pantopus.android.ui.screens.plans.components.PlanDivider
+import app.pantopus.android.ui.screens.plans.components.PlanFormCard
+import app.pantopus.android.ui.screens.plans.components.PlanGuestsSeeCard
 import app.pantopus.android.ui.screens.plans.components.PlanHostRow
 import app.pantopus.android.ui.screens.plans.components.PlanIconTile
 import app.pantopus.android.ui.screens.plans.components.PlanKindLeading
+import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
 import app.pantopus.android.ui.screens.plans.components.PlanOverline
 import app.pantopus.android.ui.screens.plans.components.PlanRow
 import app.pantopus.android.ui.screens.plans.components.PlanRowEnd
@@ -104,9 +107,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import app.pantopus.android.ui.screens.plans.components.PlanGuestsSeeCard
-import app.pantopus.android.ui.screens.plans.components.PlanFormCard
-import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
 
 /** h4 on the boards: 17/22 semibold. */
 internal val planH4 = PantopusTextStyle.body.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -1127,7 +1127,14 @@ private fun RegularsRow(
         onClick = onClick,
         modifier = Modifier.testTag(tag).semantics(mergeDescendants = true) { role = Role.Button },
     ) {
-        PlanIconTile(icon = icon, background = PantopusColors.primary100, tint = PantopusColors.primary700, size = 36.dp, glyph = 18.dp, corner = 10.dp)
+        PlanIconTile(
+            icon = icon,
+            background = PantopusColors.primary100,
+            tint = PantopusColors.primary700,
+            size = 36.dp,
+            glyph = 18.dp,
+            corner = 10.dp,
+        )
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold), color = PantopusColors.appText)
             Text(text = caption, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)

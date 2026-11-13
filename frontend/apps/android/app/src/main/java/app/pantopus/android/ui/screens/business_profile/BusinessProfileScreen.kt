@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDto
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.BizBannerHeader
@@ -99,7 +100,6 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
 import java.util.Locale
-import app.pantopus.android.data.api.models.plans.PlanDto
 
 /**
  * A10.6 — public Business Profile, reshaped (B3.1) from the old tabbed

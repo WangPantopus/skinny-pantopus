@@ -127,6 +127,30 @@ private fun PlansLocals(
     )
 }
 
+/** A plan page's arguments: the plan, "Ask to join" at once, the reveal, an invitation's token, and how they came. */
+private fun planArguments() =
+    listOf(
+        navArgument(PlansRoutes.PLAN_ID_KEY) { type = NavType.StringType },
+        navArgument(PlansRoutes.ASK_KEY) {
+            type = NavType.BoolType
+            defaultValue = false
+        },
+        navArgument(PlansRoutes.REVEAL_KEY) {
+            type = NavType.BoolType
+            defaultValue = false
+        },
+        navArgument(PlansRoutes.INVITE_KEY) {
+            type = NavType.StringType
+            nullable = true
+            defaultValue = null
+        },
+        navArgument(PlansRoutes.VIA_KEY) {
+            type = NavType.StringType
+            nullable = true
+            defaultValue = null
+        },
+    )
+
 /** Registers every Plans page. Call inside the root `NavHost`. */
 fun NavGraphBuilder.plansRoutes(
     nav: NavHostController,
@@ -134,28 +158,7 @@ fun NavGraphBuilder.plansRoutes(
 ) {
     composable(
         route = PlansRoutes.PLAN,
-        arguments =
-            listOf(
-                navArgument(PlansRoutes.PLAN_ID_KEY) { type = NavType.StringType },
-                navArgument(PlansRoutes.ASK_KEY) {
-                    type = NavType.BoolType
-                    defaultValue = false
-                },
-                navArgument(PlansRoutes.REVEAL_KEY) {
-                    type = NavType.BoolType
-                    defaultValue = false
-                },
-                navArgument(PlansRoutes.INVITE_KEY) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-                navArgument(PlansRoutes.VIA_KEY) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-            ),
+        arguments = planArguments(),
     ) {
         PlansLocals(external) {
             PlanDetailScreen(

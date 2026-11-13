@@ -107,7 +107,8 @@ fun ManagePermissionsSheet(
     /** Adds "Post plans" and "Run plans" (Plans with businesses); off unless the viewer has the switch. */
     showsPlans: Boolean = false,
 ) {
-    val catalog = if (showsPlans) BusinessPermissionCatalog.options + BusinessPermissionCatalog.plansOptions else BusinessPermissionCatalog.options
+    val catalog =
+        if (showsPlans) BusinessPermissionCatalog.options + BusinessPermissionCatalog.plansOptions else BusinessPermissionCatalog.options
     var load by remember { mutableStateOf<PermissionsLoad>(PermissionsLoad.Loading) }
     var granted by remember { mutableStateOf<Set<String>>(emptySet()) }
     var inFlight by remember { mutableStateOf<Set<String>>(emptySet()) }
