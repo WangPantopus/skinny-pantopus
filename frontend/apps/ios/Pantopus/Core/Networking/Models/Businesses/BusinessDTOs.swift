@@ -49,8 +49,12 @@ public struct BusinessProfileDTO: Decodable, Sendable, Hashable {
     public let logoFileId: String?
     public let bannerFileId: String?
     public let description: String?
-    /// `bi0_unverified` … `bi4_authority`. Anything above `bi0_unverified`
-    /// earns the violet verified mark; `bi0_unverified` reads as pending.
+    /// `unverified` / `self_attested` / `document_verified` /
+    /// `government_verified`: what the server checks. The verified mark
+    /// follows it (`BusinessCardModel.isVerified(status:tier:)`).
+    public let verificationStatus: String?
+    /// `bi0_unverified` … `bi4_authority`. Read only when a server doesn't
+    /// send `verification_status`.
     public let identityVerificationTier: String?
 
     private enum CodingKeys: String, CodingKey {
@@ -61,6 +65,7 @@ public struct BusinessProfileDTO: Decodable, Sendable, Hashable {
         case logoFileId = "logo_file_id"
         case bannerFileId = "banner_file_id"
         case description
+        case verificationStatus = "verification_status"
         case identityVerificationTier = "identity_verification_tier"
     }
 }
@@ -376,9 +381,11 @@ public struct BusinessProfileDetailDTO: Decodable, Sendable, Hashable {
     public let foundingBadge: Bool?
     public let isPublished: Bool?
     public let publishedAt: String?
+    /// The verified mark follows this, as on My businesses and the owner
+    /// header (`BusinessCardModel.isVerified(status:tier:)`).
     public let verificationStatus: String?
-    /// `bi0_unverified` … `bi4_authority`; the verified mark and claims
-    /// follow this, as on My businesses and the owner header.
+    /// `bi0_unverified` … `bi4_authority`; read only when a server doesn't
+    /// send `verification_status`.
     public let identityVerificationTier: String?
     public let primaryLocation: BusinessLocationDTO?
     /// Free-form profile attributes (e.g. `price_level`).
@@ -575,12 +582,14 @@ public struct BusinessOnboardingDTO: Decodable, Sendable, Hashable {
 public struct BusinessDashboardProfileDTO: Decodable, Sendable, Hashable {
     public let isPublished: Bool?
     public let updatedAt: String?
-    /// Same field the My businesses card reads for its verified mark.
+    /// Same fields the My businesses card reads for its verified mark.
+    public let verificationStatus: String?
     public let identityVerificationTier: String?
 
     private enum CodingKeys: String, CodingKey {
         case isPublished = "is_published"
         case updatedAt = "updated_at"
+        case verificationStatus = "verification_status"
         case identityVerificationTier = "identity_verification_tier"
     }
 }

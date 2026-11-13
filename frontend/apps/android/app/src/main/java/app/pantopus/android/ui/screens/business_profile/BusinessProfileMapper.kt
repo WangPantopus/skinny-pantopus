@@ -62,10 +62,10 @@ object BusinessProfileMapper {
                         ?: "Business",
                 handle = business.username,
                 locality = locality(business, primaryLocation),
-                // The business's own identity tier, as on My businesses and the
+                // The business's own verification, as on My businesses and the
                 // owner header. `business.verified` is the account row's flag, not
                 // the business's verification, so it never earns the mark on its own.
-                isVerified = MyBusinessesViewModel.isVerified(profile?.identityVerificationTier),
+                isVerified = MyBusinessesViewModel.isVerified(profile?.verificationStatus, profile?.identityVerificationTier),
                 logoIcon = null,
                 logoUrl = business.profilePictureUrl,
                 bannerUrl = business.coverPhotoUrl,

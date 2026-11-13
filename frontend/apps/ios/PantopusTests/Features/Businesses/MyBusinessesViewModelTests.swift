@@ -7,7 +7,8 @@
 //    - card projection (name, category + locality, role chip, team
 //      count/initials, stats, ★rating text)
 //    - verification drives the stats-band-vs-pending-strip split
-//      (`identity_verification_tier` > bi0_unverified ⇒ verified)
+//      (`verification_status` document/government verified ⇒ verified;
+//      without a status, `identity_verification_tier` > bi0_unverified)
 //    - the Hub nav-drawer now routes "My Businesses" to the real screen
 //      instead of the NotYetAvailable placeholder.
 //
@@ -145,12 +146,18 @@ final class MyBusinessesViewModelTests: XCTestCase {
         XCTAssertEqual(card.ratingText, "New")
     }
 
-    func testIsVerifiedMapsTierAboveBi0() {
-        XCTAssertFalse(BusinessCardModel.isVerified(tier: nil))
-        XCTAssertFalse(BusinessCardModel.isVerified(tier: ""))
-        XCTAssertFalse(BusinessCardModel.isVerified(tier: "bi0_unverified"))
-        XCTAssertTrue(BusinessCardModel.isVerified(tier: "bi2_domain_social"))
-        XCTAssertTrue(BusinessCardModel.isVerified(tier: "bi4_authority"))
+    func testIsVerifiedFollowsVerificationStatus() {
+        // The status the server checks wins over the identity tier.
+        XCTAssertTrue(BusinessCardModel.isVerified(status: "document_verified", tier: "bi0_unverified"))
+        XCTAssertTrue(BusinessCardModel.isVerified(status: "government_verified", tier: nil))
+        XCTAssertFalse(BusinessCardModel.isVerified(status: "self_attested", tier: "bi3_documented"))
+        XCTAssertFalse(BusinessCardModel.isVerified(status: "unverified", tier: nil))
+        // Without a status (an older server), the tier above bi0 still counts.
+        XCTAssertFalse(BusinessCardModel.isVerified(status: nil, tier: nil))
+        XCTAssertFalse(BusinessCardModel.isVerified(status: nil, tier: ""))
+        XCTAssertFalse(BusinessCardModel.isVerified(status: nil, tier: "bi0_unverified"))
+        XCTAssertTrue(BusinessCardModel.isVerified(status: nil, tier: "bi2_domain_social"))
+        XCTAssertTrue(BusinessCardModel.isVerified(status: nil, tier: "bi4_authority"))
     }
 
     /// Regression: the Hub nav-drawer's "My Businesses" row must resolve to

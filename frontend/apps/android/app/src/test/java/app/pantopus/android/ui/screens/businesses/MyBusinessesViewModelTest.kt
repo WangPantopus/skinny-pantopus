@@ -164,11 +164,17 @@ class MyBusinessesViewModelTest {
         }
 
     @Test
-    fun isVerified_maps_tier_above_bi0() {
-        assertFalse(MyBusinessesViewModel.isVerified(null))
-        assertFalse(MyBusinessesViewModel.isVerified("bi0_unverified"))
-        assertTrue(MyBusinessesViewModel.isVerified("bi2_domain_social"))
-        assertTrue(MyBusinessesViewModel.isVerified("bi4_authority"))
+    fun isVerified_follows_verification_status() {
+        // The status the server checks wins over the identity tier.
+        assertTrue(MyBusinessesViewModel.isVerified("document_verified", "bi0_unverified"))
+        assertTrue(MyBusinessesViewModel.isVerified("government_verified", null))
+        assertFalse(MyBusinessesViewModel.isVerified("self_attested", "bi3_documented"))
+        assertFalse(MyBusinessesViewModel.isVerified("unverified", null))
+        // Without a status (an older server), the tier above bi0 still counts.
+        assertFalse(MyBusinessesViewModel.isVerified(null, null))
+        assertFalse(MyBusinessesViewModel.isVerified(null, "bi0_unverified"))
+        assertTrue(MyBusinessesViewModel.isVerified(null, "bi2_domain_social"))
+        assertTrue(MyBusinessesViewModel.isVerified(null, "bi4_authority"))
     }
 
     @Test

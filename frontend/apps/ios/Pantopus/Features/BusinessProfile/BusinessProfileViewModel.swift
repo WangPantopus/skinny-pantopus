@@ -423,10 +423,13 @@ extension BusinessProfileViewModel {
             displayName: resolvedDisplayName,
             handle: business.username,
             locality: localityString(business: business, location: primaryLocation),
-            // The business's own identity tier, as on My businesses and the owner
+            // The business's own verification, as on My businesses and the owner
             // header. `business.verified` is the account row's flag, not the
             // business's verification, so it never earns the mark on its own.
-            isVerified: BusinessCardModel.isVerified(tier: profile?.identityVerificationTier),
+            isVerified: BusinessCardModel.isVerified(
+                status: profile?.verificationStatus,
+                tier: profile?.identityVerificationTier
+            ),
             logoIcon: nil,
             logoImageURL: business.profilePictureURL.flatMap(URL.init(string:)),
             bannerImageURL: business.coverPhotoURL.flatMap(URL.init(string:))
