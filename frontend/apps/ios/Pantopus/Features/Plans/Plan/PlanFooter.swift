@@ -49,7 +49,7 @@ struct PlanFooter: View {
                 Button("Change who's coming") { onAsk(true) }
                     .planButton(.secondary)
                     .accessibilityIdentifier("planChangeRequest")
-                Button("Withdraw request") { onConfirm(.withdraw(host: card.host.displayName)) }
+                Button("Withdraw request") { onConfirm(.withdraw(host: PlanCardLines.hostName(card))) }
                     .planButton(.textDanger, size: .extraSmall)
                     .accessibilityIdentifier("planWithdraw")
             })
@@ -62,7 +62,7 @@ struct PlanFooter: View {
             })
         case .going:
             AnyView(
-                Button("Can't make it") { onConfirm(.cantMakeIt(host: card.host.displayName)) }
+                Button("Can't make it") { onConfirm(.cantMakeIt(host: PlanCardLines.hostName(card))) }
                     .planButton(.textDanger)
                     .accessibilityIdentifier("planCantMakeIt")
             )
@@ -81,7 +81,11 @@ struct PlanFooter: View {
             invited(card, invite)
         } else if viewer?.canAsk ?? true {
             Button { onAsk(false) } label: {
-                PlanButtonLabel(title: card.isFull ? "Join the waitlist" : "Ask to join", kind: .primary, isLoading: viewModel.isWorking)
+                PlanButtonLabel(
+                    title: card.isFull ? "Join the waitlist" : (Self.joinsRightAway(card) ? "Join" : "Ask to join"),
+                    kind: .primary,
+                    isLoading: viewModel.isWorking
+                )
             }
             .planButton(.primary)
             .accessibilityIdentifier("planAsk")
@@ -120,7 +124,7 @@ struct PlanFooter: View {
     /// still change their mind about.
     @ViewBuilder
     private func invited(_ card: PlanCardDTO, _ invite: PlanMyInviteDTO) -> some View {
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         Button { onAsk(false) } label: {
             PlanButtonLabel(title: card.isFull ? "Join the waitlist" : "I'm in", kind: .primary, isLoading: viewModel.isWorking)
         }
@@ -150,11 +154,22 @@ struct PlanFooter: View {
     /// playdate says "Maya approves each family" (J2); other plans already say
     /// how people get in above the footer.
     private func askCaption(_ card: PlanCardDTO) -> String? {
+        // A business's plan (board G3): in right away, or the business approves each person.
+        if card.isBusiness {
+            return Self.joinsRightAway(card)
+                ? "You're in right away. No approval needed."
+                : "\(PlanCardLines.hostName(card)) approves each person."
+        }
         // Board J2: a playdate says who approves each family.
         if card.kind == .playdate { return PlanCardLines.approval(card) }
         if card.howPeopleGetIn == "automatic" { return "You're in as soon as you ask, until the spots fill." }
-        if let within = PlanCardLines.answersWithin(card.host) { return String(within.dropLast()) }
+        if let within = PlanCardLines.answersWithin(card) { return String(within.dropLast()) }
         return nil
+    }
+
+    /// A business's plan that lets anyone in right away: "Join", no request.
+    static func joinsRightAway(_ card: PlanCardDTO) -> Bool {
+        card.isBusiness && card.viewer?.autoRule == .open
     }
 
     /// "Starts in 7 hours. The waitlist closes 30 minutes before it ends."
@@ -198,7 +213,7 @@ enum PlanCannotAskCopy {
 enum PlanInviteCopy {
     /// Under "I'm in".
     static func footer(card: PlanCardDTO, invite: PlanMyInviteDTO) -> String {
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         if invite.status == .declined { return "You said you can't make it. If that changes, tap I'm in." }
         if card.isFull { return PlanCannotAskCopy.waitlist }
         if invite.needsHostOk { return "This invitation went to another address, so \(host) says yes first." }
@@ -207,7 +222,7 @@ enum PlanInviteCopy {
 
     /// The banner over the plan: "Sam invited you".
     static func banner(card: PlanCardDTO, invite: PlanMyInviteDTO) -> (title: String, message: String) {
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         let place = card.kind == .playdate ? "the time and the exact place" : card.placeKind == .home ? "the address" : "the exact place"
         if invite.needsHostOk {
             return ("\(host) invited you", "Say you're in and \(host) gets a request. You see \(place) once they say yes.")
@@ -242,7 +257,7 @@ enum PlanConfirmation: Identifiable, Equatable {
         case .withdraw: "Withdraw your request?"
         case .leaveWaitlist: "Leave the waitlist?"
         case .cantMakeIt, .notComing: "Can't make it?"
-        case let .blockHost(name): "Block \(PlanCardLines.firstName(name))?"
+        case let .blockHost(name): "Block \(name)?"
         case let .removeGuest(name, _, _): "Remove \(PlanCardLines.firstName(name))?"
         }
     }
@@ -250,11 +265,11 @@ enum PlanConfirmation: Identifiable, Equatable {
     var message: String {
         switch self {
         case let .withdraw(host):
-            "\(PlanCardLines.firstName(host)) won't see it anymore."
+            "\(host) won't see it anymore."
         case .leaveWaitlist:
             "You'll lose your place in line."
         case let .cantMakeIt(host), let .notComing(host):
-            "We'll tell \(PlanCardLines.firstName(host)), and your spot goes to the next person waiting. "
+            "We'll tell \(host), and your spot goes to the next person waiting. "
                 + "You'll lose the exact place, the note and the chat."
         case .blockHost:
             "You won't see each other's plans, requests or messages."
@@ -283,9 +298,9 @@ enum PlanConfirmation: Identifiable, Equatable {
         case .leaveWaitlist:
             await viewModel.withdraw() ? "You left the waitlist" : nil
         case let .cantMakeIt(host):
-            await viewModel.withdraw() ? "We told \(PlanCardLines.firstName(host))" : nil
+            await viewModel.withdraw() ? "We told \(host)" : nil
         case let .notComing(host):
-            await viewModel.stillComing(false) ? "We told \(PlanCardLines.firstName(host))" : nil
+            await viewModel.stillComing(false) ? "We told \(host)" : nil
         case .blockHost:
             await viewModel.blockHost() ? "Blocked. You won't see each other's plans." : nil
         case let .removeGuest(_, requestId, _):

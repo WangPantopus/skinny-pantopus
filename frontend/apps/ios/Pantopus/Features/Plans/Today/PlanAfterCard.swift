@@ -28,7 +28,7 @@ struct PlanAfterCard: View {
             if calendar.isDateInYesterday(start) { return "yesterday's" }
             return "\(PlanFormat.dayHeading(start, calendar: calendar))'s"
         } ?? "the"
-        return "\(possessive) \(card.kind.title.lowercased()) with \(PlanCardLines.firstName(card.host.displayName))"
+        return "\(possessive) \(card.kind.title.lowercased()) with \(PlanCardLines.hostName(card))"
     }
 
     // MARK: - Guest

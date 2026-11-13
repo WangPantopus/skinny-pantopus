@@ -16,6 +16,8 @@ enum PlanRowTrailing: Equatable {
     case chevron
     case text(String)
     case status(String, PantopusIcon?)
+    /// A business's plan: "Free" (Plans with businesses, board G2).
+    case price
 }
 
 struct PlanRowModel: Identifiable, Equatable {
@@ -25,10 +27,26 @@ struct PlanRowModel: Identifiable, Equatable {
     let subtitle: String
     let trailing: PlanRowTrailing
     let accessibilityLabel: String
+    /// A business hosts it: the badge on the kind tile (board P1).
+    var isBusiness = false
 
     /// A row in a public list (the map's sheet, Today and Tomorrow, J8).
     static func listed(_ card: PlanCardDTO, trailing: PlanRowTrailing? = nil, now: Date = Date()) -> PlanRowModel {
         let calendar = PlanFormat.calendar(for: card.timezone)
+        // A business's plan names the business where a neighbor's names an area, and is "Free" where
+        // a neighbor's shows its spots (board G2).
+        if let business = card.business {
+            let when = PlanFormat.rowWhen(state: card.state, start: card.startsAtDate, end: card.endsAtDate, now: now, calendar: calendar)
+            return PlanRowModel(
+                id: card.id,
+                kind: card.kind,
+                title: card.title,
+                subtitle: [when, business.name].compactMap { $0 }.joined(separator: " · "),
+                trailing: trailing ?? .price,
+                accessibilityLabel: spoken(card, now: now),
+                isBusiness: true
+            )
+        }
         let distance = PlanFormat.distance(card.distanceBand)
         // The row says just the place's name ("Downtown", "Prune Hill"), as on the board and Android.
         let area = card.area.label.hasPrefix("Near ") ? String(card.area.label.dropFirst(5)) : card.area.label
@@ -79,20 +97,22 @@ struct PlanRowModel: Identifiable, Equatable {
                 title: row.title,
                 subtitle: ["You're hosting", when].compactMap { $0 }.joined(separator: " · "),
                 trailing: trailing,
-                accessibilityLabel: "You're hosting. " + row.accessibilityLabel
+                accessibilityLabel: "You're hosting. " + row.accessibilityLabel,
+                isBusiness: row.isBusiness
             )
         }
         // An invitation not answered yet: "Sam invited you · Sun 1:25 PM".
         if viewer?.requestStatus == nil, let invite = card.myInvite, invite.status == .pending {
             let row = listed(card, trailing: .status("Invited", .userPlus), now: now)
-            let host = PlanCardLines.firstName(card.host.displayName)
+            let host = PlanCardLines.hostName(card)
             return PlanRowModel(
                 id: row.id,
                 kind: row.kind,
                 title: row.title,
                 subtitle: "\(host) invited you · \(row.subtitle)",
                 trailing: row.trailing,
-                accessibilityLabel: "\(host) invited you. " + row.accessibilityLabel
+                accessibilityLabel: "\(host) invited you. " + row.accessibilityLabel,
+                isBusiness: row.isBusiness
             )
         }
         let status: PlanRowTrailing = switch viewer?.requestStatus {
@@ -156,10 +176,11 @@ struct PlanRowModel: Identifiable, Equatable {
             // A playdate before you're in: "Saturday morning".
             parts.append(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, now: now, calendar: calendar))
         }
-        parts.append(card.area.label)
+        parts.append(card.business.map { "hosted by \($0.name)" } ?? card.area.label)
         if let distance = PlanFormat.spokenDistance(card.distanceBand) { parts.append(distance) }
         if card.kind == .studyGroup { parts.append(contentsOf: PlanCardLines.study(card.details)) }
         parts.append(card.isFull ? "full" : "\(card.spotsLeft) spot\(card.spotsLeft == 1 ? "" : "s") left")
+        if card.isBusiness { parts.append("Free") }
         return parts.joined(separator: ", ")
     }
 }
@@ -176,7 +197,7 @@ struct PlanRow: View {
             VStack(spacing: 0) {
                 if showsDivider { Divider().overlay(Theme.Color.appBorder) }
                 HStack(spacing: Spacing.s3) {
-                    PlanTile(kind: model.kind)
+                    PlanKindTile(kind: model.kind, isBusiness: model.isBusiness)
                     if typeSize.isAccessibilitySize {
                         // At the largest text sizes the status goes under the words, which keep the width.
                         stacked(lines: 4)
@@ -243,13 +264,15 @@ struct PlanRow: View {
                 .lineLimit(1)
         case let .status(text, icon):
             StatusChip(text, variant: .neutral, icon: icon).accessibilityLabel(text)
+        case .price:
+            PlanPriceChip()
         }
     }
 
     private var trailingSpoken: String {
         switch model.trailing {
         case let .status(text, _): ". \(text)"
-        case .chevron, .text: ""
+        case .chevron, .text, .price: ""
         }
     }
 }

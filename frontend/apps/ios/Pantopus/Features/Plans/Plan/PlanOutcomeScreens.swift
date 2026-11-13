@@ -77,7 +77,7 @@ struct PlanNotThisTimeScreen: View {
 
     /// No blame, and nothing about who said no.
     private var reason: String {
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         switch status {
         case .expired: return "Joining closed before you got a spot."
         case .removed: return "\(host) made a change to who's coming."

@@ -85,7 +85,12 @@ struct PlanGoingSection: View {
                 .accessibilityIdentifier("planGroupChat")
         }
         if let people = viewModel.plan?.people, !people.isEmpty {
-            PlanPeopleLine(people: people, myPartySize: viewModel.plan?.myRequest?.partySize ?? 1, onOpenPerson: onOpenProfile)
+            PlanPeopleLine(
+                people: people,
+                myPartySize: viewModel.plan?.myRequest?.partySize ?? 1,
+                onOpenPerson: onOpenProfile,
+                business: card.business
+            )
         }
         Color.clear.frame(height: 1)
             .sheet(isPresented: $showsCalendar) {
@@ -95,7 +100,7 @@ struct PlanGoingSection: View {
     }
 
     private var hostFirst: String {
-        PlanCardLines.firstName(card.host.displayName)
+        PlanCardLines.hostName(card)
     }
 
     /// "Sam said yes · just now" (board J7), then "· 12 min ago" and later times
@@ -126,7 +131,7 @@ struct PlanGoingSection: View {
         return VStack(alignment: .leading, spacing: 10) {
             PlanBanner(tone: .warning, icon: .alertTriangle, title: words.title, message: words.message)
             HStack(spacing: 10) {
-                Button("Can't make it") { onConfirm(.notComing(host: card.host.displayName)) }
+                Button("Can't make it") { onConfirm(.notComing(host: PlanCardLines.hostName(card))) }
                     .planButton(.secondary, size: .small)
                 Button("Still coming") { Task { _ = await viewModel.stillComing(true) } }
                     .planButton(.primary, size: .small)
