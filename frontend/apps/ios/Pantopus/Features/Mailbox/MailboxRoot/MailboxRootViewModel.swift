@@ -829,7 +829,11 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         }
         let response: HolidayCardsResponse? = try? await api.request(HolidayCardEndpoints.cards())
         christmasCards = response?.open == true ? response : nil
-        if let response { HolidayCardWords.postageOn = response.postageEnabled }
+        if let response {
+            HolidayCardWords.postageOn = response.postageEnabled
+            // The other ways into a card (the tab's envelope, Today, profiles, the side menu) follow this answer.
+            if case let .signedIn(user) = AuthManager.shared.state { HolidayCardDoors.shared.note(response, account: user.id) }
+        }
     }
 
     /// The row's tap: the card flow, or today's card.
@@ -838,9 +842,17 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         onOpenChristmasCards?()
     }
 
-    /// The row shows on Me's Incoming while sending is open.
+    /// The row shows on Me's Incoming while sending is open, unless the top
+    /// card is already the invitation (one door on a screen).
     var showsChristmasCardRow: Bool {
-        isLive && !showsSent && selectedDrawer == .me && currentTab == .incoming && christmasCards != nil
+        isLive && !showsSent && selectedDrawer == .me && currentTab == .incoming && christmasCards != nil && !showsEmptyDayCard
+    }
+
+    /// The top card on a day with no mail, on your own (Me) mailbox, while
+    /// sending is open: "Nothing came today." with "Send a Christmas card"
+    /// (TABCARD, drawing MailEmptyDay). Any other day the top card is the usual one.
+    var showsEmptyDayCard: Bool {
+        isLive && !showsSent && selectedDrawer == .me && christmasCards != nil && hero.isNoMailToday
     }
 
     /// Poll the disambiguation queue on appear / pull-to-refresh, exactly

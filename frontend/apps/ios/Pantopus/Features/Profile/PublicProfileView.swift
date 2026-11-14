@@ -48,6 +48,9 @@ public struct PublicProfileView: View {
     @State var showSignOutConfirm = false
     /// Text for the system share sheet (your month, your invite link).
     @State var shareText: String?
+    /// A Christmas card can go to this person now (cards open, and the send
+    /// flow's "Who it's for" finds them): "Send a card" shows.
+    @State private var canSendCard = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(RootTabModel.self) var rootTabs: RootTabModel?
     let onBack: @MainActor () -> Void
@@ -614,14 +617,44 @@ public struct PublicProfileView: View {
                         onAccept: { Task { await viewModel.connect() } },
                         onDecline: { Task { await viewModel.declineRequest() } }
                     )
-                    message.button { onOpenMessages(payload.profile) }
-                        .accessibilityIdentifier("publicProfileMessageCta")
+                    ProfileActionRow {
+                        message.button { onOpenMessages(payload.profile) }
+                            .accessibilityIdentifier("publicProfileMessageCta")
+                        sendCardButton(for: payload)
+                    }
                 } else {
+                    // "Send a card" sits beside Message, or on its own line when the row already holds two.
                     ProfileActionRow {
                         relationshipButtons(for: payload, message: message)
+                        if !relationshipRowIsFull { sendCardButton(for: payload) }
                     }
+                    if relationshipRowIsFull { sendCardButton(for: payload) }
                 }
             }
+            .task(id: "\(payload.profile.id)|\(HolidayCardDoors.shared.isOpen)") {
+                canSendCard = await HolidayCardDoors.shared.canSend(to: payload.profile.id)
+            }
+        }
+    }
+
+    /// The relationship row already holds two buttons (Connect, Requested or
+    /// Connected beside Message, or Connect's placeholder while it loads).
+    private var relationshipRowIsFull: Bool {
+        (viewModel.relationshipLoaded && viewModel.canFollow)
+            || (viewModel.hasSignedInViewer && !viewModel.relationshipLoaded && !viewModel.relationshipReadFailed)
+    }
+
+    /// "Send a card" (TABCARD, drawing Profile): the Christmas card flow in
+    /// the Mail tab with this person already chosen, as "Send one back" opens
+    /// it. Only while cards are open and the flow can find them by name.
+    @ViewBuilder
+    private func sendCardButton(for payload: PublicProfileContent) -> some View {
+        if canSendCard, !payload.isOwner, let rootTabs {
+            ProfileActionButton(title: "Send a card", icon: .mail, style: .christmasCard)
+                .button {
+                    rootTabs.openChristmasCard(toUserId: payload.profile.id, toName: payload.header.displayName)
+                }
+                .accessibilityIdentifier("profile.sendCard")
         }
     }
 
