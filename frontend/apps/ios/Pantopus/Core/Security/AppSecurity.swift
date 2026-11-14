@@ -803,4 +803,21 @@ public extension AppLockManager {
         guard let lastSensitiveAuthAt else { return false }
         return Date().timeIntervalSince(lastSensitiveAuthAt) < grace
     }
+
+    /// Whether a sensitive screen (Mail, the Wallet) would let the person in
+    /// right now without asking: their last check is still inside the grace,
+    /// or the device has no passcode to check against. Pantopus AI sends this
+    /// with each message ("identity"), so the server looks into Mail and the
+    /// Wallet for it only when those screens would open. It never prompts.
+    var passesSensitiveCheckNow: Bool {
+        refreshCapability()
+        switch capability {
+        case .passcodeNotSet:
+            return true
+        case .available:
+            return isWithinSensitiveGracePeriod()
+        case .notAvailable, .notEnrolled, .invalidContext:
+            return false
+        }
+    }
 }

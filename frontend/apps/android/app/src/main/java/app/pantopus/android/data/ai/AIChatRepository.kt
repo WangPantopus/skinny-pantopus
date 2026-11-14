@@ -1,6 +1,7 @@
 package app.pantopus.android.data.ai
 
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.data.api.models.ai.AIConversationMessagesResponse
 import app.pantopus.android.data.api.models.ai.AIConversationsResponse
 import app.pantopus.android.data.api.net.NetworkResult
@@ -40,6 +41,13 @@ private const val HTTP_TOO_MANY_REQUESTS = 429
  * standing rule cards (phase 3 §18.3).
  */
 private val AI_CARDS = listOf("pickup_schedule", "action", "link", "state", "memory", "follow_up", "rules")
+
+/**
+ * Added to `cards` when this phone's identity check for Mail and the Wallet (fingerprint, face or the screen lock)
+ * would pass right now. The server reads Mail and the Wallet for the assistant only with it; without it the
+ * assistant sends the person to that screen, where the app asks.
+ */
+private const val IDENTITY_CARD = "identity"
 
 /** A turn may take 45 seconds and eight tool rounds (contract section 8); a quiet stretch must not end it. */
 private const val STREAM_READ_TIMEOUT_SECONDS = 60L
@@ -128,6 +136,7 @@ class AIChatRepository
         private val client: OkHttpClient,
         private val tokenStorage: TokenStorage,
         private val api: AIApi,
+        private val appLock: AppLockManager,
     ) {
         // HttpLoggingInterceptor at Level.BODY (debug builds) buffers the
         // whole response before returning it to the caller, which turns the
@@ -194,7 +203,10 @@ class AIChatRepository
                             if (images.isNotEmpty()) put("images", org.json.JSONArray(images))
                             // The cards this app shows beyond the original ones; the server offers
                             // the matching tools only to apps that list them.
-                            put("cards", org.json.JSONArray(AI_CARDS))
+                            put(
+                                "cards",
+                                org.json.JSONArray(if (appLock.passesSensitiveCheckNow()) AI_CARDS + IDENTITY_CARD else AI_CARDS),
+                            )
                             context?.let { put("context", it.toRequestJson()) }
                         }
                         .toString()
