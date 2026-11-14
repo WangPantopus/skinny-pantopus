@@ -63,7 +63,8 @@ async function* build({ work, today }) {
     const facts = {
       bedrooms: count(row.BEDROOM, 15),
       ...(full ? bathFacts(full + (half || 0) * 0.5, 30) : {}),
-      ...(full && half ? { half_baths: half } : {}),
+      // The file's own full count: a total of 3 from 2 full and 2 half baths is still 2 full baths.
+      ...(full && half ? { full_baths: full, half_baths: half } : {}),
       stories: stories >= 1 && stories <= 6 && (stories * 2) % 1 === 0 ? stories : null,
       living_sqft: heated && heated < 30000 ? heated : null,
       exterior_walls: WALLS[row.EXTWALL] || null,
