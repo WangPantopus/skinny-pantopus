@@ -15,6 +15,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const feedService = require('../services/feedService');
 const store = require('../services/moments/momentStore');
+const { sunPosition } = require('../services/moments/sunPosition');
 const media = require('../services/moments/momentMedia');
 const momentCheck = require('../services/moments/momentCheck');
 const momentPlace = require('../services/moments/momentPlace');
@@ -326,17 +327,21 @@ const mapSchema = Joi.object({
 /**
  * GET /map — the rings in view: live Moments the caller may see, blocks and mutes removed. `heights_on` says whether
  * Moment heights are on for the caller (the `moment_heights` flag), so an app can offer its "Heights" control even
- * where no ring in view carries a height; it says nothing about anyone else.
+ * where no ring in view carries a height; it says nothing about anyone else. `float_on` says whether Moments with an
+ * elevation float on the caller's map by day (`moment_float`, which needs `moment_heights` too); only then `sun` says
+ * where the sun is right now over the middle of the box, so both phones draw the same shadows.
  */
 router.get('/map', async (req, res) => {
   try {
     const box = parseBody(mapSchema, req.query);
     if (box.south >= box.north || box.west >= box.east) throw store.fail(400, 'MOMENT_INVALID', 'Send a map area with south < north and west < east.');
     // `unplaced`: connections' Moments with no location (and the caller's own), for the row of faces, whatever the box.
-    const [rings, unplaced, heights] = await Promise.all([
-      store.mapRings(req.user.id, box), store.unplacedRings(req.user.id), store.heightsOn(req.user),
+    const [rings, unplaced, heights, float] = await Promise.all([
+      store.mapRings(req.user.id, box), store.unplacedRings(req.user.id), store.heightsOn(req.user), store.floatOn(req.user),
     ]);
-    res.json({ rings, unplaced, heights_on: heights });
+    const answer = { rings, unplaced, heights_on: heights, float_on: float };
+    if (float) answer.sun = sunPosition((box.south + box.north) / 2, (box.west + box.east) / 2);
+    res.json(answer);
   } catch (error) {
     sendError(res, error, 'map');
   }
