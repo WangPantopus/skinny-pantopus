@@ -231,10 +231,11 @@ private fun Hero(
                 color = PantopusColors.appText,
             )
             Text(
-                if (signedInEntry) {
-                    "Look up an address, preview its public information, and choose whether to save it privately."
-                } else {
-                    "Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account."
+                when {
+                    // The Place tab's first-run root says what an address shows, as the front door does (TABCARD §4b).
+                    embedded != null -> "Your flood risk, today's air, your home's value, and who your verified neighbors are."
+                    signedInEntry -> "Look up an address, preview its public information, and choose whether to save it privately."
+                    else -> "Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account."
                 },
                 fontSize = 15.sp,
                 lineHeight = 21.sp,
@@ -284,7 +285,12 @@ private fun Hero(
                 } else {
                     PrivacyProof()
                 }
-                ExampleCard(modifier = Modifier.padding(top = 8.dp))
+                if (embedded != null) {
+                    // A city kept on this phone: its Sun card in place of the example, once its Today comes (TABCARD §4b).
+                    PlaceAreaSunCard(modifier = Modifier.padding(top = 8.dp)) { ExampleCard(modifier = Modifier.padding(top = 8.dp)) }
+                } else {
+                    ExampleCard(modifier = Modifier.padding(top = 8.dp))
+                }
                 // The tab's root has no saved places behind it to go back to (iOS shows no such link either).
                 if (embedded == null) {
                     Text(
@@ -354,8 +360,6 @@ private fun ExampleCard(modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("EXAMPLE", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.9.sp, color = PantopusColors.appTextMuted)
-            Spacer(modifier = Modifier.weight(1f))
-            Text("A home in Camas, WA", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
         }
         exampleReadings.forEachIndexed { index, reading ->
             if (index > 0) HorizontalDivider(color = PantopusColors.appBorderSubtle, modifier = Modifier.padding(start = 60.dp))

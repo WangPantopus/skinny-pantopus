@@ -2,10 +2,12 @@ package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlacePreview
+import app.pantopus.android.data.api.models.saved_places.AreaTodayBody
 import app.pantopus.android.data.api.models.saved_places.SavePlaceBody
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceDeleteResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlaceResponse
 import app.pantopus.android.data.api.models.saved_places.SavedPlacesListResponse
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -74,4 +76,15 @@ interface SavedPlacesApi {
     suspend fun remove(
         @Path("id") id: String,
     ): SavedPlaceDeleteResponse
+
+    /**
+     * `POST /api/saved-places/area/today` — route `backend/routes/savedPlaces.js:88`: Today for the city around a point
+     * (TABCARD §4), the same JSON as a saved
+     * place's Today plus a top-level `area` (`label`, `city`, `state`, the point). It stores nothing. Read as text, so
+     * the Today and its `area` both come from the one answer (`TodayAreaStore`).
+     */
+    @POST("api/saved-places/area/today")
+    suspend fun areaToday(
+        @Body body: AreaTodayBody,
+    ): ResponseBody
 }

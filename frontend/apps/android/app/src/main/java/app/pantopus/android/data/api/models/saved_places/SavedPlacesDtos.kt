@@ -82,3 +82,13 @@ data class SavePlaceBody(
 data class SavedPlaceDeleteResponse(
     val message: String? = null,
 )
+
+/**
+ * Body for `POST /api/saved-places/area/today` (TABCARD §4): a point already rounded to two decimal places on the
+ * phone (about a kilometre). An exact fix is never sent.
+ */
+@JsonClass(generateAdapter = true)
+data class AreaTodayBody(
+    val latitude: Double,
+    val longitude: Double,
+)

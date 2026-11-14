@@ -310,6 +310,7 @@ import app.pantopus.android.ui.screens.mailbox.cards.ChristmasMenuRow
 import app.pantopus.android.ui.screens.mailbox.cards.ChristmasToday
 import app.pantopus.android.ui.screens.mailbox.cards.SendCardScreen
 import app.pantopus.android.ui.screens.mailbox.cards.SendCardViewModel
+import app.pantopus.android.ui.screens.mailbox.cards.WaitingCardLandingViewModel
 import app.pantopus.android.ui.screens.mailbox.cards.isChristmasMailSeason
 import app.pantopus.android.ui.screens.mailbox.community.CommunityMailScreen
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DISAMBIGUATE_MAIL_ID_KEY
@@ -2519,6 +2520,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         } else {
             null
         }
+    // Joined for a card (TABCARD §3): the first time an account's tabs show on this phone, a Christmas card waiting for
+    // it opens on the Mail tab as a tap on it in the Mailbox opens it (Mail's "who's holding the phone" check first).
+    val waitingCard: WaitingCardLandingViewModel = hiltViewModel()
+    val waitingCardMailId by waitingCard.open.collectAsStateWithLifecycle()
+    LaunchedEffect(waitingCardMailId) {
+        val mailId = waitingCardMailId ?: return@LaunchedEffect
+        waitingCard.opened()
+        navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailboxItemDetail(mailId))
+    }
     // Standing on Plans when the switch turns off lands on Pulse (Nearby with the Pulse redesign off). It waits for
     // the person's answer, so a relaunch that restores the Plans tab isn't moved off it by the moment before the
     // answer is read.
@@ -3278,6 +3288,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         skyShare = skyShare,
                         // The Christmas countdown's button: the card flow on the Mail tab.
                         onSendChristmasCard = openChristmasCards.takeIf { LaunchFeatures.holidayCards && LaunchFeatures.mailbox },
+                        // "Type my address" / "Add your address" (TABCARD §4a): the Place tab at its root, the address-first
+                        // screen for someone with no address yet (not the Add Home steps).
+                        onTypeAddress = { navController.openTabRoot(PantopusRoute.Place) },
                         onOpenPlace = { homeId ->
                             placeLinkScope.launch {
                                 currentPlaceHost?.let {
