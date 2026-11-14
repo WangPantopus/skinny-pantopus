@@ -171,6 +171,8 @@ function check(question, got) {
   const bodies = got.cards.flatMap((c) => [...(c.actions || []), ...(c.items || []).flatMap((item) => item.actions || [])])
     .map((a) => a.request?.body);
   if (e.noError && got.errors.length) fails.push(`error ${got.errors.join(',')}`);
+  // A reply's button line ([[button: …]], services/ai/appGuide.js) becomes a link button; it is never shown as words.
+  if (/\[\[button/i.test(got.text)) fails.push('a button line showed in the reply');
   if (e.card && !types.includes(e.card)) fails.push(`no ${e.card} card (got ${types.join(',') || 'none'})`);
   if (e.cardKind && !got.cards.some((c) => (c.actions || []).some((a) => a.request?.body?.kind === e.cardKind))) fails.push(`no ${e.cardKind} plan card`);
   if (e.then && !got.cards.some((c) => (c.actions || []).some((a) => a.then))) fails.push('card has no follow-up request');
