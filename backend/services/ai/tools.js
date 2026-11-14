@@ -20,6 +20,7 @@ const { verificationReadToolDefinitions, runVerificationReadTool } = require('./
 const { mailReadToolDefinitions, runMailReadTool, MAIL_TOOL_NAMES } = require('./readToolsMail');
 const { chatReadToolDefinitions, runChatReadTool } = require('./readToolsChats');
 const { momentReadToolDefinitions, runMomentReadTool } = require('./readToolsMoments');
+const { scheduleReadToolDefinitions, runScheduleReadTool } = require('./readToolsSchedule');
 const { walletReadToolDefinitions, runWalletReadTool, WALLET_TOOL_NAMES } = require('./readToolsWallet');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
@@ -270,6 +271,8 @@ const toolDefinitions = [
   ...mailReadToolDefinitions,
   // Their chats, only when they ask about them: the Messages list and one chat's messages (readToolsChats.js).
   ...chatReadToolDefinitions,
+  // The days ahead in one look: forecast, plans, tasks, pickup days, mail due, check-backs (readToolsSchedule.js).
+  ...scheduleReadToolDefinitions,
   // Moments they posted or can see, for people who have Moments (readToolsMoments.js).
   ...momentReadToolDefinitions,
   // Their Wallet and payments, read only (readToolsWallet.js).
@@ -347,6 +350,8 @@ const TOOL_TIMEOUTS_MS = {
   // The inbox page with its names, and a chat's messages with theirs.
   find_chats: 8000,
   read_chat: 8000,
+  // Place's weather, the address calendar, the tasks, the plans, the mail due and the check-backs, together.
+  get_schedule: 15000,
   // The map's, the connections' and the unplaced Moments, opened and named.
   find_moments: 12000,
   get_moment: 8000,
@@ -438,6 +443,8 @@ async function _executeToolImpl(name, args, ctx) {
   if (chats) return chats;
   const moments = await runMomentReadTool(name, args, ctx);
   if (moments) return moments;
+  const schedule = await runScheduleReadTool(name, args, ctx);
+  if (schedule) return schedule;
   const wallet = await runWalletReadTool(name, args, ctx);
   if (wallet) return wallet;
   const drafted = await runCardTool(name, args, ctx);

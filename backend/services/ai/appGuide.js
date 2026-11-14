@@ -27,7 +27,10 @@ const SCREENS = {
   home_members: ['pantopus://homes/{id}/members', 'home', 'Open members'],
   home_verify_postcard: ['pantopus://homes/{id}/verify-postcard', 'home', 'Enter your postcard code'],
   home_claim_status: ['pantopus://homes/{id}/waiting-room', 'home', 'See your claim'],
-  nearby: ['pantopus://nearby', null, 'Open Nearby'],
+  // The Pulse tab (the feed). `pantopus://nearby` no longer opens the feed: since November 7 it is "Verified homes nearby".
+  pulse: ['pantopus://feed', null, 'Open Pulse'],
+  verified_homes: ['pantopus://nearby', null, 'See verified homes nearby'],
+  connections: ['pantopus://connections', null, 'Open Connections'],
   post: ['pantopus://posts/{id}', 'id', 'Open the post'],
   plans: ['pantopus://plans', 'plans', 'Open Plans'],
   plan: ['pantopus://plans/{id}', 'plans+id', 'Open the plan'],
@@ -126,7 +129,7 @@ function appGuide({
 
   parts.push(`HOW PANTOPUS WORKS (use this to answer questions about the app; ${links ? 'link to screens with show_link' : 'say where in the app to go'})
 
-Tabs: Place, Today, Nearby and Messages. People who have Plans also have a Plans tab between Nearby and Messages; the context says whether this person has Plans.
+Where things are, on the phones: the tabs are Place, Today and Pulse${mailbox ? ', Mail' : ''}${moments ? ', Moments' : ''}${plans ? ' and Plans' : ''}${plans ? '' : '; people who have Plans also have a Plans tab (the context says whether this person does)'}. Messages is the chat button at the top right of each tab's first screen, with the unread count. The side menu (the three lines at the top left) has My Homes, My Businesses, Connections, Mailbox, Profile & Privacy, Search, My Pulse, My Tasks, Wallet & Payments, Settings and Help & Support. The web has Place, Today, Pulse${mailbox ? ', Mail' : ''} and Messages in its sidebar, and no Plans or Moments.
 
 PLACE
 - Place opens on "Your Place": the person's default home. The address button at the top opens "Your homes", where they switch homes or change which one is the default (the default decides what Place, Today and the briefings show).
@@ -136,6 +139,7 @@ PLACE
 - Members: the people in the home and their roles (owner, admin, member, restricted member, guest and others). To add someone, open Members${links ? ' (home_members)' : ' in Home tools'} and invite them by email or username; they get an invitation. Guests can get a guest pass that ends on its own.
 - Tasks: chores, reminders, repairs, projects and shopping, each with who it's for, a due date and a repeat (daily, weekly or monthly). The person a task is assigned to gets a notification, and a reminder push goes out at 7 AM on the due day. ${actionCards ? 'You can draft tasks with draft_home_task.' : 'They add one in Home tools → Tasks.'}
 - "See what neighbors see" on Place shows the home as neighbors see it. Neighbors never see the exact address.
+- Verified neighbors on Place shows how many verified homes are around them; "Verified homes nearby" there${links ? ' (verified_homes)' : ''} has the map of them and "Invite your neighbors".
 
 TODAY
 - Today shows the day at the default home (or a saved address): the weather, "good day to" picks (open the windows, run, wash the car, water the lawn, grill), the address calendar (pickup days and other dates for the next two weeks), radon, air quality, alerts and sunrise and sunset. People with Plans also see their plans for the day.
@@ -144,16 +148,17 @@ TODAY
 - Briefings: a morning briefing and an evening briefing (pickup reminders come in the evening). Times, quiet hours, weather and air alerts and home reminders are in Settings → Notifications${screen('notification_settings')}. ${actionCards ? 'You can draft changes with draft_notification_settings.' : 'They change them there.'}${suggestions ? `
 - Suggestions from Pantopus, a switch in Settings → Notifications, is off until the person turns it on; then you write the morning briefing, with buttons, and may send at most two nudges a day (never during quiet hours), each landing in this conversation, where "Fewer like this" mutes that kind for 30 days.` : ''}
 
-NEARBY
-- Nearby is the neighborhood feed: questions (asks), recommendations, events, lost and found, heads-ups, deals, local updates and neighborhood wins, newest first.
-- Posting nearby needs a verified address, or a fresh location within about 3 miles. Neighbors see a post's location only as an approximate area. Heads-ups can be road hazards, power outages, weather damage, missing pets, other hazards or other; reports about crimes or suspicious people aren't allowed.
+PULSE
+- Pulse (the Pulse tab${links ? ', pulse' : ''}) is the neighborhood feed, with a List | Map switch and two views: Nearby (posts around them) and Connections (posts from people they are connected to). Post kinds: questions (asks), recommendations, events, lost and found, heads-ups, deals, local updates, neighborhood wins and visitor guides, newest first. "Nearby" is this view, not a tab.
+- Posting to Nearby needs a verified address, or a location fix from the last few minutes within about 3 miles, or a photo or video taken there. Businesses can't post. Neighbors see a post's location only as an approximate area. Heads-ups can be road hazards, power outages, weather damage, missing pets, other hazards or other; reports about crimes or suspicious people aren't allowed.
 - A question stays open for 7 days; its author can mark it solved. People can like, reply, save, hide a post, mute a person or topic, and report a post.
 - ${actionCards
     ? 'You can draft a post with create_post_draft, a reply with draft_post_reply, and "mark solved" with draft_post_solve.'
     : 'You can draft a post with create_post_draft. They reply to a post, or mark their own question solved, on the post itself.'}
 
 MESSAGES
-- Direct messages, group chats, and a group chat for each plan (it opens when the host lets the first person in and closes a day after the plan). The "Pantopus AI" row is you.
+- Messages (the chat button at the top right) holds direct messages, group chats, a group chat for each plan (it opens when the host lets the first person in and becomes read-only a day after the plan) and Support Train chats. The "Pantopus AI" row is you. Swiping a conversation mutes it; Report and Block are in a direct chat's Conversation details.
+- A note to an address on their block isn't in Messages: Place, Verified neighbors, "Message a neighbor" sends a pre-written note to verified residents there, and replies come to "Your inbox" on that screen.
 - Blocking someone stops new messages from them; people can report a person from their profile. ${chats ? 'You read a chat only when the person asks you about it, and only chats they are in; you never send messages.' : "You don't read anyone's chats."}
 
 SUPPORT TRAINS

@@ -63,7 +63,7 @@ const typeRank = (type) => (TYPE_ORDER.includes(type) ? TYPE_ORDER.indexOf(type)
 const nearbyReadToolDefinitions = [
   {
     name: 'catch_up_nearby',
-    description: "What is new on the person's Nearby feed within about 10 miles: since they last looked, or over the last `days`. Counts by type and the top posts, heads-ups and lost and found first, each with its post_id for a link button. Without days it covers the time since their last visit (at most 14 days), or the last 7 days when they haven't looked yet or are looking at the feed right now. The person's own posts are left out: every post here is a neighbor's (`yours: false`), even one by someone with their first name. Use it for \"what did I miss\" and \"what's new around here\".",
+    description: "What is new on Pulse near the person (the Pulse tab's Nearby view), within about 10 miles: since they last looked, or over the last `days`. Counts by type and the top posts, heads-ups and lost and found first, each with its post_id for a link button. Without days it covers the time since their last visit (at most 14 days), or the last 7 days when they haven't looked yet or are looking at the feed right now. The person's own posts are left out: every post here is a neighbor's (`yours: false`), even one by someone with their first name. Use it for \"what did I miss\" and \"what's new around here\".",
     input_schema: {
       type: 'object',
       properties: {
@@ -139,7 +139,7 @@ const when = (ms, zone) => DateTime.fromMillis(ms).setZone(zoneOr(zone)).toForma
  */
 async function catchUpNearby(args, ctx) {
   const location = await feedLocation(ctx.userId);
-  if (!location) return { error: 'They have no home or saved place yet, so there is no Nearby feed to catch up on.' };
+  if (!location) return { error: 'They have no home or saved place yet, so there is no Pulse feed near them to catch up on.' };
   const now = Date.now();
   let sinceMs;
   let sinceSource;
@@ -317,7 +317,7 @@ async function findRecommendations(args, ctx) {
   const stems = queryStems(args.query);
   if (!stems.length) return { error: 'Ask what they want a recommendation for (a plumber, a dentist, a dog sitter).' };
   const location = await feedLocation(ctx.userId);
-  if (!location) return { error: 'They have no home or saved place yet, so there is no Nearby feed to search.' };
+  if (!location) return { error: 'They have no home or saved place yet, so there is no Pulse feed near them to search.' };
   const sinceMs = Date.now() - RECOMMENDATION_DAYS * DAY_MS;
   const [recommendations, questions] = await Promise.all([
     feedSince(ctx, location, sinceMs, { postType: 'recommendation', pages: RECOMMENDATION_PAGES, includeEnded: true }),

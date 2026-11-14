@@ -39,7 +39,7 @@ function screenName(context) {
   const screen = cleanContext(context);
   if (!screen) return null;
   if (screen.surface === 'place') return screen.section ? `the Place tab, the "${screen.section}" screen` : 'the Place tab';
-  return { today: 'the Today tab', nearby: 'the Nearby feed', post: 'a post on the Nearby feed', plans: 'the Plans tab', plan: 'a plan' }[screen.surface];
+  return { today: 'the Today tab', nearby: 'the Pulse tab', post: 'a post on Pulse', plans: 'the Plans tab', plan: 'a plan' }[screen.surface];
 }
 
 function asText(screen, value, more = '') {
