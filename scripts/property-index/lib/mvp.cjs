@@ -189,7 +189,12 @@ async function* build({ FIPS, COUNTY, SITE, SOURCE, PUBLISHER }, { work }) {
     else if (!records.has(record.id)) records.set(record.id, record);
   }
   const list = [...records.values()];
-  log(`${COUNTY}: ${list.length} parcels, ${noAddress} without a street number, ${deleted} deleted; ${dwellings.size} with a dwelling`);
+  // A county's site has served another county's file under its own link (Highland's held Knox's, Nov 2026): the records' ZIPs must be the county's.
+  const countyZips = new Set(zipsByCounty(work, ['39']).get(FIPS) || []);
+  const zipped = list.filter((record) => record.address.zip);
+  const inCounty = zipped.filter((record) => countyZips.has(record.address.zip)).length;
+  if (zipped.length >= 100 && inCounty < zipped.length * 0.9) throw new Error(`Only ${inCounty} of ${zipped.length} addresses with a ZIP are in ${COUNTY}'s ZIP codes: the download holds another county's records`);
+  log(`${COUNTY}: ${list.length} parcels, ${noAddress} without a street number, ${deleted} deleted; ${dwellings.size} with a dwelling; ${inCounty} of ${zipped.length} ZIPs in the county`);
   for (const building of condoBuildings(list, { fips: FIPS, county: COUNTY })) list.push(building);
   yield {
     fips: FIPS, state: 'OH', name: COUNTY, publisher: PUBLISHER, dataset: 'CAMA database download', method: 'county', source: SOURCE, as_of: asOf, stale_after_days: 60, extra_zips: zipsByCounty(work, ['39']).get(FIPS) || [], records: list,
