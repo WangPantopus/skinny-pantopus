@@ -25,7 +25,7 @@ type Balance = {
   }[];
 };
 const path = "/api/mailbox/stamp-books";
-const STAMP_ART = ["fir", "peak", "river"].map((s) => `${TABLE_ART}stamp-${s}.webp`);
+export const STAMP_ART = ["fir", "peak", "river"].map((s) => `${TABLE_ART}stamp-${s}.webp`);
 // What each book is for, in a sender's words.
 const BOOK_USE: Record<number, string> = { 5: "A few close friends", 20: "Your Christmas list", 50: "The whole street" };
 const money = (cents: number, currency: string) =>
@@ -113,7 +113,7 @@ export function StampChip({ stamps, onOpen }: { stamps: Stamps; onOpen: () => vo
 }
 
 /** What's left, in words: "1 free card and 2 stamps". */
-function haveWords(b: Balance): string {
+export function haveWords(b: Pick<Balance, "available" | "free_remaining" | "paid_remaining">): string {
   const paid = Math.max(0, b.paid_remaining);
   const free = b.free_remaining;
   if (b.available === 0) return "none left";

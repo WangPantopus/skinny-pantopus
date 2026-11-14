@@ -40,6 +40,7 @@ import { claimWaitingLabel } from '@/components/homes/ClaimApprovalChecklist';
 import { usePrimaryHome } from '@/lib/primaryHome';
 import { PLACE_FRESH_MS, gatedStaleTime, useAfterRecheck } from '@/lib/householdCopy';
 import { useHydrated } from '@/hooks/useHydrated';
+import ChristmasCountdown from '@/components/mailbox/cards/ChristmasCountdown';
 
 // ── Icon helpers ─────────────────────────────────────────────────
 
@@ -421,6 +422,10 @@ export default function HubTodayPage() {
                 ))}
               </div>
             )}
+
+            {/* Christmas cards (TABCARD 2a): the countdown, under the sky and what needs you (ballot, alerts), above
+                the rest of the day. Shown once hydrated: it goes by this browser's date. */}
+            {hydrated ? <ChristmasCountdown /> : null}
 
             {/* Seasonal tip — only when the ranked signals did not already
                 surface it as a card (they usually do; showing both read as
