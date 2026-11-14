@@ -47,16 +47,21 @@ const whole = (text, most) => {
   const value = Number(text);
   return Number.isInteger(value) && value > 0 && value <= most ? value : null;
 };
-// "2", "2.5", "2.50" or "2 1/2"; Grayson writes "2 1/2 Bath" and "2 Bath No"; Brazos writes "2/1" for two full and a half.
+// A home's baths as the facts a record keeps, or null. "2", "2.5", "2.50" or "2 1/2" (Grayson writes "2 1/2 Bath" and
+// "2 Bath No") is a total, which doesn't say its full and half baths (two full and two half baths is 3), so it gives the
+// total only (lib/fill.cjs bathFacts). Brazos writes "2/1" for two full baths and a half: that says both.
 function bathsIn(text) {
   const pair = /^(\d+)\/([01])$/.exec(text || '');
-  if (pair) return Number(pair[1]) > 0 && Number(pair[1]) <= 12 ? Number(pair[1]) + Number(pair[2]) / 2 : null;
+  if (pair) {
+    const [full, half] = [Number(pair[1]), Number(pair[2])];
+    return full > 0 && full <= 12 ? { bathrooms: full + half / 2, full_baths: full, ...(half ? { half_baths: half } : {}) } : null;
+  }
   const match = /^(\d+)(?:\.(\d+)| 1\/2)?(?:\s+BATH.*)?$/i.exec(text || '');
   if (!match) return null;
   const half = / 1\/2/.test(text) || (match[2] && Number(`0.${match[2]}`) === 0.5);
   if (match[2] && !half && Number(match[2]) !== 0) return null;
   const baths = Number(match[1]) + (half ? 0.5 : 0);
-  return baths > 0 && baths <= 12 ? baths : null;
+  return baths > 0 && baths <= 12 ? { bathrooms: baths } : null;
 }
 
 function firstOf(imp, names) {
@@ -94,12 +99,7 @@ function pacsCounty({ fips, county, publisher, source, page, pattern, bedrooms =
     if (imp && home) {
       put(facts, 'living_sqft', positive(imp.area));
       put(facts, 'bedrooms', whole(firstOf(imp, bedrooms), 15));
-      const bath = bathsIn(firstOf(imp, baths));
-      if (bath) {
-        facts.bathrooms = bath;
-        facts.full_baths = Math.floor(bath);
-        if (bath % 1) facts.half_baths = 1;
-      }
+      Object.assign(facts, bathsIn(firstOf(imp, baths)));
       put(facts, 'garage_sqft', positive(imp.garage));
       put(facts, 'carport_sqft', positive(imp.carport));
       if (imp.pool) facts.pool = 'Yes';

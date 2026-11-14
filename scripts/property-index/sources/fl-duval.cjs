@@ -10,6 +10,7 @@ const path = require('node:path');
 const { spawn, execFileSync } = require('node:child_process');
 const { download, zipDates, zipMembers, streamLines, USER_AGENT } = require('../lib/tables.cjs');
 const { number, positive } = require('../lib/values.cjs');
+const { keepSplit } = require('../lib/held.cjs');
 const { fillHomes, bathFacts, describe, monthOf } = require('../lib/fill.cjs');
 const { log } = require('../lib/log.cjs');
 const { countyRoll } = require('./fl-roll.cjs');
@@ -101,6 +102,8 @@ async function* build({ work, today }) {
   const roll = await countyRoll(work, FIPS, today);
   const counts = fillHomes(roll.records, dwellings);
   log(describe(COUNTY, counts));
+  // Live: its page keeps the full and half baths it showed until its bath_totals switch is on (lib/held.cjs keepSplit).
+  log(`${COUNTY}: ${keepSplit(roll.records)} homes keep the full and half baths their bath total was split into, until the county's bath_totals switch is on`);
   const day = zipDates(zip).get(member);
   yield {
     ...roll,

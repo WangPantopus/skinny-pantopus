@@ -10,7 +10,8 @@
  *   switches/<name>.json   { v: 1, counties: { "<fips>": { mode: 'off'|'shadow'|'live', withheld: [fact, ...], estimates: true } },
  *                            shared_facts: ["<fips>", ...], similar_homes: ["<fips>", ...],
  *                            appeal_packet: ["<fips>", ...], new_columns: ["<fips>", ...], derived_rows: ["<fips>", ...],
- *                            measured_rows: ["<fips>", ...], listed_units: ["<fips>", ...], past_date: ["<fips>", ...] }
+ *                            measured_rows: ["<fips>", ...], bath_totals: ["<fips>", ...], listed_units: ["<fips>", ...],
+ *                            past_date: ["<fips>", ...] }
  *
  * `estimates: true` shows a live county's owners a Pantopus estimate (propertyRecords/valueEstimate.js). Without it, none.
  * `shared_facts` names the live counties where an address with several homes on record shows what all of them agree
@@ -27,6 +28,11 @@
  * leaves empty (WP21, scripts/property-index/lib/measure.cjs: a building's footprint from its outline), served as
  * `copy.measured` for Property details only, each labeled with the survey and the year it was measured. A file without
  * the lists shows none of them, and a copy's `held` and `held_from` never leave this file.
+ * `bath_totals` works the other way round: it names the live counties whose homes show a bath total the county gives on its
+ * own as Bathrooms only. Such a county's release still carries the full and half baths its page showed before a total
+ * stopped being split into them (2.5 read as two full and a half), in the copy's facts and again under `held.bath_totals`,
+ * so its page stays as it was until it's named here; named, those facts are left out (joinHeld). A total doesn't say them:
+ * two full and two half baths is 3.0. A file without the list leaves them on screen, as before.
  * `listed_units` names the live counties where a record takes the unit number an address list gives it (`listed_unit`,
  * written by a connector whose own file has no unit, identity.js withListedUnits), so a condo's owner finds its own unit
  * instead of several homes. A file without the list has it off everywhere.
@@ -61,7 +67,7 @@ let appealPackets = new Set();
 let listedUnits = new Set();
 let pastDates = new Set();
 // The held facts' lists, in the order they apply (format.js `held`).
-const HELD = ['new_columns', 'derived_rows', 'measured_rows'];
+const HELD = ['new_columns', 'derived_rows', 'measured_rows', 'bath_totals'];
 let held = {};
 let modes = config.listedModes();
 let liveStates = new Set();
@@ -262,7 +268,8 @@ const heldFor = (fips) => (modeFor(fips) === 'live' ? HELD.filter((name) => held
  * county's `held_from`), which only Property details draws, so readers of a copy's facts (estimates, the house's
  * shape) see the county's own record. A derived 0 (a county's "None") is kept. measured_rows goes to `copy.measured`
  * ({ facts, from }) the same way, its words taking each fact's year (`held.measured_years`) where they say {year}; a fact
- * whose words need a year it doesn't have isn't served.
+ * whose words need a year it doesn't have isn't served. bath_totals takes facts out instead: the copy's full and half
+ * baths split from a bare total, which its facts (and its building's) hold as before until the county is on the list.
  * @param {object} copy     a stored copy
  * @param {string[]} names  the lists that show, in order
  */
@@ -291,6 +298,12 @@ function joinHeld(copy, names) {
       from[name] = said.replace('{year}', String(years[name]));
     }
     if (Object.keys(facts).length) out.measured = { facts, from };
+  }
+  if (names.includes('bath_totals') && kept.bath_totals) {
+    for (const part of ['facts', 'building']) {
+      const split = kept.bath_totals[part];
+      if (split && out[part]) out[part] = Object.fromEntries(Object.entries(out[part]).filter(([name]) => !(name in split)));
+    }
   }
   return out;
 }

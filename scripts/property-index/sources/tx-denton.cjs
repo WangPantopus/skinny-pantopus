@@ -10,6 +10,7 @@ const { streetParts, year, realUnit, zipCode, onRecord } = require('../lib/addre
 const { positive, put, word } = require('../lib/values.cjs');
 const { properties, mainImprovements, codes, exportDate } = require('../lib/pacs.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { keepSplit } = require('../lib/held.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '48121';
@@ -70,11 +71,8 @@ function fromProperty(row, imp, words, subdivisions) {
     put(facts, 'living_sqft', positive(imp.area));
     put(facts, 'bedrooms', whole(imp.Bedrooms, 15));
     const baths = /^\d+(\.5)?$/.test(imp.Plumbing || '') ? Number(imp.Plumbing) : null;
-    if (baths > 0 && baths <= 20) {
-      facts.bathrooms = baths;
-      facts.full_baths = Math.floor(baths);
-      if (baths % 1) facts.half_baths = 1;
-    }
+    // A total: it doesn't say its full and half baths (two full and two half baths is 3), so it's kept as the total.
+    if (baths > 0 && baths <= 20) facts.bathrooms = baths;
     put(facts, 'rooms', whole(imp['Number of Rooms'], 40));
     put(facts, 'fireplaces', /^S\d$/.test(imp.Fireplaces || '') ? Number(imp.Fireplaces[1]) : null);
     put(facts, 'condition', CONDITION[imp.Condition]);
@@ -134,6 +132,8 @@ async function* build({ work, today }) {
   }
   const list = [...records.values()];
   log(`${COUNTY}: ${list.length} accounts, ${noAddress} without a street number`);
+  // Live: its page keeps the full and half baths it showed until its bath_totals switch is on (lib/held.cjs keepSplit).
+  log(`${COUNTY}: ${keepSplit(list, { zeroFull: true })} homes keep the full and half baths their bath total was split into, until the county's bath_totals switch is on`);
   for (const building of condoBuildings(list, { fips: FIPS, county: COUNTY })) list.push(building);
   yield {
     fips: FIPS, state: 'TX', name: COUNTY, publisher: 'Denton Central Appraisal District', dataset: 'certified appraisal export', method: 'county', source: 'tx-denton', as_of: asOf, stale_after_days: 450, records: list,
