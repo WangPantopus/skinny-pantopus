@@ -19,6 +19,9 @@ const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNea
 const { verificationReadToolDefinitions, runVerificationReadTool } = require('./readToolsVerification');
 const { mailReadToolDefinitions, runMailReadTool, MAIL_TOOL_NAMES } = require('./readToolsMail');
 const { chatReadToolDefinitions, runChatReadTool } = require('./readToolsChats');
+const { momentReadToolDefinitions, runMomentReadTool } = require('./readToolsMoments');
+const { scheduleReadToolDefinitions, runScheduleReadTool } = require('./readToolsSchedule');
+const { walletReadToolDefinitions, runWalletReadTool, WALLET_TOOL_NAMES } = require('./readToolsWallet');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
 const { memoryToolDefinitions, runMemoryTool } = require('./memory');
@@ -268,6 +271,12 @@ const toolDefinitions = [
   ...mailReadToolDefinitions,
   // Their chats, only when they ask about them: the Messages list and one chat's messages (readToolsChats.js).
   ...chatReadToolDefinitions,
+  // The days ahead in one look: forecast, plans, tasks, pickup days, mail due, check-backs (readToolsSchedule.js).
+  ...scheduleReadToolDefinitions,
+  // Moments they posted or can see, for people who have Moments (readToolsMoments.js).
+  ...momentReadToolDefinitions,
+  // Their Wallet and payments, read only (readToolsWallet.js).
+  ...walletReadToolDefinitions,
   ...actionCardDefinitions,
   // Phase 3: what they ask Pantopus to remember (memory.js).
   ...memoryToolDefinitions,
@@ -313,8 +322,8 @@ function closingForDrafts(calls) {
 }
 
 // Mail (and the Wallet) open on the phones only after Face ID or the passcode.
-const PRIVATE_TOOL_NAMES = new Set([...MAIL_TOOL_NAMES]);
-const IDENTITY_NEEDED = "That opens in the app only after it checks it's them (Face ID or the passcode), and it hasn't for this conversation. Say so in a sentence and point them to that screen; don't guess what is there.";
+const PRIVATE_TOOL_NAMES = new Set([...MAIL_TOOL_NAMES, ...WALLET_TOOL_NAMES]);
+const IDENTITY_NEEDED = "That opens in the app only after it checks it's them (the phone's face or fingerprint unlock, or its passcode), and it hasn't for this conversation. Say so in a sentence and point them to that screen; don't guess what is there.";
 
 const TOOL_TIMEOUT_MS = 5000;
 // Reads that compose several providers, and the plan card's place search, need longer.
@@ -341,6 +350,14 @@ const TOOL_TIMEOUTS_MS = {
   // The inbox page with its names, and a chat's messages with theirs.
   find_chats: 8000,
   read_chat: 8000,
+  // Place's weather, the address calendar, the tasks, the plans, the mail due and the check-backs, together.
+  get_schedule: 15000,
+  // The map's, the connections' and the unplaced Moments, opened and named.
+  find_moments: 12000,
+  get_moment: 8000,
+  // The balance, holds, pending release, moves and payouts; payments with their names and refunds.
+  get_wallet: 8000,
+  find_payments: 10000,
   draft_plan_change: 15000,
   show_plan_requests: 8000,
   draft_plan_ask: 8000,
@@ -424,6 +441,12 @@ async function _executeToolImpl(name, args, ctx) {
   if (mail) return mail;
   const chats = await runChatReadTool(name, args, ctx);
   if (chats) return chats;
+  const moments = await runMomentReadTool(name, args, ctx);
+  if (moments) return moments;
+  const schedule = await runScheduleReadTool(name, args, ctx);
+  if (schedule) return schedule;
+  const wallet = await runWalletReadTool(name, args, ctx);
+  if (wallet) return wallet;
   const drafted = await runCardTool(name, args, ctx);
   if (drafted) return drafted;
   const remembered = await runMemoryTool(name, args, ctx);

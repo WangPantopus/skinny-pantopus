@@ -52,6 +52,8 @@ const cardState = require('./cardState');
 const scope = require('./scope');
 const { MAIL_TOOL_NAMES } = require('./readToolsMail');
 const { CHAT_TOOL_NAMES } = require('./readToolsChats');
+const { MOMENT_TOOL_NAMES } = require('./readToolsMoments');
+const { WALLET_TOOL_NAMES } = require('./readToolsWallet');
 
 // Reading chats (find_chats, read_chat) happens only in a person's own chat turn, when they ask about
 // a chat: these tools exist nowhere else (not in briefs, nudges or any background call).
@@ -79,7 +81,7 @@ const PLAYDATE_TOOLS = new Map([...playdateReadToolDefinitions, ...playdateCardD
 // assistant is never a way around it. The web's Mail and Wallet open with the sign-in, and it says so.
 function launchScopedChatTools({
   pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false, checksBack = false,
-  standingRules = false, sports = false, identity = false,
+  standingRules = false, sports = false, identity = false, moments = false,
 } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
@@ -104,6 +106,10 @@ function launchScopedChatTools({
       if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
       if (MAIL_TOOL_NAMES.has(tool.name)) return isLaunchFeatureEnabled('mailbox') && identity;
       if (CHAT_TOOL_NAMES.has(tool.name)) return chatReading();
+      // Moments follow the person's `moments` flag, as the Moments tab does.
+      if (MOMENT_TOOL_NAMES.has(tool.name)) return moments;
+      // The Wallet is behind the same identity check as Mail.
+      if (WALLET_TOOL_NAMES.has(tool.name)) return identity;
       // The summary card also serves a paper letter they photograph, so it needs no identity check.
       if (tool.name === 'summarize_mail_item') return isLaunchFeatureEnabled('mailbox');
       return true;
@@ -134,7 +140,7 @@ function withoutGiftFunds(tool) {
 
 function launchScopedChatInstructions({
   pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false, checksBack = false,
-  standingRules = false, sports = false, identity = false,
+  standingRules = false, sports = false, identity = false, moments = false,
 } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
@@ -151,8 +157,9 @@ function launchScopedChatInstructions({
     pantopusOnly: scope.pantopusOnly(),
     identity,
     chats: chatReading(),
+    moments,
     guide: appGuide({
-      identity, chats: chatReading(),
+      identity, chats: chatReading(), moments,
       plans, playdates, sports: plans && sports, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards, standingRules: standingRules && actionCards,
     }),
   });
@@ -195,18 +202,23 @@ const TOOL_STATUS = {
   list_user_support_trains: 'Looking up your Support Trains…',
   get_support_train_summary: 'Looking up that Support Train…',
   find_mail: 'Looking through your mail…',
+  find_moments: 'Looking at Moments…',
+  get_moment: 'Looking at the Moment…',
+  get_wallet: 'Checking your Wallet…',
+  find_payments: 'Looking at your payments…',
   find_chats: 'Looking at your chats…',
   read_chat: 'Reading the chat…',
   get_mail_item: 'Reading your mail…',
   summarize_mail_item: 'Summarizing your mail…',
   find_plans: 'Looking at plans…',
   get_plan: 'Looking at the plan…',
-  find_posts: 'Reading posts nearby…',
+  find_posts: 'Reading posts on Pulse…',
   get_post: 'Reading the post…',
-  catch_up_nearby: 'Catching up on Nearby…',
+  catch_up_nearby: 'Catching up on Pulse…',
   find_recommendations: 'Looking at what neighbors recommend…',
   get_place_facts: 'Checking your home…',
   get_today: 'Checking today…',
+  get_schedule: 'Looking at the days ahead…',
   list_home_tasks: 'Looking at your tasks…',
   get_household: 'Looking at your household…',
   get_notification_settings: 'Checking your settings…',
@@ -456,6 +468,8 @@ async function streamChat({
   const sportsRead = isFeatureEnabled('plans_sports', viewer).catch(() => false);
   // The tools list playdates only for people with the flag; planViewer reads it again for the plan rules.
   const playdatesRead = isFeatureEnabled('plans_playdates', viewer).catch(() => false);
+  // Moments is a per-person flag: its lookups and guide exist only for people who have the tab.
+  const momentsRead = isFeatureEnabled('moments', viewer).catch(() => false);
 
   // Pantopus's context, the screen they asked from and the photos are read while the conversation loads.
   const contextRead = buildChatContext(userId).catch((err) => {
@@ -499,8 +513,8 @@ async function streamChat({
     ...fields,
   });
 
-  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText, memoryText, sportsEnabled] = await Promise.all([
-    contextRead, photosRead, plansRead, playdatesRead, screenRead, memoryRead, sportsRead,
+  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText, memoryText, sportsEnabled, momentsEnabled] = await Promise.all([
+    contextRead, photosRead, plansRead, playdatesRead, screenRead, memoryRead, sportsRead, momentsRead,
   ]);
   const photos = photoResults.filter(Boolean);
   // One context message: the home facts (remembered for a minute), whether they have
@@ -511,10 +525,12 @@ async function streamChat({
   const sportsLine = sportsPrefs ? `- Sports suggestions: ${sportsPrefs.watch === 'off'
     ? 'off. Answer direct game questions, but never volunteer games or watch parties.'
     : 'available. Use find_games for listed times; never guess a fixture.'}` : null;
+  // Moments is a per-person tab too: people without it hear that it isn't theirs yet, not a guess.
+  const momentsLine = momentsEnabled ? null : "- Moments: not available to them yet; don't offer or describe it.";
   const context = {
     timeZone: homeContext.timeZone,
     text: homeContext.text || screenText || memoryText || sportsLine
-      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, sportsLine, screenText, memoryText].filter(Boolean).join('\n')
+      ? [homeContext.text || `${CONTEXT_HEADER}:`, plansLine, momentsLine, sportsLine, screenText, memoryText].filter(Boolean).join('\n')
       : null,
   };
   const toolContext = {
@@ -529,6 +545,7 @@ async function streamChat({
     rules: shown.has('rules'),
     // The app's identity check for Mail and the Wallet has passed (or, on the web, the sign-in is that check).
     identity: shown.has('identity'),
+    momentsEnabled,
   };
   if (images?.length && photos.length === 0) {
     // Answering without the photo or PDF would only confuse: say it couldn't be opened.
@@ -581,6 +598,7 @@ async function streamChat({
     checksBack: shown.has('follow_up'),
     standingRules: shown.has('rules'),
     identity: shown.has('identity'),
+    moments: momentsEnabled,
   };
   const tools = launchScopedChatTools(capabilities);
   const toolNames = tools.map((tool) => tool.name);

@@ -102,7 +102,7 @@ const readToolDefinitions = [
   },
   {
     name: 'find_posts',
-    description: "Recent posts on the person's Nearby feed (questions, recommendations, events, lost and found, heads-ups, deals, local updates), newest first, within about 10 miles, as the feed shows them. A post the person wrote has `yours: true`: use it for \"my question\" or \"my post\".",
+    description: "Recent posts on Pulse near the person (the Pulse tab's Nearby view: questions, recommendations, events, lost and found, heads-ups, deals, local updates), newest first, within about 10 miles, as the feed shows them. A post the person wrote has `yours: true`: use it for \"my question\" or \"my post\".",
     input_schema: {
       type: 'object',
       properties: {
@@ -360,7 +360,7 @@ function postForModel(post, zone) {
 async function findPosts(args, ctx) {
   const { location } = await homesOf(ctx.userId);
   if (!location || location.latitude == null || location.longitude == null) {
-    return { error: 'They have no home or saved place yet, so there is no Nearby feed to read.' };
+    return { error: 'They have no home or saved place yet, so there is no Pulse feed near them to read.' };
   }
   const days = Number.isInteger(args.days) ? Math.min(Math.max(args.days, 1), 14) : 7;
   const types = Array.isArray(args.types) ? args.types.filter((type) => PLACE_POST_TYPES.includes(type)) : [];
@@ -855,4 +855,9 @@ module.exports = {
   findPosts,
   getToday,
   getPlaceFacts,
+  // For the days ahead (readToolsSchedule.js).
+  openTasks,
+  taskForModel,
+  sectionsOf,
+  plansOn,
 };
