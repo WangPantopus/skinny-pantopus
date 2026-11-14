@@ -16,8 +16,15 @@ import Foundation
 /// The rings still running and the map's markers, until the view model says what they are made from changed.
 @MainActor
 final class MomentsMapMemo {
+    /// The markers, and the zoom and map height they were worked out for.
+    private struct Markers {
+        let span: Double
+        let mapPoints: Double
+        let value: [MomentsMarker]
+    }
+
     private var current: [MomentRingDTO]?
-    private var markers: (span: Double, mapPoints: Double, value: [MomentsMarker])?
+    private var markers: Markers?
 
     /// The rings, the clock, what was watched or what was hidden changed: everything is worked out again.
     func reset() {
@@ -51,7 +58,7 @@ final class MomentsMapMemo {
     func markers(span: Double, mapPoints: Double, _ make: () -> [MomentsMarker]) -> [MomentsMarker] {
         if let markers, markers.span == span, markers.mapPoints == mapPoints { return markers.value }
         let value = make()
-        markers = (span, mapPoints, value)
+        markers = Markers(span: span, mapPoints: mapPoints, value: value)
         return value
     }
 }

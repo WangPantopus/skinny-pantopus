@@ -103,7 +103,10 @@ final class MomentsMapViewModel {
     private(set) var areaName: String?
     /// What the spot you're at reads as ("Esther Short Park"), for the empty card.
     private(set) var herePlace: String?
-    private(set) var rings: [MomentRingDTO] = [] { didSet { memo.reset() } }
+    private(set) var rings: [MomentRingDTO] = [] {
+        didSet { memo.reset() }
+    }
+
     private(set) var loaded = false
     private(set) var loadFailed = false
     /// "Use my location" was refused or found no fix.
@@ -130,7 +133,10 @@ final class MomentsMapViewModel {
     var heightsKeyOpen = false
     var heightTagsFrame: MomentsHeightFrame?
     /// The clock the end times are read against; moved on each read and each minute.
-    private(set) var now = Date() { didSet { memo.reset() } }
+    private(set) var now = Date() {
+        didSet { memo.reset() }
+    }
+
     /// Where the camera last settled.
     @ObservationIgnored private(set) var lastRegion: MKCoordinateRegion?
     @ObservationIgnored private(set) var lastCamera: MapCamera?
@@ -144,10 +150,16 @@ final class MomentsMapViewModel {
     @ObservationIgnored private var nameTask: Task<Void, Never>?
     @ObservationIgnored private var namedAt: CLLocation?
     /// Moments watched here since the last read, and people muted or blocked: the map shows them so at once.
-    @ObservationIgnored private var watched: Set<String> = [] { didSet { memo.reset() } }
+    @ObservationIgnored private var watched: Set<String> = [] {
+        didSet { memo.reset() }
+    }
+
     /// Hidden at once, by when: a read begun after that already has the server's answer, so the id is dropped then
     /// (an unmute in Settings shows them again at the next read).
-    @ObservationIgnored private var hiddenAuthors: [String: Date] = [:] { didSet { memo.reset() } }
+    @ObservationIgnored private var hiddenAuthors: [String: Date] = [:] {
+        didSet { memo.reset() }
+    }
+
     /// What is worked out from the rings, kept until one of the four above changes (`MomentsMapMemo.swift`).
     @ObservationIgnored private let memo = MomentsMapMemo()
     let api: APIClient
@@ -223,16 +235,6 @@ final class MomentsMapViewModel {
             guard let self, center == coordinate else { return }
             herePlace = preview?.placeLabel
         }
-    }
-
-    /// The empty card's line: the place where you are while the map shows it, else "around here".
-    var emptyLine: String {
-        if centerSource == .gps, let center, let herePlace, !herePlace.isEmpty, let region = lastRegion,
-           abs(region.center.latitude - center.latitude) < region.span.latitudeDelta / 2,
-           abs(region.center.longitude - center.longitude) < region.span.longitudeDelta / 2 {
-            return "Share what's happening at \(herePlace)."
-        }
-        return "Share what's happening around here."
     }
 
     // MARK: - Reading
