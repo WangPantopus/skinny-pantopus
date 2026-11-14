@@ -39,7 +39,7 @@ yet stored are in [statewide-inventory.md](statewide-inventory.md) and [other-ro
 |---|---:|---|---|---|---|
 | Households confirm or correct their own home (WP9, link and confirm) | Every verified household, 29.96M without bedrooms | Bedrooms, baths, size, year, the household's own | Pantopus's privacy policy | $0 | Built, off; the founder turns it on |
 | Florida appraisers whose free files a script may read: Osceola, Alachua, Leon, Martin, St. Johns | 524,165 | Bedrooms, baths, living area, floors; walls and roof in three | Disclaimers; no limit on use stated | $0 | Built (this work) |
-| Duval and Manatee FL, the appraisers' own free files (Duval's real estate roll file; Manatee's nightly Comprehensive CAMA Data File), read November 14 | 510,135 | Bedrooms, baths with halves, living area, floors | No limit on use stated; Manatee's terms bar only use that slows its site | $0 | Built (November 14) |
+| Duval, Manatee and Hernando FL, the appraisers' own free files (Duval's real estate roll file; Manatee's nightly Comprehensive CAMA Data File; Hernando's weekly Comprehensive CAMA Dataset), read November 14 | 591,712 | Bedrooms, baths with halves, living area, floors | No limit on use stated; Manatee's terms bar only use that slows its site | $0 | Built (November 14) |
 | Summit County OH, Fiscal Office's dwelling file | 184,638 | Bedrooms, full and half baths | No terms stated | $0 | Built (this work) |
 | Florida appraisers whose sites refuse scripts (15 counties: Orange, Pinellas, Polk, Brevard, Pasco, Volusia, Marion, St. Lucie, Escambia, Bay, Okaloosa, Clay, Flagler, Walton, Monroe) | about 2.65M | Bedrooms, baths, living area where each publishes them | Bot challenge or robots.txt banning all robots | $0 | Founder: a one-line written ask each |
 | Other Florida appraisers: Lake (its free files sit under a robots.txt Disallow: /ftp/), Indian River (file on Schneider's server, whose terms ban robots) | 235,903 | As above | As noted | $0 | A written ask |
@@ -112,6 +112,7 @@ every home in the country about $5,000. Whether to use a licensed copy at all is
 | St. Johns FL | 133,613 of 134,367 | 133,611 | 133,074 | 119,167 | Floors, half baths (read from its Access database) |
 | Duval FL | 328,960 of 332,847 | 328,795 | 328,921 | 328,960 | Floors, half baths; condominium units' rooms from their unit lines (November 14) |
 | Manatee FL | 181,175 of 181,305 | 175,968 | 181,145 | 181,175 | Floors, half baths (November 14) |
+| Hernando FL | 81,577 of 85,959 | 81,411 | 81,557 (whole baths, as the county counts them) | (not read) | Floors (November 14) |
 | Summit OH | 184,638 of 186,097 | 184,620 | 184,579 | (already had it) | Half baths |
 
 ## What I couldn't confirm
