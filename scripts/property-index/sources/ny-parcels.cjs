@@ -12,6 +12,7 @@ const { getJson, layerRows, socrataRows, cached } = require('../lib/services.cjs
 const { year, isoDate, zipCode, realUnit } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { alsoAtOwnLine } = require('../lib/own-line.cjs');
 const { log } = require('../lib/log.cjs');
 
 const LAYER = 'https://gisservices.its.ny.gov/arcgis/rest/services/NYS_Tax_Parcels_Public/FeatureServer/1';
@@ -150,7 +151,11 @@ async function countyRelease(work, name, asOf) {
   // where both are given), unless another parcel has the very same measure: those share one shape, a mobile home park's or a
   // condominium's land, which is no one home's lot.
   for (const [record, acres] of calculated) if (shapes.get(acres) === 1) record.facts.lot_acres = acres;
-  log(`${county}: ${records.length} records, ${noAddress} without a street number`);
+  // A combined condo unit's line names both units ("UNIT 112,113"), which reads as the first: another owner's unit where that one has
+  // its own parcel. Such a home is also filed at its own line, where the lookup asks which one; nothing else is filed twice.
+  const twins = alsoAtOwnLine(records, { onlyWrong: true });
+  records.push(...twins);
+  log(`${county}: ${records.length} records, ${noAddress} without a street number, ${twins.length} also filed at their own address line`);
   for (const building of condoBuildings(records, { fips, county })) records.push(building);
   return {
     fips, state: 'NY', name: county, publisher: 'New York State', dataset: 'public tax parcels and assessment roll', method: 'state', source: 'ny-parcels', title: 'State records', as_of: asOf, stale_after_days: 730, records,
