@@ -58,8 +58,11 @@ async function fieldList(dictionary) {
       for (const column of info.columns || []) fields.set(column.fieldName.toLowerCase(), `${column.fieldName} ${column.name || ''} ${column.description || ''}`);
     }
   }
-  if (dictionary.columns) {
+  // A file's own header names, or (an object) each name with its description in the publisher's file layout.
+  if (Array.isArray(dictionary.columns)) {
     for (const column of dictionary.columns) fields.set(column.toLowerCase(), column);
+  } else if (dictionary.columns) {
+    for (const [column, description] of Object.entries(dictionary.columns)) fields.set(column.toLowerCase(), `${column} ${description}`);
   }
   return fields;
 }
