@@ -649,6 +649,24 @@ class AppLockManager
             return System.currentTimeMillis() - last < graceMs
         }
 
+        /**
+         * Whether a sensitive screen (Mail, the Wallet) would let the person in right now without asking: their
+         * last check is still inside the grace, or the device has no screen lock to check against. Pantopus AI
+         * sends this with each message ("identity"), so the server looks into Mail and the Wallet for it only when
+         * those screens would open. It never prompts. Mirrors iOS `AppLockManager.passesSensitiveCheckNow`.
+         */
+        fun passesSensitiveCheckNow(): Boolean {
+            refreshCapability()
+            return when (_capability.value) {
+                Capability.PasscodeNotSet -> true
+                Capability.Available -> isWithinSensitiveGracePeriod()
+                Capability.NotAvailable,
+                Capability.NotEnrolled,
+                Capability.InvalidContext,
+                -> false
+            }
+        }
+
         fun clearTransientState() {
             identityGeneration += 1
             _isLocked.value = false

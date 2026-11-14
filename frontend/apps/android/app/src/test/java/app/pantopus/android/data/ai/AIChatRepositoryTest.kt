@@ -1,5 +1,6 @@
 package app.pantopus.android.data.ai
 
+import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.data.api.services.AIApi
 import app.pantopus.android.data.auth.TokenStorage
 import io.mockk.coEvery
@@ -47,7 +48,8 @@ class AIChatRepositoryTest {
                 .build()
         val tokenStorage = mockk<TokenStorage>()
         coEvery { tokenStorage.accessToken() } returns "test-token"
-        repo = AIChatRepository(client, tokenStorage, mockk<AIApi>())
+        // The phone's identity check for Mail and the Wallet hasn't passed: the request lists the plain cards.
+        repo = AIChatRepository(client, tokenStorage, mockk<AIApi>(), mockk<AppLockManager>(relaxed = true))
     }
 
     @After
