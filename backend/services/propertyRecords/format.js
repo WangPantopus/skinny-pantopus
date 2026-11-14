@@ -41,7 +41,10 @@ const BLOCK_RAW_BYTES = 32 * 1024;
  * { <list>: { field: words } }`, where a list's facts come from somewhere other than the county's own column, in words
  * for Property details ("From the Census Bureau's 2025 city boundaries"). measured_rows (figures measured from public aerial
  * data, scripts/property-index/lib/measure.cjs) also has `held.measured_years: { field: year }`, the year each was measured,
- * which its words take where they say {year}.
+ * which its words take where they say {year}. `held.bath_totals: { field: value }` is the other way round: the full and half
+ * baths a live county's page showed before a bath total the county gives on its own stopped being split into them (2.5 read
+ * as two full and a half), which stay in the record's facts as well and leave its screens once the switch file names the
+ * county on its bath_totals list (router.js).
  */
 const KINDS = new Set(['property', 'unit', 'building', 'parcel', 'other']);
 

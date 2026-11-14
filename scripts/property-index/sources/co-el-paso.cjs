@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { download, zipTable, zipMembers } = require('../lib/tables.cjs');
-const { bathFacts } = require('../lib/fill.cjs');
+const { keepSplit } = require('../lib/held.cjs');
 const { year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
@@ -71,13 +71,11 @@ function fromRow(row) {
   if (home) {
     put(facts, 'living_sqft', positive(row.TotalFinishedArea));
     put(facts, 'bedrooms', inRange(row.Beds, 15));
-    // The bath count keeps quarter baths as the Assessor writes them (2.75 has a three-quarter bath), as Santa Barbara's does; only a
-    // whole or half total also says its full and half baths.
+    // The bath count keeps quarter baths as the Assessor writes them (2.75 has a three-quarter bath), as Santa Barbara's does. A
+    // total doesn't say its full and half baths: the build keeps those its page showed until the county's bath_totals switch is
+    // on (lib/held.cjs keepSplit).
     const baths = Number(row.Baths);
-    if (baths > 0 && baths <= 12 && (baths * 4) % 1 === 0) {
-      facts.bathrooms = baths;
-      if ((baths * 2) % 1 === 0) Object.assign(facts, bathFacts(baths, 12));
-    }
+    if (baths > 0 && baths <= 12 && (baths * 4) % 1 === 0) facts.bathrooms = baths;
     put(facts, 'rooms', inRange(row.Rooms, 40));
     put(facts, 'style', word(row.RESSTYLE));
   }
@@ -118,6 +116,8 @@ async function* build({ work }) {
   if (!asOf) throw new Error('The file no longer says when it was created');
   const list = [...records.values()];
   log(`${COUNTY}: ${list.length} parcels, ${noAddress} without a street number, ${repeated} repeated`);
+  // Live: its page keeps the full and half baths it showed until its bath_totals switch is on.
+  log(`${COUNTY}: ${keepSplit(list)} homes keep the full and half baths their bath total was split into, until the county's bath_totals switch is on`);
   for (const building of condoBuildings(list, { fips: FIPS, county: COUNTY })) list.push(building);
   yield {
     fips: FIPS, state: 'CO', name: COUNTY, publisher: 'El Paso County Assessor', dataset: 'parcel data file', method: 'county', source: 'co-el-paso', as_of: asOf, stale_after_days: 450, records: list,

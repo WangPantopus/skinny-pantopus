@@ -5,7 +5,9 @@
 //   disclaims any warranty or liability and says it isn't the city's official record; it states no limit on use. Then, for the homes
 //   Buffalo's roll doesn't give, Erie County's own parcels (Real Property Tax Services and the Office of GIS, on the county's ArcGIS
 //   Online, "for display, analysis and distribution", no license and no limit on use), whose assessment details date from about
-//   September 2023. Its bath count is a total: 2.5 is two full baths and a half bath.
+//   September 2023. Its bath count is a total, which doesn't say its full and half baths (two full and two half baths is 3): it takes a
+//   home only where it agrees with the state's full baths (2 or 2.5 where the state counts 2), and then says the one half bath it holds
+//   beyond them. Where the state gives no full baths, the total is all it says.
 // - Rensselaer and Montgomery: each county's parcels as New York State's GIS office publishes them, under the state's own notice (as is,
 //   no warranty, no limit on use), the same terms as the statewide file.
 // - Tioga: the county's own parcel properties for 2025, on its ArcGIS Online, which state no license and no limit on use.
@@ -19,6 +21,7 @@ const path = require('node:path');
 const { layerRows, cached } = require('../lib/services.cjs');
 const { positive, word } = require('../lib/values.cjs');
 const { fillHomes, bathFacts, describe } = require('../lib/fill.cjs');
+const { keepSplit } = require('../lib/held.cjs');
 const { log } = require('../lib/log.cjs');
 const { COUNTIES, publishedOn, countyRelease } = require('./ny-parcels.cjs');
 
@@ -39,9 +42,10 @@ const storiesOf = (value) => {
 };
 
 /** A home's counts as the facts a record keeps. No full bath and no half bath says nothing. */
-function dwelling({ beds, full, half, stories }) {
+function dwelling({ beds, full = null, half = null, total = null, stories }) {
   const facts = { bedrooms: beds || null, stories: storiesOf(stories) };
-  if (full !== null && half !== null && full + half > 0) {
+  if (total) facts.bathrooms = total;
+  else if (full !== null && half !== null && full + half > 0) {
     facts.full_baths = full || null;
     facts.half_baths = half || null;
     facts.bathrooms = full + half * 0.5;
@@ -68,12 +72,10 @@ const FILES = {
     columns: ['SWIS', 'SBL', 'CLASS', 'BEDS', 'BATHS'],
     words: 'from Erie County parcels (assessment details of about September 2023) elsewhere',
     // Only its bath counts: its bedrooms are two years older than the state's, so they only check that it's the same home.
-    only: ['bathrooms', 'full_baths', 'half_baths'],
-    // BATHS is the total: a half is one half bath, and any other fraction says nothing.
-    read: (row) => {
-      const { full_baths: full = 0, half_baths: half = 0, bathrooms } = bathFacts(Number(row.BATHS));
-      return { key: `${word(row.SWIS) || ''}${word(row.SBL) || ''}`, cls: word(row.CLASS), beds: count(row.BEDS, 15), full: bathrooms ? full : null, half: bathrooms ? half : null, stories: null };
-    },
+    only: ['bathrooms'],
+    // BATHS is the total: any fraction but a half says nothing. Its half bath, if any, is worked out against the state's full baths.
+    total: true,
+    read: (row) => ({ key: `${word(row.SWIS) || ''}${word(row.SBL) || ''}`, cls: word(row.CLASS), beds: count(row.BEDS, 15), total: bathFacts(Number(row.BATHS)).bathrooms ?? null, stories: null }),
   }],
   Montgomery: {
     layer: 'https://services6.arcgis.com/EbVsqZ18sv1kVJ3k/arcgis/rest/services/Montgomery_County_Parcels/FeatureServer/0',
@@ -104,6 +106,8 @@ const FILES = {
 
 // A count both give must be the same; the state's file is the record, and a file that disagrees changes nothing.
 const agrees = (facts, found) => ['bedrooms', 'full_baths'].every((fact) => facts[fact] == null || found[fact] == null || facts[fact] === found[fact]);
+// A file's bare total agrees when its whole number is the state's full baths.
+const agreesWithTotal = (facts, found) => agrees(facts, found) && (found.bathrooms == null || facts.full_baths == null || Math.floor(found.bathrooms) === facts.full_baths);
 
 async function* build({ work }) {
   const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
@@ -124,9 +128,39 @@ async function* build({ work }) {
         dwellings.get(home.key).push(dwelling(home));
       }
       log(`${release.name}: ${rows} rows in the county's file, ${dwellings.size} one-family parcels`);
+      const bare = each.total ? release.records.filter((record) => record.facts && record.facts.bathrooms === undefined) : [];
       // A record's id ends in the state's town code and print key ("14020099.99-9-9").
-      const counts = fillHomes(release.records, dwellings, { keyOf: (record) => record.id.split(':').pop(), agrees, only: each.only });
+      const counts = fillHomes(release.records, dwellings, { keyOf: (record) => record.id.split(':').pop(), agrees: each.total ? agreesWithTotal : agrees, only: each.only });
       log(describe(release.name, counts));
+      if (each.total) {
+        // A total half a bath beyond the state's full baths holds one half bath. Where the state gives no full baths the total says
+        // neither count, and Erie is live: its page keeps those it showed until its bath_totals switch is on (lib/held.cjs keepSplit).
+        const filled = bare.filter((record) => record.facts.bathrooms !== undefined);
+        let halves = 0;
+        for (const record of filled) {
+          if (record.facts.full_baths == null || record.facts.bathrooms - record.facts.full_baths !== 0.5) continue;
+          record.facts.half_baths = 1;
+          halves += 1;
+        }
+        const kept = keepSplit(filled.filter((record) => record.facts.full_baths == null));
+        // Homes whose baths Buffalo's roll gave without a half bath: the county's older total used to add one where it had a half
+        // and its whole number matched, beside the roll's own total. They keep it, marked the same way, until the switch is on.
+        const bareSet = new Set(bare);
+        let beside = 0;
+        for (const record of release.records) {
+          const { facts } = record;
+          if (!['property', 'unit'].includes(record.kind) || record.restricted || !facts || bareSet.has(record) || facts.bathrooms === undefined || facts.half_baths !== undefined) continue;
+          const found = dwellings.get(record.id.split(':').pop());
+          const total = found?.length === 1 ? found[0].bathrooms : null;
+          if (!(total % 1) || !(facts.bedrooms == null || found[0].bedrooms == null || facts.bedrooms === found[0].bedrooms)) continue;
+          if (facts.full_baths != null && Math.floor(total) && facts.full_baths !== Math.floor(total)) continue;
+          facts.half_baths = 1;
+          record.held = record.held || {};
+          record.held.bath_totals = { ...record.held.bath_totals, half_baths: 1 };
+          beside += 1;
+        }
+        log(`${release.name}: ${halves} homes' half bath from the county's total beyond the state's full baths; ${kept + beside} homes keep the full and half baths their total was split into, until the county's bath_totals switch is on`);
+      }
     }
     yield { ...release, dataset: `${release.dataset}, with ${files.map((each) => each.words).join(' and ')}`, source: 'ny-county-files' };
   }

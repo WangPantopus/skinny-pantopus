@@ -12,6 +12,7 @@ const { newestFile, bathsIn, USES, whole } = require('./pacs-county.cjs');
 const { CATEGORY_WORDS, useOf } = require('./texas.cjs');
 const { zipsByCounty } = require('./zcta.cjs');
 const { condoBuildings } = require('./condos.cjs');
+const { keepSplit } = require('./held.cjs');
 const { log } = require('./log.cjs');
 
 const PROTECTED = /CONFIDENTIAL|PROTECTED|WITHHELD|SUPPRESS|NOT DISPLAYED|25\.025/i;
@@ -20,7 +21,7 @@ const COLUMNS = {
   landSqft: 'LAND SQFT', living: 'BLDG HEAT AREA', built: 'YEAR_BUILT', market: 'MKT VAL', landValue: 'LAND MKT VALUE', building: 'TOTAL BUILDING VALUE', subdivision: 'SUBDIVISION',
 };
 
-function tabCounty({ fips, county, publisher, source, page, pattern, table = 'externalnal.tab', delimiter = '\t', columns = {}, uses = {}, useOfRow = null, keyOf = (account) => account, dataset = 'certified appraisal export' }) {
+function tabCounty({ fips, county, publisher, source, page, pattern, table = 'externalnal.tab', delimiter = '\t', columns = {}, uses = {}, useOfRow = null, keyOf = (account) => account, dataset = 'certified appraisal export', keepsSplit = false }) {
   const names = { ...COLUMNS, ...columns };
   const asked = [...new Set(Object.values(names).filter(Boolean))];
   const quoted = delimiter !== '\t';
@@ -47,12 +48,7 @@ function tabCounty({ fips, county, publisher, source, page, pattern, table = 'ex
       put(facts, 'living_sqft', living);
       if (element) {
         put(facts, 'bedrooms', whole(element.bedrooms, 15));
-        const bath = bathsIn(element.baths);
-        if (bath) {
-          facts.bathrooms = bath;
-          facts.full_baths = Math.floor(bath);
-          if (bath % 1) facts.half_baths = 1;
-        }
+        Object.assign(facts, bathsIn(element.baths));
       }
     }
     if (kind === 'building') put(facts, 'gross_sqft', living);
@@ -117,6 +113,8 @@ function tabCounty({ fips, county, publisher, source, page, pattern, table = 'ex
     }
     const list = [...records.values()];
     log(`${county}: ${list.length} accounts, ${noAddress} without a street number, ${hidden} protected`);
+    // A live county's page keeps the full and half baths it showed until its bath_totals switch is on (held.cjs keepSplit).
+    if (keepsSplit) log(`${county}: ${keepSplit(list, { zeroFull: true })} homes keep the full and half baths their bath total was split into, until the county's bath_totals switch is on`);
     for (const building of condoBuildings(list, { fips, county })) list.push(building);
     yield {
       fips, state: 'TX', name: county, publisher, dataset, method: 'county', source, as_of: asOf, stale_after_days: 450, extra_zips: zipsByCounty(work, ['48']).get(fips) || [], records: list,

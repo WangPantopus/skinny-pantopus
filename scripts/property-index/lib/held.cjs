@@ -28,4 +28,27 @@ function holdFacts(records, names) {
   }
 }
 
-module.exports = { hold, holdFacts };
+/**
+ * For a live county whose file gives only a bath total: the full and half baths its page showed before a total stopped
+ * being split into them (the whole number as full baths, and one half bath for a .5), kept in each record's facts so the
+ * page stays as it was, and marked under `held.bath_totals` so the server leaves them out once the founder names the
+ * county on the switch file's bath_totals list (router.js). A total doesn't say them: two full and two half baths is 3.0.
+ * Only a record with a whole or half total and neither count. Texas's readers also wrote 0 full baths for a total of a half
+ * (`zeroFull`). Returns how many records kept one, for the log.
+ */
+function keepSplit(records, { zeroFull = false } = {}) {
+  let kept = 0;
+  for (const record of records) {
+    const facts = record.facts;
+    const total = facts?.bathrooms;
+    if (!(total > 0) || (total * 2) % 1 || facts.full_baths !== undefined || facts.half_baths !== undefined) continue;
+    const split = { ...(Math.floor(total) || zeroFull ? { full_baths: Math.floor(total) } : {}), ...(total % 1 ? { half_baths: 1 } : {}) };
+    Object.assign(facts, split);
+    record.held = record.held || {};
+    record.held.bath_totals = split;
+    kept += 1;
+  }
+  return kept;
+}
+
+module.exports = { hold, holdFacts, keepSplit };

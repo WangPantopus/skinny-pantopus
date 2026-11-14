@@ -14,4 +14,6 @@ module.exports = tabCounty({
   // ACCOUNT is R000000128 where the other tables say 128.
   keyOf: (account) => account.replace(/^[A-Z]0*/, ''),
   uses: { A3: 'house', A4: 'condo', B4: 'multi_unit', E3: 'other', M3: 'mobile_home' },
+  // Live: a bath total keeps the full and half baths its page showed until its bath_totals switch is on.
+  keepsSplit: true,
 });

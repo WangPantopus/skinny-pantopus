@@ -94,8 +94,8 @@ async function dwellings(work, page) {
     const facts = {
       bedrooms: count(row.BD, 15),
       ...(full ? bathFacts(full + (half || 0) * 0.5, 30) : {}),
-      // The file's own full count: a total of 3 from 2 full and 2 half baths is still 2 full baths.
-      ...(full && half ? { full_baths: full, half_baths: half } : {}),
+      // The file's own counts (bathFacts gives the total only): a total of 3 from 2 full and 2 half baths is still 2 full baths.
+      ...(full ? { full_baths: full, ...(half ? { half_baths: half } : {}) } : {}),
       stories: floors >= 1 && floors <= 6 && (floors * 2) % 1 === 0 ? floors : null,
       living_sqft: living && living < 30000 ? living : null,
     };

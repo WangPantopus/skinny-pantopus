@@ -55,6 +55,6 @@ module.exports = {
   build,
   dictionary: {
     layer: LAYER,
-    facts: { bedrooms: 'BEDS', bathrooms: 'BATH (a half bath as .5)', full_baths: 'BATH', half_baths: 'BATH' },
+    facts: { bedrooms: 'BEDS', bathrooms: 'BATH (a half bath as .5; a total, so no full or half count)' },
   },
 };

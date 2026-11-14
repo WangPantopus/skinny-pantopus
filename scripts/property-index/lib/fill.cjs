@@ -47,11 +47,15 @@ function fillHomes(records, dwellings, { keyOf = (record) => record.facts.parcel
   return counts;
 }
 
-/** "2.5" baths as the facts a record keeps: a half is one half bath. Odd fractions and placeholders say nothing. */
+/**
+ * "2.5" baths as the facts a record keeps: the county's total, as it gives it. A total alone doesn't say how many full and
+ * half baths it holds (two full and two half baths is 3.0, one full and three half is 2.5), so it gives neither count;
+ * a live county keeps the ones its page showed until the founder turns this on there (held.cjs keepSplit). Odd fractions
+ * and placeholders say nothing.
+ */
 function bathFacts(total, most = 12) {
   if (!(total > 0) || total > most || (total * 2) % 1) return {};
-  const full = Math.floor(total);
-  return { bathrooms: total, ...(full ? { full_baths: full } : {}), ...(total % 1 ? { half_baths: 1 } : {}) };
+  return { bathrooms: total };
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

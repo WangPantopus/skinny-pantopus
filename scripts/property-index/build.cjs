@@ -24,8 +24,9 @@ const { dropPlaceholders } = require('./lib/placeholders.cjs');
 const { log } = require('./lib/log.cjs');
 
 const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'held', 'parent', 'roster', 'restricted', 'key']);
-// The lists a record's held facts may sit under (format.js `held`, router.js), and measured_rows' years beside them.
-const HELD_LISTS = new Set(['new_columns', 'derived_rows', 'measured_rows', 'measured_years']);
+// The lists a record's held facts may sit under (format.js `held`, router.js), and measured_rows' years beside them;
+// bath_totals marks facts the record states as well, which leave its screens once the county is on that list.
+const HELD_LISTS = new Set(['new_columns', 'derived_rows', 'measured_rows', 'measured_years', 'bath_totals']);
 // The lists a county may say where facts come from, in words (format.js `held_from`).
 const WORDED_LISTS = new Set(['new_columns', 'derived_rows', 'measured_rows']);
 // `listed_unit`: a unit number an address list gives a record whose own file has none. The server reads it only for a county
@@ -56,6 +57,7 @@ function assertAllowed(records) {
       if (record.restricted) throw new Error('A restricted record holds facts');
       for (const key of Object.keys(facts)) if (!FACTS[key]) throw new Error(`A record holds the fact ${key}`);
       if (list === 'measured_years') for (const year of Object.values(facts)) if (!Number.isInteger(year)) throw new Error('A measured year isn\'t a year');
+      if (list === 'bath_totals') for (const [key, value] of Object.entries(facts)) if (record.facts?.[key] !== value) throw new Error('A record marks a bath count it doesn\'t state');
     }
   }
 }

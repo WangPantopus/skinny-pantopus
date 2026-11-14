@@ -8,7 +8,7 @@
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
-const { bathFacts } = require('../lib/fill.cjs');
+const { keepSplit } = require('../lib/held.cjs');
 const { year, isoDate, zipCode, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
@@ -63,12 +63,10 @@ function fromRow(row) {
     put(facts, 'living_sqft', positive(row.SqFootage));
     put(facts, 'bedrooms', inRange(row.Bedrooms, 15));
     // The Assessor's bath total counts quarter baths (1.75 has a three-quarter bath), as Los Angeles's does; it's kept as the county
-    // gives it. Only a whole or half total also says its full and half baths (2.5 is two full baths and a half bath).
+    // gives it. A total doesn't say its full and half baths (two full and two half baths is 3): the build keeps those its page
+    // showed until the county's bath_totals switch is on (lib/held.cjs keepSplit).
     const baths = Number(row.Bathrooms);
-    if (baths > 0 && baths <= 12 && (baths * 4) % 1 === 0) {
-      facts.bathrooms = baths;
-      if ((baths * 2) % 1 === 0) Object.assign(facts, bathFacts(baths, 12));
-    }
+    if (baths > 0 && baths <= 12 && (baths * 4) % 1 === 0) facts.bathrooms = baths;
   }
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.Acreage));
   // California's assessed values (Proposition 13): land and structures; their sum is the assessed total.
@@ -94,6 +92,8 @@ async function* build({ work, today }) {
   }
   const list = [...records.values()];
   log(`${COUNTY}: ${list.length} parcels, ${noAddress} without a street number, ${repeated} repeated`);
+  // Live: its page keeps the full and half baths it showed until its bath_totals switch is on.
+  log(`${COUNTY}: ${keepSplit(list)} homes keep the full and half baths their bath total was split into, until the county's bath_totals switch is on`);
   for (const building of condoBuildings(list, { fips: FIPS, county: COUNTY })) list.push(building);
   yield {
     fips: FIPS, state: 'CA', name: COUNTY, publisher: 'Santa Barbara County Clerk-Recorder-Assessor', dataset: 'Assessor Parcels Public', method: 'county', source: 'ca-santa-barbara', as_of: isoDate(edited || today.getTime()), stale_after_days: 450, records: list,
