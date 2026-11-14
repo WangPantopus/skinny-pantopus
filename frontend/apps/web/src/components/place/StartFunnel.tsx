@@ -128,6 +128,7 @@ function HeroStep({
   invite,
   signedIn = false,
   areaCard = null,
+  topic,
 }: {
   onSelect: (p: SelectedAddress) => void;
   onClear: () => void;
@@ -143,7 +144,10 @@ function HeroStep({
   signedIn?: boolean;
   /** Signed in with an area kept in this browser: their city right now, in place of the example. */
   areaCard?: ReactNode;
+  /** The page a property-tax card or ad opens (`/tax-check`): the same lookup, speaking about the county's value. */
+  topic?: StartTopic;
 }) {
+  const taxCheck = topic === 'tax';
   return (
     <div className="flex flex-col min-h-screen pb-8">
       <TopBar />
@@ -163,10 +167,18 @@ function HeroStep({
           <h1
             className={`text-[31px] leading-[37px] sm:text-[36px] sm:leading-[43px] lg:text-[42px] lg:leading-[48px] font-bold -tracking-[0.028em] text-app-text text-balance ${invite || fromCard ? 'mt-4' : ''}`}
           >
-            Know what matters for your home, and stay on top of it.
+            {taxCheck
+              ? 'Does the county value your home above similar homes on your street?'
+              : 'Know what matters for your home, and stay on top of it.'}
           </h1>
           <p className="mt-3.5 max-w-[46ch] text-[15.5px] leading-[23px] text-app-text-secondary -tracking-[0.005em]">
-            {signedIn ? (
+            {taxCheck ? (
+              <span data-testid="start-tax-check">
+                Where county records allow it, Pantopus compares the county&apos;s value for your home, per square
+                foot, with similar houses on your street. Look up your address free, then add your home as its owner
+                to see your comparison.
+              </span>
+            ) : signedIn ? (
               <>Your flood risk, today&apos;s air, your home&apos;s value, and who your verified neighbors are.</>
             ) : (
               <>
@@ -184,7 +196,7 @@ function HeroStep({
               disabled={!canSubmit}
               className="h-[54px] w-full flex items-center justify-center gap-1.5 rounded-2xl bg-primary-600 text-white text-base font-semibold -tracking-[0.01em] shadow-[var(--shadow-primary)] enabled:hover:bg-primary-700 disabled:opacity-50 transition-colors"
             >
-              See your place
+              {taxCheck ? 'Check my home' : 'See your place'}
               <ArrowRight size={17} strokeWidth={2.5} />
             </button>
             {/* From a friend's invite, the app is one tap away and keeps the invite through the install. */}
@@ -708,7 +720,10 @@ function UnsupportedRegion({ onBrowse }: { onBrowse: () => void }) {
 }
 
 // ── The funnel ──────────────────────────────────────────────
-export default function StartFunnel({ invite }: { invite?: StartInvite } = {}) {
+/** What the page speaks about first: the county's value (`/tax-check`), or everything (`/start`). */
+export type StartTopic = 'tax';
+
+export default function StartFunnel({ invite, topic }: { invite?: StartInvite; topic?: StartTopic } = {}) {
   const router = useRouter();
   const [fromCard, setFromCard] = useState(false);
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
@@ -743,6 +758,9 @@ export default function StartFunnel({ invite }: { invite?: StartInvite } = {}) {
     if (route) {
       api.rememberFunnelRoute(route);
       setFromCard(true);
+    } else if (topic === 'tax') {
+      // No card or ad code on the link: sign-ups from this page still count apart from /start's.
+      api.rememberFunnelRoute('tax-check');
     }
     const address = (params.get('address') || '').trim();
     if (!address) return;
@@ -767,6 +785,7 @@ export default function StartFunnel({ invite }: { invite?: StartInvite } = {}) {
       }
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read once, from the link the page opened with
   }, []);
 
   const previewQuery = useQuery({
@@ -880,6 +899,7 @@ export default function StartFunnel({ invite }: { invite?: StartInvite } = {}) {
             invite={invite}
             signedIn={signedIn}
             areaCard={areaCard}
+            topic={topic}
           />
         </div>
       </main>
