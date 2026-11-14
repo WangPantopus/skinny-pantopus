@@ -672,6 +672,8 @@ private fun tagged(
     heights: MomentHeightTagPlan,
     tagWidth: (MomentShownHeight) -> Double,
     bearing: Float = 0f,
+    /** Where each ring stands in dp, when not on a north-up map at [zoom] (a turned map: as the pins stand on screen). */
+    positions: Map<String, Pair<Double, Double>>? = null,
 ): List<MomentItem.Single> {
     if (!heights.shown) return singles
     val edges = heights.edges?.let { (west, east) -> worldDp(0.0, west, zoom).first to worldDp(0.0, east, zoom).first }
@@ -680,7 +682,7 @@ private fun tagged(
     val sides = mutableMapOf<String, MomentTagSide>()
     singles.filterNot { it.fanned }.sortedBy { it.ring.id }.forEach { single ->
         val height = single.ring.ring.shownHeight ?: return@forEach
-        val (x, y) = worldDp(single.latitude, single.longitude, zoom)
+        val (x, y) = positions?.get(single.ring.id) ?: worldDp(single.latitude, single.longitude, zoom)
         val width = tagWidth(height)
         val (own, places) = single.float?.let { floatPlaces(x, y, width, it, floatOrder) } ?: standingPlaces(x, y, width)
         val free =
@@ -821,15 +823,29 @@ private fun floatItems(
     val floated =
         singles.map { single -> single.ring.ring.shownHeight?.takeUnless { single.fanned }?.let { single.copy(float = it) } ?: single }
     val heightOf = floated.mapNotNull { single -> single.float?.let { single.ring.id to it } }.toMap()
+    // The tags take their side by the map's turn, so their room is measured as the pins stand on the turned screen. The
+    // map's edges then aren't a west and an east longitude, so they aren't checked on a turned map.
+    val onScreen = if (bearing == 0f) standing else standing.mapValues { (_, point) -> turned(point, bearing) }
+    val plan = if (bearing == 0f) heights else heights.copy(edges = null)
     val taken =
         groups.map { group ->
             val height = group.singleOrNull()?.let { heightOf[it.id] }
-            val (x, y) = standing.getValue(group.first().id)
-            if (height != null) discFrame(x, y, height) else frameOf(group, standing, zoom, fontScale)
+            val (x, y) = onScreen.getValue(group.first().id)
+            if (height != null) discFrame(x, y, height) else frameOf(group, onScreen, zoom, fontScale)
         }
     val ordered =
         floated
             .sortedBy { it.ring.anyNew }
             .sortedWith(compareBy({ it.float?.let(MomentsFloat::lift) ?: -1.0 }, { it.float?.feet ?: Int.MIN_VALUE }))
-    return bubbles + tagged(ordered, taken, exact, heights, tagWidth, bearing) + posting.map { MomentItem.Posting(it) }
+    return bubbles + tagged(ordered, taken, exact, plan, tagWidth, bearing, onScreen) + posting.map { MomentItem.Posting(it) }
+}
+
+/** A point in world dp as it stands on a map turned to [bearing] degrees: the map's own turn, the other way. */
+private fun turned(
+    point: Pair<Double, Double>,
+    bearing: Float,
+): Pair<Double, Double> {
+    val angle = Math.toRadians(bearing.toDouble())
+    val (x, y) = point
+    return (x * cos(angle) + y * sin(angle)) to (-x * sin(angle) + y * cos(angle))
 }
