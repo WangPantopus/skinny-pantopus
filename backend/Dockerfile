@@ -28,6 +28,11 @@ WORKDIR /app
 # DOTENV_CONFIG_QUIET: the image has no .env files; skip dotenv's notices.
 ENV NODE_ENV=production DOTENV_CONFIG_QUIET=true
 COPY --from=prod-deps /out ./
+# The API and the worker (which builds on this stage) run as the image's unprivileged `node` user, not root:
+# they read /app, listen on 8000 and write only under /tmp (chat uploads in progress, the worker's heartbeat).
+# A bug in anything that handles what people send (images, PDFs, uploads) then can't change the code or
+# act as root inside the container.
+USER node
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
   CMD node scripts/healthcheck.js

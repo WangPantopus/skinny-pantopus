@@ -10,6 +10,7 @@
  * Mount at: app.use('/api/internal/briefing', require('./routes/internalBriefing'));
  */
 
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -32,7 +33,11 @@ const rules = require('../services/plans/planRules');
 
 function verifyInternalApiKey(req, res, next) {
   const key = req.headers['x-internal-api-key'];
-  if (!key || key !== process.env.INTERNAL_API_KEY) {
+  const expected = process.env.INTERNAL_API_KEY;
+  // Compared in constant time, as routes/internal.js does: how long a refusal takes says nothing about the key.
+  const supplied = Buffer.from(typeof key === 'string' ? key : '');
+  const wanted = Buffer.from(expected || '');
+  if (!key || !expected || supplied.length !== wanted.length || !crypto.timingSafeEqual(supplied, wanted)) {
     logger.warn('Internal API: unauthorized request', { path: req.path, ip: req.ip });
     return res.status(401).json({ error: 'unauthorized' });
   }

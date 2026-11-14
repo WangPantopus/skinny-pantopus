@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.MomentAuthorDto
 import app.pantopus.android.data.api.models.moments.MomentRingDto
+import app.pantopus.android.data.api.models.moments.MomentSunDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
@@ -171,12 +172,17 @@ data class MomentsMapUiState(
     val heightTagEdges: Pair<Double, Double>? = null,
     /** The map's zoom then, so the tags are measured against the pins as they stand on screen. */
     val heightTagZoom: Float? = null,
+    /** Part D: where the sun is while pins with an elevation float for you (`MomentsFloat.kt`); null while they don't. */
+    val floatSun: MomentSunDto? = null,
 ) {
     /** The pins carry height tags: heights are on for you and the chip hasn't turned them off. */
     val showsHeightTags: Boolean get() = heightsOn && !heightTagsOff
 
+    /** The sun while pins float: `float_on`, the Elevation chip on and the sun up; null draws today's pins. */
+    val floatingSun: MomentSunDto? get() = floatSun?.takeIf { showsHeightTags && it.isUp }
+
     /** What the map's pins need to know about height tags. */
-    val heightTagPlan: MomentHeightTagPlan get() = MomentHeightTagPlan(showsHeightTags, heightTagEdges, heightTagZoom)
+    val heightTagPlan: MomentHeightTagPlan get() = MomentHeightTagPlan(showsHeightTags, heightTagEdges, heightTagZoom, floatingSun)
 }
 
 /**
@@ -354,6 +360,7 @@ class MomentsMapViewModel
                                     loaded = true,
                                     failed = false,
                                     heightsOn = heightsOn,
+                                    floatSun = repository.floatSun.value,
                                     heightKeyOpen = it.heightKeyOpen && heightsOn,
                                 )
                             }

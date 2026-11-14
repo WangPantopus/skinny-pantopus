@@ -27,6 +27,7 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const verifyToken = require('../middleware/verifyToken');
 const validate = require('../middleware/validate');
 const logger = require('../utils/logger');
+const { clientIpKey } = require('../utils/clientIpKey');
 const { requireDpop } = require('../middleware/dpop');
 const { requireStepUp, mintStepUpToken, PURPOSES } = require('../middleware/stepUp');
 const authDeviceService = require('../services/authDeviceService');
@@ -43,9 +44,12 @@ const router = express.Router();
 
 const WINDOW_15M = 15 * 60 * 1000;
 
+// Per network (IP, IPv6 by its /64): keyed by the bare address, one IPv6 client could step through its
+// own /64 and never be counted twice.
 const challengeLimiter = rateLimit({
   windowMs: WINDOW_15M,
   limit: 30,
+  keyGenerator: clientIpKey,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.', code: 'RATE_LIMITED' },
@@ -54,6 +58,7 @@ const challengeLimiter = rateLimit({
 const resumeIpLimiter = rateLimit({
   windowMs: WINDOW_15M,
   limit: 5,
+  keyGenerator: clientIpKey,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Too many resume attempts. Please sign in again.', code: 'RATE_LIMITED' },
