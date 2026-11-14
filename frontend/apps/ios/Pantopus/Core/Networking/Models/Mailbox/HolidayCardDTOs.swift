@@ -176,6 +176,27 @@ public struct CardSignature: Codable, Sendable, Hashable {
     }
 }
 
+/// `GET /api/mailbox/cards/waiting` — route `backend/routes/mailbox.js:2314`:
+/// the Christmas card a new account joined for, or none.
+public struct HolidayCardWaitingResponse: Decodable, Sendable, Hashable {
+    public let card: Card?
+
+    public struct Card: Decodable, Sendable, Hashable {
+        /// Opens as a tap on it in the Mailbox does (`GET /api/mailbox/:id`).
+        public let mailId: String
+        /// The first word of the name on the envelope.
+        public let fromFirstName: String?
+        /// It can't be opened until Christmas morning.
+        public let sealed: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case mailId = "mail_id"
+            case fromFirstName = "from_first_name"
+            case sealed
+        }
+    }
+}
+
 /// `GET /api/mailbox/cards/arrivals?to=` — route
 /// `backend/routes/mailbox.js:1809`: when a card to one person can come, by
 /// their clock rather than this phone's.

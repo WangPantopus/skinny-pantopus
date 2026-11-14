@@ -9,7 +9,9 @@
 //  card appears) and the stretch it has covered is lit in gold; by night
 //  it waits half below the horizon, and the moon shows its real phase and
 //  name. How long until the next sunrise or sunset leads; the times and
-//  the day's length read as before. Parity twin of Android's `TodaySunArc.kt`.
+//  the day's length read as before. Place's address-first screen shows it
+//  for a kept city under "RIGHT NOW IN …" (TABCARD 4b). Parity twin of
+//  Android's `TodaySunArc.kt`.
 //
 
 import SwiftUI
@@ -22,6 +24,8 @@ struct TodaySunArcCard: View {
     /// One moment drawn with the sun already in place, for a shared picture;
     /// nil follows the clock.
     var at: Date?
+    /// A line above the sky ("RIGHT NOW IN VANCOUVER"); nil on Today.
+    var overline: String?
 
     var body: some View {
         Group {
@@ -41,7 +45,8 @@ struct TodaySunArcCard: View {
             now: now,
             day: PlacePresentation.fmtSunDay(data, timeZone: calendar.timeZone, now: now),
             weather: weather.map { SkyPalette.Weather($0) } ?? .clear,
-            placed: placed
+            placed: placed,
+            overline: overline
         )
     }
 }
@@ -55,6 +60,7 @@ private struct TodaySunArcContent: View {
     let weather: SkyPalette.Weather
     /// Drawn once with the sun where it is, rather than travelling there.
     let placed: Bool
+    let overline: String?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var travelled = 0.0
@@ -114,6 +120,13 @@ private struct TodaySunArcContent: View {
     var body: some View {
         PlaceDetailCard(padding: 16) {
             VStack(spacing: 14) {
+                if let overline {
+                    Text(overline)
+                        .font(.system(size: 11, weight: .bold))
+                        .kerning(0.88)
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 dial
                 times
             }
@@ -127,7 +140,8 @@ private struct TodaySunArcContent: View {
     private var spoken: String {
         let next = countdown.map { " \($0.label) \($0.span)." } ?? ""
         let moon = moment.phase == .night ? " \(MoonPhase.spoken(moment.moonPhase))." : ""
-        return "Sunrise \(clock(moment.sunrise)), sunset \(clock(moment.sunset)), \(data.daylightMinutes / 60) hours "
+        let place = overline.map { "\($0.capitalized). " } ?? ""
+        return place + "Sunrise \(clock(moment.sunrise)), sunset \(clock(moment.sunset)), \(data.daylightMinutes / 60) hours "
             + "\(data.daylightMinutes % 60) minutes of daylight." + next + moon
     }
 

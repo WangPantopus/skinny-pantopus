@@ -29,10 +29,24 @@ final class PlaceDetailViewModel {
     var refreshFailureMessage: String?
     let homeId: String
     let savedPlaceId: String?
+    /// Today for the city around someone with no address yet (TABCARD 4a),
+    /// from `POST /api/saved-places/area/today`: neither a Home nor a saved place.
+    let area: TodayArea?
     /// The Home whose household calendar this page reads and changes (the
-    /// pickup day, the radon kit): none for a saved place or a claim in review.
+    /// pickup day, the radon kit): none for a saved place, an area or a claim in review.
     var calendarHomeId: String? {
-        savedPlaceId == nil && !claimView ? homeId : nil
+        savedPlaceId == nil && area == nil && !claimView ? homeId : nil
+    }
+
+    /// One place's page apart from another's (an area's moved point is another page).
+    var identity: String {
+        savedPlaceId ?? area?.identity ?? homeId
+    }
+
+    /// The shown copy may stay while the page is away: a household's own Home,
+    /// a saved place, or the account's own area.
+    var keepsCopy: Bool {
+        area != nil || PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId)
     }
 
     /// Someone whose claim on this Home is in review sees its public view: the
@@ -40,6 +54,7 @@ final class PlaceDetailViewModel {
     /// Today says so up front, before the copy loads.
     var claimView: Bool {
         if claimInReview { return true }
+        if area != nil { return false }
         if case let .loaded(intel) = state { return savedPlaceId == nil && intel.tier == .t1 && intel.verifyAvailable == false }
         return false
     }
@@ -67,12 +82,14 @@ final class PlaceDetailViewModel {
         api: APIClient = .shared,
         savedPlaceId: String? = nil,
         claimInReview: Bool = false,
+        area: TodayArea? = nil,
         onStartVerify: ((PlaceVerifyMethod) -> Void)? = nil,
         onOpenVerificationStatus: (() -> Void)? = nil
     ) {
         self.homeId = homeId
         self.savedPlaceId = savedPlaceId
         self.claimInReview = claimInReview
+        self.area = area
         self.group = group
         self.api = api
         sessionScope = HomeClaimSessionScope(api: api)
@@ -101,7 +118,7 @@ final class PlaceDetailViewModel {
     }
 
     func load() async {
-        if case .loaded = state, PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) { return }
+        if case .loaded = state, keepsCopy { return }
         // The dashboard or Today may already hold this copy (one store entry).
         if let copy = storedCopy {
             show(copy)
@@ -116,6 +133,7 @@ final class PlaceDetailViewModel {
     }
 
     private var storedCopy: ScreenSnapshot<PlaceIntelligence>? {
+        if let area { return TodayAreaStore.shared.keptToday(for: area) }
         if usesPreview, let savedPlaceId { return PlaceStoreReads.previewCopy(id: savedPlaceId) }
         return PlaceStoreReads.peek(homeId: homeId, savedPlaceId: savedPlaceId, sections: sections)
     }
@@ -166,7 +184,7 @@ final class PlaceDetailViewModel {
 
     @discardableResult
     func discardTemporaryCopy() -> Bool {
-        guard !PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) else { return false }
+        guard !keepsCopy else { return false }
         copyRevision += 1
         state = .loading
         loadedAt = nil
@@ -183,7 +201,9 @@ final class PlaceDetailViewModel {
         let revision = copyRevision
         let hadFallback = fallbackCalendar != nil
         do {
-            let snapshot: ScreenSnapshot<PlaceIntelligence> = if usesPreview, let savedPlaceId {
+            let snapshot: ScreenSnapshot<PlaceIntelligence> = if let area {
+                try await TodayAreaStore.shared.today(for: area, force: force)
+            } else if usesPreview, let savedPlaceId {
                 try await PlaceStoreReads.previewDetails(id: savedPlaceId, force: force)
             } else {
                 try await PlaceStoreReads.load(
@@ -205,8 +225,7 @@ final class PlaceDetailViewModel {
         } catch {
             guard revision == copyRevision, !Task.isCancelled else { return }
             let apiError = error as? APIError
-            if case .loaded = state, !Self.isRefusal(apiError),
-               PlaceStoreReads.allowsCopy(homeId: homeId, savedPlaceId: savedPlaceId) {
+            if case .loaded = state, !Self.isRefusal(apiError), keepsCopy {
                 if !quietly { refreshFailureMessage = "Couldn't refresh. Pull down to try again." }
                 return
             }

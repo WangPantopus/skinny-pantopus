@@ -217,9 +217,7 @@ struct PlaceLaunchView: View {
                 .kerning(-0.87)
                 .lineSpacing(4)
                 .foregroundStyle(Theme.Color.appText)
-            Text(signedInEntry
-                ? "Look up an address, preview its public information, and choose whether to save it privately."
-                : "Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account.")
+            Text(heroSentence)
                 .font(.system(size: 15))
                 .lineSpacing(3)
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -237,7 +235,7 @@ struct PlaceLaunchView: View {
                 } else {
                     privacyProof
                 }
-                exampleCard
+                exampleOrSunCard
                     .padding(.top, Spacing.s2)
                 // Launch cut #1 (Beacon): hidden for the first launch.
                 if LaunchFeatures.beacon {
@@ -279,9 +277,6 @@ struct PlaceLaunchView: View {
                     .kerning(0.9)
                     .foregroundStyle(Theme.Color.appTextMuted)
                 Spacer()
-                Text("A home in Camas, WA")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.Color.appTextMuted)
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
@@ -440,6 +435,25 @@ private extension PlaceLaunchView {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(addressFocused ? Theme.Color.primary600 : Theme.Color.appBorder, lineWidth: addressFocused ? 1.5 : 1)
         )
+    }
+
+    /// Under the headline. The Place tab's first-run root (signed in) says
+    /// what an address shows, as the front door does (TABCARD 4b).
+    var heroSentence: String {
+        if embedded != nil { return "Your flood risk, today's air, your home's value, and who your verified neighbors are." }
+        return signedInEntry
+            ? "Look up an address, preview its public information, and choose whether to save it privately."
+            : "Your flood risk, today's air, your home's value, and who your verified neighbors are — free, no account."
+    }
+
+    /// The Place tab's first-run root with a city kept on this phone (TABCARD
+    /// 4b): that city's Sun card in place of the example, once its Today comes.
+    @ViewBuilder var exampleOrSunCard: some View {
+        if embedded != nil, let area = TodayAreaStore.shared.area {
+            PlaceAreaSunCard(area: area) { exampleCard }
+        } else {
+            exampleCard
+        }
     }
 
     /// On the signed-out front door only: a link copied on the web before

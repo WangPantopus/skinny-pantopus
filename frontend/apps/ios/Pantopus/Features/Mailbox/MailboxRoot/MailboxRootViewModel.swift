@@ -238,6 +238,10 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     var onOpenInvoice: (@MainActor (String) -> Void)?
     var onVerifyHome: (@MainActor (String) -> Void)?
     var onOpenWelcome: (@MainActor (DrawerItemsResponse.DrawerMail) -> Void)?
+    /// The Mailbox is the screen on top. While something else is open over it
+    /// (a card a new account joined for, opened as the tabs first showed), the
+    /// porch waits for the Mailbox to show again.
+    var mayOpenWelcome: (@MainActor () -> Bool)?
     /// "Send a Christmas card" (`holiday_cards`): the card flow, or today's card.
     var onOpenChristmasCards: (@MainActor () -> Void)?
     /// The Christmas cards answer while sending is open (`holiday_cards` and
@@ -565,6 +569,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             // A card may have gone out, or come back, since.
             await fetchChristmasCards()
             if showsSent { await sent.refresh() }
+            // A porch that waited behind another screen opens now.
+            presentWelcomeIfNeeded()
             return
         }
         state = .loading
@@ -1050,7 +1056,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// from this list, so closing the porch leaves it sealed.
     private func presentWelcomeIfNeeded() {
         guard sampleProvider == nil, selectedDrawer == .me, currentTab == .incoming, let onOpenWelcome,
-              case let .signedIn(user) = AuthManager.shared.state else { return }
+              mayOpenWelcome?() ?? true, case let .signedIn(user) = AuthManager.shared.state else { return }
         guard let welcome = loadedMail.first(where: { mail in
             Self.isWelcomeLetter(mail.item) && !mail.item.viewed && !viewedMailIds.contains(mail.id)
         }) else { return }

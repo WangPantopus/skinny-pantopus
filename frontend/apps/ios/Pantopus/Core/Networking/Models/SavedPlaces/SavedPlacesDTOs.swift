@@ -135,3 +135,48 @@ public struct SavePlaceBody: Encodable, Sendable {
         )
     }
 }
+
+/// `POST /api/saved-places/area/today` body (TABCARD section 4): the point
+/// rounded to two decimal places. `Decimal` so the JSON carries exactly that
+/// ("45.64"), never a longer binary expansion of it.
+/// Route `backend/routes/savedPlaces.js:88`.
+public struct AreaTodayBody: Encodable, Sendable, Hashable {
+    public let latitude: Decimal
+    public let longitude: Decimal
+
+    public init(latitude: Double, longitude: Double) {
+        self.latitude = Self.twoPlaces(latitude)
+        self.longitude = Self.twoPlaces(longitude)
+    }
+
+    static func twoPlaces(_ value: Double) -> Decimal {
+        Decimal(string: String(format: "%.2f", value), locale: Locale(identifier: "en_US_POSIX")) ?? 0
+    }
+}
+
+/// `POST /api/saved-places/area/today` answer: the saved-address Today
+/// (weather, air, alerts, sunrise and sunset; T1) for the city around the
+/// point, plus `area`. Route `backend/routes/savedPlaces.js:88`.
+public struct AreaTodayResponse: Decodable, Sendable, Hashable {
+    public let today: PlaceIntelligence
+    public let area: TodayAreaDTO
+
+    private enum CodingKeys: String, CodingKey {
+        case area
+    }
+
+    public init(from decoder: any Decoder) throws {
+        today = try PlaceIntelligence(from: decoder)
+        area = try decoder.container(keyedBy: CodingKeys.self).decode(TodayAreaDTO.self, forKey: .area)
+    }
+}
+
+/// What the server calls the area: "Vancouver, WA"; the state's name with no
+/// city; "Near you" with neither. The point comes back rounded again.
+public struct TodayAreaDTO: Decodable, Sendable, Hashable {
+    public let label: String
+    public let city: String?
+    public let state: String?
+    public let latitude: Double
+    public let longitude: Double
+}

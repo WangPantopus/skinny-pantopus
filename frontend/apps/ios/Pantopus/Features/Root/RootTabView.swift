@@ -324,6 +324,10 @@ public struct RootTabView: View {
                 if !isOn, model.selected == .moments { model.selected = RootTab.pulseHome }
             }
             .modifier(MomentsDotUpdates(account: signedInUserID, isOn: momentsFlags.moments, onTab: model.selected == .moments))
+            // A new account's first look: the Christmas card it joined for, once.
+            .modifier(WaitingCardLanding(account: signedInUserID, tabs: model) {
+                router.pending.map(WaitingCardLanding.opens) == true || pendingInviteToken != nil
+            })
             .onChange(of: model.selected) { _, selected in
                 // A tab that isn't kept (Plans or Moments switched off, Mail
                 // without the Mailbox) lands on the nearest one that is.
