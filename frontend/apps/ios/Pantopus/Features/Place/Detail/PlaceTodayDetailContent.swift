@@ -11,7 +11,9 @@
 //  pickup editor and the radon card on demand) and "Sources and full
 //  conditions" (the daily forecast, the AQI gauge, every alert and the sun's
 //  arc). The tab adds its Plans cards, the saved-place reminders row and Ask
-//  Pantopus. Parity twin of Android's `PlaceTodayDetailContent`.
+//  Pantopus, and the Christmas countdown above "Coming up at home" while
+//  cards are open (`ChristmasCountdownCard`). Parity twin of Android's
+//  `PlaceTodayDetailContent`.
 //
 
 import Observation
@@ -132,6 +134,11 @@ struct PlaceTodayDetailContent: View {
             VStack(alignment: .leading, spacing: 0) {
                 if let needsYou = tab?.needsYou {
                     TodayNeedsYouCard(model: needsYou, hiddenTaskIds: agendaTaskIds, onOpenTask: tab?.onOpenTask)
+                }
+                // Christmas 1 to 45 days away while cards are open (TABCARD): the tab's countdown, above the agenda.
+                if tab != nil, let days = ChristmasCountdownCard.days(open: HolidayCardDoors.shared.isOpen) {
+                    ChristmasCountdownCard(days: days) { rootTabs.openChristmasCard() }
+                        .padding(.top, 24)
                 }
                 agendaSection(proxy: proxy)
                 // The person's plans today (Directions, On my way, Message guests) right under the agenda.

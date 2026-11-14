@@ -2,10 +2,12 @@
 //  RootTabBar.swift
 //  Pantopus
 //
-//  The bar over `RootTabContainer` while the Mailbox is on: Place · Today ·
-//  Nearby · Plans · Mail · Messages (drawing "Six-tab bar", Mail tab design
-//  2026-10-27). The same icons, labels and `tab.<id>` ids as the system bar;
-//  Mail's red badge counts unopened mail and Messages' counts chats. The
+//  The bar over `RootTabContainer`: Place · Today · Mail · Pulse · Moments ·
+//  Plans with the Mailbox on (founder decision 2026-11-13: Mail is third;
+//  `RootTab.barTabs`). The same icons, labels and `tab.<id>` ids as the
+//  system bar; Mail's red badge counts unopened mail. From November 1 to
+//  Christmas, while cards are open, Mail's icon is a red envelope with a gold
+//  seal (`ChristmasMailIcon`); its name and badge stay as they are. The
 //  labels keep their size at every text size, as the system bar's do, and at
 //  the accessibility sizes a long press shows the large content viewer.
 //
@@ -17,6 +19,8 @@
 //  Scrolling down a page slides it away, so there's more room to read, and
 //  scrolling up brings it back (`RootTabBarScrollWatcher`).
 //
+
+// swiftlint:disable file_length
 
 import SwiftUI
 
@@ -90,6 +94,8 @@ struct RootTabBar: View {
     let selected: RootTab
     let badges: [RootTab: Int]
     var verticalEdge: HorizontalEdge?
+    /// Mail wears the red envelope (November 1 to Christmas, cards open).
+    var christmasMail = false
     let onSelect: @MainActor (RootTab) -> Void
 
     @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
@@ -124,7 +130,7 @@ struct RootTabBar: View {
         if #available(iOS 26.0, *) {
             if let verticalEdge {
                 // Measured from the screen's side and bottom, as the system side bar is.
-                RootTabFloatingColumn(tabs: tabs, selected: selected, badges: badges, onSelect: onSelect)
+                RootTabFloatingColumn(tabs: tabs, selected: selected, badges: badges, christmasMail: christmasMail, onSelect: onSelect)
                     .frame(width: Self.columnWidth)
                     .padding(.vertical, Self.columnEdgeInset)
                     .padding(verticalEdge == .leading ? .leading : .trailing, Self.columnEdgeInset)
@@ -145,7 +151,7 @@ struct RootTabBar: View {
     /// the screen's bottom edge, the page showing through it.
     @available(iOS 26.0, *)
     private var floatingBar: some View {
-        RootTabFloatingRow(tabs: tabs, selected: selected, badges: badges, onSelect: onSelect)
+        RootTabFloatingRow(tabs: tabs, selected: selected, badges: badges, christmasMail: christmasMail, onSelect: onSelect)
             .frame(height: Self.capsuleHeight)
             .glassEffect(.regular.interactive(), in: Capsule())
             .padding(.horizontal, Self.edgeInset)
@@ -160,7 +166,7 @@ struct RootTabBar: View {
     private var flatBar: some View {
         HStack(alignment: .top, spacing: Spacing.s0) {
             ForEach(tabs, id: \.self) { tab in
-                RootTabBarItem(tab: tab, isSelected: tab == selected, badge: badges[tab] ?? 0) {
+                RootTabBarItem(tab: tab, isSelected: tab == selected, badge: badges[tab] ?? 0, christmasMail: christmasMail) {
                     onSelect(tab)
                 }
             }
@@ -225,6 +231,7 @@ private struct RootTabFloatingColumn: View {
     let tabs: [RootTab]
     let selected: RootTab
     let badges: [RootTab: Int]
+    var christmasMail = false
     let onSelect: @MainActor (RootTab) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -245,7 +252,13 @@ private struct RootTabFloatingColumn: View {
                 }
                 VStack(spacing: Spacing.s0) {
                     ForEach(tabs, id: \.self) { tab in
-                        RootTabBarItem(tab: tab, isSelected: tab == selected, badge: badges[tab] ?? 0, style: .side) {
+                        RootTabBarItem(
+                            tab: tab,
+                            isSelected: tab == selected,
+                            badge: badges[tab] ?? 0,
+                            style: .side,
+                            christmasMail: christmasMail
+                        ) {
                             onSelect(tab)
                         }
                         .frame(height: rowHeight)
@@ -301,6 +314,7 @@ private struct RootTabFloatingRow: View {
     let tabs: [RootTab]
     let selected: RootTab
     let badges: [RootTab: Int]
+    var christmasMail = false
     let onSelect: @MainActor (RootTab) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -323,7 +337,8 @@ private struct RootTabFloatingRow: View {
                             tab: tab,
                             isSelected: tab == selected,
                             badge: badges[tab] ?? 0,
-                            style: .floating(offset: layout.center(of: index) - (span.lowerBound + span.upperBound) / 2)
+                            style: .floating(offset: layout.center(of: index) - (span.lowerBound + span.upperBound) / 2),
+                            christmasMail: christmasMail
                         ) {
                             onSelect(tab)
                         }
@@ -352,7 +367,14 @@ private struct RootTabBarItem: View {
     let isSelected: Bool
     let badge: Int
     var style: Style = .flat
+    /// The bar asks Mail for the red envelope (November 1 to Christmas, cards open).
+    var christmasMail = false
     let action: @MainActor () -> Void
+
+    /// Mail's red envelope, selected or not; the name keeps its usual color.
+    private var wearsChristmasEnvelope: Bool {
+        christmasMail && tab == .mail
+    }
 
     var body: some View {
         Button(action: action) {
@@ -383,7 +405,7 @@ private struct RootTabBarItem: View {
 
     private var flatLabel: some View {
         VStack(spacing: 3) {
-            Icon(tab.icon, size: 24, strokeWidth: isSelected ? 2.25 : 1.75, color: flatTint)
+            glyph(size: 24, strokeWidth: isSelected ? 2.25 : 1.75, color: flatTint, filled: false)
                 .overlay(alignment: .topLeading) {
                     if badge > 0, tab.badgeIsDot {
                         RootTabDot(ring: true)
@@ -417,9 +439,18 @@ private struct RootTabBarItem: View {
         .padding(.top, 1)
     }
 
+    /// The tab's icon, outlined (flat bar) or filled; Mail's red envelope in the season.
+    @ViewBuilder
+    private func glyph(size: CGFloat, strokeWidth: CGFloat = 2, color: Color, filled: Bool) -> some View {
+        if wearsChristmasEnvelope {
+            ChristmasMailIcon(size: size)
+        } else {
+            Icon(tab.icon, size: size, strokeWidth: strokeWidth, color: color).symbolVariant(filled ? .fill : .none)
+        }
+    }
+
     private var floatingIcon: some View {
-        Icon(tab.icon, size: 23, color: floatingTint)
-            .symbolVariant(.fill)
+        glyph(size: 23, color: floatingTint, filled: true)
             .overlay(alignment: .topLeading) {
                 if badge > 0, tab.badgeIsDot {
                     RootTabDot(ring: false)

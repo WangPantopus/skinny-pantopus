@@ -39,6 +39,8 @@ struct MailboxHeroModel: Equatable {
     var waitingCards = 0
     /// Letters to a person still waiting for the pickup.
     var waitingLetters = 0
+    /// After an empty round, the next delivery's day: "tomorrow", or "Mon, Nov 16".
+    var nextDeliveryDay: String?
 
     /// The flag is up while a card or letter waits for the carrier.
     var flagUp: Bool {
@@ -86,7 +88,13 @@ struct MailboxHeroModel: Equatable {
             let day = next.map { MailDates.dueDay($0, calendar: calendar) } ?? "Tomorrow"
             round = .noMailToday(next: day)
         }
-        return MailboxHeroModel(round: round, roundKey: key, addressLine: address, addressVerified: verified, houseNumber: number)
+        var model = MailboxHeroModel(round: round, roundKey: key, addressLine: address, addressVerified: verified, houseNumber: number)
+        if case .noMailToday = round {
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)
+            let isTomorrow = next.map { day in tomorrow.map { calendar.isDate(day, inSameDayAs: $0) } ?? false } ?? true
+            model.nextDeliveryDay = isTomorrow ? "tomorrow" : next.map { MailDates.dueDay($0, calendar: calendar) }
+        }
+        return model
     }
 
     var title: String {
@@ -120,6 +128,19 @@ struct MailboxHeroModel: Equatable {
         case .unknown:
             return nil
         }
+    }
+
+    /// After an empty round, the next delivery in one short line: "Your next
+    /// delivery is tomorrow, usually by 8 a.m." (the card on a day with no mail).
+    var nextDeliveryLine: String? {
+        guard !flagUp, case .noMailToday = round, let nextDeliveryDay else { return nil }
+        return "Your next delivery is \(nextDeliveryDay), usually by 8\u{00A0}a.m."
+    }
+
+    /// The top card's "No mail today": nothing came in today's round and no card waits for the pickup.
+    var isNoMailToday: Bool {
+        if !flagUp, case .noMailToday = round { return true }
+        return false
     }
 
     var nextChip: String? {
