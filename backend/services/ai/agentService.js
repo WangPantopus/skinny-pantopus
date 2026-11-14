@@ -44,6 +44,7 @@ const { actionCardDefinitions, playdateCardDefinitions, PLAN_CARD_TOOLS, draftPl
 const { appGuide } = require('./appGuide');
 const { screenContextText, screenName } = require('./screenContext');
 const { checkChatBudget } = require('./assistantBudget');
+const { noteChatPrompt } = require('./warmup');
 const memory = require('./memory');
 const followUps = require('./followUps');
 const rules = require('./rules');
@@ -314,16 +315,21 @@ async function logRequest({
 
 // ─── Conversation State ─────────────────────────────────────────────────────
 
-async function getOrCreateConversation(userId, conversationId) {
-  if (conversationId) {
-    const { data } = await supabaseAdmin
-      .from('AIConversation')
-      .select('*')
-      .eq('id', conversationId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (data) return data;
-  }
+/** The person's conversation with this id, or null (none given, not theirs, or it couldn't be read). */
+async function findConversation(userId, conversationId) {
+  if (!conversationId) return null;
+  const { data } = await supabaseAdmin
+    .from('AIConversation')
+    .select('*')
+    .eq('id', conversationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return data || null;
+}
+
+/** `found` (findConversation's answer) when there is one, else a new conversation. */
+async function getOrCreateConversation(userId, found) {
+  if (found) return found;
 
   // Create new conversation
   const { data, error } = await supabaseAdmin
@@ -396,6 +402,16 @@ async function withNudgesSentMeanwhile(conversation, saved) {
 
 // ─── 1. Streaming Chat Agent ────────────────────────────────────────────────
 
+/**
+ * Read the person's home context (chatContext.js) ahead of their message, without waiting for it: the apps open
+ * the assistant by reading its history, and what is read here is remembered for a minute, so a first message
+ * typed in that minute doesn't wait for it. Read only; a failure only means the message reads it itself.
+ */
+function readChatContextAhead(userId) {
+  if (!userId || !getAnthropicClient()) return;
+  buildChatContext(userId).catch(() => {});
+}
+
 // A PDF's upload reference keeps its file's extension (routes/upload.js), so the chat can
 // tell a document from a photo before reading it.
 const isPdfReference = (source) => typeof source === 'string' && /\.pdf$/i.test(source);
@@ -449,21 +465,14 @@ async function streamChat({
     return;
   }
 
-  // The off switch and the daily budgets, which hold across servers.
-  const blocked = await checkChatBudget(userId);
-  if (blocked) {
-    sseWriter.write('error', blocked);
-    sseWriter.end();
-    await logRequest({
-      userId, conversationId: conversationId || null, endpoint: 'chat_blocked', model: CHAT_MODEL,
-      promptVersion: prompts.VERSIONS.chat, status: 'blocked', latencyMs: Date.now() - startTime, errorMessage: blocked.error,
-    });
-    return;
-  }
-
   // What this app can show and what this person has.
   const shown = new Set(Array.isArray(cards) ? cards : []);
   const viewer = { id: userId, role: user?.role || null };
+  // Everything below that only reads starts now, beside the budget check, instead of after it: on a hosted
+  // database each read is a round trip, and the person waits for the longest chain of them before the first word.
+  // A turn the budget stops has read a little for nothing; nothing is written or opened until it has passed.
+  const budgetRead = checkChatBudget(userId);
+  const conversationRead = findConversation(userId, conversationId).catch(() => null);
   const plansRead = isFeatureEnabled('plans', viewer).catch(() => false);
   const sportsRead = isFeatureEnabled('plans_sports', viewer).catch(() => false);
   // The tools list playdates only for people with the flag; planViewer reads it again for the plan rules.
@@ -479,7 +488,10 @@ async function streamChat({
   const screenRead = Promise.all([contextRead, plansRead]).then(([home, plans]) => (screen
     ? screenContextText(screen, { userId, user: viewer, timeZone: home.timeZone, plansEnabled: plans })
     : null));
-  const photosRead = images?.length ? photoBlocks(images, userId) : Promise.resolve([]);
+  // Their sports settings, for people with Plans and sports (the context line below).
+  const sportsPrefsRead = Promise.all([plansRead, sportsRead]).then(([plans, sports]) => (plans && sports
+    ? require('../feedService').getMuteAndHideFilters(userId).catch(() => ({ sports: { watch: 'off' } })).then((filters) => filters.sports)
+    : null));
   // What they asked Pantopus to remember that goes with this message (phase 3 §5.3), for every build.
   const memoryRead = contextRead.then((home) => memory.turnContext(userId, {
     screen, message, recall: shown.has('memory'), timeZone: home.timeZone,
@@ -487,15 +499,34 @@ async function streamChat({
     logger.warn('Memory context failed', { userId, error: err.message });
     return null;
   });
+  // A turn that stops before these are awaited (the budget, a conversation that can't be made) leaves them unread.
+  for (const read of [screenRead, sportsPrefsRead]) read.catch(() => {});
+
+  // The off switch and the daily budgets, which hold across servers.
+  const blocked = await budgetRead;
+  const budgetMs = Date.now() - startTime;
+  if (blocked) {
+    sseWriter.write('error', blocked);
+    sseWriter.end();
+    await logRequest({
+      userId, conversationId: conversationId || null, endpoint: 'chat_blocked', model: CHAT_MODEL,
+      promptVersion: prompts.VERSIONS.chat, status: 'blocked', latencyMs: Date.now() - startTime, errorMessage: blocked.error,
+    });
+    return;
+  }
+  // Photos and PDFs are read once the budget has passed: an upload is used up by being read.
+  const photosRead = images?.length ? photoBlocks(images, userId) : Promise.resolve([]);
+  photosRead.catch(() => {});
 
   let conversation;
   try {
-    conversation = await getOrCreateConversation(userId, conversationId);
+    conversation = await getOrCreateConversation(userId, await conversationRead);
   } catch {
     sseWriter.write('error', { error: 'CONVERSATION_ERROR', message: 'Could not load conversation.' });
     sseWriter.end();
     return;
   }
+  const conversationMs = Date.now() - startTime;
 
   // The turn's request and steps (phase 3 contract §4.1): its cards' done states hang off it.
   // Writing it never holds the turn up, and a failed write only leaves it unrecorded.
@@ -513,15 +544,13 @@ async function streamChat({
     ...fields,
   });
 
-  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText, memoryText, sportsEnabled, momentsEnabled] = await Promise.all([
-    contextRead, photosRead, plansRead, playdatesRead, screenRead, memoryRead, sportsRead, momentsRead,
+  const [homeContext, photoResults, plansEnabled, playdatesEnabled, screenText, memoryText, sportsEnabled, momentsEnabled, sportsPrefs] = await Promise.all([
+    contextRead, photosRead, plansRead, playdatesRead, screenRead, memoryRead, sportsRead, momentsRead, sportsPrefsRead,
   ]);
   const photos = photoResults.filter(Boolean);
   // One context message: the home facts (remembered for a minute), whether they have
   // Plans, and the screen they asked from. Added again only when it changes.
   const plansLine = `- Plans: ${plansEnabled ? 'they have Plans (the Plans tab).' : "not available to them yet; don't offer plans."}`;
-  const sportsPrefs = plansEnabled && sportsEnabled
-    ? (await require('../feedService').getMuteAndHideFilters(userId).catch(() => ({ sports: { watch: 'off' } }))).sports : null;
   const sportsLine = sportsPrefs ? `- Sports suggestions: ${sportsPrefs.watch === 'off'
     ? 'off. Answer direct game questions, but never volunteer games or watch parties.'
     : 'available. Use find_games for listed times; never guess a fixture.'}` : null;
@@ -602,6 +631,10 @@ async function streamChat({
   };
   const tools = launchScopedChatTools(capabilities);
   const toolNames = tools.map((tool) => tool.name);
+  // The tools and this prompt are the same for everyone with the same kind of app and features, so one cache
+  // entry serves all their conversations. It lives an hour after each use; warmup.js keeps it from running out.
+  const system = systemBlocks(launchScopedChatInstructions(capabilities), { ttl: '1h' });
+  noteChatPrompt(JSON.stringify(capabilities), { model: CHAT_MODEL, effort: CHAT_EFFORT, system, tools });
   const ran = new Map();
 
   // The whole turn, tool calls included, shares one deadline.
@@ -610,6 +643,10 @@ async function streamChat({
 
   // Filled in as rounds finish, so a timeout can still log what was used.
   const usage = emptyUsage();
+  // Where the turn's time went (the latency log): each request to the model, and each tool.
+  const rounds = [];
+  const toolTimes = [];
+  const prepMs = Date.now() - startTime;
   const replyText = plainTextStream((delta) => sseWriter.write('text_delta', { delta }));
   let firstTextMs = null;
   // Link buttons (show_link) go out after the reply's text, just before `done`.
@@ -630,13 +667,12 @@ async function streamChat({
       effort: CHAT_EFFORT,
       maxTokens: CHAT_MAX_TOKENS,
       maxRounds: MAX_TOOL_ROUNDS,
-      // The tools and this prompt are the same for everyone, so one cache entry serves every
-      // conversation; an hour keeps it warm between the pilot's sparse messages.
-      system: systemBlocks(launchScopedChatInstructions(capabilities), { ttl: '1h' }),
+      system,
       tools,
       messages,
       signal: turnSignal,
       usage,
+      rounds,
       onText: (delta) => {
         if (firstTextMs === null) firstTextMs = Date.now() - startTime;
         replyText.push(delta);
@@ -651,6 +687,7 @@ async function streamChat({
           ? await executeTool(name, use.input || {}, toolContext)
           : { error: `Unknown tool: ${use.name}. The tools are: ${toolNames.join(', ')}.` };
         ran.set(use.id, { name, result });
+        toolTimes.push({ tool: name || use.name, ms: Date.now() - toolStarted });
         record.tool(name || use.name, {
           label: TOOL_STATUS[name] || 'Working on it…', result, latencyMs: Date.now() - toolStarted, known: Boolean(name),
         });
@@ -737,7 +774,17 @@ async function streamChat({
     totalMs: Date.now() - startTime,
     toolCalls: turn.toolCalls,
     cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
     contextAdded: Boolean(newContext),
+    // Before the model was asked: the budget check, the conversation, then the context, flags and memory.
+    prepMs,
+    budgetMs,
+    conversationMs,
+    cards: [...shown].sort().join(','),
+    rounds,
+    tools: toolTimes,
   });
 
   if (turn.outcome === 'refused' || turn.outcome === 'truncated' || turn.outcome === 'empty') {
@@ -1919,6 +1966,7 @@ async function suggestCardNote({ design, to, count, hint, note, passedOver, user
 
 module.exports = {
   streamChat,
+  readChatContextAhead,
   draftGig,
   draftListing,
   draftListingFromImages,

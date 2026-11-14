@@ -569,6 +569,8 @@ router.get('/pulse', verifyToken, asyncHandler(async (req, res) => {
 router.get('/conversations', verifyToken, asyncHandler(async (req, res) => {
   const { value: order, error } = Joi.string().valid('newest', 'oldest').default('newest').validate(req.query.order);
   if (error) return res.status(400).json({ error: 'Invalid conversation order' });
+  // The apps read this as the assistant opens: their home's context is read now, so their first message finds it ready.
+  agentService.readChatContextAhead(req.user.id);
   const conversations = await agentService.listConversations(req.user.id, { oldestFirst: order === 'oldest' });
   res.json({ conversations });
 }));
@@ -581,6 +583,7 @@ router.get('/conversations/:id/messages', verifyToken, asyncHandler(async (req, 
   if (invalid) return res.status(404).json({ error: 'Conversation not found' });
   const { value: cards, error: badCards } = cardsQuery(req.query.cards);
   if (badCards) return res.status(400).json({ error: 'Validation failed', message: badCards.message });
+  agentService.readChatContextAhead(req.user.id);
   const conversation = await agentService.getConversationMessages(req.user.id, req.params.id, { cards });
   if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
   res.json(conversation);

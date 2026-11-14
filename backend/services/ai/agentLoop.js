@@ -64,6 +64,10 @@ function raceAbort(promise, signal) {
  * @param {AbortSignal} [p.signal]       Deadline / client disconnect.
  * @param {object}   [p.usage]           Token totals, filled in as rounds finish. Pass your own to
  *                                       still have what the finished rounds used when the turn throws.
+ * @param {object[]} [p.rounds]          Filled in with one entry per request, for the latency log: how long until the
+ *                                       API answered at all (`startMs`), until the first words (`textMs`), until the
+ *                                       reply ended (`replyMs`), how long its tools ran (`toolsMs`), and the tokens
+ *                                       read from the cache, written to it, and sent uncached.
  * @param {(use: object) => Promise<object>} p.runTool   Runs one tool_use block, resolves to its tool_result block.
  * @param {(delta: string) => void} p.onText             Called with each piece of reply text as it streams.
  * @param {(name: string) => void} [p.onToolStart]       Called when Claude starts a tool call, before its input is complete.
@@ -78,6 +82,7 @@ async function runAgentTurn({
   client, model, system, tools, messages, effort, maxTokens, maxRounds, signal, runTool, onText,
   onToolStart, finishAfterTools,
   usage = emptyUsage(),
+  rounds = [],
 }) {
   const working = [...messages];
   let toolCalls = 0;
@@ -89,6 +94,9 @@ async function runAgentTurn({
     // The last round has to answer in words: a turn that ends on yet another tool
     // call has nothing to show or remember. (Changing tool_choice keeps the cache.)
     const mustAnswer = maxRounds > 1 && round === maxRounds;
+    const roundStarted = Date.now();
+    const timing = { startMs: null, textMs: null, replyMs: null, toolsMs: null, tools: [] };
+    rounds.push(timing);
     const stream = client.messages.stream({
       model,
       max_tokens: maxTokens,
@@ -105,15 +113,14 @@ async function runAgentTurn({
       ...(mustAnswer ? { tool_choice: { type: 'none' } } : {}),
     }, { signal });
 
-    if (onToolStart) {
+    stream.on('streamEvent', (event) => {
+      if (timing.startMs === null) timing.startMs = Date.now() - roundStarted;
       // A tool call starts well before its input is complete (a draft takes a second
       // or two to write), so the person can be told what is happening meanwhile.
-      stream.on('streamEvent', (event) => {
-        if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
-          onToolStart(event.content_block.name);
-        }
-      });
-    }
+      if (onToolStart && event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+        onToolStart(event.content_block.name);
+      }
+    });
 
     let roundSpoke = false;
     stream.on('text', (delta) => {
@@ -123,6 +130,7 @@ async function runAgentTurn({
       // Text before a tool call and the answer after it arrive as separate
       // blocks; keep them apart on screen.
       if (!roundSpoke && spoke) onText('\n\n');
+      if (timing.textMs === null) timing.textMs = Date.now() - roundStarted;
       roundSpoke = true;
       spoke = true;
       onText(text);
@@ -131,6 +139,11 @@ async function runAgentTurn({
     const message = await stream.finalMessage();
     addUsage(usage, message.usage);
     stopReason = message.stop_reason;
+    timing.replyMs = Date.now() - roundStarted;
+    timing.cacheReadTokens = message.usage?.cache_read_input_tokens || 0;
+    timing.cacheWriteTokens = message.usage?.cache_creation_input_tokens || 0;
+    timing.uncachedTokens = message.usage?.input_tokens || 0;
+    timing.outputTokens = message.usage?.output_tokens || 0;
 
     // The reply goes back as sent, thinking blocks included: the model needs them to
     // continue its own tool use. The one exception is a text block of only whitespace,
@@ -154,8 +167,11 @@ async function runAgentTurn({
     }
 
     toolCalls += uses.length;
+    timing.tools = uses.map((use) => use.name);
+    const toolsStarted = Date.now();
     // All results go back in one message, which is what keeps Claude calling tools in parallel.
     const results = await raceAbort(Promise.all(uses.map((use) => runTool(use))), signal);
+    timing.toolsMs = Date.now() - toolsStarted;
     working.push({ role: 'user', content: results });
 
     // A draft is the answer: the person already sees it as a card. End the turn with

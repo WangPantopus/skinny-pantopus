@@ -18,7 +18,7 @@ const { composeForHomeId } = require('../addressCalendarService');
 const { loadViewer } = require('../plans/planViewer');
 const planService = require('../plans/planService');
 const readTools = require('./readTools');
-const { runMailReadTool } = require('./readToolsMail');
+const { dueMail } = require('./readToolsMail');
 const followUps = require('./followUps');
 const {
   OTHERS_WORDS, clip, chosenHome, zoneOr, todayIn,
@@ -81,40 +81,43 @@ function forecastLine(entry) {
 async function getSchedule(args, ctx) {
   const zone = zoneOr(ctx.timeZone);
   const days = Number.isInteger(args.days) ? Math.min(Math.max(args.days, 1), MAX_DAYS) : DEFAULT_DAYS;
-  const home = await chosenHome(ctx.userId, args.home_id);
   const today = todayIn(zone);
   const start = DateTime.fromISO(today, { zone: 'utc' });
   const dates = Array.from({ length: days }, (_, i) => start.plus({ days: i }).toISODate());
   const last = dates[dates.length - 1];
-  const missing = [];
-  if (!home) missing.push('the weather, pickup days and household tasks (they have no home in Pantopus yet)');
-
+  // What this answer leaves out: what it can't have (no home, Mail behind the identity check), then any part that failed.
+  const failed = [];
   const mailOn = isLaunchFeatureEnabled('mailbox');
-  if (mailOn && !ctx.identity) missing.push("mail that is due (Mail opens only after the app checks it's them)");
+
+  // The parts that don't go by a home (plans, mail that is due, check-backs) start while the home is looked up.
+  const plansRead = part('plans', failed, ctx, async () => {
+    if (!(await readTools.plansOn(ctx))) return null;
+    const viewer = await loadViewer({ id: ctx.userId, role: ctx.user?.role || null });
+    const mine = await planService.listMine(viewer);
+    return [...(mine.hosting || []), ...(mine.going || [])];
+  });
+  // find_mail's own list of what is due, without the Mail tab's counts, which this answer doesn't carry.
+  const mailRead = mailOn && ctx.identity ? part('mail that is due', failed, ctx, () => dueMail(days - 1, ctx)) : null;
+  const checkBacksRead = part('check-backs', failed, ctx, () => followUps.listWaiting(ctx.userId));
+
+  const home = await chosenHome(ctx.userId, args.home_id);
+  const cannotHave = [];
+  if (!home) cannotHave.push('the weather, pickup days and household tasks (they have no home in Pantopus yet)');
+  if (mailOn && !ctx.identity) cannotHave.push("mail that is due (Mail opens only after the app checks it's them)");
 
   const [weather, calendar, tasks, plans, mail, checkBacks] = await Promise.all([
-    home ? part('the forecast', missing, ctx, async () => {
+    home ? part('the forecast', failed, ctx, async () => {
       const intelligence = await readTools.readSections(home.id, ctx.userId, ['weather'], ctx.user);
       const section = readTools.sectionsOf(intelligence).find((item) => item.id === 'weather');
       return Array.isArray(section?.data?.daily) ? section.data.daily : [];
     }) : null,
-    home ? part('pickup days and calendar dates', missing, ctx, () => composeForHomeId(home.id, { userId: ctx.userId })) : null,
-    home ? part('household tasks', missing, ctx, () => readTools.openTasks(home.id, ctx.userId)) : null,
-    part('plans', missing, ctx, async () => {
-      if (!(await readTools.plansOn(ctx))) return null;
-      const viewer = await loadViewer({ id: ctx.userId, role: ctx.user?.role || null });
-      const mine = await planService.listMine(viewer);
-      return [...(mine.hosting || []), ...(mine.going || [])];
-    }),
-    mailOn && ctx.identity ? part('mail that is due', missing, ctx, async () => {
-      const found = await runMailReadTool('find_mail', {
-        query: null, box: null, tab: null, unread_only: null, due_within_days: days - 1, direction: null,
-      }, ctx);
-      if (!found || found.error) throw new Error(found?.error || 'no answer');
-      return found.mail || [];
-    }) : null,
-    part('check-backs', missing, ctx, () => followUps.listWaiting(ctx.userId)),
+    home ? part('pickup days and calendar dates', failed, ctx, () => composeForHomeId(home.id, { userId: ctx.userId })) : null,
+    home ? part('household tasks', failed, ctx, () => readTools.openTasks(home.id, ctx.userId)) : null,
+    plansRead,
+    mailRead,
+    checkBacksRead,
   ]);
+  const missing = [...cannotHave, ...failed];
 
   const byDay = new Map(dates.map((date) => [date, []]));
   const overdue = [];
