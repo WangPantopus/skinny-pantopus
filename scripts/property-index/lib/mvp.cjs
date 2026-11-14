@@ -1,16 +1,19 @@
 'use strict';
-// An Ohio County Auditor's "CAMADatabase.zip" on its Schneider-hosted site: MVP1_OH_*.csv tables from the county's appraisal system, with a code table.
+// An Ohio County Auditor's "CAMADatabase.zip" on its Schneider-hosted site: the tables of the county's appraisal system, with a code table, either as
+// comma-separated MVP1_OH_*.csv files (Knox) or as pipe-separated Governmax*Extract.txt files (Adams), with the same column names.
 // Year built, finished living area, rooms, bedrooms, full and half baths, stories and style (Dwelling), acres (the parcel's deeded acres, or else the
 // acres its land lines state), market values, land use, and the last sale with the Auditor's valid-sale flag (Extract). Only the columns named here are
 // read: owner, taxpayer and lender columns are never asked for, and the owner, tax and payment tables are never opened. Each county's connector names
 // its site and states its terms.
-// The Extract table isn't quoted, and some rows carry commas inside their free text (legal description, location description, owner names,
-// subdivision), which pushes later columns right. A row is read only when exactly one placement of those extra commas gives every column read here its
-// expected shape (a ZIP, the state, a three-digit use code, numbers, a date, the valid-sale flag); any other row is left out and counted.
+// The comma-separated Extract table isn't quoted, and some rows carry commas inside their free text (legal description, location description, owner
+// names, subdivision), which pushes later columns right. A row is read only when exactly one placement of those extra commas gives every column read here
+// its expected shape (a ZIP, the state, a three-digit use code, numbers, a date, the valid-sale flag); any other row is left out and counted. The
+// pipe-separated tables have no such commas: a row is read only when it has exactly the header's columns and each column read has its expected shape.
+// Parcels a table of private properties lists (PrivateProperties.txt, when the zip holds one) are left out; only its parcel numbers are read.
 
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { download, zipTable, zipDates, USER_AGENT } = require('./tables.cjs');
+const { download, zipTable, zipDates, zipMembers, USER_AGENT } = require('./tables.cjs');
 const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('./addresses.cjs');
 const { positive, put, word } = require('./values.cjs');
 const { zipsByCounty } = require('./zcta.cjs');
@@ -18,7 +21,12 @@ const { condoBuildings } = require('./condos.cjs');
 const { isHomeSale } = require('./sales.cjs');
 const { log } = require('./log.cjs');
 
-const EXTRACT = 'MVP1_OH_Extract.csv';
+// The two layouts' table names and separators.
+const FORMATS = {
+  mvp1: { extract: 'MVP1_OH_Extract.csv', dwelling: 'MVP1_OH_Dwelling.csv', land: 'MVP1_OH_Land.csv', codes: 'MVP1_OH_Codes.csv', delimiter: ',', realign: true },
+  governmax: { extract: 'GovernmaxExtract.txt', dwelling: 'GovernmaxDwellingExtract.txt', land: 'GovernmaxLandExtract.txt', codes: 'GovernmaxCodesExtract.txt', delimiter: '|', realign: false },
+};
+const PRIVATE = 'PrivateProperties.txt';
 const DWELLING_COLUMNS = ['PropertyNumber', 'CardNumber', 'YearBuilt', 'RoomCount', 'BedroomCount', 'FullBathCount', 'HalfBathCount', 'FinishedLivingArea', 'StoryHeight', 'StyleOfHome'];
 const LAND_COLUMNS = ['PropertyNumber', 'NumAcres'];
 const CODE_COLUMNS = ['msysTypeCategory', 'mtypecode', 'mdescr'];
@@ -47,13 +55,14 @@ const shapes = {
 };
 
 /** The Extract's rows as objects of the columns read, realigned where free text holds commas. */
-async function* extractRows(zip) {
-  const unzip = execFileSync('unzip', ['-p', zip, EXTRACT], { maxBuffer: 1 << 30 }).toString('latin1');
+async function* extractRows(zip, format = FORMATS.mvp1) {
+  const { extract, delimiter, realign } = format;
+  const unzip = execFileSync('unzip', ['-p', zip, extract], { maxBuffer: 1 << 30 }).toString('latin1');
   const lines = unzip.split(/\r?\n/);
-  const header = lines[0].split(',').map((name) => name.trim());
+  const header = lines[0].split(delimiter).map((name) => name.trim());
   const at = Object.fromEntries(header.map((name, i) => [name, i]));
-  const missing = [...LEFT, ...MIDDLE, ...RIGHT, ...FREE].filter((name) => !(name in at));
-  if (missing.length) throw new Error(`${EXTRACT} no longer has ${missing.join(', ')}`);
+  const missing = [...LEFT, ...MIDDLE, ...RIGHT, ...(realign ? FREE : [])].filter((name) => !(name in at));
+  if (missing.length) throw new Error(`${extract} no longer has ${missing.join(', ')}`);
   // Commas can hide in the legal description (before the site address), the location description (before the use code), the owner columns (before
   // the values) and the subdivision (last). Each run of columns shifts by the extra commas before it.
   const fits = (fields, names, shift) => names.every((name) => !shapes[name] || shapes[name](String(fields[at[name] + shift] ?? '').trim()));
@@ -61,9 +70,9 @@ async function* extractRows(zip) {
   let skipped = 0;
   for (const line of lines.slice(1)) {
     if (!line.trim()) continue;
-    const fields = line.split(',');
+    const fields = line.split(delimiter);
     const extra = fields.length - header.length;
-    if (extra < 0) { skipped += 1; continue; }
+    if (extra < 0 || (extra > 0 && !realign)) { skipped += 1; continue; }
     const placements = [];
     for (let legal = 0; legal <= extra; legal += 1) {
       if (!fits(fields, LEFT.filter((name) => at[name] > at.mlegalDescription), legal)) continue;
@@ -84,7 +93,7 @@ async function* extractRows(zip) {
     read += 1;
     yield row;
   }
-  log(`${EXTRACT}: ${read} rows read, ${skipped} left out (their columns couldn't be placed)`);
+  log(`${extract}: ${read} rows read, ${skipped} left out (their columns couldn't be placed)`);
 }
 
 const inRange = (value, most) => {
@@ -157,13 +166,19 @@ async function fileUrl(site) {
   return link[0].replace(/&amp;/g, '&');
 }
 
-async function* build({ FIPS, COUNTY, SITE, SOURCE, PUBLISHER }, { work }) {
+async function* build({ FIPS, COUNTY, SITE, SOURCE, PUBLISHER, FORMAT }, { work }) {
+  const format = FORMATS[FORMAT];
+  const { delimiter } = format;
   const zip = path.join(work, SOURCE, 'CAMADatabase.zip');
   download(await fileUrl(SITE), zip);
-  const asOf = zipDates(zip).get(EXTRACT);
+  const asOf = zipDates(zip).get(format.extract);
   if (!asOf) throw new Error('The zip no longer dates its Extract table');
+  const hidden = new Set();
+  if (zipMembers(zip).includes(PRIVATE)) {
+    for await (const row of zipTable(zip, PRIVATE, ['ParcelID'], { delimiter, quoted: false })) if (row.ParcelID) hidden.add(row.ParcelID);
+  }
   const words = {};
-  for await (const row of zipTable(zip, 'MVP1_OH_Codes.csv', CODE_COLUMNS, { quoted: false })) {
+  for await (const row of zipTable(zip, format.codes, CODE_COLUMNS, { delimiter, quoted: false })) {
     const category = row.msysTypeCategory;
     if (category !== 'Classification' && category !== 'Style') continue;
     if (!words[category]) words[category] = new Map();
@@ -171,19 +186,21 @@ async function* build({ FIPS, COUNTY, SITE, SOURCE, PUBLISHER }, { work }) {
   }
   // A parcel can hold several cards: the first is its main building.
   const dwellings = new Map();
-  for await (const row of zipTable(zip, 'MVP1_OH_Dwelling.csv', DWELLING_COLUMNS, { quoted: false })) {
+  for await (const row of zipTable(zip, format.dwelling, DWELLING_COLUMNS, { delimiter, quoted: false })) {
     const held = dwellings.get(row.PropertyNumber);
     if (!held || (positive(row.CardNumber) || 1) < (positive(held.CardNumber) || 1)) dwellings.set(row.PropertyNumber, row);
   }
   const landAcres = new Map();
-  for await (const row of zipTable(zip, 'MVP1_OH_Land.csv', LAND_COLUMNS, { quoted: false })) {
+  for await (const row of zipTable(zip, format.land, LAND_COLUMNS, { delimiter, quoted: false })) {
     landAcres.set(row.PropertyNumber, (landAcres.get(row.PropertyNumber) || 0) + (Number(row.NumAcres) || 0));
   }
   const records = new Map();
   let noAddress = 0;
   let deleted = 0;
-  for await (const row of extractRows(zip)) {
+  let hiddenCount = 0;
+  for await (const row of extractRows(zip, format)) {
     if (row.Par_Deleted === 'Y') { deleted += 1; continue; }
+    if (hidden.has(row.mpropertyNumber)) { hiddenCount += 1; continue; }
     const record = fromParcel({ FIPS, COUNTY }, row, dwellings.get(row.mpropertyNumber), landAcres.get(row.mpropertyNumber) || 0, words);
     if (!record) noAddress += 1;
     else if (!records.has(record.id)) records.set(record.id, record);
@@ -194,7 +211,7 @@ async function* build({ FIPS, COUNTY, SITE, SOURCE, PUBLISHER }, { work }) {
   const zipped = list.filter((record) => record.address.zip);
   const inCounty = zipped.filter((record) => countyZips.has(record.address.zip)).length;
   if (zipped.length >= 100 && inCounty < zipped.length * 0.9) throw new Error(`Only ${inCounty} of ${zipped.length} addresses with a ZIP are in ${COUNTY}'s ZIP codes: the download holds another county's records`);
-  log(`${COUNTY}: ${list.length} parcels, ${noAddress} without a street number, ${deleted} deleted; ${dwellings.size} with a dwelling; ${inCounty} of ${zipped.length} ZIPs in the county`);
+  log(`${COUNTY}: ${list.length} parcels, ${noAddress} without a street number, ${deleted} deleted, ${hiddenCount} private; ${dwellings.size} with a dwelling; ${inCounty} of ${zipped.length} ZIPs in the county`);
   for (const building of condoBuildings(list, { fips: FIPS, county: COUNTY })) list.push(building);
   yield {
     fips: FIPS, state: 'OH', name: COUNTY, publisher: PUBLISHER, dataset: 'CAMA database download', method: 'county', source: SOURCE, as_of: asOf, stale_after_days: 60, extra_zips: zipsByCounty(work, ['39']).get(FIPS) || [], records: list,
@@ -203,7 +220,7 @@ async function* build({ FIPS, COUNTY, SITE, SOURCE, PUBLISHER }, { work }) {
 
 // The columns read (the Auditors' downloads carry no layout; names as the tables write them).
 const DICTIONARY = {
-  columns: [...LEFT, ...MIDDLE, ...RIGHT, ...DWELLING_COLUMNS, ...LAND_COLUMNS, ...CODE_COLUMNS],
+  columns: [...LEFT, ...MIDDLE, ...RIGHT, ...DWELLING_COLUMNS, ...LAND_COLUMNS, ...CODE_COLUMNS, 'ParcelID'],
   facts: {
     year_built: 'YearBuilt', living_sqft: 'FinishedLivingArea', gross_sqft: 'FinishedLivingArea', rooms: 'RoomCount', bedrooms: 'BedroomCount', bathrooms: 'FullBathCount', full_baths: 'FullBathCount',
     half_baths: 'HalfBathCount', stories: 'StoryHeight', style: 'StyleOfHome', lot_acres: 'macres', market_value: 'MKT_Total_Value', market_land_value: 'MKT_Land_Value',
@@ -211,9 +228,10 @@ const DICTIONARY = {
   },
 };
 
-/** A county's connector: { fips, county, site, source, publisher }. */
-function mvpCounty({ fips, county, site, source, publisher }) {
-  const settings = { FIPS: fips, COUNTY: county, SITE: site, SOURCE: source, PUBLISHER: publisher };
+/** A county's connector: { fips, county, site, source, publisher, format: 'mvp1' (default) or 'governmax' }. */
+function mvpCounty({ fips, county, site, source, publisher, format = 'mvp1' }) {
+  if (!FORMATS[format]) throw new Error(`Unknown CAMA database layout ${format}`);
+  const settings = { FIPS: fips, COUNTY: county, SITE: site, SOURCE: source, PUBLISHER: publisher, FORMAT: format };
   return { build: (options) => build(settings, options), dictionary: DICTIONARY };
 }
 
