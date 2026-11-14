@@ -64,7 +64,8 @@ struct MomentsHeightTag: View {
 struct MomentsPinTag: Hashable {
     /// After the ring, before it, or over it: whichever has room, in that order (`MomentsHeightTagPlan.swift`).
     enum Side: Hashable {
-        case after, before, above
+        /// `below` only for a floating pin (part D), whose tag takes the side away from its shadow.
+        case after, before, above, below
     }
 
     let height: MomentShownHeight
@@ -85,6 +86,7 @@ extension MomentRingPin {
                 self
                 if let tag, tag.side == .after { Self.beside(tag) }
             }
+            if let tag, tag.side == .below { MomentsHeightTag(height: tag.height) }
         }
     }
 
@@ -107,6 +109,9 @@ extension MomentRingPin {
             // The pin stays in the middle, whichever is wider; the tag only adds height over it.
             let over = MomentsHeightTag.barHeight + tagGapAbove
             return UnitPoint(x: 0.5, y: (over + size.height * anchor.y) / (over + size.height))
+        case .below:
+            let under = MomentsHeightTag.barHeight + tagGapAbove
+            return UnitPoint(x: 0.5, y: size.height * anchor.y / (size.height + under))
         }
     }
 }

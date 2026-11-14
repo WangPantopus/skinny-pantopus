@@ -43,6 +43,9 @@ public enum MomentsPalette {
         }
     }
 
+    /// A floating pin's shadow on the map (part D, board F1): a deep blue-black, never pure black.
+    public static let floatShadow = rgb(0x0E1622)
+
     /// A height band's colour (board H2's key), on the map's tag and in the key; always beside the number or a name.
     public static func height(_ band: MomentHeightBand) -> Color {
         switch band {

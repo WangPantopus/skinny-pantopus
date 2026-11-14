@@ -236,15 +236,7 @@ struct MomentsMapView: View {
             ForEach(pins.markers) { marker in
                 switch marker {
                 case let .ring(ring):
-                    let tag = heightTag(for: ring, plan: pins.tags)
-                    Annotation("", coordinate: marker.coordinate, anchor: MomentRingPin.anchor(tagged: tag)) {
-                        Button { open(ring) } label: { MomentRingPin(ring: ring, playing: isPlaying(ring)).tagged(tag) }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(MomentsSpeech.label(for: ring, height: pins.tags.spoken(ring)))
-                            .accessibilityHint("Plays their Moments")
-                            .accessibilityIdentifier("moments.ring.\(ring.id)")
-                    }
-                    .annotationTitles(.hidden)
+                    ringAnnotation(ring, at: marker.coordinate, plan: pins.tags)
                 case let .fan(cluster):
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
                         MomentsFan(rings: cluster.rings, playing: playingMomentIds, onOpen: open)
@@ -290,7 +282,7 @@ struct MomentsMapView: View {
         .accessibilityIdentifier("moments.mapCanvas")
     }
 
-    private func open(_ ring: MomentRingDTO) {
+    func open(_ ring: MomentRingDTO) {
         pinTappedAt = Date()
         actions.watch(viewModel.watchQueue(from: ring), 0, false)
     }

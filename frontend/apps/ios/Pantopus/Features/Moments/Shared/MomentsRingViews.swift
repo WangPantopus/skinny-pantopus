@@ -116,6 +116,8 @@ struct MomentRingPin: View {
     /// Playing in the card beside the map on the open iPhone Duo (board O2): a quarter bigger, standing on its tip,
     /// in a sky halo.
     var playing = false
+    /// False for a pin floating at its elevation (part D): the disc alone, 64 x 64, with no tail on the map.
+    var tail = true
 
     static let size = CGSize(width: 64, height: 72)
     /// Where the tip of the tail sits in the pin, for the map's anchor.
@@ -141,9 +143,11 @@ struct MomentRingPin: View {
 
     private var pin: some View {
         ZStack(alignment: .topLeading) {
-            PinTail()
-                .fill(MomentsPalette.pinSurface)
-                .frame(width: 64, height: 72)
+            if tail {
+                PinTail()
+                    .fill(MomentsPalette.pinSurface)
+                    .frame(width: 64, height: 72)
+            }
             Circle()
                 .fill(MomentsPalette.pinSurface)
                 .frame(width: 63, height: 63)
@@ -158,7 +162,7 @@ struct MomentRingPin: View {
                     .offset(x: 44, y: 42)
             }
         }
-        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+        .frame(width: Self.size.width, height: tail ? Self.size.height : Self.size.width, alignment: .topLeading)
         .compositingGroup()
         .shadow(color: .black.opacity(0.3), radius: 1.5, x: 0, y: 2)
     }
