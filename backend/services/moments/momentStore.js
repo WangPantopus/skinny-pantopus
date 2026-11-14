@@ -44,6 +44,8 @@ const CLOCK_SKEW_MS = 2 * 60 * 1000;
 // "Show height" (behind the `moment_heights` flag): a Moment may say how high above sea level it was posted. The phone
 // sends metres; everyone reads feet rounded to HEIGHT_STEP_FT, so the number never tells one floor from the next.
 const HEIGHTS_FLAG = 'moment_heights';
+// Part D "float by day": Moments with an elevation float on the map, shadows where the sun is. Needs HEIGHTS_FLAG.
+const FLOAT_FLAG = 'moment_float';
 const FEET_PER_M = 3.28084;
 const HEIGHT_STEP_FT = 10;
 // Below the Dead Sea's shore or above where airliners fly, the reading is wrong: it isn't shown.
@@ -242,15 +244,25 @@ function shownHeight(row) {
  * row is kept for a minute); only the internal-team tier looks up the person's role.
  */
 async function heightsOn(viewer) {
+  return flagOnFor(HEIGHTS_FLAG, viewer);
+}
+
+/** Whether Moments float by day on `viewer`'s map: `moment_float` on for them, and heights too. Off for everyone. */
+async function floatOn(viewer) {
+  return (await heightsOn(viewer)) && flagOnFor(FLOAT_FLAG, viewer);
+}
+
+/** One flag for one person, read from the cached flag row; any failure reads as off. */
+async function flagOnFor(name, viewer) {
   try {
-    const flag = await getFlag(HEIGHTS_FLAG);
+    const flag = await getFlag(name);
     if (!flag) return false;
     if (flag.enabled_globally) return true;
     const id = typeof viewer === 'string' ? viewer : viewer?.id;
     if (id && (flag.beta_user_ids || []).includes(id)) return true;
-    return flag.enabled_for_internal_team ? await isFeatureEnabled(HEIGHTS_FLAG, viewer) : false;
+    return flag.enabled_for_internal_team ? await isFeatureEnabled(name, viewer) : false;
   } catch (error) {
-    logger.warn('moments.heights_flag_failed', { error: error.message });
+    logger.warn('moments.flag_failed', { flag: name, error: error.message });
     return false;
   }
 }
@@ -913,6 +925,6 @@ module.exports = {
   KINDS, HOURS, BACKGROUNDS, AUDIENCES, DAILY_LIMIT, HOUR_MS, MOMENT_SELECT,
   fail, meta, hasEnded, momentState, displayedPoint, viewerContext, canSee, loadAuthors, loadMoment,
   serializeMoments, openMoment, openMoments, mapRings, unplacedRings, peopleRings, MAX_PEOPLE, connectionIds, unseenPeople, wentLiveAt, ownMoments, viewersOf,
-  newMomentRow, takenAtShown, shownAltitude, heightsOn, HEIGHTS_FLAG, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
+  newMomentRow, takenAtShown, shownAltitude, heightsOn, floatOn, HEIGHTS_FLAG, FLOAT_FLAG, checkPostingRules, insertMoment, updateMoment, goLive, hold, holdIfReported, releaseIfReviewed,
   filesHeld, purgeFiles, deleteMoment,
 };
