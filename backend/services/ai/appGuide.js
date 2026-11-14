@@ -34,6 +34,10 @@ const SCREENS = {
   plan_new: ['pantopus://plans/new', 'plans', 'Host a plan'],
   plan_requests: ['pantopus://plans/{id}/requests', 'plans+id', 'See who asked'],
   chat: ['pantopus://chat/{id}', 'id', 'Open the chat'],
+  // The Mail tab and one piece in it, while the mailbox is on (launch key `mailbox`).
+  mail: ['pantopus://mailbox', 'mailbox', 'Open Mail'],
+  mail_item: ['pantopus://mailbox/{id}', 'mailbox+id', 'Open this mail'],
+  mail_sent_item: ['pantopus://mailbox/sent/{id}', 'mailbox+id', 'Open what you sent'],
   notifications: ['pantopus://notifications', null, 'Open notifications'],
   notification_settings: ['pantopus://settings/notifications', null, 'Open notification settings'],
   support_train: ['pantopus://support-trains/{id}', 'id', 'Open the Support Train'],
@@ -71,7 +75,7 @@ const showLinkDefinition = {
     type: 'object',
     properties: {
       screen: { type: 'string', enum: SCREEN_NAMES },
-      id: { type: ['string', 'null'], description: 'The id the screen needs (home, post, plan, chat or Support Train id), or null.' },
+      id: { type: ['string', 'null'], description: 'The id the screen needs (home, post, plan, chat, mail or Support Train id), or null.' },
       home_id: { type: ['string', 'null'], description: 'For home_task: the home the task is in. Otherwise null.' },
       section: { type: ['string', 'null'], enum: [...SECTION_SLUGS, null], description: 'For place_section only.' },
       label: { type: ['string', 'null'], description: 'Button text, a few words starting with a verb ("Open members"). Null for the default.' },
@@ -86,6 +90,7 @@ function runShowLink(args, ctx) {
   const entry = SCREENS[args.screen];
   if (!entry) return { error: `Unknown screen. Screens: ${SCREEN_NAMES.join(', ')}.` };
   if (entry[1] && entry[1].includes('plans') && ctx.plansEnabled === false) return { error: "Plans aren't available for this person." };
+  if (entry[1] && entry[1].includes('mailbox') && !isLaunchFeatureEnabled('mailbox')) return { error: "Mail isn't available in the app yet." };
   if (entry[1] === 'memory' && !ctx.memory) return { error: "This version of the app has no memory list. Say they can see it in Settings once they update the app." };
   if (entry[1] === 'rules' && !ctx.rules) return { error: "This version of the app has no rules list. Say they can see it in Settings once they update the app." };
   const url = linkFor(args.screen, args.id, { home: args.home_id, section: args.section });
@@ -104,6 +109,7 @@ function runShowLink(args, ctx) {
 // builds have neither, and hear where in the app the person does it instead.
 function appGuide({
   plans = true, playdates = false, sports = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true, remembers = false, standingRules = false,
+  identity = true,
 } = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
@@ -164,6 +170,22 @@ ${sports ? '- Your teams: Settings → Notifications → Games and teams opens t
 - ${actionCards
     ? 'You can draft a plan (draft_plan), changes (draft_plan_change), cancelling (draft_plan_cancel), answering requests (show_plan_requests), asking to join (draft_plan_ask) and a message to guests (draft_plan_message).'
     : "They host one with Host a plan in the Plans tab. On a plan's page the host changes or cancels it and answers people asking to join, others ask to join, and people who are in message everyone."}`);
+
+  // Mail is described only while the mailbox is on; letters and Christmas cards follow their own keys.
+  if (mailbox) {
+    const letters = isLaunchFeatureEnabled('mail_extras');
+    const cards = isLaunchFeatureEnabled('holiday_cards');
+    parts.push(`MAIL
+- Mail (the Mail tab${links ? ', mail' : ''}) is mail sent through Pantopus to a person, their home or their business. It comes in one round each morning; the top of the Mailbox says whether today's mail has come.
+- Boxes: Me (their own mail), Home (their household's) and Biz (for a business they own or get mail for), then Sent. Tabs: Incoming (in the box), Counter (waiting on them: due, or put there) and Vault (what they filed, with Archived at the bottom). The search icon searches all their mail.
+- A home's mail opens only to residents whose address is proven (a postcard code, a document, a landlord's confirmation, an ID check, or the household's invitation or approval), never to guests. A letter addressed to one member stays that member's. Until the address is proven, the home's mail waits in a closed Home box.
+- "Pantopus read this for you" is a short note at the top of a piece with its key facts. Businesses and Pantopus write their own; otherwise AI writes it when the piece is first opened.
+- The ⋯ menu in Mail has Mail tasks, Home records, Stamps and Hold my mail, which keeps their own mail while they're away and brings it as one bundle the morning they're back.${letters ? `
+- Writing a letter: the pencil button in Mail (who it's to, the address, the letter, then seal and send).` : ''}${cards ? `
+- Christmas cards: "Send a Christmas card" at the top of Me and in the side menu. They pick who it's for and a card, write on the back, choose when it arrives (the next morning, sealed until Christmas, or Christmas morning), look it over, then seal and send. A card can be taken back until the 7 AM pickup, and the season closes December 31.` : ''}
+- On the phones, Mail opens after Face ID or the passcode; so does the Wallet.
+- ${identity ? `You can look through their Mail and read a piece (find_mail, get_mail_item${links ? '; mail_item opens one' : ''}). ` : ''}You can't send, pay, file or delete mail: they do that on the piece.`);
+  }
 
   const off = [];
   if (!marketplace) off.push('buying and selling (marketplace listings)');
