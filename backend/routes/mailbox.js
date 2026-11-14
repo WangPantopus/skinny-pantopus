@@ -2299,6 +2299,58 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
   }
 });
 
+// How long after joining a new account's apps open a card waiting for it ("Joined for a card", TABCARD section 3).
+const CARD_WAITING_JOINED_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * GET /api/mailbox/cards/waiting
+ * The Christmas card someone joined for: the newest unopened card in the caller's own Me mailbox (delivered, in
+ * Incoming, not archived, filed or deleted), while their account is under 14 days old. The apps ask once per account on a
+ * device and open it as tapping it in the Mailbox does. 200 { card: null } when there is none, the account is older, or
+ * cards aren't open (the launch key is off, or sending closed where they live: the "Send a Christmas card" row's rule);
+ * otherwise { card: { mail_id, from_first_name, sealed } }. The first name is the first word of the name on the envelope
+ * (the sender's Local Profile, as the Mailbox names them), never their private account name. 503 when it can't be read.
+ */
+router.get('/cards/waiting', verifyToken, async (req, res) => {
+  const none = () => res.json({ card: null });
+  if (!cardsOn()) return none();
+  const userId = req.user.id;
+  try {
+    const now = new Date();
+    const [{ data: account, error: accountError }, timeZone] = await Promise.all([
+      supabaseAdmin.from('User').select('created_at').eq('id', userId).maybeSingle(),
+      mailDelivery.personTimeZone(userId),
+    ]);
+    if (accountError) throw new Error(accountError.message);
+    if (!holidayCards.seasonOpen(timeZone || mailDelivery.FALLBACK_TIME_ZONE, now)) return none();
+    const joined = Date.parse(account?.created_at);
+    if (!Number.isFinite(joined) || now.getTime() - joined > CARD_WAITING_JOINED_MS) return none();
+    // Unopened as the Mailbox counts it: opened neither in a reader (opened_at) nor marked read (viewed).
+    const { data: rows, error } = await onlyDelivered(supabaseAdmin.from('Mail')
+      .select('id, sender_user_id, sender_entity_id, sender_business_name, sender_display, mail_extracted, delivered_at')
+      .eq('recipient_user_id', userId)
+      .eq('drawer', 'personal')
+      .contains('tags', [holidayCards.CARD_TAG])
+      .eq('viewed', false)
+      .is('opened_at', null)
+      .in('lifecycle', ['delivered', 'opened'])
+      .eq('archived', false)
+      .is('deleted_at', null), now)
+      .order('delivered_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(5);
+    if (error) throw new Error(error.message);
+    const mail = (rows || []).find((row) => holidayCards.isCard(row));
+    if (!mail) return none();
+    const named = await nameMailSender(mail, userId);
+    const fromFirstName = String(named?.sender_display || '').trim().split(/\s+/)[0] || 'Someone';
+    return res.json({ card: { mail_id: mail.id, from_first_name: fromFirstName, sealed: holidayCards.isSealed(mail, now) } });
+  } catch (err) {
+    logger.error('Waiting card read error', { error: err.message, userId });
+    return res.status(503).json({ error: 'Couldn’t check your mail just now. Try again in a moment.', code: 'CARDS_UNAVAILABLE' });
+  }
+});
+
 /**
  * Store a card that passed checkCard and answer as its send does ({ status, body }): 201 { card } (with { link } by
  * link), or why it didn't go. With digital stamps on, the database takes the card's stamp as it stores it, free ones
