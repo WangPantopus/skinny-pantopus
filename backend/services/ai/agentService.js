@@ -50,6 +50,7 @@ const rules = require('./rules');
 const agentRecord = require('./agentRecord');
 const cardState = require('./cardState');
 const scope = require('./scope');
+const { MAIL_TOOL_NAMES } = require('./readToolsMail');
 
 const READ_TOOL_NAMES = new Set(readToolDefinitions.map((tool) => tool.name));
 const CARD_TOOL_NAMES = new Set(actionCardDefinitions.map((tool) => tool.name));
@@ -90,7 +91,7 @@ function launchScopedChatTools({
       if (tool.name === scope.OUT_OF_SCOPE) return scope.pantopusOnly();
       if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
       if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
-      if (['get_mail_item', 'summarize_mail_item'].includes(tool.name)) return isLaunchFeatureEnabled('mailbox');
+      if (MAIL_TOOL_NAMES.has(tool.name) || tool.name === 'summarize_mail_item') return isLaunchFeatureEnabled('mailbox');
       return true;
     })
     .map((tool) => (tool.name === 'draft_support_train_from_story' && !giftFunds ? withoutGiftFunds(tool) : tool))
@@ -176,6 +177,7 @@ const TOOL_STATUS = {
   get_user_context: 'Looking at your places…',
   list_user_support_trains: 'Looking up your Support Trains…',
   get_support_train_summary: 'Looking up that Support Train…',
+  find_mail: 'Looking through your mail…',
   get_mail_item: 'Reading your mail…',
   summarize_mail_item: 'Summarizing your mail…',
   find_plans: 'Looking at plans…',

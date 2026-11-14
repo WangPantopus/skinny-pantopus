@@ -10,8 +10,6 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const noaa = require('../external/noaa');
 const logger = require('../../utils/logger');
-const { getAuthorizedMail } = require('./mailAccess');
-const { nameMailSender } = require('../../utils/mailSenderView');
 const { listEffectivelyOpenSlots } = require('../supportTrainSlotAvailability');
 const { resolveLocation } = require('../context/locationResolver');
 const { escapeIlike } = require('../../utils/escapeIlike');
@@ -19,6 +17,7 @@ const { draftPickupSchedule } = require('./pickupDraft');
 const { readToolDefinitions, runReadTool, PLACE_POST_TYPES } = require('./readTools');
 const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNearby');
 const { verificationReadToolDefinitions, runVerificationReadTool } = require('./readToolsVerification');
+const { mailReadToolDefinitions, runMailReadTool } = require('./readToolsMail');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
 const { memoryToolDefinitions, runMemoryTool } = require('./memory');
@@ -68,21 +67,6 @@ const toolDefinitions = [
         },
       },
       required: ['place_label'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name:'get_mail_item',
-    description: 'Get the content of a specific mail item for summarization. Requires the mail item ID.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        mail_item_id: {
-          type: 'string',
-          description: 'UUID of the mail item to retrieve.',
-        },
-      },
-      required: ['mail_item_id'],
       additionalProperties: false,
     },
   },
@@ -158,7 +142,7 @@ const toolDefinitions = [
   },
   {
     name:'summarize_mail_item',
-    description: 'Generate a structured summary of a mail item with recommended actions. Call this after retrieving mail content with get_mail_item.',
+    description: "Show a summary card for one letter, with its key facts and recommended actions. Call it after reading the letter: get_mail_item for a piece in their Mail, or the photo or text they sent of a paper letter.",
     input_schema: {
       type: 'object',
       properties: {
@@ -279,6 +263,8 @@ const toolDefinitions = [
   ...readToolDefinitions,
   ...nearbyReadToolDefinitions,
   ...verificationReadToolDefinitions,
+  // Their Mail: the Mail tab's lists, search and Sent, and one piece in full (readToolsMail.js).
+  ...mailReadToolDefinitions,
   ...actionCardDefinitions,
   // Phase 3: what they ask Pantopus to remember (memory.js).
   ...memoryToolDefinitions,
@@ -342,6 +328,9 @@ const TOOL_TIMEOUTS_MS = {
   draft_plan_from_event: 20000,
   // Each home's claim, access, postcard and residency reads.
   get_home_verification: 10000,
+  // The Mail lists' own reads (the pieces, the boxes' counts, folder names), and a letter's stored text.
+  find_mail: 10000,
+  get_mail_item: 8000,
   draft_plan_change: 15000,
   show_plan_requests: 8000,
   draft_plan_ask: 8000,
@@ -418,6 +407,8 @@ async function _executeToolImpl(name, args, ctx) {
   if (nearby) return nearby;
   const verification = await runVerificationReadTool(name, args, ctx);
   if (verification) return verification;
+  const mail = await runMailReadTool(name, args, ctx);
+  if (mail) return mail;
   const drafted = await runCardTool(name, args, ctx);
   if (drafted) return drafted;
   const remembered = await runMemoryTool(name, args, ctx);
@@ -436,9 +427,6 @@ async function _executeToolImpl(name, args, ctx) {
 
     case 'get_place_alerts':
       return _getPlaceAlerts(userId, args.place_label);
-
-    case 'get_mail_item':
-      return _getMailItem(userId, args.mail_item_id);
 
     case 'create_gig_draft': {
       const { note, ...fields } = args;
@@ -494,7 +482,9 @@ async function _executeToolImpl(name, args, ctx) {
     case 'summarize_mail_item': {
       const summary = { ...args };
       if (!summary.key_facts) summary.key_facts = [];
-      if (!summary.recommended_actions) summary.recommended_actions = [];
+      // The card's schema wants every action's `metadata` (the letter summarizer fills it); the chat's actions
+      // have none, so a summary with any action never validated.
+      summary.recommended_actions = (summary.recommended_actions || []).map((action) => ({ metadata: null, ...action }));
 
       const valid = validateMailSummary(summary);
       return { summary, valid, errors: valid ? null : validateMailSummary.errors, draftType: 'mail_summary' };
@@ -776,38 +766,6 @@ async function _primaryPlace(userId) {
     city: home?.city || null,
     state: home?.state || null,
   };
-}
-
-async function _getMailItem(userId, mailItemId) {
-  try {
-    // A person who sent it is named as neighbors see them (their Local Profile).
-    const item = await nameMailSender(await getAuthorizedMail({
-      mailItemId,
-      userId,
-      select: 'id, subject, content, preview_text, sender_display, sender_user_id, sender_entity_id, sender_business_name, sender_trust, category, type, urgency, due_date, key_facts, lifecycle',
-    }), userId);
-
-    if (!item) {
-      return { error: 'Mail item not found or access denied.' };
-    }
-    return {
-      mail: {
-        subject: item.subject,
-        content: item.content || item.preview_text,
-        sender: item.sender_display,
-        sender_trust: item.sender_trust,
-        category: item.category,
-        type: item.type,
-        urgency: item.urgency,
-        due_date: item.due_date,
-        existing_key_facts: item.key_facts,
-        lifecycle: item.lifecycle,
-      },
-    };
-  } catch (err) {
-    logger.error('get_mail_item error', { userId, mailItemId, error: err.message });
-    return { error: 'Failed to retrieve mail item.' };
-  }
 }
 
 module.exports = {
