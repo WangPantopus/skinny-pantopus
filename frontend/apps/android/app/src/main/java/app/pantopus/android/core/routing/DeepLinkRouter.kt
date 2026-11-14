@@ -293,7 +293,7 @@ object DeepLinkRouter {
         data class MailSentCard(val id: String) : Destination
 
         /**
-         * `/app/mailbox/cards?design=` — the steps of sending a card, with that picture chosen (launch key `card_table`).
+         * `/app/mailbox/cards?design=` — the steps of sending a card, with that picture chosen (on with Christmas cards).
          */
         data class SendCard(val design: String?) : Destination
 
@@ -1198,9 +1198,10 @@ object DeepLinkRouter {
                         val taskId = segments.getOrNull(2)
                         if (taskId.isNullOrBlank()) Destination.Unknown(raw) else Destination.MailTask(taskId)
                     }
-                    // "Send this card to someone" on a public card page; with the table off it's still the Mailbox.
+                    // Sending a Christmas card: "Send this card to someone" on a public card page and the Christmas card
+                    // ads, carried through an install by the page's store button. On with Christmas cards (no card_table).
                     "cards" ->
-                        if (LaunchFeatures.cardTable) {
+                        if (LaunchFeatures.mailbox && LaunchFeatures.holidayCards) {
                             Destination.SendCard(Paths.queryParam(queryPart, "design")?.takeIf(Paths::isSafeSegment))
                         } else {
                             Destination.Unknown(raw)
