@@ -114,6 +114,8 @@ every home in the country about $5,000. Whether to use a licensed copy at all is
 | Manatee FL | 181,175 of 181,305 | 175,968 | 181,145 | 181,175 | Floors, half baths (November 14) |
 | Hernando FL | 81,577 of 85,959 | 81,411 | 81,557 (whole baths, as the county counts them) | (not read) | Floors (November 14) |
 | Summit OH | 184,638 of 186,097 | 184,620 | 184,579 | (already had it) | Half baths |
+| Dakota MN (November 14) | 124,346 of 128,288 | 124,333 | 124,343 | (already had it) | Half baths; the county's own Tax Parcels (ODbL) |
+| Clackamas OR (November 14) | 112,731 of 115,305 | 109,381 | full baths only (112,490): the county's layer has no half baths, so no bath total | (already had it) | |
 
 ## What I couldn't confirm
 

@@ -28,7 +28,7 @@ async function stateLayers() {
 }
 
 // Counties read by their own connector.
-const OWN_CONNECTOR = new Set(['27123', '27139']);
+const OWN_CONNECTOR = new Set(['27037', '27123', '27139']);
 const COLUMNS = ['county_pin', 'state_pin', 'anumberpre', 'anumber', 'anumbersuf', 'st_pre_dir', 'st_pre_typ', 'st_name', 'st_pos_typ', 'st_pos_dir', 'sub_type1', 'sub_id1', 'sub_id2', 'zip', 'ctu_name', 'postcomm', 'co_name', 'acres_deed', 'acres_poly',
   'emv_land', 'emv_bldg', 'emv_total', 'tax_year', 'mkt_year', 'useclass1', 'dwell_type', 'home_style', 'fin_sq_ft', 'garage', 'garagesqft', 'basement', 'heating', 'cooling', 'year_built', 'num_units', 'sale_date', 'sale_value', 'school_dst', 'plat_name'];
 
@@ -114,39 +114,62 @@ function fromRow(row, fips, county) {
   return { id: `pp:${kind}:${fips}:${parcel}`, kind, home_type: homeType, address: { ...parsed, city: String(word(row.postcomm) || word(row.ctu_name) || '').toUpperCase(), zip: zipCode(row.zip) }, facts };
 }
 
-async function* build({ work }) {
-  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+/** The counties the state's own table marks open, and its layers. */
+async function openCounties() {
   const layers = await stateLayers();
   const table = await getJson(`${layers.table}/query?${new URLSearchParams({ where: '1=1', outFields: 'countyfips,countyname,acqdate,gac_open_approval', returnGeometry: 'false', f: 'json' })}`, 'The county table');
   const counties = (table.features || []).map((feature) => feature.attributes).filter((row) => String(row.gac_open_approval).toLowerCase() === 'true');
   log(`${counties.length} counties opted in`);
   if (counties.length < 40) throw new Error(`Only ${counties.length} counties are marked open`);
-  for (const { countyfips: code, countyname: name, acqdate: acquired } of counties.sort((a, b) => a.countyfips.localeCompare(b.countyfips))) {
-    const fips = `27${code}`;
-    if (OWN_CONNECTOR.has(fips) || (only.length && !only.includes(fips))) continue;
-    const county = `${name} County`;
-    const records = [];
-    const seen = new Set();
-    let noAddress = 0;
-    const rows = cached(path.join(work, 'mn-parcels', `${fips}.jsonl.gz`), () => layerRows(layers.parcels, COLUMNS, { where: `co_name = '${name.replace(/'/g, "''")}'`, oid: 'objectid' }));
-    for await (const row of rows) {
-      const record = fromRow(row, fips, county);
-      if (!record) noAddress += 1;
-      else if (!seen.has(record.id)) {
-        seen.add(record.id);
-        records.push(record);
-      }
+  return { layers, counties: counties.sort((a, b) => a.countyfips.localeCompare(b.countyfips)) };
+}
+
+/** One open county's entry, or null when its file has no street numbers. */
+async function countyEntry(work, layers, { countyfips: code, countyname: name, acqdate: acquired }) {
+  const fips = `27${code}`;
+  const county = `${name} County`;
+  const records = [];
+  const seen = new Set();
+  let noAddress = 0;
+  const rows = cached(path.join(work, 'mn-parcels', `${fips}.jsonl.gz`), () => layerRows(layers.parcels, COLUMNS, { where: `co_name = '${name.replace(/'/g, "''")}'`, oid: 'objectid' }));
+  for await (const row of rows) {
+    const record = fromRow(row, fips, county);
+    if (!record) noAddress += 1;
+    else if (!seen.has(record.id)) {
+      seen.add(record.id);
+      records.push(record);
     }
-    log(`${county}: ${records.length} records, ${noAddress} without a street number`);
-    const asOf = isoDate(acquired);
-    if (!asOf) throw new Error(`${county}'s row no longer says when it was acquired`);
-    // A county whose file has no street numbers has nothing to look up.
-    if (!records.length) continue;
-    for (const building of condoBuildings(records, { fips, county })) records.push(building);
-    yield {
-      fips, state: 'MN', name: county, publisher: `${county} and MnGeo`, dataset: 'open county parcels', method: 'state', source: 'mn-parcels', title: 'State records', as_of: asOf, stale_after_days: 730, records,
-    };
+  }
+  log(`${county}: ${records.length} records, ${noAddress} without a street number`);
+  const asOf = isoDate(acquired);
+  if (!asOf) throw new Error(`${county}'s row no longer says when it was acquired`);
+  // A county whose file has no street numbers has nothing to look up.
+  if (!records.length) return null;
+  for (const building of condoBuildings(records, { fips, county })) records.push(building);
+  return {
+    fips, state: 'MN', name: county, publisher: `${county} and MnGeo`, dataset: 'open county parcels', method: 'state', source: 'mn-parcels', title: 'State records', as_of: asOf, stale_after_days: 730, records,
+  };
+}
+
+async function* build({ work }) {
+  const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
+  const { layers, counties } = await openCounties();
+  for (const row of counties) {
+    const fips = `27${row.countyfips}`;
+    if (OWN_CONNECTOR.has(fips) || (only.length && !only.includes(fips))) continue;
+    const entry = await countyEntry(work, layers, row);
+    if (entry) yield entry;
   }
 }
 
-module.exports = { build, stateLayers };
+/** One county's entry from the state's open parcels, for a connector that adds the county's own facts to it. */
+async function countyParcels(work, fips) {
+  const { layers, counties } = await openCounties();
+  const row = counties.find(({ countyfips }) => `27${countyfips}` === fips);
+  if (!row) throw new Error(`The state's table no longer marks ${fips} open`);
+  const entry = await countyEntry(work, layers, row);
+  if (!entry) throw new Error(`${fips}'s open parcels have no street numbers`);
+  return entry;
+}
+
+module.exports = { build, stateLayers, countyParcels };

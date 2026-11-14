@@ -99,6 +99,8 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -392,7 +394,32 @@ fun MomentsViewerScreen(
             dismissInput()
         }
     }
+    // Dragged down, the Moment moves with the finger. Let go short of a close it springs back; far enough, it goes on
+    // down off the screen from where the finger left it while the viewer closes. It never jumps back up first.
     var dragY by remember { mutableFloatStateOf(0f) }
+    var dragMove by remember { mutableStateOf<Job?>(null) }
+    var leaving by remember { mutableStateOf(false) }
+    val settleDrag = {
+        dragMove?.cancel()
+        dragMove =
+            scope.launch {
+                animate(dragY, 0f, animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) { value, _ ->
+                    dragY = value
+                }
+                handling = false
+            }
+    }
+    val leave = { height: Float ->
+        leaving = true
+        dragMove?.cancel()
+        dragMove =
+            scope.launch {
+                animate(dragY, height, animationSpec = tween(LEAVE_MS, easing = LinearOutSlowInEasing)) { value, _ -> dragY = value }
+            }
+        close()
+    }
+    // Where the picture is laid out: the finger is read on the screen, not on the picture it is moving.
+    val picturePlace = remember { PicturePlace() }
     // Moving between people with the finger (founder, 2026-11-11): a sideways drag turns the page as it goes, the
     // person after or before coming in beside the one showing like the next face of a box. [pageX] is how far.
     var pageX by remember { mutableFloatStateOf(0f) }
@@ -486,11 +513,12 @@ fun MomentsViewerScreen(
                         .padding(bottom = BOTTOM_BAR)
                         .fillMaxSize()
                         .graphicsLayer {
-                            translationY = dragY.coerceAtLeast(0f) * 0.6f
+                            translationY = dragY.coerceAtLeast(0f)
                             alpha = 1f - (dragY.coerceAtLeast(0f) / 1600f).coerceIn(0f, 0.5f)
                         }.clip(RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp))
                         .viewerGestures(
-                            enabled = !typing && !reacting && !turning,
+                            enabled = !typing && !reacting && !turning && !leaving,
+                            place = picturePlace,
                             onHold = { holding = it },
                             onTap = { x, width -> if (x < width / 3f) viewModel.previous() else viewModel.next() },
                             onPage = { x ->
@@ -517,14 +545,19 @@ fun MomentsViewerScreen(
                                     zoom = scale.coerceIn(1f, MAX_ZOOM)
                                 }
                             },
-                            onSwipeDown = close,
+                            onLetGo = { closes, height -> if (closes) leave(height) else settleDrag() },
                             onSwipeUp = {
                                 if (mineNow) {
                                     seenByOpen = true
                                     viewModel.loadViewers()
                                 }
                             },
-                            onDrag = { dragY = it },
+                            onDrag = { y ->
+                                dragMove?.cancel()
+                                // Under the finger it waits, as it does for a turn of the page.
+                                if (y > 0f) handling = true
+                                dragY = y
+                            },
                         ).semantics {
                             customActions =
                                 listOf(
@@ -1752,36 +1785,54 @@ private fun ReactionPop(
     )
 }
 
+/** Where the picture is laid out, so its gestures can read the finger on the screen ([onScreen]). */
+private class PicturePlace {
+    var at: LayoutCoordinates? = null
+
+    /** A point on the picture, as a point on the screen: it stays put while the picture moves under the finger. */
+    fun onScreen(point: Offset): Offset = at?.takeIf { it.isAttached }?.localToRoot(point) ?: point
+}
+
 /**
  * The viewer's gestures (board V1 note): a tap on the left third goes back and elsewhere forward, a hold pauses, a
  * swipe down closes, a swipe up opens Seen by on your own Moment. A drag keeps to the way it first goes: down, and
- * [onDrag] follows it so the Moment moves with the finger; sideways, and [onPage] follows it so the page turns with the
- * finger, [onTurn] saying how far it had gone when it lifted. Two fingers pinch: [onZoom] says how big and around
- * where (as a fraction of the picture), then null when they lift; a pinch is never also a tap or a swipe.
+ * [onDrag] follows it so the Moment moves with the finger, [onLetGo] saying whether it had gone far enough to close
+ * when it lifted (and how tall the picture is); sideways, and [onPage] follows it so the page turns with the finger,
+ * [onTurn] saying how far it had gone when it lifted. Two fingers pinch: [onZoom] says how big and around where (as a
+ * fraction of the picture), then null when they lift; a pinch is never also a tap or a swipe.
+ *
+ * How far the finger has gone is read on the screen ([place]), not on the picture. The picture moves and turns under
+ * the finger, so read on the picture each move came back short by as far as the picture had already gone: a drag down
+ * moved it about a third as far as the finger, and a turn of the page stuck part of the way (founder, 2026-11-13, of
+ * the iPhone's same fault: "not smooth, lag, stuck even"). Only a tap's side is read on the picture.
  */
 @Suppress("LongParameterList", "CyclomaticComplexMethod", "LongMethod")
 private fun Modifier.viewerGestures(
     enabled: Boolean,
+    place: PicturePlace,
     onHold: (Boolean) -> Unit,
     onTap: (x: Float, width: Float) -> Unit,
     onPage: (Float) -> Unit,
     onTurn: (dx: Float, width: Float) -> Unit,
     onZoom: (scale: Float, origin: TransformOrigin?) -> Unit,
-    onSwipeDown: () -> Unit,
+    onLetGo: (closes: Boolean, height: Float) -> Unit,
     onSwipeUp: () -> Unit,
     onDrag: (Float) -> Unit,
 ): Modifier =
     if (!enabled) {
         this
     } else {
-        pointerInput(Unit) {
+        onPlaced { place.at = it }.pointerInput(Unit) {
             val slop = viewConfiguration.touchSlop
             val swipe = SWIPE_DP * density
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val start = down.position
+                val startOnScreen = place.onScreen(start)
                 val startedAt = down.uptimeMillis
                 var travel = Offset.Zero
+                // How far the finger had gone when it became a drag: the picture moves from there, with no jump.
+                var lead = Offset.Zero
                 var holding = false
                 // Sideways or up and down, once the finger has moved past the slop; it keeps to that until it lifts.
                 var sideways: Boolean? = null
@@ -1826,22 +1877,27 @@ private fun Modifier.viewerGestures(
                         continue
                     }
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    travel = change.position - start
-                    if (sideways == null && travel.getDistance() > slop) sideways = abs(travel.x) > abs(travel.y)
+                    travel = place.onScreen(change.position) - startOnScreen
+                    if (sideways == null && travel.getDistance() > slop) {
+                        sideways = abs(travel.x) > abs(travel.y)
+                        lead = Offset(travel.x, travel.y.coerceAtLeast(0f))
+                    }
                     when (sideways) {
-                        true -> onPage(travel.x)
-                        false -> if (travel.y > 0f) onDrag(travel.y)
+                        true -> onPage(travel.x - lead.x)
+                        false -> onDrag((travel.y - lead.y).coerceAtLeast(0f))
                         null -> Unit
                     }
                     change.consume()
                 }
-                onDrag(0f)
                 if (holding) onHold(false)
                 val dy = travel.y
+                val closes = pinchFrom == 0f && sideways == false && dy > swipe
+                // A drag down either goes on off the screen or springs back; it is never just put back.
+                if (sideways == false) onLetGo(closes, size.height.toFloat())
                 when {
                     pinchFrom > 0f -> onZoom(1f, null)
-                    sideways == true -> onTurn(travel.x, size.width.toFloat())
-                    sideways == false && dy > swipe -> onSwipeDown()
+                    sideways == true -> onTurn(travel.x - lead.x, size.width.toFloat())
+                    closes -> Unit
                     sideways == false && dy < -swipe -> onSwipeUp()
                     !holding && travel.getDistance() < slop -> onTap(start.x, size.width.toFloat())
                 }
@@ -1896,6 +1952,9 @@ private const val TEXT_PER_CHAR_MS = 45L
 private const val TEXT_MAX_MS = 12_000L
 private const val NANOS_PER_MS = 1_000_000.0
 private const val HOLD_MS = 180L
+
+/** How long the Moment takes to go off the bottom of the screen once a drag down is let go far enough. */
+private const val LEAVE_MS = 220
 private const val SWIPE_DP = 60f
 
 /** How far across the screen a sideways drag has to go for the page to turn when the finger lifts. */

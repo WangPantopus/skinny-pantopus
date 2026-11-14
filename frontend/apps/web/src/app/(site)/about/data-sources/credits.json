@@ -128,6 +128,15 @@
           "statement": "Regional Land Information System data are a product of Metro and made publicly available according to the license agreement found in https://rlisdiscovery.oregonmetro.gov/pages/open-database-license."
         },
         {
+          "id": "mn-dakota",
+          "publisher": "Dakota County, Minnesota",
+          "url": "https://www.arcgis.com/home/item.html?id=9785dd74842d4d7781be0fe7c0cbfe62",
+          "license": "Open Database License (ODbL) 1.0",
+          "license_url": "https://opendatacommons.org/licenses/odbl/1-0/",
+          "dataset": "Tax Parcels (bedrooms and baths)",
+          "statement": "Contains information from Dakota County's Tax Parcels, made available under the Open Database License (ODbL) 1.0; its contents are under the Database Contents License. Dakota County GIS Database Disclaimer: the GIS data are provided as is and without any warranty as to their performance, merchantability or fitness for any particular purpose; Dakota County does not represent or warrant that they are error-free, complete, current or accurate; the full disclaimer and metadata are at the link above."
+        },
+        {
           "id": "nc-onemap",
           "publisher": "NC OneMap",
           "url": "https://www.nconemap.gov",
