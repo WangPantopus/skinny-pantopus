@@ -109,7 +109,7 @@ function runShowLink(args, ctx) {
 // builds have neither, and hear where in the app the person does it instead.
 function appGuide({
   plans = true, playdates = false, sports = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true, remembers = false, standingRules = false,
-  identity = true,
+  identity = true, chats = true,
 } = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
@@ -148,7 +148,7 @@ NEARBY
 
 MESSAGES
 - Direct messages, group chats, and a group chat for each plan (it opens when the host lets the first person in and closes a day after the plan). The "Pantopus AI" row is you.
-- Blocking someone stops new messages from them; people can report a person from their profile. You don't read anyone's chats in this version.
+- Blocking someone stops new messages from them; people can report a person from their profile. ${chats ? 'You read a chat only when the person asks you about it, and only chats they are in; you never send messages.' : "You don't read anyone's chats."}
 
 SUPPORT TRAINS
 - A Support Train organizes meals, takeout or groceries for someone going through something hard: the organizer sets dates, helpers sign up for a slot, and everyone gets reminders. You can start one with draft_support_train_from_story.

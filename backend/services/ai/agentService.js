@@ -51,6 +51,14 @@ const agentRecord = require('./agentRecord');
 const cardState = require('./cardState');
 const scope = require('./scope');
 const { MAIL_TOOL_NAMES } = require('./readToolsMail');
+const { CHAT_TOOL_NAMES } = require('./readToolsChats');
+
+// Reading chats (find_chats, read_chat) happens only in a person's own chat turn, when they ask about
+// a chat: these tools exist nowhere else (not in briefs, nudges or any background call).
+// AI_CHAT_READING=off leaves them out.
+function chatReading() {
+  return !['off', 'false', '0', 'disabled'].includes(String(process.env.AI_CHAT_READING || '').trim().toLowerCase());
+}
 
 const READ_TOOL_NAMES = new Set(readToolDefinitions.map((tool) => tool.name));
 const CARD_TOOL_NAMES = new Set(actionCardDefinitions.map((tool) => tool.name));
@@ -95,6 +103,7 @@ function launchScopedChatTools({
       if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
       if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
       if (MAIL_TOOL_NAMES.has(tool.name)) return isLaunchFeatureEnabled('mailbox') && identity;
+      if (CHAT_TOOL_NAMES.has(tool.name)) return chatReading();
       // The summary card also serves a paper letter they photograph, so it needs no identity check.
       if (tool.name === 'summarize_mail_item') return isLaunchFeatureEnabled('mailbox');
       return true;
@@ -141,8 +150,9 @@ function launchScopedChatInstructions({
     standingRules: standingRules && actionCards,
     pantopusOnly: scope.pantopusOnly(),
     identity,
+    chats: chatReading(),
     guide: appGuide({
-      identity,
+      identity, chats: chatReading(),
       plans, playdates, sports: plans && sports, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards, standingRules: standingRules && actionCards,
     }),
   });
@@ -185,6 +195,8 @@ const TOOL_STATUS = {
   list_user_support_trains: 'Looking up your Support Trains…',
   get_support_train_summary: 'Looking up that Support Train…',
   find_mail: 'Looking through your mail…',
+  find_chats: 'Looking at your chats…',
+  read_chat: 'Reading the chat…',
   get_mail_item: 'Reading your mail…',
   summarize_mail_item: 'Summarizing your mail…',
   find_plans: 'Looking at plans…',
