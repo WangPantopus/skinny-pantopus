@@ -37,6 +37,11 @@ PRs, screenshots and chat. Preserve unrelated local work.
   switch: the tab is the October 13 feed under a big List | Map switch beside
   the side menu, and the density map, the meter and "Invite your neighbors"
   are "Verified homes nearby", opened from Place's Verified neighbors rows.
+  On November 13 the founder moved Mail to third while the Mailbox is on:
+  Place · Today · Mail · Pulse · Moments · Plans on iOS and Android (Moments
+  and Plans while their switches are on) and Place · Today · Mail · Pulse on
+  phone-width web; the desktop web sidebar keeps its order, and the apps still
+  open on Place.
   The founder doesn't want "Neighborhood" as a name in the app. The side menu
   (☰) is on the top screen of every tab on iOS and Android; web keeps its
   sidebar and menu. New tabs and redesigned tab screens keep the menu button,
