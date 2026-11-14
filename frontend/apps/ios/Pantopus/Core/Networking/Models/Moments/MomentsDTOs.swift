@@ -314,10 +314,15 @@ public struct MomentsMapResponse: Decodable, Sendable {
     public let unplaced: [MomentRingDTO]
     /// Heights are on for you (contract v3.9): the map offers "Elevation". False from a server before it.
     public let heightsOn: Bool
+    /// Moments with an elevation float by day (contract v3.10, `moment_float`), and where the sun is; false and nil
+    /// from a server before it.
+    public let floatOn: Bool
+    public let sun: MomentSunDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case rings, unplaced
+        case rings, unplaced, sun
         case heightsOn = "heights_on"
+        case floatOn = "float_on"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -325,6 +330,8 @@ public struct MomentsMapResponse: Decodable, Sendable {
         rings = try c.decode([MomentRingDTO].self, forKey: .rings)
         unplaced = (try? c.decodeIfPresent([MomentRingDTO].self, forKey: .unplaced)) ?? []
         heightsOn = (try? c.decodeIfPresent(Bool.self, forKey: .heightsOn)) ?? false
+        floatOn = (try? c.decodeIfPresent(Bool.self, forKey: .floatOn)) ?? false
+        sun = try? c.decodeIfPresent(MomentSunDTO.self, forKey: .sun)
     }
 }
 

@@ -26,6 +26,7 @@ struct MomentsHeightsBar: View {
                 HStack(spacing: Spacing.s2) {
                     chip
                     if viewModel.showsHeightTags { keyButton.transition(.opacity) }
+                    if let time = viewModel.sunChipTime { MomentsSunChip(time: time).transition(.opacity) }
                 }
                 if viewModel.showsHeightTags, viewModel.heightsKeyOpen {
                     MomentsHeightKey()

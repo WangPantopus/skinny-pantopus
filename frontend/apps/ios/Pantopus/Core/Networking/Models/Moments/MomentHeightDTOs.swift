@@ -141,3 +141,15 @@ extension KeyedDecodingContainer {
         return Int(feet.rounded())
     }
 }
+
+/// Where the sun is over the middle of the map right now (contract v3.10): sent only while Moments float for you
+/// (`float_on`). Degrees clockwise from true north, and above the horizon (negative after sunset).
+public struct MomentSunDTO: Decodable, Sendable, Hashable {
+    public let azimuthDeg: Double
+    public let elevationDeg: Double
+
+    private enum CodingKeys: String, CodingKey {
+        case azimuthDeg = "azimuth_deg"
+        case elevationDeg = "elevation_deg"
+    }
+}

@@ -48,6 +48,8 @@ struct MomentsHeightTagPlan: Equatable {
     let shown: Bool
     /// The rings that carry a tag, and where round the ring it sits.
     let sides: [String: MomentsPinTag.Side]
+    /// Part D: the sun while pins with an elevation float (`MomentsFloat.swift`); nil draws today's pins.
+    var float: MomentSunDTO?
 
     static let off = MomentsHeightTagPlan(shown: false, sides: [:])
 
@@ -62,6 +64,10 @@ extension MomentsMapViewModel {
     var pinsOnMap: (markers: [MomentsMarker], tags: MomentsHeightTagPlan) {
         let markers = markers
         guard showsHeightTags else { return (markers, .off) }
+        if let sun = floatingSun {
+            let sides = Self.floatTagSides(for: markers, in: heightTagsFrame, sun: sun)
+            return (markers, MomentsHeightTagPlan(shown: true, sides: sides, float: sun))
+        }
         return (markers, MomentsHeightTagPlan(shown: true, sides: Self.tagSides(for: markers, in: heightTagsFrame)))
     }
 
@@ -109,11 +115,11 @@ extension MomentsMapViewModel {
     }
 
     /// Kept clear round a tag, and between a tag and the map's edge.
-    private static let tagSpace: CGFloat = 1
-    private static let edge: CGFloat = 6
+    static let tagSpace: CGFloat = 1
+    static let edge: CGFloat = 6
 
     /// What a marker covers, from where its point is: a pin stands on its tip, a bubble too, a fan sits round it.
-    private nonisolated static func footprint(of marker: MomentsMarker, at point: CGPoint) -> CGRect {
+    nonisolated static func footprint(of marker: MomentsMarker, at point: CGPoint) -> CGRect {
         switch marker {
         case .ring:
             return CGRect(x: point.x - 32, y: point.y - 71, width: 64, height: 72)

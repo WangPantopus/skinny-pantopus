@@ -132,6 +132,9 @@ final class MomentsMapViewModel {
     var heightTagsOff = false
     var heightsKeyOpen = false
     var heightTagsFrame: MomentsHeightFrame?
+    /// Part D: pins with an elevation float by day, and the sun they're drawn for (`MomentsFloat.swift`).
+    var floatOn = false
+    var sun: MomentSunDTO?
     /// The clock the end times are read against; moved on each read and each minute.
     private(set) var now = Date() {
         didSet { memo.reset() }
@@ -279,6 +282,7 @@ final class MomentsMapViewModel {
             watched = watched.filter { id in all.contains { ring in ring.moments.contains { $0.id == id && !$0.seen } } }
             rings = all
             heightsAnswered(reply.heightsOn)
+            floatAnswered(reply.floatOn, sun: reply.sun)
             loaded = true
             loadFailed = false
             lookAroundIfOpening()
