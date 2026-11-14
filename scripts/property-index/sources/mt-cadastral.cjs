@@ -3,7 +3,8 @@
 // monthly. Montana's law (MCA 2-6-1017) bars using a public list of people as a distribution list: this index keeps no
 // people and no owner columns are asked for. The Department appraises at market value. Building detail comes from the same
 // appraisal database's county files on the State Library's site, read with no server (lib/mdf.cjs): only the residential
-// table's building columns are decoded, never its owner tables, and a property joins by the Department's own PropertyID.
+// table's building columns are decoded, with the commercial and outbuilding tables' structure kinds (to tell an improved
+// parcel with no home on it from a home), never its owner tables, and a property joins by the Department's own PropertyID.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -39,6 +40,29 @@ function useOf(row, unit) {
   if (/IMPROVED/.test(use)) return unit ? ['unit', null] : ['property', null];
   if (/VACANT/.test(use)) return ['parcel', null];
   return ['other', null];
+}
+
+// Counties live before improved parcels were told apart by what stands on them: they keep counting every improved parcel
+// as a home until the founder turns the new rule on for them (FOUNDER-LIST.md, "Montana: parcels with no home on them").
+const KEEPS_OLD_RULE = new Set(['30031', '30043', '30049', '30057', '30081']);
+const UNITS_IN = { 102: 2, 103: 3, 104: 4 };
+
+/**
+ * What an improved parcel with no dwelling in the residential table is, from the appraisal file's other building tables:
+ * its commercial buildings' structure types ("398 - Warehouse") and its outbuildings' kinds ("AAP1 - Pole Frame Bldg").
+ * A one-family house appraised on the commercial side and a cabin or living space in an outbuilding stay homes.
+ */
+function withoutDwelling(standing, buildingValue) {
+  const codes = (standing?.com || []).map((text) => Number(/^(\d+)\s+-/.exec(text)?.[1]));
+  if (codes.includes(101)) return ['property', null];
+  const units = Math.max(0, ...codes.map((code) => UNITS_IN[code] || 0));
+  if (units) return ['building', 'multi_unit', units];
+  if (codes.some((code) => code >= 211 && code <= 213)) return ['building', 'apartment'];
+  if (codes.length) return ['other', null];
+  const outbuildings = standing?.oby || [];
+  if (outbuildings.some((text) => /^(RLA|RRSC)/.test(text))) return ['property', null];
+  if (outbuildings.length || !(buildingValue > 0)) return ['parcel', null];
+  return ['property', null];
 }
 
 // The file's words carry their code in front ("03 - Ranch"); the code means nothing to a person.
@@ -77,8 +101,11 @@ function dwellingFacts(row) {
   return facts;
 }
 
-/** Each property's newest year of dwellings from its county's appraisal file: the largest dwelling's facts, and how many there are. */
-function dwellingsOf(work, name) {
+/**
+ * Each property's newest year of dwellings from its county's appraisal file: the largest dwelling's facts, and how many there
+ * are; with `withOthers`, also what else stands on each property (`standing`, for withoutDwelling).
+ */
+function dwellingsOf(work, name, withOthers) {
   const dir = path.join(work, 'mt-cadastral', 'appraisal');
   const zip = path.join(dir, `${name.replace(/ /g, '-')}.zip`);
   download(`${APPRAISAL_FILES}/COUNTY${FILE_ORDER.indexOf(name) + 1}.ZIP`, zip);
@@ -96,6 +123,25 @@ function dwellingsOf(work, name) {
       if ((row.SFLA || 0) > (held.row.SFLA || 0)) held.row = row;
     }
   }
+  // What else stands on each property in its newest year: commercial structure types and outbuilding kinds, nothing more.
+  const standing = new Map();
+  if (withOthers) {
+    for (const [table, column, key] of [['Com', 'StructureType_Desc', 'com'], ['Oby', 'Description_Desc', 'oby']]) {
+      const about = tables(file).get(table);
+      if (!about) throw new Error(`${name}'s appraisal file has no ${table} table`);
+      const newestYear = new Map();
+      for (const row of fileRows(file, about, ['PropertyID', 'TaxYear', column])) {
+        const id = Number(row.PropertyID);
+        const was = newestYear.get(id);
+        if (was !== undefined && row.TaxYear < was) continue;
+        const held = standing.get(id) || { com: [], oby: [] };
+        if (was !== undefined && row.TaxYear > was) held[key] = [];
+        newestYear.set(id, row.TaxYear);
+        held[key].push(String(row[column] ?? '').trim());
+        standing.set(id, held);
+      }
+    }
+  }
   fs.rmSync(file, { force: true });
   const dwellings = new Map();
   for (const [id, { count, row }] of newest) {
@@ -103,15 +149,20 @@ function dwellingsOf(work, name) {
     if (count > 1) facts.buildings_on_parcel = count;
     dwellings.set(id, facts);
   }
-  return dwellings;
+  return { dwellings, standing };
 }
 
-function fromRow(row, fips, county, dwellings) {
+function fromRow(row, fips, county, { dwellings, standing }) {
   const parsed = parse(row.AddressLine1, realUnit(row.AddressLine2));
   const parcel = word(row.PARCELID);
   if (!parsed || !parcel) return null;
-  const [kind, homeType] = useOf(row, parsed.unit);
+  let [kind, homeType, units] = useOf(row, parsed.unit);
+  // An improved parcel with no dwelling on record is a home only if what stands on it is one.
+  if (kind === 'property' && !homeType && !KEEPS_OLD_RULE.has(fips) && !dwellings.has(Number(row.PropertyID))) {
+    [kind, homeType, units] = withoutDwelling(standing.get(Number(row.PropertyID)), Number(row.TotalBuildingValue));
+  }
   const facts = { parcel_number: parcel, county, fips };
+  if (kind === 'building') put(facts, 'units', units);
   put(facts, 'address_on_record', onRecord(row.AddressLine1, row.AddressLine2));
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.TotalAcres));
   put(facts, 'subdivision', word(row.Subdivision));
@@ -139,12 +190,13 @@ async function* build({ work }) {
     const records = [];
     const seen = new Set();
     let noAddress = 0;
-    const dwellings = dwellingsOf(work, name);
+    const appraisal = dwellingsOf(work, name, !KEEPS_OLD_RULE.has(fips));
+    const { dwellings } = appraisal;
     const rows = cached(path.join(work, 'mt-cadastral', `${fips}.jsonl.gz`), () => layerRows(LAYER, COLUMNS, { where: `CountyName = '${name}'` }));
     const joined = new Set();
     for await (const row of rows) {
       if (dwellings.has(Number(row.PropertyID))) joined.add(Number(row.PropertyID));
-      const record = fromRow(row, fips, county, dwellings);
+      const record = fromRow(row, fips, county, appraisal);
       if (!record) noAddress += 1;
       else if (!seen.has(record.id)) {
         seen.add(record.id);
@@ -152,6 +204,9 @@ async function* build({ work }) {
       }
     }
     log(`${county}: ${records.length} records, ${noAddress} without a street number, ${records.filter(({ facts }) => facts.year_built).length} with building detail, ${joined.size} of ${dwellings.size} dwellings in the appraisal file on a parcel`);
+    const toldApart = {};
+    for (const { kind, facts } of records) if (/IMPROVED/i.test(facts.land_use || '') && kind !== 'property' && kind !== 'unit') toldApart[kind] = (toldApart[kind] || 0) + 1;
+    if (Object.keys(toldApart).length) log(`${county}: improved parcels with no home on them, by what stands there: ${Object.entries(toldApart).map(([kind, n]) => `${kind} ${n}`).join(', ')}`);
     if (!records.length) continue;
     // Which file is which county is a list kept here: a wrong one joins nothing, and that mustn't pass as a county with no
     // detail. Counted on every parcel, with a street number or not: rural counties have many dwellings on parcels without one.
