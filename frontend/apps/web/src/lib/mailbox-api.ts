@@ -9,7 +9,7 @@
 
 import { get, post, uploadFile, apiRequest, mailbox, mailCompose } from '@pantopus/api';
 import { launchFeatures } from '@/lib/featureFlags';
-import type { DeletedMail, HolidayCards, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardList, HolidayCardListPreview, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, RecipientSearchResult } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardList, HolidayCardListPreview, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, RecipientSearchResult, WaitingHolidayCard } from '@pantopus/api';
 
 /** PATCH helper — not barrel-exported from @pantopus/api */
 function patch<T>(url: string, data?: Record<string, any>): Promise<T> {
@@ -127,6 +127,11 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 
 export async function getHolidayCards(): Promise<HolidayCards> {
   return call(() => mailbox.getHolidayCards());
+}
+
+/** The card waiting for a new account (TABCARD 3), or null; throws MailboxApiError when the server couldn't say. */
+export async function getWaitingHolidayCard(): Promise<WaitingHolidayCard | null> {
+  return (await call(() => mailbox.getWaitingHolidayCard())).card ?? null;
 }
 
 export async function getHolidayCardArrivals(userId: string): Promise<HolidayCardArrivalsFor> {

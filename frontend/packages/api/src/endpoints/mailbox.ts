@@ -780,6 +780,22 @@ export async function getHolidayCards(): Promise<HolidayCards> {
   return get<HolidayCards>('/api/mailbox/cards');
 }
 
+/**
+ * The Christmas card waiting for an account that joined in the last 14 days: the newest unopened one in its own
+ * personal mailbox (`sealed` while it can't be opened before Christmas morning). Null for anyone else, with nothing
+ * waiting, or while cards are off.
+ */
+export interface WaitingHolidayCard {
+  mail_id: string;
+  from_first_name: string;
+  sealed: boolean;
+}
+
+/** GET /api/mailbox/cards/waiting: always 200 for "nothing" (`card: null`); a failure is not an answer. */
+export async function getWaitingHolidayCard(): Promise<{ card: WaitingHolidayCard | null }> {
+  return get<{ card: WaitingHolidayCard | null }>('/api/mailbox/cards/waiting');
+}
+
 /** One note "Help me write it" offers: a way of saying it, and the words, within the card's letter limit. */
 export interface HolidayCardNoteIdea {
   tone: 'heartfelt' | 'light' | 'brief';
