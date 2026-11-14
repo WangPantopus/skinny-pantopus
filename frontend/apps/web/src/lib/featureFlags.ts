@@ -137,8 +137,9 @@ const LAUNCH_CUT_ROUTES: ReadonlyArray<readonly [boolean, RegExp]> = [
   // #8 or #12, with #10: the page a letter's or a Christmas card's emailed link opens for someone not on Pantopus
   // (/open/<mail id>).
   [(launchFeatures.mailExtras || launchFeatures.holidayCards) && launchFeatures.mailbox, /^\/open(?:\/|$)/],
-  // The public Christmas card pages.
-  [launchFeatures.cardTable, /^\/cards(?:\/|$)/],
+  // The public Christmas card pages, where the Christmas card ads send people (founder, November 13: open with
+  // Christmas cards, without the rest of card_table).
+  [launchFeatures.holidayCards && launchFeatures.mailbox, /^\/cards(?:\/|$)/],
   // #12 + #10: sending a Christmas card.
   [launchFeatures.holidayCards && launchFeatures.mailbox, /^\/app\/mailbox\/cards(?:\/|$)/],
   // #10 Mailbox: every mailbox page. The middleware sends the mailbox itself to Messages.

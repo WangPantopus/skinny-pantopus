@@ -22,11 +22,12 @@ type StoreLinkProps = {
   className?: string;
   target?: string;
   rel?: string;
+  'data-testid'?: string;
   children: ReactNode;
 };
 
 /** A store button. With `copyPath` it copies the page's link first, then opens the store in this tab. */
-export default function StoreLink({ href, copyPath, className, target, rel, children }: StoreLinkProps) {
+export default function StoreLink({ href, copyPath, className, target, rel, 'data-testid': testId, children }: StoreLinkProps) {
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
       if (!copyPath) return;
@@ -37,7 +38,7 @@ export default function StoreLink({ href, copyPath, className, target, rel, chil
   );
 
   return (
-    <a href={href} onClick={handleClick} className={className} target={target} rel={rel}>
+    <a href={href} onClick={handleClick} className={className} target={target} rel={rel} data-testid={testId}>
       {children}
     </a>
   );

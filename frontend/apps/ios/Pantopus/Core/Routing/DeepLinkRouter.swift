@@ -195,7 +195,7 @@ final class DeepLinkRouter {
         /// Sent (the holiday_card_claimed / holiday_card_expired notices).
         case mailSentCard(id: String)
         /// `/app/mailbox/cards?design=` — sending a Christmas card, with the
-        /// picture a public card page chose (`card_table`).
+        /// picture a public card page chose (on with Christmas cards).
         case mailCards(design: String?)
         /// `/mailbox` — the Mail tab (the Mail Day summary notification).
         case mailbox
@@ -1013,7 +1013,10 @@ final class DeepLinkRouter {
             // A sent card's page; Sent itself is a drawer of the Mailbox.
             guard segments.count == 3, UUID(uuidString: segments[2]) != nil else { return .mailbox }
             return .mailSentCard(id: segments[2])
-        case "cards" where LaunchFeatures.cardTable && segments.count == 2:
+        // Sending a Christmas card: a public card page's "Send this card" and
+        // the Christmas card ads, carried through an install by the page's
+        // store button. On with Christmas cards; `card_table` isn't needed.
+        case "cards" where LaunchFeatures.mailbox && LaunchFeatures.holidayCards && segments.count == 2:
             return .mailCards(design: queryValue("design", in: URLComponents(url: url, resolvingAgainstBaseURL: false)))
         default:
             guard segments.count == 2, UUID(uuidString: sub) != nil else { return .unknown(url) }
