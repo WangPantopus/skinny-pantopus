@@ -194,6 +194,8 @@ data class TodayTabParts(
     val skyShare: SkySharePantopus? = null,
     /** The Christmas countdown (TABCARD §2a), after the sun card and Needs you, above "Coming up at home"; null: none. */
     val christmas: (@Composable () -> Unit)? = null,
+    /** Last on the page: a city kept before an address shows "Add your address for the rest" (TABCARD §4a); null: none. */
+    val last: (@Composable () -> Unit)? = null,
 )
 
 /**
@@ -348,6 +350,7 @@ fun PlaceTodayDetailContent(
     TodayFullConditions(intel, alertsCheck, shownCalendar, conditionsOpen, { conditionsOpen = !conditionsOpen }, targets, now)
     // 12. Ask, at the end.
     tab.onAsk?.let { TodayAskEntry("Ask Pantopus about today", it) }
+    tab.last?.invoke()
     if (homeState?.sheet != null) RadonTaskSheet(homeState)
     governments?.let { BallotGovernmentsSheet(governments = it, address = intel.place.line1, onDismiss = { governments = null }) }
 }

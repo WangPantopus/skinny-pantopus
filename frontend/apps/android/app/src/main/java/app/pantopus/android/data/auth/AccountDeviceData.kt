@@ -15,6 +15,7 @@ import app.pantopus.android.data.moments.MomentsPosting
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.posts.PostCameraPhotos
+import app.pantopus.android.data.saved_places.TodayAreaStore
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.support_trains.SupportTrainReservationsStore
 import app.pantopus.android.data.widget.TodayWidgetStore
@@ -68,6 +69,8 @@ class AccountDeviceData
             moments.clearAccount()
             MailboxRepository.forgetAccount()
             HolidayCardsRepository.forgetAccount()
+            // The city's Today read before an address (TABCARD §4); the area itself stays under the account's own id.
+            TodayAreaStore.forgetAnswers()
             chatBadges.reset()
             reservations.reset()
             broadcastSeeds.clear()

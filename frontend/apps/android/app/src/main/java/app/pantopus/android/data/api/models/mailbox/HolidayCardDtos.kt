@@ -224,6 +224,23 @@ data class HolidayCardArrivals(
     val email: List<String> = emptyList(),
 )
 
+/**
+ * `GET /api/mailbox/cards/waiting` (TABCARD §3): the newest unopened Christmas card in a new account's own Mailbox,
+ * for the first time its app opens on a phone; [card] is null when there is none.
+ */
+@JsonClass(generateAdapter = true)
+data class HolidayCardWaitingResponse(
+    val card: HolidayCardWaiting? = null,
+)
+
+/** The waiting card: its mail id (opened as a Mailbox tap opens it), who sent it, and whether it waits for Christmas morning. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardWaiting(
+    @Json(name = "mail_id") val mailId: String,
+    @Json(name = "from_first_name") val fromFirstName: String? = null,
+    val sealed: Boolean = false,
+)
+
 /** `GET /api/mailbox/cards/arrivals?to=`: when a card to one person can come, by their clock rather than the sender's. */
 @JsonClass(generateAdapter = true)
 data class HolidayCardArrivalsFor(

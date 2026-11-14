@@ -28,6 +28,8 @@ import app.pantopus.android.data.hub.HubRepository
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
+import app.pantopus.android.data.saved_places.TodayArea
+import app.pantopus.android.data.saved_places.TodayAreaStore
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.widget.TodayWidgetStore
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
@@ -91,6 +93,19 @@ class TodayTabViewModel
 
         /** The home-screen widget shows what Today last showed (unit tests build this without Hilt). */
         @Inject lateinit var todayWidget: TodayWidgetStore
+
+        /** The city kept before an address (TABCARD §4a; unit tests build this without Hilt, and Today starts at the card). */
+        @Inject lateinit var areas: TodayAreaStore
+
+        private val _locating = MutableStateFlow(false)
+
+        /** "Use my location" is reading a fix, or loading the city's day it found. */
+        val locating: StateFlow<Boolean> = _locating.asStateFlow()
+
+        private val _locationRefused = MutableStateFlow(false)
+
+        /** Location was refused or is off (or no fix came) on the last "Use my location". */
+        val locationRefused: StateFlow<Boolean> = _locationRefused.asStateFlow()
 
         private val _state = MutableStateFlow<TodayTabUiState>(TodayTabUiState.Loading)
         val state: StateFlow<TodayTabUiState> = _state.asStateFlow()
@@ -465,9 +480,73 @@ class TodayTabViewModel
             val claim = claimsData?.claims?.firstOrNull { it.isInReview }
             when {
                 claimsData == null -> _state.value = _state.value.afterFailedRead(claims.failure.sentence("Couldn't load your place."))
-                claim == null -> _state.value = TodayTabUiState.NoPlace
+                claim == null -> showArea(version, force)
                 else -> loadClaimToday(claim, version)
             }
+        }
+
+        /**
+         * No Home, saved address or claim in review (TABCARD §4a): the city kept on this phone for this account, its day
+         * read like a saved address's Today; without one, the start card ([TodayTabUiState.NoPlace]). Over an hour old
+         * while location stays allowed, the fix is read again quietly and a new point shows its own city.
+         */
+        private suspend fun showArea(
+            version: Long,
+            force: Boolean,
+        ) {
+            val area = if (::areas.isInitialized) areas.area() else null
+            if (area == null) {
+                _state.value = TodayTabUiState.NoPlace
+                _locating.value = false
+                return
+            }
+            loadAreaToday(area, version, force)
+            val moved = areas.refreshIfOld() ?: return
+            if (current(version)) loadAreaToday(moved, version, force = false)
+        }
+
+        /** The area's day from `POST /api/saved-places/area/today`; a failure keeps the same city's day, marked, or shows the error. */
+        private suspend fun loadAreaToday(
+            area: TodayArea,
+            version: Long,
+            force: Boolean,
+        ) {
+            val result = areas.today(area, force)
+            if (!current(version)) return
+            _state.value =
+                when (result) {
+                    is NetworkResult.Success ->
+                        TodayTabUiState.Loaded(result.data.today, area = result.data.area, fetchedAt = result.data.fetchedAt)
+                    is NetworkResult.Failure ->
+                        _state.value
+                            .takeIf { (it as? TodayTabUiState.Loaded)?.area?.samePoint(area) == true }
+                            .afterFailedRead(result.error.sentence("Couldn't load today."))
+                }
+            _locating.value = false
+        }
+
+        /**
+         * "Use my location" once the system allows it: one fix, rounded and kept for this account, then the city's day.
+         * Location off or no fix: the line under the buttons.
+         */
+        fun useMyLocation() {
+            if (_locating.value || !::areas.isInitialized) return
+            _locating.value = true
+            _locationRefused.value = false
+            viewModelScope.launch {
+                if (areas.locate()) {
+                    refresh(force = false)
+                } else {
+                    _locating.value = false
+                    _locationRefused.value = true
+                }
+            }
+        }
+
+        /** The system's location question was refused (or was refused for good before). */
+        fun locationRefused() {
+            _locating.value = false
+            _locationRefused.value = true
         }
 
         /**
@@ -516,7 +595,8 @@ class TodayTabViewModel
                     _state.value.takeIf {
                         it == TodayTabUiState.NoPlace ||
                             it is TodayTabUiState.ClaimInReview ||
-                            (it as? TodayTabUiState.Loaded)?.savedPlace != null
+                            (it as? TodayTabUiState.Loaded)?.savedPlace != null ||
+                            (it as? TodayTabUiState.Loaded)?.area != null
                     }
                 _state.value =
                     if (saved.failure.refusesStoredCopy) {
@@ -702,6 +782,8 @@ sealed interface TodayTabUiState {
      * @property claim a claim in review: [intelligence] is the claimed address's public view, its status on top.
      * @property fetchedAt when this copy arrived (wall clock), for Today's freshness windows.
      * @property refreshFailed the last read failed while this copy stayed on screen.
+     * @property area the city kept before an address (TABCARD §4a): [intelligence] is that city's day, never kept as a
+     *   saved place's or a Home's copy.
      */
     data class Loaded(
         val intelligence: PlaceIntelligence,
@@ -711,6 +793,7 @@ sealed interface TodayTabUiState {
         val fetchedAt: Long = 0L,
         val refreshFailed: Boolean = false,
         val claim: OwnershipClaimDto? = null,
+        val area: TodayArea? = null,
     ) : TodayTabUiState {
         /** Still the day this copy was read on, at the home: Today turns over at the home's midnight. */
         fun isSameDay(now: Long = System.currentTimeMillis()): Boolean {

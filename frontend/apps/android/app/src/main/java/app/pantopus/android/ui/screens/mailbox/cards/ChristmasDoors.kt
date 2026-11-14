@@ -49,7 +49,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -107,10 +106,11 @@ class ChristmasCardDoorsViewModel
     constructor(
         private val cards: HolidayCardsRepository,
     ) : ViewModel() {
-        val open: StateFlow<Boolean> =
-            cards.latest
-                .map { HolidayCardsRepository.cardsOpen(it) }
-                .stateIn(viewModelScope, SharingStarted.Eagerly, HolidayCardsRepository.cardsOpen(cards.latest.value))
+        /**
+         * Cards are open for the signed-in account. Before this launch's first read it is the last answer this phone
+         * read for the account, so the Mail tab's red envelope shows on the first frame of a launch.
+         */
+        val open: StateFlow<Boolean> = cards.open.stateIn(viewModelScope, SharingStarted.Eagerly, cards.openNow())
 
         private val _sendableTo = MutableStateFlow<String?>(null)
 
