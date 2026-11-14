@@ -18,6 +18,7 @@ const { readToolDefinitions, runReadTool, PLACE_POST_TYPES } = require('./readTo
 const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNearby');
 const { verificationReadToolDefinitions, runVerificationReadTool } = require('./readToolsVerification');
 const { mailReadToolDefinitions, runMailReadTool, MAIL_TOOL_NAMES } = require('./readToolsMail');
+const { chatReadToolDefinitions, runChatReadTool } = require('./readToolsChats');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
 const { memoryToolDefinitions, runMemoryTool } = require('./memory');
@@ -265,6 +266,8 @@ const toolDefinitions = [
   ...verificationReadToolDefinitions,
   // Their Mail: the Mail tab's lists, search and Sent, and one piece in full (readToolsMail.js).
   ...mailReadToolDefinitions,
+  // Their chats, only when they ask about them: the Messages list and one chat's messages (readToolsChats.js).
+  ...chatReadToolDefinitions,
   ...actionCardDefinitions,
   // Phase 3: what they ask Pantopus to remember (memory.js).
   ...memoryToolDefinitions,
@@ -335,6 +338,9 @@ const TOOL_TIMEOUTS_MS = {
   // The Mail lists' own reads (the pieces, the boxes' counts, folder names), and a letter's stored text.
   find_mail: 10000,
   get_mail_item: 8000,
+  // The inbox page with its names, and a chat's messages with theirs.
+  find_chats: 8000,
+  read_chat: 8000,
   draft_plan_change: 15000,
   show_plan_requests: 8000,
   draft_plan_ask: 8000,
@@ -416,6 +422,8 @@ async function _executeToolImpl(name, args, ctx) {
   if (PRIVATE_TOOL_NAMES.has(name) && !ctx.identity) return { error: IDENTITY_NEEDED };
   const mail = await runMailReadTool(name, args, ctx);
   if (mail) return mail;
+  const chats = await runChatReadTool(name, args, ctx);
+  if (chats) return chats;
   const drafted = await runCardTool(name, args, ctx);
   if (drafted) return drafted;
   const remembered = await runMemoryTool(name, args, ctx);
