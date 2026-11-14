@@ -13,6 +13,23 @@ export const INK = '#2c4a8a';
 /** The flow's buttons and seals: wax red. */
 export const WAX = '#8b1d1d';
 export const POSTMARK_RED = '#b2413a';
+/** The gold of the seals and lettering on the table (CardTable and CardRack's --gold). */
+export const SEAL_GOLD = '#d8b76f';
+
+// The cream paper of Mail's "Send a Christmas card" row, which every other way in to a card wears too (TABCARD): it
+// keeps its paper in dark mode, only a touch dimmer.
+export const CARD_PAPER = 'border border-[#e7dcc6] bg-[#fbf6ec] text-[#111827] [@media(prefers-color-scheme:dark)]:brightness-[0.94]';
+export const CARD_PAPER_HOVER = 'hover:bg-[#f5efe3]';
+/** Body text on the paper. */
+export const CARD_PAPER_TEXT = 'text-[#4e5563]';
+/** The quiet brown of the row's chevron: overlines and small print on the paper. */
+export const CARD_PAPER_QUIET = 'text-[#8a7a62]';
+/** The send flow's full-width wax button (with `style={{ backgroundColor: WAX }}`). */
+export const WAX_BUTTON = 'flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[16px] font-semibold text-[#fff7ed] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] focus-visible:ring-offset-2 disabled:opacity-50';
+/** The cream ink on wax red. */
+export const WAX_INK = 'text-[#fff7ed]';
+/** Wax-red fill and its ink, for a button that keeps its own shape. */
+export const WAX_FILL = `bg-[#8b1d1d] ${WAX_INK} hover:brightness-110`;
 
 export function cardPicture(design: string, size: 'full' | 'thumb' = 'full'): string {
   return `/holiday-cards/${design}${size === 'thumb' ? '-thumb' : ''}.jpg`;

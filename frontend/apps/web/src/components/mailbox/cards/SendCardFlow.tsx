@@ -42,7 +42,7 @@ import CardRack from './CardRack';
 import { askTakeBack } from './takeBack';
 import { chosenPersonFor } from './sendOneBack';
 import { clearCardDraft, readCardDraft, saveCardDraft } from './cardDraft';
-import { cardMood, cardPicture, clockTime, firstNameOf, SERIF, shortDay, WAX } from './cardArt';
+import { cardMood, cardPicture, clockTime, firstNameOf, SERIF, shortDay, WAX, WAX_BUTTON } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
 /** Someone on a list (digital stamps on): a person found by name, or an address. */
@@ -64,7 +64,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 // The whole screen is the cream desk the card sits on (the Mailbox frame scrolls it on wider screens).
 const page = 'min-h-[calc(100dvh-8rem)] bg-[#f5f0e8] text-[#111827] md:h-full md:min-h-0 md:overflow-y-auto [@media(prefers-color-scheme:dark)]:bg-app [@media(prefers-color-scheme:dark)]:text-app-text';
-const primary = 'flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[16px] font-semibold text-[#fff7ed] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] focus-visible:ring-offset-2 disabled:opacity-50';
+const primary = WAX_BUTTON;
 const secondary = 'flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#d6cbb6] bg-[#fffdf8] text-[15px] font-semibold text-[#374151] transition hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] disabled:opacity-50';
 const muted = 'text-[#4e5563] [@media(prefers-color-scheme:dark)]:text-app-text-secondary';
 
