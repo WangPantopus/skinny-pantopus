@@ -192,6 +192,8 @@ data class TodayTabParts(
     val needsYou: (@Composable (agendaTaskIds: Set<String>) -> Unit)? = null,
     /** Share's "Or share in Pantopus": the Pulse composer or a chat with today's sky; null leaves them out. */
     val skyShare: SkySharePantopus? = null,
+    /** The Christmas countdown (TABCARD §2a), after the sun card and Needs you, above "Coming up at home"; null: none. */
+    val christmas: (@Composable () -> Unit)? = null,
 )
 
 /**
@@ -291,6 +293,7 @@ fun PlaceTodayDetailContent(
     // What waits on the person, before what is coming up at home (phase 3 brief section 3).
     val agendaTasks = remember(items, now.toLocalDate()) { agendaTaskIds(items, now.toLocalDate()) }
     tab.needsYou?.invoke(agendaTasks)
+    tab.christmas?.invoke()
     var governments by remember { mutableStateOf<BallotGovernments?>(null) }
     // A place with no address calendar (a saved place) and nothing else coming shows no agenda; its plan cards stay.
     if (calendarEnv == null && items.isEmpty()) {

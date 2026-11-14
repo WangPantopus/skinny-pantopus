@@ -37,16 +37,23 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.mailbox.HolidayCardStamps
+import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.ui.components.CompactButton
 import app.pantopus.android.ui.components.CompactButtonSize
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.mailbox.cards.CardButton
+import app.pantopus.android.ui.screens.mailbox.cards.PaintedStamp
+import app.pantopus.android.ui.screens.mailbox.cards.stampsHeldWords
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceModel
+import app.pantopus.android.ui.screens.mailbox.components.MailStamp
 import app.pantopus.android.ui.screens.mailbox.components.MailboxDrawing
 import app.pantopus.android.ui.screens.mailbox.components.MailboxHeroState
 import app.pantopus.android.ui.screens.shared.list_of_rows.CompactButtonVariant
@@ -122,6 +129,99 @@ fun MailboxHeroCard(
         if (flag) {
             PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 18.dp, tint = PantopusColors.appTextMuted)
         }
+    }
+}
+
+/**
+ * The top card on a day with no mail, while cards are open (board MailEmptyDay; TABCARD §2b): the mailbox on cream
+ * paper, "Nothing came today.", an invitation to put something in someone else's mailbox, the stamps the person holds
+ * (with stamp books on and the count known), Send a Christmas card, then the card's own next-delivery line and
+ * address. Stamps have no end date on the server (`mailStamps.js`: unused stamps stay), so none is printed.
+ */
+@Composable
+fun MailboxEmptyDayCard(
+    hero: MailboxHeroState,
+    cards: HolidayCardsResponse?,
+    onSend: () -> Unit,
+) {
+    val shape = RoundedCornerShape(20.dp)
+    val stamps = cards?.stamps?.takeIf { cards.postageEnabled }
+    Column(
+        modifier =
+            Modifier
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s1)
+                .fillMaxWidth()
+                .clip(shape)
+                .background(PantopusColors.cardNotePaper)
+                .border(1.dp, PantopusColors.cardNoteEdge, shape)
+                .padding(Spacing.s4)
+                .testTag("mail.emptyDayCard"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            MailboxDrawing(modifier = Modifier.size(64.dp), number = hero.number)
+            Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+                Text(
+                    "Nothing came today.",
+                    fontSize = 20.sp,
+                    lineHeight = 25.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PantopusColors.cardWax,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    "Put something in someone else's mailbox.",
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = PantopusColors.cardTextBody,
+                )
+            }
+        }
+        stamps?.let { EmptyDayStamps(it) }
+        CardButton("Send a Christmas card", onClick = onSend, modifier = Modifier.testTag("mail.emptyDayCard.send"))
+        Text(
+            hero.detail,
+            fontSize = 12.5.sp,
+            lineHeight = 17.sp,
+            color = PantopusColors.cardTextQuiet,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        hero.address?.let {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s1, Alignment.CenterHorizontally),
+                modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+            ) {
+                PantopusIconImage(icon = PantopusIcon.ShieldCheck, contentDescription = null, size = 13.dp, tint = PantopusColors.home)
+                Text(it, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = PantopusColors.home)
+            }
+        }
+    }
+}
+
+/** The day-with-no-mail card's stamps line: three painted stamps and how many the person holds, in the stamp screens' words. */
+@Composable
+private fun EmptyDayStamps(stamps: HolidayCardStamps) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.testTag("mail.emptyDayCard.stamps"),
+    ) {
+        // One painted stamp for each the person holds, up to three.
+        listOf(MailStamp.Fir, MailStamp.Peak, MailStamp.River).take(stamps.available.coerceIn(0, 3)).forEach { stamp ->
+            PaintedStamp(stamp, width = 30.dp, height = 36.dp)
+        }
+        Text(
+            stampsHeldWords(stamps.available, stamps.freeRemaining, stamps.paidRemaining),
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.cardTextStrong,
+            modifier = Modifier.padding(start = Spacing.s1),
+        )
     }
 }
 

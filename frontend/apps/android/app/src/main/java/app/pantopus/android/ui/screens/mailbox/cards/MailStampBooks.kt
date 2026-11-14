@@ -94,7 +94,7 @@ private fun plural(
 
 /** A painted stamp with a soft shadow in its own perforated shape. */
 @Composable
-private fun PaintedStamp(
+internal fun PaintedStamp(
     stamp: MailStamp,
     width: Dp,
     height: Dp,
@@ -252,13 +252,23 @@ private fun listPostageLine(
 }
 
 /** What's left, in words: "1 free card and 2 stamps". */
-private fun haveWords(have: StampBalance): String {
-    val paid = maxOf(0, have.paidRemaining)
-    val free = have.freeRemaining
+private fun haveWords(have: StampBalance): String =
+    if (have.available == 0) "none left" else stampsHeldWords(have.available, have.freeRemaining, have.paidRemaining)
+
+/**
+ * The stamps someone holds, in the stamp screens' words: "3 free cards", "1 free card and 2 stamps", "2 stamps", or
+ * "You’re out of stamps" (Mail's day-with-no-mail card says it beside its stamps).
+ */
+internal fun stampsHeldWords(
+    available: Int,
+    free: Int,
+    paid: Int,
+): String {
+    val bought = maxOf(0, paid)
     return when {
-        have.available == 0 -> "none left"
-        paid > 0 && free > 0 -> "${plural(free, "free card")} and ${plural(paid, "stamp")}"
-        paid > 0 -> plural(paid, "stamp")
+        available == 0 -> "You’re out of stamps"
+        bought > 0 && free > 0 -> "${plural(free, "free card")} and ${plural(bought, "stamp")}"
+        bought > 0 -> plural(bought, "stamp")
         else -> plural(free, "free card")
     }
 }

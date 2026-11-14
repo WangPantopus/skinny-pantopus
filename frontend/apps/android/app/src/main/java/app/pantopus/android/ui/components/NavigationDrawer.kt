@@ -388,6 +388,8 @@ fun NavigationDrawer(
     onBackToHub: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenProfile: (() -> Unit)? = null,
+    /** A row above the first section, in the personal menu only (TABCARD §2d: Send a Christmas card); null: none. */
+    personalLeadingRow: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -410,6 +412,10 @@ fun NavigationDrawer(
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
         ) {
+            if (context is NavigationDrawerContext.Personal && personalLeadingRow != null) {
+                Spacer(Modifier.height(Spacing.s1))
+                personalLeadingRow()
+            }
             context.sections().forEach { section ->
                 DrawerSection(section = section, onSelect = onSelect)
             }

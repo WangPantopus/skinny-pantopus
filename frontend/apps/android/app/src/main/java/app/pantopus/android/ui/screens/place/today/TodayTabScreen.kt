@@ -50,6 +50,11 @@ import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.waitingLabel
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasCardDoorsViewModel
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasCountdownCard
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasToday
+import app.pantopus.android.ui.screens.mailbox.cards.daysToChristmas
+import app.pantopus.android.ui.screens.mailbox.cards.showsChristmasCountdown
 import app.pantopus.android.ui.screens.place.PlaceVerifyBanner
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.detail.AgendaActions
@@ -112,12 +117,16 @@ fun TodayTabScreen(
     onOpenLink: (String) -> Unit = DeepLinkRouter::handle,
     /** Share's "Or share in Pantopus": the Pulse composer or a chat with today's sky; null leaves them out. */
     skyShare: SkySharePantopus? = null,
+    /** The Christmas countdown's Send a Christmas card: the card flow on the Mail tab; null leaves the countdown out. */
+    onSendChristmasCard: (() -> Unit)? = null,
     viewModel: TodayTabViewModel = hiltViewModel(),
     needsYou: NeedsYouViewModel = hiltViewModel(),
+    christmasCards: ChristmasCardDoorsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val agendaTasks by viewModel.agendaTasks.collectAsStateWithLifecycle()
     val needsYouItems by needsYou.items.collectAsStateWithLifecycle()
+    val cardsOpen by christmasCards.open.collectAsStateWithLifecycle()
     // One Plans read serves the agenda's plan rows and today's plan cards.
     val plansViewModel: PlansTodayViewModel? = plans?.let { hiltViewModel() }
     val plansUi = plansViewModel?.ui?.collectAsStateWithLifecycle()?.value
@@ -244,6 +253,7 @@ fun TodayTabScreen(
                                 onRadonShown = onRadonShown,
                                 needsYou = { agendaTaskIds -> NeedsYouCard(needsYouItems, onOpenLink, agendaTaskIds = agendaTaskIds) },
                                 skyShare = skyShare,
+                                christmas = christmasCountdown(cardsOpen, onSendChristmasCard),
                             )
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::pull) {
                             PlaceTodayDetailContent(
@@ -264,6 +274,20 @@ fun TodayTabScreen(
             }
         }
     }
+}
+
+/**
+ * The Christmas countdown on Today's loaded page (TABCARD §2a): while cards are open and Christmas is 1 to 45 days away
+ * on the device's date ([daysToChristmas]); not on the no-place card.
+ */
+private fun christmasCountdown(
+    cardsOpen: Boolean,
+    onSend: (() -> Unit)?,
+): (@Composable () -> Unit)? {
+    if (!cardsOpen || onSend == null) return null
+    val days = daysToChristmas(ChristmasToday.date())
+    if (!showsChristmasCountdown(days)) return null
+    return { ChristmasCountdownCard(days = days, onSend = onSend, modifier = Modifier.padding(top = 12.dp)) }
 }
 
 /** The title, date and address, with the side menu at the end of the title line. */

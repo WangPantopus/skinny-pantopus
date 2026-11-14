@@ -305,8 +305,12 @@ import app.pantopus.android.ui.screens.inbox.search.ChatSearchScreen
 import app.pantopus.android.ui.screens.listing_offers.ListingOffersScreen
 import app.pantopus.android.ui.screens.listing_offers.ListingOffersViewModel
 import app.pantopus.android.ui.screens.listings.MyListingsScreen
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasCardDoorsViewModel
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasMenuRow
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasToday
 import app.pantopus.android.ui.screens.mailbox.cards.SendCardScreen
 import app.pantopus.android.ui.screens.mailbox.cards.SendCardViewModel
+import app.pantopus.android.ui.screens.mailbox.cards.isChristmasMailSeason
 import app.pantopus.android.ui.screens.mailbox.community.CommunityMailScreen
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DISAMBIGUATE_MAIL_ID_KEY
 import app.pantopus.android.ui.screens.mailbox.disambiguate.DisambiguateMailFormScreen
@@ -2502,6 +2506,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val momentsOn by momentsGate.on.collectAsStateWithLifecycle()
     val momentsSettled by momentsGate.settled.collectAsStateWithLifecycle()
     val barTabs = remember(plansFlags.plans, momentsOn) { PantopusRoute.barTabs(plansFlags.plans, momentsOn) }
+    // Christmas cards (TABCARD): while they're open (the Mailbox's "Send a Christmas card" row shows), Mail wears the
+    // red envelope from November 1 to Christmas Day, and the side menu, Today, profiles and chats offer a card.
+    val christmasCards: ChristmasCardDoorsViewModel = hiltViewModel()
+    val christmasCardsOpen by christmasCards.open.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { christmasCards.refresh() }
+    val openChristmasCards: () -> Unit = { navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailboxCards(null)) }
+    val sendCardTo: ((String, String) -> Unit)? =
+        if (LaunchFeatures.holidayCards && LaunchFeatures.mailbox) {
+            // On the Mail tab, as every way into a card opens it, so the flow's "See it in Sent" lands on the Mailbox.
+            { userId, name -> navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailboxCardsTo(userId, name)) }
+        } else {
+            null
+        }
     // Standing on Plans when the switch turns off lands on Pulse (Nearby with the Pulse redesign off). It waits for
     // the person's answer, so a relaunch that restores the Plans tab isn't moved off it by the moment before the
     // answer is read.
@@ -3131,6 +3148,20 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     navDrawerScope.launch { navDrawerState.close() }
                     navController.navigate(ChildRoutes.profile())
                 },
+                // Above Manage while cards are open: the card flow on the Mail tab.
+                personalLeadingRow =
+                    if (christmasCardsOpen) {
+                        {
+                            ChristmasMenuRow(
+                                onOpen = {
+                                    navDrawerScope.launch { navDrawerState.close() }
+                                    openChristmasCards()
+                                },
+                            )
+                        }
+                    } else {
+                        null
+                    },
             )
         },
     ) {
@@ -3172,6 +3203,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     dots = dots,
                     tabs = barTabs,
                     away = (tabBarSlides && tabBarScroll.isAway) || momentsBarAway,
+                    christmasMail = christmasCardsOpen && isChristmasMailSeason(ChristmasToday.date()),
                     onSelect = { target ->
                         ScreenTiming.tabTapped(target.path.substringAfterLast('/'))
                         if (target == currentRoute) {
@@ -3217,7 +3249,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenTodayRadon = openTodayRadon,
                     )
                 }
-                // ── Pulse build S3: Place · Today · Pulse · Plans · Mail (Place · Today · Nearby · Plans · Mail with the redesign off) ──
+                // ── The bar (founder decision 2026-11-13: Mail is third): Place · Today · Mail · Pulse · Moments · Plans
+                // (Place · Today · Mail · Nearby · Moments · Plans with the Pulse redesign off) ──
                 composable(PantopusRoute.Today.path) {
                     // Today's plan cards open in the Plans tab, as on iOS: the tab comes back on its map with [routes] on
                     // top, so Back lands on the map. Other Plans pages left open there give way; a plan being composed
@@ -3243,6 +3276,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         onOpenMenu = openMenu,
                         skyShare = skyShare,
+                        // The Christmas countdown's button: the card flow on the Mail tab.
+                        onSendChristmasCard = openChristmasCards.takeIf { LaunchFeatures.holidayCards && LaunchFeatures.mailbox },
                         onOpenPlace = { homeId ->
                             placeLinkScope.launch {
                                 currentPlaceHost?.let {
@@ -5411,6 +5446,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             if (navController.currentBackStackEntry?.id != profileEntry.id) return@openPost
                             navController.navigate(ChildRoutes.pulsePost(postId))
                         },
+                        // "Send a card" beside Message: the card flow on the Mail tab with them chosen, the preset
+                        // "Send Hazel a card" uses.
+                        onSendCard =
+                            sendCardTo?.let { send ->
+                                sendCard@{ userId, name ->
+                                    if (navController.currentBackStackEntry?.id != profileEntry.id) return@sendCard
+                                    send(userId, name)
+                                }
+                            },
                         // Your own profile offers Edit profile where others see Connect and Message.
                         onEditProfile = editProfile@{
                             if (navController.currentBackStackEntry?.id != profileEntry.id) return@editProfile
@@ -5794,6 +5838,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         aiConversationId = args.getString(ChildRoutes.CHAT_AI_CONVERSATION_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                         aiOpening = args.getString(ChildRoutes.CHAT_AI_OPENING_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                         sharedFile = skyShareFile(appContext, args.getString(ChildRoutes.CHAT_SHARE_KEY)).takeIf { kind != "ai" },
+                        // One-to-one chats with a person only: not a room (group, plan, home), a business chat or the assistant.
+                        onSendCard = sendCardTo.takeIf { kind == "person" && args.getString(ChildRoutes.CHAT_IDENTITY_KEY) != "business" },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
