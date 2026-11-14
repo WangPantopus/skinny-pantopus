@@ -48,9 +48,10 @@ sealed class PantopusRoute(
     data object Moments : PantopusRoute(path = "root/moments", label = "Moments", icon = PantopusIcon.CircleDashed)
 
     /**
-     * Mail — the digital mailbox, its own tab beside Messages (founder, 2026-10-26). While Mailbox is off for launch
-     * (contract §9, 2026-10-09) this tab is Messages: the conversation list itself, with a chat bubble. Its path and
-     * the `tab.mail` test tag stay, so links, saved state and UI tests keep working.
+     * Mail — the digital mailbox, its own tab (founder, 2026-10-26), third on the bar after Place and Today (founder
+     * decision 2026-11-13). While Mailbox is off for launch (contract §9, 2026-10-09) this tab is Messages: the
+     * conversation list itself, with a chat bubble, off the bar. Its path and the `tab.mail` test tag stay, so links,
+     * saved state and UI tests keep working.
      */
     data object Mail : PantopusRoute(path = "root/mail", label = "Mail", icon = PantopusIcon.Mailbox) {
         override val label: String get() = if (LaunchFeatures.mailbox) "Mail" else "Messages"
@@ -81,12 +82,14 @@ sealed class PantopusRoute(
 
     companion object {
         /**
-         * Bottom-bar destinations in display order, with every tab the app can show: Place · Today · Pulse · Moments ·
-         * Plans · Mail with the Pulse redesign on, and Place · Today · Nearby · Moments · Plans · Mail while it is off
-         * (launch cut 11; the October 13 bar with Plans added, 2026-10-17, and Moments, 2026-11-08). Messages isn't on
-         * the bar (founder decision 2026-11-08): the chat button at the top right of every tab but Mail opens it. With
-         * Mailbox off, Mail is the conversation list itself, so it leaves the bar too. Plans and Moments show only while
-         * their switches are on: read [barTabs] for what the bar draws.
+         * Bottom-bar destinations in display order, with every tab the app can show: Place · Today · Mail · Pulse ·
+         * Moments · Plans with the Pulse redesign on, and Place · Today · Mail · Nearby · Moments · Plans while it is off
+         * (launch cut 11; the October 13 bar with Plans added, 2026-10-17, and Moments, 2026-11-08). Founder decision
+         * 2026-11-13: Mail is third, so your home, your day and your mailbox come first, then the tabs about what's
+         * around you. Messages isn't on the bar (founder decision 2026-11-08): the chat button at the top right of every
+         * tab but Mail opens it. With Mailbox off, Mail is the conversation list itself, so it leaves the bar too and the
+         * order is unchanged. Plans and Moments show only while their switches are on: read [barTabs] for what the bar
+         * draws.
          */
         val entries: List<PantopusRoute>
             get() {
@@ -101,8 +104,9 @@ sealed class PantopusRoute(
          * downstream callers crash with NPE. Deferring construction until
          * first access lets every `data object` finish initialising first.
          */
-        private val redesignTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Pulse, Moments, Plans, Mail) }
-        private val launchTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Nearby, Moments, Plans, Mail) }
+        // Founder decision 2026-11-13: Mail is third (it was last, after the three tabs that need people nearby).
+        private val redesignTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Mail, Pulse, Moments, Plans) }
+        private val launchTabs: List<PantopusRoute> by lazy { listOf(Place, Today, Mail, Nearby, Moments, Plans) }
 
         /**
          * The tabs the bar draws: the [entries] tabs, without Plans while the `plans` switch is off ([plansOn]) and

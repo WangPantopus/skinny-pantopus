@@ -161,6 +161,8 @@ import app.pantopus.android.ui.screens.inbox.conversation.ai.AiLinkButtons
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiStarterRow
 import app.pantopus.android.ui.screens.inbox.conversation.ai.ChatAiAvatar
 import app.pantopus.android.ui.screens.inbox.conversation.ai.starterChips
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasCardDoorsViewModel
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasEnvelopeIcon
 import app.pantopus.android.ui.screens.moments.MomentOpenHolder
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentImages
@@ -217,7 +219,10 @@ fun ChatConversationScreen(
     onContentLoaded: () -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     onOpenPlan: (String) -> Unit = {},
+    /** "Send a Christmas card" in a one-to-one chat's details menu: the card flow with this person chosen; null: none. */
+    onSendCard: ((userId: String, name: String) -> Unit)? = null,
     viewModel: ChatConversationViewModel = hiltViewModel(),
+    christmasCards: ChristmasCardDoorsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(state) {
@@ -258,6 +263,17 @@ fun ChatConversationScreen(
             (state as? ChatConversationUiState.Loaded)?.rows?.filterIsInstance<ChatTimelineRow.SystemNote>()?.lastOrNull()?.id,
         )
     val gigContext by viewModel.gigContext.collectAsStateWithLifecycle()
+    // TABCARD §2c: a one-to-one chat with a person (not a group, plan, business or assistant chat) offers a card while
+    // cards are open and the send flow could pick them by name.
+    val cardsOpen by christmasCards.open.collectAsStateWithLifecycle()
+    val cardGoesTo by christmasCards.sendableTo.collectAsStateWithLifecycle()
+    val cardPersonId =
+        (args.mode as? ChatThreadMode.Person)?.otherUserId?.takeIf {
+            it.isNotBlank() && onSendCard != null && cardsOpen && chrome.mode == ChatConversationMode.Dm &&
+                activeCounterparty is ChatCounterparty.Person
+        }
+    LaunchedEffect(cardPersonId) { cardPersonId?.let(christmasCards::checkPerson) }
+    val sendCardTo = cardPersonId?.takeIf { it == cardGoesTo }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showFanUpgradePrompt by remember { mutableStateOf(false) }
@@ -894,6 +910,13 @@ fun ChatConversationScreen(
         if (showDetailsSheet) {
             ConversationDetailsSheet(
                 counterpartyName = activeCounterparty.displayName,
+                onSendCard =
+                    sendCardTo?.let { userId ->
+                        {
+                            showDetailsSheet = false
+                            onSendCard?.invoke(userId, activeCounterparty.displayName)
+                        }
+                    },
                 // Launch cut #3 (Marketplace): listing topics are hidden.
                 topics = topics.filter { isTopicLaunchAvailable(it.topicType) },
                 isBlocking = isBlocking,
@@ -4308,6 +4331,8 @@ private fun SendLimitNoticeBanner(
 @Composable
 private fun ConversationDetailsSheet(
     counterpartyName: String,
+    /** "Send a Christmas card", the menu's first row (it has no profile row: the header opens the profile). */
+    onSendCard: (() -> Unit)?,
     topics: List<ChatConversationTopic>,
     isBlocking: Boolean,
     onDismiss: () -> Unit,
@@ -4337,6 +4362,28 @@ private fun ConversationDetailsSheet(
                 color = PantopusColors.appText,
                 textAlign = TextAlign.Center,
             )
+            onSendCard?.let { send ->
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(Radii.lg))
+                            .clickable(onClick = send)
+                            .padding(horizontal = Spacing.s1)
+                            .testTag("chat.menu.sendCard"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+                ) {
+                    ChristmasEnvelopeIcon(size = 20.dp)
+                    Text(
+                        text = "Send a Christmas card",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appText,
+                    )
+                }
+            }
             Text(
                 text = "TOPICS",
                 modifier = Modifier.padding(top = Spacing.s2),

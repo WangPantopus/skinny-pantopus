@@ -34,6 +34,7 @@ class ChatConversationHostViewModel
  * Resolves the current user id and renders [ChatConversationScreen]. The
  * nav layer (RootTabScreen) calls this with route-decoded args.
  */
+@Suppress("LongParameterList") // The route's arguments and the chat's ways out, as the nav layer decodes them.
 @Composable
 fun ChatConversationHost(
     mode: ChatThreadMode,
@@ -55,6 +56,8 @@ fun ChatConversationHost(
     aiConversationId: String? = null,
     aiOpening: String? = null,
     sharedFile: File? = null,
+    /** The person chat's "Send a Christmas card": the card flow with them chosen (user id, name); null leaves it out. */
+    onSendCard: ((userId: String, name: String) -> Unit)? = null,
     authViewModel: ChatConversationHostViewModel = hiltViewModel(),
 ) {
     val state by authViewModel.authState.collectAsStateWithLifecycle()
@@ -90,5 +93,6 @@ fun ChatConversationHost(
         onContentLoaded = { arrival?.let(DeepLinkRouter::completeArrival) },
         onOpenProfile = onOpenProfile,
         onOpenPlan = onOpenPlan,
+        onSendCard = onSendCard,
     )
 }

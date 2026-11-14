@@ -43,6 +43,7 @@ import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.navigation.PantopusNavHost
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasToday
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -119,6 +120,9 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         // First, so the copies are in memory before the first screens ask for them.
         savedCopyReadAhead.start()
+        // Debug builds only: `PANTOPUS_DEBUG_TODAY=YYYY-MM-DD` sets the day the Mail tab's Christmas envelope and
+        // Today's countdown read (TABCARD §6). A release build never reads the extra.
+        if (BuildConfig.DEBUG) ChristmasToday.takeDebugDay(intent?.getStringExtra(ChristmasToday.DEBUG_EXTRA))
         enableEdgeToEdge()
         secureWindowController.bind(this)
         storeSync.start()
@@ -221,6 +225,9 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (BuildConfig.DEBUG && intent.hasExtra(ChristmasToday.DEBUG_EXTRA)) {
+            ChristmasToday.takeDebugDay(intent.getStringExtra(ChristmasToday.DEBUG_EXTRA))
+        }
         // Warm-start deep links (app already in memory).
         forwardDeepLink(intent)
         setIntent(intent)
