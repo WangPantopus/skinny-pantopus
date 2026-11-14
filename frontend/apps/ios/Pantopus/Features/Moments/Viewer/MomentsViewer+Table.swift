@@ -115,11 +115,12 @@ extension MomentsViewer {
                     }
                 }
                 .contentShape(Rectangle())
+                .readsLeftEdge { pressLeft = $0 }
                 .gesture(pressGesture(width: size.width))
                 .accessibilityAction(named: "Next Moment") { model.next() }
                 .accessibilityAction(named: "Previous Moment") { model.previous() }
                 .accessibilityAction(named: "Next person") { model.nextRing() }
-            MomentsProgressBars(count: model.ring?.moments.count ?? 1, current: model.momentIndex, progress: model.progress)
+            MomentsPlayingBars(model: model)
                 .padding(.horizontal, 10)
                 .padding(.top, barsTop)
                 .opacity(model.holding ? 0 : 1)

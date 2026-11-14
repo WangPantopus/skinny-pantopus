@@ -94,13 +94,13 @@ final class MomentsViewerModel {
         show()
     }
 
+    /// Quiet at once; the video lets go and the phone's sound goes back a moment later (`MomentsVideoController.stopAll`).
     func stop() {
         started = false
         clock?.cancel()
         loading?.cancel()
         readingAhead?.cancel()
         video.stopAll()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     func close() {
@@ -240,7 +240,7 @@ final class MomentsViewerModel {
         if !muted { try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback) }
         video.isMuted = muted
         video.onReady = { [weak self] in
-            guard let self, brief?.id == detail.id else { return }
+            guard let self, started, brief?.id == detail.id else { return }
             ready(detail.id)
         }
         video.load(url, id: detail.id)
@@ -270,15 +270,15 @@ final class MomentsViewerModel {
     private func skipSoon(_ id: String) {
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.2))
-            guard let self, brief?.id == id else { return }
+            guard let self, started, brief?.id == id else { return }
             next()
         }
     }
 
-    /// Paused or playing, as the pauses say.
+    /// Paused or playing, as the pauses say. Stopped, nothing plays again (a video keeps its last picture after a close).
     private func applyPause() {
         clock?.cancel()
-        guard load == .ready, let moment else { return }
+        guard started, load == .ready, let moment else { return }
         if moment.kind == .video {
             if isPaused { video.pause() } else { video.play() }
             return

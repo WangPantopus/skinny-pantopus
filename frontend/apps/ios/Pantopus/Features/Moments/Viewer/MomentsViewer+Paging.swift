@@ -49,12 +49,11 @@ extension MomentsViewer {
         !isCard && duo.pose == .phone
     }
 
-    /// The person the drag is bringing in, and where their page is.
-    var incoming: (peek: MomentsPeek, position: CGFloat)? {
-        guard pageOffset != 0, pageWidth > 0 else { return nil }
-        let step = pageOffset < 0 ? 1 : -1
-        guard let peek = model.peek(step) else { return nil }
-        return (peek, pageOffset + CGFloat(step) * pageWidth)
+    /// The person the drag is bringing in. Which side it comes from is all the viewer reads of the drag; where the
+    /// page is, the page reads itself (`MomentsPageFollow`).
+    var incoming: MomentsPeek? {
+        guard motion.step != 0, pageWidth > 0 else { return nil }
+        return model.peek(motion.step)
     }
 
     /// How far the page follows a drag of `distance`: all the way toward a person, a third of it where there is none.
@@ -64,7 +63,7 @@ extension MomentsViewer {
 
     /// The finger lifted from a sideways drag: far or fast enough turns the page, anything less springs back.
     func turnPage(_ value: DragGesture.Value) {
-        let moved = value.translation.width
+        let moved = value.translation.width - pressOrigin.width
         let thrown = value.predictedEndTranslation.width
         let far = abs(moved) > pageWidth * 0.2 || abs(thrown) > pageWidth * 0.5
         let step = moved < 0 ? 1 : -1
@@ -77,13 +76,13 @@ extension MomentsViewer {
         }
         turning = true
         withAnimation(.easeOut(duration: 0.24)) {
-            pageOffset = CGFloat(-step) * pageWidth
+            motion.page = CGFloat(-step) * pageWidth
         } completion: {
             var plain = Transaction()
             plain.disablesAnimations = true
             withTransaction(plain) {
                 if step > 0 { model.nextRing() } else { model.previousRing() }
-                pageOffset = 0
+                motion.page = 0
             }
             turning = false
             model.handling = false
@@ -91,12 +90,12 @@ extension MomentsViewer {
     }
 
     func settlePage() {
-        guard pageOffset != 0 else {
+        guard motion.page != 0 else {
             if !zooming { model.handling = false }
             return
         }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            pageOffset = 0
+            motion.page = 0
         } completion: {
             if pressStarted == nil, !zooming, !turning { model.handling = false }
         }
@@ -178,8 +177,8 @@ extension MomentsViewer {
                     zooming = true
                     zoomAnchor = value.startAnchor
                     holdTask?.cancel()
-                    pageOffset = 0
-                    dragOffset = .zero
+                    motion.page = 0
+                    motion.down = 0
                     model.handling = true
                 }
                 // The first finger's own press is part of the pinch: it neither taps nor swipes when it lifts.
