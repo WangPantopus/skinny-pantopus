@@ -144,7 +144,26 @@ data class MomentsMapResponse(
     val unplaced: List<MomentRingDto> = emptyList(),
     /** Heights are on for you (contract v3.9): the map offers "Elevation". False from a server before it. */
     @Json(name = "heights_on") val heightsOn: Boolean = false,
+    /**
+     * Moments with an elevation float by day (contract v3.10, `moment_float`), and where the sun is; false and null from
+     * a server before it.
+     */
+    @Json(name = "float_on") val floatOn: Boolean = false,
+    val sun: MomentSunDto? = null,
 )
+
+/**
+ * Where the sun is over the middle of the map right now (contract v3.10): sent only while Moments float for you
+ * (`float_on`). Degrees clockwise from true north, and above the horizon (negative after sunset).
+ */
+@JsonClass(generateAdapter = true)
+data class MomentSunDto(
+    @Json(name = "azimuth_deg") val azimuthDeg: Double? = null,
+    @Json(name = "elevation_deg") val elevationDeg: Double? = null,
+) {
+    /** The sun is above the horizon and the answer says where: pins can float. */
+    val isUp: Boolean get() = azimuthDeg != null && (elevationDeg ?: 0.0) > 0.0
+}
 
 @JsonClass(generateAdapter = true)
 data class MomentsMineResponse(
