@@ -4,12 +4,15 @@
 // The ways in to a Christmas card (TABCARD, founder 2026-11-13): the Mail
 // row's own rule for when cards are open, which every other door follows (the
 // Today countdown, Mail's empty-day card, a person's page, a chat's details,
-// the sidebar entry and the red envelope on the Mail tab), and the dates they
-// go by, on this browser's clock.
+// the sidebar entry and the red envelope on the Mail tab), the dates they go
+// by, on this browser's clock, and the card a new account joined for.
 // ============================================================
 
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import type { HolidayCards } from '@pantopus/api';
 import { launchFeatures } from '@/lib/featureFlags';
+import { getWaitingHolidayCard } from '@/lib/mailbox-api';
 import { useHolidayCards, useMailboxDrawers } from '@/lib/mailbox-queries';
 import { deliveryState, sentWaiting } from '../MailboxHero';
 
@@ -74,4 +77,44 @@ export function useEmptyDayCard(): HolidayCards | null {
   const { waiting, waitingLetters } = sentWaiting(drawers);
   if (waiting + waitingLetters > 0) return null;
   return deliveryState(drawers.delivery)?.kind === 'none' ? cards : null;
+}
+
+/** Where the app lands when a sign-in or link isn't headed anywhere in particular (lib/invitation-after-sign-in.ts). */
+const DEFAULT_LANDING = '/app/place';
+
+/**
+ * Joined for a card (TABCARD 3): the first time the signed-in app loads for an account in this browser, ask once
+ * whether a Christmas card is waiting for it (an account from the last 14 days, GET /api/mailbox/cards/waiting) and
+ * open that piece, the page a tap on it in Mail opens (a sealed card shows its sealed envelope). Remembered per account
+ * in this browser once an answer comes, a card or none; a failed read asks again on the next load. A page opened by a
+ * link to somewhere in particular (anything but the default landing) keeps its link, and counts as asked.
+ */
+export function useWaitingCardLanding(userId: string | null | undefined): void {
+  const router = useRouter();
+  const askedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userId || askedFor.current === userId || !(launchFeatures.holidayCards && launchFeatures.mailbox)) return;
+    askedFor.current = userId;
+    const key = `pantopus_card_waiting_asked:${userId}`;
+    const here = () => window.location.pathname + window.location.search;
+    try {
+      if (window.localStorage.getItem(key)) return;
+    } catch {
+      return; // Nothing can be remembered here: never land on the card at every load.
+    }
+    const remember = () => {
+      try { window.localStorage.setItem(key, new Date().toISOString()); } catch { /* asked again next load */ }
+    };
+    if (here() !== DEFAULT_LANDING) {
+      remember();
+      return;
+    }
+    getWaitingHolidayCard()
+      .then((card) => {
+        remember();
+        // Someone who has already moved on keeps where they went.
+        if (card && here() === DEFAULT_LANDING) router.push(`/app/mailbox/personal/${encodeURIComponent(card.mail_id)}`);
+      })
+      .catch(() => { /* not an answer: asked again next load */ });
+  }, [userId, router]);
 }

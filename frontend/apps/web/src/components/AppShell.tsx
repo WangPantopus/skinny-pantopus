@@ -60,7 +60,7 @@ import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { useShellReadsReleased } from '@/lib/shellReads';
 import { hubTodayQuery } from '@/lib/hubToday';
-import { useCardsOpenInChrome, useChristmasMail } from '@/components/mailbox/cards/cardDoors';
+import { useCardsOpenInChrome, useChristmasMail, useWaitingCardLanding } from '@/components/mailbox/cards/cardDoors';
 import type { CSSProperties } from 'react';
 import { Search, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import MessagesGlyph from '@/components/MessagesGlyph';
@@ -310,6 +310,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // first paint (lib/query-provider.tsx, through lib/chatShell.ts).
   useEffect(() => (user?.id ? chatShellSignedIn(user.id) : undefined), [user?.id]);
   useEffect(() => { chatShellNavigated(); }, [pathname]);
+  // Joined for a Christmas card: the first load for an account in this browser opens the card waiting for it.
+  useWaitingCardLanding(user?.id);
 
   // ── Tile prefetch for home area ──────────────────────────────
   // A cold Messages inbox paints its rows first (lib/shellReads.ts).

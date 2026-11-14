@@ -198,6 +198,8 @@ export const professional = {
 };
 
 export const getAuthToken = jest.fn();
+// /start reads whether someone is signed in (TABCARD 4b): signed out here.
+export const hasActiveSession = jest.fn(() => false);
 // Wedge Phase 1 funnel beacons (fire-and-forget from /start).
 export const recordFunnelEvent = jest.fn();
 export const getFunnelAnonId = jest.fn(() => 'anon-test');
