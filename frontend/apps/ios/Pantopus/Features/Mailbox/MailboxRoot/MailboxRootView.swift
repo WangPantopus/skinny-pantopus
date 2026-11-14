@@ -48,10 +48,17 @@ public struct MailboxRootView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.s0) {
-                        MailboxHero(model: viewModel.hero, accountId: accountId) { viewModel.selectSent() }
-                            .padding(.horizontal, Spacing.s4)
-                            .padding(.top, 6)
-                            .id(Self.heroAnchor)
+                        Group {
+                            // A day with no mail while cards are open: the top card invites a card instead.
+                            if viewModel.showsEmptyDayCard, let cards = viewModel.christmasCards {
+                                MailEmptyDayCard(hero: viewModel.hero, cards: cards) { viewModel.openChristmasCards() }
+                            } else {
+                                MailboxHero(model: viewModel.hero, accountId: accountId) { viewModel.selectSent() }
+                            }
+                        }
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, 6)
+                        .id(Self.heroAnchor)
                         if let hold = viewModel.vacationHold {
                             MailHoldBanner(hold: hold) { viewModel.openVacationHold() }
                                 .padding(.horizontal, Spacing.s4)

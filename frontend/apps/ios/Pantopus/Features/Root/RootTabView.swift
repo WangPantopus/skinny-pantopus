@@ -41,6 +41,14 @@
 //  and Plans, while the `moments` switch is on: Place · Today · Pulse ·
 //  Moments · Plans · Mail.
 //
+//  Founder decision 2026-11-13: Mail is third. With the Mailbox on the bar is
+//  Place · Today · Mail · Pulse · Moments · Plans (yours first, then what's
+//  around you), Moments and Plans while their switches are on; with it off,
+//  Place · Today · Pulse · Moments · Plans. Only Mail moved: the chat button,
+//  the side menu, the badges, the tab the app opens on (Place) and every
+//  tab's id stay. From November 1 to Christmas, while cards are open, Mail's
+//  icon is a red envelope with a gold seal (`HolidayCardDoors`).
+//
 //  The drawn bar looks like the system's (founder, 2026-10-30): on iOS 26
 //  and later the floating Liquid Glass capsule. It slides away while a page
 //  scrolls down, for more room to read, and comes back on a scroll up
@@ -112,14 +120,16 @@ public enum RootTab: Hashable, CaseIterable {
         LaunchFeatures.pulseRedesign ? .pulse : .nearby
     }
 
-    /// The bar's tabs in order: Moments and Plans while their switches are
-    /// on, Mail while the Mailbox is on (launch cut #10). Messages isn't on
-    /// the bar: the chat button opens it (founder, 2026-11-08).
+    /// The bar's tabs in order: Mail third while the Mailbox is on (launch
+    /// cut #10; founder decision 2026-11-13), then Pulse, and Moments and
+    /// Plans while their switches are on. Messages isn't on the bar: the chat
+    /// button opens it (founder, 2026-11-08).
     static func barTabs(plans: Bool, moments: Bool = false) -> [RootTab] {
-        var tabs: [RootTab] = [.place, .today, pulseHome]
+        var tabs: [RootTab] = [.place, .today]
+        if LaunchFeatures.mailbox { tabs.append(.mail) }
+        tabs.append(pulseHome)
         if moments { tabs.append(.moments) }
         if plans { tabs.append(.plans) }
-        if LaunchFeatures.mailbox { tabs.append(.mail) }
         return tabs
     }
 
@@ -202,6 +212,16 @@ public final class RootTabModel {
         selected = .messages
     }
 
+    /// The send flow of a Christmas card, in the Mail tab, as Mail's own row
+    /// opens it; with `toUserId`, that person already chosen (as "Send one
+    /// back" does). Today's countdown, a person's page, a chat's details and
+    /// the side menu open it (TABCARD).
+    func openChristmasCard(toUserId: String? = nil, toName: String? = nil) {
+        guard LaunchFeatures.mailbox, LaunchFeatures.holidayCards else { return }
+        pendingMailRequest = .route(.christmasCards(toUserId: toUserId, toName: toName))
+        selected = .mail
+    }
+
     /// Messages' Back: the tab Messages was opened from.
     func closeMessages() {
         selected = messagesReturnTab == .messages ? .place : messagesReturnTab
@@ -238,6 +258,8 @@ public struct RootTabView: View {
     @State private var momentsFlags = MomentsFlags.shared
     /// The dot on the Moments tab: someone near you added one since the tab was last open.
     @State private var momentsDot = MomentsTabDot.shared
+    /// Christmas cards open or closed: Mail's red envelope and the other ways into a card.
+    @State private var cardDoors = HolidayCardDoors.shared
     /// The side menu's model, made once (a view model made in `body` can
     /// write observed state while the bar draws: the Xcode 16.4 render loop).
     @State private var drawerModel = NavigationDrawerViewModel(context: .personal(name: ""))
@@ -271,6 +293,7 @@ public struct RootTabView: View {
             .task(id: signedInUserID) {
                 await plansFlags.refresh(account: signedInUserID)
                 await momentsFlags.refresh(account: signedInUserID)
+                await cardDoors.refresh(account: signedInUserID)
                 // A Moment the app was closed in the middle of posting carries on.
                 if momentsFlags.moments { MomentsUploader.shared.resume(account: signedInUserID) }
                 // Every invite shares the person's own link; read it before anyone taps one.
@@ -287,6 +310,7 @@ public struct RootTabView: View {
                 if plansFlags.plans { PlansStoreReads.changed() }
                 Task { await plansFlags.refresh(account: signedInUserID) }
                 Task { await momentsFlags.refresh(account: signedInUserID) }
+                Task { await cardDoors.refresh(account: signedInUserID) }
                 // Mail may have come while the app was away.
                 mailBadgeStore.refresh()
             }
@@ -528,7 +552,9 @@ public struct RootTabView: View {
     /// personal context, as it was on Place: the pill's name opens the profile
     /// cover, and rows open their screens in the Place tab's stack.
     private var navigationMenu: some View {
-        NavigationDrawerView(
+        // "Send a Christmas card" above Manage while cards are open (TABCARD).
+        let sendCard: (@MainActor () -> Void)? = cardDoors.isOpen ? sendChristmasCardFromMenu : nil
+        return NavigationDrawerView(
             viewModel: drawerModel,
             isPresented: Binding(
                 get: { model.showsNavigationMenu },
@@ -540,8 +566,15 @@ public struct RootTabView: View {
                 if LaunchFeatures.personas { openFromMenu(.identityCenter) }
             },
             onBackToHub: { openFromMenu(.backToPlace) },
-            onOpenProfile: { showProfile = true }
+            onOpenProfile: { showProfile = true },
+            onSendChristmasCard: sendCard
         )
+    }
+
+    /// The side menu's "Send a Christmas card": the send flow, in the Mail tab.
+    private func sendChristmasCardFromMenu() {
+        model.showsNavigationMenu = false
+        model.openChristmasCard()
     }
 
     /// The menu's screens live in the Place stack, as the account links
@@ -634,6 +667,7 @@ extension RootTabView {
                         selected: model.barSelection,
                         badges: [.mail: mailBadgeStore.unopened, .moments: momentsDot.hasNew ? 1 : 0],
                         verticalEdge: verticalEdge,
+                        christmasMail: cardDoors.isOpen && isChristmasMailSeason(ChristmasClock.now),
                         onSelect: select
                     )
                 }
@@ -704,10 +738,11 @@ extension RootTabView {
         model.reselection = RootTabReselection(tab: tab)
     }
 
-    /// Where a selection that isn't on the bar lands.
+    /// Where a selection that isn't on the bar lands. Mail (without the
+    /// Mailbox) sits between Today and Pulse: it lands on Today.
     private static func nearestTab(to tab: RootTab, on onBar: [RootTab]) -> RootTab {
         let nearest: RootTab = switch tab {
-        case .mail: .messages
+        case .mail: .today
         case .plans, .moments, .pulse, .nearby: RootTab.pulseHome
         default: .place
         }
