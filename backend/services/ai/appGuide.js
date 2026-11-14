@@ -38,6 +38,11 @@ const SCREENS = {
   mail: ['pantopus://mailbox', 'mailbox', 'Open Mail'],
   mail_item: ['pantopus://mailbox/{id}', 'mailbox+id', 'Open this mail'],
   mail_sent_item: ['pantopus://mailbox/sent/{id}', 'mailbox+id', 'Open what you sent'],
+  // One Moment, for people who have Moments (both phones open it; only the iPhone opens the bare map link).
+  moment: ['pantopus://moments/{id}', 'moments+id', 'Open the Moment'],
+  // The Wallet, and Settings → Payments & payouts (cards and the payout account).
+  wallet: ['pantopus://wallet', null, 'Open Wallet'],
+  payments_settings: ['pantopus://settings/payments', null, 'Open Payments'],
   notifications: ['pantopus://notifications', null, 'Open notifications'],
   notification_settings: ['pantopus://settings/notifications', null, 'Open notification settings'],
   support_train: ['pantopus://support-trains/{id}', 'id', 'Open the Support Train'],
@@ -75,7 +80,7 @@ const showLinkDefinition = {
     type: 'object',
     properties: {
       screen: { type: 'string', enum: SCREEN_NAMES },
-      id: { type: ['string', 'null'], description: 'The id the screen needs (home, post, plan, chat, mail or Support Train id), or null.' },
+      id: { type: ['string', 'null'], description: 'The id the screen needs (home, post, plan, chat, mail, Moment or Support Train id), or null.' },
       home_id: { type: ['string', 'null'], description: 'For home_task: the home the task is in. Otherwise null.' },
       section: { type: ['string', 'null'], enum: [...SECTION_SLUGS, null], description: 'For place_section only.' },
       label: { type: ['string', 'null'], description: 'Button text, a few words starting with a verb ("Open members"). Null for the default.' },
@@ -91,6 +96,7 @@ function runShowLink(args, ctx) {
   if (!entry) return { error: `Unknown screen. Screens: ${SCREEN_NAMES.join(', ')}.` };
   if (entry[1] && entry[1].includes('plans') && ctx.plansEnabled === false) return { error: "Plans aren't available for this person." };
   if (entry[1] && entry[1].includes('mailbox') && !isLaunchFeatureEnabled('mailbox')) return { error: "Mail isn't available in the app yet." };
+  if (entry[1] && entry[1].includes('moments') && !ctx.momentsEnabled) return { error: "Moments aren't available for this person." };
   if (entry[1] === 'memory' && !ctx.memory) return { error: "This version of the app has no memory list. Say they can see it in Settings once they update the app." };
   if (entry[1] === 'rules' && !ctx.rules) return { error: "This version of the app has no rules list. Say they can see it in Settings once they update the app." };
   const url = linkFor(args.screen, args.id, { home: args.home_id, section: args.section });
@@ -109,7 +115,7 @@ function runShowLink(args, ctx) {
 // builds have neither, and hear where in the app the person does it instead.
 function appGuide({
   plans = true, playdates = false, sports = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true, remembers = false, standingRules = false,
-  identity = true, chats = true,
+  identity = true, chats = true, moments = false,
 } = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
@@ -186,6 +192,23 @@ ${sports ? '- Your teams: Settings → Notifications → Games and teams opens t
 - On the phones, Mail opens after Face ID or the passcode; so does the Wallet.
 - ${identity ? `You can look through their Mail and read a piece (find_mail, get_mail_item${links ? '; mail_item opens one' : ''}). ` : ''}You can't send, pay, file or delete mail: they do that on the piece.`);
   }
+
+  // Moments are described only to people who have the tab (the `moments` flag), like their tools.
+  if (moments) {
+    parts.push(`MOMENTS
+- A Moment is a photo, a video of up to 30 seconds or a short text card, posted from the Moments tab with "+". It is pinned where they are and lasts 1, 6, 24 or 48 hours; then it is gone for everyone, its author included. Posting needs a one-time confirmation that they are 18 or older.
+- Who sees it: "Everyone nearby" or "My connections". Its place shows as a venue, a street name or a town, never an address. "Show the area instead" shows only the town, and so does a Moment posted at home. "Post with no location" keeps it off the map, for connections only.
+- It shows on the Moments map as the poster's face in a ring, and as a ring around their profile picture elsewhere in the app. People can react with one emoji or reply; a reply arrives as a direct message. Only the poster sees "Seen by".
+- You can look up their own Moments, who saw them, and Moments they can see (find_moments, get_moment${links ? '; moment opens one' : ''}). You never see the photo or video, and you can't post, react or reply for them.`);
+  }
+
+  parts.push(`WALLET AND PAYMENTS
+- The Wallet (side menu, Wallet & Payments${links ? '; wallet' : ''}) holds money they earn on Pantopus: pay for tasks they did, tips, and invoice payments. Cards pay directly: the Wallet can't be topped up or used to pay.
+- After someone pays, Pantopus holds the money for a 48-hour review ("In review"), then releases it to the Wallet. Money under a bank dispute waits for the bank's decision.
+- Withdrawing sends the balance to their bank through Stripe. It needs payouts set up ("Set up payouts"), has a $1 minimum and takes a few business days.
+- "Owed" means a payment that already reached the Wallet was later refunded or lost to a dispute; their next earnings pay it first, and withdrawals pause until then.
+- Saved cards, Apple Pay and the payout account are in Settings, Payments & payouts${links ? ' (payments_settings)' : ''}.
+- ${identity ? 'You can read their balance, holds and payments (get_wallet, find_payments). ' : ''}You can't withdraw, pay or refund: they do that in the Wallet. You never see card or bank numbers.`);
 
   const off = [];
   if (!marketplace) off.push('buying and selling (marketplace listings)');
