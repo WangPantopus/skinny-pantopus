@@ -82,6 +82,7 @@ export * as hub from './endpoints/hub';                     // Hub (Mission Cont
 export * as location from './endpoints/location';           // Viewing Location
 export * as listings from './endpoints/listings';           // Marketplace Listings
 export * as savedPlaces from './endpoints/savedPlaces';    // Saved Places
+export type { AreaToday, TodayArea } from './endpoints/savedPlaces';
 export type { RelationshipAction, RelationshipCommand, RelationshipReceipt, RelationshipReview, RelationshipResponse } from './endpoints/homeOwnership';
 export type { ResidencyReviewAction, ResidencyReviewRole, ResidencyReviewCommand, ResidencyReviewReceipt, ResidencyReview, ResidencyReviewResponse } from './endpoints/homes';
 export * as homeOwnership from './endpoints/homeOwnership'; // Home Ownership (claims, owners, quorum, disputes)
@@ -130,7 +131,7 @@ export { getHomes, attachToHome, detachFromHome } from './endpoints/homes';
 export { getChatRooms, getBusinessChatRooms, sendMessage, markMessagesAsRead, markMessagesAsReadForIdentity, getConversationMessages, markConversationAsRead } from './endpoints/chat';
 export { uploadProfilePicture, uploadPortfolio, getPortfolio } from './endpoints/files';
 export { getMailbox, markMailAsRead, createAdCampaign } from './endpoints/mailbox';
-export type { DeletedMail, CardSignature, CardMediaRef, CardPhoto, CardVoice, HolidayCards, HolidayCardDesign, HolidayCardCollection, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardNoteIdea, HolidayCardPreview, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, SentHolidayCard, SentPiece, SentPieceDetail, SentTrailStep } from './endpoints/mailbox';
+export type { DeletedMail, CardSignature, CardMediaRef, CardPhoto, CardVoice, HolidayCards, HolidayCardDesign, HolidayCardCollection, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardNoteIdea, HolidayCardPreview, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, SentHolidayCard, SentPiece, SentPieceDetail, SentTrailStep, WaitingHolidayCard } from './endpoints/mailbox';
 export { getBalance, createPaymentIntent, requestPayout } from './endpoints/payments';
 export {
   uploadGigMedia,

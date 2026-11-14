@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.moments.MomentSunDto
 import app.pantopus.android.data.moments.MomentHeightBand
 import app.pantopus.android.data.moments.MomentShownHeight
 import app.pantopus.android.ui.theme.PantopusColors
@@ -87,10 +88,15 @@ data class MomentHeightTagPlan(
      * measured at this one, so a tag is only given a place it really has on screen.
      */
     val zoom: Float? = null,
+    /**
+     * Part D: the sun while pins with an elevation float by day (`MomentsFloat.kt`); null draws today's pins. Set only
+     * while the map's answer says `float_on`, the chip is on and the sun is up.
+     */
+    val sun: MomentSunDto? = null,
 )
 
-/** Where round its ring a pin's height tag sits. */
-internal enum class MomentTagSide { AFTER, BEFORE, ABOVE }
+/** Where round its ring a pin's height tag sits; under it only for a floating pin (`MomentsFloat.kt`). */
+internal enum class MomentTagSide { AFTER, BEFORE, ABOVE, BELOW }
 
 /** Between a pin's ring and a height tag beside it, and between the ring and a tag over it; and a tag's height. */
 internal val MOMENT_HEIGHT_TAG_GAP: Dp = 3.dp
@@ -156,6 +162,10 @@ internal fun MomentsHeightsBar(
             HeightsChip(on = on, onToggle = onToggle)
             AnimatedVisibility(visible = on, enter = fadeIn(), exit = fadeOut()) {
                 HeightKeyButton(open = state.heightKeyOpen, onClick = onKey)
+            }
+            // Part D: while pins float, the time their shadows are drawn for (`MomentsFloat.kt`).
+            AnimatedVisibility(visible = state.floatingSun != null, enter = fadeIn(), exit = fadeOut()) {
+                MomentsSunChip(modifier = Modifier.glassChip(CircleShape).height(CHIP_HEIGHT))
             }
         }
         AnimatedVisibility(visible = on && state.heightKeyOpen, enter = fadeIn(), exit = fadeOut()) {

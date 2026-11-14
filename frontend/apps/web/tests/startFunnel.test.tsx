@@ -24,6 +24,8 @@ jest.mock('@pantopus/api', () => ({
   getFunnelAnonId: jest.fn(() => 'anon-test'),
   rememberFunnelRoute: jest.fn(),
   getFunnelRoute: jest.fn(() => null),
+  // Signed out: the hero's sentence and example card are the visitor's.
+  hasActiveSession: jest.fn(() => false),
 }));
 
 jest.mock('@/lib/publicShare', () => ({

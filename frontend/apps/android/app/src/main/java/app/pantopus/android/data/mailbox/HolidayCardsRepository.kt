@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -59,7 +61,27 @@ class HolidayCardsRepository
                 is NetworkResult.Success -> latestFlow.value = result.data
                 is NetworkResult.Failure -> if (result.error is NetworkError.NotFound) latestFlow.value = null
             }
+            if (result is NetworkResult.Success || (result as? NetworkResult.Failure)?.error is NetworkError.NotFound) {
+                lastReadAt = System.currentTimeMillis()
+            }
             return result
+        }
+
+        /**
+         * Reads the cards once when nothing has been read yet: the ways into a card outside the Mailbox (the Mail tab's
+         * red envelope, Today's countdown, a person's page, a chat's menu, the side menu) ask before they show. Two
+         * screens asking at once read once. Nothing is read while the keys are off.
+         */
+        suspend fun loadIfNeeded() {
+            if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox || latest.value != null) return
+            firstRead.withLock { if (latest.value == null) load() }
+        }
+
+        /** Back in the app: reads the cards again once the last answer is a minute old, so a closed season closes every door. */
+        suspend fun refreshIfStale() {
+            if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) return
+            if (System.currentTimeMillis() - lastReadAt < STALE_AFTER_MS) return
+            firstRead.withLock { if (System.currentTimeMillis() - lastReadAt >= STALE_AFTER_MS) load() }
         }
 
         /** `POST /api/ai/draft/card-note`: up to three notes for the back of the card ("Help me write it"). */
@@ -255,6 +277,21 @@ class HolidayCardsRepository
 
             private val latestFlow = MutableStateFlow<HolidayCardsResponse?>(null)
 
+            private val firstRead = Mutex()
+
+            @Volatile
+            private var lastReadAt = 0L
+
+            private const val STALE_AFTER_MS = 60_000L
+
+            /**
+             * Cards are open: exactly when the Mailbox shows its "Send a Christmas card" row at the top of Me (the keys
+             * `holiday_cards` and `mailbox` on, and the server says sending is open). Every other way into a card hides
+             * with it (TABCARD §2).
+             */
+            fun cardsOpen(cards: HolidayCardsResponse?): Boolean =
+                LaunchFeatures.holidayCards && LaunchFeatures.mailbox && cards?.open == true
+
             val latest: StateFlow<HolidayCardsResponse?> = latestFlow.asStateFlow()
 
             private val cardSentFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
@@ -309,6 +346,7 @@ class HolidayCardsRepository
             fun forgetAccount() {
                 showSentHandled()
                 latestFlow.value = null
+                lastReadAt = 0L
             }
         }
     }

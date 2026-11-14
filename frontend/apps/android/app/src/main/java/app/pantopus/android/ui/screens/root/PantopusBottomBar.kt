@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.screens.feed.PULSE_HEADER_HYSTERESIS
 import app.pantopus.android.ui.screens.feed.PULSE_HEADER_MS
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasEnvelopeIcon
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
@@ -82,9 +83,10 @@ import kotlin.math.roundToInt
 /**
  * Custom bottom bar matching the Pantopus design spec: 78dp tall, semi-
  * transparent white surface with a 12dp backdrop blur on API 31+, a 1dp
- * top border, four to six evenly-spaced tabs (Plans comes and goes with its switch and Messages follows Mail while
- * Mailbox is on, so the caller passes [tabs]), active tint `primary600`, inactive tint `appTextSecondary`. A tab
- * with a count in [badges] (Mail: unopened mail; Messages: unread messages) draws a badge. Tab labels grow with the
+ * top border, three to six evenly-spaced tabs (Plans and Moments come and go with their switches and Mail is third
+ * while Mailbox is on, founder decision 2026-11-13, so the caller passes [tabs]), active tint `primary600`, inactive
+ * tint `appTextSecondary`. A tab with a count in [badges] (Mail: unopened mail) draws a badge. From November 1 to
+ * Christmas Day, while Christmas cards are open, Mail wears the red envelope ([christmasMail]). Tab labels grow with the
  * text size up to 1.3x, and only as far as the longest label still fits its tab, so six of them share a 360-dp
  * phone at the largest text size without cutting a word; the full name still reads in TalkBack.
  * The app draws edge to edge, so the surface extends under the system
@@ -99,7 +101,10 @@ import kotlin.math.roundToInt
  * @param dots Tabs with something new and no count to show (Moments): a small dot where the badge would be.
  * @param tabs The tabs to draw, in order ([PantopusRoute.barTabs]).
  * @param away Scrolled out of the way ([TabBarScrollState]).
+ * @param christmasMail Mail's icon is the red envelope with its gold seal, selected or not (TABCARD §1): the caller
+ *     says so while cards are open and [app.pantopus.android.ui.screens.mailbox.cards.isChristmasMailSeason].
  */
+@Suppress("LongParameterList") // What the bar draws (tabs, badges, dots, the season's Mail icon) and how it moves.
 @Composable
 fun PantopusBottomBar(
     selected: PantopusRoute,
@@ -109,6 +114,7 @@ fun PantopusBottomBar(
     tabs: List<PantopusRoute> = PantopusRoute.entries,
     modifier: Modifier = Modifier,
     away: Boolean = false,
+    christmasMail: Boolean = false,
 ) {
     val background = PantopusColors.appSurface.copy(alpha = 0.96f)
     val blurModifier =
@@ -163,6 +169,7 @@ fun PantopusBottomBar(
                     badge = badges[route] ?: 0,
                     dot = route in dots,
                     labelFontScale = labelFontScale,
+                    christmas = christmasMail && route == PantopusRoute.Mail,
                     onClick = { onSelect(route) },
                 )
             }
@@ -337,6 +344,7 @@ private fun RowScope.TabItem(
     badge: Int,
     dot: Boolean,
     labelFontScale: Float,
+    christmas: Boolean,
     onClick: () -> Unit,
 ) {
     val tint = if (isSelected) PantopusColors.primary600 else PantopusColors.appTextSecondary
@@ -366,12 +374,17 @@ private fun RowScope.TabItem(
                     }.padding(horizontal = TAB_HORIZONTAL_PADDING),
         ) {
             Box {
-                PantopusIconImage(
-                    icon = route.icon,
-                    contentDescription = null,
-                    size = TAB_ICON_SIZE,
-                    tint = tint,
-                )
+                // The season's red envelope keeps its own colours, selected or not; the label shows which tab is lit.
+                if (christmas) {
+                    ChristmasEnvelopeIcon(size = TAB_ICON_SIZE)
+                } else {
+                    PantopusIconImage(
+                        icon = route.icon,
+                        contentDescription = null,
+                        size = TAB_ICON_SIZE,
+                        tint = tint,
+                    )
+                }
                 if (badge > 0) {
                     CompositionLocalProvider(LocalDensity provides labelDensity) {
                         // Over the icon's top-right corner; the offset keeps the icon and label centered.
