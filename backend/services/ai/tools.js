@@ -323,7 +323,7 @@ function closingForDrafts(calls) {
 
 // Mail (and the Wallet) open on the phones only after Face ID or the passcode.
 const PRIVATE_TOOL_NAMES = new Set([...MAIL_TOOL_NAMES, ...WALLET_TOOL_NAMES]);
-const IDENTITY_NEEDED = "That opens in the app only after it checks it's them (Face ID or the passcode), and it hasn't for this conversation. Say so in a sentence and point them to that screen; don't guess what is there.";
+const IDENTITY_NEEDED = "That opens in the app only after it checks it's them (the phone's face or fingerprint unlock, or its passcode), and it hasn't for this conversation. Say so in a sentence and point them to that screen; don't guess what is there.";
 
 const TOOL_TIMEOUT_MS = 5000;
 // Reads that compose several providers, and the plan card's place search, need longer.
