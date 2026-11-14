@@ -5,8 +5,8 @@ far it reaches. Most posts stay near the ground, together; a few rise over the t
 world.
 
 **Status on November 14, 2026: designed and drawn. Nothing is built.** The founder accepted the design's sixteen
-decisions and the ten screens that day. Phase A has a build contract; it needs the founder's go and a yes to the
-contract's calls.
+decisions and the ten screens that day. Phase A has a build contract, and the founder accepted its nine calls the same day; it needs the
+founder's go.
 
 ## What is here
 
@@ -63,7 +63,6 @@ and a view where the ground rises where it is busy.
 
 **Open:**
 
-- The phase A contract's nine calls (its section 2).
 - The go for phase A.
 - Details and drawings for the higher starting level and the terrain.
 - Contracts for phases B to E.
@@ -72,7 +71,7 @@ and a view where the ground rises where it is busy.
 
 | Phase | What people see | State |
 | --- | --- | --- |
-| A | Approximate places, built fully | Contract written |
+| A | Approximate places, built fully | Contract accepted; waits for the go |
 | B | The floating look on a flat map | Drawn |
 | C | Levels: rising, sinking, Overhead, How far | Drawn |
 | D | The living sky: night, motion, then tilt | In words |

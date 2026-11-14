@@ -1,6 +1,6 @@
 # The Sky: floating posts, levels and approximate places
 
-Design, November 14, 2026. This is a copy for builders of a private Claude Doc; the founder accepted its sixteen decisions that day. Where the [phase A contract](02-phase-a-contract.md) makes a call that differs from a sentence here (its section 2), the contract wins once the founder confirms the call.
+Design, November 14, 2026. This is a copy for builders of a private Claude Doc; the founder accepted its sixteen decisions that day. The founder also accepted the nine calls of the [phase A contract](02-phase-a-contract.md) that day, and the sentences they change are changed here.
 
 ## Summary
 
@@ -49,11 +49,11 @@ Every post is in one of three states, and the author sees which one before posti
 
 ### How an area is chosen
 
-- **The grid stays.** Today's area point comes from a fixed grid with a secret offset, so every post from one spot shows the same point and many posts never narrow it down. That mechanism is kept as it is.
+- **The grid stays.** The area's point is the centre of its grid cell, so every post from one spot shows the same point and many posts never narrow it down. Today's secret offset is dropped (decided November 14): it made the real uncertainty about half a mile in every direction, and the 100-home rule now carries the protection.
 - **The cell grows where homes are few.** The server tries cells of about 0.5 km, 1 km, 2 km and 5 km, and uses the smallest one that holds at least 100 homes. If none does, the area is the town.
 - **Size depends on the place only.** It never depends on the person or the post, so it gives nothing away about either.
-- **The disc is wider than the cell.** It is centred on the shown point, not on the cell, so its edge does not reveal where the cell's edges are.
-- **Home counts come from a file.** In the US it is built from the address records Pantopus already holds. Elsewhere it comes from a public population grid. Where there is no count, the area is the town.
+- **The disc is honest.** It is the circle around the cell, about 0.4 mile across at its smallest, so the picture shows the real area and nothing wider.
+- **Home counts come from a file.** In the US it is built from the 2020 Census housing counts by block, which cover every state (decided November 14). Elsewhere it comes from a public population grid. Where there is no count, the area is the town.
 
 ### What a public place is
 
@@ -194,7 +194,7 @@ Each threat below has a rule that answers it, and every rule runs on the server.
 | Someone works out where a person lives | Home is always an area. An area holds 100 homes or more. Every post from one spot shows the same area. No trail between posts. The label is the town |
 | A burglar learns that a home is empty | A post is never tied to a home on the map. Public pages default to "Share later", which is the advice the FBI gave athletes in 2024 |
 | A post takes off and exposes the part of town it came from | Its place widens as it rises. Past Town it needs the author's yes |
-| Someone narrows a spot down by asking the server many questions | Kept from today: every filter, distance and count uses the shown point and whole cells. New: the area's size depends only on the place, and the disc is not centred on its cell |
+| Someone narrows a spot down by asking the server many questions | Kept from today: every filter, distance and count uses the shown point and whole cells. New: the area's size depends only on the place, and a floating post stores only its area point, so the exact spot is never kept |
 | Someone copies the whole map | Nearby level needs a signed-in account and is rate-limited per account and device. City level and above are public by design |
 | Two people silence a post by reporting it | At Nearby level two reports still hide a post until review, as today. From Town up, reports send it to review without hiding it, unless the picture check flags it |
 | A flood of replies to a risen post | From City level up, replies to a Moment come only from the author's connections unless the author opens them. Reactions stay open to all |
@@ -252,7 +252,7 @@ Posting decides a post's place once. The lift job moves its level every minute. 
 ### The parts
 
 1. **Place rules, at posting time.** The code that names a Moment's place today also decides its state (ground, air or none), the size of its area and the point shown. It reads three things: the places index, the author's homes, and the homes-per-cell file.
-2. **The homes-per-cell file.** Built offline from the address records, kept in the private bucket and read into memory, the way the property index is read today. It says, for each grid cell, which size step holds 100 homes.
+2. **The homes-per-cell file.** Built offline from the 2020 Census housing counts, kept in the private bucket and read into memory, the way the property index is read today. It says, for each grid cell, which size step holds 100 homes.
 3. **The area ladder.** Town, metro area, state, country. A table of areas exists and holds three launch towns with outlines from the Census; the other US towns are loaded from the same source. Metro areas, states and countries are added to it as new kinds of area. Outside the US the outlines come from public boundary sets.
 4. **Lift.** A job runs every minute. For posts with new reactions or views it works out the score, then for each area takes the top posts and sets their level. It writes only the posts whose level changed, and tells open maps in that area.
 5. **The sky read.** One request per map view: the box, the zoom and which map (Moments or Pulse). The answer holds at most about 60 floating posts and groups, each with its shown point, its level and its disc, plus the Overhead counts.
@@ -378,7 +378,7 @@ The founder accepted all sixteen recommendations on November 14, 2026 ("Yes, all
 
 ### Next step
 
-Done on November 14: the ten screens and the [build contract for phase A](02-phase-a-contract.md). Next: the founder's yes to the contract's calls and the go for phase A.
+Done on November 14: the ten screens and the [build contract for phase A](02-phase-a-contract.md). The founder accepted the contract's nine calls the same day. Next: the go for phase A.
 
 ## What exists today
 

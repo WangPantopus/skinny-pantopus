@@ -1,7 +1,7 @@
 # The Sky, phase A: approximate places, built fully (build contract v1, 2026-11-14)
 
-**Status: written, not approved to build.** The founder accepted the design's sixteen decisions and the ten screens
-on November 14. Building phase A needs the founder's go, and a yes to the calls in section 2.
+**Status: accepted, not approved to build.** The founder accepted the design's sixteen decisions, the ten screens
+and this contract's nine calls on November 14 ("Yes, all nine"). Building phase A needs the founder's go.
 
 Read first: [the design](01-design.md), screens [4](screens/04-posting-floating.jpg),
 [5 (place)](screens/05-posting-at-a-place.jpg), [5 (home)](screens/05-posting-at-home.jpg) and
@@ -33,7 +33,8 @@ Android, and the Pulse composer's place line on web, iPhone and Android.
 
 ## 2. Calls this contract makes
 
-These go beyond the design or change a sentence of it. Each needs the founder's yes before the build.
+These go beyond the design or change a sentence of it. The founder accepted all nine on November 14, and the
+design now says what they say.
 
 | # | Call | Why |
 | --- | --- | --- |
