@@ -26,6 +26,9 @@ import GetToKnowSection from '@/components/profile/public/GetToKnowSection';
 import PinnedPostsRow from '@/components/profile/public/PinnedPostsRow';
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 import { launchFeatures } from '@/lib/featureFlags';
+import { useCardArrivals } from '@/lib/mailbox-queries';
+import { useOpenCards } from '@/components/mailbox/cards/cardDoors';
+import { sendOneBackPath } from '@/components/mailbox/cards/sendOneBack';
 import { authPageHref } from '@/lib/auth-utils';
 import UsernamePrompt, { markAskedForUsername, shouldAskForUsername } from '@/components/profile/UsernamePrompt';
 import { fetchMe, useOwnLocalProfile } from '@/lib/me';
@@ -948,6 +951,13 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
   const profilePath = typeof window === 'undefined' ? `/${profileIdentifier}` : window.location.pathname;
   const signInHref = authPageHref('/login', profilePath);
 
+  // Christmas cards (TABCARD 2c): "Send a card" beside Message on another person's page while cards are open and the
+  // send flow could pick them. The arrivals read makes the same checks as sending them a card (Send one back asks it too).
+  const openCards = useOpenCards({ enabled: mounted && viewerChecked && Boolean(currentUser) });
+  const cardPersonId = openCards && profile?.id && currentUser && currentUser.id !== profile.id
+    && (profile.accountType ?? profile.account_type) !== 'business' && connectionState !== 'blocked' ? profile.id : null;
+  const cardArrivals = useCardArrivals(cardPersonId);
+
   // ── Loading / Error states ──
 
   if (loading) {
@@ -1268,6 +1278,10 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
         onDecline={() => void answerRequest(false)}
         onDisconnect={handleDisconnect}
         onMessage={handleMessage}
+        // The send flow opens at Pick a card with them already chosen, as Send one back does.
+        onSendCard={!previewing && cardPersonId && cardArrivals.isSuccess
+          ? () => router.push(sendOneBackPath({ userId: cardPersonId, name: fullName }))
+          : undefined}
       />
     );
   }

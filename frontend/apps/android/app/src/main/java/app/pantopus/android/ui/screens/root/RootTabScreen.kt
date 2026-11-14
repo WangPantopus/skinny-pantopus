@@ -3378,6 +3378,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             openNearby = { navController.navigateToRootTab(PantopusRoute.Plans) },
                             askPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                             openProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
+                            openBusiness = { businessId -> navController.navigate(ChildRoutes.businessProfile(businessId)) },
                         ),
                 )
                 composable(PantopusRoute.Mail.path) {
@@ -5448,6 +5449,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onShare = { text -> appContext.shareText(text, "Share business") },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
+                        onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId, via = PlansRoutes.VIA_BUSINESS_PAGE)) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }
@@ -5495,6 +5497,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         },
                         onShare = { text -> appContext.shareText(text, "Share business") },
                         onOpenWebsite = { uri -> runCatching { uriHandler.openUri(uri) } },
+                        onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId, via = PlansRoutes.VIA_BUSINESS_PAGE)) },
                         onEdit = { navController.navigate(ChildRoutes.editBusinessPage(businessId)) },
                     )
                 }

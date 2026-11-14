@@ -188,6 +188,31 @@ export interface HouseholdGroup {
   reported: string | null;
 }
 
+/** "Add from a document" on Property details, for a verified member who can edit (backend/services/householdDocuments). */
+export interface HouseholdDocumentsOffer {
+  title: string;
+  lead: string;
+  action: string;
+}
+
+/** A fact the household's report states, beside what the page shows now (`note`), and where it says it (`source`). */
+export interface DocumentFact extends HouseholdFact {
+  source: string;
+}
+
+export type DocumentKind = 'inspection' | 'appraisal' | 'listing' | 'document';
+
+/** What Pantopus read in a report. Nothing of it is kept; `message` explains an answer with no facts. */
+export interface DocumentFactsAnswer {
+  kind: DocumentKind;
+  title: string;
+  subtitle: string;
+  lead: string;
+  facts: DocumentFact[];
+  missing: string | null;
+  message: string | null;
+}
+
 /** What the household has said, for those it's meant for (backend/services/householdFacts.js). */
 export interface HouseholdPart {
   can_edit: boolean;
@@ -197,6 +222,7 @@ export interface HouseholdPart {
   county_page: CountyPage | null;
   county_check?: HouseholdCountyCheck;
   floor_plan?: FloorPlanLayout;
+  documents?: HouseholdDocumentsOffer;
 }
 
 /** A change to one fact, or with `group` to every fact of a group that can take it. */
@@ -373,6 +399,26 @@ export async function reportRecordProblem(homeId: string, data: { section: strin
  */
 export async function answerFloorPlan(homeId: string, answer: 'yes' | 'no' | 'undo'): Promise<{ answered: boolean }> {
   return post<{ answered: boolean }>(`/api/homes/${homeId}/floor-plan-answer`, { answer });
+}
+
+/**
+ * "Add from a document": a PDF of the home's inspection report, appraisal or listing sheet. The server reads it in
+ * memory and keeps nothing; the answer lists the facts it states for the household to check.
+ */
+export async function readDocumentFacts(homeId: string, file: Blob, name = 'report.pdf'): Promise<DocumentFactsAnswer> {
+  const form = new FormData();
+  form.append('file', file, name);
+  return post<DocumentFactsAnswer>(`/api/homes/${homeId}/document-facts/read`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
+    // A file the server can't read says why on the screen.
+    suppressDevErrorOverlay: true,
+  });
+}
+
+/** The facts the household kept from its report: saved as its own, each saying which report it came from. */
+export async function saveDocumentFacts(homeId: string, data: { kind: DocumentKind; facts: Array<{ key: string; value: string }> }): Promise<{ message: string }> {
+  return post<{ message: string }>(`/api/homes/${homeId}/document-facts`, data);
 }
 
 /**

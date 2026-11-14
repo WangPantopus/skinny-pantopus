@@ -66,6 +66,7 @@ class BusinessProfileViewModelTest {
             profiles = profiles,
             businessPages = businessPages,
             savedStateHandle = SavedStateHandle(mapOf(BUSINESS_PROFILE_BUSINESS_ID_KEY to "biz-1")),
+            plans = mockk { coEvery { businessPlans(any()) } returns emptyList() },
         )
 
     private fun sampleDetail(): BusinessDetailResponse =
@@ -102,7 +103,7 @@ class BusinessProfileViewModelTest {
                             legacyDisplayText = "Serves Cambridge & Somerville",
                         ),
                     isPublished = true,
-                    verificationStatus = "address_verified",
+                    verificationStatus = "document_verified",
                     identityVerificationTier = "bi1_basic",
                     primaryLocation =
                         BusinessLocationDto(

@@ -40,6 +40,7 @@ import app.pantopus.android.data.plans.KidsAgeBand
 import app.pantopus.android.data.plans.PlanAutoRule
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.isAtHome
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
@@ -109,6 +110,7 @@ fun PlanRequestsScreen(
                         RequestCard(
                             request = request,
                             playdate = plan?.isPlaydate == true,
+                            business = plan?.isBusiness == true,
                             working = request.id in ui.working,
                             onAccept = { viewModel.accept(request) },
                             onDecline = { viewModel.decline(request) },
@@ -134,6 +136,7 @@ fun PlanRequestsScreen(
                     RequestCard(
                         request = request,
                         playdate = plan?.isPlaydate == true,
+                        business = plan?.isBusiness == true,
                         working = request.id in ui.working,
                         onAccept = { viewModel.accept(request) },
                         onDecline = { viewModel.decline(request) },
@@ -189,7 +192,8 @@ private fun RequestsHeader(
         }
         PlanSpotsMeter(spots = plan.spots, taken = taken)
     }
-    if (!plan.isPlaydate) {
+    // A business's plan lets people in right away or by hand, nothing else, so it has no "people you've hosted".
+    if (!plan.isPlaydate && !plan.isBusiness) {
         val on = PlanAutoRule.HOSTED_BEFORE in plan.autoRules.orEmpty()
         Row(
             modifier =
@@ -225,6 +229,7 @@ private fun RequestCard(
     request: PlanRequestViewDto,
     playdate: Boolean,
     working: Boolean,
+    business: Boolean = false,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
 ) {
@@ -246,7 +251,9 @@ private fun RequestCard(
                     Text(text = name, style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold), color = PantopusColors.appText)
                     if (user?.verifiedAddress == true) PlanVerifiedBadge(text = "Verified")
                 }
-                Text(text = requesterCaption(request), style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+                requesterCaption(request, business).takeIf(String::isNotBlank)?.let {
+                    Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+                }
             }
             PlanStatusChip(text = partyLabel(request, playdate))
         }
@@ -304,9 +311,16 @@ private fun SpokenAs(
     ) { content() }
 }
 
-/** "About 1 mi away · joined 2 plans · 1 mutual connection" (or "new to Pantopus"). */
-private fun requesterCaption(request: PlanRequestViewDto): String {
+/**
+ * "About 1 mi away · joined 2 plans · 1 mutual connection" (or "new to Pantopus"). A business's team sees less (B4):
+ * whether the person came before, and nothing about distance, connections or what else they joined.
+ */
+private fun requesterCaption(
+    request: PlanRequestViewDto,
+    business: Boolean = false,
+): String {
     val user = request.user ?: return ""
+    if (business) return if (user.hostedBefore) "Came before" else ""
     val parts = mutableListOf<String>()
     PlanFormat.distance(user.distanceBand)?.let { parts += "${it.replaceFirstChar { c -> c.titlecase() }} away" }
     if (user.hostedBefore) parts += "you hosted them before"

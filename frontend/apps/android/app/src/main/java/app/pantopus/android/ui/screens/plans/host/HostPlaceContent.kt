@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.R
+import app.pantopus.android.data.api.models.plans.HostAsBusinessDto
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlaceDto
 import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestionsResponse
 import app.pantopus.android.data.api.net.NetworkError
@@ -48,7 +49,9 @@ import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.components.PlanAreaGlow
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
 import app.pantopus.android.ui.screens.plans.components.PlanFormCard
+import app.pantopus.android.ui.screens.plans.components.PlanGuestsSeeCard
 import app.pantopus.android.ui.screens.plans.components.PlanIconTile
+import app.pantopus.android.ui.screens.plans.components.PlanLockLine
 import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
 import app.pantopus.android.ui.screens.plans.components.PlanOverline
 import app.pantopus.android.ui.screens.plans.components.PlanRow
@@ -646,6 +649,7 @@ internal fun PlanNearbyPlaceDto.toPicked(): PickedPlace? {
         category = category?.split(',')?.firstOrNull()?.trim(),
         distanceMeters = distanceMeters,
         categories = categories.orEmpty().ifEmpty { listOfNotNull(category) },
+        placeId = placeId?.takeIf(String::isNotBlank),
     )
 }
 
@@ -750,84 +754,147 @@ internal fun HostPreviewStep(
             HostFooterButton(title = "Post plan", onClick = onPost, loading = ui.posting)
         },
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-            PlanOverline("What neighbors see")
-            NeighborsCard(ui, kind)
-            PlanOverline(
-                if (kind == PlanKind.PLAYDATE) "Families you accept also see" else "People you accept also see",
-                modifier = Modifier.padding(top = Spacing.s1),
-            )
+        val business = ui.business
+        if (business != null) {
+            BusinessPreview(ui, kind, business)
+        } else {
+            NeighborPreview(ui, kind)
+        }
+    }
+}
+
+/**
+ * A business's plan before posting (board B2's Preview): what guests see, the place included, since a business's
+ * place is public; the note is for people who are in.
+ */
+@Composable
+private fun BusinessPreview(
+    ui: HostUi,
+    kind: PlanKind,
+    business: HostAsBusinessDto,
+) {
+    val draft = ui.draft
+    val start = draft.start ?: return
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4), modifier = Modifier.testTag("planBusinessPreview")) {
+        PlanOverline("What guests see")
+        PlanGuestsSeeCard(
+            kind = kind,
+            label = ui.labels.firstOrNull { it.key == draft.label }?.text,
+            title = draft.title.trim(),
+            whenText = PlanFormat.whenLine(start.atZone(ui.zone), draft.end?.atZone(ui.zone), long = true),
+            spots = draft.spots,
+            place = listOfNotNull(locationTitle(business, ui.location), ui.location?.address).joinToString(" · "),
+        )
+        PlanLockLine(
+            if (draft.approveEach) "You approve each person who asks." else "Anyone gets in right away, until the spots fill.",
+            icon = PantopusIcon.Users,
+        )
+        if (draft.note.isNotBlank()) {
+            PlanOverline("People who are in also see", modifier = Modifier.padding(top = Spacing.s1))
             PlanFormCard {
                 PlanOptionRow(first = true) {
                     PantopusIconImage(
-                        icon = if (draft.atHome) PantopusIcon.Home else PantopusIcon.MapPin,
+                        icon = PantopusIcon.Lock,
                         contentDescription = null,
                         size = 18.dp,
                         tint = PantopusColors.appTextSecondary,
                     )
                     Text(
-                        text = if (draft.atHome) "Your address" else "The exact spot: ${draft.place?.name ?: "your place"}",
-                        style = PantopusTextStyle.small,
-                        color = PantopusColors.appText,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (draft.note.isNotBlank()) {
-                    PlanOptionRow {
-                        PantopusIconImage(
-                            icon = PantopusIcon.Lock,
-                            contentDescription = null,
-                            size = 18.dp,
-                            tint = PantopusColors.appTextSecondary,
-                        )
-                        Text(
-                            text = "Your note: “${draft.note.trim()}”",
-                            style = PantopusTextStyle.small,
-                            color = PantopusColors.appText,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-                // A playdate's exact time is its own row, as on iOS (neighbors see only the part of the day).
-                if (kind == PlanKind.PLAYDATE) {
-                    PlanOptionRow {
-                        PantopusIconImage(
-                            icon = PantopusIcon.Clock,
-                            contentDescription = null,
-                            size = 18.dp,
-                            tint = PantopusColors.appTextSecondary,
-                        )
-                        Text(
-                            text = "The exact time",
-                            style = PantopusTextStyle.small,
-                            color = PantopusColors.appText,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-                PlanOptionRow {
-                    PantopusIconImage(
-                        icon = PantopusIcon.Users,
-                        contentDescription = null,
-                        size = 18.dp,
-                        tint = PantopusColors.appTextSecondary,
-                    )
-                    Text(
-                        text = "Who's going, and the group chat",
+                        text = "Your note: “${draft.note.trim()}”",
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appText,
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
-            Text(
-                text =
-                    "You can change or cancel it any time. If you move the time or the place, everyone who's in is asked " +
-                        "“Still coming?”",
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-            )
         }
+    }
+}
+
+/** H7: a neighbor's plan, as it has always been previewed. */
+@Composable
+private fun NeighborPreview(
+    ui: HostUi,
+    kind: PlanKind,
+) {
+    val draft = ui.draft
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+        PlanOverline("What neighbors see")
+        NeighborsCard(ui, kind)
+        PlanOverline(
+            if (kind == PlanKind.PLAYDATE) "Families you accept also see" else "People you accept also see",
+            modifier = Modifier.padding(top = Spacing.s1),
+        )
+        PlanFormCard {
+            PlanOptionRow(first = true) {
+                PantopusIconImage(
+                    icon = if (draft.atHome) PantopusIcon.Home else PantopusIcon.MapPin,
+                    contentDescription = null,
+                    size = 18.dp,
+                    tint = PantopusColors.appTextSecondary,
+                )
+                Text(
+                    text = if (draft.atHome) "Your address" else "The exact spot: ${draft.place?.name ?: "your place"}",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appText,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (draft.note.isNotBlank()) {
+                PlanOptionRow {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Lock,
+                        contentDescription = null,
+                        size = 18.dp,
+                        tint = PantopusColors.appTextSecondary,
+                    )
+                    Text(
+                        text = "Your note: “${draft.note.trim()}”",
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appText,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            // A playdate's exact time is its own row, as on iOS (neighbors see only the part of the day).
+            if (kind == PlanKind.PLAYDATE) {
+                PlanOptionRow {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Clock,
+                        contentDescription = null,
+                        size = 18.dp,
+                        tint = PantopusColors.appTextSecondary,
+                    )
+                    Text(
+                        text = "The exact time",
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appText,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            PlanOptionRow {
+                PantopusIconImage(
+                    icon = PantopusIcon.Users,
+                    contentDescription = null,
+                    size = 18.dp,
+                    tint = PantopusColors.appTextSecondary,
+                )
+                Text(
+                    text = "Who's going, and the group chat",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appText,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        Text(
+            text =
+                "You can change or cancel it any time. If you move the time or the place, everyone who's in is asked " +
+                    "“Still coming?”",
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.appTextSecondary,
+        )
     }
 }
 

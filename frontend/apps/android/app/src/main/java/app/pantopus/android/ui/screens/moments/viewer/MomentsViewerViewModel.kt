@@ -11,9 +11,12 @@ import app.pantopus.android.data.api.models.moments.MomentRingDto
 import app.pantopus.android.data.api.models.moments.MomentViewersResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.moments.MomentHeight
 import app.pantopus.android.data.moments.MomentsDot
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
+import app.pantopus.android.data.moments.shownHeight
+import app.pantopus.android.data.plans.PlanLocationResolver
 import app.pantopus.android.ui.screens.moments.components.MomentImages
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -76,10 +79,31 @@ data class MomentsViewerUiState(
     val finished: Boolean = false,
     val viewers: MomentViewersResponse? = null,
     val viewersLoading: Boolean = false,
+    /** Your own height now, in feet, from the fix the phone already had when the viewer opened; null without one. */
+    val ownHeightFeet: Int? = null,
 ) {
     val ring: ViewerRing? get() = rings.getOrNull(ringIndex)
     val brief: MomentBriefDto? get() = ring?.moments?.getOrNull(momentIndex)
     val moment: MomentDto? get() = (load as? ViewerLoad.Ready)?.moment
+
+    /**
+     * The height rail for the Moment showing (`MomentsViewerHeights.kt`): its face, other people's rings that carry a
+     * height, and you. Null when the Moment carries no height (or heights are off for you).
+     */
+    val heightRail: MomentHeightRail?
+        get() {
+            val current = ring?.ring ?: return null
+            val height = moment?.takeIf { it.id == brief?.id }?.shownHeight ?: return null
+            val others =
+                rings
+                    .asSequence()
+                    .map { it.ring }
+                    .filter { it.id != current.id && !it.mine && it.author.id != current.author.id }
+                    .mapNotNull { other -> other.shownHeight?.let { MomentRailFace(other.id, other.author, it) } }
+                    .take(MomentHeightRail.MOST_OTHERS)
+                    .toList()
+            return MomentHeightRail(MomentRailFace(current.id, current.author, height), others, ownHeightFeet)
+        }
 }
 
 /**
@@ -92,6 +116,7 @@ class MomentsViewerViewModel
     constructor(
         private val repository: MomentsRepository,
         private val dot: MomentsDot,
+        private val locations: PlanLocationResolver,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
         private val _state = MutableStateFlow(MomentsViewerUiState())
@@ -128,6 +153,11 @@ class MomentsViewerViewModel
                     momentIndex = rings.getOrNull(start)?.startAt ?: 0,
                     finished = rings.isEmpty(),
                 )
+            // "You" on the height rail: the height of the fix the phone already has. The viewer asks for no location.
+            viewModelScope.launch {
+                val feet = locations.fixHeight()?.let { MomentHeight.feet(it.meters, it.accuracyMeters, it.speedMps) }
+                if (feet != null) _state.update { it.copy(ownHeightFeet = feet) }
+            }
             load()
         }
 

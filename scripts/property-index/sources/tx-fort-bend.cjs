@@ -13,6 +13,7 @@ const { year, isoDate, zipCode, realUnit, streetParts, onRecord } = require('../
 const { positive, put, word } = require('../lib/values.cjs');
 const { CATEGORY_WORDS, protectedWhere, useOf } = require('../lib/texas.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
+const { alsoAtOwnLine } = require('../lib/own-line.cjs');
 const { log } = require('../lib/log.cjs');
 
 const FIPS = '48157';
@@ -100,14 +101,23 @@ async function* build({ work }) {
       records.push(record);
     }
   }
-  log(`${COUNTY}: ${records.length} accounts, ${noAddress} without a street number`);
+  // The district writes a lettered house number with a space ("100 E", its number column), so its address line reads like a
+  // direction ("100 E OAK ST") and can find the plain number's home. Such a home is also filed at its own line, where it's found.
+  const twins = alsoAtOwnLine(records, { onlyWrong: true });
+  records.push(...twins);
+  log(`${COUNTY}: ${records.length} accounts, ${noAddress} without a street number, ${twins.length} also filed at their own address line`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'TX', name: COUNTY, publisher: 'Fort Bend Central Appraisal District', dataset: 'public parcel data', method: 'county', source: 'tx-fort-bend', as_of: asOf, stale_after_days: 450, records,
   };
 }
 
+// The parcel layer's own shapes, by the parcel number each record carries (the same columns): what lib/measure.cjs
+// measures a lot's area and counts its buildings on (measured rows, held off until the county's measured_rows switch is on).
+const parcelShapes = { url: LAYER, fields: ['QUICKREFID', 'PROPNUMBER'], key: (row) => word(row.QUICKREFID) || word(row.PROPNUMBER) };
+
 module.exports = {
+  parcelShapes,
   build,
   dictionary: {
     layer: [LAYER],

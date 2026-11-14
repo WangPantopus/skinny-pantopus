@@ -142,9 +142,14 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
     public let noLocation: Bool
     /// A small look at the newest Moment, for the pin (contract v3.6, `MomentRingPreviewDTO.swift`); nil without one.
     public let preview: MomentRingPreviewDTO?
+    /// How high its newest Moment was made, in feet above sea level, and whether in flight (contract v3.8,
+    /// `MomentHeightDTOs.swift`); none unless heights are on for you and its author showed it.
+    public let altitudeFt: Int?
+    public let flying: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case id, author, latitude, longitude, moments, mine, preview
+        case id, author, latitude, longitude, moments, mine, preview, flying
+        case altitudeFt = "altitude_ft"
         case placeLabel = "place_label"
         case newestAt = "newest_at"
         case noLocation = "no_location"
@@ -164,6 +169,8 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
         mine = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? false
         // An older server sends none, and one this app can't read only costs the picture.
         preview = try? c.decodeIfPresent(MomentRingPreviewDTO.self, forKey: .preview)
+        altitudeFt = c.momentFeet(forKey: .altitudeFt)
+        flying = (try? c.decodeIfPresent(Bool.self, forKey: .flying)) ?? false
     }
 
     /// One Moment as a ring of its own: opened from a chat quote, with no map behind it.
@@ -185,6 +192,8 @@ public struct MomentRingDTO: Codable, Sendable, Hashable, Identifiable {
         newestAt = moment.createdAt
         self.mine = mine
         preview = nil
+        altitudeFt = moment.altitudeFt
+        flying = moment.flying
     }
 }
 
@@ -221,9 +230,13 @@ public struct MomentDTO: Decodable, Sendable, Hashable, Identifiable {
     public let takenAt: String?
     /// Posted with no location (contract v3.4): no point or place, connections only.
     public let noLocation: Bool
+    /// How high it was made, in feet above sea level, and whether in flight (contract v3.8); `height` is the picture's.
+    public let altitudeFt: Int?
+    public let flying: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case id, author, kind, state, caption, text, background, width, height, latitude, longitude, audience, hours, seen
+        case id, author, kind, state, caption, text, background, width, height, latitude, longitude, audience, hours, seen, flying
+        case altitudeFt = "altitude_ft"
         case mediaURL = "media_url"
         case posterURL = "poster_url"
         case durationMs = "duration_ms"
@@ -266,6 +279,8 @@ public struct MomentDTO: Decodable, Sendable, Hashable, Identifiable {
         reactionCounts = try? c.decodeIfPresent([MomentReactionCount].self, forKey: .reactionCounts)
         takenAt = try? c.decodeIfPresent(String.self, forKey: .takenAt)
         noLocation = (try? c.decodeIfPresent(Bool.self, forKey: .noLocation)) ?? false
+        altitudeFt = c.momentFeet(forKey: .altitudeFt)
+        flying = (try? c.decodeIfPresent(Bool.self, forKey: .flying)) ?? false
     }
 
     public var media: URL? {
@@ -297,15 +312,26 @@ public struct MomentsMapResponse: Decodable, Sendable {
     public let rings: [MomentRingDTO]
     /// Connections' (and your own) Moments with no location, one ring per person, whatever the area (contract v3.4).
     public let unplaced: [MomentRingDTO]
+    /// Heights are on for you (contract v3.9): the map offers "Elevation". False from a server before it.
+    public let heightsOn: Bool
+    /// Moments with an elevation float by day (contract v3.10, `moment_float`), and where the sun is; false and nil
+    /// from a server before it.
+    public let floatOn: Bool
+    public let sun: MomentSunDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case rings, unplaced
+        case rings, unplaced, sun
+        case heightsOn = "heights_on"
+        case floatOn = "float_on"
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         rings = try c.decode([MomentRingDTO].self, forKey: .rings)
         unplaced = (try? c.decodeIfPresent([MomentRingDTO].self, forKey: .unplaced)) ?? []
+        heightsOn = (try? c.decodeIfPresent(Bool.self, forKey: .heightsOn)) ?? false
+        floatOn = (try? c.decodeIfPresent(Bool.self, forKey: .floatOn)) ?? false
+        sun = try? c.decodeIfPresent(MomentSunDTO.self, forKey: .sun)
     }
 }
 
@@ -343,7 +369,7 @@ public struct MomentPlacePreviewDTO: Decodable, Sendable, Hashable {
     public let pickWithinM: Double?
     /// Whether you have a connection (contract v3.4): a Moment with no location needs one. Nil from an older server.
     public let hasConnections: Bool?
-    /// The sheet may offer "Show height" here (contract v3.8): heights are on for you and it isn't your home.
+    /// The sheet may offer "Show elevation" here (contract v3.8): heights are on for you and it isn't your home.
     public let canShowHeight: Bool
 
     private enum CodingKeys: String, CodingKey {
@@ -417,79 +443,5 @@ public struct MomentReplyResponse: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case roomId = "room_id"
         case messageId = "message_id"
-    }
-}
-
-// MARK: - Requests
-
-/// Where the pin goes: a GPS fix at most five minutes old, or where a library
-/// photo or video was taken (in the last 24 hours).
-public struct MomentLocationBody: Encodable, Sendable, Hashable {
-    public enum Source: String, Encodable, Sendable {
-        /// `none`: no location (contract v3.4): connections only, no point.
-        case gps, capture, none
-    }
-
-    /// A Moment with no location.
-    public static let noLocation = MomentLocationBody(source: .none, latitude: 0, longitude: 0, at: Date())
-
-    public let source: Source
-    public let latitude: Double
-    public let longitude: Double
-    /// When the fix was taken (`gps`) or the photo or video was (`capture`).
-    public let at: Date
-
-    public init(source: Source, latitude: Double, longitude: Double, at: Date) {
-        self.source = source
-        self.latitude = latitude
-        self.longitude = longitude
-        self.at = at
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case source, latitude, longitude
-        case fixAt = "fix_at"
-        case takenAt = "taken_at"
-    }
-
-    public func encode(to encoder: any Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(source, forKey: .source)
-        guard source != .none else { return }
-        try c.encode(latitude, forKey: .latitude)
-        try c.encode(longitude, forKey: .longitude)
-        try c.encode(MomentTime.string(at), forKey: source == .gps ? .fixAt : .takenAt)
-    }
-}
-
-/// `POST /api/moments`.
-public struct MomentCreateBody: Encodable, Sendable, Hashable {
-    public let kind: MomentKind
-    public let hours: Int
-    public let audience: MomentAudience
-    public let showArea: Bool
-    public let caption: String?
-    public let text: String?
-    public let background: String?
-    public let location: MomentLocationBody
-    /// One id per Post tap (a uuid): sending it again answers with the Moment
-    /// that tap made, so a retry after a lost answer never posts twice.
-    public var clientRequestId: String?
-    /// The place name the person picked (a key from place-preview's `places`); left out for the automatic one.
-    public var placeKey: String?
-    /// When an album photo or video pinned where you are (its file doesn't say where) was taken (contract v3.3).
-    public var takenAt: String?
-    /// A venue picked in the place picker around the pin (its `osm:` id, contract v3.3): the Moment pins there.
-    public var venueId: String?
-    /// "Show height" was on (contract v3.8, `MomentHeightDTOs.swift`); left out otherwise.
-    public var altitude: MomentAltitudeBody?
-
-    private enum CodingKeys: String, CodingKey {
-        case kind, hours, audience, caption, text, background, location, altitude
-        case showArea = "show_area"
-        case clientRequestId = "client_request_id"
-        case placeKey = "place_key"
-        case takenAt = "taken_at"
-        case venueId = "venue_id"
     }
 }

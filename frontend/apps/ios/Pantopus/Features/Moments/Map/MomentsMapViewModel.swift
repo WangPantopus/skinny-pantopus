@@ -103,7 +103,10 @@ final class MomentsMapViewModel {
     private(set) var areaName: String?
     /// What the spot you're at reads as ("Esther Short Park"), for the empty card.
     private(set) var herePlace: String?
-    private(set) var rings: [MomentRingDTO] = []
+    private(set) var rings: [MomentRingDTO] = [] {
+        didSet { memo.reset() }
+    }
+
     private(set) var loaded = false
     private(set) var loadFailed = false
     /// "Use my location" was refused or found no fix.
@@ -116,11 +119,27 @@ final class MomentsMapViewModel {
     private(set) var placeRequest: MomentsPlaceRequest?
     /// When a finger last touched the map itself (`MomentsMapFinger.swift`): a camera that settles just after was
     /// moved by hand. Nil on the open iPhone Duo, where a crowded spot's list stays until it is closed.
-    @ObservationIgnored var fingerOnMapAt: Date?
+    /// A touch on the map also closes the height key.
+    @ObservationIgnored var fingerOnMapAt: Date? {
+        didSet { closeHeightsKey() }
+    }
+
     /// The map has just opened on you: its first read looks around once (`MomentsMapViewModel+Moves.swift`).
     @ObservationIgnored var looksAround = false
+    /// Moment heights (`MomentsHeightsChip.swift`): on for you, as the map's answer says; the chip turned the
+    /// tags off; the colour key is open; the map the tags were last laid out on.
+    var heightsOn = false
+    var heightTagsOff = false
+    var heightsKeyOpen = false
+    var heightTagsFrame: MomentsHeightFrame?
+    /// Part D: pins with an elevation float by day, and the sun they're drawn for (`MomentsFloat.swift`).
+    var floatOn = false
+    var sun: MomentSunDTO?
     /// The clock the end times are read against; moved on each read and each minute.
-    private(set) var now = Date()
+    private(set) var now = Date() {
+        didSet { memo.reset() }
+    }
+
     /// Where the camera last settled.
     @ObservationIgnored private(set) var lastRegion: MKCoordinateRegion?
     @ObservationIgnored private(set) var lastCamera: MapCamera?
@@ -134,10 +153,18 @@ final class MomentsMapViewModel {
     @ObservationIgnored private var nameTask: Task<Void, Never>?
     @ObservationIgnored private var namedAt: CLLocation?
     /// Moments watched here since the last read, and people muted or blocked: the map shows them so at once.
-    @ObservationIgnored private var watched: Set<String> = []
+    @ObservationIgnored private var watched: Set<String> = [] {
+        didSet { memo.reset() }
+    }
+
     /// Hidden at once, by when: a read begun after that already has the server's answer, so the id is dropped then
     /// (an unmute in Settings shows them again at the next read).
-    @ObservationIgnored private var hiddenAuthors: [String: Date] = [:]
+    @ObservationIgnored private var hiddenAuthors: [String: Date] = [:] {
+        didSet { memo.reset() }
+    }
+
+    /// What is worked out from the rings, kept until one of the four above changes (`MomentsMapMemo.swift`).
+    @ObservationIgnored private let memo = MomentsMapMemo()
     let api: APIClient
     private let store: ScreenStore
     private let location: any LocationProviding
@@ -213,16 +240,6 @@ final class MomentsMapViewModel {
         }
     }
 
-    /// The empty card's line: the place where you are while the map shows it, else "around here".
-    var emptyLine: String {
-        if centerSource == .gps, let center, let herePlace, !herePlace.isEmpty, let region = lastRegion,
-           abs(region.center.latitude - center.latitude) < region.span.latitudeDelta / 2,
-           abs(region.center.longitude - center.longitude) < region.span.longitudeDelta / 2 {
-            return "Share what's happening at \(herePlace)."
-        }
-        return "Share what's happening around here."
-    }
-
     // MARK: - Reading
 
     /// The camera settled: read the rings for the visible box (debounced) and name the area.
@@ -245,6 +262,7 @@ final class MomentsMapViewModel {
             await self?.load()
         }
         nameArea(at: region.center)
+        placeHeightTags(in: region)
         if let focus, !visibleRings.contains(where: { focus.ringIds.contains($0.id) }) { self.focus = nil }
         closeSpotIfSplit(span: span)
     }
@@ -263,6 +281,8 @@ final class MomentsMapViewModel {
             let all = reply.rings + reply.unplaced
             watched = watched.filter { id in all.contains { ring in ring.moments.contains { $0.id == id && !$0.seen } } }
             rings = all
+            heightsAnswered(reply.heightsOn)
+            floatAnswered(reply.floatOn, sun: reply.sun)
             loaded = true
             loadFailed = false
             lookAroundIfOpening()
@@ -287,17 +307,9 @@ final class MomentsMapViewModel {
 
     /// Every ring read, with what was watched or hidden since, and only Moments still running.
     var currentRings: [MomentRingDTO] {
-        rings.compactMap { ring in
-            guard hiddenAuthors[ring.author.id] == nil else { return nil }
-            var ring = ring
-            ring.moments = ring.moments.compactMap { moment in
-                if let end = moment.expiresAtDate, end <= now { return nil }
-                var moment = moment
-                if watched.contains(moment.id) { moment.seen = true }
-                return moment
-            }
-            return ring.moments.isEmpty ? nil : ring
-        }
+        // Read even when remembered, so a screen that shows them is redrawn when they change.
+        _ = (rings, now)
+        return memo.current { MomentsMapMemo.running(rings, now: now, watched: watched, hidden: hiddenAuthors) }
     }
 
     /// The rings inside the visible map, and the Moments with no location (they show wherever the map is).
@@ -311,7 +323,10 @@ final class MomentsMapViewModel {
 
     /// The map's rings and bubbles at this zoom (never a Moment with no location).
     var markers: [MomentsMarker] {
-        MomentsClustering.markers(currentRings.filter { !$0.noLocation }, span: span, mapPoints: mapPoints)
+        let current = currentRings
+        return memo.markers(span: span, mapPoints: mapPoints) {
+            MomentsClustering.markers(current.filter { !$0.noLocation }, span: span, mapPoints: mapPoints)
+        }
     }
 
     /// The strip: the spot zoomed into (M2), or every ring in view; you first, then new ones, then nearest.

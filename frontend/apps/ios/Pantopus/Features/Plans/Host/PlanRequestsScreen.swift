@@ -128,7 +128,8 @@ struct PlanRequestsScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     if let card = viewModel.plan?.card { summary(card) }
-                    if let plan = viewModel.plan, plan.card.kind != .playdate { hostedSwitch(plan) }
+                    // A business's plan lets everyone in or approves each person; it has no "people you've hosted" rule.
+                    if let plan = viewModel.plan, plan.card.kind != .playdate, !plan.card.isBusiness { hostedSwitch(plan) }
                     if let error = viewModel.error {
                         Text(error).planFont(.small).foregroundStyle(Theme.Color.error).fixedSize(horizontal: false, vertical: true)
                     }
@@ -239,7 +240,9 @@ struct PlanRequestsScreen: View {
                     isWorking: viewModel.working.contains(request.id),
                     onDecline: { Task { await viewModel.decline(request) } },
                     onAccept: { accept(request) },
-                    onOpenProfile: onOpenProfile
+                    // A business's team sees a guest's first name only: no profile, no derived facts.
+                    onOpenProfile: viewModel.plan?.card.isBusiness == true ? nil : onOpenProfile,
+                    isBusiness: viewModel.plan?.card.isBusiness == true
                 )
             }
         } else if viewModel.loadFailed {
@@ -266,7 +269,8 @@ struct PlanRequestsScreen: View {
                         isWorking: viewModel.working.contains(request.id),
                         onDecline: { Task { await viewModel.decline(request) } },
                         onAccept: { accept(request) },
-                        onOpenProfile: onOpenProfile
+                        onOpenProfile: viewModel.plan?.card.isBusiness == true ? nil : onOpenProfile,
+                        isBusiness: viewModel.plan?.card.isBusiness == true
                     )
                 }
             }
@@ -291,6 +295,8 @@ struct PlanRequestCard: View {
     let onAccept: () -> Void
     /// The requester's profile, from their photo and name; nil leaves them plain.
     var onOpenProfile: ((String) -> Void)?
+    /// A business's plan: the team sees what the server sends and nothing derived from it.
+    var isBusiness = false
 
     var body: some View {
         PlanCardBox(padding: Spacing.s4) {
@@ -370,8 +376,8 @@ struct PlanRequestCard: View {
         if let mutual = request.user.mutualConnections, mutual > 0 {
             parts.append("\(mutual) mutual connection\(mutual == 1 ? "" : "s")")
         }
-        // Only when nothing else speaks for them (as on Android).
-        if (request.user.plansJoined ?? 0) == 0, (request.user.mutualConnections ?? 0) == 0, !request.user.hostedBefore {
+        // Only when nothing else speaks for them (as on Android); never to a business's team.
+        if !isBusiness, (request.user.plansJoined ?? 0) == 0, (request.user.mutualConnections ?? 0) == 0, !request.user.hostedBefore {
             parts.append("new to Pantopus")
         }
         return parts.joined(separator: " · ")

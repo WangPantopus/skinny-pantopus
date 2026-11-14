@@ -2,7 +2,7 @@
 //  MomentsComposerModel+Height.swift
 //  Pantopus
 //
-//  "Show height" on the Post sheet (board H1): the Moment says how high above
+//  "Show elevation" on the Post sheet (board H1): the Moment says how high above
 //  sea level it was made, rounded to 10 ft. The height goes with the pin: the
 //  album photo's own where the Moment pins where the photo was taken, else the
 //  fix's. The switch is offered only where the server allows it (heights are
@@ -24,7 +24,7 @@ extension MomentsComposerModel {
         heightReading.flatMap { MomentHeight.feet(meters: $0.meters, accuracyM: $0.accuracyMeters, speedMps: $0.speedMps) }
     }
 
-    /// The "Show height" row is on the sheet: never at home, for an area or with no location.
+    /// The "Show elevation" row is on the sheet: never at home, for an area or with no location.
     var offersHeight: Bool {
         place?.canShowHeight == true && !showArea && !noLocationOn && heightFeet != nil
     }

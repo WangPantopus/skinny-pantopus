@@ -237,6 +237,10 @@ fun MomentsMapScreen(
         )
     }
 
+    val heights =
+        remember(viewModel) {
+            MomentsHeightsActions(viewModel::toggleHeightTags, viewModel::toggleHeightKey, viewModel::closeHeightKey)
+        }
     // The test ids read as resource ids, for UI automation (as My Homes does).
     Box(
         modifier =
@@ -249,6 +253,7 @@ fun MomentsMapScreen(
     ) {
         MomentsMap(
             state = state,
+            heightTags = state.heightTagPlan,
             // Moments with no location have no spot: only the row of faces shows them.
             rings = rings.filterNot { it.ring.noLocation },
             posts = posts.filter { it.latitude != null && it.longitude != null },
@@ -291,11 +296,16 @@ fun MomentsMapScreen(
                 viewModel.openSpot(cluster, returnTo, openedZoom = zoom)
             },
             onSpotSplit = viewModel::closeSpot,
-            onMapMoving = actions.onMapMoving,
+            onMapMoving = { moving ->
+                // The height key steps aside with the tab bar.
+                if (moving) viewModel.closeHeightKey()
+                actions.onMapMoving(moving)
+            },
             onPosting = { item -> if (item.stage == MomentPosting.Stage.FAILED) failedPosting = item },
         )
         MomentsTopChrome(
             state = state,
+            heights = heights,
             onOpenMenu = actions.onOpenMenu,
             onBackFromSpot = {
                 spot?.returnTo?.let { back ->
@@ -312,7 +322,9 @@ fun MomentsMapScreen(
                 }
             },
             onUseHome = viewModel::useHome,
-            modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { chromeHeight = it.height },
+            // The row alone: the map centers under it as it always has, with or without the chip.
+            onRowHeight = { chromeHeight = it },
+            modifier = Modifier.align(Alignment.TopCenter),
         )
         Column(
             modifier =
@@ -419,6 +431,7 @@ private object LocationAllowed {
 @Composable
 private fun MomentsMap(
     state: MomentsMapUiState,
+    heightTags: MomentHeightTagPlan,
     rings: List<MomentRingUi>,
     posts: List<MomentPosting>,
     avatarUrl: String?,
@@ -628,6 +641,7 @@ private fun MomentsMap(
             mapReady = mapLoaded,
             camera = { liveCamera ?: camera.position },
             layoutKey = { liveTargetPoint },
+            heights = heightTags,
         )
     }
 }
@@ -635,6 +649,30 @@ private fun MomentsMap(
 /** ☰, the area pill and the chat button over the map (board M1); in a crowded spot, "‹ Esther Short Park" (M2). */
 @Composable
 private fun MomentsTopChrome(
+    state: MomentsMapUiState,
+    heights: MomentsHeightsActions,
+    onOpenMenu: (() -> Unit)?,
+    onBackFromSpot: () -> Unit,
+    onUseLocation: () -> Unit,
+    onUseHome: () -> Unit,
+    onRowHeight: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        MomentsTopRow(state, onOpenMenu, onBackFromSpot, onUseLocation, onUseHome, Modifier.onSizeChanged { onRowHeight(it.height) })
+        // Under the row while heights are on for you: the "Elevation" chip and its key (`MomentsHeights.kt`).
+        MomentsHeightsBar(
+            state = state,
+            onToggle = heights.onToggle,
+            onKey = heights.onKey,
+            onCloseKey = heights.onCloseKey,
+            modifier = Modifier.padding(top = Spacing.s2, start = Spacing.s4),
+        )
+    }
+}
+
+@Composable
+private fun MomentsTopRow(
     state: MomentsMapUiState,
     onOpenMenu: (() -> Unit)?,
     onBackFromSpot: () -> Unit,

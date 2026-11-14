@@ -146,6 +146,14 @@ public enum PlansEndpoints {
         Endpoint(method: .get, path: "\(base)/\(planId)/requests", query: biz())
     }
 
+    /// `GET /api/plans/host-as` — the businesses this person may host a plan
+    /// as, with their locations, kinds, labels and limits (Plans with
+    /// businesses, board B1). Empty for nearly everyone. Route
+    /// `backend/routes/plans.js` (`GET /host-as`).
+    public static func hostAs() -> Endpoint {
+        Endpoint(method: .get, path: "\(base)/host-as", query: biz())
+    }
+
     /// `GET /api/plans/games` — games in the next 14 days from the checked
     /// list kept in the backend. Route `backend/routes/plans.js`.
     public static func games(from center: UserCoordinate? = nil, gps: PlansGPS? = nil, purpose: String = "sheet") -> Endpoint {

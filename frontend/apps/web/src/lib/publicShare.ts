@@ -55,7 +55,7 @@ export type PublicCardDesigns = {
   designs: { id: string; number: number; slug: string; caption: string; paper: string; collection?: string | null; table: string; verse?: string | null }[];
 };
 
-/** Every Christmas card, for the public card pages (launch key card_table; 404 while it's off). */
+/** Every Christmas card, for the public card pages (on with Christmas cards; 404 while they're off). */
 export const fetchPublicCardDesigns = cache(async (): Promise<PublicFetchResult<PublicCardDesigns>> => (
   fetchPublicJson<PublicCardDesigns>('/api/mailbox/cards/designs')
 ));

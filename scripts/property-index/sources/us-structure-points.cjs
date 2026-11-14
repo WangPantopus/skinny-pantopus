@@ -23,6 +23,9 @@ const { log } = require('../lib/log.cjs');
 const { openState, nearest, round, NSI_VERSION } = require('./us-structures.cjs');
 
 const COLUMNS = ['Shape', 'OCC_CLS', 'PRIM_OCC', 'PROP_ADDR', 'SQFEET', 'LONGITUDE', 'LATITUDE', 'PROD_DATE'];
+// The date of the imagery or lidar each outline was drawn from: a measured row (lib/measure.cjs) names its year. Not every
+// state's file has it.
+const OPTIONAL_COLUMNS = ['IMAGE_DATE'];
 const OUTLINE_TOLERANCE = 1; // half a meter, in the outline's own units
 // FEMA's point is the structure's own only within this of its outline: 2,007 of Kentucky's aren't coordinates at all.
 const POINT_SLACK_DEGREES = 0.02;
@@ -145,6 +148,13 @@ function halfWidth(outline) {
   return widest / points.OFFSETS_PER_METER;
 }
 
+/** An imagery date's year, or 0 when the file gives none or one that can't be right. */
+function imageYear(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  const year = new Date(value).getUTCFullYear();
+  return year >= 1990 && year <= new Date().getUTCFullYear() ? year : 0;
+}
+
 const useCode = (row) => {
   const home = row.OCC_CLS === 'Residential' || row.OCC_CLS === 'Unclassified';
   if (!home) return 'x';
@@ -163,6 +173,7 @@ function readStructures(table, inventory) {
   const street = growing(Uint32Array, 1 << 20);
   const match = growing(Int32Array, 1 << 20);
   const next = growing(Int32Array, 1 << 20);
+  const imaged = growing(Uint16Array, 1 << 20);
   const numbers = [''];
   const numberIds = new Map();
   const heads = new Map();
@@ -170,8 +181,8 @@ function readStructures(table, inventory) {
   let count = 0;
   let used = 0;
   let newest = 0;
-  const counts = { read: 0, homes: 0, addressed: 0, joined: 0, no_shape: 0, off_point: 0, too_wide: 0 };
-  for (const row of rows(table[1], COLUMNS)) {
+  const counts = { read: 0, homes: 0, addressed: 0, joined: 0, no_shape: 0, off_point: 0, too_wide: 0, imaged: 0 };
+  for (const row of rows(table[1], [...COLUMNS, ...OPTIONAL_COLUMNS], { optional: OPTIONAL_COLUMNS })) {
     counts.read += 1;
     if (!row.Shape || !row.Shape.length || !row.Shape[0].length) {
       counts.no_shape += 1;
@@ -193,6 +204,7 @@ function readStructures(table, inventory) {
     street.fit(count);
     match.fit(count);
     next.fit(count);
+    imaged.fit(count);
     pool.fit(used + outline.length);
     at.array[i * 2] = lng;
     at.array[i * 2 + 1] = lat;
@@ -200,6 +212,8 @@ function readStructures(table, inventory) {
     used += outline.length;
     starts.array[i + 1] = used;
     sqft.array[i] = row.SQFEET;
+    imaged.array[i] = imageYear(row.IMAGE_DATE);
+    if (imaged.array[i]) counts.imaged += 1;
     const code = useCode(row);
     use.array[i] = code.charCodeAt(0);
     match.array[i] = -1;
@@ -234,7 +248,7 @@ function readStructures(table, inventory) {
       }
     }
   }
-  const data = { at: at.array, starts: starts.array, pool: pool.array, sqft: sqft.array, use: use.array, number: number.array, street: street.array, match: match.array, next: next.array, numbers, heads, wide, count, newest, counts };
+  const data = { at: at.array, starts: starts.array, pool: pool.array, sqft: sqft.array, imaged: imaged.array, use: use.array, number: number.array, street: street.array, match: match.array, next: next.array, numbers, heads, wide, count, newest, counts };
   data.claimNumber = new Int32Array(count);
   data.claimStreet = new Uint32Array(count);
   data.inventoried = new Uint8Array(count);
@@ -276,6 +290,7 @@ function recordOf(data, inventory, i) {
     facts: factsOf(data, inventory, i),
   };
   if (data.number[i]) record.num = data.numbers[data.number[i]];
+  if (data.imaged?.[i]) record.img = data.imaged[i];
   if (data.inventoried?.[i] > 1) record.homes = data.inventoried[i];
   if (data.claimNumber[i] === -1) record.claim = points.MANY;
   else if (data.claimNumber[i]) record.claim = data.claimLabels[data.claimNumber[i]];
@@ -497,7 +512,7 @@ function buildStatePoints({ work, out, state, registry: registryRoot, built }) {
   const data = readStructures(table, inventory);
   fs.rmSync(femaDir, { recursive: true, force: true });
   const { counts } = data;
-  log(`${state}: ${counts.read} structures, ${counts.homes} homes, ${counts.addressed} with a readable address, ${counts.joined} joined to the inventory, ${counts.no_shape} with no outline, ${counts.off_point} whose point was off its outline, ${counts.too_wide} too wide for a building`);
+  log(`${state}: ${counts.read} structures, ${counts.homes} homes, ${counts.addressed} with a readable address, ${counts.joined} joined to the inventory, ${counts.no_shape} with no outline, ${counts.off_point} whose point was off its outline, ${counts.too_wide} too wide for a building, ${counts.imaged} with an imagery date`);
   countInventory(data, inventory);
   const registry = readRegistry(registryRoot, state, work);
   const claimed = addClaims(data, inventory, registry);

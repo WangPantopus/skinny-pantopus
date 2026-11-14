@@ -20,19 +20,21 @@ struct PlanDetailsForm: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: model.kind.title, leading: .back, trailing: step, onLeading: onBack)
+            PlanNavBar(title: model.businessKind?.name ?? model.kind.title, leading: .back, trailing: step, onLeading: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s6) {
+                    // A business's plan (board B2): its label, its own location, who gets in; no price, no repeats.
+                    if model.isBusiness { PlanBusinessLabelField(model: model) }
                     PlanKindFields(model: model)
-                    if model.kind != .pickupGame { titleField }
+                    if model.kind != .pickupGame || model.isBusiness { titleField }
                     if model.kind == .walkCoffee { PlanWalkExtras(model: model) }
                     when
-                    whereSection
+                    if model.isBusiness { PlanBusinessWhereField(model: model) } else { whereSection }
                     spotsRow
-                    approvalSection
+                    if model.isBusiness { PlanWhoGetsInField(model: model) } else { approvalSection }
                     if model.kind == .pickupGame { gearSwitch }
                     noteField
-                    if model.kind == .watchParty { aboutField }
+                    if model.kind == .watchParty || model.isBusiness { aboutField }
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.top, Spacing.s2)
@@ -70,7 +72,7 @@ struct PlanDetailsForm: View {
 
     private var when: some View {
         PlanFormField(label: "When") {
-            if model.kind == .pickupGame {
+            if model.kind == .pickupGame, !model.isBusiness {
                 PlanSegmented(
                     options: [(true, "Now"), (false, "Later")],
                     selection: $model.startsNow,
@@ -78,12 +80,13 @@ struct PlanDetailsForm: View {
                 )
             }
             PlanFormCard {
-                if !(model.kind == .pickupGame && model.startsNow) {
+                if !(model.kind == .pickupGame && model.startsNow) || model.isBusiness {
                     PlanDateRow(
                         label: "Starts",
                         date: $model.start,
                         components: [.date, .hourAndMinute],
-                        range: Date()...Date().addingTimeInterval(14 * 86400)
+                        // A business plans up to 60 days ahead (its limits); a neighbor 14.
+                        range: Date()...Date().addingTimeInterval(TimeInterval(model.hostAs?.limits.daysAhead ?? 14) * 86400)
                     )
                     Divider().overlay(Theme.Color.appBorder)
                 }
@@ -203,7 +206,8 @@ struct PlanDetailsForm: View {
     }
 
     private var spotsTitle: String {
-        switch model.kind {
+        if model.isBusiness { return "Spots" }
+        return switch model.kind {
         case .watchParty, .studyGroup: "Spots"
         case .playdate: "Families"
         case .pickupGame: "Players needed"
@@ -212,7 +216,8 @@ struct PlanDetailsForm: View {
     }
 
     private var spotsSubtitle: String {
-        switch model.kind {
+        if model.isBusiness { return "Guests see how many are left" }
+        return switch model.kind {
         case .watchParty, .studyGroup: "People who can join, besides you"
         case .playdate: "Besides yours"
         case .pickupGame: "Shown as \u{201C}need \(model.spots)\u{201D}"
@@ -261,7 +266,7 @@ struct PlanDetailsForm: View {
     private var aboutField: some View {
         PlanFormField(label: "About · everyone sees this") {
             PlanTextInput(
-                placeholder: "Big screen in the backyard. Kids welcome.",
+                placeholder: model.isBusiness ? "What happens, who it's for, what to bring" : "Big screen in the backyard. Kids welcome.",
                 text: $model.about,
                 multiline: true,
                 limit: 500,

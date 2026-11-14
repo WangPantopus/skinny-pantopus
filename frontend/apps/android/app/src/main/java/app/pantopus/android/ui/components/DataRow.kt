@@ -42,6 +42,9 @@ data class DataRowFlag(
  * Read-only label / value row for detail surfaces. Supports an optional
  * secondary line under the label, monospaced values, a mismatch treatment
  * for conflicting external sources, and an optional trailing status flag.
+ * The secondary line sits under the label and value together, so a long
+ * one (where a row came from: "Measured from FEMA's USA Structures, 2012
+ * imagery") wraps across the row instead of taking the value's room.
  *
  * @param label Leading caption.
  * @param value Trailing value.
@@ -62,7 +65,7 @@ fun DataRow(
     testTag: String? = null,
 ) {
     val ruleWidth = 3.dp
-    Row(
+    Column(
         modifier =
             modifier
                 .fillMaxWidth()
@@ -86,53 +89,54 @@ fun DataRow(
                             if (flag != null) append(", ${flag.text}")
                         }
                 },
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
-        Column(
-            modifier = Modifier.widthIn(min = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
             Text(
                 text = label,
+                modifier = Modifier.widthIn(min = 96.dp),
                 style = PantopusTextStyle.small,
                 color = PantopusColors.appTextSecondary,
             )
-            if (sub != null) {
+            Spacer(Modifier.weight(1f))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                if (mismatch) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.AlertTriangle,
+                        contentDescription = null,
+                        size = 14.dp,
+                        tint = PantopusColors.warning,
+                    )
+                }
                 Text(
-                    text = sub,
-                    style = PantopusTextStyle.caption,
-                    color = PantopusColors.appTextMuted,
+                    text = value,
+                    style =
+                        if (mono) {
+                            PantopusTextStyle.body.copy(fontFamily = FontFamily.Monospace)
+                        } else {
+                            PantopusTextStyle.small
+                        },
+                    color = PantopusColors.appText,
+                    textAlign = TextAlign.End,
                 )
+                if (flag != null) {
+                    StatusChip(text = flag.text, variant = flag.variant)
+                }
             }
         }
-        Spacer(Modifier.weight(1f))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-        ) {
-            if (mismatch) {
-                PantopusIconImage(
-                    icon = PantopusIcon.AlertTriangle,
-                    contentDescription = null,
-                    size = 14.dp,
-                    tint = PantopusColors.warning,
-                )
-            }
+        if (sub != null) {
             Text(
-                text = value,
-                style =
-                    if (mono) {
-                        PantopusTextStyle.body.copy(fontFamily = FontFamily.Monospace)
-                    } else {
-                        PantopusTextStyle.small
-                    },
-                color = PantopusColors.appText,
-                textAlign = TextAlign.End,
+                text = sub,
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextMuted,
             )
-            if (flag != null) {
-                StatusChip(text = flag.text, variant = flag.variant)
-            }
         }
     }
 }

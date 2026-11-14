@@ -164,6 +164,64 @@ data class HouseholdPartDto(
     @Json(name = "county_check") val countyCheck: HouseholdCountyCheckDto? = null,
     /** "Is this your layout?", for a unit its building's sheet names. */
     @Json(name = "floor_plan") val floorPlan: FloorPlanLayoutDto? = null,
+    /** "Add from a document", for a verified member who can edit (`backend/services/householdDocuments`). */
+    val documents: HouseholdDocumentsOfferDto? = null,
+)
+
+/** "From your papers": the card's words, as the server sends them. */
+@JsonClass(generateAdapter = true)
+data class HouseholdDocumentsOfferDto(
+    val title: String,
+    val lead: String,
+    val action: String,
+)
+
+/** A fact the household's report states, beside what the page shows now ([note]), and where it says it ([source]). */
+@JsonClass(generateAdapter = true)
+data class DocumentFactDto(
+    val key: String,
+    val label: String,
+    val value: String? = null,
+    /** What a fix starts from: the report's value. */
+    val current: String = "",
+    val note: String? = null,
+    /** `number`, `decimal`, `year` or `text`. */
+    val input: String = "text",
+    val unit: String? = null,
+    val options: List<HouseholdAnswerDto> = emptyList(),
+    /** "Page 3: “Manufacture Date: 2018”". */
+    val source: String = "",
+)
+
+/** What the server read in a report. Nothing of it is kept; [message] says why an answer has no facts. */
+@JsonClass(generateAdapter = true)
+data class DocumentFactsAnswerDto(
+    val kind: String,
+    val title: String,
+    val subtitle: String = "",
+    val lead: String = "",
+    val facts: List<DocumentFactDto> = emptyList(),
+    val missing: String? = null,
+    val message: String? = null,
+)
+
+/** The facts the household kept from its report (`POST /api/homes/:id/document-facts`). */
+@JsonClass(generateAdapter = true)
+data class DocumentFactsSaveRequest(
+    val kind: String,
+    val facts: List<DocumentFactValue>,
+)
+
+@JsonClass(generateAdapter = true)
+data class DocumentFactValue(
+    val key: String,
+    val value: String,
+)
+
+/** "Saved 9 facts from your inspection report." */
+@JsonClass(generateAdapter = true)
+data class DocumentFactsSavedResponse(
+    val message: String,
 )
 
 /**

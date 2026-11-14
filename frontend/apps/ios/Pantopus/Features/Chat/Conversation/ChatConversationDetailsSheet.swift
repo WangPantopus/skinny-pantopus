@@ -7,6 +7,8 @@
 //  with a confirm-to-block action (`POST /api/users/:userId/block`) and
 //  a "Report" row that submits to `POST /api/users/:userId/report`
 //  (route `backend/routes/users.js:4153`) via a reason picker sheet.
+//  While Christmas cards are open and a card can go to this person, its first
+//  row is "Send a Christmas card" (TABCARD): the card flow with them chosen.
 //
 
 import SwiftUI
@@ -16,6 +18,8 @@ struct ChatConversationDetailsSheet: View {
     /// Called after a successful block — the host dismisses the drawer
     /// and pops the thread.
     let onBlocked: @MainActor () -> Void
+    /// "Send a Christmas card" with this person chosen; nil leaves the row out.
+    var onSendCard: (@MainActor () -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var blockConfirmPresented = false
@@ -26,6 +30,7 @@ struct ChatConversationDetailsSheet: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
+                    if let onSendCard { sendCardRow(onSendCard) }
                     topicsSection
                     safetySection
                 }
@@ -81,6 +86,32 @@ struct ChatConversationDetailsSheet: View {
             .accessibilityLabel("Close")
             .accessibilityIdentifier("chatDetailsClose")
         }
+    }
+
+    // MARK: - Christmas card
+
+    /// The card flow, in the Mail tab, with this person already chosen.
+    private func sendCardRow(_ action: @escaping @MainActor () -> Void) -> some View {
+        Button {
+            dismiss()
+            action()
+        } label: {
+            HStack(spacing: Spacing.s3) {
+                ChristmasMailIcon(size: 15)
+                    .frame(width: 30, height: 30)
+                    .background(MailPaper.cardNote)
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                Text("Send a Christmas card")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                Spacer(minLength: Spacing.s0)
+                Icon(.chevronRight, size: 14, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("chat.menu.sendCard")
     }
 
     // MARK: - Topics

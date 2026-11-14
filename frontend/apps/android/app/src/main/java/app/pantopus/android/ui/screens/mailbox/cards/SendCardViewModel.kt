@@ -5,7 +5,6 @@ package app.pantopus.android.ui.screens.mailbox.cards
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.CardMediaFile
 import app.pantopus.android.data.api.models.mailbox.CardSignature
@@ -878,8 +877,9 @@ class SendCardViewModel
                     ?: saved.get<String>(KEY_TO_EMAIL)?.let { CardRecipient.Email(it) }
                     ?: CardRecipient.Link.takeIf { saved.get<Boolean>(KEY_TO_LINK) == true }
                     ?: list?.first?.takeIf { saved.get<Boolean>(KEY_TO_LIST) == true && it.size > 1 }?.let { CardRecipient.Several(it) }
-            // "Send this card to someone" on a public card page names the picture.
-            val design = saved.get<String>(KEY_DESIGN) ?: saved.get<String>(SEND_CARD_DESIGN_KEY)?.takeIf { LaunchFeatures.cardTable }
+            // "Send this card to someone" on a public card page (or a Christmas card ad's link) names the picture. The
+            // router only sends it with Christmas cards on; card_table isn't needed (iOS keeps it the same way).
+            val design = saved.get<String>(KEY_DESIGN) ?: saved.get<String>(SEND_CARD_DESIGN_KEY)
             val message = saved.get<String>(KEY_MESSAGE).orEmpty()
             val signature = saved.get<String>(KEY_SIGNATURE)?.let(CardSignatureJson::fromJson)
             val photo = saved.get<String>(KEY_PHOTO)?.let { readPhoto(it, saved.get<String>(KEY_PHOTO_ALT).orEmpty()) }

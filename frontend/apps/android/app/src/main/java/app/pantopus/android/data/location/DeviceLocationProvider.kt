@@ -134,7 +134,7 @@ class DeviceLocationProvider internal constructor(
          * How high [fix] says the phone is, above mean sea level. Android's own altitude counts from the WGS84
          * ellipsoid, which sits about 20 m off sea level around Vancouver, WA, so it is used only once the phone has
          * turned it into a sea-level height: Android 14 and later do that themselves. An older phone gives none unless
-         * the fix already came with one, and "Show height" is then not offered for where you are.
+         * the fix already came with one, and "Show elevation" is then not offered for where you are.
          */
         suspend fun seaLevelHeight(
             context: Context,

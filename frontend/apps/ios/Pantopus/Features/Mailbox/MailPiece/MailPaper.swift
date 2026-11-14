@@ -112,6 +112,11 @@ enum MailPaper {
     static let cardEnvelopeInk = Color(red: 0xFD / 255, green: 0xF2 / 255, blue: 0xE3 / 255)
     static let cardEnvelopeAddress = Color(red: 0xFF / 255, green: 0xFA / 255, blue: 0xF0 / 255)
     static let cardEnvelopeLabel = Color(red: 0xFD / 255, green: 0xE7 / 255, blue: 0xC8 / 255)
+    /// The Mail tab's envelope from November 1 to Christmas (TABCARD): red, a
+    /// little brighter in dark mode so it reads on the dark bar, with its small
+    /// gold seal.
+    static let seasonEnvelope = dynamic(light: 0xB8322A, dark: 0xE0493E)
+    static let seasonSeal = dynamic(light: 0xD4A537, dark: 0xE8C063)
     /// The "Do not open until Christmas" seal: cream, ringed in dark red.
     static let cardSeal = Color(red: 0xFD / 255, green: 0xF2 / 255, blue: 0xE3 / 255)
     static let cardSealInk = Color(red: 0x7A / 255, green: 0x14 / 255, blue: 0x14 / 255)

@@ -1,5 +1,7 @@
 // ============================================================
-// StartFunnel — the signed-out Place funnel at /start.
+// StartFunnel — the signed-out Place funnel at /start, which is also
+// Place's address-first page for someone signed in with nothing saved
+// (Place's "Preview an address", Today's "Type my address").
 //
 // A2 hero (sentence-case, "free, no account" on the demonstration only)
 // → address autocomplete (public api.geo) → the taste → the wall.
@@ -17,7 +19,7 @@
 
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -62,6 +64,9 @@ import AddressAutocomplete, { type SelectedAddress } from './AddressAutocomplete
 import { isDailyLookupLimit, lookupLimitMessage } from './lookupLimit';
 import BallotTeaser from '@/components/ballot/BallotTeaser';
 import { ballotTeaserData } from '@/components/ballot/BallotCard';
+import SunCard from '@/components/sky/SunCard';
+import { useMe } from '@/lib/me';
+import { areaSunData, areaTodayQuery, useHasNoPlace, useKeptArea } from '@/lib/todayArea';
 
 
 // ── Brand lockup + static region pill ───────────────────────
@@ -121,6 +126,8 @@ function HeroStep({
   onBrowse,
   fromCard,
   invite,
+  signedIn = false,
+  areaCard = null,
 }: {
   onSelect: (p: SelectedAddress) => void;
   onClear: () => void;
@@ -132,6 +139,10 @@ function HeroStep({
   fromCard: boolean;
   /** Opened from a friend's invite link: their name leads the page. */
   invite?: StartInvite;
+  /** Someone signed in, starting their Place here. */
+  signedIn?: boolean;
+  /** Signed in with an area kept in this browser: their city right now, in place of the example. */
+  areaCard?: ReactNode;
 }) {
   return (
     <div className="flex flex-col min-h-screen pb-8">
@@ -155,8 +166,14 @@ function HeroStep({
             Know what matters for your home, and stay on top of it.
           </h1>
           <p className="mt-3.5 max-w-[46ch] text-[15.5px] leading-[23px] text-app-text-secondary -tracking-[0.005em]">
-            Wildfire and flood risk, today&apos;s air, radon, water, who represents you, and the neighbors who&apos;ve
-            proven they&apos;re real. Free, no account.
+            {signedIn ? (
+              <>Your flood risk, today&apos;s air, your home&apos;s value, and who your verified neighbors are.</>
+            ) : (
+              <>
+                Wildfire and flood risk, today&apos;s air, radon, water, who represents you, and the neighbors who&apos;ve
+                proven they&apos;re real. Free, no account.
+              </>
+            )}
           </p>
 
           <div className="mt-6 flex flex-col gap-2.5">
@@ -181,7 +198,7 @@ function HeroStep({
           <PrivacyProof />
         </div>
 
-        <ExampleReadings className="mt-8 lg:mt-0" />
+        {areaCard ? <div className="mt-8 lg:mt-0">{areaCard}</div> : <ExampleReadings className="mt-8 lg:mt-0" />}
       </div>
 
       <div className="flex flex-col items-center gap-0.5">
@@ -258,9 +275,8 @@ function ExampleReadings({ className = '' }: { className?: string }) {
       data-testid="start-example"
       className={`rounded-2xl border border-app-border bg-app-surface shadow-sm ${className}`}
     >
-      <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
+      <div className="px-4 pt-3.5 pb-2">
         <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-app-text-muted">Example</span>
-        <span className="text-[12px] font-medium text-app-text-muted">A home in Camas, WA</span>
       </div>
       <ul className="divide-y divide-app-border-subtle">
         {EXAMPLE_READINGS.map(({ icon: Icon, label, value, tone }) => (
@@ -699,6 +715,23 @@ export default function StartFunnel({ invite }: { invite?: StartInvite } = {}) {
   const [fallbackAddress, setFallbackAddress] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<string | null>(null);
 
+  // Signed in (TABCARD 4b): the sentence speaks to your own home, and with an area kept in this browser
+  // (Today's "Use my location") your city's sun right now takes the example's place once its answer comes.
+  // The page's HTML is the signed-out one; the session is read in the browser.
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => { setSignedIn(api.hasActiveSession()); }, []);
+  const viewer = useMe({ enabled: signedIn });
+  const userId = signedIn ? viewer.data?.id ?? null : null;
+  const [keptArea] = useKeptArea(userId);
+  // Only while nothing is saved, as on Today: once there's a Home, a saved address or a claim, the area is ignored.
+  const { noPlace } = useHasNoPlace(userId, !!keptArea);
+  const areaQuery = useQuery({ ...areaTodayQuery(userId, keptArea), enabled: noPlace && !!keptArea });
+  const areaSun = areaSunData(areaQuery.data);
+  const areaPlace = areaQuery.data ? (areaQuery.data.area.city || areaQuery.data.area.label) : null;
+  const areaCard = noPlace && areaSun && areaPlace ? (
+    <SunCard data={areaSun} countdown overline={`RIGHT NOW IN ${areaPlace.toUpperCase()}`} testId="place.firstRun.sunCard" />
+  ) : null;
+
   // Deep links (Wedge v2 D5): `?r=<route>` from an EDDM card or invite
   // postcard is remembered for every funnel beacon; `?address=` (a share
   // card, a postcard QR) resolves the first suggestion and shows the
@@ -845,6 +878,8 @@ export default function StartFunnel({ invite }: { invite?: StartInvite } = {}) {
             onBrowse={goBrowse}
             fromCard={fromCard}
             invite={invite}
+            signedIn={signedIn}
+            areaCard={areaCard}
           />
         </div>
       </main>

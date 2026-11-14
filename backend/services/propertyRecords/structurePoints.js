@@ -21,6 +21,8 @@
  *   claim  which address's point marks this building in the address registry: its
  *          house number, or + when two or more addresses do
  *   facts  estimateFacts.js's names, nothing else
+ *   img    the year of the imagery or lidar its outline was drawn from, where FEMA's file gives one
+ *          (scripts/property-index/lib/measure.cjs names it on a measured row)
  *
  * The identity check is `resolve` below. A point can land on a neighbor's building,
  * and a neighbor's own registry point lands there too: that's what `claim` catches.

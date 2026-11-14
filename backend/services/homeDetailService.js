@@ -15,6 +15,7 @@ const { changeNicheData } = require('./homeNicheData');
 const addressReview = require('./addressValidation/addressReviewService');
 const countyPages = require('./countyPages');
 const countyLinks = require('../config/countyLinks');
+const householdDocuments = require('./householdDocuments');
 const logger = require('../utils/logger');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
@@ -292,15 +293,18 @@ async function verifiedWritersAt(homeId, userIds) {
 async function householdPart({ homeId, home, raw, access, actorId, problems, copy = null, countyRecord = null, otherRecord = null, seesEntries = true }) {
   try {
     const canEdit = access.permissions.includes('home.edit');
-    const [verifiedWriters, reports, countyPage, sheet] = await Promise.all([
+    const [verifiedWriters, reports, countyPage, sheet, systems] = await Promise.all([
       verifiedWritersAt(homeId, householdFacts.unverifiedWriters(raw.niche_data, actorId)),
       copy && canEdit ? problems : null,
       canEdit ? countyPages.forHome({ copy, home }) : null,
       householdFacts.isResident(access) ? floorPlans.forHome(raw) : null,
+      // The years in Place's Home systems, with facts from the household's documents (off: none).
+      seesEntries ? householdDocuments.systemsFor(homeId) : null,
     ]);
     return householdFacts.project({ home, nicheData: raw.niche_data, copy, countyRecord, canEdit, viewerId: actorId, verifiedWriters, reports, countyPage,
       // The county's record goes first for everyone, including those who don't see it.
-      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries, countyCheck: countyLinks.enabled() });
+      floorPlan: householdFacts.usableFloorPlan(sheet, homeRecords.liveCopy(raw)), otherRecord, seesEntries, countyCheck: countyLinks.enabled(),
+      systems, documents: householdDocuments.offer(access) });
   } catch (error) {
     logger.warn('Home household facts unavailable', { homeId, error: error.message });
     return null;
@@ -350,9 +354,10 @@ async function propertyDetail(homeId, actorId, { sharedFacts = false } = {}) {
     const home = { ...columns, ...householdFacts.shownColumns(raw, record?.copy) };
     if (record) {
       const shared = sharedFacts && !record.copy ? record.shared || null : null;
-      // Rows the record implies show only to a build that draws a row's source under it (`vocabulary=2`, the same
-      // builds that ask for shared facts): any other build gets the county's own rows, as it always has.
-      const shown = record.copy && !sharedFacts && record.copy.derived ? { ...record.copy, derived: undefined } : record.copy;
+      // Rows the record implies, and measured ones, show only to a build that draws a row's source under it
+      // (`vocabulary=2`, the same builds that ask for shared facts): any other build gets the county's own rows, as it
+      // always has, so a measured figure never reaches a screen that can't say it was measured.
+      const shown = record.copy && !sharedFacts && (record.copy.derived || record.copy.measured) ? { ...record.copy, derived: undefined, measured: undefined } : record.copy;
       const county = shown ? serializePropertyRecord(shown, await valueEstimate.forCopy(record.copy, raw)) : serializePropertyRecord(shared);
       // A county that stopped publishing says so; the estimate is for homes no record ever covered.
       if (!county && record.lookup !== 'pending' && record.reason !== 'withdrawn') {

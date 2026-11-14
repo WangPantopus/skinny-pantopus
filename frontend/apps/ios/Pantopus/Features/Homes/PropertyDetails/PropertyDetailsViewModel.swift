@@ -42,6 +42,7 @@ final class PropertyDetailsViewModel {
 
     let homeId: String
     private let api: APIClient
+    private let uploader: MultipartUploader = .shared
     private let store: ScreenStore
     /// Preview/test seam. When non-nil, `load()` projects this loader's
     /// output instead of calling the backend.
@@ -92,6 +93,45 @@ final class PropertyDetailsViewModel {
         defer { savingFacts = false }
         do {
             let _: HouseholdWriteResponse = try await api.request(HomesEndpoints.updateHouseholdFacts(homeId: homeId, changes: changes))
+        } catch {
+            return false
+        }
+        await fetch(force: true)
+        return true
+    }
+
+    /// "Add from a document": where reading the household's report stands.
+    private(set) var documents = HouseholdDocumentsState()
+
+    /// Send the picked PDF to be read (`MultipartUploader.readDocumentFacts`). The server keeps nothing; the answer is
+    /// what the report states, for the household to check. Nil when it couldn't be read (the card says why).
+    func readDocument(at url: URL) async -> DocumentFactsAnswerDTO? {
+        guard !documents.reading else { return nil }
+        documents = HouseholdDocumentsState(reading: true)
+        defer { documents.reading = false }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let data = try Data(contentsOf: url)
+            // Named report.pdf on the way up: the file's own name stays on the phone.
+            let file = MultipartFile(fieldName: "file", filename: "report.pdf", mimeType: "application/pdf", data: data)
+            return try await uploader.readDocumentFacts(homeId: homeId, file: file)
+        } catch {
+            documents.error = (error as? LocalizedError)?.errorDescription ?? "Couldn't read that file. Please try again."
+            return nil
+        }
+    }
+
+    /// The facts the household kept from its report, then the page as the server shows it.
+    func saveDocumentFacts(kind: String, facts: [DocumentFactsSaveRequest.Fact]) async -> Bool {
+        guard !savingFacts, !facts.isEmpty else { return false }
+        savingFacts = true
+        defer { savingFacts = false }
+        do {
+            let saved: DocumentFactsSavedResponse = try await api.request(
+                HomesEndpoints.saveDocumentFacts(homeId: homeId, request: DocumentFactsSaveRequest(kind: kind, facts: facts))
+            )
+            documents.notice = saved.message
         } catch {
             return false
         }
@@ -241,7 +281,8 @@ final class PropertyDetailsViewModel {
                     questions: $0.questions,
                     countyPage: $0.countyPage,
                     countyCheck: $0.countyCheck,
-                    floorPlan: $0.floorPlan
+                    floorPlan: $0.floorPlan,
+                    documents: $0.documents
                 )
             }
         )

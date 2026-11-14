@@ -64,19 +64,33 @@ import {
   ShieldCheck,
   Radio,
   Trash2,
+  createLucideIcon,
   type LucideIcon,
 } from 'lucide-react';
+import { POSTMARK_RED, SEAL_GOLD } from '@/components/mailbox/cards/cardArt';
+
+/**
+ * The Mail tab's red envelope with a small gold seal, worn from November 1 to December 25 while Christmas cards are
+ * open (TABCARD, founder 2026-11-13). Its colours are its own, the same selected or not and in either theme.
+ */
+const ChristmasMail = createLucideIcon('ChristmasMail', [
+  ['rect', { key: 'envelope', width: '20', height: '16', x: '2', y: '4', rx: '2', fill: POSTMARK_RED, stroke: POSTMARK_RED }],
+  ['path', { key: 'flap', d: 'm21 6.5-9 6-9-6', stroke: 'white', strokeOpacity: '0.85', strokeWidth: '1.5' }],
+  ['circle', { key: 'seal', cx: '12', cy: '12.5', r: '2.6', fill: SEAL_GOLD, stroke: 'none' }],
+]);
 
 // ── Navigation icons (sidebar, header, tabs) ─────────────────
 export const NavIcons = {
   place: Home,
   hub: LayoutDashboard,
-  // Four-tab IA (wedge Phase 1.5): Place · Today · Nearby · Mail.
+  // The phone tabs: Place · Today · Mail · Pulse (Mail third, founder decision 2026-11-13).
   today: Sun,
   /** The Pulse tab (named Nearby until the founder's November 7 decision). */
   pulse: Activity,
   nearby: Compass,
   mail: Mail,
+  /** Mail from November 1 to December 25 while Christmas cards are open (cardDoors useChristmasMail). */
+  christmasMail: ChristmasMail,
   /** @deprecated the door is "Nearby" now; kept for any stale reference. */
   neighborhood: Users,
   feed: Newspaper,

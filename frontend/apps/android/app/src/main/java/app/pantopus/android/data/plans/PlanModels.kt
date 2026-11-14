@@ -71,6 +71,33 @@ enum class PlanWindow(
     WEEKEND("weekend", "This weekend"),
 }
 
+/**
+ * The list's All / Neighbors / Businesses filter (Plans with businesses, board G2). Shown only when the list says a
+ * business has a plan in the area. It filters the list and the pins on the phone, as the kind chips do, so the
+ * requests stay as they were (as on iOS); [wire] is how the choice is remembered.
+ */
+enum class PlanHostFilter(
+    val wire: String,
+    val label: String,
+) {
+    ALL("all", "All"),
+    NEIGHBORS("neighbors", "Neighbors"),
+    BUSINESSES("businesses", "Businesses"),
+    ;
+
+    /** Whether a plan (or pin) a business hosts, or not, passes this filter. */
+    fun passes(business: Boolean): Boolean =
+        when (this) {
+            ALL -> true
+            NEIGHBORS -> !business
+            BUSINESSES -> business
+        }
+
+    companion object {
+        fun from(wire: String?): PlanHostFilter = entries.firstOrNull { it.wire == wire } ?: ALL
+    }
+}
+
 /** Where the viewer stands with a plan, from the card's `viewer` block (or a pin's two viewer fields). */
 enum class PlanViewerStanding {
     NONE,
@@ -109,8 +136,17 @@ val PlanDto.planState: PlanState get() = PlanState.from(state)
 val PlanDto.standing: PlanViewerStanding
     get() = PlanViewerStanding.of(viewer?.role, viewer?.requestStatus ?: myRequest?.status)
 
-/** True when the private part (place, note, people) came with this copy: the viewer hosts it or is in. */
-val PlanDto.hasPrivatePart: Boolean get() = place != null || people != null
+/**
+ * True when the private part (place, note, people) came with this copy: the viewer hosts it or is in. A business's
+ * plan carries its place for everyone (it is the business's own address), so only the people count there.
+ */
+val PlanDto.hasPrivatePart: Boolean get() = (place != null && business == null) || people != null
+
+/** A business hosts this plan (Plans with businesses): the server sends `business` only then. */
+val PlanDto.isBusiness: Boolean get() = business != null
+
+/** A business's pin. */
+val PlanPinDto.isBusiness: Boolean get() = business != null
 
 val PlanDto.isPlaydate: Boolean get() = planKind == PlanKind.PLAYDATE
 val PlanDto.isAtHome: Boolean get() = placeKind == "home"
@@ -125,6 +161,9 @@ object PlanAutoRule {
     const val VERIFIED = "verified"
     const val HOSTED_BEFORE = "hosted_before"
     const val ANYONE_NEARBY = "anyone_nearby"
+
+    /** A business's plan only: anyone gets in right away. */
+    const val OPEN = "open"
 }
 
 /** Why someone can't ask (`viewer.cannot_ask_reason`). */

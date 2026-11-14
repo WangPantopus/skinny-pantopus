@@ -42,6 +42,14 @@ package is approved beyond the rows marked as the founder's.
 | The bar, raised | "we want the best quality data in the country, and give users real impression about their homes, that we may know them much better than they know about their homes", and "we want to at least to have all the fields from the attached screenshot example of a home, for all addresses": every row of Property details ([property-fields.md](property-fields.md)), for every address. The six-fact bar stays the minimum for a county to go live |
 | Research first | "Do not start any code or data work here yet. just research, knowledge, and plans." The review and proposed plan are in [full-page-plan.md](full-page-plan.md); its packages (WP17-WP25) start only with the founder's yes, and its decisions are D13-D17 and P6 below |
 
+### Direction of November 13
+
+| Item | Direction |
+|---|---|
+| The packages | The founder approved starting WP17, WP19, WP20, WP6 and WP10 ("Yes, all five"); WP18 was folded into WP19 and WP20, with Clark County proving each first |
+| This lane's branches | Property data work goes to production directly and to `dev` too: "this your lane of work all sessions here are good to go to production directly live ... I think it is good to merge to both dev and master". PRs target master; `dev` is brought up to master after each landing |
+| Spending | "Anything you proposed that we need to spend money on, that will be a no answer, the whole reason we do this is to not spend that much money, so do not approve anything spend money for now. For others, all approve." So D13 and D15 are no; D14, D16, D17 and P6 are yes |
+
 ### The seven accepted corrections
 
 1. Success means what people keep: asking at Add Home for a fact ATTOM used to prefill is a regression
@@ -88,11 +96,11 @@ Recommendations are this package's; the founder decides. Each is asked in plain 
 | D10 | A rule for USPS "no-stat" addresses (USPS doesn't deliver there) | Record in shadow first; decide with the counts | WP3 |
 | D11 | When old store builds get the new vocabulary (their Add Home card loses "(ATTOM)") | When the measured share of old-build Add Home sessions is small | WP2, WP15 |
 | D12 | Bring stored Google content within its 30-day limits (coordinates, USPS data) | Clear USPS data after 30 days in WP3; replace coordinates with registry points in WP6 | WP3, WP6 |
-| D13 | A licensed copy of public records as a labeled fallback, shown only where no county, derived or measured fact exists. This would change D2's "no reseller files". About $5,000 once for the whole country at the price read November 11 ([full-page-plan.md](full-page-plan.md#51-a-licensed-copy-costs-about-5000-not-450000)) | Test first on the vendor's free plan against Pantopus's own county records, counts only; ask the vendor in writing; then decide | WP23 |
-| D14 | Show measured figures (a building's outline area, buildings on the parcel, lot area from the parcel's shape) in their own rows, labeled "Measured", when the record has none. Today they may sit only in the separate estimate slot | Yes for those three; stories from height stays a labeled estimate | WP21 |
-| D15 | Buy USPS's national ZIP+4 file ($1,750 a year) | Yes, once USPS confirms the registry run may use it and a home's ZIP+4 may be shown to its household | WP22 |
-| D16 | Measure every county by rows filled per home (the page score) and by how often its sources agree, keeping the six-fact bar as the go-live minimum | Yes | WP20 |
-| D17 | A county past its stale date shows its last answer with that date, not nothing | Yes: "better to show something than nothing" (November 5) | WP17 |
+| D13 | A licensed copy of public records as a labeled fallback, shown only where no county, derived or measured fact exists. This would change D2's "no reseller files". About $5,000 once for the whole country at the price read November 11 ([full-page-plan.md](full-page-plan.md#51-a-licensed-copy-costs-about-5000-not-450000)) | Test first on the vendor's free plan against Pantopus's own county records, counts only; ask the vendor in writing; then decide. **Decided November 13: no** (it spends money) | WP23 |
+| D14 | Show measured figures (a building's outline area, buildings on the parcel, lot area from the parcel's shape) in their own rows, labeled "Measured", when the record has none. Today they may sit only in the separate estimate slot | Yes for those three; stories from height stays a labeled estimate. **Decided November 13: yes** | WP21 |
+| D15 | Buy USPS's national ZIP+4 file ($1,750 a year) | Yes, once USPS confirms the registry run may use it and a home's ZIP+4 may be shown to its household. **Decided November 13: no** (it spends money) | WP22 |
+| D16 | Measure every county by rows filled per home (the page score) and by how often its sources agree, keeping the six-fact bar as the go-live minimum | Yes. **Decided November 13: yes** | WP20 |
+| D17 | A county past its stale date shows its last answer with that date, not nothing | Yes: "better to show something than nothing" (November 5). **Decided November 13: yes** | WP17 |
 
 ## Proposals that need a yes
 
@@ -104,7 +112,7 @@ New tables, hosted storage and hosted configuration are the founder's to approve
 | P3 | A `mail_provider` column on the existing mail rows | A piece always finishes with the provider that accepted it | Additive migration through normal review; listed for visibility |
 | P4 | Private storage for uploaded floor-plan sheets | Keep originals only with permission | Can share P1's account |
 | P5 | A mail event ledger table, if the existing webhook dedupe can't hold normalized events | Duplicate and late events made harmless | Reuse the existing dedupe store first |
-| P6 | Private storage for documents a household uploads about its own home (an inspection report, an appraisal), read for facts the household then confirms (WP25) | Roof age, furnace, water heater and panel are in no county file | Read the document and keep only the confirmed facts, not the original |
+| P6 | Private storage for documents a household uploads about its own home (an inspection report, an appraisal), read for facts the household then confirms (WP25) | Roof age, furnace, water heater and panel are in no county file | Read the document and keep only the confirmed facts, not the original. **Decided November 13: yes**, keeping only the confirmed facts; nothing that spends money |
 
 ## Founder-only facts and actions
 

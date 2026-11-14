@@ -87,6 +87,8 @@ public struct PropertyHouseholdContent: Sendable, Hashable {
     public let countyCheck: HouseholdCountyCheckDTO?
     /// "Is this your layout?", for a unit its building's sheet names.
     public let floorPlan: FloorPlanLayoutDTO?
+    /// "From your papers": a PDF of the home's own report, read for facts the household checks.
+    public let documents: HouseholdDocumentsOfferDTO?
 
     public init(
         sections: [PropertyRecordSection],
@@ -94,7 +96,8 @@ public struct PropertyHouseholdContent: Sendable, Hashable {
         questions: [HouseholdQuestionDTO],
         countyPage: HouseholdCountyPageDTO?,
         countyCheck: HouseholdCountyCheckDTO? = nil,
-        floorPlan: FloorPlanLayoutDTO? = nil
+        floorPlan: FloorPlanLayoutDTO? = nil,
+        documents: HouseholdDocumentsOfferDTO? = nil
     ) {
         self.sections = sections
         self.groups = groups
@@ -102,6 +105,7 @@ public struct PropertyHouseholdContent: Sendable, Hashable {
         self.countyPage = countyPage
         self.countyCheck = countyCheck
         self.floorPlan = floorPlan
+        self.documents = documents
     }
 
     /// The layout question, if it sits at the foot of this card.

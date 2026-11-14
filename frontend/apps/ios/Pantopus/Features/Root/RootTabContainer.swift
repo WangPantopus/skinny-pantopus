@@ -2,8 +2,9 @@
 //  RootTabContainer.swift
 //  Pantopus
 //
-//  The tabs' container while the Mailbox is on (Mail tab, founder decisions
-//  2026-10-26/27): Place · Today · Nearby · Plans · Mail · Messages. SwiftUI's
+//  The tabs' container (Mail tab, founder decisions 2026-10-26/27; Mail third
+//  since 2026-11-13): Place · Today · Mail · Pulse · Moments · Plans, and
+//  Messages off the bar (`RootTab.hostedTabs`). SwiftUI's
 //  TabView moves a sixth tab under "More" on iPhone, even with its bar hidden,
 //  so these tabs live in a UIKit container that does what the system tab bar
 //  controller does without its bar: one hosting controller per tab, made the

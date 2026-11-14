@@ -9,7 +9,8 @@
  *   queue  asked for, and no release: the next counties to build, by what people asked for
  *   ready  asked for, with a release, and not live: what going live would start answering
  *   stale_soon  live counties STALE_SOON_DAYS or fewer from the date their release stops being served (stale_after), or past
- *          it: the reader then answers "stale", and Add Home finds no record there. Nearest first. A refresh that brings a newer
+ *          it: the reader then answers "stale", and Add Home finds no record there, unless the switch file's past_date list
+ *          keeps the county answering from that release, saying how old it is (router.js). Nearest first. A refresh that brings a newer
  *          file moves the date (.github/workflows/property-index.yml; its refresh watch says the same after every build).
  */
 

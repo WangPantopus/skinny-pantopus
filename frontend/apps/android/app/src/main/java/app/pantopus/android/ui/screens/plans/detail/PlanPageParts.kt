@@ -77,6 +77,8 @@ fun PlanPageScaffold(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     scope: String? = null,
+    /** The scope chip's glyph: a lock, or a map pin for a business's address. */
+    scopeIcon: PantopusIcon = PantopusIcon.Lock,
     onShare: (() -> Unit)? = null,
     menu: List<PlanMenuItem> = emptyList(),
     footer: (@Composable ColumnScope.() -> Unit)? = null,
@@ -92,7 +94,12 @@ fun PlanPageScaffold(
                     if (scope != null) {
                         PlanScopeChip(
                             text = scope,
-                            modifier = Modifier.align(Alignment.BottomStart).padding(start = Spacing.s4, bottom = 34.dp),
+                            icon = scopeIcon,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(start = Spacing.s4, end = Spacing.s4, bottom = 34.dp)
+                                    .then(if (scopeIcon == PantopusIcon.MapPin) Modifier.testTag("planBusinessAddress") else Modifier),
                         )
                     }
                 }

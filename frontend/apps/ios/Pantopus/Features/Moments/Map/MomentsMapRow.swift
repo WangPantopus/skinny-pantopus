@@ -15,6 +15,16 @@
 import SwiftUI
 
 extension MomentsMapViewModel {
+    /// The empty card's line: the place where you are while the map shows it, else "around here".
+    var emptyLine: String {
+        if centerSource == .gps, let center, let herePlace, !herePlace.isEmpty, let region = lastRegion,
+           abs(region.center.latitude - center.latitude) < region.span.latitudeDelta / 2,
+           abs(region.center.longitude - center.longitude) < region.span.longitudeDelta / 2 {
+            return "Share what's happening at \(herePlace)."
+        }
+        return "Share what's happening around here."
+    }
+
     /// The faces the row lists: a crowded spot's people (M2); otherwise only the people with a Moment that has no
     /// location, since everyone else is on the map.
     var rowPeople: [MomentsStripPerson] {

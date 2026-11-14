@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.models.moments.MomentReplyBody
 import app.pantopus.android.data.api.models.moments.MomentReplyResponse
 import app.pantopus.android.data.api.models.moments.MomentReportBody
 import app.pantopus.android.data.api.models.moments.MomentRingDto
+import app.pantopus.android.data.api.models.moments.MomentSunDto
 import app.pantopus.android.data.api.models.moments.MomentViewersResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -67,6 +68,19 @@ class MomentsRepository
 
         /** The rings of the last map read, newest first as the server sent them. */
         val rings: StateFlow<List<MomentRingDto>> = _rings.asStateFlow()
+
+        private val _heightsOn = MutableStateFlow(false)
+
+        /** Heights are on for you, as the last map read said (contract v3.9): the map offers "Elevation". */
+        val heightsOn: StateFlow<Boolean> = _heightsOn.asStateFlow()
+
+        private val _floatSun = MutableStateFlow<MomentSunDto?>(null)
+
+        /**
+         * Where the sun is while Moments with an elevation float for you, as the last map read said (contract v3.10,
+         * `float_on`); null while they don't.
+         */
+        val floatSun: StateFlow<MomentSunDto?> = _floatSun.asStateFlow()
 
         private val _watched = MutableStateFlow<Set<String>>(emptySet())
 
@@ -150,6 +164,8 @@ class MomentsRepository
         /** Sign-out: the next person on this phone starts with no rings, nothing watched and nothing queued. */
         fun clearAccount() {
             _rings.value = emptyList()
+            _heightsOn.value = false
+            _floatSun.value = null
             _watched.value = emptySet()
             _reported.value = emptySet()
             _mapNote.value = null
@@ -194,6 +210,8 @@ class MomentsRepository
                     // Moments with no location ride along (flagged `noLocation`): the strip shows them, the map doesn't.
                     val all = result.data.rings + result.data.unplaced.map { it.copy(noLocation = true) }
                     _rings.value = all
+                    _heightsOn.value = result.data.heightsOn
+                    _floatSun.value = result.data.sun.takeIf { result.data.floatOn }
                     NetworkResult.Success(all)
                 }
                 is NetworkResult.Failure -> result

@@ -132,8 +132,14 @@ async function* build({ work }) {
   };
 }
 
+// The Office's own parcel shapes, by the square-suffix-lot each record carries as its parcel number (the common ownership
+// layer, whose SSL is the account's): what lib/measure.cjs measures a lot and counts its buildings on (measured rows, held
+// off until the District's measured_rows switch is on). Only the SSL column is asked for.
+const parcelShapes = { url: `${BASE}/40`, fields: ['SSL'], key: (row) => word(row.SSL), publisher: 'the District of Columbia' };
+
 module.exports = {
   build,
+  parcelShapes,
   dictionary: {
     layer: [EXTRACT, HOMES, CONDOS],
     facts: { year_built: 'AYB', effective_year_built: 'EYB', living_sqft: ['GBA', 'LIVING_GBA'], bedrooms: 'BEDRM', rooms: 'ROOMS', full_baths: 'BATHRM', half_baths: 'HF_BATHRM', stories: 'STORIES', fireplaces: 'FIREPLACES', units: 'NUM_UNITS', lot_sqft: 'LANDAREA', market_value: 'NEWTOTAL', market_land_value: 'NEWLAND', market_building_value: 'NEWIMPR', sale_price: 'SALEPRICE', sale_date: 'SALEDATE', tax_amount: 'ANNUALTAX' },

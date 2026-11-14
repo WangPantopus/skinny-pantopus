@@ -81,7 +81,12 @@ async function* build({ work, today }) {
   };
 }
 
+// The parcel layer's own shapes, by the parcel number each record carries (the same columns): what lib/measure.cjs
+// measures a lot's area and counts its buildings on (measured rows, held off until the county's measured_rows switch is on).
+const parcelShapes = { url: LAYER, fields: ['GPIN', 'Tax_ID'], key: (row) => word(row.GPIN) || word(row.Tax_ID), pageSize: 1000 };
+
 module.exports = {
+  parcelShapes,
   build,
   dictionary: {
     layer: LAYER,

@@ -4,8 +4,8 @@
 //
 // deriveRows adds the rows the record implies but doesn't state (full-page-plan.md, section 7, WP19): a lot number or a
 // subdivision its legal description plainly names, "Garage: Yes" where it gives a garage area, the class and subtype its use
-// code means in a code list the state or county publishes, and the city or town whose official limits hold the home's
-// address point. Each fills only a row the county leaves empty, says what it came from, and waits in the record's
+// code means in a code list the state or county publishes, stories and gross area from the floor areas a county lists, and
+// the city or town whose official limits hold the home's address point. Each fills only a row the county leaves empty, says what it came from, and waits in the record's
 // `held.derived_rows` until the county is on the switch file's `derived_rows` list, so a republish changes no live page.
 
 const { sortKey } = require('../../../backend/services/propertyRecords/addressKey');
@@ -20,9 +20,26 @@ const TYPE_WORDS = {
   'property:house': 'Single family residence', 'property:townhouse': 'Townhouse', 'property:mobile_home': 'Manufactured or mobile home', 'property:condo': 'Condominium',
   'unit:condo': 'Condominium', 'building:condo': 'Condominium building', 'building:multi_unit': 'Multi-family building', 'building:apartment': 'Apartment building',
 };
+// Facts a county writes as its code and its own words together ("10-SINGLE FAMILY", "1-GAS"): the words alone, held as a
+// rewording; the county's value stays in its record. Stark County OH's building type and heat type columns. Approved by the
+// founder on Nov 13 ("Yes, both"). Its land use ("1-FAMILY DWELLING", one family) isn't a code, so it isn't here.
+const CODED_WORDS = { 'oh-stark': ['style', 'heating'] };
+const CODE_THEN_WORDS = /^(?:\d{1,3}|[A-Z]\d)-\s*([A-Z][A-Z0-9 ,/&'-]*[A-Z])$/;
 const SWITCH = 'derived_rows';
 // Counts where a county's 0 is its answer: none.
 const ZERO_MEANS_NONE = [['fireplaces', 'fireplace count'], ['half_baths', 'half-bath count']];
+// Sources whose files list each floor's area and state neither a story count nor a gross area for homes (plan 5.5;
+// measured Nov 13). 'floors': the record's ground and second floor areas must add up to its living area, so no floor goes
+// unlisted (Dane County WI: 41,173 homes). 'living': the county's living area is its floors added up on every home, so the
+// record carries only the first (Clark County NV: TOTSQFT = FLR1SQFT + FLR2SQFT on all 763,199 homes with a first floor).
+const FLOOR_LISTS = { 'wi-madison': 'floors', 'nv-clark': 'living' };
+// Sources whose municipality field holds a district, not a city: Franklin County OH's Auditor writes the tax district
+// ("COLUMBUS-WORTHINGTON CSD", "PLAIN TWP-NEW ALBANY CORP"), Ramsey County MN names St. Paul's planning districts ("GREATER
+// EAST SIDE"). The city or town at the home's point is held as a rewording (places.cjs); the county's words stay in its
+// record. Approved by the founder on Nov 13 ("Yes, both").
+const DISTRICT_MUNICIPALITIES = new Set(['oh-franklin', 'mn-ramsey']);
+// Split and bi-level homes: their floors don't give a story count (a lower level can sit in the county's basement columns).
+const SPLIT_LEVELS = /SPLIT|BI-?LEVEL|TRI-?LEVEL|MULTI-?LEVEL/i;
 
 /**
  * The other unit of a lot and the type's words, into the record's facts as before; with a county (build.cjs), also the
@@ -120,6 +137,19 @@ function deriveRows(records, county, { work = null } = {}) {
       if (subdivision) hold(record, 'subdivision', subdivision(facts.legal_description), `From ${office}’s legal description`);
     }
     if (facts.garage_sqft > 0) hold(record, 'garage', 'Yes', `From ${office}’s garage area`);
+    // Stories and gross area from the county's own floor areas, where it lists each floor (FLOOR_LISTS). One listed floor
+    // holding all the living area is one story; two floors don't say whether the upper one is a full or a half story, so
+    // they give none. The gross area is the floors and the basement added up (a garage isn't: the files don't say it's
+    // part of the house). A house's or townhouse's own floors only: a unit's would read as its building's (facts.js).
+    const floorList = FLOOR_LISTS[county.source];
+    if (floorList && record.kind === 'property' && facts.ground_floor_sqft > 0 && facts.living_sqft > 0) {
+      const floors = floorList === 'living' ? facts.living_sqft : facts.ground_floor_sqft + (facts.second_floor_sqft || 0);
+      if (floors === facts.living_sqft) {
+        const words = `From ${office}’s floor areas`;
+        if (facts.ground_floor_sqft === facts.living_sqft && !SPLIT_LEVELS.test(facts.style || '')) hold(record, 'stories', 1, words);
+        hold(record, 'gross_sqft', floors + (facts.basement_sqft || 0), words);
+      }
+    }
     if (uses) {
       const meant = uses.words(facts);
       if (meant) {
@@ -127,12 +157,18 @@ function deriveRows(records, county, { work = null } = {}) {
         hold(record, 'property_subtype', meant.subtype, uses.from);
       }
     }
+    for (const fact of CODED_WORDS[county.source] || []) {
+      const said = CODE_THEN_WORDS.exec(String(facts[fact] ?? '').trim().toUpperCase());
+      if (said) hold(record, fact, said[1], `From ${office}’s record, without its code number`, { rewording: true });
+    }
   }
   // The city or town limits that hold the home's point: for a home whose county names no municipality, and, reworded, for one
-  // whose county names itself ("Clark County") where the limits agree it's in no city.
+  // whose county names itself ("Clark County") where the limits agree it's in no city, or names a district
+  // (DISTRICT_MUNICIPALITIES) that isn't the city or town there.
   const asks = (record) => {
     if (record.facts.municipality === undefined) return 'fill';
-    return namesTheCounty(record.facts.municipality, county) ? 'reword' : null;
+    if (namesTheCounty(record.facts.municipality, county)) return 'reword';
+    return DISTRICT_MUNICIPALITIES.has(county.source) ? 'district' : null;
   };
   if (work) addMunicipalities(records, county, work, hold, sortKey, asks);
   for (const record of records) {

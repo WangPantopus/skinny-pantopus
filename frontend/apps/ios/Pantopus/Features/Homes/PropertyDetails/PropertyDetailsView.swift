@@ -17,6 +17,7 @@
 import CoreLocation
 import MapKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 public struct PropertyDetailsView: View {
     @State private var viewModel: PropertyDetailsViewModel
@@ -24,6 +25,8 @@ public struct PropertyDetailsView: View {
     private let onRequestCorrection: () -> Void
     @State private var editing: HouseholdGroupDTO?
     @State private var reporting: PropertyRecordSection?
+    @State private var pickingDocument = false
+    @State private var foundDocument: DocumentFactsAnswerDTO?
 
     public init(
         homeId: String,
@@ -66,6 +69,16 @@ public struct PropertyDetailsView: View {
                     await viewModel.reportProblem(section: section.id, field: field, note: note)
                 }
             }
+            // "Add from a document": a PDF from Files, read by the server and dropped; then "Check what we found".
+            .fileImporter(isPresented: $pickingDocument, allowedContentTypes: [.pdf]) { result in
+                guard case let .success(url) = result else { return }
+                Task { foundDocument = await viewModel.readDocument(at: url) }
+            }
+            .sheet(item: $foundDocument) { answer in
+                DocumentFactsSheet(answer: answer) { facts in
+                    await viewModel.saveDocumentFacts(kind: answer.kind, facts: facts)
+                }
+            }
     }
 
     private var householdActions: HouseholdActions {
@@ -75,7 +88,9 @@ public struct PropertyDetailsView: View {
             edit: { editing = $0 },
             report: { reporting = $0 },
             answerLayout: { answer in Task { await viewModel.answerFloorPlan(answer) } },
-            homeId: viewModel.homeId
+            homeId: viewModel.homeId,
+            addDocument: { pickingDocument = true },
+            documents: viewModel.documents
         )
     }
 
@@ -166,6 +181,14 @@ private struct LoadedBody: View {
                         }
                         ForEach(household.addDetails) { group in
                             HouseholdAddDetailsCard(group: group, actions: householdActions)
+                        }
+                        if let offer = household.documents {
+                            HouseholdDocumentsCard(
+                                offer: offer,
+                                state: householdActions.documents,
+                                saving: householdActions.saving,
+                                onPick: householdActions.addDocument
+                            )
                         }
                     }
                     // Verification sources have no clean backend mapping

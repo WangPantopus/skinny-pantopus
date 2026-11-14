@@ -264,10 +264,13 @@ struct PlanHostingSection: View {
             invite
             going
             HStack(spacing: 10) {
-                Button(action: onOpenChat) { PlanButtonLabel(title: "Message guests", icon: .messageCircle, kind: .secondary) }
-                    .planButton(.secondary, size: .small)
-                    .disabled(viewModel.plan?.chatRoomId == nil)
-                    .accessibilityIdentifier("planMessageGuests")
+                // A business's team isn't in its plan's chat yet (contract B7): no chat, no button.
+                if !(card.isBusiness && viewModel.plan?.chatRoomId == nil) {
+                    Button(action: onOpenChat) { PlanButtonLabel(title: "Message guests", icon: .messageCircle, kind: .secondary) }
+                        .planButton(.secondary, size: .small)
+                        .disabled(viewModel.plan?.chatRoomId == nil)
+                        .accessibilityIdentifier("planMessageGuests")
+                }
                 if let url = card.shareUrl.flatMap(URL.init(string:)) {
                     ShareLink(item: url, message: Text(card.title)) {
                         PlanButtonLabel(title: "Share", icon: .share, kind: .secondary)
@@ -396,8 +399,9 @@ struct PlanHostingSection: View {
         VStack(spacing: 0) {
             if divider { Divider().overlay(Theme.Color.appBorder) }
             HStack(spacing: Spacing.s3) {
-                // The guest's photo and name open their profile; the options stay on the menu beside them.
-                Button { onOpenProfile(person.userId) } label: {
+                // The guest's photo and name open their profile; the options stay on the menu beside them. A business's
+                // team sees a guest's first name only, so nothing opens there.
+                Button { if !card.isBusiness { onOpenProfile(person.userId) } } label: {
                     HStack(spacing: Spacing.s3) {
                         PlanAvatar(name: person.displayName, url: person.avatarUrl)
                         VStack(alignment: .leading, spacing: 0) {

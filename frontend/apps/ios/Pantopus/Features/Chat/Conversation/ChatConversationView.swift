@@ -456,6 +456,10 @@ public struct ChatConversationView: View {
     @Environment(\.chatPlanContext) private var planContext
     /// Opens a screen in the app from the assistant (closing the Ask sheet first).
     @Environment(\.openPantopusLink) private var openPantopusLink
+    /// The tabs, for the Christmas card flow in the Mail tab; nil outside them.
+    @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
+    /// A Christmas card can go to this chat's person now.
+    @State private var canSendCard = false
     /// Presentation mode — drives the AI chrome (avatar, welcome card,
     /// reply bubbles). Default `.dm`.
     private let mode: ChatConversationMode
@@ -760,13 +764,25 @@ public struct ChatConversationView: View {
             }
         }
         .sheet(isPresented: $viewModel.isShowingDetails) {
-            ChatConversationDetailsSheet(viewModel: viewModel) {
-                // Blocked — close the drawer and pop the thread.
-                viewModel.isShowingDetails = false
-                onBack()
-            }
+            ChatConversationDetailsSheet(
+                viewModel: viewModel,
+                onBlocked: {
+                    // Blocked — close the drawer and pop the thread.
+                    viewModel.isShowingDetails = false
+                    onBack()
+                },
+                onSendCard: sendCardAction
+            )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        // A one-to-one chat with a person: may a Christmas card go to them (TABCARD)?
+        .task(id: "\(cardRecipientId ?? "")|\(HolidayCardDoors.shared.isOpen)") {
+            guard let id = cardRecipientId else {
+                canSendCard = false
+                return
+            }
+            canSendCard = await HolidayCardDoors.shared.canSend(to: id)
         }
         .alert(bulkDeleteTitle, isPresented: $bulkDeleteConfirmPresented) {
             Button("Cancel", role: .cancel) {}
@@ -915,6 +931,24 @@ public struct ChatConversationView: View {
 
     private var resolvedCreatorContext: ChatCreatorThreadContext {
         creatorContext ?? .defaults()
+    }
+
+    /// The person of a one-to-one chat, never a group, plan, business or
+    /// assistant chat: who "Send a Christmas card" would go to.
+    private var cardRecipientId: String? {
+        guard mode == .dm, planContext == nil, !viewModel.isBusinessReply else { return nil }
+        return viewModel.profileUserId
+    }
+
+    /// The details' "Send a Christmas card": the card flow in the Mail tab with
+    /// this person chosen, as "Send one back" opens it; nil while it can't go.
+    private var sendCardAction: (@MainActor () -> Void)? {
+        guard canSendCard, let id = cardRecipientId, let rootTabs else { return nil }
+        let name = viewModel.counterparty.displayName
+        return {
+            leaveWithoutKeyboard()
+            rootTabs.openChristmasCard(toUserId: id, toName: name)
+        }
     }
 
     /// A person DM's header opens that person's profile, as web's does.

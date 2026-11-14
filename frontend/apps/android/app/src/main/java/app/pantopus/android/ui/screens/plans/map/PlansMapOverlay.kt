@@ -65,6 +65,8 @@ data class MapPin(
     /** Playdates show the neighborhood (about 1 km) instead of the area (about 500 m). */
     val neighborhood: Boolean = false,
     val areaLabel: String? = null,
+    /** A business's pin (board G1): the place is its own public address, so no shaded area is drawn around it. */
+    val exact: Boolean = false,
 )
 
 /** What the overlay places: a pin, a cluster of pins, or the selected pin's area. */
@@ -347,7 +349,7 @@ private fun buildItems(
         }
     }
     val area =
-        selected?.let {
+        selected?.takeUnless { it.exact }?.let {
             val meters = if (it.neighborhood) NEIGHBORHOOD_METERS else AREA_METERS
             MapItem.Area(it, (meters / metersPerDp(it.latitude, zoom)).toFloat())
         }

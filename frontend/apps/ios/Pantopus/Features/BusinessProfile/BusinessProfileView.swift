@@ -367,6 +367,9 @@ private struct BusinessProfileSections: View {
             BizCategoryRow(categories: content.categories)
                 .padding(.top, content.isNewlyClaimed ? Spacing.s2 : Spacing.s0)
 
+            // Plans with businesses (board B6): its upcoming plans, only when the server sends any.
+            BusinessUpcomingPlansSection(businessId: content.businessId)
+
             aboutSection
             hoursSection
             serviceAreaSection

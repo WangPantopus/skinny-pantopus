@@ -501,6 +501,9 @@ function serializeCountyRecord(attomPayload, avm = null) {
 
 // ── A Home's own copy of its county record ──────────────────
 
+// The county's figures a measured one stands in for: shown, they keep the measured one off the page.
+const MEASURED_GIVES_WAY = { outline_sqft: ['ground_floor_sqft'], lot_sqft: ['lot_acres'], lot_acres: ['lot_sqft'] };
+
 function factValue(kind, value) {
   if (kind === 'stories') {
     const n = positive(value);
@@ -551,6 +554,18 @@ const BUILDING_NOTES = {
 };
 const AGREED_NOTE = 'More than one home is on record at this address. These are the details all of its records agree on; anything they differ on isn\u2019t shown.';
 
+/**
+ * A release past its date that still answers (`past_date`, propertyRecords/homeRecord.js dated): the first section says
+ * how old the county's records are, plainly, ahead of any note it has. The footer keeps the source and its date.
+ */
+function withAge(sections, copy) {
+  const date = copy.past_date ? dateLabel(copy.as_of) : null;
+  if (!date || !sections.length) return sections;
+  const age = `These county records are from ${date}, the newest we have. Some details may have changed since.`;
+  const [first, ...rest] = sections;
+  return [{ ...first, note: first.note ? `${age} ${first.note}` : age }, ...rest];
+}
+
 function recordFooter(copy) {
   const date = dateLabel(copy.as_of);
   const source = `From ${copy.publisher}\u2019s ${copy.dataset}`;
@@ -579,15 +594,27 @@ function serializePropertyRecord(copy, estimate = null) {
   const sourced = (held) => Object.fromEntries(Object.entries(held || {}).filter(([name]) => typeof from[name] === 'string'));
   const derivedFacts = sourced(copy.derived?.facts);
   const derivedBuilding = sourced(copy.derived?.building);
-  const derived = copy.derived ? Object.fromEntries([...Object.keys(derivedBuilding), ...Object.keys(derivedFacts)].map((name) => [name, from[name]])) : null;
-  const facts = { ...(copy.facts || {}), ...derivedFacts };
+  let derived = copy.derived ? Object.fromEntries([...Object.keys(derivedBuilding), ...Object.keys(derivedFacts)].map((name) => [name, from[name]])) : null;
+  let facts = { ...(copy.facts || {}), ...derivedFacts };
   const buildingFacts = copy.building || Object.keys(derivedBuilding).length ? { ...(copy.building || {}), ...derivedBuilding } : undefined;
+  // Figures measured from public aerial data (scripts/property-index/lib/measure.cjs), present only while the county's
+  // measured_rows switch is on: each only where neither the record nor a derived row has it, and never beside the figure it
+  // stands in for (a building's footprint isn't shown where the county states its ground floor area). Each says what it
+  // was measured from and when, under its value, as a derived row does.
+  const measuredFrom = copy.measured?.from || {};
+  const stated = (name) => facts[name] !== undefined || buildingFacts?.[name] !== undefined;
+  const measured = Object.entries(copy.measured?.facts || {})
+    .filter(([name]) => typeof measuredFrom[name] === 'string' && !stated(name) && !(MEASURED_GIVES_WAY[name] || []).some(stated));
+  if (measured.length) {
+    facts = { ...facts, ...Object.fromEntries(measured) };
+    derived = { ...(derived || {}), ...Object.fromEntries(measured.map(([name]) => [name, measuredFrom[name]])) };
+  }
   const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
   if (copy.match === 'ambiguous') {
     const building = titled('building');
     addFacts(building, Object.fromEntries(AGREED_FACTS.filter((name) => facts[name] !== undefined).map((name) => [name, facts[name]])), ['building']);
     if (!building.rows.length) return null;
-    return { sections: [{ id: building.id, title: building.title, rows: building.rows, note: AGREED_NOTE }], footer: recordFooter(copy), as_of: copy.as_of || null };
+    return { sections: withAge([{ id: building.id, title: building.title, rows: building.rows, note: AGREED_NOTE }], copy), footer: recordFooter(copy), as_of: copy.as_of || null };
   }
   const sections = [];
   const house = copy.match === 'exact' && copy.subject?.kind !== 'unit';
@@ -636,7 +663,7 @@ function serializePropertyRecord(copy, estimate = null) {
 
   const shown = sections.filter((section) => section.rows.length > 0).map(({ id, title, rows, note }) => ({ id, title, rows, note }));
   if (!shown.length) return null;
-  return { sections: shown, footer: recordFooter(copy), as_of: copy.as_of || null };
+  return { sections: withAge(shown, copy), footer: recordFooter(copy), as_of: copy.as_of || null };
 }
 
 const factIsMono = (kind) => MONO.has(kind);

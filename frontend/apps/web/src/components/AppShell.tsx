@@ -60,6 +60,7 @@ import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { useShellReadsReleased } from '@/lib/shellReads';
 import { hubTodayQuery } from '@/lib/hubToday';
+import { useCardsOpenInChrome, useChristmasMail, useWaitingCardLanding } from '@/components/mailbox/cards/cardDoors';
 import type { CSSProperties } from 'react';
 import { Search, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import MessagesGlyph from '@/components/MessagesGlyph';
@@ -309,6 +310,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // first paint (lib/query-provider.tsx, through lib/chatShell.ts).
   useEffect(() => (user?.id ? chatShellSignedIn(user.id) : undefined), [user?.id]);
   useEffect(() => { chatShellNavigated(); }, [pathname]);
+  // Joined for a Christmas card: the first load for an account in this browser opens the card waiting for it.
+  useWaitingCardLanding(user?.id);
 
   // ── Tile prefetch for home area ──────────────────────────────
   // A cold Messages inbox paints its rows first (lib/shellReads.ts).
@@ -705,8 +708,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* The tabs on phone-width web: Place · Today · Pulse · (Mail ·) Messages
-          as a bottom bar (the sidebar carries them at md+). Business context
+      {/* The tabs on phone-width web: Place · Today · (Mail ·) Pulse as a
+          bottom bar (Mail third, founder decision 2026-11-13; the sidebar
+          carries them at md+ in its own order, with Messages). Business context
           keeps its own navigation, and a conversation has the whole window. */}
       {showMobileTabs && <MobileTabBar unreadMail={mailUnread} />}
 
@@ -790,6 +794,10 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   };
   const isActive = (path: string) => currentPath === path;
   const startsWith = (prefix: string) => currentPath.startsWith(prefix);
+  // Christmas cards (TABCARD): the red envelope on Mail and "Send a Christmas card" under it, while cards are open.
+  const christmasMail = useChristmasMail();
+  const cardsOpen = useCardsOpenInChrome();
+  const onCards = currentPath === '/app/mailbox/cards';
 
   // ── Prefetch on hover/focus of primary nav items ──────────
   // Each prefetcher:
@@ -863,7 +871,10 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
       {/* The Pulse tab, named Nearby until the founder's November 7 decision (its test id stays). */}
       <SidebarItem icon={NavIcons.pulse} label="Pulse" active={startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/feed')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
-      {launchFeatures.mailbox ? <SidebarItem icon={NavIcons.mail} label="Mail" active={startsWith('/app/mailbox')} onClick={() => go('/app/mailbox/personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={mailUnread} countLabel="unopened" testId="sidebar-mail" /> : null}
+      {launchFeatures.mailbox ? <SidebarItem icon={christmasMail ? NavIcons.christmasMail : NavIcons.mail} label="Mail" active={startsWith('/app/mailbox') && !(cardsOpen && onCards)} onClick={() => go('/app/mailbox/personal')} onPrefetch={prefetchMail} showLabel={showLabels} count={mailUnread} countLabel="unopened" testId="sidebar-mail" /> : null}
+      {/* While Christmas cards are open (Mail's "Send a Christmas card" row shows), the send flow is one step away,
+          right under Mail (TABCARD 2d, founder 2026-11-13). */}
+      {cardsOpen ? <SidebarItem icon={NavIcons.christmasMail} label="Send a Christmas card" active={onCards} onClick={() => go('/app/mailbox/cards')} showLabel={showLabels} testId="navDrawer.item.send-a-christmas-card" /> : null}
       <SidebarItem icon={NavIcons.messages} label="Messages" active={startsWith('/app/chat')} onClick={() => go('/app/chat')} onPrefetch={prefetchMessages} showLabel={showLabels} count={chatUnread} testId="sidebar-messages" />
       {/* Launch cut #5 (Public scheduling): the Scheduling entry is hidden. */}
       {webFeatureFlags.scheduling && launchFeatures.publicScheduling ? <SidebarItem icon={NavIcons.scheduling} label="Scheduling" active={startsWith('/app/scheduling')} onClick={() => go('/app/scheduling')} onPrefetch={prefetchScheduling} showLabel={showLabels} testId="sidebar-scheduling" /> : null}

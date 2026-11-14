@@ -55,6 +55,7 @@
     "ngeohash": "^0.6.3",
     "node-cron": "^4.2.1",
     "nodemailer": "^10.1.4",
+    "pdfjs-dist": "6.4.299",
     "pdfkit": "^0.19.1",
     "pg": "^8.17.2",
     "pg-boss": "^12.15.0",

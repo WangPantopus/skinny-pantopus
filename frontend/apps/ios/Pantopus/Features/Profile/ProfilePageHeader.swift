@@ -335,12 +335,14 @@ struct ProfileExpandableText: View {
 // MARK: - Buttons
 
 /// The profile's header buttons: 48 pt tall (growing with the text size),
-/// filled for the main action and outlined for the other.
+/// filled for the main action and outlined for the other; "Send a card" in the
+/// Christmas cards' wax red.
 @MainActor
 struct ProfileActionButton: View {
     enum Style {
         case primary
         case secondary
+        case christmasCard
     }
 
     let title: String
@@ -369,7 +371,7 @@ struct ProfileActionButton: View {
         .padding(.vertical, 10)
         // 48 pt, or taller as the text grows.
         .frame(maxWidth: .infinity, minHeight: 48)
-        .background(style == .primary ? Theme.Color.primarySolid : Theme.Color.appSurface)
+        .background(background)
         .overlay {
             if style == .secondary {
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
@@ -381,7 +383,19 @@ struct ProfileActionButton: View {
     }
 
     private var foreground: Color {
-        style == .primary ? Theme.Color.appTextInverse : Theme.Color.appText
+        switch style {
+        case .primary: Theme.Color.appTextInverse
+        case .secondary: Theme.Color.appText
+        case .christmasCard: MailPaper.waxText
+        }
+    }
+
+    private var background: Color {
+        switch style {
+        case .primary: Theme.Color.primarySolid
+        case .secondary: Theme.Color.appSurface
+        case .christmasCard: MailPaper.wax
+        }
     }
 }
 

@@ -21,6 +21,9 @@ const FACTS = {
   usable_sqft: { section: 'building', label: 'Living or usable area', format: 'sqft', scope: 'unit' },
   gross_sqft: { section: 'building', label: 'Gross area', format: 'sqft', scope: 'building' },
   ground_floor_sqft: { section: 'building', label: 'Ground floor area', format: 'sqft', scope: 'unit' },
+  // Measured, never a county's: the area of the building's outline seen from above (scripts/property-index/lib/measure.cjs),
+  // which takes in an attached garage, porches and eaves. Only ever held under measured_rows (format.js).
+  outline_sqft: { section: 'building', label: 'Building footprint', format: 'sqft', scope: 'building' },
   second_floor_sqft: { section: 'building', label: 'Second floor area', format: 'sqft', scope: 'unit' },
   stories: { section: 'building', label: 'Stories', format: 'stories', scope: 'building' },
   rooms: { section: 'building', label: 'Total rooms', format: 'count', scope: 'unit' },

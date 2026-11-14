@@ -23,6 +23,11 @@ const { execFileSync } = require('node:child_process');
 const { switchesPath } = require('../../backend/services/propertyRecords/format');
 
 const WARN_DAYS = 30;
+// Sources published by hand on purpose, and why: listed apart rather than as missing from the schedule. Their live counties
+// still answer to the 30- and 14-day checks like any other.
+const BY_HAND = new Map([
+  ['tx-stratmap', "the state's download site refuses GitHub's servers, so it's rebuilt and published on the founder's Mac"],
+]);
 const RED_DAYS = 14;
 // GitHub starts a scheduled run hours after its time, and a run can take most of a day with the ledger after it.
 const GRACE_HOURS = 36;
@@ -240,6 +245,8 @@ function watch(opts) {
   errors.sort((a, b) => a.left - b.left);
   summary.push(`### Live counties within ${WARN_DAYS} days of their date`, '');
   summary.push(...(near.length ? table(['County', 'Source', 'Dated', 'Stops serving', 'Days left', 'Schedule (UTC)'], near.map(({ row }) => row)) : ['None.', '']));
+  const byHand = new Map([...unscheduled].filter(([source]) => BY_HAND.has(source)));
+  for (const source of byHand.keys()) unscheduled.delete(source);
   for (const [source, { counties: count, live: liveCount }] of unscheduled) {
     const line = `${source} serves ${count} ${count === 1 ? 'county' : 'counties'}${liveCount ? ` (${liveCount} live)` : ''} and is on no schedule`;
     if (liveCount) errors.push({ line });
@@ -253,6 +260,7 @@ function watch(opts) {
   // GitHub shows the first ten of each kind on the run's page: the counties nearest their date first, then the missed builds.
   const red = [...errors.map(({ line }) => line), ...missedLines];
   if (unscheduled.size) summary.push('### Stored sources on no schedule', '', ...table(['Source', 'Counties', 'Live'], [...unscheduled].map(([source, value]) => [source, value.counties, value.live])));
+  if (byHand.size) summary.push('### Published by hand', '', ...table(['Source', 'Counties', 'Live', 'Why'], [...byHand].map(([source, value]) => [source, value.counties, value.live, BY_HAND.get(source)])));
   summary.push(`${live.size} live counties of ${counties.length} stored; ${cronOf.size} sources on ${schedule.length} scheduled builds.`, '');
 
   attempts.updated_at = now.toISOString();

@@ -53,6 +53,13 @@ data class MomentRingDto(
     val mine: Boolean = false,
     /** A small look at the newest Moment, for the pin (contract v3.6); null without one and from an older server. */
     val preview: MomentRingPreviewDto? = null,
+    /**
+     * How high its newest Moment was made, in feet above sea level, and whether in flight (contract v3.8,
+     * `MomentHeight.kt`); none unless heights are on for you and its author showed it. A number either way it is
+     * written (4390 or 4390.0).
+     */
+    @Json(name = "altitude_ft") val altitudeFt: Double? = null,
+    val flying: Boolean = false,
 )
 
 /**
@@ -125,6 +132,9 @@ data class MomentDto(
     @Json(name = "taken_at") val takenAt: String? = null,
     /** Posted with no location (contract v3.4): no point or place, connections only. */
     @Json(name = "no_location") val noLocation: Boolean = false,
+    /** How high it was made, in feet above sea level, and whether in flight (contract v3.8); `height` is the picture's. */
+    @Json(name = "altitude_ft") val altitudeFt: Double? = null,
+    val flying: Boolean = false,
 )
 
 @JsonClass(generateAdapter = true)
@@ -132,7 +142,28 @@ data class MomentsMapResponse(
     val rings: List<MomentRingDto> = emptyList(),
     /** Connections' (and your own) Moments with no location, one ring per person, whatever the area (contract v3.4). */
     val unplaced: List<MomentRingDto> = emptyList(),
+    /** Heights are on for you (contract v3.9): the map offers "Elevation". False from a server before it. */
+    @Json(name = "heights_on") val heightsOn: Boolean = false,
+    /**
+     * Moments with an elevation float by day (contract v3.10, `moment_float`), and where the sun is; false and null from
+     * a server before it.
+     */
+    @Json(name = "float_on") val floatOn: Boolean = false,
+    val sun: MomentSunDto? = null,
 )
+
+/**
+ * Where the sun is over the middle of the map right now (contract v3.10): sent only while Moments float for you
+ * (`float_on`). Degrees clockwise from true north, and above the horizon (negative after sunset).
+ */
+@JsonClass(generateAdapter = true)
+data class MomentSunDto(
+    @Json(name = "azimuth_deg") val azimuthDeg: Double? = null,
+    @Json(name = "elevation_deg") val elevationDeg: Double? = null,
+) {
+    /** The sun is above the horizon and the answer says where: pins can float. */
+    val isUp: Boolean get() = azimuthDeg != null && (elevationDeg ?: 0.0) > 0.0
+}
 
 @JsonClass(generateAdapter = true)
 data class MomentsMineResponse(
@@ -176,7 +207,7 @@ data class MomentPlacePreviewDto(
     @Json(name = "pick_within_m") val pickWithinM: Int? = null,
     /** Whether you have a connection (contract v3.4): a Moment with no location needs one. Null from an older server. */
     @Json(name = "has_connections") val hasConnections: Boolean? = null,
-    /** The sheet may offer "Show height" here (contract v3.8): heights are on for you and it isn't your home. */
+    /** The sheet may offer "Show elevation" here (contract v3.8): heights are on for you and it isn't your home. */
     @Json(name = "can_show_height") val canShowHeight: Boolean = false,
 )
 
@@ -223,12 +254,12 @@ data class CreateMomentBody(
     @Json(name = "taken_at") val takenAt: String? = null,
     /** A venue picked in the place picker around the pin (its `osm:` id, contract v3.3): the Moment pins there. */
     @Json(name = "venue_id") val venueId: String? = null,
-    /** "Show height" was on (contract v3.8); left out otherwise. */
+    /** "Show elevation" was on (contract v3.8); left out otherwise. */
     val altitude: MomentAltitudeBody? = null,
 )
 
 /**
- * "Show height" (contract v3.8): how high above sea level the fix, or the album photo, says the Moment was made, with
+ * "Show elevation" (contract v3.8): how high above sea level the fix, or the album photo, says the Moment was made, with
  * how far off that may be and the phone's speed (which tells a flight from a mountain) when the phone knows them.
  */
 @JsonClass(generateAdapter = true)

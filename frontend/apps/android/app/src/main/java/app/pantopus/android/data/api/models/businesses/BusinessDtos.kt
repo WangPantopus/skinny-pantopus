@@ -40,8 +40,12 @@ data class BusinessProfileDto(
     @Json(name = "logo_file_id") val logoFileId: String? = null,
     @Json(name = "banner_file_id") val bannerFileId: String? = null,
     val description: String? = null,
-    // bi0_unverified … bi4_authority. Anything above bi0_unverified earns
-    // the violet verified mark; bi0_unverified reads as pending.
+    // unverified / self_attested / document_verified / government_verified:
+    // what the server checks. The verified mark follows it
+    // (MyBusinessesViewModel.isVerified).
+    @Json(name = "verification_status") val verificationStatus: String? = null,
+    // bi0_unverified … bi4_authority. Read only when a server doesn't send
+    // verification_status.
     @Json(name = "identity_verification_tier") val identityVerificationTier: String? = null,
 )
 
@@ -200,9 +204,11 @@ data class BusinessProfileDetailDto(
     @Json(name = "founding_badge") val foundingBadge: Boolean? = null,
     @Json(name = "is_published") val isPublished: Boolean? = null,
     @Json(name = "published_at") val publishedAt: String? = null,
+    // The verified mark follows this, as on My businesses and the owner header
+    // (MyBusinessesViewModel.isVerified).
     @Json(name = "verification_status") val verificationStatus: String? = null,
-    // bi0_unverified … bi4_authority: the verified mark and claims follow this,
-    // as on My businesses and the owner header.
+    // bi0_unverified … bi4_authority: read only when a server doesn't send
+    // verification_status.
     @Json(name = "identity_verification_tier") val identityVerificationTier: String? = null,
     @Json(name = "primary_location") val primaryLocation: BusinessLocationDto? = null,
     /**
@@ -355,7 +361,8 @@ data class BusinessOnboardingDto(
 data class BusinessDashboardProfileDto(
     @Json(name = "is_published") val isPublished: Boolean? = null,
     @Json(name = "updated_at") val updatedAt: String? = null,
-    /** Same field the My businesses card reads for its verified mark. */
+    /** Same fields the My businesses card reads for its verified mark. */
+    @Json(name = "verification_status") val verificationStatus: String? = null,
     @Json(name = "identity_verification_tier") val identityVerificationTier: String? = null,
 )
 

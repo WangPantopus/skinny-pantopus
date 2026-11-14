@@ -63,6 +63,17 @@ final class PlanComposerModel {
     var dogsWelcome = false
     var subject = ""
     var studyStyle = "quiet"
+    /// Plans with businesses (board B1): the businesses this person may host as. Empty for nearly everyone.
+    var hostAsOptions: [PlanHostAsBusinessDTO] = []
+    /// The business hosting the plan, or nil to host as yourself.
+    var hostAs: PlanHostAsBusinessDTO? {
+        didSet { if oldValue?.id != hostAs?.id { applyBusinessDefaults() } }
+    }
+
+    /// A business's plan (board B2): what guests see it called (a label key), where, and who gets in.
+    var businessLabel: String?
+    var businessLocationId: String?
+    var letsEveryoneIn = true
 
     private(set) var isPosting = false
     var postError: String?
@@ -98,7 +109,8 @@ final class PlanComposerModel {
         async let homeRead: Void = loadHome()
         async let gamesRead: Void = loadGames()
         async let standingRead: Void = loadStanding()
-        _ = await (homeRead, gamesRead, standingRead)
+        async let hostAsRead: Void = loadHostAs()
+        _ = await (homeRead, gamesRead, standingRead, hostAsRead)
     }
 
     private func loadStanding() async {
@@ -149,6 +161,7 @@ final class PlanComposerModel {
             dropAutoTitle()
             startTitle()
         }
+        if isBusiness { businessKindChosen() }
     }
 
     func pick(_ newGame: PlanGameOptionDTO?) {
@@ -197,6 +210,7 @@ final class PlanComposerModel {
     }
 
     var problem: String? {
+        if isBusiness { return businessProblem }
         if kind == .playdate, kidsAges.isEmpty { return "Pick the kids' ages." }
         if kind == .studyGroup, trimmedSubject.isEmpty { return "Add what you're studying." }
         if effectiveTitle.trimmingCharacters(in: .whitespaces).isEmpty { return "Give your plan a title." }
@@ -210,15 +224,6 @@ final class PlanComposerModel {
         return nil
     }
 
-    var effectiveTitle: String {
-        if kind == .pickupGame { return "\(PlanComposerOptions.sportLabel(sport)), need \(spots)" }
-        return title
-    }
-
-    var effectiveStart: Date {
-        kind == .pickupGame && startsNow ? Date() : start
-    }
-
     func loadPreviewArea() async {
         guard let point = placePoint else { return }
         if let reply: GeoReverseResponse = try? await api.request(GeoEndpoints.reverse(
@@ -227,13 +232,6 @@ final class PlanComposerModel {
         )),
             let city = reply.normalized.city, !city.isEmpty {
             previewArea = "Near \(city)"
-        }
-    }
-
-    var placePoint: (latitude: Double, longitude: Double)? {
-        switch whereKind {
-        case .publicPlace: place.map { ($0.latitude, $0.longitude) }
-        case .home: home.map { ($0.latitude, $0.longitude) }
         }
     }
 
@@ -257,6 +255,7 @@ final class PlanComposerModel {
     }
 
     private func makeBody() async -> CreatePlanBody? {
+        if isBusiness { return businessBody() }
         let placeBody: PlanPlaceBody
         switch whereKind {
         case .publicPlace:
@@ -307,6 +306,7 @@ final class PlanComposerModel {
     }
 
     var autoRules: [PlanAutoRule] {
+        if isBusiness { return letsEveryoneIn ? [.open] : [] }
         if kind == .playdate { return [] }
         var rules: [PlanAutoRule] = []
         switch approval {
@@ -354,6 +354,23 @@ final class PlanComposerModel {
 }
 
 extension PlanComposerModel {
+    var effectiveTitle: String {
+        if kind == .pickupGame, !isBusiness { return "\(PlanComposerOptions.sportLabel(sport)), need \(spots)" }
+        return title
+    }
+
+    var effectiveStart: Date {
+        kind == .pickupGame && startsNow && !isBusiness ? Date() : start
+    }
+
+    var placePoint: (latitude: Double, longitude: Double)? {
+        if isBusiness { return businessLocation.map { ($0.latitude, $0.longitude) } }
+        switch whereKind {
+        case .publicPlace: return place.map { ($0.latitude, $0.longitude) }
+        case .home: return home.map { ($0.latitude, $0.longitude) }
+        }
+    }
+
     var details: PlanDetailsDTO {
         var details = PlanDetailsDTO()
         switch kind {

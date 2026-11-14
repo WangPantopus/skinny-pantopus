@@ -250,10 +250,21 @@ private val PinShadow = PantopusElevation(Color.Black, 0.30f, 3.dp, 0.dp, 2.dp)
 /** Where a map pin's point is, from its top: the overlay places that spot on the Moment's location. */
 val MOMENT_PIN_ANCHOR_FROM_TOP: Dp = 71.dp
 
+/** A map pin's width, which is also its ring's height (the tail is below): a height tag sits level with the ring. */
+val MOMENT_PIN_WIDTH: Dp = 64.dp
+
+/** A floating pin's outline (Moment elevation part D): the round head alone, 64 × 64. */
+private val DiscShape =
+    GenericShape { size, _ ->
+        val unit = size.width / 64f
+        addOval(androidx.compose.ui.geometry.Rect(0.5f * unit, 0.5f * unit, 63.5f * unit, 63.5f * unit))
+    }
+
 /**
  * A ring on the map (board M1): a 64 × 72 pin in the surface color with the face inside the ring and the check of a
  * verified resident at its lower right. [seen] holds each Moment's watched state, oldest first. With a [preview] the
  * ring holds a small look at the newest Moment and the face is a badge at its lower left (`MomentPinPreview.kt`).
+ * Without its [tail] it is the 64 × 64 disc that floats over its spot by day (`MomentsFloat.kt`).
  */
 @Composable
 fun MomentMapPin(
@@ -261,19 +272,22 @@ fun MomentMapPin(
     seen: List<Boolean>,
     modifier: Modifier = Modifier,
     preview: MomentRingPreviewDto? = null,
+    tail: Boolean = true,
 ) {
-    Box(modifier = modifier.size(width = 64.dp, height = 72.dp)) {
-        Canvas(modifier = Modifier.fillMaxSize().pantopusShadow(PinShadow, PinShape)) {
+    Box(modifier = modifier.size(width = 64.dp, height = if (tail) 72.dp else 64.dp)) {
+        Canvas(modifier = Modifier.fillMaxSize().pantopusShadow(PinShadow, if (tail) PinShape else DiscShape)) {
             val unit = size.width / 64f
             drawCircle(color = Color.White, radius = 31.5f * unit, center = Offset(32f * unit, 32f * unit))
-            val tail =
-                Path().apply {
-                    moveTo(25f * unit, 58f * unit)
-                    lineTo(32f * unit, 71f * unit)
-                    lineTo(39f * unit, 58f * unit)
-                    close()
-                }
-            drawPath(tail, Color.White)
+            if (tail) {
+                val point =
+                    Path().apply {
+                        moveTo(25f * unit, 58f * unit)
+                        lineTo(32f * unit, 71f * unit)
+                        lineTo(39f * unit, 58f * unit)
+                        close()
+                    }
+                drawPath(point, Color.White)
+            }
             drawMomentRing(seen, Offset(32f * unit, 32f * unit), 29.25f * unit, 3.5f * unit, 8f * unit)
         }
         MomentPinInside(author = author, preview = preview)

@@ -5,6 +5,8 @@
 // is the assessed value, capped by law, so it's never a market value, and it's the Appraiser's working figure for next year's roll. The
 // same roll, as the Appraiser files it with the state (fl-roll.cjs), says what the point view doesn't: this year's certified just value
 // (the county's own market value) with the assessed value beside it, effective year built, buildings and tax district.
+// Since November 12, 2026 the point view gives the street address without its unit (the unit has its own column) and no legal
+// description. The Appraiser's Parcels View, on the same site under the same notice, still gives each folio's legal description.
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
@@ -18,7 +20,8 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '12086';
 const COUNTY = 'Miami-Dade County';
 const LAYER = 'https://services.arcgis.com/8Pc9XBTAsYuxx9Ny/arcgis/rest/services/PaGISView_gdb/FeatureServer/0';
-const COLUMNS = ['FOLIO', 'TRUE_SITE_ADDR', 'TRUE_SITE_UNIT', 'TRUE_SITE_CITY', 'TRUE_SITE_ZIP_CODE', 'CONDO_FLAG', 'DOR_CODE_CUR', 'DOR_DESC', 'SUBDIVISION', 'BEDROOM_COUNT', 'BATHROOM_COUNT', 'HALF_BATHROOM_COUNT', 'FLOOR_COUNT', 'UNIT_COUNT', 'BUILDING_ACTUAL_AREA', 'BUILDING_HEATED_AREA', 'LOT_SIZE', 'YEAR_BUILT', 'ASSESSMENT_YEAR_CUR', 'ASSESSED_VAL_CUR', 'DOS_1', 'PRICE_1', 'LEGAL'];
+const PARCELS = 'https://services.arcgis.com/8Pc9XBTAsYuxx9Ny/arcgis/rest/services/ParcelsView_gdb/FeatureServer/0';
+const COLUMNS = ['FOLIO', 'TRUE_SITE_ADDR_NO_UNIT', 'TRUE_SITE_UNIT', 'TRUE_SITE_CITY', 'TRUE_SITE_ZIP_CODE', 'CONDO_FLAG', 'DOR_CODE_CUR', 'DOR_DESC', 'SUBDIVISION', 'BEDROOM_COUNT', 'BATHROOM_COUNT', 'HALF_BATHROOM_COUNT', 'FLOOR_COUNT', 'UNIT_COUNT', 'BUILDING_ACTUAL_AREA', 'BUILDING_HEATED_AREA', 'LOT_SIZE', 'YEAR_BUILT', 'ASSESSMENT_YEAR_CUR', 'ASSESSED_VAL_CUR', 'DOS_1', 'PRICE_1'];
 
 function useOf(row, unit) {
   const code = String(row.DOR_CODE_CUR ?? '').trim();
@@ -39,9 +42,11 @@ const inRange = (value, most) => {
   return count && count <= most ? count : null;
 };
 
-function fromRow(row) {
-  const line = word(row.TRUE_SITE_ADDR);
-  const address = line ? parse(line, realUnit(word(row.TRUE_SITE_UNIT))) : null;
+function fromRow(row, legal) {
+  // The street line the point view gave before November 12 ended with the unit; a record keeps that line as its address on record.
+  const [street, unitWord] = [word(row.TRUE_SITE_ADDR_NO_UNIT), realUnit(word(row.TRUE_SITE_UNIT))];
+  const line = street && unitWord ? `${street} ${unitWord}` : street;
+  const address = line ? parse(line, unitWord) : null;
   const folio = word(row.FOLIO);
   if (!address || !folio) return null;
   const [kind, homeType] = useOf(row, address.unit);
@@ -51,7 +56,7 @@ function fromRow(row) {
   put(facts, 'land_use', word(row.DOR_DESC));
   put(facts, 'county_use_code', word(row.DOR_CODE_CUR));
   put(facts, 'subdivision', word(row.SUBDIVISION));
-  put(facts, 'legal_description', word(row.LEGAL)?.slice(0, 300));
+  put(facts, 'legal_description', legal.get(folio)?.slice(0, 300));
   if (home || kind === 'building') {
     put(facts, 'year_built', year(row.YEAR_BUILT));
     put(facts, 'stories', inRange(row.FLOOR_COUNT, kind === 'building' ? 120 : 6));
@@ -80,11 +85,17 @@ async function* build({ work }) {
   const info = await getJson(`${LAYER}?f=json`, 'The layer\'s description');
   const asOf = isoDate(info.editingInfo?.dataLastEditDate || info.editingInfo?.lastEditDate);
   if (!asOf) throw new Error('The layer no longer says when it changed');
+  // A folio's legal description, from the Parcels View.
+  const legal = new Map();
+  for await (const row of cached(path.join(work, 'fl-miami-dade', 'legal.jsonl.gz'), () => layerRows(PARCELS, ['FOLIO', 'LEGAL']))) {
+    const [folio, text] = [word(row.FOLIO), word(row.LEGAL)];
+    if (folio && text && !legal.has(folio)) legal.set(folio, text);
+  }
   const records = [];
   const seen = new Set();
   let noAddress = 0;
   for await (const row of cached(path.join(work, 'fl-miami-dade', 'points.jsonl.gz'), () => layerRows(LAYER, COLUMNS))) {
-    const record = fromRow(row);
+    const record = fromRow(row, legal);
     if (!record) noAddress += 1;
     else if (!seen.has(record.id)) {
       seen.add(record.id);
@@ -112,17 +123,22 @@ async function* build({ work }) {
       record.facts.value_source = valueSource;
     }
   }
-  log(`${COUNTY}: ${records.length} folios, ${noAddress} without a street number, ${joined} on the state's roll`);
+  log(`${COUNTY}: ${records.length} folios, ${noAddress} without a street number, ${joined} on the state's roll, ${records.filter((record) => record.facts.legal_description).length} with a legal description from the Parcels View`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
     fips: FIPS, state: 'FL', name: COUNTY, publisher: 'Miami-Dade County Property Appraiser', dataset: 'Property Point View, open data', method: 'county', source: 'fl-miami-dade', as_of: asOf, stale_after_days: 60, records,
   };
 }
 
+// The parcel layer's own shapes, by the parcel number each record carries (the same columns): what lib/measure.cjs
+// measures a lot's area and counts its buildings on (measured rows, held off until the county's measured_rows switch is on).
+const parcelShapes = { url: PARCELS, fields: ['FOLIO'], key: (row) => word(row.FOLIO) };
+
 module.exports = {
+  parcelShapes,
   build,
   dictionary: {
-    layer: LAYER,
-    facts: { year_built: 'YEAR_BUILT', living_sqft: 'BUILDING_HEATED_AREA', gross_sqft: 'BUILDING_ACTUAL_AREA', bedrooms: 'BEDROOM_COUNT', full_baths: 'BATHROOM_COUNT', half_baths: 'HALF_BATHROOM_COUNT', stories: 'FLOOR_COUNT', units: 'UNIT_COUNT', lot_sqft: 'LOT_SIZE', assessed_value: 'ASSESSED_VAL_CUR', value_year: 'ASSESSMENT_YEAR_CUR', sale_price: 'PRICE_1', sale_date: 'DOS_1' },
+    layer: [LAYER, PARCELS],
+    facts: { legal_description: 'LEGAL', year_built: 'YEAR_BUILT', living_sqft: 'BUILDING_HEATED_AREA', gross_sqft: 'BUILDING_ACTUAL_AREA', bedrooms: 'BEDROOM_COUNT', full_baths: 'BATHROOM_COUNT', half_baths: 'HALF_BATHROOM_COUNT', stories: 'FLOOR_COUNT', units: 'UNIT_COUNT', lot_sqft: 'LOT_SIZE', assessed_value: 'ASSESSED_VAL_CUR', value_year: 'ASSESSMENT_YEAR_CUR', sale_price: 'PRICE_1', sale_date: 'DOS_1' },
   },
 };
