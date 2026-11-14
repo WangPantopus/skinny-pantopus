@@ -109,6 +109,7 @@ function runShowLink(args, ctx) {
 // builds have neither, and hear where in the app the person does it instead.
 function appGuide({
   plans = true, playdates = false, sports = false, suggestions = false, actionCards = true, links = true, pickupSchedule = true, remembers = false, standingRules = false,
+  identity = true,
 } = {}) {
   const marketplace = isLaunchFeatureEnabled('marketplace');
   const openGigs = isLaunchFeatureEnabled('open_gigs');
@@ -182,7 +183,8 @@ ${sports ? '- Your teams: Settings → Notifications → Games and teams opens t
 - The ⋯ menu in Mail has Mail tasks, Home records, Stamps and Hold my mail, which keeps their own mail while they're away and brings it as one bundle the morning they're back.${letters ? `
 - Writing a letter: the pencil button in Mail (who it's to, the address, the letter, then seal and send).` : ''}${cards ? `
 - Christmas cards: "Send a Christmas card" at the top of Me and in the side menu. They pick who it's for and a card, write on the back, choose when it arrives (the next morning, sealed until Christmas, or Christmas morning), look it over, then seal and send. A card can be taken back until the 7 AM pickup, and the season closes December 31.` : ''}
-- You can look through their Mail and read a piece (find_mail, get_mail_item${links ? '; mail_item opens one' : ''}). You can't send, pay, file or delete mail: they do that on the piece.`);
+- On the phones, Mail opens after Face ID or the passcode; so does the Wallet.
+- ${identity ? `You can look through their Mail and read a piece (find_mail, get_mail_item${links ? '; mail_item opens one' : ''}). ` : ''}You can't send, pay, file or delete mail: they do that on the piece.`);
   }
 
   const off = [];

@@ -17,7 +17,7 @@ const { draftPickupSchedule } = require('./pickupDraft');
 const { readToolDefinitions, runReadTool, PLACE_POST_TYPES } = require('./readTools');
 const { nearbyReadToolDefinitions, runNearbyReadTool } = require('./readToolsNearby');
 const { verificationReadToolDefinitions, runVerificationReadTool } = require('./readToolsVerification');
-const { mailReadToolDefinitions, runMailReadTool } = require('./readToolsMail');
+const { mailReadToolDefinitions, runMailReadTool, MAIL_TOOL_NAMES } = require('./readToolsMail');
 const { actionCardDefinitions, runCardTool } = require('./actionCards');
 const { showLinkDefinition, runShowLink } = require('./appGuide');
 const { memoryToolDefinitions, runMemoryTool } = require('./memory');
@@ -309,6 +309,10 @@ function closingForDrafts(calls) {
   return notes.join(' ') + saveFirst;
 }
 
+// Mail (and the Wallet) open on the phones only after Face ID or the passcode.
+const PRIVATE_TOOL_NAMES = new Set([...MAIL_TOOL_NAMES]);
+const IDENTITY_NEEDED = "That opens in the app only after it checks it's them (Face ID or the passcode), and it hasn't for this conversation. Say so in a sentence and point them to that screen; don't guess what is there.";
+
 const TOOL_TIMEOUT_MS = 5000;
 // Reads that compose several providers, and the plan card's place search, need longer.
 const TOOL_TIMEOUTS_MS = {
@@ -407,6 +411,9 @@ async function _executeToolImpl(name, args, ctx) {
   if (nearby) return nearby;
   const verification = await runVerificationReadTool(name, args, ctx);
   if (verification) return verification;
+  // What the phones keep behind their identity check is read only once the app says it passed (agentService
+  // leaves these tools out otherwise; this is the same rule for a call that names one anyway).
+  if (PRIVATE_TOOL_NAMES.has(name) && !ctx.identity) return { error: IDENTITY_NEEDED };
   const mail = await runMailReadTool(name, args, ctx);
   if (mail) return mail;
   const drafted = await runCardTool(name, args, ctx);

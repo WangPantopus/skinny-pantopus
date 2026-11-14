@@ -65,10 +65,13 @@ const PLAYDATE_TOOLS = new Map([...playdateReadToolDefinitions, ...playdateCardD
 // Cards go only to apps that say they can show them (`cards`): the pickup days,
 // action cards ("action") and link buttons ("link"). Plans tools need the
 // person's `plans` flag, and playdates among their kinds `plans_playdates`.
-// The read tools answer in words, so every app gets them.
+// The read tools answer in words, so every app gets them. The exception is what the phones keep behind
+// their identity check (Face ID or the passcode: Mail, the Wallet and Payments, since November 6): those
+// lookups go only to an app that says the check has passed (`cards` lists "identity"), so asking the
+// assistant is never a way around it. The web's Mail and Wallet open with the sign-in, and it says so.
 function launchScopedChatTools({
   pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false, checksBack = false,
-  standingRules = false, sports = false,
+  standingRules = false, sports = false, identity = false,
 } = {}) {
   const giftFunds = isLaunchFeatureEnabled('gift_funds');
   return toolDefinitions
@@ -91,7 +94,9 @@ function launchScopedChatTools({
       if (tool.name === scope.OUT_OF_SCOPE) return scope.pantopusOnly();
       if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
       if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
-      if (MAIL_TOOL_NAMES.has(tool.name) || tool.name === 'summarize_mail_item') return isLaunchFeatureEnabled('mailbox');
+      if (MAIL_TOOL_NAMES.has(tool.name)) return isLaunchFeatureEnabled('mailbox') && identity;
+      // The summary card also serves a paper letter they photograph, so it needs no identity check.
+      if (tool.name === 'summarize_mail_item') return isLaunchFeatureEnabled('mailbox');
       return true;
     })
     .map((tool) => (tool.name === 'draft_support_train_from_story' && !giftFunds ? withoutGiftFunds(tool) : tool))
@@ -120,7 +125,7 @@ function withoutGiftFunds(tool) {
 
 function launchScopedChatInstructions({
   pickupSchedule = false, actionCards = false, links = false, plans = false, playdates = false, remembers = false, checksBack = false,
-  standingRules = false, sports = false,
+  standingRules = false, sports = false, identity = false,
 } = {}) {
   return prompts.chatAgentSystem({
     openGigs: isLaunchFeatureEnabled('open_gigs'),
@@ -135,7 +140,9 @@ function launchScopedChatInstructions({
     checksBack: checksBack && actionCards,
     standingRules: standingRules && actionCards,
     pantopusOnly: scope.pantopusOnly(),
+    identity,
     guide: appGuide({
+      identity,
       plans, playdates, sports: plans && sports, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards, standingRules: standingRules && actionCards,
     }),
   });
@@ -508,6 +515,8 @@ async function streamChat({
     memory: shown.has('memory'),
     // Apps with the rules list (phase 3, standing rules) can open it from a link.
     rules: shown.has('rules'),
+    // The app's identity check for Mail and the Wallet has passed (or, on the web, the sign-in is that check).
+    identity: shown.has('identity'),
   };
   if (images?.length && photos.length === 0) {
     // Answering without the photo or PDF would only confuse: say it couldn't be opened.
@@ -559,6 +568,7 @@ async function streamChat({
     remembers: shown.has('memory'),
     checksBack: shown.has('follow_up'),
     standingRules: shown.has('rules'),
+    identity: shown.has('identity'),
   };
   const tools = launchScopedChatTools(capabilities);
   const toolNames = tools.map((tool) => tool.name);

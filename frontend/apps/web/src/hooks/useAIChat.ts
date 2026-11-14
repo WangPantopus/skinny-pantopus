@@ -6,7 +6,10 @@ import type { AIChatMessage, AIChatDraft } from '@pantopus/types';
 
 // The draft cards this app shows beyond the original ones (AIDraftCard); the
 // server offers the matching tools only to apps that list them.
-const AI_CARDS = ['pickup_schedule'];
+// "identity": the phones show Mail and the Wallet only after Face ID or the
+// passcode, and tell the assistant when that check has passed. On the web those
+// pages open with the sign-in alone, so the sign-in is the check.
+const AI_CARDS = ['pickup_schedule', 'identity'];
 
 /**
  * Hook for the AI Chat Agent with SSE streaming.
