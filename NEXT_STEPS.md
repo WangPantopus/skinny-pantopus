@@ -348,6 +348,14 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] A list still sends one note to everyone, so for three or more people the helper writes a note that names no one. A different note per person is not built.
 - [ ] Not this season: AI-made card pictures. "Draw our photo in this card's style" would need a picture vendor and your decision on sending family photos to it.
 
+**Made by the founder on November 11 (Plans with businesses).** You asked for an evaluation of Plans and whether Pantopus can work with businesses on a model that makes money for both. To the proposal you said yes, asked what justifies a 15% fee, and then said: don't build it, draw the design and write the documents, and make sure people can still plan for themselves. Progress is in the Plans with businesses section below.
+
+- [x] Design it and write it down, no build: a verified business hosts a plan at its own place, free or with a price on each spot; guests pay in the app; Pantopus keeps a fee from the business's payout. The [proposal, design, build contract and build plan](docs/product/plans-with-businesses/README.md) and the [22 boards](https://claude.ai/artifact/W7CYVbCejsR9oP5BUdLTMv) are done.
+- [x] A neighbor's own plan stays exactly as it is: the same composer, kinds, ask and accept, private place and chat, free, with no card. The design holds every board to this, and the build plan checks it on every PR.
+- [ ] Confirm the six decisions the documents take as accepted (you said yes to the proposal; none was confirmed one by one): paid spots lead and venues host free; kids' activities and sports clinics first, in Camas, Washougal and Vancouver; 15% on a guest Pantopus brings (10% for the first 50 founding businesses) and 5% plus the card fee on the business's own guest (founding: the card fee only, for a year); verified businesses only; a full refund until 24 hours before, and whenever the business cancels; by hand first, then the build in steps.
+- [ ] Confirm the other five calls the contract makes (C2, C3, C4, C7 and C8 in its section 2). The one that matters most: the fee follows how the guest arrived every time, not only on a first visit.
+- [x] November 12: you said go for the first round of the build ("Yes, start"). In it: the documents brought up to date, the two shared server pieces Plans needs (who may act for a business, and one key for a place), Plans step 1 (a plan remembers its venue) and step 2 on the server and the web share page (a verified business posts a free plan), then the prompts for the iPhone and Android sessions. All of it is behind `plans_business`, off. For these steps you took four of the contract's calls as written: only document-verified or government-verified businesses host (C1); children's plans get their own switch, off (C5); 1 to 30 spots (C6); old app builds never see a business's plan (C9). You also allowed this build's sessions to use subagents on Opus 5.5 at Extra reasoning. Not approved: paid spots, and the money decisions that go with them.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -985,6 +993,44 @@ Tells a verified homeowner whether their home costs more than it should, from re
 
 - [ ] A Today card: set aside on November 10. The apps accept only the Today kinds they know, so it needs iPhone and Android code and store builds; the yearly notice already tells the owner.
 - [ ] Selling the packet inside the phone apps (it is on the web only).
+
+## Plans with businesses (added November 11)
+
+Designed; the first round of the build started on November 12 (section 0). A verified business hosts a plan in Plans at its own place, with a price on each spot; a neighbor's plan is unchanged. Everything is in [docs/product/plans-with-businesses](docs/product/plans-with-businesses/README.md); the boards are on the [Plans with businesses canvas](https://claude.ai/artifact/W7CYVbCejsR9oP5BUdLTMv) (private).
+
+**Written.**
+
+- [x] The proposal: the model, why a business would pay 15%, what Pantopus has that others don't, the ten ways a guest arrives, what it is worth, the risks.
+- [x] The design: 22 boards in light and dark (guest, the doors, the business, the parts), with the rules each screen keeps.
+- [x] The build contract: added columns only and no new table through step 4; the routes; the two rates and how each guest's way in is checked; refunds; the payout 48 hours after the plan; the notices; "done when".
+- [x] The build plan: seven steps, the switches `plans_business` and `plans_business_kids` (both off), the checks, the traps.
+
+**Yours to do.**
+
+- [ ] Confirm the decisions that are still open (section 0): the six from the proposal, and the five money calls.
+- [ ] Step 0, by hand, no code: three businesses (a kids' activity, a sports clinic, a café or bar) each host a weekly plan from the owner's own account for four weeks; a paid one collects by business invoice. Count plans, asks, who came and who came back.
+- [x] Say go for the first round (November 12): steps 1 and 2 on the server, a free plan only.
+- [ ] Say go for each later step. Each server step has a migration, and merging it applies it to production.
+- [ ] Before paid spots: one real charge, refund, delayed payout and bank payout on the live payment account, and an accountant's answer on sales tax for classes in Washington.
+- [ ] Before plans for children: a lawyer's read on businesses hosting children's sessions.
+- [ ] Before bars are invited: a lawyer's read of the Washington rule on bar promotions (WAC 314-52-110).
+- [ ] Before real people: the privacy policy, the data inventory and the store privacy labels.
+
+**Built, behind `plans_business`, off (November 12).**
+
+- [x] Step 1, a plan remembers its venue: [#3976](https://github.com/WangPantopus/skinny-pantopus/pull/3976), merged. Nothing is saved until the apps send the place picker's id, which is one line in each app, in the step 2 app prompts.
+- [x] Step 2 on the server and the web share page, a verified business hosts a free plan: [#3983](https://github.com/WangPantopus/skinny-pantopus/pull/3983), merged. Checked on a private local stack: 115 checks of the business flow, a neighbor's whole flow compared with untouched master (identical with the switch off), invitations, a plan for kids with its own switch on there, the Plans job, and the share page in a browser. Two independent reviews; their fixes are in.
+- [ ] Step 2 on iPhone and Android: not started. The prompts are in [05-app-session-prompts.md](docs/product/plans-with-businesses/05-app-session-prompts.md); you start those sessions.
+
+**Yours to check from the build** (the contract's "Calls the build made", B1 to B10). The ones you would notice:
+
+- [ ] Admins and editors post and run a business's plans by default; staff and viewers don't. There is no "manager" role.
+- [ ] The business's team is not in a plan's chat yet. Guests chat among themselves and see the business's own lines. The team joins when Plans has its own rule for it, planned with the roster in step 3.
+- [ ] The team sees a guest's first name only.
+- [ ] Only a storefront, an office or a warehouse can host a plan. A business whose location is of unknown type has to fix the location first.
+- [ ] On the web share page, the board's last line, "A neighbor's plan still shows only its area here.", is shown as drawn. Say if that was a note to you and should come off.
+
+**Not built.** The phone screens, paid spots and everything about money, the doors, repeats, and the web desk. No business has been asked whether it wants this.
 
 ## Background backlog
 
