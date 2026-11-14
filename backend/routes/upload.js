@@ -10,6 +10,7 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('node:fs');
 const rateLimit = require('express-rate-limit');
+const { clientIpKey } = require('../utils/clientIpKey');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const registerHomeTaskMediaRoutes = require('./homeTaskMediaRoutes');
 const { S3_BUCKET } = require('../config/aws');
@@ -36,10 +37,11 @@ function publishGigMediaChange(req, gigId) {
 }
 
 
-// Rate limit: 30 uploads per 15 minutes per IP
+// Rate limit: 30 uploads per 15 minutes per network (IP, IPv6 by its /64)
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
+  keyGenerator: clientIpKey,
   message: 'Too many upload requests. Please try again later.',
 });
 
