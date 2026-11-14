@@ -1,8 +1,8 @@
 'use client';
 
-import { Check, ChevronDown, MessageSquare, UserPlus } from 'lucide-react';
+import { Check, ChevronDown, Mail, MessageSquare, UserPlus } from 'lucide-react';
 import ProfileMenu from './ProfileMenu';
-import { buttonRow, primaryButton, secondaryButton } from './profileButtons';
+import { buttonRow, cardButton, primaryButton, secondaryButton } from './profileButtons';
 
 export type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
 
@@ -23,6 +23,8 @@ interface RelationshipActionsProps {
   onDecline: () => void;
   onDisconnect: () => void;
   onMessage: () => void;
+  /** While Christmas cards are open and the send flow could pick them: "Send a card" beside Message. */
+  onSendCard?: () => void;
 }
 
 const iconClass = 'w-[1.1875rem] h-[1.1875rem] shrink-0';
@@ -30,7 +32,8 @@ const iconClass = 'w-[1.1875rem] h-[1.1875rem] shrink-0';
 /**
  * Connect and Message, by where the two of you stand: none → Connect + Message; request sent → Requested (withdraw)
  * + Message; request received → "<name> wants to connect" with Accept / Not now, above Message; connected → Message +
- * Connected ▾ (Disconnect). Someone you blocked gets no buttons (the ⋯ menu unblocks).
+ * Connected ▾ (Disconnect). Someone you blocked gets no buttons (the ⋯ menu unblocks). While Christmas cards are open,
+ * "Send a card" follows Message.
  */
 export default function RelationshipActions({
   name,
@@ -45,6 +48,7 @@ export default function RelationshipActions({
   onDecline,
   onDisconnect,
   onMessage,
+  onSendCard,
 }: RelationshipActionsProps) {
   if (relationship === 'blocked') return null;
   const disabled = inert || busy;
@@ -55,6 +59,13 @@ export default function RelationshipActions({
       Message
     </button>
   );
+  // Christmas cards (TABCARD 2c): opens the send flow with this person already chosen. The row wraps a third button.
+  const sendCard = onSendCard ? (
+    <button type="button" onClick={onSendCard} disabled={inert} data-testid="profile.sendCard" className={cardButton}>
+      <Mail aria-hidden="true" className={iconClass} strokeWidth={2.25} />
+      Send a card
+    </button>
+  ) : null;
 
   if (relationshipKnown && relationship === 'pending_received') {
     return (
@@ -73,7 +84,7 @@ export default function RelationshipActions({
             </button>
           </div>
         </section>
-        <div className="flex [&>button]:flex-1">{message(false)}</div>
+        <div className={sendCard ? buttonRow : 'flex [&>button]:flex-1'}>{message(false)}{sendCard}</div>
       </div>
     );
   }
@@ -133,12 +144,14 @@ export default function RelationshipActions({
       {connected ? (
         <>
           {message(true)}
+          {sendCard}
           {relationshipButton}
         </>
       ) : (
         <>
           {relationshipButton}
           {message(false)}
+          {sendCard}
         </>
       )}
     </div>

@@ -29,6 +29,10 @@ import { fetchMe, peekMe } from '@/lib/me';
 import { navigateChatPath } from '@/hooks/useChatOfflineShell';
 import { readCachedChatAccountId, type ChatDraftCommit } from './chatStorage';
 import { queryKeys } from '@/lib/query-keys';
+import { NavIcons } from '@/lib/icons';
+import { useCardArrivals } from '@/lib/mailbox-queries';
+import { useOpenCards } from '@/components/mailbox/cards/cardDoors';
+import { sendOneBackPath } from '@/components/mailbox/cards/sendOneBack';
 
 // ============================================================
 // UNIFIED CONVERSATION VIEW (Person-Based)
@@ -82,6 +86,12 @@ export default function ConversationView({
 
   // ── Shared chat hook ──────────────────────────────────
   const chat = useChatMessages({ otherUserId, topicId: selectedTopicId, currentUserId, initialMessageId });
+
+  // Christmas cards (TABCARD 2c): "Send a Christmas card" in Chat details while cards are open and the send flow
+  // could pick this person (the arrivals read is the same check as sending them a card; a business is never picked).
+  const openCards = useOpenCards({ enabled: Boolean(currentUserId) });
+  const cardPersonId = openCards && currentUserId && otherUserId !== currentUserId ? otherUserId : null;
+  const cardArrivals = useCardArrivals(cardPersonId);
 
   // Safety actions belong to the account and conversation that opened them.
   const safetyScope = useRef(0);
@@ -569,6 +579,22 @@ export default function ConversationView({
                   {usernameHandle(otherHandle) && <div className="text-sm text-app-text-secondary">{usernameHandle(otherHandle)}</div>}
                 </div>
               </div>
+
+              {/* Christmas cards: the send flow, with this person already chosen by the name shown here (as Send one back
+                  opens it) */}
+              {cardPersonId && cardArrivals.isSuccess && chatPersonName(otherPerson) ? (
+                <div className="mb-6 -mt-2">
+                  <button
+                    type="button"
+                    data-testid="chat.menu.sendCard"
+                    onClick={() => { setShowDrawer(false); router.push(sendOneBackPath({ userId: cardPersonId, name: chatTitle })); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover-bg-app transition-colors text-left text-sm font-medium text-app-text-strong"
+                  >
+                    <NavIcons.christmasMail className="w-5 h-5 flex-shrink-0" aria-hidden />
+                    Send a Christmas card
+                  </button>
+                </div>
+              ) : null}
 
               {/* Topics section */}
               <div className="mb-6">

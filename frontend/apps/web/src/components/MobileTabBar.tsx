@@ -1,18 +1,23 @@
 'use client';
 
 // MobileTabBar — the app's tabs as a bottom bar on phone-width web:
-// Place · Today · Pulse, and Mail while the Mailbox is on. Messages left the
+// Place · Today · Mail · Pulse while the Mailbox is on, Place · Today · Pulse
+// without it. Founder decision 2026-11-13: Mail is third (your home, your day,
+// your mailbox, then what's happening around you), as on iPhone and Android;
+// from November 1 to December 25, while Christmas cards are open, its icon is
+// a red envelope (cardDoors useChristmasMail). Messages left the
 // bar (founder decision 2026-11-08, as on iPhone and Android): the chat button
 // at the top right of the top bar opens it, with the unread count. Native gets
 // these tabs on day one; on mobile web they used to hide behind the hamburger,
 // which made the app read as a single long page. Desktop keeps the sidebar
-// (AppShell). No Plans tab: Plans on the web comes later (founder, 2026-10-27).
+// (AppShell), in its own order. No Plans tab: Plans on the web comes later (founder, 2026-10-27).
 
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { NavIcons } from '@/lib/icons';
 import { launchFeatures } from '@/lib/featureFlags';
 import { afterInboxRows } from '@/lib/shellReads';
+import { useChristmasMail } from '@/components/mailbox/cards/cardDoors';
 
 type Tab = {
   key: 'place' | 'today' | 'nearby' | 'mail';
@@ -28,14 +33,14 @@ export const MOBILE_TABS: Tab[] = [
   // "Verified homes nearby" (/app/nearby) opens from Place (founder decision 2026-11-07).
   { key: 'place', label: 'Place', href: '/app/place', icon: NavIcons.place, matches: (p) => starts(p, '/app/place', '/app/homes', '/app/nearby', '/app/neighborhood') },
   { key: 'today', label: 'Today', href: '/app/today', icon: NavIcons.today, matches: (p) => starts(p, '/app/today', '/app/hub/today') },
-  // The Pulse tab, named Nearby until the founder's November 7 decision (its key stays): the feed under its List | Map
-  // switch. Connections is in the menu.
-  { key: 'nearby', label: 'Pulse', href: '/app/feed', icon: NavIcons.pulse, matches: (p) => starts(p, '/app/feed', '/app/beacons', '/app/gigs', '/app/marketplace') },
-  // Launch cut #10 (Mailbox): Mail is its own tab (founder, 2026-10-26). It
-  // opens the Me drawer.
+  // Launch cut #10 (Mailbox): Mail is its own tab (founder, 2026-10-26), third
+  // since the founder's November 13 decision. It opens the Me drawer.
   ...(launchFeatures.mailbox
     ? [{ key: 'mail' as const, label: 'Mail', href: '/app/mailbox/personal', icon: NavIcons.mail, matches: (p: string) => starts(p, '/app/mailbox') }]
     : []),
+  // The Pulse tab, named Nearby until the founder's November 7 decision (its key stays): the feed under its List | Map
+  // switch. Connections is in the menu.
+  { key: 'nearby', label: 'Pulse', href: '/app/feed', icon: NavIcons.pulse, matches: (p) => starts(p, '/app/feed', '/app/beacons', '/app/gigs', '/app/marketplace') },
 ];
 
 // With the Mailbox on, Mail's badge is the drawings' red count (Mail tab
@@ -66,6 +71,7 @@ export default function MobileTabBar({ unreadMail = 0 }: { unreadMail?: number }
   const pathname = usePathname() ?? '';
   const router = useRouter();
   const active = activeMobileTab(pathname);
+  const christmasMail = useChristmasMail();
 
   // The sidebar prefetches each tab on hover; phones have no hover, so
   // warm every tab once instead of giving the slowest connections the
@@ -83,7 +89,8 @@ export default function MobileTabBar({ unreadMail = 0 }: { unreadMail?: number }
     >
       <ul className="grid" style={{ gridTemplateColumns: `repeat(${MOBILE_TABS.length}, minmax(0, 1fr))` }}>
         {MOBILE_TABS.map((tab) => {
-          const Icon = tab.icon;
+          // The red envelope keeps its own colours, selected or not; the label keeps the tab's.
+          const Icon = tab.key === 'mail' && christmasMail ? NavIcons.christmasMail : tab.icon;
           const isActive = active === tab.key;
           // Mail counts unopened mail; unread chats show on the top bar's chat button.
           const count = tab.key === 'mail' ? unreadMail : 0;
