@@ -63,6 +63,15 @@
           "statement": "Carteret County provides its GIS data as is and with all faults. It does not warrant the data in any way and makes each of the disclaimers in its Terms of Use."
         },
         {
+          "id": "va-james-city",
+          "publisher": "James City County, Virginia",
+          "url": "https://opendata-jcc.opendata.arcgis.com/datasets/a0dfa59d3c4a442c9ebe3719762a407d_17",
+          "license": "James City County GIS metadata (use constraints and distribution liability)",
+          "license_url": "https://property.jamescitycountyva.gov/AGOL/Documents/AGOL_Open_Data/GIS_Metadata.pdf",
+          "dataset": "Parcels, with the Real Estate Assessment Division's building facts, assessments and sales",
+          "statement": "All data is believed to be correct, but is not guaranteed by James City County. The county is not responsible for its accuracy or how current it may be."
+        },
+        {
           "id": "va-charlottesville",
           "publisher": "City of Charlottesville, Virginia",
           "url": "https://opendata.charlottesville.org",
