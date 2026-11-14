@@ -358,6 +358,17 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] The example card's "A home in Camas, WA" label is gone; signed-in people see the sentence "Your flood risk, today's air, your home's value, and who your verified neighbors are."
 - [x] No new launch key, table or migration. Two new server routes: `GET /api/mailbox/cards/waiting` and `POST /api/saved-places/area/today`.
 
+**Made by the founder on November 14 (the Sky: where a post is, and how far it reaches).** You asked whether celebrities could use Pantopus, said "It never was meant to be just for local", and gave the idea: posts show an approximate place, float on the map, start at one base height, and rise with views and likes. You accepted the design's sixteen decisions ("Yes, all sixteen"), then the ten screens ("yes, these are good"). The design, the screens and the phase A contract are in [docs/product/sky](docs/product/sky/README.md). Nothing is built.
+
+- [x] A Moment is an area by default, not an exact pin. An exact pin is possible only at a public place the author picks by name. This reverses the November 5 choice of an exact pin wherever a photo was taken, the author's home included, and it applies to Pulse posts already made.
+- [x] A post made at home is always an area, with no choice. The smallest area holds 100 homes.
+- [x] Lift on the map means reach. Real elevation keeps its chip, its colours, its numbers and its floating view, as a mode. A floating post shows its elevation rounded to 100 ft.
+- [x] A post rises by rank with a floor (about ten per town, per metro area and per state, twenty per country, thirty for the world), and views count as one twentieth of a reaction. Rising past Town needs the author's yes. A person reviews every post before Country or World. From Town up, reports send a post to review without hiding it.
+- [x] The database gains columns on posts and new kinds of area; no new table in phases A to C.
+- [x] Sponsored lift: later, and from Town up only. A public sky page on the web for people with no account: yes, in phase E.
+- [x] The names: the Sky, Overhead, How far, and the levels Nearby, Town, City, Region, Country, World.
+- [x] Added with your yes to the screens, as directions for later phases: most posts stay near the ground; someone with many followers may choose to start higher (this replaces "public pages start at City level"); and a view where the ground rises where it is busy, by public place in built-up areas, where higher means busy and not good.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -1043,3 +1054,18 @@ Decided November 13 (section 0). Built the same night by one builder per platfor
 - [ ] Not checked anywhere: real phones (real GPS, Face ID or a screen lock on Android, pushes), the hosted staging and production sites, the iPhone Duo layout, screen readers speaking aloud, Location Services switched off for the whole phone, and a real 7 a.m. delivery (test cards were delivered by hand in the local database).
 - [ ] Known and left: on phone-width web the floating "+" button sits over the right end of the countdown's button; logging out of the web clears the browser's storage, so a card still sealed until Christmas opens again after signing back in; if a link arrives after a waiting card has already opened, the link opens over the card.
 - [ ] Yours: promote `dev` to `master` when staging looks right, then cut and release new iPhone and Android store builds; phones show none of this until then. Still undecided from November 11: a card to someone new outside the daily limit (Part 11.8), and whether Mail should ask "who's holding the phone" before the card flow.
+
+
+## The Sky (added November 14)
+
+Decided November 14 (section 0). Every Moment and Pulse post gets a place that is only as exact as is safe, and a height on the map that shows how far it reaches. Everything is in [docs/product/sky](docs/product/sky/README.md): the design, fourteen boards for the ten screens, and the build contract for phase A.
+
+- [x] The design, with its sixteen decisions accepted on November 14.
+- [x] The ten screens, approved on November 14. They sit on real screenshots of today's apps where a screen exists.
+- [x] The build contract for phase A (approximate places, built fully): [02-phase-a-contract.md](docs/product/sky/02-phase-a-contract.md). Written from the code on `dev`; nothing is built.
+- [x] Your yes to the contract's nine calls (its section 2), given November 14 ("Yes, all nine"). The ones that change a sentence of the design: a floating post stores only its area point; the area's point is the centre of its cell with no secret offset, so the disc is honest and small; home counts come from the 2020 Census for the whole US.
+- [ ] Your go for phase A. It is ten small pull requests into `dev` behind one switch, `sky_places`, which you turn on for your own account first.
+- [ ] The homes-per-cell file is built and published beside the property index; that bucket belongs to the property-data lane.
+- [ ] Details and drawings for the two later additions: the higher starting level (which followers count, the steps) and the terrain (same map or its own screen).
+- [ ] Phases B to E (the floating look, levels, the living sky, the world) each need their own contract and your OK.
+- [ ] Not decided: whether old exact points are replaced with area points in the production database (contract call C8). They are no longer shown either way.
