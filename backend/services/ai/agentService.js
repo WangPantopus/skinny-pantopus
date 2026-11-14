@@ -41,7 +41,8 @@ const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 const { isFeatureEnabled } = require('../featureFlagService');
 const { readToolDefinitions, playdateReadToolDefinitions, PLAN_TOOLS } = require('./readTools');
 const { actionCardDefinitions, playdateCardDefinitions, PLAN_CARD_TOOLS, draftPlanDefinition } = require('./actionCards');
-const { appGuide } = require('./appGuide');
+const { appGuide, buttonRule, buttonLink, needsDefaultHome, replyWithoutButtons, splitButtonLines } = require('./appGuide');
+const { homesOf } = require('./assistantKit');
 const { screenContextText, screenName } = require('./screenContext');
 const { checkChatBudget } = require('./assistantBudget');
 const { noteChatPrompt } = require('./warmup');
@@ -100,7 +101,9 @@ function launchScopedChatTools({
       if (rules.RULE_TOOL_NAMES.has(tool.name)) return standingRules && (actionCards || !rules.RULE_CARD_TOOLS.has(tool.name));
       if (CARD_TOOL_NAMES.has(tool.name)) return actionCards && (plans || !PLAN_CARD_TOOLS.has(tool.name));
       if (READ_TOOL_NAMES.has(tool.name)) return plans || !PLAN_TOOLS.has(tool.name);
-      if (tool.name === 'show_link') return links;
+      // A link button is the reply's own last line since November 14 (appGuide.js "Buttons"), not a tool call.
+      // The tool still runs when a conversation from before leads the model to call it (streamChat).
+      if (tool.name === 'show_link') return false;
       // Pantopus only (scope.js): every app gets it, since its answer is a line of text.
       if (tool.name === scope.OUT_OF_SCOPE) return scope.pantopusOnly();
       if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
@@ -159,6 +162,7 @@ function launchScopedChatInstructions({
     identity,
     chats: chatReading(),
     moments,
+    buttons: links ? buttonRule({ plansEnabled: plans, momentsEnabled: moments, memory: remembers, rules: standingRules }) : '',
     guide: appGuide({
       identity, chats: chatReading(), moments,
       plans, playdates, sports: plans && sports, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards, standingRules: standingRules && actionCards,
@@ -648,8 +652,10 @@ async function streamChat({
   const toolTimes = [];
   const prepMs = Date.now() - startTime;
   const replyText = plainTextStream((delta) => sseWriter.write('text_delta', { delta }));
+  // The reply's button lines never reach the person as text: they become the link buttons below.
+  const shownText = replyWithoutButtons((text) => replyText.push(text));
   let firstTextMs = null;
-  // Link buttons (show_link) go out after the reply's text, just before `done`.
+  // Link buttons (the reply's button lines) go out after the reply's text, just before `done`.
   const links = [];
   // What they asked for when the turn ended on out_of_scope (scope.js), for the log.
   let outOfScope = null;
@@ -675,13 +681,16 @@ async function streamChat({
       rounds,
       onText: (delta) => {
         if (firstTextMs === null) firstTextMs = Date.now() - startTime;
-        replyText.push(delta);
+        shownText.push(delta);
       },
       onToolStart: (name) => sseWriter.write('status', { tool: name, message: TOOL_STATUS[name] || 'Working on it…' }),
       // Run one tool Claude asked for; a draft goes to the client as soon as it exists.
       runTool: async (use) => {
         const name = toolNames.find((known) => known === use.name)
-          || toolNames.find((known) => known.toLowerCase() === String(use.name).toLowerCase());
+          || toolNames.find((known) => known.toLowerCase() === String(use.name).toLowerCase())
+          // No longer offered, but a conversation from before the button line holds its calls, and the model
+          // sometimes repeats one: it still makes its button, as it did.
+          || (capabilities.links && String(use.name).toLowerCase() === 'show_link' ? 'show_link' : undefined);
         const toolStarted = Date.now();
         const result = name
           ? await executeTool(name, use.input || {}, toolContext)
@@ -760,6 +769,32 @@ async function streamChat({
     return;
   }
 
+  // The button lines the reply ended with become its link buttons, by the same rules the show_link tool had.
+  // One that can't be made (a screen this app doesn't have, an id that isn't one) is dropped, and taken out of
+  // what is kept of the reply, so the history shows what the person saw.
+  const buttonLines = shownText.flush();
+  let buttonsDropped = 0;
+  if (turn.outcome === 'complete' && buttonLines.length) {
+    // A home's screen named without its home opens their default home (the one Today shows).
+    const defaultHomeId = capabilities.links && buttonLines.some(needsDefaultHome)
+      ? (await homesOf(userId).catch(() => null))?.defaultHomeId || null : null;
+    const kept = (from, to) => {
+      const last = [...turn.messages].reverse().find((m) => m.role === 'assistant' && Array.isArray(m.content) && m.content.some((b) => b.type === 'text'));
+      if (last) last.content = last.content.map((b) => (b.type === 'text' ? { ...b, text: b.text.replace(from, to).trimEnd() } : b));
+    };
+    for (const line of buttonLines) {
+      const made = capabilities.links ? buttonLink(line, { ...toolContext, defaultHomeId }) : { error: 'This app shows no link buttons.' };
+      if (made.link) {
+        links.push(made.link);
+        if (made.line !== line) kept(line, made.line);
+        continue;
+      }
+      buttonsDropped += 1;
+      logger.warn('AI chat button line dropped', { userId, error: String(made.error).slice(0, 80) });
+      kept(line, '');
+    }
+  }
+
   const logged = {
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
@@ -785,6 +820,8 @@ async function streamChat({
     cards: [...shown].sort().join(','),
     rounds,
     tools: toolTimes,
+    buttons: links.length,
+    ...(buttonsDropped ? { buttonsDropped } : {}),
   });
 
   if (turn.outcome === 'refused' || turn.outcome === 'truncated' || turn.outcome === 'empty') {
@@ -1731,7 +1768,10 @@ function displayMessages(stored, { cards = [], startedAt } = {}) {
   const history = sanitizeHistory(stored);
   const results = storedResults(history);
   let at = startedAt;
-  // Link buttons (show_link) go on the last reply text of their turn, whichever round made them.
+  // Link buttons (a reply's button lines; show_link calls in older turns) go on the last reply text of their turn.
+  // What a button line may open is checked as when it was made, but for the person's own features (Plans,
+  // Moments), which a history read doesn't know: a line the chat dropped then was taken out of the stored reply.
+  const buttonContext = { plansEnabled: true, momentsEnabled: true, memory: shown.has('memory'), rules: shown.has('rules') };
   let turnStart = 0;
   let turnLinks = [];
   const flushLinks = () => {
@@ -1774,7 +1814,16 @@ function displayMessages(stored, { cards = [], startedAt } = {}) {
     const firstItem = items.length;
     let text = '';
     for (const block of blocks) {
-      if (block.type === 'text') text += (text ? '\n\n' : '') + block.text.replace(/\*\*/g, '');
+      if (block.type === 'text') {
+        const reply = splitButtonLines(block.text.replace(/\*\*/g, ''));
+        if (reply.text) text += (text ? '\n\n' : '') + reply.text;
+        if (shown.has('link')) {
+          for (const line of reply.lines) {
+            const made = buttonLink(line, buttonContext);
+            if (made.link) turnLinks.push(made.link);
+          }
+        }
+      }
       if (block.type !== 'tool_use') continue;
       const result = results.get(block.id);
       // A link button (show_link) goes with this reply's text.

@@ -154,9 +154,10 @@ const CONTEXT = `Context from Pantopus (facts about this person's home as of ${n
 
 async function chat(client) {
   // The launch tool set: no gig, listing or mail tools.
-  const tools = toolDefinitions.filter((t) => !['create_gig_draft', 'create_listing_draft', 'find_mail', 'get_mail_item', 'summarize_mail_item'].includes(t.name));
+  // No show_link either: a link button is the reply's last line now (appGuide.js), taught only to apps that show one.
+  const tools = toolDefinitions.filter((t) => !['create_gig_draft', 'create_listing_draft', 'find_mail', 'get_mail_item', 'summarize_mail_item', 'show_link'].includes(t.name));
   console.log(`\nChat agent (${CHAT_MODEL}, effort ${CHAT_EFFORT}, ${tools.length} tools)`);
-  const system = llm.systemBlocks(prompts.chatAgentSystem({ openGigs: false, marketplace: false, mailbox: false }));
+  const system = llm.systemBlocks(prompts.chatAgentSystem({ openGigs: false, marketplace: false, mailbox: false, links: false }));
   let stored = [];
 
   async function turn(label, message, { expectTool, expectNoTool, withContext, expectClosing } = {}) {

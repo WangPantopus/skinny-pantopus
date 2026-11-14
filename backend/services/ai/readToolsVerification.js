@@ -264,7 +264,7 @@ async function getHomeVerification(args, ctx) {
   }));
   return {
     note: `Their own claims and verification only, as their screens show them. Use the screens' words; never guess a review time or anything about other people.${ctx.links
-      ? ' Before you answer, add a show_link button for each screen a home lists in `screens` (with its home_id), every time you read this.'
+      ? ' End your answer with a button line for each screen a home lists in `screens` (with its home_id), every time you read this.'
       : ''}`,
     homes,
     ...(chosen.length > MAX_HOMES ? { more_homes: chosen.length - MAX_HOMES } : {}),
