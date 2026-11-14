@@ -53,6 +53,11 @@ public struct AIChatStreamRequest: Encodable, Sendable {
     /// `follow_up` the check-back cards (§7) and `rules` the standing-rule
     /// cards (§18).
     public static let supportedCards = ["pickup_schedule", "action", "link", "state", "memory", "follow_up", "rules"]
+    /// Added to `cards` when this phone's identity check for Mail and the
+    /// Wallet (Face ID or the passcode) would pass right now. The server reads
+    /// Mail and the Wallet for the assistant only with it; without it the
+    /// assistant sends the person to that screen, where the app asks.
+    public static let identityCard = "identity"
 
     public let message: String
     public let conversationId: String?
@@ -62,11 +67,17 @@ public struct AIChatStreamRequest: Encodable, Sendable {
     /// opened from a screen.
     public let context: AIChatContext?
 
-    public init(message: String, conversationId: String? = nil, images: [String]? = nil, context: AIChatContext? = nil) {
+    public init(
+        message: String,
+        conversationId: String? = nil,
+        images: [String]? = nil,
+        context: AIChatContext? = nil,
+        identityChecked: Bool = false
+    ) {
         self.message = message
         self.conversationId = conversationId
         self.images = images
-        cards = Self.supportedCards
+        cards = identityChecked ? Self.supportedCards + [Self.identityCard] : Self.supportedCards
         self.context = context
     }
 }
@@ -2094,7 +2105,9 @@ public final class ChatConversationViewModel {
             // PDF references go with the photos' (phase 2 contract §7.1).
             images: references.isEmpty ? nil : references,
             // Every message of a thread opened from a screen (or a link or Siri naming one) says which.
-            context: aiTopic?.context ?? aiLaunchContext
+            context: aiTopic?.context ?? aiLaunchContext,
+            // Mail and the Wallet are read for the assistant only while their own screens would open.
+            identityChecked: AppLockManager.shared.passesSensitiveCheckNow
         )
         // The stream is consumed in a stored Task so the composer's stop
         // button (A15.3) can cancel it mid-generation via

@@ -690,7 +690,10 @@ server.listen(PORT, HOST, async () => {
   if (process.env.NODE_ENV !== 'test') require('./utils/legacyUsernames').startLegacyUsernameRefresh();
 
   // Compile the AI response schemas ahead of the first draft after a quiet day (staging and production only).
-  if (process.env.NODE_ENV !== 'test') require('./services/ai/warmup').startSchemaWarmup();
+  if (process.env.NODE_ENV !== 'test') {
+    require('./services/ai/warmup').startSchemaWarmup();
+    require('./services/ai/warmup').startChatKeepWarm();
+  }
 
   require('./services/chatPushDelivery').start();
 

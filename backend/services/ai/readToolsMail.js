@@ -442,29 +442,41 @@ async function homesWaitingForProof(userId, homeIds) {
   }
 }
 
-async function findReceived(filters, ctx) {
+/**
+ * The pieces find_mail lists for these filters, as the model reads them, and how many matched: the list, then each
+ * piece's bill and Vault folder (two reads that don't wait for one another).
+ */
+async function receivedPieces(filters, ctx, homeIds) {
   const userId = ctx.userId;
   const zone = zoneOr(ctx.timeZone);
   const today = todayIn(zone);
-  // Fails closed: when the Homes can't be read, they read only their own mail.
-  const homeIds = await getAccessibleHomeIds(userId);
   const drawer = filters.box ? BOX_DRAWER[filters.box] : null;
   const dueBy = filters.dueWithinDays == null
     ? null : DateTime.fromISO(today, { zone: 'utc' }).plus({ days: filters.dueWithinDays }).toISODate();
-  const [listed, counts, waitingHomes] = await Promise.all([
-    drawer === 'home' && !homeIds.length
-      ? { rows: [], total: 0 }
-      : listReceived({ userId, homeIds, drawer, tab: filters.tab, terms: filters.terms, unreadOnly: filters.unreadOnly, dueBy }, userId),
+  const listed = drawer === 'home' && !homeIds.length
+    ? { rows: [], total: 0 }
+    : await listReceived({ userId, homeIds, drawer, tab: filters.tab, terms: filters.terms, unreadOnly: filters.unreadOnly, dueBy }, userId);
+  const shown = listed.rows.map((mail) => shownPiece(mail, userId, zone));
+  // The folder names go by each piece's own row, so they are read beside the bills, not after them.
+  const [pieces, folders] = await Promise.all([attachInvoices(shown), folderLabels(shown, userId, homeIds)]);
+  return { mail: pieces.map((piece) => pieceForModel(piece, { zone, today, folders })), total: listed.total };
+}
+
+async function findReceived(filters, ctx) {
+  const userId = ctx.userId;
+  // Fails closed: when the Homes can't be read, they read only their own mail.
+  const homeIds = await getAccessibleHomeIds(userId);
+  const drawer = filters.box ? BOX_DRAWER[filters.box] : null;
+  // The pieces, the Mail tab's numbers and the Homes waiting for proof are read together.
+  const [{ mail, total }, counts, waitingHomes] = await Promise.all([
+    receivedPieces(filters, ctx, homeIds),
     mailCounts(userId, homeIds).catch((err) => {
       logger.warn('assistant mail counts failed', { userId, error: err?.message });
       return null;
     }),
     !drawer || drawer === 'home' ? homesWaitingForProof(userId, homeIds) : 0,
   ]);
-  const pieces = await attachInvoices(listed.rows.map((mail) => shownPiece(mail, userId, zone)));
-  const folders = await folderLabels(pieces, userId, homeIds);
-  const mail = pieces.map((piece) => pieceForModel(piece, { zone, today, folders }));
-  const more = listed.total - mail.length;
+  const more = total - mail.length;
   let empty = null;
   if (!mail.length) {
     empty = drawer === 'home' && !homeIds.length
@@ -481,6 +493,19 @@ async function findReceived(filters, ctx) {
       ? `Mail for ${waitingHomes === 1 ? 'a home' : `${waitingHomes} homes`} they live at opens once they prove the address; it waits in the Home box until then.`
       : null,
   });
+}
+
+/**
+ * The pieces due within `dueWithinDays` days, exactly as find_mail lists them with that filter alone (the same
+ * read, the same rule on whose mail they may read, the same shape), without the Mail tab's counts and the Homes
+ * waiting for proof: for get_schedule, which reads only the pieces. Throws when Mail is off or can't be read.
+ */
+async function dueMail(dueWithinDays, ctx) {
+  if (!isLaunchFeatureEnabled('mailbox')) throw new Error("Mail isn't available for this person yet.");
+  if (!ctx?.userId) throw new Error("That couldn't be read just now.");
+  const homeIds = await getAccessibleHomeIds(ctx.userId);
+  const { mail } = await receivedPieces({ terms: [], box: null, tab: null, unreadOnly: false, dueWithinDays }, ctx, homeIds);
+  return mail;
 }
 
 // ─── Sent ──────────────────────────────────────────────────────────────────
@@ -807,4 +832,4 @@ function getMailItem(args, ctx) {
   return runMailReadTool('get_mail_item', args, ctx);
 }
 
-module.exports = { mailReadToolDefinitions, runMailReadTool, MAIL_TOOL_NAMES, getMailItem };
+module.exports = { mailReadToolDefinitions, runMailReadTool, MAIL_TOOL_NAMES, getMailItem, dueMail };
