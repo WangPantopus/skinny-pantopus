@@ -103,7 +103,7 @@ final class MomentsMapViewModel {
     private(set) var areaName: String?
     /// What the spot you're at reads as ("Esther Short Park"), for the empty card.
     private(set) var herePlace: String?
-    private(set) var rings: [MomentRingDTO] = []
+    private(set) var rings: [MomentRingDTO] = [] { didSet { memo.reset() } }
     private(set) var loaded = false
     private(set) var loadFailed = false
     /// "Use my location" was refused or found no fix.
@@ -130,7 +130,7 @@ final class MomentsMapViewModel {
     var heightsKeyOpen = false
     var heightTagsFrame: MomentsHeightFrame?
     /// The clock the end times are read against; moved on each read and each minute.
-    private(set) var now = Date()
+    private(set) var now = Date() { didSet { memo.reset() } }
     /// Where the camera last settled.
     @ObservationIgnored private(set) var lastRegion: MKCoordinateRegion?
     @ObservationIgnored private(set) var lastCamera: MapCamera?
@@ -144,10 +144,12 @@ final class MomentsMapViewModel {
     @ObservationIgnored private var nameTask: Task<Void, Never>?
     @ObservationIgnored private var namedAt: CLLocation?
     /// Moments watched here since the last read, and people muted or blocked: the map shows them so at once.
-    @ObservationIgnored private var watched: Set<String> = []
+    @ObservationIgnored private var watched: Set<String> = [] { didSet { memo.reset() } }
     /// Hidden at once, by when: a read begun after that already has the server's answer, so the id is dropped then
     /// (an unmute in Settings shows them again at the next read).
-    @ObservationIgnored private var hiddenAuthors: [String: Date] = [:]
+    @ObservationIgnored private var hiddenAuthors: [String: Date] = [:] { didSet { memo.reset() } }
+    /// What is worked out from the rings, kept until one of the four above changes (`MomentsMapMemo.swift`).
+    @ObservationIgnored private let memo = MomentsMapMemo()
     let api: APIClient
     private let store: ScreenStore
     private let location: any LocationProviding
@@ -299,17 +301,9 @@ final class MomentsMapViewModel {
 
     /// Every ring read, with what was watched or hidden since, and only Moments still running.
     var currentRings: [MomentRingDTO] {
-        rings.compactMap { ring in
-            guard hiddenAuthors[ring.author.id] == nil else { return nil }
-            var ring = ring
-            ring.moments = ring.moments.compactMap { moment in
-                if let end = moment.expiresAtDate, end <= now { return nil }
-                var moment = moment
-                if watched.contains(moment.id) { moment.seen = true }
-                return moment
-            }
-            return ring.moments.isEmpty ? nil : ring
-        }
+        // Read even when remembered, so a screen that shows them is redrawn when they change.
+        _ = (rings, now)
+        return memo.current { MomentsMapMemo.running(rings, now: now, watched: watched, hidden: hiddenAuthors) }
     }
 
     /// The rings inside the visible map, and the Moments with no location (they show wherever the map is).
@@ -323,7 +317,10 @@ final class MomentsMapViewModel {
 
     /// The map's rings and bubbles at this zoom (never a Moment with no location).
     var markers: [MomentsMarker] {
-        MomentsClustering.markers(currentRings.filter { !$0.noLocation }, span: span, mapPoints: mapPoints)
+        let current = currentRings
+        return memo.markers(span: span, mapPoints: mapPoints) {
+            MomentsClustering.markers(current.filter { !$0.noLocation }, span: span, mapPoints: mapPoints)
+        }
     }
 
     /// The strip: the spot zoomed into (M2), or every ring in view; you first, then new ones, then nearest.
