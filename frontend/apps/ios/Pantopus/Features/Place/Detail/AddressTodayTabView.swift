@@ -9,8 +9,10 @@
 //  briefing (`TodayDetailView`) is still
 //  reachable from a morning-push deep link; this is what the tab shows
 //  on its own. With no place but a claim in review, it is the claimed
-//  address's public Today under the claim's status. Parity twin of
-//  Android's `TodayTabScreen`.
+//  address's public Today under the claim's status. With none of those it
+//  starts where the person is (TABCARD 4a): "Use my location" keeps their
+//  city on this phone (`TodayAreaStore`) and Today shows that city's day.
+//  Parity twin of Android's `TodayTabScreen`.
 //
 
 import SwiftUI
@@ -45,7 +47,9 @@ struct AddressTodayTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Theme.Color.appBg)
             .task(id: resolveKey) {
-                if rootTabs.selected == .today { await resolveHome() }
+                guard rootTabs.selected == .today else { return }
+                await resolveHome()
+                await refreshAreaIfOld()
             }
             // Needs you reads again each time Today shows, beside the place.
             .task(id: resolveKey) {
@@ -72,7 +76,7 @@ struct AddressTodayTabView: View {
 
     @discardableResult
     private func discardTemporaryPlace() -> Bool {
-        if let detail, PlaceStoreReads.allowsCopy(homeId: detail.homeId, savedPlaceId: detail.savedPlaceId) { return false }
+        if let detail, detail.keepsCopy { return false }
         detail?.discardTemporaryCopy()
         resolveID = UUID()
         detail = nil
@@ -126,8 +130,9 @@ struct AddressTodayTabView: View {
     }
 
     private var address: String? {
-        if let detail, case let .loaded(intel) = detail.state { return placeDetailAddress(intel.place) }
-        return nil
+        guard let detail, case let .loaded(intel) = detail.state else { return nil }
+        // An area shows its city ("Vancouver, WA") where an address would.
+        return detail.area == nil ? placeDetailAddress(intel.place) : intel.place.label
     }
 
     private var placeTimeZone: TimeZone {
@@ -148,9 +153,10 @@ struct AddressTodayTabView: View {
                 claim: claimInReview,
                 needsYou: needsYou,
                 onAddHome: onAddHome,
+                onAddAddress: detail.area == nil ? nil : { rootTabs.openAddressFirst() },
                 onResolvePlace: resolveHome
             ) { openBallot() }
-                .id(detail.savedPlaceId ?? detail.homeId)
+                .id(detail.identity)
         } else if loadFailed {
             VStack(spacing: 0) {
                 TodayNeedsYouCard(model: needsYou).padding(.horizontal, Spacing.s4)
@@ -161,40 +167,10 @@ struct AddressTodayTabView: View {
             VStack(spacing: 0) {
                 TodayNeedsYouCard(model: needsYou).padding(.horizontal, Spacing.s4)
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
-                noPlace
+                // No address yet and no city kept: Today starts where they are.
+                TodayAreaStartCard(onLocated: showArea) { rootTabs.openAddressFirst() }
             }
         }
-    }
-
-    /// No claimed place yet: Today starts at an address, so send them to claim one.
-    private var noPlace: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.Color.homeBg)
-                Icon(.cloudSun, size: 28, strokeWidth: 2, color: Theme.Color.home)
-            }
-            .frame(width: 56, height: 56)
-            Text("Today starts at your address")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(Theme.Color.appText)
-            Text(
-                // swiftlint:disable:next line_length
-                "Weather, air, alerts, and the dates that matter at your address — pickup day, tax deadlines, council meetings. Claim your address to start."
-            )
-            .font(.system(size: 14))
-            .lineSpacing(3)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(Theme.Color.appTextSecondary)
-            PrimaryButton(title: "Claim your address") { onAddHome() }
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-        .padding(.horizontal, 16)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .accessibilityIdentifier("addressTodayNoPlace")
     }
 
     /// Could not ask which home is primary (offline, a dead spot, a 5xx).
@@ -229,7 +205,7 @@ struct AddressTodayTabView: View {
         // changed. The first visit, a retry after a failure and another
         // account start blank.
         let userID = currentUserID
-        let canKeep = detail.map { PlaceStoreReads.allowsCopy(homeId: $0.homeId, savedPlaceId: $0.savedPlaceId) } ?? false
+        let canKeep = detail?.keepsCopy ?? false
         let quiet = resolved && !loadFailed && resolvedUserID == userID && canKeep
         if !quiet {
             resolved = false
@@ -295,12 +271,32 @@ struct AddressTodayTabView: View {
         savedPlace = nil
         claimInReview = claims.claims.first(where: \.isInReview)
         guard let claim = claimInReview else {
-            detail = nil
+            showArea()
             return
         }
         if detail?.homeId != claim.homeId || detail?.claimInReview != true {
             detail = PlaceDetailViewModel(homeId: claim.homeId, group: .today, claimInReview: true)
         }
+    }
+
+    /// No Home, saved address or claim: the city kept on this phone for this
+    /// account, else the start card (nil).
+    private func showArea() {
+        guard let area = TodayAreaStore.shared.area else {
+            detail = nil
+            return
+        }
+        if detail?.area?.samePoint(as: area) != true {
+            detail = PlaceDetailViewModel(homeId: "", group: .today, area: area)
+        }
+    }
+
+    /// The city view over an hour old: read the fix again quietly (while
+    /// location stays allowed) and show the new city if the point moved.
+    private func refreshAreaIfOld() async {
+        guard detail?.area != nil, let moved = await TodayAreaStore.shared.refreshIfOld(),
+              detail?.area != nil, currentUserID == resolvedUserID else { return }
+        detail = PlaceDetailViewModel(homeId: "", group: .today, area: moved)
     }
 
     /// The ballot card is on this home's Place dashboard. Selecting the
@@ -377,6 +373,8 @@ private struct AddressTodayLoaded: View {
     let claim: OwnershipClaimDTO?
     let needsYou: TodayNeedsYouModel
     let onAddHome: () -> Void
+    /// An area's "Add your address" (TABCARD 4a): Place's address-first screen.
+    let onAddAddress: (() -> Void)?
     let onResolvePlace: () async -> Void
     let onOpenPlace: () -> Void
     @State private var scope = HomeClaimSessionScope(api: .shared)
@@ -444,15 +442,20 @@ private struct AddressTodayLoaded: View {
                 PlaceTodayDetailContent(
                     intel: intel,
                     vm: viewModel,
-                    showHomeRadon: savedPlace == nil && claim == nil,
+                    showHomeRadon: savedPlace == nil && claim == nil && viewModel.area == nil,
                     onOpenBallot: onOpenPlace,
                     tab: TodayTabExtras(
                         savedPlace: savedPlace != nil,
                         onAddHome: onAddHome,
-                        onAsk: { askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil) },
+                        onAsk: {
+                            // A saved place or an area has no Home to ask about.
+                            let homeId = viewModel.savedPlaceId == nil && viewModel.area == nil ? viewModel.homeId : nil
+                            askTopic = .today(homeId: homeId)
+                        },
                         onOpenTask: { homeId, taskId in openedTask = TodayOpenedTask(homeId: homeId, taskId: taskId) },
                         needsYou: needsYou,
-                        lead: claim != nil || savedAnchorMatches ? AnyView(lead) : nil
+                        lead: claim != nil || savedAnchorMatches ? AnyView(lead) : nil,
+                        onAddAddress: onAddAddress
                     )
                 )
             }
@@ -462,7 +465,8 @@ private struct AddressTodayLoaded: View {
         .readableColumnWidens(from: PlaceColumnsSplit.minimumScreenWidth)
         // The home-screen widget shows what Today just showed for this place.
         .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
-            guard scope.isCurrent,
+            // Not for an area: the widget shows a Home or a saved address.
+            guard scope.isCurrent, viewModel.area == nil,
                   PlaceStoreReads.allowsCopy(homeId: viewModel.homeId, savedPlaceId: viewModel.savedPlaceId) else {
                 WidgetSnapshotStore.shared.clearToday()
                 return

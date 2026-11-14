@@ -12,8 +12,9 @@
 //  conditions" (the daily forecast, the AQI gauge, every alert and the sun's
 //  arc). The tab adds its Plans cards, the saved-place reminders row and Ask
 //  Pantopus, and the Christmas countdown above "Coming up at home" while
-//  cards are open (`ChristmasCountdownCard`). Parity twin of Android's
-//  `PlaceTodayDetailContent`.
+//  cards are open (`ChristmasCountdownCard`); for a city kept before an
+//  address (TABCARD 4a), "Add your address for the rest" last. Parity twin
+//  of Android's `PlaceTodayDetailContent`.
 //
 
 import Observation
@@ -38,6 +39,8 @@ struct TodayTabExtras {
     var needsYou: TodayNeedsYouModel?
     /// What the tab says first about the place (a claim's status, "Saved place"): first in the leading column.
     var lead: AnyView?
+    /// A city kept before an address (TABCARD 4a): "Add your address for the rest", last on the page.
+    var onAddAddress: (() -> Void)?
 }
 
 struct PlaceTodayDetailContent: View {
@@ -164,6 +167,11 @@ struct PlaceTodayDetailContent: View {
                 AskPantopusBox(action: tab.onAsk)
                     .padding(.top, 24)
                     .placeColumn(.trailing, order: 6)
+            }
+            if let addAddress = tab?.onAddAddress {
+                TodayAreaAddAddressCard(action: addAddress)
+                    .padding(.top, 24)
+                    .placeColumn(.trailing, order: 7)
             }
         }
     }
