@@ -105,9 +105,9 @@ const FILES = {
 };
 
 // A count both give must be the same; the state's file is the record, and a file that disagrees changes nothing.
-// A total with no full count agrees when its whole number is the state's full baths.
-const agrees = (facts, found) => ['bedrooms', 'full_baths'].every((fact) => facts[fact] == null || found[fact] == null || facts[fact] === found[fact])
-  && (found.full_baths != null || found.bathrooms == null || facts.full_baths == null || Math.floor(found.bathrooms) === facts.full_baths);
+const agrees = (facts, found) => ['bedrooms', 'full_baths'].every((fact) => facts[fact] == null || found[fact] == null || facts[fact] === found[fact]);
+// A file's bare total agrees when its whole number is the state's full baths.
+const agreesWithTotal = (facts, found) => agrees(facts, found) && (found.bathrooms == null || facts.full_baths == null || Math.floor(found.bathrooms) === facts.full_baths);
 
 async function* build({ work }) {
   const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
@@ -130,7 +130,7 @@ async function* build({ work }) {
       log(`${release.name}: ${rows} rows in the county's file, ${dwellings.size} one-family parcels`);
       const bare = each.total ? release.records.filter((record) => record.facts && record.facts.bathrooms === undefined) : [];
       // A record's id ends in the state's town code and print key ("14020099.99-9-9").
-      const counts = fillHomes(release.records, dwellings, { keyOf: (record) => record.id.split(':').pop(), agrees, only: each.only });
+      const counts = fillHomes(release.records, dwellings, { keyOf: (record) => record.id.split(':').pop(), agrees: each.total ? agreesWithTotal : agrees, only: each.only });
       log(describe(release.name, counts));
       if (each.total) {
         // A total half a bath beyond the state's full baths holds one half bath. Where the state gives no full baths the total says
