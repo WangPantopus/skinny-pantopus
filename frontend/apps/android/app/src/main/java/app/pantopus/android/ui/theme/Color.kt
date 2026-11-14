@@ -766,6 +766,9 @@ object PantopusColors {
     val momentHeightPeak = Color(0xFFBE123C)
     val momentHeightFlying = Color(0xFF0284C7)
 
+    /** A floating pin's shadow on the Moments map (Moment elevation part D, board F1): `#0E1622`, never pure black. */
+    val momentFloatShadow = Color(0xFF0E1622)
+
     /** The Pantopus curator's mark on a ring — `#0284C7` on white. */
     val momentBrand = Color(0xFF0284C7)
 
