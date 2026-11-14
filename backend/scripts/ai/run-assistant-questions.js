@@ -5,7 +5,7 @@
  * with the live model. Prints one line per question and exits non-zero when any fails.
  *
  *   node scripts/ai/run-assistant-questions.js --api http://127.0.0.1:18751 \
- *     --accounts <accounts.env> --prefix AIX_ [--only <id,id>]
+ *     --accounts <accounts.env> --prefix AIX_ [--only <id,id>] [--group <name>] [--show]
  *
  * The accounts file holds <PREFIX><LABEL>_EMAIL, _PASSWORD and _HOME_ID lines (the local
  * launch kit's format). Passwords and tokens are never printed. Every run costs a few
@@ -18,6 +18,10 @@
  * the person's tap would (e.g. "remember"); `same: true` continues the previous question's conversation.
  * Standing rules: `reset: ["rules"]` deletes the account's rules first, and `expect.rule` checks a
  * rule_save card's stored rule ({ "kind": "plan_repeat" }).
+ * Pantopus only (services/ai/scope.js): `--group scope` runs the questions whose `group` is "scope";
+ * `expect.tools` names tools the turn must have called and `expect.noTools` ones it must not (read from
+ * the chat's status events), `expect.maxChars` caps the reply's length and `expect.noDraft` allows no
+ * draft of any kind. `--show` prints every reply, not only the failed ones.
  */
 const fs = require('fs');
 const path = require('path');
@@ -31,8 +35,10 @@ const API = opt('--api', 'http://127.0.0.1:18751');
 const ACCOUNTS = opt('--accounts');
 const PREFIX = opt('--prefix', 'AIX_');
 const ONLY = opt('--only') ? new Set(opt('--only').split(',')) : null;
+const GROUP = opt('--group');
+const SHOW = args.includes('--show');
 if (!ACCOUNTS) {
-  console.error('usage: run-assistant-questions.js --api <url> --accounts <accounts.env> [--prefix AIX_] [--only id,id]');
+  console.error('usage: run-assistant-questions.js --api <url> --accounts <accounts.env> [--prefix AIX_] [--only id,id] [--group name] [--show]');
   process.exit(1);
 }
 
@@ -131,7 +137,9 @@ async function ask(question) {
     body: JSON.stringify(body),
   });
   const raw = await res.text();
-  const out = { text: '', cards: [], drafts: [], links: [], errors: [] };
+  // A refusal before the turn starts (the hourly limit, a bad request) is JSON, not a stream: never a pass.
+  if (!res.ok) throw new Error(`chat answered ${res.status} ${/"error":"([A-Z_]+)"/.exec(raw)?.[1] || ''}`.trim());
+  const out = { text: '', cards: [], drafts: [], links: [], errors: [], tools: [] };
   for (const block of raw.split('\n\n')) {
     const name = /^event: (.+)$/m.exec(block)?.[1];
     const data = /^data: (.+)$/m.exec(block)?.[1];
@@ -140,6 +148,8 @@ async function ask(question) {
     if (name === 'conversation') lastConversation = json.conversationId;
     if (name === 'text_delta') out.text += json.delta || '';
     if (name === 'link') out.links.push(json.url);
+    // A tool the turn called: the chat says so when the call starts.
+    if (name === 'status' && json.tool) out.tools.push(json.tool);
     if (name === 'error') out.errors.push(json.error);
     if (name === 'draft') (json.type === 'action' ? out.cards : out.drafts).push(json.type === 'action' ? json.draft : json.type);
   }
@@ -176,6 +186,10 @@ function check(question, got) {
   if (e.memory && !got.cards.some((c) => c.card === 'memory_save' && includes(c.memory, e.memory))) fails.push(`no memory_save card with ${JSON.stringify(e.memory)}`);
   // A rule_save card's stored rule (standing rules): { "kind": "pickup_reminder" }.
   if (e.rule && !got.cards.some((c) => c.card === 'rule_save' && includes(c.rule, e.rule))) fails.push(`no rule_save card with ${JSON.stringify(e.rule)}`);
+  for (const tool of e.tools || []) if (!got.tools.includes(tool)) fails.push(`${tool} was not called (called ${got.tools.join(',') || 'nothing'})`);
+  for (const tool of e.noTools || []) if (got.tools.includes(tool)) fails.push(`${tool} was called`);
+  if (e.noDraft && got.drafts.length) fails.push(`unexpected draft ${got.drafts.join(',')}`);
+  if (e.maxChars && got.text.length > e.maxChars) fails.push(`reply is ${got.text.length} characters (at most ${e.maxChars})`);
   if (e.textMatches && !new RegExp(e.textMatches, 'i').test(got.text)) fails.push(`text lacks /${e.textMatches}/`);
   if (e.textNotMatches && new RegExp(e.textNotMatches, 'im').test(got.text)) fails.push(`text matches /${e.textNotMatches}/`);
   // What everyone nearby would read: the title and about a card would post.
@@ -189,6 +203,7 @@ function check(question, got) {
   let failed = 0;
   for (const question of questions) {
     if (ONLY && !ONLY.has(question.id)) continue;
+    if (GROUP && question.group !== GROUP) continue;
     const started = Date.now();
     try {
       const got = await ask(question);
@@ -199,7 +214,7 @@ function check(question, got) {
       }
       if (fails.length) failed += 1;
       console.log(`${fails.length ? 'FAIL' : 'pass'}  ${question.id}  ${Date.now() - started} ms${fails.length ? `  — ${fails.join('; ')}` : ''}`);
-      if (fails.length) console.log(`      reply: ${got.text.replace(/\s+/g, ' ').slice(0, 240)}${got.errors.length ? `  (errors: ${got.errors.join(', ')})` : ''}`);
+      if (fails.length || SHOW) console.log(`      reply: ${got.text.replace(/\s+/g, ' ').slice(0, SHOW ? 600 : 240)}${got.errors.length ? `  (errors: ${got.errors.join(', ')})` : ''}`);
     } catch (err) {
       failed += 1;
       console.log(`FAIL  ${question.id}  — ${err.message}`);
