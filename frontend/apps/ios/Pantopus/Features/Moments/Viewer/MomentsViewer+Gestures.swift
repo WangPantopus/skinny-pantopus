@@ -13,16 +13,20 @@ import SwiftUI
 
 extension MomentsViewer {
     /// One gesture for the whole picture: a tap moves on or back, a hold
-    /// pauses, a swipe changes ring or closes.
+    /// pauses, a swipe changes ring or closes. The finger is read in the screen's own space. Read in the
+    /// picture's, a drag that moves the picture moves what the finger is measured against: the next reading comes
+    /// back short by as far as the picture went, the one after long again, and the viewer shakes between two places
+    /// under a moving finger (founder, 2026-11-13: "not smooth, lag, stuck even").
     func pressGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in pressChanged(value) }
             .onEnded { value in pressEnded(value, width: width) }
     }
 
     private func pressChanged(_ value: DragGesture.Value) {
-        // The page is finishing its turn, or two fingers are on a photo: neither is a tap or a swipe.
-        guard !turning, !pressZoomed else { return }
+        // The page is finishing its turn, the viewer is on its way out, or two fingers are on a photo: neither is a
+        // tap or a swipe.
+        guard !turning, !motion.leaving, !pressZoomed else { return }
         if pressStarted == nil {
             pressStarted = Date()
             pressMoved = false
@@ -33,29 +37,43 @@ extension MomentsViewer {
                 model.holding = true
             }
         }
-        guard hypot(value.translation.width, value.translation.height) > 10 else { return }
-        pressMoved = true
-        holdTask?.cancel()
-        if model.holding { model.holding = false }
-        // The way it first goes is the way it keeps: a turn of the page never wanders into a close.
-        let axis = pressAxis ?? (abs(value.translation.height) > abs(value.translation.width) ? .vertical : .horizontal)
-        pressAxis = axis
-        if axis == .vertical {
-            if value.translation.height > 0 { dragOffset = value.translation }
-        } else if pagesWithFinger, !isReplying {
-            model.handling = true
-            pageOffset = pull(value.translation.width)
+        if !pressMoved {
+            guard hypot(value.translation.width, value.translation.height) > 10 else { return }
+            pressMoved = true
+            holdTask?.cancel()
+            // The viewer moves from where the finger is now, so it starts under it without a jump.
+            pressOrigin = value.translation
+            // The way it first goes is the way it keeps: a turn of the page never wanders into a close.
+            pressAxis = abs(value.translation.height) > abs(value.translation.width) ? .vertical : .horizontal
         }
+        if pressAxis == .vertical {
+            let down = max(0, value.translation.height - max(pressOrigin.height, 0))
+            // Under the finger it waits, as it does for a turn of the page; let go short of a close, it plays on.
+            if down > 0, !model.handling { model.handling = true }
+            if motion.down != down { motion.down = down }
+        } else if pagesWithFinger, !isReplying {
+            if !model.handling { model.handling = true }
+            motion.page = pull(value.translation.width - pressOrigin.width)
+        }
+        // After `handling`, so a hold that becomes a drag stays paused instead of playing for a moment between.
+        if model.holding { model.holding = false }
     }
 
     private func pressEnded(_ value: DragGesture.Value, width: CGFloat) {
         holdTask?.cancel()
         let wasHolding = model.holding
         let axis = pressAxis
-        model.holding = false
         pressStarted = nil
         pressAxis = nil
-        defer { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { dragOffset = .zero } }
+        guard !motion.leaving else { return }
+        if pressMoved, axis == .vertical, !turning, !pressZoomed, !isReplying, closes(value) {
+            model.holding = false
+            return leave()
+        }
+        model.holding = false
+        if motion.down != 0 {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { motion.down = 0 }
+        }
         guard !turning else { return }
         if pressMoved, axis == .horizontal, pagesWithFinger, !pressZoomed, !isReplying {
             return turnPage(value)
@@ -69,18 +87,44 @@ extension MomentsViewer {
         } else if pressMoved {
             swipe(value.translation, axis: axis)
         } else if !wasHolding {
-            if value.location.x < width / 3 { model.previous() } else { model.next() }
+            if value.startLocation.x - pressLeft < width / 3 { model.previous() } else { model.next() }
         }
     }
 
-    /// Down closes, up opens Seen by (yours) or the reply (theirs), left and right change ring.
+    /// Dragged far enough down, or flicked down, to close.
+    private func closes(_ value: DragGesture.Value) -> Bool {
+        let moved = value.translation.height
+        return moved > 110 || (moved > 30 && value.predictedEndTranslation.height > 280)
+    }
+
+    /// Let go far enough down: the viewer goes on down off the screen from where the finger left it, keeping its
+    /// picture, and then closes. It never comes back up first.
+    private func leave() {
+        model.handling = true
+        withAnimation(.easeOut(duration: 0.22)) {
+            motion.leaving = true
+            motion.down = max(motion.fall, motion.down)
+        } completion: {
+            model.close()
+        }
+    }
+
+    /// The viewer is done: whoever opened it takes it down. Dragged off the bottom, it has already left the
+    /// screen, so its cover goes at once instead of sliding down empty.
+    func finish() {
+        guard motion.leaving else { return onClose() }
+        var plain = Transaction()
+        plain.disablesAnimations = true
+        withTransaction(plain) { onClose() }
+    }
+
+    /// Up opens Seen by (yours) or the reply (theirs), left and right change ring. Down is a close, and has
+    /// already left (`leave`).
     private func swipe(_ translation: CGSize, axis: Axis?) {
         let dx = translation.width
         let dy = translation.height
         let vertical = axis.map { $0 == .vertical } ?? (abs(dy) > abs(dx))
-        if vertical, dy > 110 {
-            model.close()
-        } else if vertical, dy < -70 {
+        if vertical, dy < -70 {
             if model.isMine {
                 session.showsSeenBy = true
             } else if model.ring?.author.kind != .pantopus {

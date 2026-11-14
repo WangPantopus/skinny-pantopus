@@ -89,10 +89,10 @@ class NavigationSmokeTest {
         check(tags() == listOf("tab.home", "tab.today", "tab.nearby", "tab.moments", "tab.plans")) {
             "PantopusRoute.entries derived testTags drifted: ${tags()}"
         }
-        // With Mailbox on, Mail is the Mailbox tab; Messages stays off the bar.
+        // With Mailbox on, Mail is the Mailbox tab, third (founder decision 2026-11-13); Messages stays off the bar.
         try {
             LaunchFeatures.overrideForTesting = setOf(LaunchFeature.MAILBOX)
-            check(tags() == listOf("tab.home", "tab.today", "tab.nearby", "tab.moments", "tab.plans", "tab.mail")) {
+            check(tags() == listOf("tab.home", "tab.today", "tab.mail", "tab.nearby", "tab.moments", "tab.plans")) {
                 "PantopusRoute.entries derived testTags drifted with Mailbox on: ${tags()}"
             }
         } finally {

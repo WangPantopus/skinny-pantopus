@@ -338,6 +338,8 @@ data class MailboxHeroState(
     val address: String?,
     /** The house number for the mailbox's plate. */
     val number: String?,
+    /** After an empty round: "No mail today" (while cards are open, Me's top card invites a card instead). */
+    val noMailToday: Boolean = false,
 ) {
     companion object {
         fun from(
@@ -358,10 +360,12 @@ data class MailboxHeroState(
                     next != null && next.toLocalDate() == today ->
                         "Your mail comes this morning" to "Usually by 8 a.m. You'll get one notification."
                     last == null && next != null -> "Your mail comes each morning" to "The next delivery is ${nextWords.orEmpty()}"
-                    else -> "No mail today" to "Your next delivery is tomorrow morning, usually by 8 a.m."
+                    else -> NO_MAIL_TODAY to "Your next delivery is tomorrow morning, usually by 8 a.m."
                 }
-            return MailboxHeroState(title, detail, address?.let { "$it · verified home" }, number)
+            return MailboxHeroState(title, detail, address?.let { "$it · verified home" }, number, noMailToday = title == NO_MAIL_TODAY)
         }
+
+        private const val NO_MAIL_TODAY = "No mail today"
 
         /** "Today's mail came at 7:00 a.m." with how many came and how many are still sealed. */
         private fun todaysRound(

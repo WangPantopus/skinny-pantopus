@@ -365,7 +365,10 @@ extension BusinessOwnerViewModel {
             publicProfile: publicProfile,
             canPostAsBusiness: BusinessOwnerContent.postingRoles.contains(dashboard.access?.roleBase ?? ""),
             foundingOffer: foundingOffer,
-            isVerified: BusinessCardModel.isVerified(tier: dashboard.profile?.identityVerificationTier),
+            isVerified: BusinessCardModel.isVerified(
+                status: dashboard.profile?.verificationStatus,
+                tier: dashboard.profile?.identityVerificationTier
+            ),
             access: BusinessTeamAccessDTO(
                 hasAccess: dashboard.access?.hasAccess == true,
                 isOwner: dashboard.access?.isOwner,

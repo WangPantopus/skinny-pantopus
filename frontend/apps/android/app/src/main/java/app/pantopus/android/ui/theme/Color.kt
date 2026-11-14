@@ -101,6 +101,13 @@ object PantopusColors {
     val businessDark = Color(0xFF5B21B6)
 
     /**
+     * The business color on a dark theme — `#A78BFA` on `#221833` (Plans with businesses, board P1): the business
+     * shape, its badge and "Verified business" when the app is dark.
+     */
+    val businessOnDark = Color(0xFFA78BFA)
+    val businessBgDark = Color(0xFF221833)
+
+    /**
      * Warm-amber identity pillar — `#B45309`. The "porch tone" accent for
      * support-train and other warm-tinted wizards (A12.11). Tailwind
      * amber-700; pairs with [warmAmberBg] for chips, selected-state
@@ -751,6 +758,16 @@ object PantopusColors {
     val momentFaceTeal = Color(0xFF0F766E)
     val momentFaceVioletBg = Color(0xFFF3E8FF)
     val momentFaceViolet = Color(0xFF7C3AED)
+
+    /** A height band's color (board H2's key), on the map's tag and in the key; always beside the number or a name. */
+    val momentHeightLow = Color(0xFF15803D)
+    val momentHeightHills = Color(0xFF84CC16)
+    val momentHeightMountain = Color(0xFFF59E0B)
+    val momentHeightPeak = Color(0xFFBE123C)
+    val momentHeightFlying = Color(0xFF0284C7)
+
+    /** A floating pin's shadow on the Moments map (Moment elevation part D, board F1): `#0E1622`, never pure black. */
+    val momentFloatShadow = Color(0xFF0E1622)
 
     /** The Pantopus curator's mark on a ring — `#0284C7` on white. */
     val momentBrand = Color(0xFF0284C7)

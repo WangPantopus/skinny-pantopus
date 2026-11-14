@@ -60,6 +60,7 @@ import app.pantopus.android.data.api.models.mailbox.SentCard
 import app.pantopus.android.data.api.models.mailbox.v2.MailHome
 import app.pantopus.android.data.api.models.mailbox.v2.MailSentSummary
 import app.pantopus.android.data.api.models.mailbox.v2.MailVacationHold
+import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
@@ -330,19 +331,14 @@ private fun MailboxList(
     // Home mail opens once the address is proven: with no Home open yet, the drawer is a closed box.
     val waiting = homes.filter { it.mailAccess == "needs_proof" }
     val closedHome = waiting.firstOrNull()?.takeIf { selectedDrawer == MailboxDrawer.Home && homes.none { it.mailAccess == "open" } }
+    val emptyDayCard = showsEmptyDayCard(hero, sent, selectedDrawer, cards)
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = contentTop, bottom = Spacing.s8),
     ) {
         // Always the first item, so the card coming in after the first frame isn't inserted above the scroll position.
-        item(key = "hero") {
-            if (hero != null) {
-                MailboxHeroCard(hero, waiting = sent.waiting, waitingLetters = sent.waitingLetters, onOpenSent = viewModel::openSent)
-            } else {
-                MailboxHeroPlaceholder()
-            }
-        }
+        item(key = "hero") { MailboxTopCard(hero, emptyDayCard, cards, sent, onOpenCards, viewModel::openSent) }
         if (hold != null) item(key = "hold") { MailHoldBanner(hold, zone, onOpenHold) }
         item(key = "drawers") { MailboxDrawerRow(drawers, selectedDrawer, drawerUnread, viewModel::selectDrawer) }
         // Sent has no tabs: what was sent, and nothing of the drawers' mail.
@@ -373,7 +369,7 @@ private fun MailboxList(
         if (selectedDrawer == MailboxDrawer.Home) {
             waiting.firstOrNull()?.let { home -> item(key = "homeWaiting") { MailHomeWaitingBanner(home) { onVerify(home) } } }
         }
-        holidayCardItem(cards, selectedDrawer, selectedTab, onOpenCards)
+        holidayCardItem(cards, selectedDrawer, selectedTab, emptyDayCard, onOpenCards)
         when (selectedTab) {
             MailboxTab.Incoming -> incomingItems(state, viewModel)
             MailboxTab.Counter -> counterItems(state, viewModel, onPay)
@@ -388,18 +384,49 @@ private fun MailboxList(
 }
 
 /**
+ * A day with no mail on your own mailbox, while cards are open: the top card invites you to send one (TABCARD §2b).
+ * With the flag up the card says so instead, as on any other day.
+ */
+private fun showsEmptyDayCard(
+    hero: MailboxHeroState?,
+    sent: SentContent,
+    drawer: MailboxDrawer,
+    cards: HolidayCardsResponse?,
+): Boolean =
+    hero?.noMailToday == true && sent.waiting + sent.waitingLetters == 0 && drawer == MailboxDrawer.Me &&
+        HolidayCardsRepository.cardsOpen(cards)
+
+/** The Mailbox's top card: its placeholder while read, the day-with-no-mail invitation, or the morning round. */
+@Composable
+private fun MailboxTopCard(
+    hero: MailboxHeroState?,
+    emptyDayCard: Boolean,
+    cards: HolidayCardsResponse?,
+    sent: SentContent,
+    onOpenCards: () -> Unit,
+    onOpenSent: () -> Unit,
+) {
+    when {
+        hero == null -> MailboxHeroPlaceholder()
+        emptyDayCard -> MailboxEmptyDayCard(hero, cards, onSend = onOpenCards)
+        else -> MailboxHeroCard(hero, waiting = sent.waiting, waitingLetters = sent.waitingLetters, onOpenSent = onOpenSent)
+    }
+}
+
+/**
  * Christmas cards (launch keys `holiday_cards` + `mailbox`): the way in, at the top of your own mail (Me, Incoming),
- * while sending is open.
+ * while sending is open ([HolidayCardsRepository.cardsOpen], the rule every other way in follows). Not while the top
+ * card is the day-with-no-mail invitation, which has its own "Send a Christmas card" (no two doors on one screen).
  */
 private fun LazyListScope.holidayCardItem(
     cards: HolidayCardsResponse?,
     drawer: MailboxDrawer,
     tab: MailboxTab,
+    emptyDayCard: Boolean,
     onOpen: () -> Unit,
 ) {
-    if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) return
-    if (drawer != MailboxDrawer.Me || tab != MailboxTab.Incoming) return
-    val open = cards?.takeIf { it.open } ?: return
+    if (drawer != MailboxDrawer.Me || tab != MailboxTab.Incoming || emptyDayCard) return
+    val open = cards?.takeIf { HolidayCardsRepository.cardsOpen(it) } ?: return
     item(key = "holidayCards") { HolidayCardRow(open, onOpen) }
 }
 

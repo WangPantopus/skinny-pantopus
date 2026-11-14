@@ -14,6 +14,8 @@ struct PlanPeopleLine: View {
     let myPartySize: Int
     /// Opens a person's profile from their photo; nil leaves the photos plain.
     var onOpenPerson: ((String) -> Void)?
+    /// A business hosts the plan: the host is the business, by its whole name and shape (Plans with businesses).
+    var business: PlanBusinessDTO?
 
     var body: some View {
         HStack(spacing: Spacing.s3) {
@@ -40,6 +42,21 @@ struct PlanPeopleLine: View {
 
     @ViewBuilder
     private func photo(_ person: PlanPersonDTO) -> some View {
+        if person.isHost, let business {
+            // The business's shape; it opens the business's page, not a person's profile.
+            Button { DeepLinkRouter.shared.handle(path: "/business/\(business.userId)") } label: {
+                PlanBusinessShape(url: business.avatarUrl, size: 30)
+                    .overlay(RoundedRectangle(cornerRadius: 30 * 0.28 + 1, style: .continuous).stroke(Theme.Color.appSurface, lineWidth: 2))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("planPersonPhoto_\(person.userId)")
+        } else {
+            personPhoto(person)
+        }
+    }
+
+    @ViewBuilder
+    private func personPhoto(_ person: PlanPersonDTO) -> some View {
         let avatar = PlanAvatar(name: person.displayName, url: person.avatarUrl, size: 30)
             .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
         if let onOpenPerson {
@@ -58,7 +75,8 @@ struct PlanPeopleLine: View {
             if person.userId == me {
                 names.append(myPartySize > 1 ? "you + \(myPartySize - 1)" : "you")
             } else {
-                let first = PlanCardLines.firstName(person.displayName)
+                // A business is named in full ("Lacamas Pickleball Club (host)"), a neighbor by first name.
+                let first = person.isHost && business != nil ? person.displayName : PlanCardLines.firstName(person.displayName)
                 let name = person.isHost ? "\(first) (host)" : person.partySize > 1 ? "\(first) + \(person.partySize - 1)" : first
                 names.append(name)
             }

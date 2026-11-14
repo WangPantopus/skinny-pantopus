@@ -74,8 +74,16 @@ struct PlansSheetContent: View {
                         seeAll(count: cards.count)
                     }
                 }
+                // Plans with businesses (board G1): the filter, only once a business has a plan here.
+                if viewModel.hasBusinessPlans {
+                    PlansHostFilterBar(selection: viewModel.hostFilter) { viewModel.setHostFilter($0) }
+                        .padding(.vertical, Spacing.s1)
+                }
                 if let soonest = first.first {
                     peekRow(soonest, showsDivider: false)
+                } else if viewModel.shownHostFilter == .businesses {
+                    PlansBusinessesEmpty(window: viewModel.window) { viewModel.setHostFilter(.all) }
+                        .padding(.vertical, Spacing.s2)
                 } else {
                     Text("Nothing within 5 miles \(windowPhrase). Plans farther away show on the map.")
                         .planFont(.small)
@@ -185,7 +193,15 @@ struct PlansSheetContent: View {
 
 extension PlanRowModel {
     func withTrailing(_ trailing: PlanRowTrailing) -> PlanRowModel {
-        PlanRowModel(id: id, kind: kind, title: title, subtitle: subtitle, trailing: trailing, accessibilityLabel: accessibilityLabel)
+        PlanRowModel(
+            id: id,
+            kind: kind,
+            title: title,
+            subtitle: subtitle,
+            trailing: trailing,
+            accessibilityLabel: accessibilityLabel,
+            isBusiness: isBusiness
+        )
     }
 }
 
@@ -197,6 +213,8 @@ struct PlansListSheet: View {
     let onStop: (PlansSheetStop) -> Void
     /// "Back to the map", which a list beside the map doesn't need.
     var showsMapButton = true
+    /// The venues whose later plans are unfolded (board P3).
+    @State private var openFolds: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -210,7 +228,11 @@ struct PlansListSheet: View {
                     ForEach(days, id: \.title) { day in
                         section(day.title, cards: day.cards, mine: false)
                     }
-                    if days.isEmpty {
+                    if days.isEmpty, viewModel.shownHostFilter == .businesses {
+                        PlansBusinessesEmpty(window: viewModel.window) { viewModel.setHostFilter(.all) }
+                            .padding(.top, Spacing.s4)
+                            .hiddenUnderPlansTabBar()
+                    } else if days.isEmpty {
                         Text("No other \(viewModel.kindFilter?.title.lowercased() ?? "plans") near you yet.")
                             .planFont(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
@@ -227,6 +249,17 @@ struct PlansListSheet: View {
     }
 
     private var header: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            titleRow
+            // Plans with businesses (board G2): under the title, only once a business has a plan here.
+            if viewModel.hasBusinessPlans {
+                PlansHostFilterBar(selection: viewModel.hostFilter) { viewModel.setHostFilter($0) }
+            }
+        }
+        .padding(.bottom, Spacing.s2)
+    }
+
+    private var titleRow: some View {
         HStack(alignment: .center, spacing: Spacing.s3) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Plans near \(viewModel.areaName ?? "you")")
@@ -250,7 +283,6 @@ struct PlansListSheet: View {
                 .accessibilityIdentifier("plansBackToMap")
             }
         }
-        .padding(.bottom, Spacing.s2)
     }
 
     private var windowName: String {
@@ -294,6 +326,22 @@ struct PlansListSheet: View {
                 }
                 .itemZoomSource(.plan, id: card.id)
                 .hiddenUnderPlansTabBar()
+                // A venue's later plans fold under its soonest one (board P3), "Your plans" too: the plan you're
+                // in comes from your own plans, which don't carry the fold, so it is read from the list's row.
+                if let more = card.moreTimes ?? viewModel.cards.first(where: { $0.id == card.id })?.moreTimes,
+                   !more.items.isEmpty {
+                    PlanFoldView(
+                        planId: card.id,
+                        moreTimes: more,
+                        window: viewModel.window,
+                        isOpen: openFolds.contains(card.id),
+                        onToggle: {
+                            if openFolds.contains(card.id) { openFolds.remove(card.id) } else { openFolds.insert(card.id) }
+                        },
+                        onOpen: { item in actions.openPlan(nil, item.id, .view) }
+                    )
+                    .hiddenUnderPlansTabBar()
+                }
             }
         }
     }

@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardNoteHelpBody
 import app.pantopus.android.data.api.models.mailbox.HolidayCardNoteIdeas
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
+import app.pantopus.android.data.api.models.mailbox.HolidayCardWaitingResponse
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardListBody
@@ -63,6 +64,14 @@ interface HolidayCardsApi {
     suspend fun arrivals(
         @Query("to") userId: String,
     ): HolidayCardArrivalsFor
+
+    /**
+     * `GET /api/mailbox/cards/waiting` — route `backend/routes/mailbox.js:2314` (TABCARD §3): the
+     * newest unopened Christmas card in the caller's own Mailbox while the account is under 14 days old; `card: null`
+     * otherwise (always 200 for "nothing").
+     */
+    @GET("api/mailbox/cards/waiting")
+    suspend fun waiting(): HolidayCardWaitingResponse
 
     /**
      * `POST /api/ai/draft/card-note` — route `backend/routes/ai.js:451`: "Help me write it" (the server's launch key

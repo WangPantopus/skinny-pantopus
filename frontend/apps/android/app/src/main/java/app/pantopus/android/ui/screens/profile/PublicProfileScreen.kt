@@ -56,6 +56,7 @@ import app.pantopus.android.ui.components.rememberShareTextWithCompletion
 import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasCardDoorsViewModel
 import app.pantopus.android.ui.screens.root.ScrollAwayHeaderLayout
 import app.pantopus.android.ui.screens.root.ScrollAwayHeaderPage
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
@@ -110,8 +111,11 @@ fun PublicProfileScreen(
     ownerNavigation: OwnerNavigation = OwnerNavigation(),
     /** The `monthly_receipt` push (`?tab=receipt`): last month opens in full. */
     expandMonthlyReceipt: Boolean = false,
+    /** "Send a card" beside Message: the card flow with this person chosen (user id, name); null leaves it out. */
+    onSendCard: ((userId: String, name: String) -> Unit)? = null,
     viewModel: PublicProfileViewModel = hiltViewModel(),
     usernameShare: UsernameShareViewModel = hiltViewModel(),
+    christmasCards: ChristmasCardDoorsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
@@ -145,6 +149,8 @@ fun PublicProfileScreen(
     val postsLoading by viewModel.postsLoading.collectAsStateWithLifecycle()
     val ownerExtras by viewModel.owner.extras.collectAsStateWithLifecycle()
     val preview by viewModel.preview.state.collectAsStateWithLifecycle()
+    val cardsOpen by christmasCards.open.collectAsStateWithLifecycle()
+    val cardGoesTo by christmasCards.sendableTo.collectAsStateWithLifecycle()
     var showPreviewSheet by rememberSaveable { mutableStateOf(false) }
     var showReceipt by rememberSaveable { mutableStateOf(false) }
     var showInvite by rememberSaveable { mutableStateOf(false) }
@@ -241,6 +247,17 @@ fun PublicProfileScreen(
                                 onOpenLink = { url -> runCatching { uriHandler.openUri(url) } },
                             )
                         } else if (content.kind == PublicProfileKind.Local && neighbor != null) {
+                            // TABCARD §2c: another person (not a business, no block either way), while cards are open and
+                            // the send flow could pick them by name.
+                            val personId = content.profile.id
+                            val mayOfferCard =
+                                onSendCard != null && cardsOpen && !content.isOwner && content.profile.accountType != "business" &&
+                                    connection != ProfileConnection.Blocked && !isBlockedByViewer
+                            LaunchedEffect(personId, mayOfferCard) { if (mayOfferCard) christmasCards.checkPerson(personId) }
+                            val sendCard =
+                                onSendCard?.takeIf { mayOfferCard && cardGoesTo == personId }?.let { send ->
+                                    { send(personId, content.header.displayName) }
+                                }
                             LocalProfileLoadedFrame(
                                 content = content,
                                 selectedTab = selectedLocalTab,
@@ -261,6 +278,7 @@ fun PublicProfileScreen(
                                         onDisconnect = viewModel::requestDisconnect,
                                         onMessage = { onOpenMessages(content.profile) },
                                         onEditProfile = onEditProfile,
+                                        onSendCard = sendCard,
                                     ),
                                 onBack = onBack,
                                 onSelectTab = { viewModel.selectLocalTab(it) },

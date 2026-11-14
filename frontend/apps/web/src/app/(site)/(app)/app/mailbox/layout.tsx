@@ -4,7 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getAuthToken } from '@pantopus/api';
 import MailboxHeader, { mailboxHref, mailboxView } from '@/components/mailbox/MailboxHeader';
-import MailboxHero, { deliveryState } from '@/components/mailbox/MailboxHero';
+import MailboxHero, { deliveryState, sentWaiting } from '@/components/mailbox/MailboxHero';
+import { useEmptyDayCard } from '@/components/mailbox/cards/cardDoors';
 import MailboxErrorBoundary from '@/components/mailbox/MailboxErrorBoundary';
 import { MailboxToastProvider } from '@/components/mailbox/MailboxToast';
 import { MailboxProvider, useMailboxContext } from '@/contexts/MailboxContext';
@@ -130,16 +131,17 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
   const bannerClass = view.kind === 'main' || view.kind === 'sent' ? (view.pushed ? 'hidden md:flex' : 'flex') : 'hidden';
 
   // The flag is up while a card (Christmas cards on) or a letter (letters on) you sent waits for the 7 a.m. pickup.
-  const sentLetters = drawers?.sent?.waiting_letters ?? 0;
-  const waiting = launchFeatures.holidayCards ? Math.max(0, (drawers?.sent?.waiting ?? 0) - sentLetters) : 0;
-  const waitingLetters = launchFeatures.mailExtras ? sentLetters : 0;
+  const { waiting, waitingLetters } = sentWaiting(drawers);
+  // Your own mail (Me) on a day with no mail, while Christmas cards are open: the top card invites you to send one.
+  const emptyDayCard = useEmptyDayCard();
+  const invite = view.kind === 'main' && view.drawer === 'personal' ? emptyDayCard : null;
 
   return (
     <div className="bg-app md:flex md:h-[calc(100vh-3.5rem)] md:flex-col md:overflow-hidden">
       <MailboxHeader
         view={view}
         backHref={backHref}
-        hero={drawers ? <MailboxHero delivery={delivery} homes={drawers.homes} opening={deliveryOpening} waiting={waiting} waitingLetters={waitingLetters} /> : null}
+        hero={drawers ? <MailboxHero delivery={delivery} homes={drawers.homes} opening={deliveryOpening} waiting={waiting} waitingLetters={waitingLetters} invite={invite} /> : null}
         onWriteLetter={launchFeatures.mailExtras ? () => setComposeOpen(true) : undefined}
       />
 

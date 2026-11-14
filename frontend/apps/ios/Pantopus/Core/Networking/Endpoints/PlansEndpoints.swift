@@ -62,6 +62,15 @@ public struct PlansViewport: Sendable, Hashable {
 public enum PlansEndpoints {
     static let base = "/api/plans"
 
+    /// Plans with businesses (contract section 5.1): every request under
+    /// `/api/plans`, the map's plans layer and a business page's plans say this
+    /// build can draw a business's plan. Without `biz=1` a business's plan does
+    /// not exist, even for its own team. A person without `plans_business` gets
+    /// today's answers either way.
+    static func biz(_ query: [String: String] = [:]) -> [String: String] {
+        query.merging(["biz": "1"]) { _, marker in marker }
+    }
+
     // MARK: - Flags
 
     /// `GET /api/feature-flags/:flagName` — `{ flagName, enabled }`. Honors
@@ -87,7 +96,7 @@ public enum PlansEndpoints {
             "window": window.rawValue
         ]
         if !kinds.isEmpty { query["kinds"] = kinds.map(\.rawValue).joined(separator: ",") }
-        return Endpoint(method: .get, path: "/api/posts/map", query: query)
+        return Endpoint(method: .get, path: "/api/posts/map", query: biz(query))
     }
 
     /// `GET /api/plans?latitude&longitude&window&kinds&cursor` — the list
@@ -109,13 +118,13 @@ public enum PlansEndpoints {
         if let gps { query.merge(gps.query) { $1 } }
         if !kinds.isEmpty { query["kinds"] = kinds.map(\.rawValue).joined(separator: ",") }
         if let cursor, !cursor.isEmpty { query["cursor"] = cursor }
-        return Endpoint(method: .get, path: base, query: query)
+        return Endpoint(method: .get, path: base, query: biz(query))
     }
 
     /// `GET /api/plans/mine` — `{ hosting, going, asked, waitlisted }` of
     /// PlanCards, for "Your plans" and Today. Route `backend/routes/plans.js`.
     public static func mine() -> Endpoint {
-        Endpoint(method: .get, path: "\(base)/mine")
+        Endpoint(method: .get, path: "\(base)/mine", query: biz())
     }
 
     /// `GET /api/plans/:id` — a PlanDetail for the host and people who are
@@ -128,13 +137,21 @@ public enum PlansEndpoints {
             query["longitude"] = String(center.longitude)
         }
         if let gps { query.merge(gps.query) { $1 } }
-        return Endpoint(method: .get, path: "\(base)/\(id)", query: query)
+        return Endpoint(method: .get, path: "\(base)/\(id)", query: biz(query))
     }
 
     /// `GET /api/plans/:id/requests` (host only) — `{ pending, waitlisted }`.
     /// Never an address. Route `backend/routes/plans.js`.
     public static func requests(planId: String) -> Endpoint {
-        Endpoint(method: .get, path: "\(base)/\(planId)/requests")
+        Endpoint(method: .get, path: "\(base)/\(planId)/requests", query: biz())
+    }
+
+    /// `GET /api/plans/host-as` — the businesses this person may host a plan
+    /// as, with their locations, kinds, labels and limits (Plans with
+    /// businesses, board B1). Empty for nearly everyone. Route
+    /// `backend/routes/plans.js` (`GET /host-as`).
+    public static func hostAs() -> Endpoint {
+        Endpoint(method: .get, path: "\(base)/host-as", query: biz())
     }
 
     /// `GET /api/plans/games` — games in the next 14 days from the checked
@@ -146,7 +163,7 @@ public enum PlansEndpoints {
             query["longitude"] = String(center.longitude)
         }
         if let gps { query.merge(gps.query) { $1 } }
-        return Endpoint(method: .get, path: "\(base)/games", query: query)
+        return Endpoint(method: .get, path: "\(base)/games", query: biz(query))
     }
 
     public static func teams(query text: String = "", from center: UserCoordinate? = nil) -> Endpoint {
@@ -155,7 +172,7 @@ public enum PlansEndpoints {
             query["latitude"] = String(center.latitude)
             query["longitude"] = String(center.longitude)
         }
-        return Endpoint(method: .get, path: "\(base)/teams", query: query)
+        return Endpoint(method: .get, path: "\(base)/teams", query: biz(query))
     }
 
     /// `GET /api/plans/places/nearby` — public places for H6, cached per
@@ -180,7 +197,7 @@ public enum PlansEndpoints {
             query["ends_at"] = PlanTime.string(plan.endsAt)
         }
         if !wait { query["wait"] = "0" }
-        return Endpoint(method: .get, path: "\(base)/places/nearby", query: query)
+        return Endpoint(method: .get, path: "\(base)/places/nearby", query: biz(query))
     }
 
     /// `POST /api/plans/places/suggest` — H6's "Suggest places": up to three
@@ -188,7 +205,7 @@ public enum PlansEndpoints {
     /// `why`; 202 while the area's places are still loading. Route
     /// `backend/routes/plans.js`.
     public static func suggestPlaces(_ body: PlanPlaceSuggestBody) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/places/suggest", body: body)
+        Endpoint(method: .post, path: "\(base)/places/suggest", query: biz(), body: body)
     }
 
     // MARK: - Hosting
@@ -197,18 +214,18 @@ public enum PlansEndpoints {
     /// (403), `too_many_plans` (429), validation (422).
     /// Route `backend/routes/plans.js`.
     public static func create(_ body: CreatePlanBody) -> Endpoint {
-        Endpoint(method: .post, path: base, body: body)
+        Endpoint(method: .post, path: base, query: biz(), body: body)
     }
 
     /// `PATCH /api/plans/:id` — host edits. Route `backend/routes/plans.js`.
     public static func update(id: String, _ body: UpdatePlanBody) -> Endpoint {
-        Endpoint(method: .patch, path: "\(base)/\(id)", body: body)
+        Endpoint(method: .patch, path: "\(base)/\(id)", query: biz(), body: body)
     }
 
     /// `POST /api/plans/:id/cancel` — tells everyone in and waiting, closes
     /// the chat, removes the pin. Route `backend/routes/plans.js`.
     public static func cancel(id: String, note: String?) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(id)/cancel", body: CancelPlanBody(note: note))
+        Endpoint(method: .post, path: "\(base)/\(id)/cancel", query: biz(), body: CancelPlanBody(note: note))
     }
 
     /// `POST /api/plans/:id/requests/:requestId/accept` — idempotent; 409
@@ -218,6 +235,7 @@ public enum PlansEndpoints {
         Endpoint(
             method: .post,
             path: "\(base)/\(planId)/requests/\(requestId)/accept",
+            query: biz(),
             body: AcceptPlanRequestBody(confirmSharesAddress: confirmSharesAddress)
         )
     }
@@ -225,13 +243,13 @@ public enum PlansEndpoints {
     /// `POST /api/plans/:id/requests/:requestId/decline` — idempotent.
     /// Route `backend/routes/plans.js`.
     public static func decline(planId: String, requestId: String) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/requests/\(requestId)/decline")
+        Endpoint(method: .post, path: "\(base)/\(planId)/requests/\(requestId)/decline", query: biz())
     }
 
     /// `POST /api/plans/:id/requests/:requestId/remove` — the guest loses the
     /// plan, the note and the chat. Route `backend/routes/plans.js`.
     public static func remove(planId: String, requestId: String) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/requests/\(requestId)/remove")
+        Endpoint(method: .post, path: "\(base)/\(planId)/requests/\(requestId)/remove", query: biz())
     }
 
     // MARK: - Joining
@@ -239,38 +257,38 @@ public enum PlansEndpoints {
     /// `POST /api/plans/:id/requests` — ask to join. A matching rule accepts
     /// at once. Idempotent per person per plan. Route `backend/routes/plans.js`.
     public static func ask(planId: String, _ body: AskToJoinBody) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/requests", body: body)
+        Endpoint(method: .post, path: "\(base)/\(planId)/requests", query: biz(), body: body)
     }
 
     /// `DELETE /api/plans/:id/requests/mine` — withdraw (pending or
     /// waitlisted) or leave (accepted). Route `backend/routes/plans.js`.
     public static func withdraw(planId: String) -> Endpoint {
-        Endpoint(method: .delete, path: "\(base)/\(planId)/requests/mine")
+        Endpoint(method: .delete, path: "\(base)/\(planId)/requests/mine", query: biz())
     }
 
     /// `POST /api/plans/:id/on-my-way` — a line in the chat, no push.
     /// Route `backend/routes/plans.js`.
     public static func onMyWay(planId: String) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/on-my-way")
+        Endpoint(method: .post, path: "\(base)/\(planId)/on-my-way", query: biz())
     }
 
     /// `POST /api/plans/:id/still-coming` — `false` leaves the plan.
     /// Route `backend/routes/plans.js`.
     public static func stillComing(planId: String, coming: Bool) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/still-coming", body: PlanStillComingBody(coming: coming))
+        Endpoint(method: .post, path: "\(base)/\(planId)/still-coming", query: biz(), body: PlanStillComingBody(coming: coming))
     }
 
     /// `POST /api/plans/:id/report` — `{ reason, details? }` into the admin
     /// report queue (the generic post report can't see plan posts).
     /// Route `backend/routes/plans.js`.
     public static func report(planId: String, reason: String, details: String? = nil) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/report", body: PostReportRequest(reason: reason, details: details))
+        Endpoint(method: .post, path: "\(base)/\(planId)/report", query: biz(), body: PostReportRequest(reason: reason, details: details))
     }
 
     /// `POST /api/plans/:id/feedback` — `not_right` files a report in the
     /// admin queue. Route `backend/routes/plans.js`.
     public static func feedback(planId: String, _ body: PlanFeedbackBody) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/feedback", body: body)
+        Endpoint(method: .post, path: "\(base)/\(planId)/feedback", query: biz(), body: body)
     }
 
     // MARK: - Invitations
@@ -279,21 +297,21 @@ public enum PlansEndpoints {
     /// counts, emails_left, can_invite }`. Route `backend/routes/plans.js`
     /// (`GET /:id/invites`).
     public static func invites(planId: String) -> Endpoint {
-        Endpoint(method: .get, path: "\(base)/\(planId)/invites")
+        Endpoint(method: .get, path: "\(base)/\(planId)/invites", query: biz())
     }
 
     /// `GET /api/plans/:id/invites/people?q=` (host) — connections and people
     /// who came to their plans, with where each stands on this plan. Route
     /// `backend/routes/plans.js` (`GET /:id/invites/people`).
     public static func invitePeople(planId: String, query text: String = "") -> Endpoint {
-        Endpoint(method: .get, path: "\(base)/\(planId)/invites/people", query: text.isEmpty ? [:] : ["q": text])
+        Endpoint(method: .get, path: "\(base)/\(planId)/invites/people", query: biz(text.isEmpty ? [:] : ["q": text]))
     }
 
     /// `POST /api/plans/:id/invites` (host) — people on Pantopus and addresses.
     /// 409 `confirm_shares_address` the first time at a home; 429
     /// `too_many_invites`; 422 `invalid_email`. Route `backend/routes/plans.js`.
     public static func invite(planId: String, _ body: PlanInviteBody) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/invites", body: body)
+        Endpoint(method: .post, path: "\(base)/\(planId)/invites", query: biz(), body: body)
     }
 
     /// `POST /api/plans/:id/invites/link` (host) — a one-person link to text,
@@ -302,6 +320,7 @@ public enum PlansEndpoints {
         Endpoint(
             method: .post,
             path: "\(base)/\(planId)/invites/link",
+            query: biz(),
             body: PlanInviteLinkBody(confirmSharesAddress: confirmSharesAddress)
         )
     }
@@ -309,25 +328,25 @@ public enum PlansEndpoints {
     /// `DELETE /api/plans/:id/invites/:inviteId` (host) — take back an
     /// invitation nobody said yes to. Route `backend/routes/plans.js`.
     public static func cancelInvite(planId: String, inviteId: String) -> Endpoint {
-        Endpoint(method: .delete, path: "\(base)/\(planId)/invites/\(inviteId)")
+        Endpoint(method: .delete, path: "\(base)/\(planId)/invites/\(inviteId)", query: biz())
     }
 
     /// `POST /api/plans/:id/invites/claim` — the person opened an email or
     /// text invitation (`?invite=` on the plan link). 409 `invite_used`, 404
     /// `invite_unavailable`. Route `backend/routes/plans.js`.
     public static func claimInvite(planId: String, token: String) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/invites/claim", body: PlanInviteClaimBody(token: token))
+        Endpoint(method: .post, path: "\(base)/\(planId)/invites/claim", query: biz(), body: PlanInviteClaimBody(token: token))
     }
 
     /// `POST /api/plans/:id/invites/decline` — "Can't make it". Saying "I'm
     /// in" is the ordinary ask. Route `backend/routes/plans.js`.
     public static func declineInvite(planId: String) -> Endpoint {
-        Endpoint(method: .post, path: "\(base)/\(planId)/invites/decline")
+        Endpoint(method: .post, path: "\(base)/\(planId)/invites/decline", query: biz())
     }
 
     /// `GET /api/plans/invites/next` — right after signing in, the newest
     /// invitation not opened yet, `{ plan_id }`. Route `backend/routes/plans.js`.
     public static func nextInvite() -> Endpoint {
-        Endpoint(method: .get, path: "\(base)/invites/next")
+        Endpoint(method: .get, path: "\(base)/invites/next", query: biz())
     }
 }

@@ -25,6 +25,7 @@ const { memoryToolDefinitions, runMemoryTool } = require('./memory');
 const { followUpToolDefinitions, runFollowUpTool } = require('./followUps');
 const { ruleToolDefinitions, runRuleTool } = require('./rules');
 const { needsYouDefinition, runNeedsYou } = require('./needsYou');
+const { OUT_OF_SCOPE, outOfScopeDefinition, runOutOfScope } = require('./scope');
 const { homesOf, localToUtc } = require('./assistantKit');
 
 const {
@@ -287,6 +288,8 @@ const toolDefinitions = [
   // Phase 3: standing rules, what Pantopus does on its own once they turn it on (rules.js).
   ...ruleToolDefinitions,
   showLinkDefinition,
+  // Pantopus only: what the model calls for a message outside what the assistant is for (scope.js).
+  outOfScopeDefinition,
 ];
 
 // ─── Tool Executors ─────────────────────────────────────────────────────────
@@ -425,6 +428,7 @@ async function _executeToolImpl(name, args, ctx) {
   const ruled = await runRuleTool(name, args, ctx);
   if (ruled) return ruled;
   if (name === 'show_link') return runShowLink(args, ctx);
+  if (name === OUT_OF_SCOPE) return runOutOfScope(args);
   switch (name) {
     case 'get_user_context':
       return _getUserContext(userId);

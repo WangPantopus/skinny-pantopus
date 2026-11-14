@@ -37,8 +37,8 @@ struct PlanPinCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 // Pulled down, the card keeps its type, title, when and where over the map.
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        PlanTypeTag(kind: card.kind)
+                    HStack(spacing: Spacing.s2) {
+                        PlanCardTag(card: card)
                         Spacer()
                         closeButton
                     }
@@ -58,7 +58,14 @@ struct PlanPinCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .plansSheetPeek(.card(planId))
-                PlanHostRow(host: card.host, kind: card.kind).hiddenUnderPlansTabBar()
+                Group {
+                    if let business = card.business {
+                        PlanBusinessHostRow(business: business).accessibilityIdentifier("planBusinessHost")
+                    } else {
+                        PlanHostRow(host: card.host, kind: card.kind)
+                    }
+                }
+                .hiddenUnderPlansTabBar()
                 // Someone already in (or hosting) doesn't need to hear how to get in.
                 PlanSpotsBlock(
                     card: card,
@@ -163,7 +170,10 @@ struct PlanMainAction: Equatable {
         if card.myInvite?.isOpen == true, viewer.canAsk || viewer.cannotAskReason == .fullUseWaitlist {
             return PlanMainAction(title: card.isFull ? "Join the waitlist" : "I'm in", isPrimary: true, asks: true)
         }
-        if viewer.canAsk { return PlanMainAction(title: card.isFull ? "Join the waitlist" : "Ask to join", isPrimary: true, asks: true) }
+        if viewer.canAsk {
+            let ask = card.isBusiness && viewer.autoRule == .open ? "Join" : "Ask to join"
+            return PlanMainAction(title: card.isFull ? "Join the waitlist" : ask, isPrimary: true, asks: true)
+        }
         if viewer.cannotAskReason == .fullUseWaitlist { return PlanMainAction(title: "Join the waitlist", isPrimary: true, asks: true) }
         return nil
     }
@@ -185,7 +195,8 @@ enum PlanCardLines {
         } else {
             parts.append(PlanFormat.dayPartPhrase(card.dayPart, day: card.startsOnDate, calendar: calendar))
         }
-        parts.append(card.area.label)
+        // A business's plan is at its place, by name (board G3); a neighbor's at its area.
+        parts.append(card.isBusiness ? businessPlaceName(card) : card.area.label)
         if let distance = PlanFormat.distance(card.distanceBand) { parts.append(distance) }
         return parts.joined(separator: " · ")
     }
@@ -194,7 +205,7 @@ enum PlanCardLines {
     /// this viewer (or, for the host, anyone) in right away, in the words of
     /// board J6 and the Android app. Playdates: "Maya approves each family".
     static func approval(_ card: PlanCardDTO) -> String {
-        let first = firstName(card.host.displayName)
+        let first = hostName(card)
         // The host's invitation: no request (or, opened from another address, the host says yes first), as Android.
         if card.viewer?.isHost != true, let invite = card.myInvite, invite.isOpen {
             return invite.needsHostOk ? "\(first) says yes first" : "Invited by \(first) · no request needed"
@@ -205,6 +216,7 @@ enum PlanCardLines {
         case .anyoneNearby: return "Lets in anyone nearby automatically"
         case .verified: return "Lets in verified neighbors automatically"
         case .hostedBefore: return card.viewer?.isHost == true ? "Lets in people you've hosted automatically" : "You can get in right away"
+        case .open: return card.viewer?.isHost == true ? "Lets anyone in right away" : "You can get in right away"
         case nil: return "\(first) approves each person"
         }
     }
@@ -236,9 +248,9 @@ enum PlanCardLines {
     }
 
     /// "Sam usually answers within an hour", when the server knows.
-    static func answersWithin(_ host: PlanHostDTO) -> String? {
-        guard let minutes = host.typicalAnswerMinutes else { return nil }
-        let first = firstName(host.displayName)
+    static func answersWithin(_ card: PlanCardDTO) -> String? {
+        guard let minutes = card.host.typicalAnswerMinutes else { return nil }
+        let first = hostName(card)
         let span = switch minutes {
         case ..<20: "within minutes"
         case ..<75: "within an hour"

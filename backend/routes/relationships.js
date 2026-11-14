@@ -31,6 +31,7 @@ const marketplaceService = require('../services/marketplace/marketplaceService')
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+const { clientIpKey } = require('../utils/clientIpKey');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
 // A blocked relationship exists only for the person who blocked. To the
@@ -106,9 +107,11 @@ async function blockSomeoneWhoBlockedYou(req, res, userId, otherUserId, reason) 
 
 // ============ RATE LIMITERS ============
 
+// Per network (IP, IPv6 by its /64), so one IPv6 client can't step through its own /64 uncounted.
 const connectionRequestLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 50,
+  keyGenerator: clientIpKey,
   message: 'Too many connection requests. Please try again later.',
 });
 

@@ -281,16 +281,58 @@ function foldUnit(part) {
     .trim();
 }
 
-/** One comparable key for a premises. */
-function householdMatchKey(line1, line2, city, state, zip) {
-  const zip5 = String(zip || '').trim().slice(0, 5);
-  return [
-    foldAddressPart(line1),
-    foldUnit(line2),
-    foldAddressPart(city),
-    String(state || '').trim().toUpperCase(),
-    zip5,
-  ].join('|');
+/** The street part of a premises, folded: the street line and the unit. */
+function streetKey(line1, line2) {
+  return `${foldAddressPart(line1)}|${foldUnit(line2)}`;
+}
+
+/** The five-digit ZIP, or '' when there isn't one (blank, or fewer than five digits). */
+function zip5Of(zip) {
+  const digits = String(zip || '').replace(/\D/g, '');
+  return digits.length >= 5 ? digits.slice(0, 5) : '';
+}
+
+/**
+ * Can two addresses' city, state and ZIP be the same place? Each part has to agree only where both sides have one.
+ * The apps let an owner leave State and ZIP blank (their grey "WA" and "98660" placeholders look filled in), and a
+ * blank part read as a different place let a business be filed at a household's address, or a second page take a
+ * verified business's name there. Two different values are still two places.
+ *
+ * @param {{ city?: string, state?: string, zip?: string }} a
+ * @param {{ city?: string, state?: string, zip?: string }} b
+ */
+function sameLocality(a, b) {
+  const agree = (x, y) => !x || !y || x === y;
+  const state = (s) => String(s || '').trim().toUpperCase();
+  return agree(foldAddressPart(a.city), foldAddressPart(b.city))
+    && agree(state(a.state), state(b.state))
+    && agree(zip5Of(a.zip), zip5Of(b.zip));
+}
+
+/**
+ * Rows of `table` with this house number in this ZIP or in this city: the candidates the part-by-part passes compare.
+ * Both lookups run, so a blank ZIP on either side, typed or stored, still finds the row by its city.
+ *
+ * @returns {Promise<{ rows: object[] } | { error: string }>}
+ */
+async function rowsAtHouseNumber(table, columns, normalized, { activeOnly = false, limit = 50 } = {}) {
+  const houseNumber = (String(normalized.line1 || '').trim().match(/^\d+/) || [])[0];
+  if (!houseNumber) return { rows: [] };
+  const zip5 = zip5Of(normalized.zip);
+  // The city's first word as a prefix, so "Camas." and "camas" both find "Camas"; sameLocality compares it in full.
+  const cityWord = (String(normalized.city || '').toLowerCase().match(/[a-z0-9]+/) || [])[0];
+  const lookups = [];
+  if (zip5) lookups.push(['zipcode', `${zip5}%`]);
+  if (cityWord) lookups.push(['city', `${cityWord}%`]);
+  const found = new Map();
+  for (const [column, pattern] of lookups) {
+    let query = supabaseAdmin.from(table).select(columns).ilike('address', `${houseNumber} %`).ilike(column, pattern);
+    if (activeOnly) query = query.eq('is_active', true);
+    const { data, error } = await query.limit(limit);
+    if (error) return { error: error.message };
+    (data || []).forEach((row) => found.set(row.id, row));
+  }
+  return { rows: [...found.values()] };
 }
 
 async function findHouseholdAtAddress(hash, normalized) {
@@ -316,41 +358,28 @@ async function findHouseholdAtAddress(hash, normalized) {
   // The hash is format-sensitive: Home.address_hash is usually computed from
   // Google's canonical output while this probe hashes raw input, so
   // "123 Main St." and "123 Main St" miss each other. Widen with a
-  // field-level pass: candidates by house number + ZIP5, then a
+  // field-level pass: candidates by house number in the ZIP or the city, then a
   // punctuation-insensitive fold comparison. This is a comparison rule local
   // to the probe — computeAddressHash is untouched, so no stored hash changes.
   if (normalized && normalized.line1) {
-    const houseNumber = (String(normalized.line1).trim().match(/^\d+/) || [])[0];
-    const zip5 = String(normalized.zip || '').trim().slice(0, 5);
-    if (houseNumber && zip5) {
-      const { data: fieldHomes, error: fieldErr } = await supabaseAdmin
-        .from('Home')
-        .select('id, address, address2, city, state, zipcode')
-        .ilike('address', `${houseNumber} %`)
-        .ilike('zipcode', `${zip5}%`)
-        .limit(50);
-
-      if (fieldErr) {
-        logger.warn('Household conflict field probe failed', { error: fieldErr.message });
-        return { unknown: true };
-      }
-
-      const wanted = householdMatchKey(
-        normalized.line1, normalized.line2, normalized.city, normalized.state, zip5,
-      );
-      // A suite doesn't make a house a different place: a home recorded with no
-      // unit matches its street address with any unit, so typing "Suite 1" at
-      // someone's house can't walk past this probe. A home in another unit of
-      // the same building is still a different premises.
-      const wantedWithoutUnit = householdMatchKey(
-        normalized.line1, '', normalized.city, normalized.state, zip5,
-      );
-      const fieldMatches = (fieldHomes || []).filter((h) => {
-        const homeKey = householdMatchKey(h.address, h.address2, h.city, h.state, h.zipcode);
-        return homeKey === wanted || (foldUnit(h.address2) === '' && homeKey === wantedWithoutUnit);
-      });
-      candidateIds = [...new Set([...candidateIds, ...fieldMatches.map((h) => h.id)])];
+    const near = await rowsAtHouseNumber('Home', 'id, address, address2, city, state, zipcode', normalized);
+    if (near.error) {
+      logger.warn('Household conflict field probe failed', { error: near.error });
+      return { unknown: true };
     }
+
+    const wanted = streetKey(normalized.line1, normalized.line2);
+    // A suite doesn't make a house a different place: a home recorded with no
+    // unit matches its street address with any unit, so typing "Suite 1" at
+    // someone's house can't walk past this probe. A home in another unit of
+    // the same building is still a different premises.
+    const wantedWithoutUnit = streetKey(normalized.line1, '');
+    const fieldMatches = near.rows.filter((h) => {
+      if (!sameLocality(normalized, { city: h.city, state: h.state, zip: h.zipcode })) return false;
+      const homeKey = streetKey(h.address, h.address2);
+      return homeKey === wanted || (foldUnit(h.address2) === '' && homeKey === wantedWithoutUnit);
+    });
+    candidateIds = [...new Set([...candidateIds, ...fieldMatches.map((h) => h.id)])];
   }
 
   if (candidateIds.length === 0) return null;
@@ -373,7 +402,7 @@ async function findHouseholdAtAddress(hash, normalized) {
 /**
  * Other businesses' active locations at this premises (same street address and the same suite, or none on both).
  *
- * Two passes, like the household probe: the stored hash, then house number + ZIP compared part by part. The phone
+ * Two passes, like the household probe: the stored hash, then house number in the ZIP or city, compared part by part. The phone
  * create wizard saves its location with no hash, and "60 Centre St." hashes apart from "60 Centre St", so the hash
  * alone misses both.
  *
@@ -398,22 +427,14 @@ async function otherBusinessLocationsAt(normalized, hash, businessUserId) {
     (data || []).forEach(keep);
   }
 
-  const houseNumber = (String(normalized.line1 || '').trim().match(/^\d+/) || [])[0];
-  const zip5 = String(normalized.zip || '').trim().slice(0, 5);
-  if (houseNumber && zip5) {
-    const { data, error } = await supabaseAdmin
-      .from('BusinessLocation')
-      .select('id, business_user_id, address, address2, city, state, zipcode')
-      .eq('is_active', true)
-      .ilike('address', `${houseNumber} %`)
-      .ilike('zipcode', `${zip5}%`)
-      .limit(200);
-    if (error) return { error: error.message };
-    const wanted = householdMatchKey(normalized.line1, normalized.line2, normalized.city, normalized.state, zip5);
-    (data || [])
-      .filter((loc) => householdMatchKey(loc.address, loc.address2, loc.city, loc.state, loc.zipcode) === wanted)
-      .forEach(keep);
-  }
+  const near = await rowsAtHouseNumber('BusinessLocation', 'id, business_user_id, address, address2, city, state, zipcode',
+    normalized, { activeOnly: true, limit: 200 });
+  if (near.error) return { error: near.error };
+  const wanted = streetKey(normalized.line1, normalized.line2);
+  near.rows
+    .filter((loc) => streetKey(loc.address, loc.address2) === wanted
+      && sameLocality(normalized, { city: loc.city, state: loc.state, zip: loc.zipcode }))
+    .forEach(keep);
 
   return { rows: [...found.values()] };
 }

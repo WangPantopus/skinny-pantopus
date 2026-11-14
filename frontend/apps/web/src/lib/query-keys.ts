@@ -12,6 +12,9 @@ export const queryKeys = {
   // ── Hub ────────────────────────────────────────────────────
   hub: () => ['hub'] as const,
   hubToday: () => ['hub', 'today'] as const,
+  /** Today for the city around your kept area, before an address (POST /api/saved-places/area/today); lib/todayArea.ts. */
+  todayArea: (userId: string | null, latitude: number | null, longitude: number | null) =>
+    ['hub', 'today-area', userId, latitude, longitude] as const,
 
   // ── Feed ───────────────────────────────────────────────────
   feed: (surface: string, filter: string) =>

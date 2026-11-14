@@ -22,6 +22,14 @@ public enum HolidayCardEndpoints {
         Endpoint(method: .get, path: "/api/mailbox/cards/arrivals", query: ["to": toUserId])
     }
 
+    /// `GET /api/mailbox/cards/waiting` — route `backend/routes/mailbox.js:2314`.
+    /// The card a new account joined for: the newest unopened Christmas card in
+    /// its own Me mailbox while the account is under 14 days old, else
+    /// `{ card: null }` (also while cards are off). 503 when it can't be read.
+    public static func waiting() -> Endpoint {
+        Endpoint(method: .get, path: "/api/mailbox/cards/waiting")
+    }
+
     /// `POST /api/mailbox/cards` — route `backend/routes/mailbox.js:1837`.
     /// One card a day; answers 201 `{ card }`.
     public static func send(_ body: SendHolidayCardBody) -> Endpoint {

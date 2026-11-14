@@ -1,5 +1,8 @@
 package app.pantopus.android.ui.screens.place.today
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +54,11 @@ import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.StatusChip
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.waitingLabel
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasCardDoorsViewModel
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasCountdownCard
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasToday
+import app.pantopus.android.ui.screens.mailbox.cards.daysToChristmas
+import app.pantopus.android.ui.screens.mailbox.cards.showsChristmasCountdown
 import app.pantopus.android.ui.screens.place.PlaceVerifyBanner
 import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.detail.AgendaActions
@@ -112,12 +121,33 @@ fun TodayTabScreen(
     onOpenLink: (String) -> Unit = DeepLinkRouter::handle,
     /** Share's "Or share in Pantopus": the Pulse composer or a chat with today's sky; null leaves them out. */
     skyShare: SkySharePantopus? = null,
+    /** The Christmas countdown's Send a Christmas card: the card flow on the Mail tab; null leaves the countdown out. */
+    onSendChristmasCard: (() -> Unit)? = null,
+    /** "Type my address" and "Add your address" (TABCARD §4a): Place's address-first screen, not the Add Home steps. */
+    onTypeAddress: () -> Unit = onClaim,
     viewModel: TodayTabViewModel = hiltViewModel(),
     needsYou: NeedsYouViewModel = hiltViewModel(),
+    christmasCards: ChristmasCardDoorsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val locating by viewModel.locating.collectAsStateWithLifecycle()
+    val locationRefused by viewModel.locationRefused.collectAsStateWithLifecycle()
+    // Only the "Use my location" tap asks the system; once allowed (now or before), one fix is read.
+    val context = LocalContext.current
+    val locationQuestion =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            if (results.values.any { it }) viewModel.useMyLocation() else viewModel.locationRefused()
+        }
+    val useMyLocation = {
+        if (hasLocationPermission(context)) {
+            viewModel.useMyLocation()
+        } else {
+            locationQuestion.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
     val agendaTasks by viewModel.agendaTasks.collectAsStateWithLifecycle()
     val needsYouItems by needsYou.items.collectAsStateWithLifecycle()
+    val cardsOpen by christmasCards.open.collectAsStateWithLifecycle()
     // One Plans read serves the agenda's plan rows and today's plan cards.
     val plansViewModel: PlansTodayViewModel? = plans?.let { hiltViewModel() }
     val plansUi = plansViewModel?.ui?.collectAsStateWithLifecycle()?.value
@@ -186,7 +216,13 @@ fun TodayTabScreen(
                     ScrollAwayHeaderPage(scroll)
                     Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(top = top)) {
                         needsYouFirst()
-                        NoPlaceCard(onClaim)
+                        // No address yet and no city kept: Today starts where they are.
+                        TodayAreaStartCard(
+                            locating = locating,
+                            refused = locationRefused,
+                            onUseLocation = useMyLocation,
+                            onTypeAddress = onTypeAddress,
+                        )
                     }
                 }
                 is TodayTabUiState.ClaimInReview -> {
@@ -244,6 +280,9 @@ fun TodayTabScreen(
                                 onRadonShown = onRadonShown,
                                 needsYou = { agendaTaskIds -> NeedsYouCard(needsYouItems, onOpenLink, agendaTaskIds = agendaTaskIds) },
                                 skyShare = skyShare,
+                                christmas = christmasCountdown(cardsOpen, onSendChristmasCard),
+                                // The city's day before an address: the rest needs the street, last on the page.
+                                last = current.area?.let { { TodayAreaAddAddressCard(onAdd = onTypeAddress) } },
                             )
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::pull) {
                             PlaceTodayDetailContent(
@@ -264,6 +303,20 @@ fun TodayTabScreen(
             }
         }
     }
+}
+
+/**
+ * The Christmas countdown on Today's loaded page (TABCARD §2a): while cards are open and Christmas is 1 to 45 days away
+ * on the device's date ([daysToChristmas]); not on the no-place card.
+ */
+private fun christmasCountdown(
+    cardsOpen: Boolean,
+    onSend: (() -> Unit)?,
+): (@Composable () -> Unit)? {
+    if (!cardsOpen || onSend == null) return null
+    val days = daysToChristmas(ChristmasToday.date())
+    if (!showsChristmasCountdown(days)) return null
+    return { ChristmasCountdownCard(days = days, onSend = onSend, modifier = Modifier.padding(top = 12.dp)) }
 }
 
 /** The title, date and address, with the side menu at the end of the title line. */
@@ -288,7 +341,15 @@ private fun TodayHeader(
                     modifier = Modifier.padding(bottom = 3.dp),
                 )
             }
-            (state as? TodayTabUiState.Loaded)?.intelligence?.place?.let { TodayAddressLine(it) }
+            (state as? TodayTabUiState.Loaded)?.let { loaded ->
+                // A city kept before an address shows its name ("Vancouver, WA") where an address would.
+                val area = loaded.area
+                if (area != null) {
+                    TodayAddressText(area.label ?: loaded.intelligence.place.label)
+                } else {
+                    TodayAddressLine(loaded.intelligence.place)
+                }
+            }
         }
         if (onOpenMenu != null) MessagesButton(testTag = "today.chat", modifier = Modifier.offset(y = (-10).dp))
     }
@@ -296,9 +357,12 @@ private fun TodayHeader(
 
 /** "1421 SE Oak St · Portland", as iOS's Today and the Place pages show it. */
 @Composable
-private fun TodayAddressLine(place: PlaceAddressRef) {
+private fun TodayAddressLine(place: PlaceAddressRef) = TodayAddressText(placeDetailAddress(place))
+
+@Composable
+private fun TodayAddressText(text: String) {
     Text(
-        placeDetailAddress(place),
+        text,
         fontSize = 13.sp,
         fontWeight = FontWeight.Medium,
         color = PantopusColors.appTextMuted,
@@ -344,32 +408,6 @@ private fun TodayPlaceholders(modifier: Modifier = Modifier) {
                         .background(PantopusColors.appSurfaceSunken),
             )
         }
-    }
-}
-
-@Composable
-private fun NoPlaceCard(onClaim: () -> Unit) {
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth().placeCard().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(PantopusColors.homeBg),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(PantopusIcon.CloudSun, null, size = 28.dp, strokeWidth = 2f, tint = PantopusColors.home)
-        }
-        Text("Today starts at your address", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
-        Text(
-            "Weather, air, alerts, and the dates that matter at your address — pickup day, tax deadlines, council meetings. " +
-                "Claim your address to start.",
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            textAlign = TextAlign.Center,
-            color = PantopusColors.appTextSecondary,
-        )
-        PrimaryButton(title = "Claim your address", onClick = onClaim, modifier = Modifier.fillMaxWidth())
     }
 }
 

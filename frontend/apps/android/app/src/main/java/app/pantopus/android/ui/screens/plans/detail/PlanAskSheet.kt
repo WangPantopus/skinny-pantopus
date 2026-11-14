@@ -29,6 +29,8 @@ import app.pantopus.android.data.plans.KidsAgeBand
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanKind
 import app.pantopus.android.data.plans.PlanViewerStanding
+import app.pantopus.android.data.plans.hostApproves
+import app.pantopus.android.data.plans.isBusiness
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.standing
@@ -75,6 +77,8 @@ internal fun PlanAskSheet(
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val host = plan.hostFirst
+    // A business's plan that lets anyone in right away: "Join", not a request (board G3).
+    val joinsAtOnce = plan.isBusiness && !plan.hostApproves
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = sheet,
@@ -95,7 +99,7 @@ internal fun PlanAskSheet(
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (invited) "Join $host's plan" else "Ask $host to join",
+                        text = if (invited || joinsAtOnce) "Join $host's plan" else "Ask $host to join",
                         style = planH3,
                         color = PantopusColors.appText,
                         modifier = Modifier.semantics { heading() },
@@ -117,25 +121,12 @@ internal fun PlanAskSheet(
             } else {
                 PartyField(plan, draft, onEdit)
             }
-            HelloField(plan, draft, onEdit)
-            PlanScopeLine(
-                if (plan.isPlaydate) {
-                    "$host sees your first name, your verified badge, about how far away you live and your kids' ages. Never their names."
-                } else {
-                    "$host sees your first name, your verified badge and about how far away you live. Never your address."
-                },
-            )
+            // A business's plan that lets people in right away has no "Say hi" box (design, G4).
+            if (!joinsAtOnce) HelloField(plan, draft, onEdit)
+            PlanScopeLine(askScopeLine(plan, host, joinsAtOnce))
             draft.error?.let { Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error) }
             PrimaryButton(
-                title =
-                    when {
-                        // Changing a request still waiting; after a withdrawal or a no, asking again is a new request
-                        // (the server keeps the old one in `my_request`), as on iOS.
-                        plan.standing == PlanViewerStanding.REQUESTED -> "Update request"
-                        plan.isFull -> "Join the waitlist"
-                        invited -> "I'm in"
-                        else -> "Send request"
-                    },
+                title = askButtonTitle(plan, invited, joinsAtOnce),
                 onClick = onSend,
                 isLoading = draft.sending,
                 isEnabled = !draft.sending && (!plan.isPlaydate || (draft.staysWithKids && draft.ageBands.isNotEmpty())),
@@ -144,6 +135,37 @@ internal fun PlanAskSheet(
         }
     }
 }
+
+/** What the host will see about the person asking: less for a business's team (B4), and no note where there is no box. */
+private fun askScopeLine(
+    plan: PlanDto,
+    host: String,
+    joinsAtOnce: Boolean,
+): String =
+    when {
+        plan.isBusiness && joinsAtOnce -> "$host sees your first name and how many are coming. Never your address."
+        plan.isBusiness -> "$host sees your first name, how many are coming and your note. Never your address."
+        plan.isPlaydate ->
+            "$host sees your first name, your verified badge, about how far away you live and your kids' ages. Never their names."
+        else -> "$host sees your first name, your verified badge and about how far away you live. Never your address."
+    }
+
+/**
+ * The sheet's button. Changing a request still waiting; after a withdrawal or a no, asking again is a new request (the
+ * server keeps the old one in `my_request`), as on iOS. A business's right-away plan: "Join".
+ */
+private fun askButtonTitle(
+    plan: PlanDto,
+    invited: Boolean,
+    joinsAtOnce: Boolean,
+): String =
+    when {
+        plan.standing == PlanViewerStanding.REQUESTED -> "Update request"
+        plan.isFull -> "Join the waitlist"
+        invited -> "I'm in"
+        joinsAtOnce -> "Join"
+        else -> "Send request"
+    }
 
 @Composable
 private fun PartyField(

@@ -18,6 +18,14 @@ public enum SavedPlacesEndpoints {
         Endpoint(method: .get, path: "/api/saved-places/\(id)/today")
     }
 
+    /// `POST /api/saved-places/area/today` — the same Today as `today(id:)`
+    /// for the city around a point rounded to two decimal places (in the body,
+    /// never the URL), plus `area`. Stores nothing; 400 for a missing or
+    /// impossible point. Route `backend/routes/savedPlaces.js:88`.
+    public static func areaToday(_ body: AreaTodayBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/saved-places/area/today", body: body)
+    }
+
     /// `GET /api/saved-places/:id/preview` — the public address preview for
     /// the saved point itself (its stored coordinates; a label can be a name
     /// that geocodes elsewhere). Same shape as `GET /api/public/place`.

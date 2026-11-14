@@ -28,14 +28,18 @@ struct MomentsViewer: View {
     @State var showsMenu = false
     @State var showsReport = false
     @State var showsBlock = false
-    @State var dragOffset: CGSize = .zero
+    /// Where the finger has moved the viewer, down or sideways (`MomentsViewerMotion.swift`): never read by this
+    /// view's own body, so a finger moving doesn't build the viewer again.
+    @State var motion = MomentsViewerMotion()
     @State var pressStarted: Date?
     @State var pressMoved = false
     @State var holdTask: Task<Void, Never>?
     /// Which way the press under the finger is going, once it has moved: it keeps to that way until it lifts.
     @State var pressAxis: Axis?
-    /// How far a sideways drag has turned the page toward the person after (negative) or before (`+Paging`).
-    @State var pageOffset: CGFloat = 0
+    /// Where a press that became a drag was when it did: the viewer moves from there, with no jump.
+    @State var pressOrigin: CGSize = .zero
+    /// Where the picture's left edge is on the screen: a tap's side is told from it.
+    @State var pressLeft: CGFloat = 0
     @State var pageWidth: CGFloat = 0
     /// The page is finishing its turn: touches wait for it.
     @State var turning = false
@@ -64,7 +68,7 @@ struct MomentsViewer: View {
     let onBack: (@MainActor () -> Void)?
     /// The place under the name, tapped: whoever opened the viewer over a map shows that spot on it.
     let onShowPlace: (@MainActor (MomentRingDTO) -> Void)?
-    private let onClose: @MainActor () -> Void
+    let onClose: @MainActor () -> Void
 
     init(
         session: MomentsWatchSession,
@@ -101,23 +105,6 @@ struct MomentsViewer: View {
         presentation == .card
     }
 
-    /// How far the viewer has been dragged down, never negative.
-    private var dragDown: CGFloat {
-        max(dragOffset.height, 0)
-    }
-
-    /// The viewer shrinks a little as it's dragged down.
-    private var dragScale: CGFloat {
-        let travel: CGFloat = min(dragDown, 400)
-        return 1 - travel / 2400
-    }
-
-    /// The black behind the viewer fades as it's dragged down.
-    private var backdropOpacity: Double {
-        let travel: CGFloat = min(dragDown, 300)
-        return 1 - Double(travel) / 600
-    }
-
     var body: some View {
         menuDialogs(on: layout, active: !isCard)
             // A card's black and shadow are a plain card behind it (not the playing picture's), and move with it.
@@ -129,10 +116,10 @@ struct MomentsViewer: View {
                         .shadow(color: .black.opacity(0.22), radius: 4, x: 0, y: 2)
                 }
             }
-            .offset(y: max(0, dragOffset.height))
-            .scaleEffect(dragScale)
-            // A card has its own rounded black; behind a cover the black fades as it's dragged down.
-            .background { if !isCard { Color.black.opacity(backdropOpacity).ignoresSafeArea() } }
+            // It follows a drag down. A card has its own rounded black; behind a cover the black fades with the
+            // drag, and what opened the viewer shows through.
+            .modifier(MomentsDragFollow(motion: motion, fades: !isCard))
+            .modifier(MomentsCoverBackdrop(isCover: !isCard))
             // Watching is always dark. A card is inside the tab, so only the card goes dark, not the app.
             .environment(\.colorScheme, .dark)
             .preferredColorScheme(isCard ? nil : .dark)
@@ -140,7 +127,7 @@ struct MomentsViewer: View {
             .task { model.start() }
             .onAppear(perform: giveReplyFocusBack)
             .onDisappear { if stopsOnDisappear { model.stop() } }
-            .onChange(of: model.isClosed) { _, closed in if closed { onClose() } }
+            .onChange(of: model.isClosed) { _, closed in if closed { finish() } }
             .onChange(of: replyFocused) { _, focused in
                 model.replying = focused || session.showsReactions
                 noteReplyFocus(focused)
@@ -150,6 +137,8 @@ struct MomentsViewer: View {
             .onChange(of: covered, initial: true) { _, isCovered in model.covered = isCovered }
             // A reply half-typed for one person is never left in the next person's box.
             .onChange(of: model.brief?.id) { _, _ in session.replyText = "" }
+            // Another watching in the same place starts where a viewer rests, not where the last one was left.
+            .onChange(of: session.id) { _, _ in motion = MomentsViewerMotion() }
             // Another app, a call or the notification shade: it waits, and picks up where it was.
             .onChange(of: scenePhase, initial: true) { _, phase in model.away = phase != .active }
             // Folding or turning the Duo takes the keyboard just before the new layout: the reply box gets it back.
@@ -192,13 +181,13 @@ struct MomentsViewer: View {
                 ZStack(alignment: .bottom) {
                     // The person a sideways drag is bringing in, beside the one showing.
                     if let incoming {
-                        GeometryReader { geo in peekStage(geo, incoming.peek) }
+                        GeometryReader { geo in peekStage(geo, incoming) }
                             .ignoresSafeArea(.keyboard)
-                            .modifier(MomentsPageTurn(position: incoming.position, width: pageWidth, flat: reduceMotion))
+                            .modifier(MomentsPageFollow(motion: motion, incoming: true, width: pageWidth, flat: reduceMotion))
                     }
                     GeometryReader { geo in stage(geo) }
                         .ignoresSafeArea(.keyboard)
-                        .modifier(MomentsPageTurn(position: pageOffset, width: pageWidth, flat: reduceMotion))
+                        .modifier(MomentsPageFollow(motion: motion, incoming: false, width: pageWidth, flat: reduceMotion))
                     bottomColumn(floating: false, showsReact: true)
                 }
             case .closed:
@@ -254,6 +243,7 @@ extension MomentsViewer {
                     }
                 }
                 .contentShape(Rectangle())
+                .readsLeftEdge { pressLeft = $0 }
                 .gesture(pressGesture(width: geo.size.width))
                 .simultaneousGesture(zoomGesture)
                 // VoiceOver can't tap a side: the same moves as actions.
@@ -261,7 +251,7 @@ extension MomentsViewer {
                 .accessibilityAction(named: "Previous Moment") { model.previous() }
                 .accessibilityAction(named: "Next person") { model.nextRing() }
             VStack(spacing: 0) {
-                MomentsProgressBars(count: model.ring?.moments.count ?? 1, current: model.momentIndex, progress: model.progress)
+                MomentsPlayingBars(model: model)
                     .padding(.horizontal, 10)
                     .padding(.top, geo.safeAreaInsets.top + 8)
                 MomentsViewerHeader(
@@ -285,6 +275,12 @@ extension MomentsViewer {
             }
             .opacity(model.holding || zooming ? 0 : 1)
             .animation(.easeOut(duration: 0.15), value: model.holding || zooming)
+            // How high it was made, down the right edge (`MomentsViewerHeights.swift`): there with the header.
+            if let rail = model.heightRail(you: ownHeight) {
+                let top = geo.safeAreaInsets.top + Self.railTop
+                MomentsViewerHeights(rail: rail, top: top, length: max(mediaHeight - Self.railBelow - top, 120))
+                    .opacity(model.holding || zooming || isReplying ? 0 : 1)
+            }
         }
         .ignoresSafeArea()
         .onChange(of: geo.safeAreaInsets.bottom, initial: true) { _, inset in homeInset = inset }

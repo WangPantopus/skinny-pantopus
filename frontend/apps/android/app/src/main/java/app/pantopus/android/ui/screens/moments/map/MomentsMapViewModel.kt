@@ -9,11 +9,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.MomentAuthorDto
 import app.pantopus.android.data.api.models.moments.MomentRingDto
+import app.pantopus.android.data.api.models.moments.MomentSunDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.moments.MomentPosting
 import app.pantopus.android.data.moments.MomentPostingOutcome
+import app.pantopus.android.data.moments.MomentShownHeight
 import app.pantopus.android.data.moments.MomentsFeature
 import app.pantopus.android.data.moments.MomentsMapMove
 import app.pantopus.android.data.moments.MomentsPlayback
@@ -75,18 +77,21 @@ data class MomentRingUi(
         get() = if (mine) "You" else author.firstName?.takeIf { it.isNotBlank() } ?: author.name?.substringBefore(' ') ?: ""
 
     /** "Aisha M., 1 Moment, new, at Esther Short Park, verified resident" (board M1). */
-    val spoken: String
-        get() {
-            val count = if (seen.size == 1) "1 Moment" else "${seen.size} Moments"
-            val name = if (mine) "Your Moments" else author.name ?: author.firstName ?: "Someone"
-            return listOfNotNull(
-                name,
-                count,
-                if (anyNew) "new" else "watched",
-                placeLabel?.let { "at $it" },
-                if (author.verified) "verified resident" else null,
-            ).joinToString(", ")
-        }
+    val spoken: String get() = spoken(null)
+
+    /** The same with the height its pin shows: "…, at Silver Star Mountain, 4,390 feet above sea level". */
+    fun spoken(height: MomentShownHeight?): String {
+        val count = if (seen.size == 1) "1 Moment" else "${seen.size} Moments"
+        val name = if (mine) "Your Moments" else author.name ?: author.firstName ?: "Someone"
+        return listOfNotNull(
+            name,
+            count,
+            if (anyNew) "new" else "watched",
+            placeLabel?.let { "at $it" },
+            height?.spoken,
+            if (author.verified) "verified resident" else null,
+        ).joinToString(", ")
+    }
 }
 
 /**
@@ -157,7 +162,28 @@ data class MomentsMapUiState(
     /** M3's "Share what's happening at <place>": where you'd post from. */
     val emptyPlace: String? = null,
     val spot: MomentsSpot? = null,
-)
+    /** Moment heights (`MomentsHeights.kt`): on for you, as the map's answer says. */
+    val heightsOn: Boolean = false,
+    /** The "Elevation" chip turned the pins' tags off (kept on the phone, per account; they start on). */
+    val heightTagsOff: Boolean = false,
+    /** The color key under the chip is open. */
+    val heightKeyOpen: Boolean = false,
+    /** The west and east edges of the map when it last settled: a tag that would run off either isn't put there. */
+    val heightTagEdges: Pair<Double, Double>? = null,
+    /** The map's zoom then, so the tags are measured against the pins as they stand on screen. */
+    val heightTagZoom: Float? = null,
+    /** Part D: where the sun is while pins with an elevation float for you (`MomentsFloat.kt`); null while they don't. */
+    val floatSun: MomentSunDto? = null,
+) {
+    /** The pins carry height tags: heights are on for you and the chip hasn't turned them off. */
+    val showsHeightTags: Boolean get() = heightsOn && !heightTagsOff
+
+    /** The sun while pins float: `float_on`, the Elevation chip on and the sun up; null draws today's pins. */
+    val floatingSun: MomentSunDto? get() = floatSun?.takeIf { showsHeightTags && it.isUp }
+
+    /** What the map's pins need to know about height tags. */
+    val heightTagPlan: MomentHeightTagPlan get() = MomentHeightTagPlan(showsHeightTags, heightTagEdges, heightTagZoom, floatingSun)
+}
 
 /**
  * The Moments map (boards M1 to M3, P5): rings for the area in view, read again when the map settles, when something
@@ -175,7 +201,13 @@ class MomentsMapViewModel
         private val feature: MomentsFeature,
         @ApplicationContext private val context: Context,
     ) : ViewModel() {
-        private val _state = MutableStateFlow(MomentsMapUiState())
+        /** The "Elevation" chip's last choice on this phone, per account (`MomentsHeights.kt`). */
+        private val choices = context.getSharedPreferences(HEIGHTS_PREFS, Context.MODE_PRIVATE)
+        private val heightTagsOffKey: String? =
+            (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id?.let { "$it.heightTagsOff" }
+
+        private val _state =
+            MutableStateFlow(MomentsMapUiState(heightTagsOff = heightTagsOffKey?.let { choices.getBoolean(it, false) } ?: false))
         val state: StateFlow<MomentsMapUiState> = _state.asStateFlow()
 
         /** Moments posting now (board P5). */
@@ -297,6 +329,10 @@ class MomentsMapViewModel
         ) {
             val next = Viewport(south, west, north, east, zoom)
             viewCenter.value = next.centerLatitude to next.centerLongitude
+            // The height tags are laid out on the map as it is now (`MomentsHeights.kt`).
+            if (_state.value.heightTagEdges != west to east || _state.value.heightTagZoom != zoom) {
+                _state.update { it.copy(heightTagEdges = west to east, heightTagZoom = zoom) }
+            }
             if (next == viewport && _state.value.loaded) return
             viewport = next
             fetch(next)
@@ -317,7 +353,17 @@ class MomentsMapViewModel
                             repository.map(area.south, area.west, area.north, area.east, area.zoom.toInt().coerceIn(1, MAX_ZOOM))
                     ) {
                         is NetworkResult.Success -> {
-                            _state.update { it.copy(rings = result.data, loaded = true, failed = false) }
+                            val heightsOn = repository.heightsOn.value
+                            _state.update {
+                                it.copy(
+                                    rings = result.data,
+                                    loaded = true,
+                                    failed = false,
+                                    heightsOn = heightsOn,
+                                    floatSun = repository.floatSun.value,
+                                    heightKeyOpen = it.heightKeyOpen && heightsOn,
+                                )
+                            }
                             if (result.data.all { it.noLocation }) emptyPlace()
                             lookAroundIfOpening(area, result.data)
                         }
@@ -387,6 +433,22 @@ class MomentsMapViewModel
 
         fun closeSpot() {
             _state.update { it.copy(spot = null) }
+        }
+
+        /** The "Elevation" chip: the pins' tags on or off, kept on the phone per account. The key goes with the tags. */
+        fun toggleHeightTags() {
+            val off = !_state.value.heightTagsOff
+            _state.update { it.copy(heightTagsOff = off, heightKeyOpen = it.heightKeyOpen && !off) }
+            heightTagsOffKey?.let { choices.edit().putBoolean(it, off).apply() }
+        }
+
+        fun toggleHeightKey() {
+            _state.update { it.copy(heightKeyOpen = !it.heightKeyOpen) }
+        }
+
+        /** The key closes when it is tapped and when the map is moved. */
+        fun closeHeightKey() {
+            if (_state.value.heightKeyOpen) _state.update { it.copy(heightKeyOpen = false) }
         }
 
         /** A move the map is asked to make without a finger on it (`MomentsMapMoves.kt`), until it has made it. */
@@ -491,6 +553,7 @@ class MomentsMapViewModel
             const val RELABEL_METERS = 400.0
             const val LABEL_SETTLE_MS = 600L
             const val NEIGHBORHOOD_ZOOM = 14f
+            const val HEIGHTS_PREFS = "pantopus.moments.heights"
         }
     }
 

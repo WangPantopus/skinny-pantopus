@@ -6,8 +6,8 @@
 //  2026-11-11): each is its own Moment. The first takes the Post sheet; when
 //  it has posted, the next takes it, pinned where it was taken and with its
 //  own caption, under the same "How long" and "Who sees it". Retake drops the
-//  ones still waiting. Also here: what the camera's chip reads and where the
-//  last choices are kept, moved out of the model's main file for room.
+//  ones still waiting. Also here: what the camera's chip reads and the last
+//  choices (kept and read back), moved out of the model's main file for room.
 //
 
 import Foundation
@@ -59,5 +59,27 @@ extension MomentsComposerModel {
 
     static func audienceKey(_ account: String) -> String {
         "pantopus.moments.lastAudience.\(account)"
+    }
+
+    static func showHeightKey(_ account: String) -> String {
+        "pantopus.moments.lastShowHeight.\(account)"
+    }
+
+    /// The sheet opens with the last "How long", "Who sees it" and "Show elevation" (kept on the phone, per account).
+    /// "Show the area instead" always starts off.
+    func restoreChoices() {
+        guard let account = Self.account else { return }
+        let savedHours = defaults.integer(forKey: Self.hoursKey(account))
+        if [1, 6, 24, 48].contains(savedHours) { hours = savedHours }
+        if let saved = defaults.string(forKey: Self.audienceKey(account)).flatMap(MomentAudience.init(rawValue:)) { audience = saved }
+        showHeight = defaults.bool(forKey: Self.showHeightKey(account))
+    }
+
+    func saveChoices() {
+        guard let account = Self.account else { return }
+        defaults.set(hours, forKey: Self.hoursKey(account))
+        defaults.set(audience.rawValue, forKey: Self.audienceKey(account))
+        // Only a sheet that offered the switch says what the person wants: one that hid it keeps the last answer.
+        if offersHeight { defaults.set(showHeight, forKey: Self.showHeightKey(account)) }
     }
 }

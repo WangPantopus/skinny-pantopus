@@ -1,5 +1,6 @@
 package app.pantopus.android.data.mailbox
 
+import android.content.Context
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.CardSignature
@@ -11,6 +12,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
 import app.pantopus.android.data.api.models.mailbox.HolidayCardSharedBody
 import app.pantopus.android.data.api.models.mailbox.HolidayCardStamps
+import app.pantopus.android.data.api.models.mailbox.HolidayCardWaiting
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardListBody
@@ -24,15 +26,21 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HolidayCardsApi
 import app.pantopus.android.data.api.services.MailComposeApi
+import app.pantopus.android.data.auth.AuthRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,24 +50,101 @@ import javax.inject.Singleton
  * day, taking it back, and the people a card can go to. [latest] is what the Mailbox's "Send a Christmas card" row and
  * the send screens show, so a card sent or taken back shows on both at once.
  */
+@Suppress("TooManyFunctions") // Every card route the app calls, with the per-account answers the card doors share.
 @Singleton
 class HolidayCardsRepository
     @Inject
     constructor(
         private val api: HolidayCardsApi,
         private val composeApi: MailComposeApi,
+        private val auth: AuthRepository,
+        @ApplicationContext context: Context,
     ) {
         /** The cards as last read; null until read, and while cards are off (the server answers 404). */
         val latest: StateFlow<HolidayCardsResponse?> get() = Companion.latest
 
-        /** `GET /api/mailbox/cards`. A failure other than 404 keeps what was read before. */
+        // Per account on this phone: whether cards were open at the last read (so the Mail tab's envelope is right on
+        // the first frame of a launch), and whether a new account's waiting card was asked for (TABCARD §3).
+        private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+        private fun signedInAccount(): String? = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
+
+        /**
+         * Cards are open for the signed-in account (the Mailbox's "Send a Christmas card" row shows): this launch's
+         * answer once read, and until then the answer this phone last read for that account. Another account's answer
+         * never counts.
+         */
+        val open: Flow<Boolean> = combine(latestFlow, answeredForFlow) { cards, answeredFor -> openFor(cards, answeredFor) }
+
+        /** [open] now, for a first frame. */
+        fun openNow(): Boolean = openFor(latestFlow.value, answeredForFlow.value)
+
+        private fun openFor(
+            cards: HolidayCardsResponse?,
+            answeredFor: String?,
+        ): Boolean {
+            if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) return false
+            val account = signedInAccount() ?: return false
+            return if (answeredFor == account) cardsOpen(cards) else prefs.getBoolean(OPEN_KEY + account, false)
+        }
+
+        /**
+         * `GET /api/mailbox/cards`. A failure other than 404 keeps what was read before. An answer that comes after a
+         * sign-out, or for another account than the one signed in now, is dropped: nothing of it stays for the next one.
+         */
         suspend fun load(): NetworkResult<HolidayCardsResponse> {
+            val account = signedInAccount()
+            val started = generation
             val result = safeApiCall { api.cards() }
+            if (account == null || started != generation || signedInAccount() != account) return result
+            val answered = result is NetworkResult.Success || (result as? NetworkResult.Failure)?.error is NetworkError.NotFound
             when (result) {
                 is NetworkResult.Success -> latestFlow.value = result.data
                 is NetworkResult.Failure -> if (result.error is NetworkError.NotFound) latestFlow.value = null
             }
+            if (answered) {
+                lastReadAt = System.currentTimeMillis()
+                // After [latestFlow], so [open] never shows a moment of "closed" between the two.
+                answeredForFlow.value = account
+                prefs.edit().putBoolean(OPEN_KEY + account, cardsOpen(latestFlow.value)).apply()
+            }
             return result
+        }
+
+        /**
+         * Reads the cards once when nothing has been read yet for the signed-in account: the ways into a card outside
+         * the Mailbox (the Mail tab's red envelope, Today's countdown, a person's page, a chat's menu, the side menu)
+         * ask before they show. Two screens asking at once read once. Nothing is read while the keys are off.
+         */
+        suspend fun loadIfNeeded() {
+            if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox || answeredHere()) return
+            firstRead.withLock { if (!answeredHere()) load() }
+        }
+
+        private fun answeredHere(): Boolean = signedInAccount()?.let { it == answeredForFlow.value } == true
+
+        /**
+         * `GET /api/mailbox/cards/waiting` (TABCARD §3): the card waiting for a new account, null when there is none. A
+         * failure is not an answer.
+         */
+        suspend fun waiting(): NetworkResult<HolidayCardWaiting?> =
+            when (val result = safeApiCall { api.waiting() }) {
+                is NetworkResult.Success -> NetworkResult.Success(result.data.card)
+                is NetworkResult.Failure -> result
+            }
+
+        /** This phone already asked whether a card waits for [account] (and got an answer, or a link opened instead). */
+        fun waitingAsked(account: String): Boolean = prefs.getBoolean(WAITING_ASKED_KEY + account, false)
+
+        fun markWaitingAsked(account: String) {
+            prefs.edit().putBoolean(WAITING_ASKED_KEY + account, true).apply()
+        }
+
+        /** Back in the app: reads the cards again once the last answer is a minute old, so a closed season closes every door. */
+        suspend fun refreshIfStale() {
+            if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) return
+            if (System.currentTimeMillis() - lastReadAt < STALE_AFTER_MS) return
+            firstRead.withLock { if (System.currentTimeMillis() - lastReadAt >= STALE_AFTER_MS) load() }
         }
 
         /** `POST /api/ai/draft/card-note`: up to three notes for the back of the card ("Help me write it"). */
@@ -255,6 +340,32 @@ class HolidayCardsRepository
 
             private val latestFlow = MutableStateFlow<HolidayCardsResponse?>(null)
 
+            /** The account [latestFlow] was read for; null before the first answer and after a sign-out. */
+            private val answeredForFlow = MutableStateFlow<String?>(null)
+
+            /** Bumped at every sign-out: a read that started before it never writes its answer back. */
+            @Volatile
+            private var generation = 0L
+
+            private val firstRead = Mutex()
+
+            @Volatile
+            private var lastReadAt = 0L
+
+            private const val STALE_AFTER_MS = 60_000L
+
+            private const val PREFS = "pantopus.holiday_cards"
+            private const val OPEN_KEY = "open."
+            private const val WAITING_ASKED_KEY = "waiting_asked."
+
+            /**
+             * Cards are open: exactly when the Mailbox shows its "Send a Christmas card" row at the top of Me (the keys
+             * `holiday_cards` and `mailbox` on, and the server says sending is open). Every other way into a card hides
+             * with it (TABCARD §2).
+             */
+            fun cardsOpen(cards: HolidayCardsResponse?): Boolean =
+                LaunchFeatures.holidayCards && LaunchFeatures.mailbox && cards?.open == true
+
             val latest: StateFlow<HolidayCardsResponse?> = latestFlow.asStateFlow()
 
             private val cardSentFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
@@ -305,10 +416,17 @@ class HolidayCardsRepository
                 showSentFlow.resetReplayCache()
             }
 
-            /** Sign-out: nothing of this account's cards stays for the next one. */
+            /**
+             * Sign-out: nothing of this account's cards stays for the next one, and a read still on its way is dropped.
+             * What this phone remembers per account (cards open at the last read, the waiting card asked) stays under
+             * that account's id and is never read for another.
+             */
             fun forgetAccount() {
+                generation++
                 showSentHandled()
+                answeredForFlow.value = null
                 latestFlow.value = null
+                lastReadAt = 0L
             }
         }
     }

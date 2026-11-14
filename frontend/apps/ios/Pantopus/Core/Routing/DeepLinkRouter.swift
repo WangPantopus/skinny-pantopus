@@ -295,6 +295,17 @@ final class DeepLinkRouter {
     /// (the Login cover) can re-read what is waiting.
     private(set) var parkedArrivals = 0
 
+    /// The last link that went live for a signed-in account, and whose it was.
+    /// The tab that owns a link may consume it before the root sees it; a
+    /// one-time look at sign-in (a waiting Christmas card, TABCARD 3) reads
+    /// this to let a link that already opened win.
+    struct LiveLink: Equatable {
+        let account: String
+        let destination: Destination
+    }
+
+    private(set) var lastLiveLink: LiveLink?
+
     private let onDiagnostic: @MainActor (String) -> Void
 
     init(onDiagnostic: @escaping @MainActor (String) -> Void = { category in
@@ -434,6 +445,7 @@ final class DeepLinkRouter {
                     PendingDeepLinkStore.clear()
                 }
                 prefersLoginPresentation = false
+                lastLiveLink = LiveLink(account: userID, destination: destination)
                 pending = destination
             } else {
                 activeContentArrival = nil

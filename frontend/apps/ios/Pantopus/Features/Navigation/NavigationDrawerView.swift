@@ -22,6 +22,9 @@ struct NavigationDrawerView: View {
     /// Opens the viewer's profile from the Personal pill's name. Without it
     /// the whole pill opens the Identity Center.
     var onOpenProfile: (@MainActor () -> Void)?
+    /// "Send a Christmas card" above Manage in the personal menu, while cards
+    /// are open (TABCARD): the send flow. Nil leaves the row out.
+    var onSendChristmasCard: (@MainActor () -> Void)?
 
     /// The panel's widest: more than it is on any iPhone (440 × 0.82 = 361 pt), so only a wide screen is capped.
     private static let maxPanelWidth: CGFloat = 400
@@ -69,6 +72,9 @@ struct NavigationDrawerView: View {
             contextPill
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s0) {
+                    if case .personal = viewModel.context, let onSendChristmasCard {
+                        christmasCardRow(onSendChristmasCard)
+                    }
                     ForEach(viewModel.sections) { section in
                         sectionView(section)
                     }
@@ -264,6 +270,42 @@ struct NavigationDrawerView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("navDrawer.item.\(item.slug)")
+    }
+
+    // MARK: Christmas card
+
+    /// The cream row with the red envelope (drawing SideMenu): the card flow.
+    private func christmasCardRow(_ action: @escaping @MainActor () -> Void) -> some View {
+        Button {
+            dismiss()
+            action()
+        } label: {
+            HStack(spacing: Spacing.s3) {
+                ChristmasMailIcon(size: 20)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Send a Christmas card")
+                        .font(.system(size: 14.5, weight: .bold))
+                        .foregroundStyle(MailPaper.wax)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Until December 31")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(MailPaper.cardTextSoft)
+                }
+                Spacer(minLength: Spacing.s2)
+            }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, Spacing.s3)
+        .padding(.top, Spacing.s1)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("navDrawer.item.send-a-christmas-card")
     }
 
     // MARK: Back to Hub

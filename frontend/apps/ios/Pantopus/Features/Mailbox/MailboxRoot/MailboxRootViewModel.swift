@@ -238,6 +238,10 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     var onOpenInvoice: (@MainActor (String) -> Void)?
     var onVerifyHome: (@MainActor (String) -> Void)?
     var onOpenWelcome: (@MainActor (DrawerItemsResponse.DrawerMail) -> Void)?
+    /// The Mailbox is the screen on top. While something else is open over it
+    /// (a card a new account joined for, opened as the tabs first showed), the
+    /// porch waits for the Mailbox to show again.
+    var mayOpenWelcome: (@MainActor () -> Bool)?
     /// "Send a Christmas card" (`holiday_cards`): the card flow, or today's card.
     var onOpenChristmasCards: (@MainActor () -> Void)?
     /// The Christmas cards answer while sending is open (`holiday_cards` and
@@ -565,6 +569,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             // A card may have gone out, or come back, since.
             await fetchChristmasCards()
             if showsSent { await sent.refresh() }
+            // A porch that waited behind another screen opens now.
+            presentWelcomeIfNeeded()
             return
         }
         state = .loading
@@ -829,7 +835,11 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         }
         let response: HolidayCardsResponse? = try? await api.request(HolidayCardEndpoints.cards())
         christmasCards = response?.open == true ? response : nil
-        if let response { HolidayCardWords.postageOn = response.postageEnabled }
+        if let response {
+            HolidayCardWords.postageOn = response.postageEnabled
+            // The other ways into a card (the tab's envelope, Today, profiles, the side menu) follow this answer.
+            if case let .signedIn(user) = AuthManager.shared.state { HolidayCardDoors.shared.note(response, account: user.id) }
+        }
     }
 
     /// The row's tap: the card flow, or today's card.
@@ -838,9 +848,17 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         onOpenChristmasCards?()
     }
 
-    /// The row shows on Me's Incoming while sending is open.
+    /// The row shows on Me's Incoming while sending is open, unless the top
+    /// card is already the invitation (one door on a screen).
     var showsChristmasCardRow: Bool {
-        isLive && !showsSent && selectedDrawer == .me && currentTab == .incoming && christmasCards != nil
+        isLive && !showsSent && selectedDrawer == .me && currentTab == .incoming && christmasCards != nil && !showsEmptyDayCard
+    }
+
+    /// The top card on a day with no mail, on your own (Me) mailbox, while
+    /// sending is open: "Nothing came today." with "Send a Christmas card"
+    /// (TABCARD, drawing MailEmptyDay). Any other day the top card is the usual one.
+    var showsEmptyDayCard: Bool {
+        isLive && !showsSent && selectedDrawer == .me && christmasCards != nil && hero.isNoMailToday
     }
 
     /// Poll the disambiguation queue on appear / pull-to-refresh, exactly
@@ -1038,7 +1056,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// from this list, so closing the porch leaves it sealed.
     private func presentWelcomeIfNeeded() {
         guard sampleProvider == nil, selectedDrawer == .me, currentTab == .incoming, let onOpenWelcome,
-              case let .signedIn(user) = AuthManager.shared.state else { return }
+              mayOpenWelcome?() ?? true, case let .signedIn(user) = AuthManager.shared.state else { return }
         guard let welcome = loadedMail.first(where: { mail in
             Self.isWelcomeLetter(mail.item) && !mail.item.viewed && !viewedMailIds.contains(mail.id)
         }) else { return }

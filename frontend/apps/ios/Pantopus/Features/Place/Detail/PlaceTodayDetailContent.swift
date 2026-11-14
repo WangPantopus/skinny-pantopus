@@ -11,7 +11,10 @@
 //  pickup editor and the radon card on demand) and "Sources and full
 //  conditions" (the daily forecast, the AQI gauge, every alert and the sun's
 //  arc). The tab adds its Plans cards, the saved-place reminders row and Ask
-//  Pantopus. Parity twin of Android's `PlaceTodayDetailContent`.
+//  Pantopus, and the Christmas countdown above "Coming up at home" while
+//  cards are open (`ChristmasCountdownCard`); for a city kept before an
+//  address (TABCARD 4a), "Add your address for the rest" last. Parity twin
+//  of Android's `PlaceTodayDetailContent`.
 //
 
 import Observation
@@ -36,6 +39,8 @@ struct TodayTabExtras {
     var needsYou: TodayNeedsYouModel?
     /// What the tab says first about the place (a claim's status, "Saved place"): first in the leading column.
     var lead: AnyView?
+    /// A city kept before an address (TABCARD 4a): "Add your address for the rest", last on the page.
+    var onAddAddress: (() -> Void)?
 }
 
 struct PlaceTodayDetailContent: View {
@@ -133,6 +138,11 @@ struct PlaceTodayDetailContent: View {
                 if let needsYou = tab?.needsYou {
                     TodayNeedsYouCard(model: needsYou, hiddenTaskIds: agendaTaskIds, onOpenTask: tab?.onOpenTask)
                 }
+                // Christmas 1 to 45 days away while cards are open (TABCARD): the tab's countdown, above the agenda.
+                if tab != nil, let days = ChristmasCountdownCard.days(open: HolidayCardDoors.shared.isOpen) {
+                    ChristmasCountdownCard(days: days) { rootTabs.openChristmasCard() }
+                        .padding(.top, 24)
+                }
                 agendaSection(proxy: proxy)
                 // The person's plans today (Directions, On my way, Message guests) right under the agenda.
                 if tab != nil, PlansFlags.shared.plans {
@@ -157,6 +167,11 @@ struct PlaceTodayDetailContent: View {
                 AskPantopusBox(action: tab.onAsk)
                     .padding(.top, 24)
                     .placeColumn(.trailing, order: 6)
+            }
+            if let addAddress = tab?.onAddAddress {
+                TodayAreaAddAddressCard(action: addAddress)
+                    .padding(.top, 24)
+                    .placeColumn(.trailing, order: 7)
             }
         }
     }

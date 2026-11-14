@@ -106,6 +106,8 @@ fun BusinessTeamScreen(
     val presets by viewModel.rolePresets.collectAsStateWithLifecycle()
     val online by viewModel.isOnline.collectAsStateWithLifecycle()
     val mutationError by viewModel.mutationError.collectAsStateWithLifecycle()
+    val showsPlans by viewModel.showsPlansPermissions.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.checkPlansPermissions() }
 
     var sheet by remember { mutableStateOf<TeamSheet?>(null) }
     var removeTarget by remember { mutableStateOf<BusinessTeamMemberRow?>(null) }
@@ -207,6 +209,7 @@ fun BusinessTeamScreen(
                 loadPermissions = { viewModel.memberPermissions(s.row.userId) },
                 toggle = { permission, allowed -> viewModel.togglePermission(s.row.userId, permission, allowed) },
                 onDismiss = { sheet = null },
+                showsPlans = showsPlans,
             )
     }
 

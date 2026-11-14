@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -478,12 +479,16 @@ internal data class ProfileActionCallbacks(
     val onDisconnect: () -> Unit = {},
     val onMessage: () -> Unit = {},
     val onEditProfile: () -> Unit = {},
+    /** "Send a card" beside Message (TABCARD §2c): only while cards are open and a card can go to them; null hides it. */
+    val onSendCard: (() -> Unit)? = null,
 )
 
 /**
  * The actions by relationship: none → Connect + Message; request sent → Requested (tap to withdraw) + Message;
  * request received → "<name> wants to connect" with Accept / Not now above Message; connected → Message +
  * Connected ▾ (Disconnect); blocked → nothing. Your own profile shows Edit profile and never Message or Connect.
+ * While Christmas cards are open, "Send a card" follows Message ([ProfileActionCallbacks.onSendCard]); a third button
+ * wraps to the next line, two across as the row always is.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -519,9 +524,13 @@ internal fun ProfileHeaderActions(
                             .testTag("publicProfileActionPending"),
                 )
                 MessageButton(primary = false, onClick = callbacks.onMessage)
+                SendCardButton(callbacks.onSendCard)
             }
         !state.showsConnection ->
-            ProfileActionRow(large) { MessageButton(primary = true, onClick = callbacks.onMessage) }
+            ProfileActionRow(large) {
+                MessageButton(primary = true, onClick = callbacks.onMessage)
+                SendCardButton(callbacks.onSendCard)
+            }
         state.connection == ProfileConnection.PendingReceived ->
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 ConnectRequestBanner(
@@ -531,7 +540,10 @@ internal fun ProfileHeaderActions(
                     onAccept = callbacks.onAccept,
                     onNotNow = callbacks.onDecline,
                 )
-                ProfileActionRow(large) { MessageButton(primary = false, onClick = callbacks.onMessage) }
+                ProfileActionRow(large) {
+                    MessageButton(primary = false, onClick = callbacks.onMessage)
+                    SendCardButton(callbacks.onSendCard)
+                }
             }
         else -> ProfileActionRow(large) { RelationshipButtons(state, callbacks, firstName) }
     }
@@ -556,10 +568,12 @@ private fun FlowRowScope.RelationshipButtons(
                 testTag = "publicProfileConnectCta",
             )
             MessageButton(primary = false, onClick = callbacks.onMessage)
+            SendCardButton(callbacks.onSendCard)
         }
         // The filled button stays on the left, as on iOS and web.
         ProfileConnection.PendingSent -> {
             MessageButton(primary = true, onClick = callbacks.onMessage)
+            SendCardButton(callbacks.onSendCard)
             ProfileActionButton(
                 title = "Requested",
                 icon = PantopusIcon.Clock,
@@ -573,6 +587,7 @@ private fun FlowRowScope.RelationshipButtons(
         }
         ProfileConnection.Connected -> {
             MessageButton(primary = true, onClick = callbacks.onMessage)
+            SendCardButton(callbacks.onSendCard)
             ConnectedMenuButton(firstName = firstName, enabled = !state.inFlight, onDisconnect = callbacks.onDisconnect)
         }
         ProfileConnection.PendingReceived, ProfileConnection.Blocked -> Unit
@@ -592,6 +607,22 @@ private fun FlowRowScope.MessageButton(
         onClick = onClick,
         modifier = Modifier.weight(1f),
         testTag = "publicProfileMessage",
+    )
+}
+
+/** "Send a card" in the card red with an envelope: the card flow with this person chosen. Nothing while [onClick] is null. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FlowRowScope.SendCardButton(onClick: (() -> Unit)?) {
+    if (onClick == null) return
+    ProfileActionButton(
+        title = "Send a card",
+        icon = PantopusIcon.Mail,
+        primary = true,
+        onClick = onClick,
+        modifier = Modifier.weight(1f),
+        testTag = "profile.sendCard",
+        fill = PantopusColors.cardWax to PantopusColors.cardWaxText,
     )
 }
 
@@ -662,9 +693,11 @@ internal fun ProfileActionButton(
     trailingIcon: PantopusIcon? = null,
     testTag: String? = null,
     clickLabel: String? = null,
+    /** A filled button in another colour than sky, and the ink on it (Send a card's card red). */
+    fill: Pair<Color, Color>? = null,
 ) {
     val shape = RoundedCornerShape(Radii.lg)
-    val ink = if (primary) PantopusColors.appTextInverse else PantopusColors.appText
+    val ink = fill?.second ?: if (primary) PantopusColors.appTextInverse else PantopusColors.appText
     Row(
         modifier =
             modifier
@@ -672,7 +705,9 @@ internal fun ProfileActionButton(
                 .alpha(if (enabled) 1f else DISABLED_BUTTON_ALPHA)
                 .clip(shape)
                 .then(
-                    if (primary) {
+                    if (fill != null) {
+                        Modifier.background(fill.first)
+                    } else if (primary) {
                         Modifier.background(PantopusColors.primary600)
                     } else {
                         Modifier.background(PantopusColors.appSurface).border(1.dp, PantopusColors.appBorderStrong, shape)

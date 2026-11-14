@@ -147,12 +147,13 @@ extension MomentsViewer {
                     }
                 }
                 .contentShape(Rectangle())
+                .readsLeftEdge { pressLeft = $0 }
                 .gesture(pressGesture(width: size.width))
                 .accessibilityAction(named: "Next Moment") { model.next() }
                 .accessibilityAction(named: "Previous Moment") { model.previous() }
                 .accessibilityAction(named: "Next person") { model.nextRing() }
             VStack(spacing: 0) {
-                MomentsProgressBars(count: model.ring?.moments.count ?? 1, current: model.momentIndex, progress: model.progress)
+                MomentsPlayingBars(model: model)
                     .padding(.horizontal, 10)
                     .padding(.top, barsTop)
                 MomentsViewerHeader(
@@ -173,6 +174,10 @@ extension MomentsViewer {
                 .padding(.top, 9)
                 if let taken = model.metaTaken {
                     MomentsTakenPill(taken: taken)
+                }
+                // The Duo's layouts show the height as a tag under the name, without the phone's rail.
+                if let height = model.shownHeight {
+                    MomentsViewerHeightLine(height: height)
                 }
             }
             .opacity(model.holding ? 0 : 1)

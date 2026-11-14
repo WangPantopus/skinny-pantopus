@@ -21,11 +21,15 @@ struct PlanPreviewScreen: View {
             PlanNavBar(title: "Preview", leading: .back, trailing: step, onLeading: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
-                    Text.planOverline("What neighbors see")
-                    neighborsCard
-                    Text.planOverline(model.kind == .playdate ? "Families you accept also see" : "People you accept also see")
-                        .padding(.top, Spacing.s1)
-                    PlanFormCard {
+                    Text.planOverline(model.isBusiness ? "What guests see" : "What neighbors see")
+                    if model.isBusiness { PlanBusinessPreviewCard(model: model) } else { neighborsCard }
+                    Text.planOverline(
+                        model.isBusiness ? "People who are in also see"
+                            : model.kind == .playdate ? "Families you accept also see" : "People you accept also see"
+                    )
+                    .padding(.top, Spacing.s1)
+                    // A business's place is public: guests see it before they're in, so its card starts with the note.
+                    if model.isBusiness { businessPrivate } else { PlanFormCard {
                         privateRow(
                             icon: model.whereKind == .home ? .home : .mapPin,
                             text: model.whereKind == .home ? "Your address" : "The exact spot: \(model.place?.name ?? "your place")"
@@ -43,7 +47,7 @@ struct PlanPreviewScreen: View {
                         }
                         Divider().overlay(Theme.Color.appBorder)
                         privateRow(icon: .users, text: "Who's going, and the group chat")
-                    }
+                    } }
                     Text(
                         "You can change or cancel it any time. If you move the time or the place, "
                             + "everyone who's in is asked \u{201C}Still coming?\u{201D}"
@@ -78,6 +82,18 @@ struct PlanPreviewScreen: View {
         .task { await model.loadPreviewArea() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planPreview")
+    }
+
+    /// A business's plan: what only people who are in see (its note, who's going and the chat).
+    private var businessPrivate: some View {
+        PlanFormCard {
+            let note = model.guestNote.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !note.isEmpty {
+                privateRow(icon: .lock, text: "Your note: \u{201C}\(note)\u{201D}")
+                Divider().overlay(Theme.Color.appBorder)
+            }
+            privateRow(icon: .users, text: "Who's going, and the group chat")
+        }
     }
 
     private var neighborsCard: some View {

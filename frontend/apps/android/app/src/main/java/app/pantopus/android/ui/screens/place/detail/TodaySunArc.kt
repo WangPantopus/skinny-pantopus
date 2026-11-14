@@ -78,7 +78,8 @@ private const val TIMES_STACK_SCALE = 1.3f
 
 /**
  * [weather] is the reported weather, so the little sky matches the big one above it. [at] draws one moment with the sun
- * already in place, for a shared picture; null follows the clock.
+ * already in place, for a shared picture; null follows the clock. [overline] is a line above the sky (Place's
+ * address-first screen: "RIGHT NOW IN VANCOUVER", TABCARD §4b); null on Today.
  */
 @Composable
 fun TodaySunArcCard(
@@ -87,6 +88,7 @@ fun TodaySunArcCard(
     timeZone: ZoneId = ZoneId.systemDefault(),
     weather: WeatherConditionCode? = null,
     at: ZonedDateTime? = null,
+    overline: String? = null,
 ) {
     val clock = rememberMinuteClock(timeZone)
     val now = at ?: clock
@@ -108,11 +110,21 @@ fun TodaySunArcCard(
     }
     val countdown = sunCountdown(now, moment, up).takeIf { today }
     val daylight = "${data.daylightMinutes / 60}h ${data.daylightMinutes % 60}m"
-    val spoken = spokenSun(data, moment, countdown)
+    val spoken = (overline?.let { "${it.lowercase().replaceFirstChar(Char::uppercase)}. " } ?: "") + spokenSun(data, moment, countdown)
     PlaceDetailCard(
         modifier = modifier.testTag("todaySunArc").clearAndSetSemantics { contentDescription = spoken },
         padding = 16.dp,
     ) {
+        overline?.let {
+            Text(
+                it,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.88.sp,
+                color = PantopusColors.appTextMuted,
+                modifier = Modifier.padding(bottom = 14.dp),
+            )
+        }
         SunDial(
             moment = moment,
             sky = SkyPalette.sky(moment.phase, weather?.let(::skyWeather) ?: SkyPalette.Weather.CLEAR),

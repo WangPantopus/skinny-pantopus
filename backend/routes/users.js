@@ -830,6 +830,7 @@ const registerLimiters = [
 const usernameAvailabilityLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
+  keyGenerator: clientIpKey,
   message: { error: 'Too many username checks. Please wait a moment and try again.' },
 });
 
@@ -845,21 +846,26 @@ function authEmailLimiters(error) {
 const forgotPasswordLimiters = authEmailLimiters('Too many password reset requests. Please try again later.');
 const resendVerificationLimiters = authEmailLimiters('Too many verification email requests. Please try again later.');
 
+// The limiters below count per network (IP, IPv6 by its /64), like sign-in and sign-up: keyed by
+// the bare address, one IPv6 client could step through its own /64 and never be counted twice.
 const oauthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20,
+  keyGenerator: clientIpKey,
   message: { error: 'Too many OAuth requests. Please try again later.' },
 });
 
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 30,
+  keyGenerator: clientIpKey,
   message: { error: 'Too many token refresh requests. Please try again later.' },
 });
 
 const reauthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
+  keyGenerator: clientIpKey,
   message: 'Too many re-authentication attempts. Please try again later.',
 });
 
@@ -878,6 +884,7 @@ const reauthAccountLimiter = rateLimit({
 const logoutLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
+  keyGenerator: clientIpKey,
   message: { error: 'Too many logout requests. Please try again later.' },
 });
 
@@ -887,7 +894,36 @@ const logoutLimiter = rateLimit({
 const resetPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
+  keyGenerator: clientIpKey,
   message: { error: 'Too many password reset attempts. Please try again later.' },
+});
+
+// /verify-email checks a link's token, or a 6-digit code with its email, against Supabase Auth. It had no
+// limiter of its own: a code could be guessed at the general write rate, and every wrong try spends
+// Supabase's verify limit, which the whole app shares (one server address), so a handful of bad requests
+// could hold up everyone's confirmations and returning sign-ins. Like sign-in, only refused tries count, so
+// people confirming together on one network (a meetup's Wi-Fi) don't use up each other's:
+// - one network (IP, IPv6 by its /64): 10 refused tries in 15 minutes;
+// - one email address, for the code form only: 5 refused codes an hour, from any network. The link form
+//   names no email, so the address's owner can always confirm with the link in their inbox.
+const VERIFY_EMAIL_LIMIT = { error: 'Too many confirmation attempts. Please wait a few minutes and try again.' };
+const verifyEmailAccepted = (_req, res) => res.locals.verifyEmailRefused !== true;
+const verifyEmailNetworkLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: clientIpKey,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: verifyEmailAccepted,
+  message: VERIFY_EMAIL_LIMIT,
+});
+const verifyEmailCodeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: requestEmail,
+  skip: (req) => Boolean(req.body?.tokenHash) || !requestEmail(req),
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: verifyEmailAccepted,
+  message: VERIFY_EMAIL_LIMIT,
 });
 
 const OAUTH_USER_SELECT = 'id, username, name, first_name, last_name, email, verified, role';
@@ -1119,9 +1155,9 @@ const resendVerificationSchema = Joi.object({
 });
 
 const verifyEmailSchema = Joi.object({
-  tokenHash: Joi.string().optional(),
-  token: Joi.string().optional(),
-  email: Joi.string().email().optional(),
+  tokenHash: Joi.string().max(512).optional(),
+  token: Joi.string().max(64).optional(),
+  email: Joi.string().email().max(320).optional(),
   type: Joi.string().valid('signup', 'email', 'magiclink').default('signup'),
 }).or('tokenHash', 'token');
 
@@ -4289,7 +4325,7 @@ router.post('/resend-verification', resendVerificationLimiters.network, validate
  * POST /api/users/verify-email
  * Verify email using Supabase OTP token hash (link-based) or OTP code.
  */
-router.post('/verify-email', validate(verifyEmailSchema), async (req, res) => {
+router.post('/verify-email', verifyEmailNetworkLimiter, validate(verifyEmailSchema), verifyEmailCodeLimiter, async (req, res) => {
   try {
     const { tokenHash, token, email, type = 'signup' } = req.body;
     logger.info('Email verification attempt', {
@@ -4356,6 +4392,8 @@ router.post('/verify-email', validate(verifyEmailSchema), async (req, res) => {
         hasTokenHash: Boolean(tokenHash),
         hasToken: Boolean(token),
       });
+      // Only a refused link or code counts toward the limits above.
+      res.locals.verifyEmailRefused = true;
       return res.status(400).json({ error: 'Invalid or expired verification link/code' });
     }
 

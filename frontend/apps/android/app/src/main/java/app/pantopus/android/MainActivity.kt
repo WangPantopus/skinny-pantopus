@@ -33,6 +33,7 @@ import app.pantopus.android.data.moments.MomentsFeature
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.realtime.SocketManager
+import app.pantopus.android.data.saved_places.TodayAreaStore
 import app.pantopus.android.data.store.SavedCopyReadAhead
 import app.pantopus.android.data.store.StoreSync
 import app.pantopus.android.push.ASSISTANT_RECIPIENT
@@ -43,6 +44,7 @@ import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.navigation.PantopusNavHost
+import app.pantopus.android.ui.screens.mailbox.cards.ChristmasToday
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -119,6 +121,12 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         // First, so the copies are in memory before the first screens ask for them.
         savedCopyReadAhead.start()
+        // Debug builds only: `PANTOPUS_DEBUG_TODAY=YYYY-MM-DD` sets the day the Mail tab's Christmas envelope and
+        // Today's countdown read (TABCARD §6). A release build never reads the extra.
+        if (BuildConfig.DEBUG) ChristmasToday.takeDebugDay(intent?.getStringExtra(ChristmasToday.DEBUG_EXTRA))
+        // Debug builds only: `PANTOPUS_DEBUG_AREA_MAX_AGE=<seconds>` shortens the hour after which Today reads the
+        // city's fix again (TABCARD §4). A release build never reads it.
+        if (BuildConfig.DEBUG) TodayAreaStore.takeDebugMaxAge(intent?.getStringExtra(TodayAreaStore.DEBUG_MAX_AGE_EXTRA))
         enableEdgeToEdge()
         secureWindowController.bind(this)
         storeSync.start()
@@ -221,6 +229,12 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (BuildConfig.DEBUG && intent.hasExtra(ChristmasToday.DEBUG_EXTRA)) {
+            ChristmasToday.takeDebugDay(intent.getStringExtra(ChristmasToday.DEBUG_EXTRA))
+        }
+        if (BuildConfig.DEBUG && intent.hasExtra(TodayAreaStore.DEBUG_MAX_AGE_EXTRA)) {
+            TodayAreaStore.takeDebugMaxAge(intent.getStringExtra(TodayAreaStore.DEBUG_MAX_AGE_EXTRA))
+        }
         // Warm-start deep links (app already in memory).
         forwardDeepLink(intent)
         setIntent(intent)

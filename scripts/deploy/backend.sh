@@ -41,6 +41,11 @@ env_file=${PANTOPUS_ENV_FILE:-$HOME/pantopus/.env.$suffix}
 # Docker's default json-file driver never rotates, so container logs could fill
 # the host disk. The local driver keeps five compressed 20 MB files per container.
 log_options=(--log-driver local --log-opt max-size=20m --log-opt max-file=5)
+# The API and worker need none of the Linux capabilities Docker grants by default (changing file owners,
+# raw sockets, binding low ports...) and never gain privileges through a setuid binary: they listen on
+# 8000 and write only under /tmp. This holds for an earlier release image too, whose process is root:
+# without capabilities it still reads its own files and writes /tmp. The proxy already runs this way.
+confine_options=(--cap-drop ALL --security-opt no-new-privileges)
 health_attempts=${PANTOPUS_HEALTH_ATTEMPTS:-40}
 health_interval=${PANTOPUS_HEALTH_INTERVAL:-3}
 lock_dir=${PANTOPUS_LOCK_DIR:-$HOME/pantopus}
@@ -256,7 +261,7 @@ docker rm -f "$next" >/dev/null 2>&1 || true
 # Set created before docker run: Docker can create a container and then fail
 # while binding its port. Recovery must remove that partial container too.
 next_created=true
-docker run -d --name "$next" --env-file "$env_file" "${log_options[@]}" \
+docker run -d --name "$next" --env-file "$env_file" "${log_options[@]}" "${confine_options[@]}" \
   -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=false -e CRON_ENABLED=false \
   -p "127.0.0.1:$new_port:8000" --restart unless-stopped \
@@ -283,7 +288,7 @@ if exists "$worker"; then
   docker stop --time 30 "$worker_backup" >/dev/null
 fi
 worker_created=true
-docker run -d --name "$worker" --env-file "$env_file" "${log_options[@]}" \
+docker run -d --name "$worker" --env-file "$env_file" "${log_options[@]}" "${confine_options[@]}" \
   -e NODE_ENV=production -e APP_ENV="$target" \
   -e PGBOSS_ENABLED=true -e CRON_ENABLED=true --restart unless-stopped \
   --health-cmd='node scripts/worker-healthcheck.js' --health-interval=5s --health-start-period=30s \

@@ -82,6 +82,15 @@ object PlanFormat {
         pin: PlanPinDto,
         now: Instant = Instant.now(),
     ): String {
+        val tag = plainPinTag(pin, now)
+        // A business's one pin for a venue with later plans this week: "Sat 10:00 · 4 times" (board G1).
+        return if (pin.isBusiness && pin.moreTimes > 0) "$tag · ${pin.moreTimes + 1} times" else tag
+    }
+
+    private fun plainPinTag(
+        pin: PlanPinDto,
+        now: Instant,
+    ): String {
         val state = pin.planState
         val start = instant(pin.startsAt)
         return when {
@@ -312,10 +321,13 @@ object PlanFormat {
             else -> {
                 // An invitation not answered yet: "Sam invited you · Sun 1:25 PM" (as on iOS).
                 if (plan.standing == PlanViewerStanding.NONE && plan.myInvite?.status == "pending") {
-                    parts += "${firstName(plan.host?.displayName)} invited you"
+                    parts += "${hostName(plan)} invited you"
                 }
                 parts += whenText
-                if (plan.isPlaydate) {
+                if (plan.isBusiness) {
+                    // A business's row names the business where a neighbor's names an area (board G2).
+                    (plan.place?.name ?: plan.host?.displayName)?.let { parts += it }
+                } else if (plan.isPlaydate) {
                     area?.let { parts += it }
                     KidsAgeBand.rangeLabel(plan.details?.kidsAgeBands)?.let { parts += it }
                 } else {
@@ -357,9 +369,15 @@ object PlanFormat {
     /** "Sam R." → "Sam". */
     fun firstName(displayName: String?): String = displayName?.trim()?.substringBefore(' ')?.takeIf { it.isNotBlank() } ?: "The host"
 
+    /**
+     * The host as sentences name them: a neighbor's first name ("Sam"), a business's whole name ("Lacamas Pickleball
+     * Club"), never its first word.
+     */
+    fun hostName(plan: PlanDto): String = plan.business?.name?.takeIf(String::isNotBlank) ?: firstName(plan.host?.displayName)
+
     /** "Sam approves each person" / "Maya approves each family" / "Lets in anyone nearby automatically". */
     fun howPeopleGetIn(plan: PlanDto): String {
-        val host = firstName(plan.host?.displayName)
+        val host = hostName(plan)
         // The host sees their rules; a guest sees the rule that would let them in (`viewer.auto_rule`).
         val rules = plan.autoRules.orEmpty() + listOfNotNull(plan.viewer?.autoRule)
         val invite = plan.myInvite?.takeIf { it.isOpen && plan.viewer?.role != "host" }
@@ -367,6 +385,8 @@ object PlanFormat {
             // The host's invitation: no request (or, opened from another address, the host says yes first), as iOS.
             invite != null && invite.needsHostOk -> "$host says yes first"
             invite != null -> "Invited by $host · no request needed"
+            // A business's own rule, as its team reads it: anyone gets in right away.
+            PlanAutoRule.OPEN in plan.autoRules.orEmpty() -> "Anyone gets in right away"
             !plan.hostApproves && PlanAutoRule.ANYONE_NEARBY in rules -> "Lets in anyone nearby automatically"
             !plan.hostApproves && PlanAutoRule.VERIFIED in rules -> "Lets in verified neighbors automatically"
             !plan.hostApproves -> "You can get in right away"
@@ -381,7 +401,7 @@ object PlanFormat {
         distanceBand: String?,
         now: Instant = Instant.now(),
     ): String {
-        val parts = mutableListOf(pin.planKind?.label ?: "Plan")
+        val parts = mutableListOf(pin.labelText?.takeIf { pin.isBusiness } ?: pin.planKind?.label ?: "Plan")
         val start = instant(pin.startsAt)
         when {
             pin.planState == PlanState.LIVE -> parts += "happening now"
@@ -412,6 +432,8 @@ object PlanFormat {
             PlanViewerStanding.WAITLISTED -> parts += "on the waitlist"
             else -> Unit
         }
+        pin.business?.name?.takeIf(String::isNotBlank)?.let { parts += "hosted by $it" }
+        if (pin.isBusiness && pin.moreTimes > 0) parts += "${pin.moreTimes + 1} times"
         return parts.joinToString(", ")
     }
 

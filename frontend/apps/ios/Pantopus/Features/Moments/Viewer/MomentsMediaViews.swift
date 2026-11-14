@@ -28,6 +28,10 @@ final class MomentsVideoController {
     private var endObserver: (any NSObjectProtocol)?
     private var statusObserver: NSKeyValueObservation?
     private var isReady = false
+    /// The viewer closed: the wait before the players let go.
+    private var letGo: Task<Void, Never>?
+    /// The players with a video loaded, across every viewer: the phone's sound isn't given back under one of them.
+    private static var loaded: Set<ObjectIdentifier> = []
 
     var isMuted = false {
         didSet { player.isMuted = isMuted }
@@ -50,6 +54,7 @@ final class MomentsVideoController {
 
     func load(_ url: URL, id: String) {
         stop()
+        Self.loaded.insert(ObjectIdentifier(self))
         let item: AVPlayerItem
         if standbyID == id, let held = standby.currentItem, held.status != .failed {
             // The one made ready: the players trade places, and the old one is free for the next.
@@ -92,7 +97,15 @@ final class MomentsVideoController {
         player.pause()
     }
 
+    /// The Moment showing changes: its video goes. A viewer that plays on after a close was asked for keeps its players.
     func stop() {
+        letGo?.cancel()
+        letGo = nil
+        release()
+    }
+
+    private func release() {
+        Self.loaded.remove(ObjectIdentifier(self))
         player.pause()
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         timeObserver = nil
@@ -103,11 +116,26 @@ final class MomentsVideoController {
         isReady = false
     }
 
-    /// The viewer closed: the video made ready goes too.
+    /// The viewer closed. It goes quiet at once and keeps the picture it was showing, so the viewer leaves the
+    /// screen with it instead of with the video's first picture. Half a second on, off the screen, the players let
+    /// go of their videos and the phone's sound goes back to what was playing before.
     func stopAll() {
-        stop()
-        standby.replaceCurrentItem(with: nil)
-        standbyID = nil
+        player.pause()
+        standby.pause()
+        letGo?.cancel()
+        letGo = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard let self, !Task.isCancelled else { return }
+            release()
+            standby.replaceCurrentItem(with: nil)
+            standbyID = nil
+            // Giving the sound back can take a few tenths of a second: asked off the main thread, so nothing on
+            // screen waits for it. Not while another viewer has a video.
+            guard Self.loaded.isEmpty else { return }
+            Task.detached(priority: .utility) {
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            }
+        }
     }
 }
 

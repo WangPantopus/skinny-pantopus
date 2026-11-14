@@ -39,15 +39,17 @@ jobs:
       - name: Build release message
         id: message
         if: steps.gate.outputs.should_notify == 'true'
+        # Values from the run reach the script through env, never pasted into its text: a branch
+        # name may contain quotes and shell syntax, and this job holds the channel webhooks.
+        env:
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          ACTOR: ${{ github.event.workflow_run.actor.login }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
         run: |
-          CONCLUSION='${{ github.event.workflow_run.conclusion }}'
-          WORKFLOW='${{ github.event.workflow_run.name }}'
-          BRANCH='${{ github.event.workflow_run.head_branch }}'
-          SHA='${{ github.event.workflow_run.head_sha }}'
-          ACTOR='${{ github.event.workflow_run.actor.login }}'
-          REPO='${{ github.repository }}'
-          RUN_URL='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}'
-
           if [ "$CONCLUSION" = "success" ]; then
             ICON='✅'
           elif [ "$CONCLUSION" = "failure" ]; then

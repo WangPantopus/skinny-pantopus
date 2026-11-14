@@ -9,20 +9,25 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.CreateMomentBody
+import app.pantopus.android.data.api.models.moments.MomentAltitudeBody
 import app.pantopus.android.data.api.models.moments.MomentLocationBody
 import app.pantopus.android.data.api.models.moments.MomentPlaceChoiceDto
 import app.pantopus.android.data.api.models.moments.MomentPlacePreviewDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.location.HeightReading
+import app.pantopus.android.data.moments.MomentHeight
 import app.pantopus.android.data.moments.MomentMedia
 import app.pantopus.android.data.moments.MomentMediaFile
 import app.pantopus.android.data.moments.MomentsPosting
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
+import app.pantopus.android.data.plans.PlanGpsFix
 import app.pantopus.android.data.plans.PlanLocationResolver
 import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
 import app.pantopus.android.ui.screens.compose.pulse.MediaLocationAccess
+import app.pantopus.android.ui.screens.compose.pulse.PickedPlace
 import app.pantopus.android.ui.screens.compose.pulse.readPickedPlace
 import app.pantopus.android.ui.screens.moments.MomentsRoutes
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
@@ -53,6 +58,8 @@ data class ComposePin(
     /** The fix's time (`gps`) or the capture time (`capture`). */
     val at: Instant,
     val capture: Boolean,
+    /** How high the fix, or the library photo, says this is; read only where "Show elevation" may be offered. */
+    val height: HeightReading? = null,
 )
 
 /**
@@ -116,6 +123,8 @@ data class MomentsComposeUiState(
     val noLocation: Boolean = false,
     /** Whether you have a connection (place-preview's `has_connections`); null until known. */
     val hasConnections: Boolean? = null,
+    /** "Show elevation" (board H1): the Moment says how high above sea level it was made. Kept for your next Moments. */
+    val showHeight: Boolean = false,
 ) {
     val kind: String
         get() =
@@ -172,6 +181,19 @@ data class MomentsComposeUiState(
 
     /** "Taken Oct 3" on the Post sheet: an album photo or video taken more than a day ago (everyone will see it). */
     val takenLine: String? get() = takenAt?.takeIf { media != null && takenLongAgo(it) }?.let { takenLabel(it) }
+
+    /** The feet the "Show elevation" row shows and everyone will read; null with no reading the server would keep. */
+    val heightFeet: Int? get() = pin?.height?.let { MomentHeight.feet(it.meters, it.accuracyMeters, it.speedMps) }
+
+    /**
+     * The "Show elevation" row is on the sheet: only where the server allows it (heights are on for you and the spot
+     * isn't your home), for an exact pin, with a reading. Never for an area or with no location.
+     */
+    val offersHeight: Boolean get() = place?.canShowHeight == true && !showArea && !noLocationOn && heightFeet != null
+
+    /** What goes with the post: the reading, only while the row is on the sheet and switched on. */
+    val shownHeight: MomentAltitudeBody?
+        get() = pin?.height?.takeIf { offersHeight && showHeight }?.let { MomentAltitudeBody(it.meters, it.accuracyMeters, it.speedMps) }
 }
 
 /**
@@ -200,6 +222,7 @@ class MomentsComposeViewModel
                     step = if (savedState.get<String>(MomentsRoutes.MODE_KEY) == "text") ComposeStep.Text else ComposeStep.Camera,
                     hours = choices.getInt("$accountId.hours", DEFAULT_HOURS).takeIf { it in ALLOWED_HOURS } ?: DEFAULT_HOURS,
                     audience = choices.getString("$accountId.audience", null).takeIf { it in ALLOWED_AUDIENCES } ?: "nearby",
+                    showHeight = choices.getBoolean("$accountId.showHeight", false),
                 ),
             )
         val state: StateFlow<MomentsComposeUiState> = _state.asStateFlow()
@@ -225,22 +248,37 @@ class MomentsComposeViewModel
                 }
                 val here = ComposePin(fix.latitude, fix.longitude, fix.at, capture = false)
                 when (val preview = repository.placePreview(here.latitude, here.longitude)) {
-                    is NetworkResult.Success ->
+                    is NetworkResult.Success -> {
+                        val height = fixHeightFor(preview.data)
                         _state.update {
                             it.copy(
-                                here = here,
+                                here = here.copy(height = height),
                                 herePlace = preview.data,
                                 hasConnections = preview.data.hasConnections ?: it.hasConnections,
                                 gate = if (preview.data.adultConfirmed) ComposeGate.Open else ComposeGate.NeedsAdult,
                                 notice = null,
                             )
                         }
+                    }
                     is NetworkResult.Failure ->
                         // The chip can do without a name; the server checks everything again on Post.
                         _state.update { it.copy(here = here, gate = ComposeGate.Open, notice = null) }
                 }
             }
         }
+
+        /**
+         * How high the fix just taken says the phone is, read only where the server says "Show elevation" may be offered:
+         * while heights are off for the person, nothing new runs.
+         */
+        private suspend fun fixHeightFor(place: MomentPlacePreviewDto?): HeightReading? =
+            if (place?.canShowHeight == true) locations.fixHeight() else null
+
+        /** The library photo's own height, which goes with a pin where it was taken; read only where it may be shown. */
+        private suspend fun photoHeightFor(
+            place: MomentPlacePreviewDto?,
+            picked: PickedPlace,
+        ): HeightReading? = if (place?.canShowHeight == true) withContext(Dispatchers.IO) { picked.height } else null
 
         fun locationRefused() {
             _state.update { it.copy(gate = ComposeGate.NeedsLocation) }
@@ -395,16 +433,16 @@ class MomentsComposeViewModel
                 _state.update { it.copy(notice = "Videos can be up to 30 seconds.") }
                 return false
             }
-            val place = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }
-            val capture = MomentMedia.capture(context, uri, copy, video, place.captured, place.mayBeHidden)
+            val picked = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }
+            val capture = MomentMedia.capture(context, uri, copy, video, picked.captured, picked.mayBeHidden)
             // A file that never says when it was taken posts like one taken now (no date on the Moment).
             val takenAt = capture.takenAt
             val media = if (video) MomentMediaFile.Video(copy, duration, recordedHere = false) else MomentMediaFile.Photo(copy)
             val lat = capture.latitude
             val lng = capture.longitude
             if (lat != null && lng != null) {
-                val pin = ComposePin(lat, lng, takenAt ?: Instant.now(), capture = true)
                 val place = (repository.placePreview(lat, lng) as? NetworkResult.Success)?.data
+                val pin = ComposePin(lat, lng, takenAt ?: Instant.now(), capture = true, height = photoHeightFor(place, picked))
                 _state.update {
                     it.copy(
                         media = media,
@@ -447,12 +485,13 @@ class MomentsComposeViewModel
         fun rereadPickedPlace() {
             val (uri, mime) = pickedSource ?: return
             viewModelScope.launch {
-                val located = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }.captured ?: return@launch
+                val picked = withContext(Dispatchers.IO) { readPickedPlace(context, uri, mime) }
+                val located = picked.captured ?: return@launch
                 val current = _state.value
                 if (current.step != ComposeStep.Review || current.media == null) return@launch
                 val takenAt = located.capturedAt ?: current.pin?.at ?: return@launch
                 val place = (repository.placePreview(located.latitude, located.longitude) as? NetworkResult.Success)?.data
-                val pin = ComposePin(located.latitude, located.longitude, takenAt, capture = true)
+                val pin = ComposePin(located.latitude, located.longitude, takenAt, capture = true, height = photoHeightFor(place, picked))
                 _state.update {
                     it.copy(
                         pin = pin,
@@ -514,6 +553,8 @@ class MomentsComposeViewModel
 
         fun setShowArea(on: Boolean) = _state.update { it.copy(showArea = on) }
 
+        fun setShowHeight(on: Boolean) = _state.update { it.copy(showHeight = on) }
+
         /** A name from the place list: the first (automatic) one goes back to no pick. */
         fun pickPlace(key: String) =
             _state.update { current ->
@@ -561,7 +602,7 @@ class MomentsComposeViewModel
                 // A fix older than about 4 minutes is read again: the server takes one no older than 5.
                 val usable =
                     if (!pin.capture && Instant.now().toEpochMilli() - pin.at.toEpochMilli() > FIX_REFRESH_MS) {
-                        locations.newFix()?.let { ComposePin(it.latitude, it.longitude, it.at, capture = false) } ?: pin
+                        locations.newFix()?.let { freshPin(it, current.place) } ?: pin
                     } else {
                         pin
                     }
@@ -588,6 +629,8 @@ class MomentsComposeViewModel
                         // An album item pinned where you are says when it was taken (a capture pin carries its own).
                         takenAt = current.takenAt?.toString()?.takeIf { current.media != null && !usable.capture },
                         venueId = current.pickedVenue?.placeId,
+                        // The height of the pin that is sent, while "Show elevation" is on the sheet and switched on.
+                        altitude = current.copy(pin = usable).shownHeight,
                     )
                 when (val result = repository.create(body)) {
                     is NetworkResult.Success -> {
@@ -598,17 +641,27 @@ class MomentsComposeViewModel
                         } else {
                             posting.posted(moment)
                         }
-                        choices
-                            .edit()
-                            .putInt("$accountId.hours", current.hours)
-                            .putString("$accountId.audience", current.audience)
-                            .apply()
+                        saveChoices(current)
                         postedOne()
                     }
                     is NetworkResult.Failure -> handlePostFailure(result.error, retried)
                 }
             }
         }
+
+        /** The next sheet opens with this one's "How long", "Who sees it" and "Show elevation" (on this phone, per account). */
+        private fun saveChoices(posted: MomentsComposeUiState) {
+            val saved = choices.edit().putInt("$accountId.hours", posted.hours).putString("$accountId.audience", posted.audience)
+            // Only a sheet that offered the switch says what the person wants.
+            if (posted.offersHeight) saved.putBoolean("$accountId.showHeight", posted.showHeight)
+            saved.apply()
+        }
+
+        /** The pin for a fix taken again at Post, with its height where "Show elevation" may be offered. */
+        private suspend fun freshPin(
+            fix: PlanGpsFix,
+            place: MomentPlacePreviewDto?,
+        ) = ComposePin(fix.latitude, fix.longitude, fix.at, capture = false, height = fixHeightFor(place))
 
         /** A Moment with no location: connections only, no pin, no place (contract v3.4). */
         private fun postWithoutLocation(current: MomentsComposeUiState) {
@@ -652,7 +705,8 @@ class MomentsComposeViewModel
                     if (!retried) {
                         viewModelScope.launch {
                             locations.newFix()?.let { fix ->
-                                _state.update { it.copy(pin = ComposePin(fix.latitude, fix.longitude, fix.at, capture = false)) }
+                                val pin = freshPin(fix, _state.value.place)
+                                _state.update { it.copy(pin = pin) }
                                 post(retried = true)
                             } ?: _state.update { it.copy(notice = NO_FIX) }
                         }

@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.R
+import app.pantopus.android.data.moments.MomentHeight
 import app.pantopus.android.ui.screens.moments.components.MomentSelfFace
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevation
@@ -109,6 +110,7 @@ fun MomentsPostSheet(
     onPlace: (String) -> Unit = {},
     onFindPlace: () -> Unit = {},
     onNoLocation: (Boolean) -> Unit = {},
+    onShowHeight: (Boolean) -> Unit = {},
 ) {
     // A venue picked in the place picker moves the pin off the home (the server checks its point again).
     val venue = state.pickedVenue
@@ -271,6 +273,9 @@ fun MomentsPostSheet(
                 }
             }
             NoLocationRow(state = state, onNoLocation = onNoLocation)
+            state.heightFeet?.takeIf { state.offersHeight }?.let { feet ->
+                HeightRow(feet = feet, on = state.showHeight, onShowHeight = onShowHeight)
+            }
             SectionLabel("How long")
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).semantics { contentDescription = "How long" },
@@ -633,6 +638,52 @@ private fun NoLocationRow(
             checked = state.noLocationOn,
             onCheckedChange = onNoLocation,
             enabled = enabled,
+            colors =
+                SwitchDefaults.colors(
+                    checkedTrackColor = PantopusColors.primary600,
+                    uncheckedTrackColor = PantopusColors.momentSwitchTrack,
+                    uncheckedBorderColor = PantopusColors.momentSwitchTrack,
+                    uncheckedThumbColor = Color.White,
+                ),
+        )
+    }
+}
+
+/**
+ * "Show elevation" (board H1): how high above sea level the phone, or the album photo, says this is, as everyone will read
+ * it (rounded to 10 ft). Only on the sheet where it may be shown ([MomentsComposeUiState.offersHeight]).
+ */
+@Composable
+private fun HeightRow(
+    feet: Int,
+    on: Boolean,
+    onShowHeight: (Boolean) -> Unit,
+) {
+    val line = MomentHeight.line(feet)
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s5)
+                .padding(top = 6.dp)
+                .heightIn(min = 52.dp)
+                .clickable(role = Role.Switch) { onShowHeight(!on) }
+                .testTag("moments.post.height")
+                .clearAndSetSemantics {
+                    contentDescription = "Show elevation. $line"
+                    role = Role.Switch
+                    selected = on
+                },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(text = "Show elevation", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appText)
+            Text(text = line, fontSize = 12.5.sp, lineHeight = 16.sp, color = PantopusColors.appTextSecondary)
+        }
+        Switch(
+            checked = on,
+            onCheckedChange = onShowHeight,
             colors =
                 SwitchDefaults.colors(
                     checkedTrackColor = PantopusColors.primary600,

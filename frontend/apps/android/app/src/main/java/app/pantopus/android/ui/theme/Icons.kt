@@ -245,6 +245,7 @@ import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.filled.ZoomOutMap
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Terrain
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -523,6 +524,9 @@ enum class PantopusIcon(
     FolderPlus("folder-plus"),
     PiggyBank("piggy-bank"),
     Plane("plane"),
+
+    // Moment heights: the "Elevation" chip on the Moments map, and a Moment's height in the viewer.
+    Mountain("mountain"),
     ReceiptText("receipt-text"),
     Paperclip("paperclip"),
     ArrowDownUp("arrow-down-up"),
@@ -1021,6 +1025,7 @@ internal fun PantopusIcon.source(): IconSource =
         PantopusIcon.FolderPlus -> IconSource.Material(Icons.Filled.CreateNewFolder)
         PantopusIcon.PiggyBank -> IconSource.Material(Icons.Filled.Savings)
         PantopusIcon.Plane -> IconSource.Material(Icons.Filled.Flight)
+        PantopusIcon.Mountain -> IconSource.Material(Icons.Outlined.Terrain)
         PantopusIcon.ReceiptText -> IconSource.Material(Icons.Filled.Description)
         PantopusIcon.Paperclip -> IconSource.Material(Icons.Filled.AttachFile)
         PantopusIcon.ArrowDownUp -> IconSource.Material(Icons.Filled.Sort)

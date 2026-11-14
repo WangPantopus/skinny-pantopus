@@ -32,6 +32,12 @@ public struct PlanPinDTO: Decodable, Sendable, Hashable, Identifiable {
     public let timezone: String?
     public let areaLabel: String?
     public let distanceBand: PlanDistanceBand?
+    /// Plans with businesses: the business hosting (its pin is exact, with no area).
+    public let business: PlanPinBusinessDTO?
+    public let labelText: String?
+    public let placeName: String?
+    /// The venue's later plans in the window, folded into this pin: "Sat 10:00 · 4 times".
+    public let moreTimes: Int
 
     enum CodingKeys: String, CodingKey {
         case id, kind, latitude, longitude, precision, title, state
@@ -48,6 +54,10 @@ public struct PlanPinDTO: Decodable, Sendable, Hashable, Identifiable {
         case timezone
         case areaLabel = "area_label"
         case distanceBand = "distance_band"
+        case business
+        case labelText = "label_text"
+        case placeName = "place_name"
+        case moreTimes = "more_times"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -75,6 +85,10 @@ public struct PlanPinDTO: Decodable, Sendable, Hashable, Identifiable {
         timezone = try container.decodeIfPresent(String.self, forKey: .timezone)
         areaLabel = try container.decodeIfPresent(String.self, forKey: .areaLabel)
         distanceBand = try? container.decodeIfPresent(PlanDistanceBand.self, forKey: .distanceBand)
+        business = try? container.decodeIfPresent(PlanPinBusinessDTO.self, forKey: .business)
+        labelText = business == nil ? nil : try container.decodeIfPresent(String.self, forKey: .labelText)
+        placeName = business == nil ? nil : try container.decodeIfPresent(String.self, forKey: .placeName)
+        moreTimes = business == nil ? 0 : (try? container.decodeIfPresent(Int.self, forKey: .moreTimes)) ?? 0
     }
 
     public var startsAtDate: Date? {

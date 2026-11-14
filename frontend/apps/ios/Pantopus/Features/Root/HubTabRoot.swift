@@ -1041,6 +1041,7 @@ public struct HubTabRoot: View {
         model.onOpenInvoice = { invoiceId in push(.invoiceDetail(invoiceId: invoiceId)) }
         model.onVerifyHome = { homeId in showVerifyHome(homeId) }
         model.onOpenWelcome = { mail in push(.mailWelcome(mail)) }
+        model.mayOpenWelcome = { path.last == nil || path.last == .mailboxRoot }
         model.onOpenChristmasCards = { push(.christmasCards()) }
         model.onOpenSentCard = { id in push(.mailSentCard(id: id)) }
         return model

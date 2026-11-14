@@ -85,7 +85,12 @@ struct PlanGoingSection: View {
                 .accessibilityIdentifier("planGroupChat")
         }
         if let people = viewModel.plan?.people, !people.isEmpty {
-            PlanPeopleLine(people: people, myPartySize: viewModel.plan?.myRequest?.partySize ?? 1, onOpenPerson: onOpenProfile)
+            PlanPeopleLine(
+                people: people,
+                myPartySize: viewModel.plan?.myRequest?.partySize ?? 1,
+                onOpenPerson: onOpenProfile,
+                business: card.business
+            )
         }
         Color.clear.frame(height: 1)
             .sheet(isPresented: $showsCalendar) {
@@ -95,7 +100,7 @@ struct PlanGoingSection: View {
     }
 
     private var hostFirst: String {
-        PlanCardLines.firstName(card.host.displayName)
+        PlanCardLines.hostName(card)
     }
 
     /// "Sam said yes · just now" (board J7), then "· 12 min ago" and later times
@@ -126,7 +131,7 @@ struct PlanGoingSection: View {
         return VStack(alignment: .leading, spacing: 10) {
             PlanBanner(tone: .warning, icon: .alertTriangle, title: words.title, message: words.message)
             HStack(spacing: 10) {
-                Button("Can't make it") { onConfirm(.notComing(host: card.host.displayName)) }
+                Button("Can't make it") { onConfirm(.notComing(host: PlanCardLines.hostName(card))) }
                     .planButton(.secondary, size: .small)
                 Button("Still coming") { Task { _ = await viewModel.stillComing(true) } }
                     .planButton(.primary, size: .small)
@@ -259,10 +264,13 @@ struct PlanHostingSection: View {
             invite
             going
             HStack(spacing: 10) {
-                Button(action: onOpenChat) { PlanButtonLabel(title: "Message guests", icon: .messageCircle, kind: .secondary) }
-                    .planButton(.secondary, size: .small)
-                    .disabled(viewModel.plan?.chatRoomId == nil)
-                    .accessibilityIdentifier("planMessageGuests")
+                // A business's team isn't in its plan's chat yet (contract B7): no chat, no button.
+                if !(card.isBusiness && viewModel.plan?.chatRoomId == nil) {
+                    Button(action: onOpenChat) { PlanButtonLabel(title: "Message guests", icon: .messageCircle, kind: .secondary) }
+                        .planButton(.secondary, size: .small)
+                        .disabled(viewModel.plan?.chatRoomId == nil)
+                        .accessibilityIdentifier("planMessageGuests")
+                }
                 if let url = card.shareUrl.flatMap(URL.init(string:)) {
                     ShareLink(item: url, message: Text(card.title)) {
                         PlanButtonLabel(title: "Share", icon: .share, kind: .secondary)
@@ -391,8 +399,9 @@ struct PlanHostingSection: View {
         VStack(spacing: 0) {
             if divider { Divider().overlay(Theme.Color.appBorder) }
             HStack(spacing: Spacing.s3) {
-                // The guest's photo and name open their profile; the options stay on the menu beside them.
-                Button { onOpenProfile(person.userId) } label: {
+                // The guest's photo and name open their profile; the options stay on the menu beside them. A business's
+                // team sees a guest's first name only, so nothing opens there.
+                Button { if !card.isBusiness { onOpenProfile(person.userId) } } label: {
                     HStack(spacing: Spacing.s3) {
                         PlanAvatar(name: person.displayName, url: person.avatarUrl)
                         VStack(alignment: .leading, spacing: 0) {

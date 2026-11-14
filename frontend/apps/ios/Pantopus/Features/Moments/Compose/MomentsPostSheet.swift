@@ -233,6 +233,9 @@ struct MomentsPostSheet: View {
             }
             noLocationRow
                 .padding(.top, model.noLocationOn ? Spacing.s2 : 0)
+            if model.offersHeight, let feet = model.heightFeet {
+                heightRow(feet: feet)
+            }
             label("How long").padding(.top, Spacing.s4)
             durations.padding(.top, Spacing.s2)
             label("Who sees it").padding(.top, 14)

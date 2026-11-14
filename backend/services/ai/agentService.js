@@ -49,6 +49,7 @@ const followUps = require('./followUps');
 const rules = require('./rules');
 const agentRecord = require('./agentRecord');
 const cardState = require('./cardState');
+const scope = require('./scope');
 
 const READ_TOOL_NAMES = new Set(readToolDefinitions.map((tool) => tool.name));
 const CARD_TOOL_NAMES = new Set(actionCardDefinitions.map((tool) => tool.name));
@@ -85,6 +86,8 @@ function launchScopedChatTools({
       if (CARD_TOOL_NAMES.has(tool.name)) return actionCards && (plans || !PLAN_CARD_TOOLS.has(tool.name));
       if (READ_TOOL_NAMES.has(tool.name)) return plans || !PLAN_TOOLS.has(tool.name);
       if (tool.name === 'show_link') return links;
+      // Pantopus only (scope.js): every app gets it, since its answer is a line of text.
+      if (tool.name === scope.OUT_OF_SCOPE) return scope.pantopusOnly();
       if (tool.name === 'create_gig_draft') return isLaunchFeatureEnabled('open_gigs');
       if (tool.name === 'create_listing_draft') return isLaunchFeatureEnabled('marketplace');
       if (['get_mail_item', 'summarize_mail_item'].includes(tool.name)) return isLaunchFeatureEnabled('mailbox');
@@ -130,6 +133,7 @@ function launchScopedChatInstructions({
     remembers: remembers && actionCards,
     checksBack: checksBack && actionCards,
     standingRules: standingRules && actionCards,
+    pantopusOnly: scope.pantopusOnly(),
     guide: appGuide({
       plans, playdates, sports: plans && sports, suggestions: actionCards, actionCards, links, pickupSchedule, remembers: remembers && actionCards, standingRules: standingRules && actionCards,
     }),
@@ -212,6 +216,7 @@ const TOOL_STATUS = {
   draft_rule: 'Getting the rule ready…',
   draft_rule_change: 'Getting the change ready…',
   list_rules: 'Looking at what I do for you…',
+  [scope.OUT_OF_SCOPE]: 'One moment…',
 };
 
 // A draft Claude declined to write: not an outage, so not "try again later".
@@ -567,6 +572,8 @@ async function streamChat({
   let firstTextMs = null;
   // Link buttons (show_link) go out after the reply's text, just before `done`.
   const links = [];
+  // What they asked for when the turn ended on out_of_scope (scope.js), for the log.
+  let outOfScope = null;
   let turn;
   try {
     // Send conversation ID immediately
@@ -633,6 +640,12 @@ async function streamChat({
       // describe the button or say the answer again.
       finishAfterTools: (uses, { said }) => {
         const calls = uses.map((use) => ran.get(use.id));
+        // A message outside what the assistant is for ends on the one line that says so.
+        const declined = scope.closingForScope(calls, { said });
+        if (declined) {
+          outOfScope = calls[0].result.kind;
+          return declined;
+        }
         const linked = calls.length > 0 && calls.every((call) => call?.name === 'show_link' && call.result.link);
         if (linked) return said && !said.endsWith(':') ? true : null;
         return closingForDrafts(calls);
@@ -743,6 +756,8 @@ async function streamChat({
     logChat({
       status: 'ok',
       ...(turn.stopReason === 'max_tokens' ? { errorMessage: 'max_tokens' } : {}),
+      // Answered, with the line that says it is outside what the assistant does: counted from here.
+      ...(outOfScope ? { errorMessage: `${scope.OUT_OF_SCOPE}:${outOfScope}` } : {}),
       ...logged,
     }),
     turn.outcome === 'complete' ? closeRecord('done') : closeRecord('couldnt', turn.outcome),

@@ -43,6 +43,20 @@ public enum MomentsPalette {
         }
     }
 
+    /// A floating pin's shadow on the map (part D, board F1): a deep blue-black, never pure black.
+    public static let floatShadow = rgb(0x0E1622)
+
+    /// A height band's colour (board H2's key), on the map's tag and in the key; always beside the number or a name.
+    public static func height(_ band: MomentHeightBand) -> Color {
+        switch band {
+        case .low: dynamic(light: 0x15803D, dark: 0x22C55E)
+        case .hills: dynamic(light: 0x84CC16, dark: 0xA3E635)
+        case .mountain: dynamic(light: 0xF59E0B, dark: 0xFBBF24)
+        case .peak: dynamic(light: 0xBE123C, dark: 0xFB7185)
+        case .flying: dynamic(light: 0x0284C7, dark: 0x38BDF8)
+        }
+    }
+
     /// A soft initials disc: its fill and its ink, light and dark.
     public enum Tone: Int, CaseIterable, Sendable {
         case blue, green, amber, rose, slate, teal, violet

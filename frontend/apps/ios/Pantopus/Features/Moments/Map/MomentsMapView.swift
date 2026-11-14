@@ -143,7 +143,7 @@ struct MomentsMapView: View {
                     // Open sideways it stays on the left half, under the top row, clear of the fold.
                     .frame(maxWidth: duo.pose.isWide ? duo.leftHalf.width : nil)
                     .frame(maxWidth: duo.pose.isWide ? .infinity : nil, alignment: .leading)
-                    .padding(.top, duo.pose.isOpen ? (duo.topRowTop ?? 0) + Self.openRowHeight + 12 : 64)
+                    .padding(.top, (duo.pose.isOpen ? (duo.topRowTop ?? 0) + Self.openRowHeight + 12 : 64) + viewModel.heightsNoteDrop)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task(id: note) {
                         try? await Task.sleep(for: .seconds(4))
@@ -230,19 +230,13 @@ struct MomentsMapView: View {
     }
 
     private func mapLayer(onSettled: @escaping (MapCameraUpdateContext) -> Void) -> some View {
-        Map(position: $camera, interactionModes: [.pan, .zoom]) {
+        let pins = viewModel.pinsOnMap
+        return Map(position: $camera, interactionModes: [.pan, .zoom]) {
             UserAnnotation()
-            ForEach(viewModel.markers) { marker in
+            ForEach(pins.markers) { marker in
                 switch marker {
                 case let .ring(ring):
-                    Annotation("", coordinate: marker.coordinate, anchor: MomentRingPin.anchor) {
-                        Button { open(ring) } label: { MomentRingPin(ring: ring, playing: isPlaying(ring)) }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(MomentsSpeech.label(for: ring))
-                            .accessibilityHint("Plays their Moments")
-                            .accessibilityIdentifier("moments.ring.\(ring.id)")
-                    }
-                    .annotationTitles(.hidden)
+                    ringAnnotation(ring, at: marker.coordinate, plan: pins.tags)
                 case let .fan(cluster):
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
                         MomentsFan(rings: cluster.rings, playing: playingMomentIds, onOpen: open)
@@ -288,7 +282,7 @@ struct MomentsMapView: View {
         .accessibilityIdentifier("moments.mapCanvas")
     }
 
-    private func open(_ ring: MomentRingDTO) {
+    func open(_ ring: MomentRingDTO) {
         pinTappedAt = Date()
         actions.watch(viewModel.watchQueue(from: ring), 0, false)
     }
@@ -452,10 +446,11 @@ enum MomentsSpeech {
         return parts.joined(separator: ", ")
     }
 
-    static func label(for ring: MomentRingDTO) -> String {
+    static func label(for ring: MomentRingDTO, height: MomentShownHeight? = nil) -> String {
         let count = ring.moments.count == 1 ? "1 Moment" : "\(ring.moments.count) Moments"
         var parts = [ring.mine ? "Your Moments" : ring.author.name, count, ring.isNew ? "new" : "watched"]
         if !ring.placeLabel.isEmpty { parts.append("at \(ring.placeLabel)") }
+        if let height { parts.append(height.spoken) }
         if ring.author.verified { parts.append("verified resident") }
         return parts.joined(separator: ", ")
     }

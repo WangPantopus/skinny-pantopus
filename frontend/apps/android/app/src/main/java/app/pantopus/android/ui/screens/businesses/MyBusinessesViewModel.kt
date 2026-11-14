@@ -90,7 +90,7 @@ class MyBusinessesViewModel
                 listOfNotNull(m.business.city, m.business.state)
                     .filter { it.isNotEmpty() }
                     .joinToString(", ")
-            val verified = isVerified(m.profile?.identityVerificationTier)
+            val verified = isVerified(m.profile?.verificationStatus, m.profile?.identityVerificationTier)
             val rating = m.business.averageRating
             val reviews = m.business.reviewCount ?: 0
             return BusinessCard(
@@ -152,8 +152,21 @@ class MyBusinessesViewModel
             }
 
         companion object {
-            /** Anything above `bi0_unverified` (and non-null) earns the verified mark. */
-            fun isVerified(tier: String?): Boolean = !tier.isNullOrEmpty() && tier != "bi0_unverified"
+            /**
+             * Verified the way the server counts it (plans, the founding offer,
+             * invoices): `verification_status` is `document_verified` or
+             * `government_verified`. Self-attested or unverified reads as pending.
+             * The identity tier is only a fallback for a server that doesn't send
+             * the status: a document approval sets both, but a business verified
+             * before it did (or by hand) still has `bi0_unverified`.
+             */
+            fun isVerified(
+                status: String?,
+                tier: String?,
+            ): Boolean {
+                if (!status.isNullOrEmpty()) return status == "document_verified" || status == "government_verified"
+                return !tier.isNullOrEmpty() && tier != "bi0_unverified"
+            }
         }
     }
 

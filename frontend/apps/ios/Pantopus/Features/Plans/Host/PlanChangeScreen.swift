@@ -23,6 +23,11 @@ struct PlanChangeScreen: View {
     /// The H6 picker's draft, for moving a public plan.
     @State private var placeDraft: PlanComposerModel?
     @State private var newPlace: PlanPlaceOptionDTO?
+    /// A business's plan (Plans with businesses): the business as this person may post for it, and the
+    /// location it moves to. A business's plan meets only at its own locations.
+    @State private var business: PlanHostAsBusinessDTO?
+    @State private var newLocationId: String?
+    @State private var choosingLocation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,7 +36,7 @@ struct PlanChangeScreen: View {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
                     if let card = plan?.card {
                         when(card)
-                        if card.placeKind != .home { place(card) }
+                        if card.isBusiness { businessPlace(card) } else if card.placeKind != .home { place(card) }
                         if asksStillComing(card) { warning(card) }
                         if asksStillComing(card) { preview(card) }
                     } else {
@@ -93,11 +98,44 @@ struct PlanChangeScreen: View {
         }
     }
 
+    /// Where a business's plan meets: one of its own locations, chosen from "Where?".
+    private func businessPlace(_ card: PlanCardDTO) -> some View {
+        let locations = business?.locations ?? []
+        let chosen = locations.first { $0.id == newLocationId }
+        return VStack(alignment: .leading, spacing: Spacing.s2) {
+            Text.planOverline("Where")
+            Button { if locations.count > 1 { choosingLocation = true } } label: {
+                PlanBusinessLocationRow(
+                    name: chosen.map { PlanBusinessLocationRow.name($0, business: business) } ?? card.businessPlace?.name,
+                    address: chosen?.address ?? card.businessPlace?.address,
+                    avatarUrl: card.business?.avatarUrl,
+                    choosable: locations.count > 1
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(locations.count > 1 ? "Choose another of your business's locations" : "")
+            .accessibilityIdentifier("planChangePlace")
+            .confirmationDialog("Where?", isPresented: $choosingLocation, titleVisibility: .visible) {
+                ForEach(locations) { location in
+                    Button(PlanBusinessLocationRow.line(location, business: business)) {
+                        // Choosing the place it's already at changes nothing.
+                        let here = card.businessPlace.map {
+                            abs($0.latitude - location.latitude) < 0.00001 && abs($0.longitude - location.longitude) < 0.00001
+                        } ?? false
+                        newLocationId = here ? nil : location.id
+                    }
+                    .accessibilityIdentifier("planBusinessLocation.\(location.id)")
+                }
+            }
+        }
+    }
+
     private func load() async {
         guard let detail = try? await PlansStoreReads.detail(id: planId) else {
             error = "We couldn't load this plan."
             return
         }
+        if let owner = detail.card.business { business = await PlanComposerHostAs.business(owner.userId) }
         plan = detail
         start = detail.card.startsAtDate ?? Date()
         end = detail.card.endsAtDate ?? start.addingTimeInterval(7200)
@@ -109,7 +147,7 @@ struct PlanChangeScreen: View {
             VStack(spacing: 0) {
                 DatePicker(
                     selection: $start,
-                    in: Date()...Date().addingTimeInterval(14 * 86400),
+                    in: Date()...Date().addingTimeInterval(TimeInterval(business?.limits.daysAhead ?? 14) * 86400),
                     displayedComponents: [.date, .hourAndMinute]
                 ) {
                     Text("Starts").planFont(.body)
@@ -149,7 +187,12 @@ struct PlanChangeScreen: View {
 
     /// Moving the start by more than 30 minutes, or the place, asks everyone who's in.
     private func asksStillComing(_ card: PlanCardDTO) -> Bool {
-        goingCount(card) > 0 && (newPlace != nil || timeMoved(card))
+        goingCount(card) > 0 && (placeChanged || timeMoved(card))
+    }
+
+    /// A new public place, or another of the business's locations.
+    private var placeChanged: Bool {
+        newPlace != nil || newLocationId != nil
     }
 
     private func timeMoved(_ card: PlanCardDTO) -> Bool {
@@ -160,18 +203,18 @@ struct PlanChangeScreen: View {
     /// The push the server sends, word for word (board H11; Android shows the same).
     private func pushWords(_ card: PlanCardDTO) -> (title: String, body: String) {
         let calendar = PlanFormat.calendar(for: card.timezone)
-        let host = PlanCardLines.firstName(card.host.displayName)
+        let host = PlanCardLines.hostName(card)
         let noun = PlanCardLines.noun(card)
         let now = "Now \(PlanFormat.dayPhrase(start, calendar: calendar)) at \(PlanFormat.time(start, calendar: calendar))"
-        if newPlace != nil, timeMoved(card) { return ("\(host) changed the \(noun)", "\(now), at a new place. Still coming?") }
-        if newPlace != nil { return ("\(host) changed the place", "It's at a new place now. Still coming?") }
+        if placeChanged, timeMoved(card) { return ("\(host) changed the \(noun)", "\(now), at a new place. Still coming?") }
+        if placeChanged { return ("\(host) changed the place", "It's at a new place now. Still coming?") }
         return ("\(host) moved the \(noun)", "\(now). Still coming?")
     }
 
     /// Board H11: one sentence beside a warning glyph (as on Android).
     private func warning(_ card: PlanCardDTO) -> some View {
         let going = goingCount(card)
-        let asks = newPlace == nil
+        let asks = !placeChanged
             ? "Moving the time by more than 30 minutes asks each of them \u{201C}Still coming?\u{201D}"
             : "Changing the place asks each of them \u{201C}Still coming?\u{201D}"
         return HStack(alignment: .top, spacing: Spacing.s3) {
@@ -251,9 +294,11 @@ struct PlanChangeScreen: View {
                 address: newPlace.address,
                 latitude: newPlace.latitude,
                 longitude: newPlace.longitude,
-                homeId: nil
+                homeId: nil,
+                placeId: newPlace.placeId
             )
         }
+        body.businessLocationId = newLocationId
         Task {
             // Moving a public plan needs the same fresh nearby proof as posting one.
             let location = DeviceLocationProvider.shared

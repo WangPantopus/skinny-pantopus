@@ -115,15 +115,25 @@ extension MomentsViewer {
                     }
                 }
                 .contentShape(Rectangle())
+                .readsLeftEdge { pressLeft = $0 }
                 .gesture(pressGesture(width: size.width))
                 .accessibilityAction(named: "Next Moment") { model.next() }
                 .accessibilityAction(named: "Previous Moment") { model.previous() }
                 .accessibilityAction(named: "Next person") { model.nextRing() }
-            MomentsProgressBars(count: model.ring?.moments.count ?? 1, current: model.momentIndex, progress: model.progress)
+            MomentsPlayingBars(model: model)
                 .padding(.horizontal, 10)
                 .padding(.top, barsTop)
                 .opacity(model.holding ? 0 : 1)
                 .animation(.easeOut(duration: 0.15), value: model.holding)
+            // On a table the height is a tag at the picture's top left, without the phone's rail.
+            if let height = model.shownHeight {
+                MomentsViewerHeightTag(height: height, compact: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, Spacing.s3)
+                    .padding(.top, barsTop + 14)
+                    .opacity(model.holding ? 0 : 1)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: size.width, height: size.height)
         .shadow(color: .black.opacity(0.55), radius: 30)

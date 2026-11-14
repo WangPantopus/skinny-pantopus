@@ -114,6 +114,8 @@ public enum PlanAutoRule: String, Codable, Sendable, Hashable, CaseIterable {
     case verified
     case hostedBefore = "hosted_before"
     case anyoneNearby = "anyone_nearby"
+    /// Anyone gets in right away. Only a business's plan has it (Plans with businesses).
+    case open
 }
 
 /// Who may ask: anyone with a location nearby, or only verified neighbors.
@@ -303,6 +305,8 @@ public struct PlanCardDTO: Decodable, Sendable, Hashable, Identifiable {
     public let myInvite: PlanMyInviteDTO?
     /// Host only: their invitations to this plan.
     public let invites: PlanHostInvitesDTO?
+    /// Plans with businesses (only with `biz=1`): the business's parts. Nil on a neighbor's plan.
+    public let businessPart: PlanCardBusinessPart?
 
     enum CodingKeys: String, CodingKey {
         case id, kind, title, about, timezone, area, host, spots, details, state, viewer
@@ -360,6 +364,7 @@ public struct PlanCardDTO: Decodable, Sendable, Hashable, Identifiable {
         myRequest = try? container.decodeIfPresent(PlanMyRequestDTO.self, forKey: .myRequest)
         myInvite = try? container.decodeIfPresent(PlanMyInviteDTO.self, forKey: .myInvite)
         invites = try? container.decodeIfPresent(PlanHostInvitesDTO.self, forKey: .invites)
+        businessPart = try? PlanCardBusinessPart(from: decoder)
     }
 
     /// The exact start, parsed. Nil when hidden (a playdate before you're in).
@@ -395,11 +400,15 @@ public struct PlansListResponse: Decodable, Sendable, Hashable {
     public let nextCursor: String?
     /// When the page is empty: the closest town with plans 5 to 15 miles away (F4).
     public let nearestElsewhere: PlansNearestElsewhere?
+    /// Plans with businesses: a business has a plan in the area and window, so
+    /// the list shows All · Neighbors · Businesses. Absent (false) otherwise.
+    public let hasBusinessPlans: Bool
 
     enum CodingKeys: String, CodingKey {
         case items
         case nextCursor = "next_cursor"
         case nearestElsewhere = "nearest_elsewhere"
+        case hasBusinessPlans = "has_business_plans"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -407,6 +416,7 @@ public struct PlansListResponse: Decodable, Sendable, Hashable {
         items = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .items)?.items ?? []
         nextCursor = try container.decodeIfPresent(String.self, forKey: .nextCursor)
         nearestElsewhere = try? container.decodeIfPresent(PlansNearestElsewhere.self, forKey: .nearestElsewhere)
+        hasBusinessPlans = (try? container.decodeIfPresent(Bool.self, forKey: .hasBusinessPlans)) ?? false
     }
 
     var carriesPrivateTimes: Bool {
