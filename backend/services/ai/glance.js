@@ -198,7 +198,7 @@ async function nearby(userId, zone) {
   const headline = (post) => clip(post.title_text || post.title, 60)
     || clip(String(post.body_text || '').split('\n').map((line) => line.trim()).find(Boolean), 60);
   const lines = (caughtUp.posts || []).slice(0, 3).map((post) => ({ label: POST_LABELS[post.type] || 'Post', value: headline(post) || 'A post' }));
-  return answer('nearby', 'Nearby', sentences, lines, 'pantopus://nearby');
+  return answer('nearby', 'Nearby', sentences, lines, 'pantopus://feed');
 }
 
 /**
