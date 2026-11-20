@@ -13,6 +13,11 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function showConfirmation(status: string) {
+  if (status === 'paid') toast.success('Payment received');
+  else toast.info('Payment confirmation is pending. Check the invoice before trying again.');
+}
+
 const STATUS_BADGE: Record<string, { bg: string; color: string; label: string }> = {
   sent:    { bg: 'bg-blue-100',   color: 'text-blue-700',   label: 'Payment Requested' },
   viewed:  { bg: 'bg-indigo-100', color: 'text-indigo-700', label: 'Viewed' },
@@ -42,7 +47,7 @@ function InvoiceContent() {
     if (!invoiceId || finishingReturn.current || searchParams.get('payment') !== 'complete') return;
     finishingReturn.current = true;
     api.businesses.confirmInvoicePayment(invoiceId)
-      .then((res) => { setInvoice((prev: typeof invoice) => ({ ...prev, ...res.invoice })); toast.success('Payment received'); })
+      .then((res) => { setInvoice((prev: typeof invoice) => ({ ...prev, ...res.invoice })); showConfirmation(res.invoice.status); })
       .catch((e: unknown) => toast.error(e instanceof Error && e.message ? e.message : "This payment hasn't gone through yet."))
       .finally(() => router.replace(`/app/invoice/${invoiceId}`));
   }, [invoiceId, searchParams, router]);
@@ -166,7 +171,7 @@ function InvoiceContent() {
                 // The confirm answer is the bare invoice row; keep the business shown in "From".
                 setInvoice((prev: typeof invoice) => ({ ...prev, ...paid }));
                 setClientSecret(null);
-                toast.success(`Payment of ${formatCents(paid.total_cents)} received`);
+                showConfirmation(paid.status);
               }}
               onCancel={() => setClientSecret(null)}
             />
@@ -227,7 +232,7 @@ function InvoicePaymentForm({ invoiceId, amountLabel, onPaid, onCancel }: {
           redirect: 'if_required',
         });
         if (error) {
-          setMessage(error.message || 'Your card was not charged. Please try again.');
+          setMessage(error.message || 'Payment could not be confirmed. Check the invoice before trying again.');
           return;
         }
         setAccepted(true);
@@ -243,7 +248,7 @@ function InvoicePaymentForm({ invoiceId, amountLabel, onPaid, onCancel }: {
 
   return (
     <form onSubmit={submit}>
-      {accepted ? <p className="text-sm text-app-text">Your card was accepted.</p> : <PaymentElement />}
+      {accepted ? <p className="text-sm text-app-text">Payment submitted. Checking confirmation…</p> : <PaymentElement />}
       {message && <p role="alert" className="text-sm text-red-600 mt-3">{message}</p>}
       <div className="flex gap-3 mt-4">
         {!accepted && (
@@ -254,7 +259,7 @@ function InvoicePaymentForm({ invoiceId, amountLabel, onPaid, onCancel }: {
         )}
         <button type="submit" disabled={processing || !stripe}
           className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50 transition">
-          {processing ? 'Processing…' : accepted ? 'Try again' : `Pay ${amountLabel}`}
+          {processing ? 'Processing…' : accepted ? 'Check payment status' : `Pay ${amountLabel}`}
         </button>
       </div>
     </form>

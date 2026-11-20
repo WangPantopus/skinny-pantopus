@@ -21,6 +21,8 @@ sealed interface InvoicePaymentStatus {
 
     data object Paid : InvoicePaymentStatus
 
+    data object Unconfirmed : InvoicePaymentStatus
+
     data object Canceled : InvoicePaymentStatus
 
     data class Declined(val message: String) : InvoicePaymentStatus

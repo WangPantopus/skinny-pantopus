@@ -69,6 +69,9 @@ public struct InvoiceDetailView: View {
         case .paid:
             toast = ToastMessage(text: "Payment complete.", kind: .success)
             viewModel.clearPaymentStatus()
+        case .unconfirmed:
+            toast = ToastMessage(text: "Payment confirmation is pending. Check the invoice before trying again.", kind: .neutral)
+            viewModel.clearPaymentStatus()
         case .canceled:
             toast = ToastMessage(text: "Payment canceled.", kind: .neutral)
             viewModel.clearPaymentStatus()

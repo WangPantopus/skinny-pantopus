@@ -94,6 +94,7 @@ class InvoiceDetailViewModel
 
         /** Tapped "Pay" — create the PaymentIntent, then ask the screen to present the sheet. */
         fun pay() {
+            if (_paymentStatus.value == InvoicePaymentStatus.Paying) return
             val current = invoice
             if (current == null || !Projection.isPayable(current.status)) {
                 _paymentStatus.value = InvoicePaymentStatus.Declined(unpayableMessage(current?.status))
@@ -132,14 +133,16 @@ class InvoiceDetailViewModel
         fun onCheckoutOutcome(outcome: CheckoutOutcome) {
             when (outcome) {
                 CheckoutOutcome.Paid -> {
-                    _paymentStatus.value = InvoicePaymentStatus.Paid
+                    _paymentStatus.value = InvoicePaymentStatus.Paying
                     viewModelScope.launch {
-                        // The charge succeeded — tell the server so the invoice
-                        // flips to `paid`. A failure here is not a payment
-                        // failure (the Stripe webhook also reconciles), so we
-                        // still report success and let the re-read decide what
-                        // the screen shows.
-                        invoicesRepository.confirmInvoicePayment(invoiceId)
+                        // Sheet completion is not proof that funds were captured.
+                        val confirmation = invoicesRepository.confirmInvoicePayment(invoiceId)
+                        _paymentStatus.value =
+                            if (confirmation is NetworkResult.Success && confirmation.data.invoice.status == "paid") {
+                                InvoicePaymentStatus.Paid
+                            } else {
+                                InvoicePaymentStatus.Unconfirmed
+                            }
                         fetch(showLoading = false)
                     }
                 }

@@ -70,6 +70,8 @@ fun InvoiceDetailScreen(
     LaunchedEffect(paymentStatus) {
         when (val status = paymentStatus) {
             is InvoicePaymentStatus.Paid -> toastController.success("Payment complete.")
+            is InvoicePaymentStatus.Unconfirmed ->
+                toastController.info("Payment confirmation is pending. Check the invoice before trying again.")
             is InvoicePaymentStatus.Canceled -> toastController.info("Payment canceled.")
             is InvoicePaymentStatus.Declined -> toastController.error(status.message)
             else -> Unit
