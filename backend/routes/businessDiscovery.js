@@ -972,6 +972,46 @@ router.get('/:businessId/combined-trust', verifyToken, async (req, res) => {
 
 // ============ ENDORSEMENTS (Phase 7) ============
 
+// Endorsements are stored lowercased ("pet care"), while a business lists its categories its own
+// way ("Pet care", or "home_services" from an earlier phone build), and clients send and compare
+// that spelling. So endorsement categories match by the key Discover's filters use (the SQL helper
+// business_category_key): lowercase, with "_", "-" and runs of spaces read as one space, and the
+// slugs earlier phone builds saved read as their names. Keep the two in step.
+const LEGACY_PHONE_CATEGORY_NAMES = new Map([
+  ['home_services', 'Home services'],
+  ['personal_services', 'Personal services'],
+  ['tech_repair', 'Tech & repair'],
+  ['delivery_errands', 'Delivery & errands'],
+  ['goods_retail', 'Goods & retail'],
+  ['rentals', 'Rentals'],
+  ['vehicles_rideshare', 'Vehicles & rideshare'],
+  ['other', 'Other'],
+]);
+
+function businessCategoryKey(category) {
+  const name = LEGACY_PHONE_CATEGORY_NAMES.get(category) ?? String(category);
+  return name.toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+}
+
+/** The categories a business lists, as it spells them. */
+async function getListedCategories(businessId) {
+  const { data, error } = await supabaseAdmin
+    .from('BusinessProfile')
+    .select('categories')
+    .eq('business_user_id', businessId)
+    .maybeSingle();
+  if (error) {
+    logger.warn('Error reading business categories for endorsements', { error: error.message });
+  }
+  return (data?.categories || []).filter((c) => typeof c === 'string');
+}
+
+/** A stored endorsement category in the business's own spelling, or as stored if it no longer lists it. */
+function listedSpelling(category, listed) {
+  const key = businessCategoryKey(category);
+  return listed.find((c) => businessCategoryKey(c) === key) ?? category;
+}
+
 /**
  * GET /:businessId/endorsements
  *
@@ -997,15 +1037,20 @@ router.get('/:businessId/endorsements', verifyToken, async (req, res) => {
     const radiusMeters = Math.round(radiusMiles * MILES_TO_METERS);
     const category = req.query.category || null;
 
-    const { data: result, error } = await supabaseAdmin.rpc(
-      'get_endorsement_count',
-      {
-        p_business_user_id: businessId,
-        p_viewer_home_id: viewerHomeId,
-        p_radius_meters: radiusMeters,
-        p_category: category,
-      },
-    );
+    // Counted for every category, then grouped here by category key, so a category's endorsements
+    // count together however each was stored.
+    const [{ data: result, error }, listed] = await Promise.all([
+      supabaseAdmin.rpc(
+        'get_endorsement_count',
+        {
+          p_business_user_id: businessId,
+          p_viewer_home_id: viewerHomeId,
+          p_radius_meters: radiusMeters,
+          p_category: null,
+        },
+      ),
+      getListedCategories(businessId),
+    ]);
 
     if (error) {
       logger.error('Error fetching endorsement count', { error: error.message });
@@ -1013,8 +1058,21 @@ router.get('/:businessId/endorsements', verifyToken, async (req, res) => {
     }
 
     const row = Array.isArray(result) ? result[0] : result;
-    const count = parseInt(row?.endorsement_count, 10) || 0;
-    const byCategory = row?.by_category || [];
+    const byKey = new Map();
+    for (const entry of row?.by_category || []) {
+      const key = businessCategoryKey(entry.category);
+      const entryCount = parseInt(entry.count, 10) || 0;
+      const same = byKey.get(key);
+      if (same) same.count += entryCount;
+      else byKey.set(key, { category: listedSpelling(entry.category, listed), count: entryCount });
+    }
+    let count = parseInt(row?.endorsement_count, 10) || 0;
+    let byCategory = [...byKey.values()].sort((a, b) => b.count - a.count);
+    if (category) {
+      const wanted = byKey.get(businessCategoryKey(category));
+      count = wanted ? wanted.count : 0;
+      byCategory = wanted ? [wanted] : [];
+    }
 
     res.json({
       count,
@@ -1095,7 +1153,26 @@ router.post('/:businessId/endorsements', verifyToken, async (req, res) => {
       });
     }
 
-    // Insert endorsement (unique constraint handles duplicates)
+    // One endorsement per category, however it's spelled: "pet-care" after "Pet care" is a repeat.
+    const { data: existing, error: existingErr } = await supabaseAdmin
+      .from('NeighborEndorsement')
+      .select('category')
+      .eq('endorser_home_id', occupancy.home_id)
+      .eq('business_user_id', businessId);
+
+    if (existingErr) {
+      logger.error('Error reading endorsements before endorsing', { error: existingErr.message });
+      return res.status(500).json({ error: 'Failed to create endorsement' });
+    }
+
+    const key = businessCategoryKey(category);
+    if ((existing || []).some((e) => businessCategoryKey(e.category) === key)) {
+      return res.status(409).json({
+        error: 'You have already endorsed this business for this category',
+      });
+    }
+
+    // Insert endorsement (the unique constraint catches a concurrent duplicate)
     const { data: endorsement, error: insertErr } = await supabaseAdmin
       .from('NeighborEndorsement')
       .insert({
@@ -1153,20 +1230,36 @@ router.delete('/:businessId/endorsements/:category', verifyToken, async (req, re
       return res.status(404).json({ error: 'No active home found' });
     }
 
-    const { error: delErr, count } = await supabaseAdmin
+    // The business's spelling ("Pet care") finds the endorsement however it was stored ("pet care").
+    const { data: endorsements, error: readErr } = await supabaseAdmin
       .from('NeighborEndorsement')
-      .delete({ count: 'exact' })
+      .select('id, category')
       .eq('endorser_home_id', occupancy.home_id)
-      .eq('business_user_id', businessId)
-      .eq('category', category.toLowerCase());
+      .eq('business_user_id', businessId);
+
+    if (readErr) {
+      logger.error('Error reading endorsements to retract', { error: readErr.message });
+      return res.status(500).json({ error: 'Failed to retract endorsement' });
+    }
+
+    const key = businessCategoryKey(category);
+    const ids = (endorsements || [])
+      .filter((e) => businessCategoryKey(e.category) === key)
+      .map((e) => e.id);
+
+    if (ids.length === 0) {
+      return res.status(404).json({ error: 'Endorsement not found' });
+    }
+
+    const { error: delErr } = await supabaseAdmin
+      .from('NeighborEndorsement')
+      .delete()
+      .eq('endorser_home_id', occupancy.home_id)
+      .in('id', ids);
 
     if (delErr) {
       logger.error('Error deleting endorsement', { error: delErr.message });
       return res.status(500).json({ error: 'Failed to retract endorsement' });
-    }
-
-    if (count === 0) {
-      return res.status(404).json({ error: 'Endorsement not found' });
     }
 
     res.json({ message: 'Endorsement retracted' });
@@ -1200,19 +1293,23 @@ router.get('/:businessId/endorsements/mine', verifyToken, async (req, res) => {
       return res.json({ endorsed_categories: [] });
     }
 
-    const { data: endorsements, error } = await supabaseAdmin
-      .from('NeighborEndorsement')
-      .select('category')
-      .eq('endorser_home_id', occupancy.home_id)
-      .eq('business_user_id', businessId);
+    const [{ data: endorsements, error }, listed] = await Promise.all([
+      supabaseAdmin
+        .from('NeighborEndorsement')
+        .select('category')
+        .eq('endorser_home_id', occupancy.home_id)
+        .eq('business_user_id', businessId),
+      getListedCategories(businessId),
+    ]);
 
     if (error) {
       logger.error('Error fetching user endorsements', { error: error.message });
       return res.status(500).json({ error: 'Failed to fetch endorsements' });
     }
 
+    // In the business's own spelling, the one clients list and compare.
     res.json({
-      endorsed_categories: (endorsements || []).map(e => e.category),
+      endorsed_categories: [...new Set((endorsements || []).map((e) => listedSpelling(e.category, listed)))],
     });
   } catch (err) {
     logger.error('my endorsements error', { error: err.message, stack: err.stack });
