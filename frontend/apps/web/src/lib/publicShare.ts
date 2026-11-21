@@ -1,5 +1,6 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
+import type { CardJourney, CardJourneyGoal } from '@pantopus/api';
 import { ANDROID_PLAY_STORE_URL, API_BASE_URL, APP_NAME, APP_WEB_URL, IOS_APP_STORE_APP_ID, IOS_APP_STORE_URL, chosenUsername } from '@pantopus/utils';
 
 const API_BASE = API_BASE_URL.replace(/\/+$/, '');
@@ -60,6 +61,18 @@ export type PublicCardDesigns = {
 export const fetchPublicCardDesigns = cache(async (): Promise<PublicFetchResult<PublicCardDesigns>> => (
   fetchPublicJson<PublicCardDesigns>('/api/mailbox/cards/designs')
 ));
+
+/** A travelling card's journey (server key card_travel; 404 while it's off or there is no such journey). Towns and dates only. */
+export const fetchCardJourney = cache(async (id: string): Promise<PublicFetchResult<CardJourney>> => {
+  const result = await fetchPublicJson<{ journey: CardJourney }>(`/api/mailbox/cards/journeys/${encodeURIComponent(id)}`, { noStore: true });
+  return { data: result.data?.journey ?? null, status: result.status };
+});
+
+/** All cards this Christmas (D3), for /cards (404 while the travelling card is off). */
+export const fetchCardJourneyGoal = cache(async (): Promise<PublicFetchResult<CardJourneyGoal>> => {
+  const result = await fetchPublicJson<{ goal: CardJourneyGoal }>('/api/mailbox/cards/journeys');
+  return { data: result.data?.goal ?? null, status: result.status };
+});
 
 /** The invite code a shared card's link carries in `ref`, if it looks like one. It's only ever passed on to sign-up. */
 export function shareRefFrom(value: string | string[] | undefined): string | null {

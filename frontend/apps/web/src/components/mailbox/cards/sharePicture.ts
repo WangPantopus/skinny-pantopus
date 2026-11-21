@@ -5,11 +5,12 @@
 // on the site, because Facebook reads them from the page.
 // ============================================================
 
-import { firstNameOf, isVerseReference, PAPER_SERIF, postmarkDay, TABLE_ART, tableTint, cardTrimmedPicture } from './cardArt';
+import { cardStampFile, firstNameOf, isVerseReference, PAPER_SERIF, postmarkDay, TABLE_ART, tableTint, cardTrimmedPicture } from './cardArt';
+import { postmarksSvgString } from './TravelPostmarks';
 import { cardHand, cardPen } from './cardFont';
 import { measureNote, NOTE_HEIGHT, penWords, type NoteFit } from './CardPaper';
 import { drawableSignature, signaturePath, SIGNATURE_INK, SIGNATURE_LINE, SIGNATURE_ON_CARD, SIGNATURE_STROKE, SIGNATURE_W } from './cardSignature';
-import type { CardSignature } from '@pantopus/api';
+import type { CardSignature, CardTravelPostmark } from '@pantopus/api';
 
 export type ShareFormat = 'story' | 'post' | 'open' | 'link';
 
@@ -31,7 +32,14 @@ export type ShareDetails = {
   fromName: string;
   /** Signed beside FROM (design plan 8.2): drawn as on the card, only where the back shows with the note. */
   signature?: CardSignature | null;
+  /**
+   * A card that travels (travelling card Part 7): its envelope with the postmarks and no names lies behind the
+   * picture, and the slip says how far it has gone. `journey` is its page (Copy link, the link preview).
+   */
+  travel?: ShareTravel | null;
 };
+
+export type ShareTravel = { journey: string | null; postmarks: CardTravelPostmark[]; towns: number; miles: number; travelling?: boolean };
 
 const SCALE = 2;
 const PEN = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
@@ -437,6 +445,83 @@ function paperSlip(ctx: Ctx, art: Art, x: number, y: number, turn: number, textW
   ctx.restore();
 }
 
+/**
+ * A travelling card's slip (Part 7, sample .slip): "5 TOWNS · 2,692 MILES", "Still travelling", "Start one at
+ * pantopus.com/cards", centred on the same paper as the name slip.
+ */
+function travelSlip(ctx: Ctx, art: Art, travel: ShareTravel, x: number, y: number, turn: number, w: number, size: number) {
+  const lines: [string, number, string, number][] = [
+    [`${travel.towns} ${travel.towns === 1 ? 'TOWN' : 'TOWNS'} · ${travel.miles.toLocaleString('en-US')} ${travel.miles === 1 ? 'MILE' : 'MILES'}`, size, `600 ${size}px ${SERIF}`, size * 0.13],
+    ...(travel.travelling === false ? [] : [['Still travelling', size * 0.77, `${size * 0.77}px ${SERIF}`, size * 0.05] as [string, number, string, number]]),
+    ['Start one at pantopus.com/cards', size * 0.77, `${size * 0.77}px ${SERIF}`, size * 0.05],
+  ];
+  const pad = size * 0.7;
+  const h = pad * 2 + lines.reduce((sum, [, s], i) => sum + s * (i ? 1.3 : 1.15), 0);
+  ctx.save();
+  ctx.translate(x + (w / 2), y + (h / 2));
+  ctx.rotate((turn * Math.PI) / 180);
+  ctx.translate(-w / 2, -h / 2);
+  ctx.save();
+  setShadow(ctx, 1, 3, 6, 'rgba(0, 0, 0, 0.45)', turn);
+  ctx.fillStyle = '#f6eedc';
+  roundedRect(ctx, 0, 0, w, h, 1.5);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  roundedRect(ctx, 0, 0, w, h, 1.5);
+  ctx.clip();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = tile(ctx, art.paper, 220);
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+  let top = pad;
+  lines.forEach(([text, s, font, spacing], i) => {
+    const box = s * (i ? 1.3 : 1.15);
+    ctx.fillStyle = i ? 'rgba(43, 38, 34, 0.75)' : '#2b2622';
+    ctx.font = font;
+    spacedText(ctx, text, w / 2, baselineIn(ctx, top, box, s), spacing, true);
+    top += box;
+  });
+  ctx.restore();
+}
+
+/** The slip under every picture: the name slip, or a travelling card's (as wide, at the same place). */
+function drawSlip(ctx: Ctx, art: Art, details: ShareDetails, x: number, y: number, turn: number, textWidth: number, h: number, nameSize: number, lineSize: number) {
+  if (details.travel && !details.card.sealed) {
+    travelSlip(ctx, art, details.travel, x, y - nameSize * 0.6, turn, textWidth + (h * 0.36), nameSize * 1.05);
+    return;
+  }
+  paperSlip(ctx, art, x, y, turn, textWidth, h, nameSize, lineSize);
+}
+
+type TravelArt = { front: HTMLImageElement; stamp: HTMLImageElement; marks: HTMLImageElement };
+
+/** The envelope's address side and its postmarks (as one SVG image), for a travelling card's pictures. */
+async function loadTravelArt(details: ShareDetails): Promise<TravelArt | null> {
+  if (!details.travel?.postmarks.length || details.card.sealed) return null;
+  const svg = postmarksSvgString(details.travel.postmarks);
+  const [front, stamp, marks] = await Promise.all([
+    artImage('env-front.webp'),
+    image(cardStampFile(details.card.number, details.card.design)),
+    image(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`),
+  ]);
+  return { front, stamp, marks };
+}
+
+/** The envelope as it reached them, address side up, with its postmarks and no names (sample screen 6). */
+function addressedEnvelope(ctx: Ctx, travelArt: TravelArt, width: number, x: number, top: number, turn: number) {
+  envelopeGroup(ctx, width, x, top, turn, 0, [3, 8, 11, 'rgba(0, 0, 0, 0.55)'], (group, height) => {
+    group.drawImage(travelArt.front, 0, 0, width, height);
+    const stampW = width * 0.2017;
+    group.drawImage(travelArt.stamp, width * 0.755, height * 0.0345, stampW, (stampW * travelArt.stamp.naturalHeight) / travelArt.stamp.naturalWidth);
+    const size = width * 0.0235;
+    group.fillStyle = '#d8b76f';
+    group.font = `600 ${size}px ${SERIF}`;
+    spacedText(group, 'CHRISTMAS CARD', width * 0.068, height * 0.946, size * 0.2);
+    group.drawImage(travelArt.marks, 0, 0, width, height);
+  });
+}
+
 function doNotOpen(ctx: Ctx, left: number, top: number, fontSize: number) {
   const lines = ['DO NOT OPEN', 'UNTIL CHRISTMAS'];
   const spacing = fontSize * 0.11;
@@ -558,7 +643,7 @@ function openCard(ctx: Ctx, details: ShareDetails, art: Art, showNote: boolean) 
   if (details.card.sealed) {
     shutEnvelope(ctx, art, 340, 230, 40, -1.6, 101);
     doNotOpen(ctx, 274, 280, 15);
-    paperSlip(ctx, art, 261, 492, -1.2, 262, 46, 12, 12);
+    drawSlip(ctx, art, details, 261, 492, -1.2, 262, 46, 12, 12);
     return;
   }
   if (showNote) {
@@ -569,7 +654,7 @@ function openCard(ctx: Ctx, details: ShareDetails, art: Art, showNote: boolean) 
     openEnvelope(ctx, art, 260, 445, 171, 0);
     cardFront(ctx, details, art, 350, 50, 60, 0);
   }
-  paperSlip(ctx, art, 261, 504, -1.2, 262, 46, 12, 12);
+  drawSlip(ctx, art, details, 261, 504, -1.2, 262, 46, 12, 12);
 }
 
 async function toJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -595,7 +680,7 @@ export async function drawShareSet(details: ShareDetails, withNote: boolean): Pr
     const [canvas, ctx] = canvasOf(width, height);
     tableCloth(ctx, art, tableTint(card.table), width, height);
     draw(ctx);
-    paperSlip(ctx, art, 139, 612, -1.2, 262, 46, 12, 12);
+    drawSlip(ctx, art, details, 139, 612, -1.2, 262, 46, 12, 12);
     tableLight(ctx, art, width, height);
     return toJpeg(canvas);
   };
@@ -613,7 +698,7 @@ export async function drawShareSet(details: ShareDetails, withNote: boolean): Pr
  */
 export async function drawSharePicture(details: ShareDetails, format: 'story' | 'post' | 'open', withNote: boolean): Promise<Blob> {
   const { card } = details;
-  const [art] = await Promise.all([loadArt(card.design, card.sealed), loadFonts()]);
+  const [art, , travelArt] = await Promise.all([loadArt(card.design, card.sealed), loadFonts(), loadTravelArt(details)]);
   const [width, height] = SIZES[format];
   const [canvas, ctx] = canvasOf(width, height);
   const story = format === 'story';
@@ -627,29 +712,40 @@ export async function drawSharePicture(details: ShareDetails, format: 'story' | 
   } else if (card.sealed) {
     shutEnvelope(ctx, art, story ? 460 : 410, story ? 40 : 65, story ? 190 : 62, story ? -2.4 : -2.2, story ? 136 : 122);
     doNotOpen(ctx, story ? 96 : 118, story ? 506 : 352, story ? 21 : 18);
-    if (story) paperSlip(ctx, art, 122, 776, -1.6, 296, 54, 13.5, 13.5);
-    else paperSlip(ctx, art, 139, 606, -1.2, 262, 46, 12, 12);
+    if (story) drawSlip(ctx, art, details, 122, 776, -1.6, 296, 54, 13.5, 13.5);
+    else drawSlip(ctx, art, details, 139, 606, -1.2, 262, 46, 12, 12);
   } else if (showNote) {
     const fit = measureNote(details.note);
     if (story) {
       openEnvelope(ctx, art, 372, 84, 300, 4);
       cardFront(ctx, details, art, 360, 16, 138, -4);
       cardBack(ctx, details, art, fit, 360, 164, 346, 3.2);
-      paperSlip(ctx, art, 26, 806, -2.2, 250, 50, 12, 12.5);
+      drawSlip(ctx, art, details, 26, 806, -2.2, 250, 50, 12, 12.5);
     } else {
       openEnvelope(ctx, art, 300, 120, 150, 2.5);
       cardFront(ctx, details, art, 272, 6, 104, -3.2);
       cardBack(ctx, details, art, fit, 272, 262, 116, 2.8);
-      paperSlip(ctx, art, 139, 612, -1.2, 262, 46, 12, 12);
+      drawSlip(ctx, art, details, 139, 612, -1.2, 262, 46, 12, 12);
+    }
+  } else if (travelArt && details.travel) {
+    // A travelling card (Part 7, sample screen 6): its envelope with the postmarks behind, the card in front, the slip.
+    if (story) {
+      addressedEnvelope(ctx, travelArt, 407, 98, 30, 6);
+      cardFront(ctx, details, art, 321, 43, 356, -3.5);
+      travelSlip(ctx, art, details.travel, 70, 790, 1.2, 400, 24);
+    } else {
+      addressedEnvelope(ctx, travelArt, 300, 190, 26, 6);
+      cardFront(ctx, details, art, 262, 52, 214, -3.5);
+      travelSlip(ctx, art, details.travel, 118, 568, 1.2, 304, 19);
     }
   } else if (story) {
     openEnvelope(ctx, art, 400 * 1.012, 68, 298, 2.4);
     cardFront(ctx, details, art, 400, 70, 302, -2.6);
-    paperSlip(ctx, art, 122, 806, -1.6, 296, 54, 13.5, 13.5);
+    drawSlip(ctx, art, details, 122, 806, -1.6, 296, 54, 13.5, 13.5);
   } else {
     openEnvelope(ctx, art, 380 * 1.012, 78, 112, 3);
     cardFront(ctx, details, art, 380, 80, 110, -2.6);
-    paperSlip(ctx, art, 139, 612, -1.2, 262, 46, 12, 12);
+    drawSlip(ctx, art, details, 139, 612, -1.2, 262, 46, 12, 12);
   }
   tableLight(ctx, art, width, height);
 

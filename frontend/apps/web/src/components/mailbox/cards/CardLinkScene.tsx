@@ -14,6 +14,8 @@ import type { CardLinkFront } from '@pantopus/api';
 import { TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { PaperFront } from './CardPaper';
 import { useDarkPage } from './useDarkPage';
+import TravelPostmarks from './TravelPostmarks';
+import { cardStampFile } from './cardArt';
 import styles from './CardLinkScene.module.css';
 
 const SLATE = '#3b4c6e';
@@ -28,8 +30,11 @@ export default function CardLinkScene({
   framed = false,
   envelope = true,
   front = null,
+  postmarks = null,
   children,
 }: {
+  /** A travelling card (Part 7): its envelope, address side up with these postmarks and no names, behind the card. */
+  postmarks?: { town: string; state: string | null; on: string }[] | null;
   /** Inside Look it over, in place of the whole page. */
   framed?: boolean;
   envelope?: boolean;
@@ -50,7 +55,17 @@ export default function CardLinkScene({
       </div>
       <div className={styles.column}>
         {envelope && front ? (
-          <div className={styles.lying} role="img" aria-label={`A Christmas card: ${front.caption}`} data-testid="cardLinkFront">
+          <div className={`${styles.lying} ${postmarks?.length ? styles.lyingTravel : ''}`} role="img" aria-label={`A Christmas card: ${front.caption}`} data-testid="cardLinkFront">
+            {postmarks?.length ? (
+              <div className={styles.addressed} aria-hidden="true" data-testid="cardLinkPostmarks">
+                {/* eslint-disable @next/next/no-img-element */}
+                <img src={art('env-front.webp')} alt="" />
+                <img src={cardStampFile(null, front.design)} alt="" className={styles.addressedStamp} />
+                {/* eslint-enable @next/next/no-img-element */}
+                <span className={styles.addressedKind}>Christmas card</span>
+                <TravelPostmarks marks={postmarks} />
+              </div>
+            ) : null}
             <div className={styles.open}>
               {/* eslint-disable @next/next/no-img-element */}
               <img src={art('env-flap-in.webp')} alt="" className={styles.flapIn} />
