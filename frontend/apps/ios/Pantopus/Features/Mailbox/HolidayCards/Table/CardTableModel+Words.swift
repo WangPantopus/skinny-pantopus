@@ -205,7 +205,7 @@ extension CardTableModel {
         }
         return switch step {
         case .front, .back, .flap, .pulling:
-            "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")"
+            "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")" + spokenMarks
         case .out:
             "Card from \(content.firstName): \(HolidayCardWords.captionSentence(content.caption)) On the back: \(content.note)"
                 + Self.withIt(content)

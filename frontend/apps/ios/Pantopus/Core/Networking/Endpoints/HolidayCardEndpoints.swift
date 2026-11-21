@@ -155,4 +155,19 @@ public enum HolidayCardEndpoints {
     public static func emailAgain(cardId: String) -> Endpoint {
         Endpoint(method: .post, path: "/api/mailbox/cards/\(cardId)/email-again", reportsServerErrors: false)
     }
+
+    // MARK: The travelling card (server switch `card_travel`, travelling card plan Part 1; 404 while it's off)
+
+    /// `GET /api/mailbox/cards/towns?q=` — route `backend/routes/mailbox.js` (travelling card routes). Up to 8 towns for
+    /// two letters or more, or 3 to 5 digits of a ZIP code, from the bundled Census lists; without `q`, the suggested
+    /// town ("Use Vancouver, WA") or none.
+    public static func towns(query: String?) -> Endpoint {
+        Endpoint(method: .get, path: "/api/mailbox/cards/towns", query: query.map { ["q": $0] } ?? [:])
+    }
+
+    /// `PUT /api/mailbox/cards/town` — route `backend/routes/mailbox.js` (travelling card routes). Keeps the chosen
+    /// town in the profile's town fields (D4: asked once).
+    public static func setTown(_ body: CardTownBody) -> Endpoint {
+        Endpoint(method: .put, path: "/api/mailbox/cards/town", body: body)
+    }
 }

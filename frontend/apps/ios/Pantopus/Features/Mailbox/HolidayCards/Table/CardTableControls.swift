@@ -40,6 +40,7 @@ struct CardTableControls: View {
     let onShare: (() -> Void)?
 
     @ScaledMetric(relativeTo: .title3) private var wordsSize: CGFloat = 18
+    @ScaledMetric(relativeTo: .footnote) private var smallSize: CGFloat = 13.5
     @ScaledMetric(relativeTo: .subheadline) private var primarySize: CGFloat = 15
     @ScaledMetric(relativeTo: .caption) private var hintSize: CGFloat = 15
     @ScaledMetric(relativeTo: .footnote) private var toastSize: CGFloat = 13.5
@@ -158,23 +159,32 @@ struct CardTableControls: View {
     }
 
     private var wordsText: some View {
-        Text(model.words ?? " ")
-            .font(.system(size: wordsSize, design: .serif).italic())
-            .lineSpacing(wordsSize * 0.3 * 0.5)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(MailPaper.tableCreamSoft)
-            .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 1)
-            // At the largest sizes it can run over the mail, so it gets its own glass, as the hint does; so does
-            // sealing's, which shows over the open flap.
-            .padding(.horizontal, wordsOnGlass ? 12 : 0)
-            .padding(.vertical, wordsOnGlass ? 6 : 0)
-            .background {
-                if wordsOnGlass, model.words != nil {
-                    CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
+        VStack(spacing: 7) {
+            Text(model.words ?? " ")
+                .font(.system(size: wordsSize, design: .serif).italic())
+                .lineSpacing(wordsSize * 0.3 * 0.5)
+            // A travelling card: how far it came (travelling card plan Part 3).
+            if let small = model.wordsSmall {
+                Text(small)
+                    .font(.system(size: smallSize))
+                    .lineSpacing(smallSize * 0.2)
+                    .accessibilityIdentifier("cardTableCameLine")
             }
-            .frame(width: max(0, contentWidth - 48))
-            .fixedSize(horizontal: false, vertical: true)
+        }
+        .multilineTextAlignment(.center)
+        .foregroundStyle(MailPaper.tableCreamSoft)
+        .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 1)
+        // At the largest sizes it can run over the mail, so it gets its own glass, as the hint does; so does
+        // sealing's, which shows over the open flap.
+        .padding(.horizontal, wordsOnGlass ? 12 : 0)
+        .padding(.vertical, wordsOnGlass ? 6 : 0)
+        .background {
+            if wordsOnGlass, model.words != nil {
+                CardTableGlass(shape: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+        .frame(width: max(0, contentWidth - 48))
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var wordsOnGlass: Bool {
