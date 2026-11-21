@@ -775,10 +775,13 @@ public struct MailCard: Decodable, Sendable, Hashable {
     /// older servers.
     public let photo: CardPhoto?
     public let voice: CardVoice?
+    /// A card that travels (server switch `card_travel`, travelling card plan): its postmarks, miles and places for its
+    /// reader; nil for every other card, the switch off, and older servers.
+    public let travel: CardTravel?
 
     private enum CodingKeys: String, CodingKey {
         case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table, verse, signature
-        case photo, voice
+        case photo, voice, travel
         case sealedUntil = "sealed_until"
     }
 
@@ -800,6 +803,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         signature = reply.signature
         photo = nil
         voice = nil
+        travel = nil
     }
 
     /// A card not sent yet, as its envelope is drawn while it's being sealed.
@@ -820,6 +824,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         signature = nil
         photo = nil
         voice = nil
+        travel = nil
     }
 
     private init(copying card: MailCard, sealed: Bool) {
@@ -839,6 +844,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         signature = card.signature
         photo = card.photo
         voice = card.voice
+        travel = card.travel
     }
 
     /// The same card on the morning its seal lifts.
@@ -864,6 +870,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         signature = try? c.decodeIfPresent(CardSignature.self, forKey: .signature)
         photo = sealed ? nil : try? c.decodeIfPresent(CardPhoto.self, forKey: .photo)
         voice = sealed ? nil : try? c.decodeIfPresent(CardVoice.self, forKey: .voice)
+        travel = try? c.decodeIfPresent(CardTravel.self, forKey: .travel)
     }
 }
 

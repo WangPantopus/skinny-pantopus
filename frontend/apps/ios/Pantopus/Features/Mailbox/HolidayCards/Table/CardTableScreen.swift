@@ -33,6 +33,7 @@ struct CardTableScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @ScaledMetric(relativeTo: .title3) private var wordsSize: CGFloat = 18
+    @ScaledMetric(relativeTo: .footnote) private var smallSize: CGFloat = 13.5
     @ScaledMetric(relativeTo: .subheadline) private var primarySize: CGFloat = 15
     @ScaledMetric(relativeTo: .caption) private var hintSize: CGFloat = 15
 
@@ -179,12 +180,20 @@ struct CardTableScreen: View {
     /// The tallest the words and the button can be, so the card doesn't shift when they change.
     private func measures(width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
-            Text("It opens Christmas morning, in 56 days.")
-                .font(.system(size: wordsSize, design: .serif).italic())
-                .lineSpacing(wordsSize * 0.15)
-                .frame(width: max(0, width - 48))
-                .fixedSize(horizontal: false, vertical: true)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { wordsHeight = $0 }
+            VStack(spacing: 7) {
+                Text("It opens Christmas morning, in 56 days.")
+                    .font(.system(size: wordsSize, design: .serif).italic())
+                    .lineSpacing(wordsSize * 0.15)
+                // A travelling card keeps room for how far it came (travelling card plan Part 3).
+                if model.content.travel?.cameLine != nil {
+                    Text("It came 12,345 miles through 10 towns to reach you.")
+                        .font(.system(size: smallSize))
+                        .lineSpacing(smallSize * 0.2)
+                }
+            }
+            .frame(width: max(0, width - 48))
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { wordsHeight = $0 }
             CardTableAct(
                 title: "Take the card out",
                 hint: "or swipe it, the way you’d turn it in your hand",
