@@ -64,3 +64,7 @@
 .trouble h1 { margin: 0; font: 400 1.75rem/1.2 var(--serif); }
 .trouble p { margin: 0; font-size: 1rem; color: var(--cream-soft); }
 @media (prefers-reduced-motion: reduce) { .tile img { transition: none; } .tile:hover img { transform: none; } }
+/* The shared goal (travelling card Part 8): a small map and its line under the header. */
+.goal { margin: 1.5rem auto 0; max-width: 22rem; }
+.goalMap svg { display: block; width: 100%; height: auto; }
+.allHead .goalLine { margin: 0.5rem 0 0; font: italic 1rem/1.4 var(--serif); color: var(--cream); }

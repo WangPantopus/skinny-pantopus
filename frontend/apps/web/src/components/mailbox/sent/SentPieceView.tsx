@@ -9,6 +9,7 @@
 // ============================================================
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarClock, ChevronLeft, Loader2, Lock, MailWarning } from 'lucide-react';
 import { useCardExchange, useEmailHolidayCardAgain, useHolidayCards, useSentCard, useTakeBackCardReply, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
@@ -27,7 +28,7 @@ import { cardMood, firstNameOf, shortDay, WAX } from '../cards/cardArt';
 import CardPrint from '../cards/CardPrint';
 import CardGreeting from '../cards/CardGreeting';
 import CardLinkActions from '../cards/CardLinkActions';
-import { linkOpened, sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, trailLabel, trailWhen } from './sentWords';
+import { linkOpened, sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, sentTravelLine, trailLabel, trailWhen } from './sentWords';
 import { launchFeatures } from '@/lib/featureFlags';
 
 const label = 'text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary';
@@ -202,6 +203,8 @@ export default function SentPieceView({ id }: { id: string }) {
             fromName: piece.envelope.from,
             mailedOn: piece.envelope.postmarked_on || piece.sent_at,
             signature: card.signature ?? null,
+            // A travelling card (Part 7): its envelope's postmarks, and how far it has gone from here.
+            travel: piece.travel?.journey ? { journey: piece.travel.journey, postmarks: piece.travel.postmarks ?? [], towns: piece.travel.towns, miles: piece.travel.miles } : null,
           }}
           slug={card.slug}
           mine
@@ -213,6 +216,13 @@ export default function SentPieceView({ id }: { id: string }) {
         <div className="mx-auto w-full max-w-3xl px-4 pb-8 pt-1 md:px-7 md:pt-6">
           <h2 className="text-2xl font-bold leading-8 tracking-tight text-app-text">{byLinkUnopened ? 'Your card by link' : <>Your {piece.kind === 'letter' ? 'letter' : 'card'} to {name}</>}</h2>
           <p className="mt-0.5 text-sm leading-5 text-app-text-secondary">Sent {shortDay(piece.sent_at)} · {sentStatusLine(piece)}</p>
+          {/* A card that travels (travelling card Part 6): "5 towns · 2,692 miles. Now in Tampa, FL." and its journey. */}
+          {piece.travel?.journey ? (
+            <p className="mt-1 text-sm leading-5 text-app-text" data-testid="mailSentTravel">
+              {sentTravelLine(piece) ? <>{sentTravelLine(piece)} </> : null}
+              <Link href={`/cards/journey/${piece.travel.journey}`} className="font-semibold text-app-text-strong underline underline-offset-4" data-testid="mailSentJourney">See its journey</Link>
+            </p>
+          ) : null}
           {piece.email_status ? (
             // Its email didn't go out: the server keeps trying for about an hour, then gives up. Say so, with the
             // address they typed, first on the page, and let them email it again (or take it back below).

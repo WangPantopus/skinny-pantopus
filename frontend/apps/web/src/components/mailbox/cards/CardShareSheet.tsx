@@ -95,7 +95,9 @@ export default function CardShareSheet({
   const noteInPicture = hasNote && withNote && format !== 'link';
   const key = `${format}-${noteInPicture ? 'note' : 'card'}`;
   const from = firstNameOf(details.fromName);
-  const link = cardPageLink(slug, card.sealed, inviteCode);
+  // A travelling card's link is its journey's page (travelling card Part 7).
+  const journey = !card.sealed ? details.travel?.journey ?? null : null;
+  const link = journey ? `${APP_WEB_URL}/cards/journey/${journey}` : cardPageLink(slug, card.sealed, inviteCode);
   const words = mine
     ? { subject: 'A Christmas card I sent', body: `I sent this Christmas card on Pantopus. You can send one too: ${link}` }
     : { subject: 'Look what came in the mail', body: `I got this Christmas card on Pantopus. You can send one too: ${link}` };
@@ -114,13 +116,15 @@ export default function CardShareSheet({
     setPicture(known ?? null);
     if (known) return undefined;
     const making = format === 'link'
-      ? fetch(`/holiday-cards/share/${card.sealed ? 'sealed' : card.design}-link.jpg`).then((answer) => {
+      ? fetch(journey ? `/api/og/journey?id=${encodeURIComponent(journey)}` : `/holiday-cards/share/${card.sealed ? 'sealed' : card.design}-link.jpg`).then((answer) => {
         if (!answer.ok) throw new Error(`Couldn't load the link picture: ${answer.status}`);
         return answer.blob();
       })
       : drawSharePicture(details, format, noteInPicture);
     making.then((blob) => {
-      const made = { url: URL.createObjectURL(blob), file: new File([blob], `pantopus-christmas-card-${format}.jpg`, { type: 'image/jpeg' }) };
+      // A journey's link preview comes as a PNG (its picture is drawn by the server); the rest are JPEGs.
+      const png = blob.type === 'image/png';
+      const made = { url: URL.createObjectURL(blob), file: new File([blob], `pantopus-christmas-card-${format}.${png ? 'png' : 'jpg'}`, { type: png ? 'image/png' : 'image/jpeg' }) };
       pictures.current.set(key, made);
       if (live) setPicture(made);
     }).catch(() => { if (live) setFailed(true); });

@@ -165,3 +165,13 @@ export function trailWhen(step: SentTrailStep): string | null {
   if (step.on) return shortDay(step.on).replace(',', '').toUpperCase();
   return null;
 }
+
+/**
+ * A card that travels (travelling card Part 6): "5 towns · 2,692 miles. Now in Tampa, FL.", counted from this card on,
+ * once it has reached someone; null before that or for a card that doesn't travel.
+ */
+export function sentTravelLine(piece: Pick<SentPiece, 'travel'>): string | null {
+  const travel = piece.travel;
+  if (!travel?.now_in) return null;
+  return `${travel.towns} ${travel.towns === 1 ? 'town' : 'towns'} · ${travel.miles.toLocaleString('en-US')} miles. Now in ${travel.now_in}.`;
+}

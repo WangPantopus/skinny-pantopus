@@ -145,7 +145,9 @@ function HowSendingWorks({ freeCards }: { freeCards: number | null }) {
   );
 }
 
-export function PublicCardsPage({ designs, collections, inviteCode, store = null, freeCards = null }: { designs: PublicDesign[]; collections: PublicCollection[]; inviteCode: string | null; store?: PublicCardsStore | null; freeCards?: number | null }) {
+export function PublicCardsPage({ designs, collections, inviteCode, store = null, freeCards = null, goal = null }: { designs: PublicDesign[]; collections: PublicCollection[]; inviteCode: string | null; store?: PublicCardsStore | null; freeCards?: number | null;
+  /** All cards this Christmas (travelling card Part 8, D3): a small map and its line, drawn by the page; null while it's off. */
+  goal?: ReactNode }) {
   const byId = new Map(designs.map((design) => [design.id, design]));
   // A server with no collections shows them as one shelf.
   const shelves = collections.length
@@ -163,6 +165,7 @@ export function PublicCardsPage({ designs, collections, inviteCode, store = null
               <GetTheApp store={store} label="Send a card with the Pantopus app" testId="publicCardsGetApp" />
             </div>
           ) : null}
+          {goal}
         </header>
         {shelves.map((shelf) => (
           <section key={shelf.id} className={styles.shelf} aria-labelledby={`shelf-${shelf.id}`}>

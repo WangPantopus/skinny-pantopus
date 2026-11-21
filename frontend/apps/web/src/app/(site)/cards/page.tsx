@@ -10,7 +10,8 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { APP_WEB_URL } from '@pantopus/utils';
 import { PublicCardsPage, PublicCardsTrouble } from '@/components/mailbox/cards/PublicCards';
-import { cardsStoreLink, fetchPublicCardDesigns, getStoreDownloadCta, shareRefFrom, storePlatform } from '@/lib/publicShare';
+import CardsGoal from '@/components/mailbox/cards/CardsGoal';
+import { cardsStoreLink, fetchCardJourneyGoal, fetchPublicCardDesigns, getStoreDownloadCta, shareRefFrom, storePlatform } from '@/lib/publicShare';
 import type { PublicCardsStore } from '@/components/mailbox/cards/PublicCards';
 
 // Rendered on every request. A build or a first visit that met the server with
@@ -35,12 +36,14 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#171e2d' };
 
 export default async function AllCardsPage({ searchParams }: { searchParams: Promise<{ ref?: string | string[] }> }) {
-  const { data, status } = await fetchPublicCardDesigns();
+  const [{ data, status }, goal] = await Promise.all([fetchPublicCardDesigns(), fetchCardJourneyGoal()]);
   if (status === 404) notFound();
   if (!data) return <PublicCardsTrouble />;
   const inviteCode = shareRefFrom((await searchParams).ref);
   const store = await phoneStore('/app/mailbox/cards', inviteCode);
-  return <PublicCardsPage designs={data.designs} collections={data.collections ?? []} inviteCode={inviteCode} store={store} freeCards={data.free_cards ?? null} />;
+  // The shared goal (travelling card Part 8): only while the travelling card is on (404 otherwise) and the server answers.
+  return <PublicCardsPage designs={data.designs} collections={data.collections ?? []} inviteCode={inviteCode} store={store} freeCards={data.free_cards ?? null}
+    goal={goal.data ? <CardsGoal goal={goal.data} /> : null} />;
 }
 
 /**

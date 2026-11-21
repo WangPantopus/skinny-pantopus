@@ -38,7 +38,9 @@ export interface EscrowedMailView {
      * A Christmas card: whether it's sealed, and its front (the stock picture the sender picked, as the public
      * /cards/<slug> page draws it), null while it's sealed until Christmas. Never its note, signature, photo or voice.
      */
-    card?: { holiday: string; year: number; sealed: boolean; front?: CardLinkFront | null; by_link?: boolean } | null;
+    card?: { holiday: string; year: number; sealed: boolean; front?: CardLinkFront | null; by_link?: boolean;
+      /** A card that travels (server key card_travel): its envelope's postmarks, the towns and the miles it came. */
+      travel?: { postmarks: { town: string; state: string | null; on: string }[]; towns: number; miles: number } } | null;
   };
 }
 

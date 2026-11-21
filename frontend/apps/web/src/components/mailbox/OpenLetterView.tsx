@@ -28,6 +28,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { launchFeatures } from '@/lib/featureFlags';
 import CardLinkScene, { cardLinkStyles as table, type CardLinkSceneFront } from './cards/CardLinkScene';
 import { PaperFront } from './cards/CardPaper';
+import { travelCameLine } from './cards/TravelPostmarks';
 
 type Letter = EscrowedMailView['mail'];
 type ClosedCode = Extract<EscrowClaimErrorCode, 'MAIL_LINK_INVALID' | 'MAIL_CLAIMED' | 'MAIL_EXPIRED' | 'MAIL_WITHDRAWN'> | 'UNAVAILABLE';
@@ -367,6 +368,8 @@ export function CardLinkWords({ letter }: { letter: LinkPageLetter }) {
     <div className={table.words}>
       <h1>A Christmas card for you</h1>
       <p className={table.from}>From {letter.senderName}</p>
+      {/* A travelling card past its first stop (Part 7): how far it came. */}
+      {travelCameLine(letter.card?.travel) ? <p className={table.line} data-testid="cardLinkTravelLine">{travelCameLine(letter.card?.travel)}</p> : null}
       {letter.senderVerified ? <span className={table.badge}>{letter.senderKind === 'business' ? 'Verified business' : 'Verified resident'}</span> : null}
       {letter.card?.sealed ? <p className={table.sealed}>It’s sealed until Christmas morning.</p> : null}
     </div>
@@ -598,7 +601,7 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
 
   if (launchFeatures.cardTable && card) {
     return (
-      <CardLinkScene front={linkPageFront(letter)}>
+      <CardLinkScene front={linkPageFront(letter)} postmarks={letter.card?.travel?.postmarks ?? null}>
         <CardLinkWords letter={letter} />
 
         {signedIn === false && (
