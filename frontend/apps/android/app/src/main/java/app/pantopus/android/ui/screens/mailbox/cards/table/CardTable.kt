@@ -475,6 +475,7 @@ private fun rememberTableGeometry(
                 // The geometry keeps what a full-size card leaves under it, once it's turned over.
                 keepsMediaRoom = media,
                 quietRoom = quietHeight,
+                shutBelowWords = cameHeight > 0,
             )
         }
     }

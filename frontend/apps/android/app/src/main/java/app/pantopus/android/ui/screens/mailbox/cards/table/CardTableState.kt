@@ -179,6 +179,11 @@ internal class TableGeometry(
     keepsMediaRoom: Boolean = false,
     /** The reader's quiet row, part of [bottomRoom]: it shows only once the card is out and turned over. */
     quietRoom: Float = 0f,
+    /**
+     * A travelling card's line under the words (travelling card Part 3) can make them reach lower than 88 dp: the shut
+     * envelope is then sized to fit between the words and the buttons, as the card is on a short screen.
+     */
+    shutBelowWords: Boolean = false,
 ) {
     val cardWidth: Float
     val cardHeight: Float
@@ -214,7 +219,8 @@ internal class TableGeometry(
         // Tablets and wide windows go to 640 dp where the height allows (plan 6.3).
         val widest = min(width - side * 2f, (if (wide) 640f else 470f) * d)
         // Shut, the envelope sits at least 88 dp below the safe area and clear of the buttons; the quiet row isn't there yet.
-        val shutLimit = (height - safeTop - (bottomRoom - quietRoom) - 88f * d) / ENVELOPE_TALL
+        val shutTop = if (shutBelowWords) max(safeTop + 88f * d, wordsBottom) else safeTop + 88f * d
+        val shutLimit = (height - shutTop - (bottomRoom - quietRoom)) / ENVELOPE_TALL
 
         fun fitted(above: Float): Float =
             max(
