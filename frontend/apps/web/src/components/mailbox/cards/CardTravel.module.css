@@ -1,0 +1,116 @@
+/* The travelling card (server key card_travel; docs/product/travelling-card-2026-11-21): the small paper sheets
+   ("Where does it start?", "Pass it on") and the lines the card table gains. Measures and colours from sample/page.html
+   (.sheet, .who, .draft, .send, .free): cream paper over the dimmed table, always in the card's own light. */
+.backdrop {
+  position: fixed; inset: 0; z-index: 1100; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(8, 4, 2, 0.5); animation: fade 0.18s ease both; color-scheme: light;
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet {
+  position: relative; width: min(100%, 480px); max-height: min(92dvh, 760px); overflow-y: auto;
+  border-radius: 24px 24px 0 0; padding: 20px 18px calc(env(safe-area-inset-bottom, 0px) + 18px);
+  background: url(/holiday-cards/table/paper.webp) center / 256px, #f6eedc; background-blend-mode: multiply;
+  color: #2b2622; font: 0.9375rem/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.35); animation: rise 0.22s ease both;
+  --serif: ui-serif, 'New York', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+}
+@media (min-width: 640px) {
+  .backdrop { align-items: center; }
+  .sheet { border-radius: 24px; padding-bottom: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .backdrop, .sheet { animation: none; } }
+.close {
+  position: absolute; right: 12px; top: 12px; width: 36px; height: 36px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(43, 38, 34, 0.08); display: flex; align-items: center; justify-content: center;
+}
+.close svg { width: 16px; height: 16px; stroke: #2b2622; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.title { margin: 0; padding-right: 40px; font: 400 1.375rem/1.25 var(--serif); }
+.sub { margin: 2px 0 0; font-size: 0.78125rem; line-height: 1.4; color: rgba(43, 38, 34, 0.7); }
+.label {
+  display: block; margin: 16px 0 6px; font-size: 0.59375rem; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
+  color: rgba(43, 38, 34, 0.62);
+}
+.field {
+  display: block; width: 100%; min-height: 48px; padding: 10px 12px; border-radius: 14px; font: inherit; font-size: 1rem;
+  background: rgba(255, 252, 244, 0.8); border: 1px solid rgba(43, 38, 34, 0.16); color: #2b2622;
+}
+.field:focus-visible, .row:focus-visible, .send:focus-visible, .quiet:focus-visible, .close:focus-visible, .use:focus-visible {
+  outline: 2px solid #8b1d1d; outline-offset: 2px;
+}
+.list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.row {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 9px 12px; border-radius: 14px;
+  background: rgba(255, 252, 244, 0.8); border: 1px solid rgba(43, 38, 34, 0.16); text-align: left; cursor: pointer;
+  font: inherit; color: #2b2622;
+}
+.row b { flex: 1; min-width: 0; font-weight: 600; font-size: 0.875rem; }
+.row span { font-size: 0.75rem; color: rgba(43, 38, 34, 0.66); white-space: nowrap; }
+.use {
+  display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; margin-top: 12px; border-radius: 14px;
+  border: 1px solid rgba(43, 38, 34, 0.22); background: transparent; color: #2b2622; font: inherit; font-weight: 600;
+  cursor: pointer;
+}
+.tip { margin: 6px 2px 0; font-size: 0.71875rem; line-height: 1.45; color: rgba(43, 38, 34, 0.66); }
+.error { margin: 10px 0 0; font-size: 0.8125rem; font-weight: 600; color: #8b1d1d; }
+.send {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; margin-top: 14px;
+  border-radius: 14px; border: 0; background: #8f1f1f; color: #fbf3e2; font: inherit; font-weight: 600; font-size: 0.9375rem;
+  cursor: pointer;
+}
+.send:disabled, .use:disabled, .row:disabled { opacity: 0.6; cursor: default; }
+.free { margin: 8px 0 0; text-align: center; font-size: 0.71875rem; line-height: 1.45; color: rgba(43, 38, 34, 0.7); }
+.quiet { background: none; border: 0; padding: 4px; color: #2b2622; text-decoration: underline; font: inherit; cursor: pointer; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* "Let it travel" on Seal it for the day: one row on the same paper as the arrival choices. */
+.travelRow {
+  display: flex; align-items: flex-start; gap: 12px; padding: 14px; border-radius: 12px; background: #fffdf8; color: #111827;
+  border: 1px solid #e3d8c3; cursor: pointer;
+}
+.travelRow .words { flex: 1; min-width: 0; }
+.travelRow .words b { display: block; font-size: 0.9375rem; font-weight: 600; line-height: 1.25rem; }
+.travelRow .words span { display: block; font-size: 0.8125rem; line-height: 1.125rem; color: #4e5563; }
+.switch {
+  position: relative; flex: none; width: 51px; height: 31px; margin-top: 2px; border-radius: 999px; border: 0; padding: 0;
+  background: #c9c2b4; cursor: pointer; transition: background 0.18s ease;
+}
+.switch[aria-checked='true'] { background: #8b1d1d; }
+.switch::after {
+  content: ''; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25); transition: transform 0.18s ease;
+}
+.switch[aria-checked='true']::after { transform: translateX(20px); }
+.switch:focus-visible { outline: 2px solid #8b1d1d; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
+
+/* The postmarks on a travelling card's envelope (Part 3; TravelPostmarks.tsx): today's ink, every third blue-black. */
+.pm {
+  position: absolute; overflow: visible; color: rgba(19, 13, 15, 0.8); transform: rotate(var(--r));
+  transform-origin: calc(var(--ew) * 0.135) 50%; pointer-events: none;
+}
+.pmBlue { color: rgba(14, 22, 52, 0.84); }
+.pm text { font-family: Georgia, 'Times New Roman', serif; fill: currentColor; font-weight: 700; }
+.pmMore {
+  position: absolute; right: 6.8%; bottom: 5.4%; font: 600 calc(var(--ew) * 0.0235) / 1 ui-serif, 'New York', Georgia, serif;
+  letter-spacing: 0.2em; text-transform: uppercase; color: #d8b76f;
+}
+/* Being sealed: the newest postmark lands with the table's own thump (CardTable.module.css, 1.74 s after addressing). */
+[data-send] .pmNewest { opacity: 0; }
+[data-addressed] .pmNewest { animation: pmThump 0.24s ease-out 1.74s forwards; }
+/* Just arrived: the newest is struck last. */
+.pmArrive { animation: pmThump 0.24s ease-out 0.9s backwards; }
+@keyframes pmThump {
+  from { opacity: 0; transform: rotate(var(--r)) scale(1.3); }
+  60% { opacity: 1; transform: rotate(var(--r)) scale(0.97); }
+  to { opacity: 1; transform: rotate(var(--r)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-addressed] .pmNewest { animation: none; opacity: 1; }
+  .pmArrive { animation: none; }
+}
+/* "It came 2,692 miles through 4 towns to reach you." under the table's words (sample .words small). */
+.wordsSub {
+  display: block; margin-top: 7px; font: normal 0.78125rem/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: rgba(244, 233, 214, 0.68); text-wrap: balance;
+}
