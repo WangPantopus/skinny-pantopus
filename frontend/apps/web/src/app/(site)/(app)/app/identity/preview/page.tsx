@@ -40,7 +40,7 @@ const SURFACES: ReadonlyArray<{ id: Surface; label: string }> = [
 
 const VIEWER_MODES: ReadonlyArray<{ id: ViewerMode; label: string; surface: Surface | 'both' }> = [
   { id: 'public',            label: 'Public stranger',                     surface: 'both' },
-  { id: 'verified_local',    label: 'Verified neighbor (same area)',       surface: 'local' },
+  { id: 'verified_local',    label: 'Verified home (same area)',           surface: 'local' },
   { id: 'neighbor',          label: 'Connection of mine',                  surface: 'local' },
   { id: 'household_member',  label: 'Someone in my household',             surface: 'local' },
   { id: 'business_teammate', label: 'My business teammate',                surface: 'local' },

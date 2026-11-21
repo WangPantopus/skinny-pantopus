@@ -111,7 +111,7 @@ function linesFor(data: InCommon, viewerId: string, personId: string, firstName:
   if (count > 0) {
     const people = (data.connections?.people ?? []).slice(0, 2);
     const others = Math.max(0, count - people.length);
-    const names: ReactNode[] = people.map((person) => <Strong key={person.id}>{firstWord(person.name || 'A neighbor')}</Strong>);
+    const names: ReactNode[] = people.map((person) => <Strong key={person.id}>{firstWord(person.name || 'Someone nearby')}</Strong>);
     if (others > 0 && names.length) names.push(`${others} ${others === 1 ? 'other' : 'others'}`);
     lines.push({
       key: 'connections',

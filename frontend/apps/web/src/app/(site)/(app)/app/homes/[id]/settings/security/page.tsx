@@ -119,7 +119,7 @@ function SecurityContent() {
         label="Privacy & Discoverability"
         description="Control how visible your home is to non-members and search."
         options={[
-          { value: 'normal', label: 'Normal — discoverable by neighbors' },
+          { value: 'normal', label: 'Normal — others can find this home' },
           { value: 'high', label: 'Stealth — hidden from search, visible by link only' },
           { value: 'invite_only_discovery', label: 'Invite only — completely hidden' },
         ]}

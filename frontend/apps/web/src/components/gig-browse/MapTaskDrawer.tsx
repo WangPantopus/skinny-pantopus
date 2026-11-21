@@ -147,7 +147,7 @@ export default function MapTaskDrawer({
                 <div className="text-3xl" aria-hidden="true">🗺️</div>
                 <h3 className="mt-3 text-sm font-semibold text-app-text">No tasks in view</h3>
                 <p className="mt-2 max-w-xs text-sm text-app-text-secondary">
-                  Move the map or zoom out to see more tasks in nearby neighborhoods.
+                  Move the map or zoom out to see more tasks nearby.
                 </p>
               </div>
             ) : (

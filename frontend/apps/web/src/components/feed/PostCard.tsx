@@ -206,7 +206,7 @@ function PostCard({
     chosenUsername(publicAuthor?.handle) ||
     post.creator?.name ||
     chosenUsername(post.creator?.username) ||
-    'Neighbor';
+    'Someone nearby';
 
   const creatorAvatar =
     publicAuthor?.avatarUrl ||

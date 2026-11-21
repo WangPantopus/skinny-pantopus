@@ -11,7 +11,7 @@ import NoMailView from '@/components/place/no-mail/NoMailView';
 export const metadata: Metadata = {
   metadataBase: new URL('https://pantopus.com'),
   title: 'Stop mail to this address',
-  description: 'Permanently stop Pantopus neighbor invitations to your address.',
+  description: 'Permanently stop Pantopus invitations to your address.',
   robots: { index: false, follow: false },
 };
 

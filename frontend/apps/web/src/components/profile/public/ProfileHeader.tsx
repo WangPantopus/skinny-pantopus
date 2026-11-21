@@ -119,7 +119,7 @@ export default function ProfileHeader({
   const [explainerOpen, setExplainerOpen] = useState(false);
   const joined = joinedText(joinedAt);
   const facts = [city, joined].filter(Boolean) as string[];
-  const first = hasName ? firstWord(name) : 'This neighbor';
+  const first = hasName ? firstWord(name) : 'This person';
   const joinedMonth = joinedDate(joinedAt)?.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const TrustIcon = verifiedNeighbor ? ShieldCheck : city ? MapPin : CalendarDays;
   const trustText = (
@@ -130,7 +130,7 @@ export default function ProfileHeader({
         strokeWidth={2}
       />
       <span>
-        {verifiedNeighbor && <span className="font-semibold text-app-home">Verified neighbor</span>}
+        {verifiedNeighbor && <span className="font-semibold text-app-home">Verified home</span>}
         {verifiedNeighbor && facts.length > 0 ? ' · ' : ''}
         {facts.join(' · ')}
       </span>
@@ -173,7 +173,7 @@ export default function ProfileHeader({
 
       {children}
 
-      <BottomSheet open={explainerOpen} onClose={() => setExplainerOpen(false)} title="Verified neighbor">
+      <BottomSheet open={explainerOpen} onClose={() => setExplainerOpen(false)} title="Verified home">
         <div className="flex items-start gap-3">
           <span aria-hidden="true" className="w-9 h-9 shrink-0 rounded-full bg-app-home-bg text-app-home flex items-center justify-center">
             <ShieldCheck className="w-[1.125rem] h-[1.125rem]" />

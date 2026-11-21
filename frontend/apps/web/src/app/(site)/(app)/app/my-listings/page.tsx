@@ -139,7 +139,7 @@ export default function MyListingsPage() {
                 : `No ${STATUS_TABS.find((t) => t.key === filter)?.label.toLowerCase()} listings`,
             subcopy:
               filter === 'all'
-                ? 'Start selling, giving away, or sharing items with your neighbors.'
+                ? 'Start selling, giving away, or sharing items with people near you.'
                 : 'Try a different filter or create a new listing.',
             tone: 'personal',
             ctaLabel: 'Create listing',

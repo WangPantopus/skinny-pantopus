@@ -71,7 +71,7 @@ function MapPostPopupCard({
 }) {
   const config = getPostTypeConfig(pin.post_type || 'general');
   const TypeIcon = getTypeReactIcon(pin.post_type || 'general');
-  const author = pin.creator?.displayName || pin.creator?.name || chosenUsername(pin.creator?.username) || 'Neighbor';
+  const author = pin.creator?.displayName || pin.creator?.name || chosenUsername(pin.creator?.username) || 'Someone nearby';
   const snippet = (pin.content || pin.title || 'No content yet').trim();
 
   return (
@@ -472,7 +472,7 @@ export default function FeedMap({
     ? pins.filter((p) => p.latitude >= bounds.south && p.latitude <= bounds.north
       && p.longitude >= bounds.west && p.longitude <= bounds.east).length
     : pins.length;
-  const authorName = (p: MapMarker) => p.creator?.displayName || p.creator?.name || chosenUsername(p.creator?.username) || 'Neighbor';
+  const authorName = (p: MapMarker) => p.creator?.displayName || p.creator?.name || chosenUsername(p.creator?.username) || 'Someone nearby';
   const postType = (p: MapMarker) => p.post_type || 'general';
 
   // A card listing posts, each opening its post: a tapped cluster's, or Connections' posts with no place.

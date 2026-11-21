@@ -651,16 +651,16 @@ export interface InviteProgress {
 
 export const INVITE_FEATURE_TIERS = [
   { key: 'activity_map', label: 'Activity Map', threshold: 1 },
-  { key: 'neighborhood_insights', label: 'Neighborhood Insights', threshold: 3 },
+  { key: 'neighborhood_insights', label: 'Local Insights', threshold: 3 },
   { key: 'priority_matching', label: 'Priority Matching', threshold: 5 },
-  { key: 'founding_badge', label: 'Founding Neighbor Badge', threshold: 10 },
+  { key: 'founding_badge', label: 'Block Founder Badge', threshold: 10 },
 ] as const;
 
 export const FEATURE_LABELS: Record<string, string> = {
   activity_map: 'Activity Map',
-  neighborhood_insights: 'Neighborhood Insights',
+  neighborhood_insights: 'Local Insights',
   priority_matching: 'Priority Matching',
-  founding_badge: 'Founding Neighbor Badge',
+  founding_badge: 'Block Founder Badge',
 };
 
 // ============ USER TYPES ============

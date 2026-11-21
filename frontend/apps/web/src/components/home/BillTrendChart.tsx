@@ -248,7 +248,7 @@ export default function BillTrendChart({
           </div>
           <div className="flex items-center gap-1">
             <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600" />
-            <span className="text-[10px] text-secondary">Neighborhood</span>
+            <span className="text-[10px] text-secondary">Nearby homes</span>
           </div>
         </div>
       )}
@@ -257,7 +257,7 @@ export default function BillTrendChart({
       {matches.length > 0 && (
         <div className="mt-3 pt-3 border-t border-app-border">
           <p className="text-xs text-secondary leading-snug">
-            Across {matches.length} matching month{matches.length === 1 ? '' : 's'}: your {activeType} bill: {fmtAmount(userAvg, currency)}/mo avg. Neighborhood:{' '}
+            Across {matches.length} matching month{matches.length === 1 ? '' : 's'}: your {activeType} bill: {fmtAmount(userAvg, currency)}/mo avg. Nearby homes:{' '}
             {fmtAmount(benchAvg, currency)}/mo avg.
           </p>
           {diffDir !== 'same' && pctDiff > 0 && (
@@ -268,7 +268,7 @@ export default function BillTrendChart({
                   : 'text-green-600 dark:text-green-400'
               }`}
             >
-              {pctDiff}% {diffDir} neighborhood average
+              {pctDiff}% {diffDir} nearby average
             </span>
           )}
         </div>
@@ -281,7 +281,7 @@ export default function BillTrendChart({
         <div className="mt-3 pt-3 border-t border-app-border flex items-center gap-1.5">
           <Users className="h-3.5 w-3.5 text-app-text-secondary flex-shrink-0" />
           <p className="text-xs text-app-text-secondary leading-snug">
-            Almost there &mdash; {(rawBenchmark as BillBenchmarkInsufficient).needed} more neighbor{(rawBenchmark as BillBenchmarkInsufficient).needed === 1 ? '' : 's'} needed for comparison
+            Almost there &mdash; {(rawBenchmark as BillBenchmarkInsufficient).needed} more home{(rawBenchmark as BillBenchmarkInsufficient).needed === 1 ? '' : 's'} near you needed for comparison
           </p>
         </div>
       )}

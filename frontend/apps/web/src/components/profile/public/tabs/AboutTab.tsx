@@ -124,7 +124,7 @@ export default function AboutTab({
               <Row
                 icon={<ShieldCheck className="w-[1.0625rem] h-[1.0625rem]" />}
                 iconClassName="bg-app-home-bg text-app-home"
-                title={city ? `Lives in ${city}` : 'Verified neighbor'}
+                title={city ? `Lives in ${city}` : 'Verified home'}
                 detail="Pantopus confirmed where they live. The address itself is never shown."
               />
             )}

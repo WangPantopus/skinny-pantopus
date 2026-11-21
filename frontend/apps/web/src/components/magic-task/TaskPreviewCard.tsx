@@ -141,7 +141,7 @@ export default function TaskPreviewCard({
           </span>
           <span className="mx-1">·</span>
           <Eye className="w-3.5 h-3.5" />
-          <span>Visible to verified neighbors and nearby helpers</span>
+          <span>Visible to verified homes and nearby helpers</span>
         </div>
 
         {/* Tags */}

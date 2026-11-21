@@ -34,7 +34,7 @@ export default function AboutPage() {
         <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="prose-custom">
             <p className="text-xl text-app-text-strong leading-relaxed mb-6">
-              Pantopus started with a simple frustration: real-world tools were fragmented. Neighborhood apps, home tools, task marketplaces, and public profiles all lived in separate places.
+              Pantopus started with a simple frustration: real-world tools were fragmented. Local community apps, home tools, task marketplaces, and public profiles all lived in separate places.
             </p>
             <p className="text-lg text-app-text-secondary dark:text-app-text-muted leading-relaxed mb-6">
               We wanted something grounded. Something that felt like your actual street — where the people you interact with are real, where your home is more than a pin on a map, where asking for help or offering a skill doesn&apos;t require navigating a corporate platform designed for the whole internet.
@@ -80,7 +80,7 @@ export default function AboutPage() {
                 {
                   icon: '🤝',
                   title: 'Local work has real value',
-                  body: 'The skills your neighbors need — yard work, handyman, tutoring, pet care — are exactly the kinds of work that machines cannot replace. We take that seriously.',
+                  body: 'The skills people near you need — yard work, handyman, tutoring, pet care — are exactly the kinds of work that machines cannot replace. We take that seriously.',
                 },
                 {
                   icon: '🌐',

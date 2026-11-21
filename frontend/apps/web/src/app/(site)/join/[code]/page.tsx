@@ -7,7 +7,7 @@ import JoinInvite from '@/components/place/JoinInvite';
 export const dynamic = 'force-dynamic';
 
 const DESCRIPTION =
-  "Public records, local risks, and who's verified nearby — free, no account. Look up your address, then join your neighbors.";
+  "Public records, local risks, and who's verified nearby — free, no account. Look up your address, then join the homes near you.";
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: { params: Promise<{ code: str
   return {
     ...base,
     ...buildShareMetadata({
-      title: `${data.referrer_name || 'A neighbor'} invited you to Pantopus`,
+      title: `${data.referrer_name || 'Someone'} invited you to Pantopus`,
       description: DESCRIPTION,
       path: `/join/${encodeURIComponent(code)}`,
       smartBanner: false,
@@ -41,7 +41,7 @@ export default async function JoinPage({ params }: { params: Promise<{ code: str
   return (
     <JoinInvite
       status="valid"
-      invite={{ code: data.code, name: data.referrer_name || 'A neighbor', avatarUrl: data.referrer_avatar ?? null }}
+      invite={{ code: data.code, name: data.referrer_name || 'Someone', avatarUrl: data.referrer_avatar ?? null }}
     />
   );
 }

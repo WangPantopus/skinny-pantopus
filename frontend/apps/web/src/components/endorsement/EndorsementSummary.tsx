@@ -80,7 +80,7 @@ export default function EndorsementSummary({
           <span className="text-lg" aria-hidden="true">👍</span>
           <div>
             <h3 className="text-sm font-bold text-app-text">
-              Neighbor Endorsements
+              Local endorsements
             </h3>
             {count > 0 && (
               <p className="text-xs text-app-text-secondary">
@@ -137,7 +137,7 @@ export default function EndorsementSummary({
         <div className="text-center py-4">
           <p className="text-sm text-app-text-muted">No endorsements yet</p>
           <p className="text-xs text-gray-300 mt-1">
-            Be the first neighbor to endorse this business
+            Be the first to endorse this business
           </p>
         </div>
       )}

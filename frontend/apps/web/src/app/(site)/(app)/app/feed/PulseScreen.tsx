@@ -535,7 +535,7 @@ export default function FeedPage() {
                 <input
                   value={area.areaQuery}
                   onChange={(e) => area.setAreaQuery(e.target.value)}
-                  placeholder="Search city, address, neighborhood..."
+                  placeholder="Search city, address, area..."
                   className="w-full px-3 py-2 text-sm border border-app bg-surface text-app placeholder:text-app-muted rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
                 <div className="max-h-52 overflow-auto border border-app rounded-lg bg-surface">

@@ -11,7 +11,7 @@ export const PROFILE_PROMPTS = [
   { key: 'something_learning', text: 'Something I’m learning…' },
   { key: 'lived_here_since', text: 'I’ve lived here since…' },
   { key: 'best_way_to_say_hi', text: 'Best way to say hi…' },
-  { key: 'neighborhood_tradition', text: 'A neighborhood tradition I love…' },
+  { key: 'neighborhood_tradition', text: 'A local tradition I love…' },
 ] as const;
 
 /** At most this many prompts on a profile. */

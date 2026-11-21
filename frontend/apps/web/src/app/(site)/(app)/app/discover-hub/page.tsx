@@ -24,7 +24,7 @@ export default function DiscoverHubPage() {
       {/* Hero */}
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold text-app-text leading-tight">
-          Your neighborhood,<br />all in one place
+          Everything near you,<br />all in one place
         </h1>
         <p className="text-sm text-app-text-secondary mt-2 leading-relaxed">
           Find trusted businesses, explore nearby services, and connect with your community.

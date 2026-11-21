@@ -278,7 +278,7 @@ function StepIdentity({ persona, paidMembershipsEnabled, onContinue }: {
       </h2>
       <p className="mt-2 text-sm text-app-secondary">
         Your Beacon is separate from your personal account. People who
-        follow you here never see your real name, neighborhood, or personal
+        follow you here never see your real name, area, or personal
         profile.
       </p>
       <Link

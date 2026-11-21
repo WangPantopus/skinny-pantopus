@@ -189,7 +189,7 @@ export default function PrivacySettingsPage() {
               />
               <SelectSetting
                 id="neighborhood"
-                label="Neighborhood"
+                label="Area"
                 description="Who can see your city (Edit profile's “Who sees your city”)"
                 value={showNeighborhood}
                 onChange={(v) => edit({ show_neighborhood: v as ProfileVisibilityLevel })}

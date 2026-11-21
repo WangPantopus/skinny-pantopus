@@ -81,7 +81,7 @@ export default async function PublicGigPage({
   const storeCta = getStoreDownloadCta(userAgent);
   const fallbackUrl = storeCta?.href ?? null;
 
-  const creatorName = displayNameForUser(gig.creator, 'Pantopus neighbor');
+  const creatorName = displayNameForUser(gig.creator, 'Pantopus member');
   const previewImages = collectPreviewImages(
     gig.media_urls,
     gig.photos,

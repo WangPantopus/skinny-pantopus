@@ -43,7 +43,7 @@ function PublishModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="w-full max-w-sm mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border p-5">
         <h3 className="text-sm font-semibold text-app-text mb-1">
-          Share with your neighborhood?
+          Share with people near you?
         </h3>
         <p className="text-sm text-app-text-secondary mb-4">
           Share with households nearby?
@@ -62,7 +62,7 @@ function PublishModal({
                   : 'border-app-border text-app-text-secondary dark:text-app-text-muted hover:bg-app-hover dark:hover:bg-gray-800'
               }`}
             >
-              {s === 'building' ? 'Building only' : s === 'neighborhood' ? 'Neighborhood' : 'City'}
+              {s === 'building' ? 'Building only' : s === 'neighborhood' ? 'Nearby area' : 'City'}
             </button>
           ))}
         </div>
@@ -160,7 +160,7 @@ export default function MailCommunityPage() {
         {/* Header */}
         <div className="px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
           <h1 className="text-base font-semibold text-app-text">
-            Neighborhood Mail
+            Local Mail
           </h1>
           <p className="text-xs text-app-text-secondary mt-0.5">
             {sortedItems.length} item{sortedItems.length !== 1 ? 's' : ''} · {home.neighborhood}
@@ -172,7 +172,7 @@ export default function MailCommunityPage() {
           <div className="px-4 py-3 bg-primary-50 dark:bg-primary-900/20 border-b border-primary-100 dark:border-primary-800 flex-shrink-0">
             <p className="text-sm text-app-text-strong mb-2">
               A <span className="font-semibold">{eligibleForPublish.community_type.replace(/_/g, ' ')}</span> notice from{' '}
-              <span className="font-semibold">{eligibleForPublish.sender_display || 'a sender'}</span> is eligible to share with your neighborhood.
+              <span className="font-semibold">{eligibleForPublish.sender_display || 'a sender'}</span> is eligible to share with people near you.
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -180,7 +180,7 @@ export default function MailCommunityPage() {
                 onClick={() => setPublishTarget(eligibleForPublish)}
                 className="px-3 py-1.5 text-xs font-semibold bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
               >
-                Share with Neighborhood
+                Share nearby
               </button>
               <button
                 type="button"

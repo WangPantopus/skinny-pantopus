@@ -216,7 +216,7 @@ export default function EndorsementButton({
           {endorsedCategories.length > 0 && (
             <div className="px-3 pt-1.5 border-t border-app-border-subtle">
               <p className="text-[10px] text-app-text-muted">
-                Your endorsements help neighbors discover trusted providers
+                Your endorsements help people near you discover trusted providers
               </p>
             </div>
           )}

@@ -53,14 +53,14 @@ export default function NeighborPhotoField({ view, accountId, name }: NeighborPh
       toast.error('Image must be under 5MB');
       return;
     }
-    void savePhoto(() => api.upload.uploadLocalProfilePicture(file), 'Neighbors now see your new photo');
+    void savePhoto(() => api.upload.uploadLocalProfilePicture(file), 'Others now see your new photo');
   };
 
   const note = !avatarUrl
-    ? (account.avatarUrl ? 'Neighbors see your initials, not your account photo.' : 'Neighbors see your initials until you add one.')
+    ? (account.avatarUrl ? 'Others see your initials, not your account photo.' : 'Others see your initials until you add one.')
     : followsAccount.avatarUrl
       ? 'Your account photo: it changes when your account photo does.'
-      : "A photo just for neighbors: changing your account photo won't change it.";
+      : "A photo just for your profile: changing your account photo won't change it.";
 
   return (
     <div id="photo" className="py-4 flex items-start gap-3.5 scroll-mt-24">
@@ -83,7 +83,7 @@ export default function NeighborPhotoField({ view, accountId, name }: NeighborPh
               disabled={busy}
               onClick={() => void savePhoto(
                 () => api.localProfiles.updateMyLocalProfile({ avatar_url: account.avatarUrl }),
-                'Neighbors now see your account photo',
+                'Others now see your account photo',
               )}
               className={smallButton}
             >
@@ -96,7 +96,7 @@ export default function NeighborPhotoField({ view, accountId, name }: NeighborPh
               disabled={busy}
               onClick={() => void savePhoto(
                 () => api.localProfiles.updateMyLocalProfile({ avatar_url: null }),
-                'Neighbors now see your initials',
+                'Others now see your initials',
               )}
               className={smallButton}
             >
@@ -110,7 +110,7 @@ export default function NeighborPhotoField({ view, accountId, name }: NeighborPh
           accept="image/jpeg,image/png,image/gif,image/webp"
           onChange={onPickPhoto}
           className="hidden"
-          aria-label="Choose the photo neighbors see"
+          aria-label="Choose the photo others see"
         />
       </div>
     </div>

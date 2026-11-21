@@ -77,7 +77,7 @@ function ProviderMiniCard({
           )}
           {biz.neighbor_count >= 2 && (
             <span className="text-[10px] bg-teal-50 text-teal-700 px-1 py-0.5 rounded-full font-medium">
-              {biz.neighbor_count} neighbors
+              {biz.neighbor_count} near you
             </span>
           )}
           {biz.is_new_business && (

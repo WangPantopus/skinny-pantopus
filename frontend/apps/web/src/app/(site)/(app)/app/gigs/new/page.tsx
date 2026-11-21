@@ -470,7 +470,7 @@ function PostTaskPageContent() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-8 max-w-md w-full mx-4 text-center">
           <div className="text-5xl mb-4">🎉</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Your gig is live!</h2>
-          <p className="text-gray-500 mb-6">Share it with your neighbors to get offers faster.</p>
+          <p className="text-gray-500 mb-6">Share it with people near you to get offers faster.</p>
           <div className="space-y-3">
             <button
               onClick={handleCopyGigLink}

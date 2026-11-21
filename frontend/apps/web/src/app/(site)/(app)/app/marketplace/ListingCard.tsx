@@ -237,7 +237,7 @@ export default React.memo(function ListingCard({ item, onSave, onClick, saveDisa
             {sellerIsVerifiedNeighbor(item.creator) && (
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-green-50 dark:bg-green-900/30 rounded-full">
                 <ShieldCheck className="w-3 h-3 text-green-600 dark:text-green-400" />
-                <span className="text-[10px] font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">Verified Neighbor</span>
+                <span className="text-[10px] font-semibold text-green-700 dark:text-green-400 whitespace-nowrap">Verified home</span>
               </span>
             )}
           </div>

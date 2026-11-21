@@ -532,7 +532,7 @@ export default function DiscoverMap({
                 >
                   <Popup>
                     <div className="text-sm font-medium">
-                      {cluster.items.length} neighborhood posts
+                      {cluster.items.length} posts nearby
                     </div>
                   </Popup>
                 </Marker>
@@ -701,7 +701,7 @@ function PostPinPopup({ marker }: { marker: MapMarker }) {
     <div className="min-w-[160px] space-y-1">
       {marker.creator && (
         <p className="text-xs font-medium text-app-text-strong">
-          {marker.creator.name || chosenUsername(marker.creator.username) || 'Neighbor'}
+          {marker.creator.name || chosenUsername(marker.creator.username) || 'Someone nearby'}
         </p>
       )}
       <p className="text-xs text-app-text-secondary line-clamp-3">{content}{content.length >= 120 ? '…' : ''}</p>

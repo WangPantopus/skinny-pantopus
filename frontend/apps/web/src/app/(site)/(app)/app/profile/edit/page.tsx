@@ -204,7 +204,7 @@ export default function EditProfilePage() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (neighborNameChanged && !trimmedNeighborName) {
-      setNeighborNameError('Enter the name neighbors should see.');
+      setNeighborNameError('Enter the name others should see.');
       document.getElementById('profile-neighbor-name')?.focus();
       return;
     }
@@ -245,7 +245,7 @@ export default function EditProfilePage() {
         {/* Live preview */}
         <section aria-labelledby="edit-preview-label" className="mt-2">
           <p id="edit-preview-label" className="mb-2 text-[0.8125rem] leading-[1.125rem] font-semibold text-app-muted">
-            How neighbors see you · updates as you type
+            How others see you · updates as you type
           </p>
           <div className="rounded-2xl border border-app bg-surface p-4">
             <div className="flex items-center gap-3">
@@ -259,7 +259,7 @@ export default function EditProfilePage() {
               <p className="mt-2.5 flex items-start gap-1.5 text-[0.875rem] leading-[1.1875rem] text-app-muted">
                 {verifiedNeighbor ? <ShieldCheck aria-hidden="true" className="mt-px w-4 h-4 shrink-0 text-app-home" /> : null}
                 <span>
-                  {verifiedNeighbor && <span className="font-semibold text-app-home">Verified neighbor</span>}
+                  {verifiedNeighbor && <span className="font-semibold text-app-home">Verified home</span>}
                   {verifiedNeighbor && previewFacts ? ' · ' : ''}
                   {previewFacts}
                 </span>
@@ -281,7 +281,7 @@ export default function EditProfilePage() {
               id="edit-neighbors"
               icon={<Users className="w-[1.0625rem] h-[1.0625rem]" />}
               iconClass="bg-app-home-bg text-app-home"
-              title="Neighbors see this"
+              title="Others see this"
               detail="Shown on your profile and next to your posts, comments and messages."
             />
             <div className="rounded-2xl border border-app bg-surface px-4 divide-y divide-app">
@@ -290,7 +290,7 @@ export default function EditProfilePage() {
               ) : (
                 <div className="py-4 flex items-center justify-between gap-3">
                   <p className="text-[0.875rem] text-app-muted">
-                    {localProfile.isError ? 'Couldn’t load the photo and name neighbors see.' : 'Loading the photo neighbors see…'}
+                    {localProfile.isError ? 'Couldn’t load the photo and name others see.' : 'Loading the photo others see…'}
                   </p>
                   {localProfile.isError ? (
                     <button type="button" onClick={() => void localProfile.refetch()} className="min-h-[2.75rem] px-3.5 rounded-full border border-app-strong text-[0.875rem] font-semibold text-app hover-bg-app">
@@ -301,7 +301,7 @@ export default function EditProfilePage() {
               )}
 
               <div className="py-4">
-                <label htmlFor="profile-neighbor-name" className={labelClass}>Name neighbors see</label>
+                <label htmlFor="profile-neighbor-name" className={labelClass}>Name others see</label>
                 <input
                   id="profile-neighbor-name"
                   type="text"
@@ -367,7 +367,7 @@ export default function EditProfilePage() {
                   aria-invalid={fieldErrors.bio ? true : undefined}
                   aria-describedby="profile-bio-count"
                   className={inputClass + ' resize-y' + (fieldErrors.bio ? inputErrorClass : '')}
-                  placeholder="What you like about the neighborhood, what you're into, how you can help."
+                  placeholder="What you like about where you live, what you're into, how you can help."
                 />
                 {fieldErrors.bio ? <p className={fieldErrorClass}>{fieldErrors.bio}</p> : null}
                 <p id="profile-bio-count" className={helpClass + ' text-right'}>{form.bio.length} / 2000</p>
@@ -383,7 +383,7 @@ export default function EditProfilePage() {
             {/* What you help with */}
             <section id="helps-with" aria-labelledby="edit-helps-with" className="mt-4 rounded-2xl border border-app bg-surface p-4 scroll-mt-24">
               <h3 id="edit-helps-with" className="text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Helps with</h3>
-              <p className="mt-0.5 text-[0.8125rem] leading-[1.125rem] text-app-muted">Neighbors who need a hand can find you for these.</p>
+              <p className="mt-0.5 text-[0.8125rem] leading-[1.125rem] text-app-muted">People who need a hand can find you for these.</p>
               {skills.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-2">
                   {skills.map((skill) => (
@@ -654,7 +654,7 @@ export default function EditProfilePage() {
                 <LinkRow
                   icon={<Home className="w-5 h-5" />}
                   title="Home address"
-                  detail="Never shown. Neighbors see &ldquo;Verified neighbor&rdquo;."
+                  detail="Never shown. Others see &ldquo;Verified home&rdquo;."
                   href="/app/homes"
                   onOpen={(href) => void leave(href)}
                 />

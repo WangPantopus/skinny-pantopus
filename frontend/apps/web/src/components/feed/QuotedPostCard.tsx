@@ -29,7 +29,7 @@ function authorName(post: Post): string {
     || chosenUsername(post.author?.handle)
     || post.creator?.name
     || chosenUsername(post.creator?.username)
-    || 'Neighbor';
+    || 'Someone nearby';
 }
 
 /** The first photo, or a video's frame, as a small square; nothing for a document or a video without a frame. */

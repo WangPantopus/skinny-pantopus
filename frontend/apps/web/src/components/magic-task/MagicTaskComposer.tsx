@@ -511,7 +511,7 @@ export default function MagicTaskComposer({
                 Task posted!
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Nearby neighbors and helpers will see your task shortly.
+                People and helpers near you will see your task shortly.
               </p>
 
               <div className="flex items-center justify-center gap-3 pt-2">

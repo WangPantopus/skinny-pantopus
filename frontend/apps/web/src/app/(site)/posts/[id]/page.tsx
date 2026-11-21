@@ -148,7 +148,7 @@ export default async function PublicPostPage({
     );
   }
 
-  const creatorName = displayNameForUser(post.creator, 'Pantopus neighbor');
+  const creatorName = displayNameForUser(post.creator, 'Pantopus member');
   const image = pickPreviewImage(post.media_urls, post.media_live_urls);
   // The public author has no city or state; the post's own place name is its location. A Home post's place is its
   // city, which is also the Home's public name, so the byline says it once.

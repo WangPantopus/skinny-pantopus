@@ -85,7 +85,7 @@ export const ENTITY_TYPE_CONFIG: Record<EntityType, EntityTypeConfig> = {
     allowedPaymentModes: ['dues'],
     catalogKindsAllowed: ['membership', 'other'],
     requiresPhysicalLocation: false,
-    onboardingDescription: 'HOA, neighborhood association, club, or community organization.',
+    onboardingDescription: "HOA, residents' association, club, or community organization.",
   },
   sole_proprietor: {
     label: 'Sole Proprietor',

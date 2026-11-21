@@ -451,7 +451,7 @@ export default function HomesPage() {
                           {privateSetup && <p className="mt-2 text-sm text-app-text-secondary">{claimHeld
                             ? 'We need to check this address first. Verify it by mail to open your household tools.'
                             : instantClaim
-                              ? 'Claim it now to use your household tools and invite your household. Verifying by mail later gets you neighbor messages and your verified badge.'
+                              ? 'Claim it now to use your household tools and invite your household. Verifying by mail later gets you messages between homes and your verified badge.'
                               : 'Start with your own tasks while verification is pending.'}</p>}
                           {verification && <p className="mt-2 text-sm text-app-text-secondary">Household access is awaiting verification. Continue your request to see its current status.</p>}
                           {askedRequest ? <ClaimInfoRequestNote request={askedRequest} className="mt-3" /> : null}

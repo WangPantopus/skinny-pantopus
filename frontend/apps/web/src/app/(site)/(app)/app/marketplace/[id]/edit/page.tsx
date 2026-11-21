@@ -19,7 +19,7 @@ type LocationMode = 'meetup' | 'neighborhood' | 'none' | 'exact';
 
 const LOCATION_OPTIONS: { key: LocationMode; label: string; description: string; icon: typeof MapPin; precision: string }[] = [
   { key: 'meetup', label: 'Meetup area', description: 'Show an approximate pickup area', icon: MapPin, precision: 'approx_area' },
-  { key: 'neighborhood', label: 'Neighborhood only', description: 'Show your neighborhood name, no pin', icon: Navigation, precision: 'neighborhood_only' },
+  { key: 'neighborhood', label: 'Area only', description: 'Show your area name, no pin', icon: Navigation, precision: 'neighborhood_only' },
   { key: 'none', label: 'Remote / Ship only', description: 'No location shown', icon: Globe, precision: 'none' },
   { key: 'exact', label: 'Exact address', description: 'Your exact location will be visible', icon: AlertTriangle, precision: 'exact_place' },
 ];

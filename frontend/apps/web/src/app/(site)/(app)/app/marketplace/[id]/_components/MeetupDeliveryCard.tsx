@@ -39,7 +39,7 @@ export default function MeetupDeliveryCard({
         {deliveryAvailable && (
           <div className="flex items-center gap-2.5">
             <Car className="w-4 h-4 text-app-text-secondary flex-shrink-0" />
-            <span className="text-sm text-app-text-strong">Delivery available via neighbor gig</span>
+            <span className="text-sm text-app-text-strong">Delivery available via a gig</span>
           </div>
         )}
         {isAddressAttached && (

@@ -345,9 +345,9 @@ export function useProfileForm(): UseProfileFormReturn {
           setOwnLocalProfile(await api.localProfiles.updateMyLocalProfile({ display_name: extras.neighborName }));
         } catch (nameErr: unknown) {
           const nameFields = extractFieldErrors(nameErr) as Record<string, string | undefined>;
-          const reason = nameFields.display_name || extractApiError(nameErr, "Couldn't save the name neighbors see.");
+          const reason = nameFields.display_name || extractApiError(nameErr, "Couldn't save the name others see.");
           setFieldErrors({ neighborName: reason } as FieldErrors);
-          toast.error(`Your profile was saved, but the name neighbors see wasn't: ${reason}`);
+          toast.error(`Your profile was saved, but the name others see wasn't: ${reason}`);
           return;
         }
       }

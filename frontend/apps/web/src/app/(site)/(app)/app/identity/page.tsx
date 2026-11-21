@@ -66,7 +66,7 @@ function getNextStep(data: IdentityCenterPayload): NextStep {
   if (!data.localProfile) {
     return {
       title: 'Review your Profile',
-      body: 'Add the nearby profile neighbors see before you decide whether to link profiles.',
+      body: 'Add the nearby profile others see before you decide whether to link profiles.',
       href: '/app/profile/edit',
       cta: 'Edit Profile',
       icon: User,
@@ -316,7 +316,7 @@ export default function IdentityCenterPage() {
             </PanelActions>
           </IdentityPanel>
 
-          <IdentityPanel icon={User} title="Profile" subtitle="Used for nearby posts, gigs, marketplace, and neighbors.">
+          <IdentityPanel icon={User} title="Profile" subtitle="Used for nearby posts, gigs, marketplace, and people near you.">
             {data.localProfile ? (
               <>
                 <p className="font-medium text-app">{data.localProfile.displayName}</p>
@@ -435,7 +435,7 @@ export default function IdentityCenterPage() {
             {canManageProfileLinks ? (
               <div className="space-y-3">
                 <BridgeToggle
-                  label="Let neighbors find my Beacon"
+                  label="Let people near me find my Beacon"
                   subtitle="If on, your Profile will show a link to your Beacon."
                   checked={data.bridges.show_persona_on_local}
                   disabled={savingBridge}

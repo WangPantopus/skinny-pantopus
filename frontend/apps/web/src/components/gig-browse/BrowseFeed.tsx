@@ -45,7 +45,7 @@ function EmptyNeighborhood() {
       </span>
       <h2 className="text-xl font-bold text-app-text-strong mb-2">No tasks yet in your area</h2>
       <p className="text-sm text-app-text-muted mb-6 max-w-sm">
-        Be the first to post a task and kickstart your neighborhood!
+        Be the first to post a task near you!
       </p>
       <Link
         href="/app/gigs-v2/new"
@@ -75,9 +75,9 @@ function SparseFeed({
         style={{ animationFillMode: 'forwards' }}
       >
         <p className="text-sm text-app-text-muted leading-relaxed">
-          Your neighborhood is just getting started! Here {total === 1 ? 'is' : 'are'} the{' '}
+          Pantopus is just getting started near you! Here {total === 1 ? 'is' : 'are'} the{' '}
           <strong className="text-app-text-strong">{total}</strong> task{total !== 1 ? 's' : ''}{' '}
-          nearby. Post one to help your neighborhood grow.
+          nearby. Post one to get things going.
         </p>
       </div>
       <div className="rounded-xl border border-app-border bg-app-surface overflow-hidden">

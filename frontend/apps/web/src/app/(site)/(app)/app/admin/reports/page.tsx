@@ -15,7 +15,7 @@ type AdminReport = api.admin.AdminReport;
 type ReportStatus = api.admin.ReportStatus;
 type ReportPerson = api.admin.ReportPerson;
 
-const KIND_LABELS: Record<string, string> = { user: 'Person', post: 'Post', gig: 'Task', message: 'Neighbor message' };
+const KIND_LABELS: Record<string, string> = { user: 'Person', post: 'Post', gig: 'Task', message: 'Message between homes' };
 const REASON_LABELS: Record<string, string> = {
   spam: 'Spam',
   harassment: 'Harassment',
@@ -219,7 +219,7 @@ export default function AdminReportsPage() {
                       </Link>
                     )}
                     {status === 'pending' && !report.closable && (
-                      <span className="text-xs text-app-text-muted">Neighbor-message reports can’t be closed here yet.</span>
+                      <span className="text-xs text-app-text-muted">Reports on messages between homes can’t be closed here yet.</span>
                     )}
                     {status === 'pending' && report.closable && (
                       <>

@@ -116,7 +116,7 @@ export function MonthLine() {
   if (!receipt) return null;
   const community = receipt.community || ({} as Record<string, number>);
   const facts = [
-    community.neighbors_helped > 0 ? plural(community.neighbors_helped, 'neighbor helped', 'neighbors helped') : null,
+    community.neighbors_helped > 0 ? plural(community.neighbors_helped, 'person helped', 'people helped') : null,
     community.posts_created > 0 ? plural(community.posts_created, 'post', 'posts') : null,
     community.connections_made > 0 ? plural(community.connections_made, 'new connection', 'new connections') : null,
   ].filter(Boolean) as string[];
@@ -207,7 +207,7 @@ export function AccountSection() {
   const invite = async () => {
     try {
       const { invite_url: url } = await api.users.getInviteCode();
-      const text = 'Join me on Pantopus, the app for our neighborhood.';
+      const text = 'Join me on Pantopus, the app for where we live.';
       if (navigator.share) {
         try {
           await navigator.share({ text, url });
@@ -257,7 +257,7 @@ export function AccountSection() {
         <AccountRow icon={<Home className={iconClass} />} label="My homes" onClick={() => router.push('/app/homes')} />
         <AccountRow
           icon={<UserPlus className={iconClass} />}
-          label="Invite neighbors"
+          label="Invite people"
           value={joined > 0 ? `${joined} joined` : null}
           onClick={() => void invite()}
         />

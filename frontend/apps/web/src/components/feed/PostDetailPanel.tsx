@@ -361,7 +361,7 @@ export default function PostDetailPanel({
     chosenUsername(publicAuthor?.handle) ||
     post?.creator?.name ||
     chosenUsername(post?.creator?.username) ||
-    'Neighbor';
+    'Someone nearby';
   // The hover card follows and connects by account id: a person's creator.id is their Local Profile id. A business
   // keeps its own id, which its writer's copy of the post doesn't carry in user_id.
   const creatorUserId = publicAuthor?.type === 'local'

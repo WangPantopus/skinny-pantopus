@@ -567,7 +567,7 @@ describe('Profiles & Privacy web pages', () => {
     render(<IdentityCenterPage />);
 
     expect(await screen.findByRole('heading', { name: 'Profiles & Privacy' })).toBeInTheDocument();
-    const trigger = screen.getByRole('button', { name: /Let neighbors find my Beacon/i });
+    const trigger = screen.getByRole('button', { name: /Let people near me find my Beacon/i });
     fireEvent.click(trigger);
 
     expect(await screen.findByRole('dialog', { name: 'Link these profiles?' })).toBeInTheDocument();

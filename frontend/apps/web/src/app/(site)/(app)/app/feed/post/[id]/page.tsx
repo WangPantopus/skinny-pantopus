@@ -388,7 +388,7 @@ export default function PostDetailPage() {
     chosenUsername(publicAuthor?.handle) ||
     post?.creator?.name ||
     chosenUsername(post?.creator?.username) ||
-    'Neighbor';
+    'Someone nearby';
   const creatorAvatarUrl =
     publicAuthor?.avatarUrl ||
     post?.creator?.profile_picture_url ||
@@ -528,7 +528,7 @@ export default function PostDetailPage() {
               <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div>
                 <p className="text-sm font-medium text-amber-900">Removed by a moderator</p>
-                <p className="text-sm text-amber-800">Only you can see this post. Neighbors can&apos;t see it or reply.</p>
+                <p className="text-sm text-amber-800">Only you can see this post. Others can&apos;t see it or reply.</p>
               </div>
             </div>
           )}
@@ -570,7 +570,7 @@ export default function PostDetailPage() {
                   <UserIdentityLink
                     userId={creatorUserId}
                     username={creatorHandle}
-                    displayName={creatorName || 'Neighbor'}
+                    displayName={creatorName || 'Someone nearby'}
                     avatarUrl={creatorAvatarUrl}
                     city={null}
                     state={null}

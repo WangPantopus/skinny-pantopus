@@ -51,7 +51,7 @@ export function pieceTrust(item: Pick<MailItemV2, 'sender_trust' | 'from_pantopu
     case 'pantopus_user':
       return item.sender_business_name?.trim()
         ? { label: 'Business on Pantopus', color: '#4e5563', mark: null }
-        : { label: 'Pantopus neighbor', color: '#4e5563', mark: null };
+        : { label: 'Pantopus member', color: '#4e5563', mark: null };
     default: return { label: 'Unverified sender', color: '#a81a1a', mark: null };
   }
 }

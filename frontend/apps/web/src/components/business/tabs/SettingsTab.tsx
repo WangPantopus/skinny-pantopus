@@ -48,7 +48,7 @@ export default function SettingsTab({ businessId, profile, onUpdate, canClose = 
     if (profile?.is_published) {
       const ok = await confirmStore.open({
         title: 'Unpublish this page?',
-        description: "Your page goes offline right away. Neighbors can't find or view it until you publish it again.",
+        description: "Your page goes offline right away. People can't find or view it until you publish it again.",
         confirmLabel: 'Unpublish',
         cancelLabel: 'Cancel',
         variant: 'destructive',

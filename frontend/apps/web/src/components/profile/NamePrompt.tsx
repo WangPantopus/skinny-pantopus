@@ -110,7 +110,7 @@ export default function NamePrompt({
       onClose={close}
       icon={UserRound}
       title="What should we call you?"
-      subtitle="Add your name so your household and neighbors know who you are."
+      subtitle="Add your name so your household and others know who you are."
       cancelLabel="Not now"
       onCancel={close}
       cancelDisabled={saving}

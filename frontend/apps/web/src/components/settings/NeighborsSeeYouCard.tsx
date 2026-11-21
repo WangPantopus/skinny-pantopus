@@ -28,11 +28,11 @@ export default function NeighborsSeeYouCard({ enabled, accountId }: { enabled: b
         <span aria-hidden="true" className="w-12 h-12 shrink-0 rounded-full bg-surface-muted" />
       )}
       <span className="min-w-0 flex-1">
-        <span className="block text-base font-semibold text-app">How neighbors see you</span>
+        <span className="block text-base font-semibold text-app">How others see you</span>
         <span className="block text-sm text-app-secondary [overflow-wrap:anywhere]" data-testid="neighbors-see-you-name">
           {view
             ? `${view.profile.displayName}${view.profile.handle ? ` · @${view.profile.handle}` : ''}`
-            : query.isError ? 'Your name and photo for neighbors' : 'Loading…'}
+            : query.isError ? 'Your name and photo for others' : 'Loading…'}
         </span>
         <span className="block text-xs text-app-muted mt-0.5">
           The name and photo on your profile, posts, comments and chats. Change them in Edit profile.

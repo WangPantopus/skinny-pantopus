@@ -280,7 +280,7 @@ export function useListingDetail() {
   const handleShareToFeed = async () => {
     try {
       await api.listings.shareToFeed(listingId, { content: `Check out: ${listing?.title}` });
-      toast.success('Shared to Neighborhood!');
+      toast.success('Shared nearby!');
     } catch {
       toast.error('Failed to share.');
     }

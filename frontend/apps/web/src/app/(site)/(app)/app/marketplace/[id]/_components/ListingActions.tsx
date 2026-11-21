@@ -128,7 +128,7 @@ export default function ListingActions({
         {/* Owner: Share to Neighborhood */}
         {isOwner && (
           <button onClick={onShareToFeed} className="flex items-center gap-1.5 px-4 py-2 border border-green-200 text-green-700 rounded-lg text-sm font-medium hover:bg-green-50">
-            <Megaphone className="w-4 h-4" /> Share to Neighborhood
+            <Megaphone className="w-4 h-4" /> Share nearby
           </button>
         )}
 

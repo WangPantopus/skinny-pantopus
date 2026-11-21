@@ -16,8 +16,8 @@ export const PREVIEW_AUDIENCES: Array<{ key: PreviewAudience; label: string; det
   },
   {
     key: 'neighbors',
-    label: 'Neighbors',
-    detail: 'People on Pantopus you aren’t connected to.',
+    label: 'People on Pantopus',
+    detail: 'Signed-in people you aren’t connected to.',
     icon: <Users className="w-5 h-5" />,
   },
   {

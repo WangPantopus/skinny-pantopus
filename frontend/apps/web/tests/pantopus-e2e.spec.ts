@@ -621,7 +621,7 @@ test.describe('Pulse', () => {
 
     await expect(page.getByText('Viewing:')).toBeVisible({ timeout: 10000 });
     await page.getByRole('button', { name: 'Change area' }).click();
-    await page.getByPlaceholder('Search city, address, neighborhood...').fill('Honolulu');
+    await page.getByPlaceholder('Search city, address, area...').fill('Honolulu');
     await expect(page.getByText('Honolulu, Hawaii, United States')).toBeVisible({ timeout: 10000 });
     await page.getByText('Honolulu, Hawaii, United States').click();
 

@@ -31,7 +31,7 @@ function howChecked(piece: MailItemV2): string {
     case 'pantopus_user':
       if (piece.sender_business_name?.trim()) return "A business with a Pantopus account sent this. Pantopus hasn't verified the business yet.";
       // Anyone with a personal account can send a Christmas card: no proven home.
-      return piece.card ? 'A Pantopus neighbor sent this.' : 'A Pantopus neighbor with a verified address sent this.';
+      return piece.card ? 'A Pantopus member sent this.' : 'A Pantopus member with a verified address sent this.';
     default: return "Pantopus couldn't check who sent this. Be careful with links, payments and personal details.";
   }
 }

@@ -1341,7 +1341,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
               <div>
                 <h2 className="text-xl font-semibold text-app-text mb-1">Where is your home?</h2>
                 <p className="text-sm text-app-text-secondary">
-                  Your exact address is only shown to people in your household. Neighbours and
+                  Your exact address is only shown to people in your household. Others and
                   tasks see an approximate area, never the street address.
                 </p>
               </div>

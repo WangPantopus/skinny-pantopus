@@ -102,7 +102,7 @@ export default function PrivacyPage() {
             <div className="space-y-4 mt-4">
               <div className="bg-app-surface-raised/60 border border-app-border-subtle rounded-xl p-5">
                 <p className="font-semibold text-app-text dark:text-white text-sm mb-1">Your address is not publicly displayed by default.</p>
-                <p className="text-app-text-secondary dark:text-app-text-muted text-sm">Home claim and residency information is used internally for routing and feature access. Neighborhood-level presence (e.g., posts shown as &quot;nearby&quot;) does not reveal your exact address.</p>
+                <p className="text-app-text-secondary dark:text-app-text-muted text-sm">Home claim and residency information is used internally for routing and feature access. Area-level presence (e.g., posts shown as &quot;nearby&quot;) does not reveal your exact address.</p>
               </div>
               <div className="bg-app-surface-raised/60 border border-app-border-subtle rounded-xl p-5">
                 <p className="font-semibold text-app-text dark:text-white text-sm mb-1">Audience controls are yours to set.</p>
@@ -121,7 +121,7 @@ export default function PrivacyPage() {
 
           <PolicySection title="5. AI features and the Pantopus assistant">
             <p>
-              Pantopus has an assistant, called Pantopus in the app, that answers questions about your home, your neighborhood and what you have in Pantopus, explains how the app works, and prepares posts, plans, reminders and replies for you to check. It is not a general chatbot: it declines requests about anything else. AI also writes the text of your daily briefings and reads photos and PDFs you choose to share, such as a hauler&apos;s flyer, a radon lab report or a warranty.
+              Pantopus has an assistant, called Pantopus in the app, that answers questions about your home, your area and what you have in Pantopus, explains how the app works, and prepares posts, plans, reminders and replies for you to check. It is not a general chatbot: it declines requests about anything else. AI also writes the text of your daily briefings and reads photos and PDFs you choose to share, such as a hauler&apos;s flyer, a radon lab report or a warranty.
             </p>
             <p>
               These features run on Claude, an AI model made by Anthropic. Anthropic processes this information on our behalf, as our service provider. When you use them, we send Anthropic what the feature needs to answer you:

@@ -94,7 +94,7 @@ export default function PromptsField({ prompts, onChange, error }: PromptsFieldP
       <p className={helpClass}>
         {known.length > 0
           ? `Tap one to change it. Answers can be up to ${PROMPT_ANSWER_MAX} characters.`
-          : `Give neighbors something to ask you about: pick up to ${MAX_PROFILE_PROMPTS} prompts and answer each in a line.`}
+          : `Give people something to ask you about: pick up to ${MAX_PROFILE_PROMPTS} prompts and answer each in a line.`}
       </p>
       {error ? <p role="alert" className="mt-1.5 text-[0.8125rem] leading-[1.125rem] text-red-600">{error}</p> : null}
 
@@ -129,7 +129,7 @@ export default function PromptsField({ prompts, onChange, error }: PromptsFieldP
         open={editing !== null}
         onClose={() => setEditing(null)}
         title={editing ? promptText(editing.key) ?? '' : ''}
-        subhead="Neighbors see your answer on your profile."
+        subhead="Others see your answer on your profile."
         footer={(
           <div className="flex items-center justify-between gap-3">
             {editing && !editing.isNew ? (

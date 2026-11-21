@@ -106,8 +106,8 @@ export default function GigCreationModal({
           </h3>
           <p className="text-sm text-app-text-secondary mb-4">
             {verifiedFirst
-              ? 'Sent to verified neighbors first'
-              : 'Posted to neighborhood'}
+              ? 'Sent to verified homes first'
+              : 'Posted nearby'}
           </p>
           <button
             type="button"
@@ -222,7 +222,7 @@ export default function GigCreationModal({
           {/* Pre-delivery: nearby neighbors */}
           {source === 'pre_delivery' && neighbors && neighbors.length > 0 && (
             <div>
-              <label className="text-xs text-app-text-secondary mb-2 block">Verified neighbors nearby</label>
+              <label className="text-xs text-app-text-secondary mb-2 block">Verified homes nearby</label>
               <div className="space-y-1.5">
                 {neighbors.map((n) => (
                   <div
@@ -280,7 +280,7 @@ export default function GigCreationModal({
               className="w-4 h-4 rounded border-app-border text-primary-600 focus:ring-primary-500"
             />
             <span className="text-sm text-app-text-strong">
-              Post to Verified Neighbors first
+              Post to verified homes first
             </span>
           </label>
         </div>

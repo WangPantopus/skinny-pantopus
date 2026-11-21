@@ -37,7 +37,7 @@ export default function AroundTheNeighborhood({ firstName, contributions }: { fi
 
   return (
     <section>
-      <h3 className="mb-2.5 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Around the neighborhood</h3>
+      <h3 className="mb-2.5 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Around here</h3>
       <ul className="rounded-2xl border border-app bg-surface divide-y divide-app overflow-hidden">
         {trains > 0 && (
           <Row icon={<HandHeart className={iconClass} />} iconClassName="bg-app-home-bg text-app-home">
@@ -54,7 +54,7 @@ export default function AroundTheNeighborhood({ firstName, contributions }: { fi
         )}
         {helpful > 0 && (
           <Row icon={<Lightbulb className={iconClass} />} iconClassName="bg-amber-50 text-amber-700">
-            Neighbors marked {firstName}&rsquo;s posts helpful{' '}
+            Others marked {firstName}&rsquo;s posts helpful{' '}
             <strong className="font-semibold">{helpful === 1 ? 'once' : `${helpful} times`}</strong>
           </Row>
         )}

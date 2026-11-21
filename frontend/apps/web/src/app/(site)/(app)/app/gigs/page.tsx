@@ -706,7 +706,7 @@ export default function GigsBrowsePage() {
                         description={
                           userLat == null || userLng == null
                             ? 'Enable location to see Support Trains near you.'
-                            : 'No published Support Trains in your area yet. Start one to organize meals, rides, or help for a neighbor.'
+                            : 'No published Support Trains in your area yet. Start one to organize meals, rides, or help for someone nearby.'
                         }
                         actionLabel="Start a Support Train"
                         onAction={() => router.push('/app/support-trains/new')}

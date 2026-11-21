@@ -192,7 +192,7 @@ export default function CommentThread({
   const renderComment = (comment: PostComment, depth = 0) => {
     // P0.4: read from the new identity shape only (displayName / handle).
     const authorName =
-      comment.author?.displayName || chosenUsername(comment.author?.handle) || 'Neighbor';
+      comment.author?.displayName || chosenUsername(comment.author?.handle) || 'Someone nearby';
     const authorInitial = authorName[0]?.toUpperCase() || '?';
     const avatarUrl = comment.author?.avatarUrl;
     const isOwn = comment.user_id === currentUserId;

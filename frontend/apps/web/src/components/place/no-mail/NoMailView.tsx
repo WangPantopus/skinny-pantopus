@@ -43,14 +43,14 @@ export default function NoMailView({ code }: { code: string }) {
           <>
             <h1 className="text-[19px] font-bold text-app-text -tracking-[0.01em] mt-4">You&apos;re off the list</h1>
             <p className="text-[14px] text-app-text-secondary leading-[21px] mt-2">
-              Your address will never receive another neighbor invitation from Pantopus. This is permanent and applies no matter who sends it.
+              Your address will never receive another invitation from Pantopus. This is permanent and applies no matter who sends it.
             </p>
           </>
         ) : (
           <>
             <h1 className="text-[19px] font-bold text-app-text -tracking-[0.01em] mt-4">Stop mail to this address</h1>
             <p className="text-[14px] text-app-text-secondary leading-[21px] mt-2">
-              A neighbor asked us to mail your address an invitation. One tap below and we&apos;ll never send another — permanently, no account needed.
+              Someone on your street asked us to mail your address an invitation. One tap below and we&apos;ll never send another — permanently, no account needed.
             </p>
             <button
               type="button"
@@ -70,7 +70,7 @@ export default function NoMailView({ code }: { code: string }) {
         )}
 
         <p className="text-[12px] text-app-text-muted leading-[17px] mt-5 pt-4 border-t border-app-border-subtle">
-          Neighbors choose an address, but every card is written and mailed by Pantopus with this opt-out printed on it. The sender is never told you opted out.
+          People choose an address, but every card is written and mailed by Pantopus with this opt-out printed on it. The sender is never told you opted out.
         </p>
       </div>
     </div>

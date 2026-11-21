@@ -46,7 +46,7 @@ export function NoHomeBanner() {
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm text-amber-800 font-medium">Add your home address to see neighbor trust data</p>
+        <p className="text-sm text-amber-800 font-medium">Add your home address to see who people near you trust</p>
       </div>
       <button
         onClick={() => router.push('/app/homes')}

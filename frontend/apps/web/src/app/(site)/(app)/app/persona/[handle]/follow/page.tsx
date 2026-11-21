@@ -214,7 +214,7 @@ export default function FollowHandshakePage() {
           </h1>
           <p className="text-sm text-app-secondary">
             Choose the fan name Beacon creators see. It is separate from your
-            Pantopus account — your real name, neighborhood, and personal
+            Pantopus account — your real name, area, and personal
             profile stay private.
           </p>
           {tierRank > 1 ? (

@@ -52,7 +52,7 @@ const SECTION_CONFIG: Record<string, EmptyStateProps> = {
   },
   community: {
     icon: <Megaphone className="w-10 h-10" />,
-    title: 'No neighborhood notices yet',
+    title: 'No local notices yet',
     description:
       'Verified government and business mail for your area will appear here.',
   },

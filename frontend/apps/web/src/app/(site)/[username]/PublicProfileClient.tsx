@@ -1060,7 +1060,7 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
   const fullName = realName || 'Pantopus member';
   // Other people get no first name, so "Connect with …" uses the name's first word, as the apps do.
   const shownFirstName = realName ? firstWord(realName) : null;
-  const firstName = shownFirstName || 'this neighbor';
+  const firstName = shownFirstName || 'this person';
   const photoUrl = shownProfile.profile_picture_url || shownProfile.avatar_url || shownProfile.profilePicture || null;
   // "Your account name, Rowan Park-Lee, stays private.": only when it differs from the name neighbors see.
   const accountName = lpView?.account?.displayName?.trim() || '';
@@ -1198,7 +1198,7 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
     <div className="mb-3 -mx-1 rounded-2xl border border-sky-200 bg-sky-50 py-2 pl-3.5 pr-1 flex items-center gap-2.5" role="status">
       <Eye aria-hidden="true" className="w-5 h-5 shrink-0 text-app-link" strokeWidth={2} />
       <div className="min-w-0 flex-1">
-        <p className="text-[0.9375rem] leading-5 font-semibold text-app">Previewing as {audienceInfo.label.toLowerCase()}</p>
+        <p className="text-[0.9375rem] leading-5 font-semibold text-app">Previewing as {audienceInfo.label.charAt(0).toLowerCase() + audienceInfo.label.slice(1)}</p>
         <p className="text-[0.8125rem] leading-[1.125rem] text-app-muted">{audienceInfo.detail}</p>
       </div>
       <button type="button" onClick={leaveOwnerPreview} className="min-h-[44px] px-3 text-[1.0625rem] font-semibold text-app-link hover:underline">
@@ -1314,12 +1314,12 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
     },
     featuredSkills.length === 0 && {
       key: 'skills', icon: <HandHeart className="w-5 h-5" />, title: 'Add what you help with',
-      detail: 'Neighbors who need a hand can find you. Only you see this tip.',
+      detail: 'People who need a hand can find you. Only you see this tip.',
       onOpen: () => router.push('/app/profile/edit#helps-with'),
     },
     !(Array.isArray(shownProfile.prompts) && shownProfile.prompts.length > 0) && {
       key: 'prompt', icon: <MessageSquareQuote className="w-5 h-5" />, title: 'Answer a prompt',
-      detail: 'Give neighbors an easy way to start a conversation. Only you see this tip.',
+      detail: 'Give people an easy way to start a conversation. Only you see this tip.',
       onOpen: () => router.push('/app/profile/edit#prompts'),
     },
     // Reposts can't be pinned: the tip is for a person with a post of their own.

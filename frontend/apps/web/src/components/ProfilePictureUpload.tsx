@@ -82,7 +82,7 @@ export default function ProfilePictureUpload({
       <div className="min-w-0 flex-1">
         <p className="text-[0.9375rem] leading-5 font-semibold text-app-text">Account photo</p>
         <p className="mt-0.5 text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
-          For your account. Neighbors see the profile photo above. JPG, PNG, GIF or WebP, up to 5 MB.
+          For your account. Others see the profile photo above. JPG, PNG, GIF or WebP, up to 5 MB.
         </p>
         <button
           type="button"

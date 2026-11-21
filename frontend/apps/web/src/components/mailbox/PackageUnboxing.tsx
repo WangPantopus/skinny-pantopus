@@ -233,7 +233,7 @@ export default function PackageUnboxing({
         >
           <Handshake className="w-5 h-5 flex-shrink-0" />
           <span className="text-sm font-medium text-primary-700 dark:text-primary-300">
-            Ask a neighbor to help assemble
+            Ask someone nearby to help assemble
           </span>
           <svg className="w-4 h-4 text-primary-400 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

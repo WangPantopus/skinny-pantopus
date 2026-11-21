@@ -238,7 +238,7 @@ export function AIAssistantView({ initialMessage, onBack }: AIAssistantViewProps
 const QUICK_PROMPTS = [
   ...(launchFeatures.openGigs ? [{ label: '🛋️ Help me move something', text: 'I need help moving furniture' }] : []),
   ...(launchFeatures.marketplace ? [{ label: '🏷️ Sell an item', text: 'I want to sell' }] : []),
-  { label: '📢 Post to neighbors', text: 'I want to tell my neighbors about' },
+  { label: '📢 Post nearby', text: 'I want to tell people near me about' },
   // The assistant summarizes a letter it is given (or one shared from Mail); it
   // can't browse the inbox, so the prompt asks for the letter itself. Launch cut #10.
   ...(launchFeatures.mailbox ? [{ label: '📬 Summarize a letter', text: 'Can you summarize this letter for me? Here it is: ' }] : []),

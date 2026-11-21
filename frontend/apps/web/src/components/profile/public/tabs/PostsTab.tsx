@@ -174,7 +174,7 @@ export default function PostsTab({
     return (
       <div className={emptyCard}>
         <span aria-hidden="true" className={emptyIcon}><Lock className="w-[1.375rem] h-[1.375rem]" /></span>
-        <h3 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Posts are for neighbors</h3>
+        <h3 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Posts are for people on Pantopus</h3>
         <p className="mt-1.5 max-w-[18rem] text-[0.9375rem] leading-5 text-app-muted">
           Sign in or join Pantopus to see {firstName ? `${firstName}'s` : 'their'} posts and pinned posts.
         </p>
@@ -220,7 +220,7 @@ export default function PostsTab({
         <span aria-hidden="true" className={emptyIcon}><Hand className="w-[1.375rem] h-[1.375rem]" /></span>
         <h3 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">No posts yet</h3>
         <p className="mt-1.5 max-w-[17rem] text-[0.9375rem] leading-5 text-app-muted">
-          When you post, neighbors see it here too.
+          When you post, others see it here too.
         </p>
       </div>
     );
@@ -232,7 +232,7 @@ export default function PostsTab({
       <div className={emptyCard}>
         <span aria-hidden="true" className={emptyIcon}><Hand className="w-[1.375rem] h-[1.375rem]" /></span>
         <h3 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">
-          {justJoined ? `${firstName || 'This neighbor'} just joined` : 'No posts yet'}
+          {justJoined ? `${firstName || 'This person'} just joined` : 'No posts yet'}
         </h3>
         <p className="mt-1.5 max-w-[17rem] text-[0.9375rem] leading-5 text-app-muted">
           {justJoined ? 'No posts yet. A quick hello goes a long way.' : `When ${firstName || 'they'} post${firstName ? 's' : ''}, it shows up here.`}
