@@ -76,6 +76,13 @@ struct HolidayCardSealStep: View {
                 ForEach(viewModel.arrivals, id: \.self) { arrival in
                     choice(arrival)
                 }
+                // Under the arrival choices, on the same paper (travelling card plan Part 2).
+                if viewModel.travelOffered {
+                    HolidayCardTravelRow(
+                        isOn: Binding(get: { viewModel.travels }, set: { viewModel.setTravels($0) }),
+                        firstName: travelFirstName
+                    )
+                }
             }
             .padding(.top, 10)
         }
@@ -90,6 +97,12 @@ struct HolidayCardSealStep: View {
         } else {
             choices
         }
+    }
+
+    /// Who can pass it on, by first name: the person chosen; nil for an address, a link or a list ("They").
+    private var travelFirstName: String? {
+        guard case let .person(_, name) = recipient else { return nil }
+        return HolidayCardWords.firstName(name)
     }
 
     /// Until when it can be taken back (each card on a list on its own).
@@ -273,6 +286,13 @@ struct HolidayCardSentView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(MailPaper.cardTextSoft)
                         .fixedSize(horizontal: false, vertical: true)
+                    if viewModel.sentTravels {
+                        Text(HolidayCardTravelWords.sentLine)
+                            .font(.system(size: 14))
+                            .foregroundStyle(MailPaper.cardTextSoft)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("sendCardTravels")
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

@@ -148,6 +148,15 @@ struct HolidayCardFlowView: View {
             Task { await viewModel.rereadCards() }
         }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // A card that travels, and no town yet: "Where does it start?" (travelling card plan Part 2, D4).
+        .sheet(isPresented: Binding(
+            get: { viewModel.asksTown && !viewModel.sealsAtTable },
+            set: { if !$0, viewModel.asksTown { viewModel.townCancelled() } }
+        )) {
+            CardTravelTownSheet(onChosen: viewModel.townChosen, onCancel: viewModel.townCancelled)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         // Seal it by hand: the table over the flow, from Look it over until Done.
         .modifier(CardTableSendCover(viewModel: viewModel, onDone: done))
         .accessibilityElement(children: .contain)

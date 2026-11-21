@@ -227,7 +227,9 @@ struct CardTableStage: View {
             year: content.year,
             sealed: setup?.sealedForChristmas ?? content.sealed,
             reveal: model.addressing,
-            isLetter: content.isLetter
+            isLetter: content.isLetter,
+            travelMarks: setup == nil ? model.travelMarks : [],
+            strike: model.strikeShown
         )
         .equatable()
         // To several people: a stack of envelopes under the top one.

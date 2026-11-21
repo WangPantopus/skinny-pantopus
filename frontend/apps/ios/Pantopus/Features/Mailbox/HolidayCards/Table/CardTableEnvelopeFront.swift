@@ -28,6 +28,11 @@ struct CardTableEnvelopeFront: View, Equatable {
     /// A letter on the cream envelope (plan Part 10): the names in the pen's ink, no postmark (Pantopus put it
     /// straight in the box, and the postmark says Christmas), and "A letter for you" in the seal's red.
     var isLetter = false
+    /// A travelling card's postmarks, oldest first (travelling card plan Part 3): they take the place of today's one
+    /// postmark, over the names, the first cancelling the stamp. Empty for every other card.
+    var travelMarks: [CardTravelMark] = []
+    /// The newest of them being struck as the envelope arrives, 0 to 1.
+    var strike: Double = 1
 
     var body: some View {
         Canvas(rendersAsynchronously: false) { context, size in
@@ -43,7 +48,7 @@ struct CardTableEnvelopeFront: View, Equatable {
                 let box = CGRect(x: width * 0.755, y: height * 0.0345, width: stampWidth, height: stampWidth * 300 / 242)
                 stampLayer.draw(Image(uiImage: stamp), in: box.insetBy(dx: -box.width * (grow - 1) / 2, dy: -box.height * (grow - 1) / 2))
             }
-            let postmarkIn = isLetter ? 0 : CardTableAddress.progress(reveal, CardTableAddress.postmark)
+            let postmarkIn = isLetter || !travelMarks.isEmpty ? 0 : CardTableAddress.progress(reveal, CardTableAddress.postmark)
             if postmarkIn > 0 {
                 var inked = context
                 inked.opacity = postmarkIn
@@ -59,6 +64,9 @@ struct CardTableEnvelopeFront: View, Equatable {
                 }
             } else {
                 drawKind(in: context, size: size)
+            }
+            if !travelMarks.isEmpty {
+                CardTableTravelMarks.draw(travelMarks, in: context, size: size, strike: strike)
             }
         }
         .accessibilityHidden(true)
@@ -128,7 +136,8 @@ struct CardTableEnvelopeFront: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.paper === rhs.paper && lhs.stamp === rhs.stamp && lhs.postmark === rhs.postmark && lhs.fromName == rhs.fromName
             && lhs.toName == rhs.toName && lhs.mailedOn == rhs.mailedOn && lhs.year == rhs.year && lhs.sealed == rhs.sealed
-            && lhs.reveal == rhs.reveal && lhs.isLetter == rhs.isLetter
+            && lhs.reveal == rhs.reveal && lhs.isLetter == rhs.isLetter && lhs.travelMarks == rhs.travelMarks
+            && lhs.strike == rhs.strike
     }
 }
 

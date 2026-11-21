@@ -132,6 +132,8 @@ final class CardTableModel {
     var zoomedOnce = false
     /// "Send {first name} a card" (plan Part 3), set by the reader's page once the server says a card can go to them.
     var sendBack: CardTableMenuItem?
+    /// A travelling card's Pass it on and quiet row (travelling card plan Part 4), set by the reader's page.
+    var travelButtons = CardTableTravelButtons()
     /// "Write back to {first name}", or "You wrote back" (experience plan Part 3), set by the reader's page.
     var writeBack: CardTableMenuItem?
     /// "Open the next card (2 more)" (experience plan Part 4), set by the reader's page when the Mailbox list it came
@@ -152,6 +154,8 @@ final class CardTableModel {
     var sealPress = 0.0
     /// The address side being written on, 0 to 1 (`CardTableAddress`).
     var addressing = 1.0
+    /// A travelling card's newest postmark being struck as the envelope arrives (`CardTableModel+Travel.swift`).
+    var travelStrike = 1.0
     /// Step 5's words, main button and quiet buttons, once it's sent.
     var goneWords: String?
     var gonePrimary = "Done"
@@ -278,6 +282,7 @@ final class CardTableModel {
         takeOutTask?.cancel()
         springs.drop.jump(to: animated && !reduceMotion ? 1 : 0)
         springs.drop.t = 0
+        resetStrike(animated: animated)
         wake()
     }
 
@@ -440,6 +445,7 @@ final class CardTableModel {
         springs = next
         if sending != nil, advanceSending(elapsed: elapsed) { moving = true }
         if advanceLeaf(elapsed: elapsed) { moving = true }
+        if advanceStrike(elapsed: elapsed) { moving = true }
         // Once it has cleared the envelope, the card is laid down in front of it.
         if step == .pulling, springs.pull.x > 0.985 {
             didCardLand()

@@ -14,6 +14,8 @@ import SwiftUI
 extension HolidayCardFlowViewModel {
     /// "Seal and send": with the table on, it opens to seal the card by hand (the seal sends it); otherwise it goes.
     func sealOrSend() {
+        // A card that travels needs the sender's town first (travelling card plan Part 2).
+        if askTownFirst(then: { [weak self] in self?.sealOrSend() }) { return }
         if LaunchFeatures.cardTable {
             sealsAtTable = true
         } else if recipient?.entries != nil {
@@ -27,6 +29,7 @@ extension HolidayCardFlowViewModel {
     /// sealing table, where the card is sealed by hand as from Look it over. A refusal stays under the choices; a list
     /// with a card that won't go opens Look it over instead; a server that can't show the look still lets it be sealed.
     func sealFromChoices() async {
+        if askTownFirst(then: { [weak self] in Task { await self?.sealFromChoices() } }) { return }
         let passed = await lookItOver(opens: false)
         guard passed || (lookUnavailable && recipient?.entries == nil) else { return }
         sealOrSend()
@@ -165,6 +168,11 @@ struct CardTableSendCover: ViewModifier {
         guard viewModel.step == .sent else {
             // Out of stamps: the seal doesn't take and the stamp books open over the table (as web).
             if viewModel.showsStampBooks { return .refused(nil) }
+            // A card that travels and no town yet: the table goes so "Where does it start?" can ask.
+            if viewModel.asksTown {
+                viewModel.sealsAtTable = false
+                return .refused(nil)
+            }
             // An arrival that closed, or a card sealed from Seal it for the day that didn't go: back to its choices,
             // which say why. A list says why on the table.
             if viewModel.step != .look, viewModel.sendError == nil {
@@ -180,7 +188,7 @@ struct CardTableSendCover: ViewModifier {
         if let results = viewModel.listResults {
             let sent = results.filter { $0.card != nil }.count
             let words = sent == 1 ? "1 card on its way." : "\(sent) cards on their way."
-            return .sent(words: words, primary: "Done", buttons: [share] + again)
+            return .sent(words: travelWords(words, viewModel), primary: "Done", buttons: [share] + again)
         }
         guard let card = viewModel.sent else { return .sent(words: "On its way.", primary: "Done", buttons: [share] + again) }
         if card.byLink, let link = viewModel.sentLink {
@@ -192,7 +200,7 @@ struct CardTableSendCover: ViewModifier {
             let shareLink = CardTableMenuItem(title: "Share", identifier: "cardTableSendShareLink") { [weak model] in
                 model?.linkShareText = "A Christmas card for you from \(from): \(link)"
             }
-            return .sent(words: "Your card is ready.", primary: "Done", buttons: [copy, shareLink] + again)
+            return .sent(words: travelWords("Your card is ready.", viewModel), primary: "Done", buttons: [copy, shareLink] + again)
         }
         let first = MailPieceModel.firstText(card.toName).map(HolidayCardWords.firstName) ?? "them"
         let lines = [HolidayCardWords.arrivalLine(card), HolidayCardWords.takeBackLine(card)].compactMap(\.self)
@@ -203,7 +211,15 @@ struct CardTableSendCover: ViewModifier {
             })
         }
         buttons.append(share)
-        return .sent(words: (["On its way to \(first)."] + lines).joined(separator: "\n"), primary: "Done", buttons: buttons + again)
+        let travels = viewModel.sentTravels ? [HolidayCardTravelWords.sentLine] : []
+        let words = (["On its way to \(first)."] + travels + lines).joined(separator: "\n")
+        return .sent(words: words, primary: "Done", buttons: buttons + again)
+    }
+
+    /// A card that travels: its sent words gain "It can travel. You'll hear when it reaches a town." (plan Part 2).
+    @MainActor
+    private static func travelWords(_ words: String, _ viewModel: HolidayCardFlowViewModel) -> String {
+        viewModel.sentTravels ? "\(words)\n\(HolidayCardTravelWords.sentLine)" : words
     }
 
     /// "Send this card to someone else" under the sent card (experience plan Part 6), when another card can go now: the
