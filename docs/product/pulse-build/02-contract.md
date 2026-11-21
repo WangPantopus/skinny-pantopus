@@ -57,7 +57,8 @@ Heads-up kinds a resident may create: `road_hazard`, `power_outage`, `weather_da
   },
   "about": { "label": "Camas", "area_id": "uuid" },         // the place or area the post is about; label may be null
   "read_scope": "public",
-  "status": { "state": "open", "resolution": null, "ends_at": null },   // state: open | resolved
+  "status": { "state": "open", "resolution": null, "ends_at": null,    // state: open | resolved
+              "ends_when": null },   // S12: "Ends when power returns" while a Heads-up waits on a Right now event (2.16)
   "action": { "kind": "answer", "label": "Answer", "done": false },     // the one action and the viewer's state
   "counts": { "replies": 6, "going": null },                             // going only for events
   "event": null,                  // { starts_at, ends_at, venue } for events
@@ -147,6 +148,7 @@ The response is the created post as today's endpoint returns it plus `pulse: Pul
 - **Composer checks.** The create path calls PS's `evaluateComposerChecks(text, media, context)` from `backend/services/pulse/safety/composerChecks.js`, with `context` `{ userId, postType, topic, areaId, readScope, mode: "create" | "edit" }`. Besides the section 2.6 fields it returns `holds: [{ rule }]` for the server path only (a sale, PS's other hold rules). A block returns `422 COMPOSER_BLOCKED { blocks }` and creates nothing; a hold creates the post with `moderation_state: held` and that `moderation_rule`. While the module is absent, or when it fails, nothing blocks or holds (fail open, logged).
 - **About.** A Pulse post's `about.label` (2.1) is the `locationName` its author gave, otherwise its area's name; an older row's `location_name` is never shown there. `postMetadata.pulse_about` from a client is dropped.
 - **Held posts** reach only their author (section 5) and send no notifications; the response's `pulse.moderation.state` is `held`.
+- **S12 additions.** `knownEntryId` links a public Ask to the Known entry it asks again (2.14); `rightNowEventId` tags a Heads-up to an active Right now event in its town (2.16). Either on another type, another town or an entry or event the author can't use answers `400 INVALID_PULSE_POST`.
 - **Edits** (`PATCH /api/posts/:id`) of a post with a `read_scope` never change its type, point, precision, audience or window: a changed `postType`, `latitude`, `longitude`, `locationPrecision`, `visibility`, `visibilityScope` or `radiusMiles` answers `400 PULSE_FIELD_LOCKED`, and the same value sent back is ignored. Narrowing goes through section 2.13. A content edit runs the composer checks with `mode: "edit"`: a block answers `422 COMPOSER_BLOCKED` and keeps the old text. At most 9 photos.
 
 ### 2.6 Composer check (PS)
@@ -266,11 +268,107 @@ The asker's two actions on an open Ask, offered by the day-6 reminder (`ask_stil
 
 Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NOT_AN_ASK` (another type), and `409 ASK_ENDED` when the Ask is already answered, closed or past its end.
 
+### 2.14 Known (S12)
+
+Known lists short, sourced answers for a town. The curator and staff write entries (PS's drafting and console call PB's functions below); residents confirm, suggest a correction or flag an entry outdated; nobody edits an entry directly. All Known routes require sign-in; `area_id` works as on the feed (default: the reader's town).
+
+`GET /api/pulse/known?area_id=&q=&topic=` → `{ "area": Area, "entries": [KnownSummary] }`: published and stale entries in the town, most recently confirmed first, at most 50. `q` (up to 80 characters) matches titles and answers with search's rules (2.17); `topic` filters.
+
+```jsonc
+// KnownSummary
+{ "id": "uuid", "title": "Plumbers neighbors recommend", "topic": "home_repairs",
+  "kind": "neighbor",              // neighbor | official: clients show them differently
+  "status": "published",           // published | stale ("May be out of date")
+  "last_confirmed_at": "<iso>", "conversation_count": 7, "item_count": 3 }
+```
+
+`GET /api/pulse/known/:id` → `{ "entry": KnownEntry }`:
+
+```jsonc
+{
+  "id": "uuid", "area": Area, "topic": "home_repairs", "kind": "neighbor", "status": "published",
+  "title": "Plumbers neighbors recommend",
+  "answer": null,                           // the answer's text; null for an entry that is a list of recommendations
+  "items": [{                               // recommendations, most recently recommended first
+    "name": "Harbor Plumbing",
+    "recommended_by": { "names": ["Priya", "Tom"], "others": 4 },   // first names as the public posts showed them
+    "latest_at": "<iso>",
+    "quote": { "text": "Fixed our water heater the same day and explained the bill.", "display_name": "Priya",
+               "label": "resident", "post_id": "uuid", "reply_id": "uuid" }                  // or null
+  }],
+  "sources": {
+    "conversations": [{ "post_id": "uuid", "title": "Who's a good plumber?", "created_at": "<iso>" }],   // newest first, at most 20
+    "conversation_count": 7, "first_at": "<iso>", "last_at": "<iso>",
+    "official": [{ "label": "City of Camas", "url": "https://…", "retrieved_at": "<iso>" }]
+  },
+  "last_confirmed_at": "<iso>",
+  "asked_again": { "post_id": "uuid", "at": "<iso>" },                  // the open Ask that will refresh it, or null
+  "viewer": { "can_respond": true, "confirmed": false, "suggested_correction": false, "flagged_outdated": false }
+}
+```
+
+- **Only public conversations and official links feed Known.** A post counts only while it is `read_scope: public`, `live` and not removed from the web view; a reply only while it is live and its author's account exists. A street, neighborhood or town-only post, a held or removed one, one its author narrowed, and a deleted post or account never appear in `items`, a quote, `recommended_by`, `sources` or any count. This is decided when the entry is read, so deleting a post or an account takes its quote and its share of every count away at once. People across a block from the reader are left out of that reader's names, quotes and counts.
+- No ratings: `items` are ordered by `latest_at` only. A business appears only as a name residents recommended; nothing about an entry can be bought or edited by a business.
+- Official entries (`kind: official`) carry `answer` and `sources.official`; they may cite public property facts the Place tab already shows (school zone, flood zone), never valuations or ownership.
+- `POST /api/pulse/known/:id/confirm`, `POST /api/pulse/known/:id/correct` `{ "note" }` (1 to 500 characters) and `POST /api/pulse/known/:id/outdated` `{ "note"? }` → `{ "entry": KnownEntry }`. Only someone with a verified home in the entry's town (`403 NEEDS_VERIFIED_ADDRESS`); business accounts `403 BUSINESS_CANNOT_POST`. A person counts once per kind until the entry is next confirmed (repeating answers the same entry). Confirmations from two different people with different homes since `last_confirmed_at` refresh the entry (`last_confirmed_at` becomes now and a stale entry is published again); two outdated flags from different homes make it `stale`. A correction goes to staff (PS's console) and changes nothing by itself. `viewer.can_respond` says whether these calls would be accepted.
+- **Asking again.** The "Ask again to refresh" button opens the composer with the entry's title; the Ask is created through `POST /api/posts` in Pulse mode (2.5) with `knownEntryId`. Its area and topic default to the entry's, and it must be a public Ask in the entry's town (`400 INVALID_PULSE_POST` otherwise). The entry then shows `asked_again`. When that Ask is answered (the asker marks a reply Helpful), the Helpful reply joins the entry's sources if it is public and the entry is refreshed. This replaces the outlined `POST /api/pulse/known/ask-again`.
+- `404 KNOWN_NOT_FOUND` for an entry that doesn't exist, is a draft or retired, or is in an area the reader can't open.
+- For PS, in process (`backend/services/pulse/known.js`): `saveDraft`, `publish`, `retire`, `openCorrections(areaId)` and `similar(text, areaId)`, which gives the composer check's `existing` items (`{ "kind": "known", "id", "title", "meta" }`, 2.6).
+
+### 2.15 Upcoming (S12)
+
+`GET /api/pulse/upcoming?area_id=&limit=` → `{ "area": Area, "items": [UpcomingItem] }`: the next 14 days, soonest first, at most `limit` (default 20, max 50).
+
+```jsonc
+{ "kind": "event", "starts_at": "<iso>", "ends_at": "<iso>|null", "post": PulsePost }   // an Event posted in Pulse, Official and curator events included
+{ "kind": "plan",  "starts_at": "<iso>", "ends_at": "<iso>|null", "plan": { /* the card GET /api/plans returns */ } }
+```
+
+- Events follow the feed's reader rules (walls, moderation, blocks, mutes, hides) in the town or `area_id`. An event stays until its `ends_at`, or for 3 hours after `starts_at` when it has no end.
+- Plans are those `GET /api/plans` lists for the reader around the town's center in its `week` window (the next 7 days, with its own rules: kinds, playdates, holds), and only while the `plans` switch is on for the reader.
+- "Going" is the only RSVP: the event card's `action` (`going`) and the plan's own request flow. Interest alone counts nobody.
+
+### 2.16 Right now (S12)
+
+The feed's `right_now` (2.3) and `GET /api/pulse/right-now?area_id=` → `{ "right_now": RightNow | null }`:
+
+```jsonc
+{
+  "id": "uuid",
+  "kind": "power_outage",          // power_outage | water_outage | smoke | road_closure | severe_weather | boil_notice; never crime
+  "title": "Power outage around Prune Hill",
+  "area": Area,                    // the town, or a street or neighborhood in it
+  "origin": "official",            // official | neighbors: "Reported by neighbors" until an official source confirms
+  "official": { "source_label": "Utility", "text": "About 1,200 homes are without power. Crews expect to restore it by 11pm.",
+                "url": "https://…", "updated_at": "<iso>" },      // null while only neighbors report it
+  "updated_at": "<iso>",
+  "reports": { "me_too": 38, "its_back": 2 },                    // homes, not people
+  "ends_when": "The card ends when power is restored.",
+  "viewer": { "report": null, "can_report": true }               // report: me_too | its_back | null
+}
+```
+
+- At most one card, only while something is active, for the town being read or an open street or neighborhood in it: official before neighbors, then the most recently updated.
+- `POST /api/pulse/right-now/:id/report` `{ "kind": "me_too" | "its_back" }` → `{ "right_now": RightNow }`; `DELETE /api/pulse/right-now/:id/report` withdraws it. A report belongs to the reporter's verified home inside the event's area (`403 NEEDS_VERIFIED_ADDRESS` without one); a person has one report per event, and a second call replaces the first. `404 RIGHT_NOW_NOT_FOUND`, `409 RIGHT_NOW_ENDED`. No free text.
+- **Official start and updates.** Official and curator accounts: `POST /api/pulse/right-now` `{ "areaId", "kind", "title", "text", "sourceLabel", "sourceUrl" }` starts an event, or confirms an active neighbors' event of the same kind in that area (it becomes `official`); `POST /api/pulse/right-now/:id/update` `{ "text" }` and `POST /api/pulse/right-now/:id/clear`. Everyone else `403 NOT_OFFICIAL`; another kind `400 INVALID_RIGHT_NOW`.
+- **Neighbors start one.** Pulse Heads-ups of kind `power_outage` from three different verified homes in one town within an hour start a `neighbors` event for that town and are tagged to it.
+- **Ending.** An official event ends when its source clears it. A neighbors' event ends when three homes say "It's back", or when no home has reported or posted about it for three hours (the hourly lifecycle job).
+- **Heads-ups during an event.** A Pulse Heads-up may be created with `rightNowEventId` (an active event in its town). Without its own `expiresAt` it ends when the event ends: meanwhile its card's `status.ends_at` is null and `status.ends_when` reads "Ends when power returns" (per kind). With an `expiresAt` it keeps that end. `PulsePost.status.ends_when` is null otherwise.
+- Starting an event sends no notification in this slice; `pulse_right_now` (section 6) is reserved for it, with PC's noise budget.
+
+### 2.17 Search (S12)
+
+`GET /api/pulse/search?q=&area_id=&cursor=` → `{ "area": Area, "q": "…", "posts": [PulsePost], "known": [KnownSummary], "places": [Area], "next_cursor": "…" | null }`.
+
+- `q` is 2 to 80 characters of plain words: quotes, `&`, `|`, `:*`, accents and emoji are matched as text and never cause an error; `400 INVALID_SEARCH` outside that length. Matching uses English word stems, so "plumbers" finds "plumber"; accents must match as typed.
+- `posts`: conversations in the town or `area_id` whose title or text match, newest first, 20 a page (`next_cursor`, opaque, pages `posts` only). **Resolved and ended conversations are included** and their `status` says so. The feed's reader rules apply: never held, removed, muted, hidden, blocked or unreadable posts.
+- `known`: up to 5 matching entries in the town (2.14). `places`: up to 5 open areas in the town whose names contain the words (places, and the streets and neighborhoods the reader may open).
+
 ## 3. Outlined (shapes are published by the owner before the first client PR)
 
 | Slice | Endpoints (owner) |
 |---|---|
-| S12 | `GET /api/pulse/known?area=&q=`, `GET /api/pulse/known/:id`, `POST /api/pulse/known/:id/{confirm,correct,outdated}`, `POST /api/pulse/known/ask-again` (PB data, PS drafting); `GET /api/pulse/upcoming?area=`; `GET /api/pulse/right-now`, `POST /api/pulse/right-now/:id/report` `{kind: me_too\|its_back}`; `GET /api/pulse/search?q=&area=` (PB) |
+| S12 | Frozen in 2.14 (Known), 2.15 (Upcoming), 2.16 (Right now) and 2.17 (Search) (PB data and routes; PS drafting) |
 | S13 | Digest content and delivery are jobs, not endpoints (PC); preferences above. PC reads content in process from PB's `backend/services/pulse/content.js`: `digestPosts(viewerId, { since, until?, limit?, perGroup?, areaId? })` → `{ area, since, until, total, groups: [{ key, title, area_id, total, items: [PulsePost] }] }`; `unansweredForHelper(viewerId, { minAgeHours?, limit?, excludePostIds?, areaId? })` → `{ posts: [PulsePost] }`; `followRecaps(viewerId, { since, until? })` → `{ since, until, conversations: [{ follow: PulseFollow, post: PulsePost, replies: [PulseReply] }] }`; `getSeenMarker(viewerId, view)` → ISO time or null. They use the feed's own read rules, carry no distance and no media, and never move a marker (PB) |
 | S14 | `GET /api/pulse/posts/:id` fills `plan`; `POST /api/pulse/posts/:id/plan` creates a Plan through the existing Plans services with `Plan.source_post_id` (PB) |
 | S15 | `GET /api/public/pulse/areas`, `GET /api/public/pulse/feed?area=`, `GET /api/public/pulse/posts/:id` (public posts only; no distance, no street, first name and label) (PC with PB) |
@@ -291,7 +389,7 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 
 | Table | Change |
 |---|---|
-| `Post` | `read_scope text` (check: `public`, `verified_town`, `verified_area`), `area_id uuid` (FK `PulseArea`, after approval), `expires_at timestamptz`, `resolution text` (check, section 1), `claim_mode text default 'choose'`, `moderation_state text not null default 'live'`, `moderation_rule text`, `moderation_note text`, `moderated_at timestamptz`, `search_tsv tsvector` generated + GIN (R3). Widen `Post_post_type_check` with `share`, `offer`; widen `Post_topic_check` to the 12 topics (plus legacy `sports`); keep `state` in sync (`open` → `solved` when `answered`, `archived` otherwise) so older clients still read it. `expires_at`, `resolution`, `claim_mode` and the two new types are in `20261014070000_pulse_post_lifecycle.sql` (S7); legacy post rows (`/api/posts/feed`, saved, profile lists, `GET /api/posts/:id`) return the three columns as stored (`claim_mode` is on every row and means something only on an offer), and marking an Ask solved (`PATCH /api/posts/:id/solve`, `PATCH /api/posts/resolve/:id`) sets `resolution: answered` with `state: solved`. `moderation_state` (default `live`, check `live`/`held`/`removed`), `moderation_rule`, `moderation_note` and `moderated_at` are in `20261014090000_pulse_post_moderation_state.sql` (S11, PB's half); nothing writes `held` or `removed` until PS's moderation actions (S11) and S8's held sale posts |
+| `Post` | `read_scope text` (check: `public`, `verified_town`, `verified_area`), `area_id uuid` (FK `PulseArea`, after approval), `expires_at timestamptz`, `resolution text` (check, section 1), `claim_mode text default 'choose'`, `moderation_state text not null default 'live'`, `moderation_rule text`, `moderation_note text`, `moderated_at timestamptz`, search over title and text (R3: an expression GIN index on `to_tsvector('english', coalesce(title,'') || ' ' || coalesce(content,''))`, not a stored column, so `Post` is not rewritten), `right_now_event_id uuid null` (FK `RightNowEvent`, S12; a Heads-up tagged to an event). Widen `Post_post_type_check` with `share`, `offer`; widen `Post_topic_check` to the 12 topics (plus legacy `sports`); keep `state` in sync (`open` → `solved` when `answered`, `archived` otherwise) so older clients still read it. `expires_at`, `resolution`, `claim_mode` and the two new types are in `20261014070000_pulse_post_lifecycle.sql` (S7); legacy post rows (`/api/posts/feed`, saved, profile lists, `GET /api/posts/:id`) return the three columns as stored (`claim_mode` is on every row and means something only on an offer), and marking an Ask solved (`PATCH /api/posts/:id/solve`, `PATCH /api/posts/resolve/:id`) sets `resolution: answered` with `state: solved`. `moderation_state` (default `live`, check `live`/`held`/`removed`), `moderation_rule`, `moderation_note` and `moderated_at` are in `20261014090000_pulse_post_moderation_state.sql` (S11, PB's half); nothing writes `held` or `removed` until PS's moderation actions (S11) and S8's held sale posts |
 | `PostComment` | `helpful_at timestamptz`, `helpful_by uuid`, `moderation_state text not null default 'live'`, `moderation_rule text`. Account deletion must leave a "Reply removed" row instead of cascading (change `user_id` to nullable with `ON DELETE SET NULL`, and soft-delete the text). `moderation_state` (check `live`/`held`/`removed`) and `moderation_rule` are in `20261014091000_pulse_comment_moderation_state.sql` (S11, PB's half, part 2) |
 | `PostReport` | `comment_id uuid null` (foreign key to `PostComment`, deleted with it): a report about one reply of the post (S9, 2.7). Post reports leave it null |
 | `PostMute` | `area_id uuid null` (the `topic` entity type already exists); its unique index includes `area_id`. Added with `Post_topic_check`'s widening in `20261014031000_pulse_topics.sql` (S4); the foreign key to `PulseArea` comes with that table |
@@ -315,10 +413,10 @@ Both answer `404 POST_NOT_FOUND`, `403 NOT_POST_AUTHOR` (not the asker), `400 NO
 | 2 | `PulseFollow` | PB | `user_id`, `target_type`, `target_id text`, `area_id`, `notify`, `ends_on_resolve`, `until_at`; unique per user, target and area |
 | 3 | `CommentThanks` | PB | `comment_id`, `from_user_id`, `to_user_id`; unique per comment and thanker |
 | 4 | `OfferClaim` | PB | `post_id`, `claimer_id`, `status` (`requested`, `chosen`, `declined`, `gone`), `note`; unique per post and claimer |
-| 5 | `KnownEntry` | PB | The same table the Pantopus Agent system design plans (`docs/product/pantopus-agent-system-design-2026-10-04.md`: `area`, `topic`, `question`, `answer`, `sources jsonb`, `status`, `last_confirmed_at`, `review_by`, `created_by`, generated full-text column) plus `kind` (`official` or `neighbor`) and `source_post_ids uuid[]`. One table for both products |
-| 6 | `KnownConfirmation` | PB | `entry_id`, `user_id`, `kind` (`confirm`, `correct`, `outdated`), `note` |
-| 7 | `RightNowEvent` | PB | `area_id`, `kind`, `title`, official source label, url and text, `status`, `origin` (`official` or `neighbors`), `started_at`, `resolved_at` |
-| 8 | `RightNowReport` | PB | `event_id`, `user_id`, `kind` (`me_too`, `its_back`), `home_id` |
+| 5 | `KnownEntry` | PB | The same table the Pantopus Agent system design plans (`docs/product/pantopus-agent-system-design-2026-10-04.md`: `area`, `topic`, `question`, `answer`, `sources jsonb`, `status`, `last_confirmed_at`, `review_by`, `created_by`, generated full-text column) plus `kind` (`official` or `neighbor`) and `source_post_ids uuid[]`. One table for both products. Final columns (S12): `id`, `area_id` (FK `PulseArea`), `topic`, `kind`, `question` (the title), `answer`, `items jsonb` (recommendations: name and the post or reply that recommended it), `sources jsonb` (official links and conversation post ids), `source_post_ids uuid[]` (GIN), `status` (`draft`, `published`, `stale`, `retired`), `last_confirmed_at`, `review_by`, `asked_post_id`, `asked_at`, `created_by`, `published_by`, `created_at`, `updated_at`, a generated `search tsvector` (GIN) |
+| 6 | `KnownConfirmation` | PB | `entry_id`, `user_id`, `kind` (`confirm`, `correct`, `outdated`), `note`. Final columns (S12): plus `id`, `home_id` (the verified home it counted for), `created_at`, `resolved_at` and `resolved_by` (staff closing a correction) |
+| 7 | `RightNowEvent` | PB | `area_id`, `kind`, `title`, official source label, url and text, `status`, `origin` (`official` or `neighbors`), `started_at`, `resolved_at`. Final columns (S12): `id`, `area_id`, `kind` (2.16; no crime kind exists), `title`, `origin`, `status` (`active`, `ended`), `official_source_label`, `official_source_url`, `official_text`, `official_updated_at`, `started_at`, `resolved_at`, `end_reason` (`cleared`, `its_back`, `quiet`), `last_activity_at`, `created_by`, `updated_at` |
+| 8 | `RightNowReport` | PB | `event_id`, `user_id`, `kind` (`me_too`, `its_back`), `home_id`. Final columns (S12): plus `id`, `created_at`, `updated_at`; one row per event and person |
 | 9 | `ModerationAction` | PS | `target_type`, `target_id`, `action` (`hold`, `remove`, `restore`, `warn`, `slow_mode`, `ban`, `unban`), `rule_code`, `reason_text`, `actor_id` (null = system), `expires_at`, `report_id` |
 | 10 | `ModerationAppeal` | PS | `action_id`, `user_id`, `message`, `status`, `decided_by`, `decided_at` |
 | 11 | `DigestDelivery` | PC | `user_id`, `kind` (`daily`, `weekly_street`), `period_start`, `sent_at`, `channel`, `item_count`; unique per user, kind and period |
@@ -397,6 +495,13 @@ Labels use the author's **primary** home, as posting and limits do. A second ver
 | 400 | `PULSE_FIELD_LOCKED` | An edit that would change a Pulse post's type, point or audience (2.5) |
 | 404 | `REPLY_NOT_FOUND` | A reply action (Helpful, Thanks, report) on a reply the person can't read (2.7) |
 | 400 | `OWN_REPLY` | Thanking or reporting your own reply (2.7) |
+| 404 | `KNOWN_NOT_FOUND` | A Known entry that doesn't exist, is a draft or retired, or is in an area the reader can't open (2.14) |
+| 400 | `NOTE_REQUIRED` | A Known correction without a note, or a note over 500 characters (2.14) |
+| 404 | `RIGHT_NOW_NOT_FOUND` | A Right now event that doesn't exist or isn't in an area the reader can open (2.16) |
+| 409 | `RIGHT_NOW_ENDED` | A report on, or an update to, an event that has ended (2.16) |
+| 403 | `NOT_OFFICIAL` | Starting, updating or clearing a Right now event without an Official or curator account (2.16) |
+| 400 | `INVALID_RIGHT_NOW` | A Right now kind outside 2.16, or a missing title, text or source (2.16) |
+| 400 | `INVALID_SEARCH` | A search shorter than 2 or longer than 80 characters (2.17) |
 
 ## 9. Funnel events
 
