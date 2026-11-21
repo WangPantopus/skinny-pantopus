@@ -139,7 +139,7 @@ internal object CardTravelPostmarks {
         if (more > 0) drawMore(canvas, more, width, height, paints)
     }
 
-    /** "+ 4 more towns", bottom right in CHRISTMAS CARD's gold and letters, on its line. */
+    /** "+ 4 MORE TOWNS", bottom right in CHRISTMAS CARD's gold and capitals, on its line (as the web and iPhone set it). */
     private fun drawMore(
         canvas: Canvas,
         more: Int,
@@ -157,7 +157,7 @@ internal object CardTravelPostmarks {
         paint.textAlign = Paint.Align.RIGHT
         paint.color = PantopusColors.tableGold.toArgb()
         val baseline = height * (1f - 0.054f) - size * 0.2f
-        canvas.drawText(moreTowns(more), width * (1f - 0.068f) + size * 0.1f, baseline, paint)
+        canvas.drawText(moreTowns(more).uppercase(Locale.US), width * (1f - 0.068f) + size * 0.1f, baseline, paint)
         paint.textAlign = Paint.Align.LEFT
     }
 
