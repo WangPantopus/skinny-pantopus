@@ -295,67 +295,67 @@ internal object TravelPostmarks {
 
     /** The drawing's own ink before it's inked: solid, so the grain alone sets how much shows. */
     private const val INK = -0x1000000
+}
 
-    /** The grain's tile, in units. */
-    private const val GRAIN = 128
+/** The grain's tile, in units. */
+private const val GRAIN = 128
 
-    /**
-     * Soft noise like the sample's `feTurbulence` (base frequency 0.3, three octaves), wrapping at the tile's edges,
-     * turned into ink: solid where the noise is low, thinning and then gone where it's high (alpha = 2.75 − 3.2 n).
-     */
-    private fun makeGrain(): Bitmap {
-        val pixels = IntArray(GRAIN * GRAIN)
-        val cells = intArrayOf(32, 64, 128)
-        val weights = floatArrayOf(1f, 0.5f, 0.25f)
-        val total = weights.sum()
-        for (y in 0 until GRAIN) {
-            for (x in 0 until GRAIN) {
-                var n = 0f
-                for (o in cells.indices) {
-                    n += weights[o] * valueNoise(x, y, cells[o], o)
-                }
-                val level = (2.75f - 3.2f * (0.5f + (n / total - 0.5f) * GRAIN_SPREAD)).coerceIn(0f, 1f)
-                pixels[y * GRAIN + x] = ((level * 255f).roundToInt() shl 24) or 0xFFFFFF
+/**
+ * Soft noise like the sample's `feTurbulence` (base frequency 0.3, three octaves), wrapping at the tile's edges,
+ * turned into ink: solid where the noise is low, thinning and then gone where it's high (alpha = 2.75 − 3.2 n).
+ */
+private fun makeGrain(): Bitmap {
+    val pixels = IntArray(GRAIN * GRAIN)
+    val cells = intArrayOf(32, 64, 128)
+    val weights = floatArrayOf(1f, 0.5f, 0.25f)
+    val total = weights.sum()
+    for (y in 0 until GRAIN) {
+        for (x in 0 until GRAIN) {
+            var n = 0f
+            for (o in cells.indices) {
+                n += weights[o] * valueNoise(x, y, cells[o], o)
             }
+            val level = (2.75f - 3.2f * (0.5f + (n / total - 0.5f) * GRAIN_SPREAD)).coerceIn(0f, 1f)
+            pixels[y * GRAIN + x] = ((level * 255f).roundToInt() shl 24) or 0xFFFFFF
         }
-        return Bitmap.createBitmap(pixels, GRAIN, GRAIN, Bitmap.Config.ARGB_8888)
     }
+    return Bitmap.createBitmap(pixels, GRAIN, GRAIN, Bitmap.Config.ARGB_8888)
+}
 
-    /** How widely the noise strays from its middle: close to the sample's, so every day and year still reads. */
-    private const val GRAIN_SPREAD = 0.95f
+/** How widely the noise strays from its middle: close to the sample's, so every day and year still reads. */
+private const val GRAIN_SPREAD = 0.95f
 
-    private fun valueNoise(
-        x: Int,
-        y: Int,
-        cells: Int,
-        octave: Int,
-    ): Float {
-        val span = GRAIN.toFloat() / cells
-        val fx = x / span
-        val fy = y / span
-        val x0 = fx.toInt()
-        val y0 = fy.toInt()
-        val tx = smooth(fx - x0)
-        val ty = smooth(fy - y0)
-        val a = lattice(x0 % cells, y0 % cells, octave)
-        val b = lattice((x0 + 1) % cells, y0 % cells, octave)
-        val c = lattice(x0 % cells, (y0 + 1) % cells, octave)
-        val d = lattice((x0 + 1) % cells, (y0 + 1) % cells, octave)
-        val top = a + (b - a) * tx
-        val bottom = c + (d - c) * tx
-        return top + (bottom - top) * ty
-    }
+private fun valueNoise(
+    x: Int,
+    y: Int,
+    cells: Int,
+    octave: Int,
+): Float {
+    val span = GRAIN.toFloat() / cells
+    val fx = x / span
+    val fy = y / span
+    val x0 = fx.toInt()
+    val y0 = fy.toInt()
+    val tx = smooth(fx - x0)
+    val ty = smooth(fy - y0)
+    val a = lattice(x0 % cells, y0 % cells, octave)
+    val b = lattice((x0 + 1) % cells, y0 % cells, octave)
+    val c = lattice(x0 % cells, (y0 + 1) % cells, octave)
+    val d = lattice((x0 + 1) % cells, (y0 + 1) % cells, octave)
+    val top = a + (b - a) * tx
+    val bottom = c + (d - c) * tx
+    return top + (bottom - top) * ty
+}
 
-    private fun smooth(t: Float): Float = t * t * (3f - 2f * t)
+private fun smooth(t: Float): Float = t * t * (3f - 2f * t)
 
-    private fun lattice(
-        i: Int,
-        j: Int,
-        octave: Int,
-    ): Float {
-        var h = i * 374_761_393 + j * 668_265_263 + octave * 1_274_126_177
-        h = (h xor (h ushr 13)) * 1_274_126_177
-        h = h xor (h ushr 16)
-        return (h and 0xFFFF) / 65_535f
-    }
+private fun lattice(
+    i: Int,
+    j: Int,
+    octave: Int,
+): Float {
+    var h = i * 374_761_393 + j * 668_265_263 + octave * 1_274_126_177
+    h = (h xor (h ushr 13)) * 1_274_126_177
+    h = h xor (h ushr 16)
+    return (h and 0xFFFF) / 65_535f
 }

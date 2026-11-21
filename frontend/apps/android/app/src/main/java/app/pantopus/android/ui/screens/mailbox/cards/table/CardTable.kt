@@ -55,6 +55,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -459,11 +460,7 @@ private fun rememberTableGeometry(
             val wordsWidth = Constraints(maxWidth = (width - 48.dp.roundToPx()).coerceAtLeast(1))
             val longestWords = if (card.sealed) "It opens Christmas morning, in 56 days." else "A Christmas card from ${card.fromFirst}."
             val wordsHeight = measurer.measure(longestWords, tableWordsStyle, constraints = wordsWidth).size.height
-            // A travelling card's line under the words: "It came 2,692 miles through 4 towns to reach you." (Part 3).
-            val cameHeight =
-                card.travel?.cameLine?.takeIf { card.travels }?.let { line ->
-                    measurer.measure(line, tableCameStyle, constraints = wordsWidth).size.height + CAME_GAP.roundToPx()
-                } ?: 0
+            val cameHeight = cameLineHeight(card, measurer, wordsWidth)
             val wordsBottom = safeTop + 54.dp.toPx() + wordsHeight + cameHeight + 8.dp.toPx()
             // Sending, the words ("For Hazel.", or why the seal didn't take) show over the open flap: start below them.
             val sendingWords =
@@ -481,6 +478,16 @@ private fun rememberTableGeometry(
             )
         }
     }
+}
+
+/** A travelling card's line under the words, "It came 2,692 miles through 4 towns to reach you." (Part 3): its height. */
+private fun Density.cameLineHeight(
+    card: CardOnTable,
+    measurer: TextMeasurer,
+    width: Constraints,
+): Int {
+    val line = card.travel?.cameLine?.takeIf { card.travels } ?: return 0
+    return measurer.measure(line, tableCameStyle, constraints = width).size.height + CAME_GAP.roundToPx()
 }
 
 /** How far the card's lowest edge can move: the light moves it 5.5 dp, and its 1° turn lowers a corner about 3.5. */
