@@ -23,7 +23,7 @@ object PublicProfileSampleData {
                     avatarUrl = null,
                     isVerified = true,
                     identity = NeighborIdentity.Personal,
-                    kicker = "Neighbor since 2022",
+                    kicker = "On Pantopus since 2022",
                 ),
             stats =
                 listOf(
@@ -151,7 +151,7 @@ object PublicProfileSampleData {
                     title = "Be the welcome wagon",
                     body =
                         "Sasha just moved in. A quick “hi, welcome to the block” goes a long way — " +
-                            "and first messages from verified neighbors travel fast.",
+                            "and first messages from verified homes travel fast.",
                 ),
             isNewNeighbor = true,
             primaryCtaLabel = "Say hi",

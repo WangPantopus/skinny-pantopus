@@ -500,7 +500,7 @@ private fun PolicySheetContent(
         }
         SheetInfoNote(
             icon = PantopusIcon.Info,
-            text = "Most neighbors pick Moderate — it protects you without scaring off bidders.",
+            text = "Most people pick Moderate — it protects you without scaring off bidders.",
             tint = PantopusColors.primary700,
             container = PantopusColors.primary50,
         )
@@ -652,7 +652,7 @@ private fun TagsSheetContent(
     PickerSheetScaffold(
         rootTestTag = "gigPicker.tagsSheet",
         title = "Tags",
-        subtitle = "Help the right neighbors find this gig.",
+        subtitle = "Help the right people find this gig.",
         applyLabel = applyLabel,
         applyTestTag = "gigPicker.tagsApply",
         onApply = vm::dismissPicker,

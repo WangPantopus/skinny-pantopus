@@ -263,7 +263,7 @@ object MailPieceMapper {
         val spokenSender =
             when (sender) {
                 MailSender.Pantopus -> null
-                MailSender.Neighbor -> if (row.card != null) "a Pantopus neighbor" else "a Pantopus neighbor at a verified address"
+                MailSender.Neighbor -> if (row.card != null) "a Pantopus member" else "a Pantopus member at a verified address"
                 MailSender.PantopusBusiness -> "a business on Pantopus"
                 else -> sender.line.lowercase(Locale.US)
             }

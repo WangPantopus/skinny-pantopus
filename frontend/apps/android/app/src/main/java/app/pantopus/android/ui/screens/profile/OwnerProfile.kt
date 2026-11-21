@@ -267,12 +267,12 @@ internal fun OwnerTips(
                             "One line about you, in bold under your name. Only you see this tip.",
                         )
                     OwnerTip.Skills ->
-                        Triple(PantopusIcon.Hand, "Add what you help with", "Neighbors look for help nearby. Only you see this tip.")
+                        Triple(PantopusIcon.Hand, "Add what you help with", "People look for help nearby. Only you see this tip.")
                     OwnerTip.Prompt ->
                         Triple(
                             PantopusIcon.MessageCircle,
                             "Answer a prompt",
-                            "Give neighbors an easy way to start talking. Only you see this tip.",
+                            "Give people an easy way to start talking. Only you see this tip.",
                         )
                     OwnerTip.Pin ->
                         Triple(PantopusIcon.Pin, "Pin a post", "Show up to 3 posts first on your profile. Only you see this tip.")
@@ -388,7 +388,7 @@ internal fun OwnerAccountSection(
                 AboutDivider()
                 AccountRow(
                     PantopusIcon.UserPlus,
-                    "Invite neighbors",
+                    "Invite people",
                     extras.invite?.totalConverted?.takeIf { it > 0 }?.let { "$it joined" },
                     onOpenInvite,
                     "ownerRowInvite",
@@ -582,7 +582,7 @@ internal fun PostsForNeighborsCard(firstName: String) {
             PantopusIconImage(icon = PantopusIcon.Lock, contentDescription = null, size = 22.dp, tint = PantopusColors.appTextSecondary)
         }
         Text(
-            text = "Posts are for neighbors",
+            text = "Posts are for people on Pantopus",
             fontSize = 17.sp,
             lineHeight = 22.sp,
             fontWeight = FontWeight.SemiBold,

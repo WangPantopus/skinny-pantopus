@@ -57,7 +57,7 @@ object MemorySampleData {
                     MemoryFact(
                         kind = MemoryFact.Kind.Others,
                         label = "Others on the thread",
-                        value = "6 neighbors helped search",
+                        value = "6 people helped search",
                     ),
                 ),
             elfFresh =

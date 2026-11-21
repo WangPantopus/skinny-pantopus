@@ -495,7 +495,7 @@ private fun MyBusinessesEmpty(
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            "Set up your business page so neighbors can learn about your services. Creating a page does not verify the business.",
+            "Set up your business page so people can learn about your services. Creating a page does not verify the business.",
             fontSize = 13.sp,
             color = PantopusColors.appTextSecondary,
             textAlign = TextAlign.Center,

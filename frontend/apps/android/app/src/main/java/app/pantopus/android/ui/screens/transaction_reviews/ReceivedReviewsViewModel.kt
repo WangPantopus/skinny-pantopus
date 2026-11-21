@@ -174,7 +174,7 @@ class ReceivedReviewsViewModel
                     return if (last != null) "$first $last" else first
                 }
                 MadeUpUsername.chosen(reviewer?.username)?.let { return it }
-                return "Neighbor"
+                return "Someone nearby"
             }
 
             fun initials(name: String): String {

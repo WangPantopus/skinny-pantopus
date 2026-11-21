@@ -44,7 +44,7 @@ fun NeighborsSeeYouRow(onOpen: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            Text(text = "How neighbors see you", style = PantopusTextStyle.h3, color = PantopusColors.appText)
+            Text(text = "How others see you", style = PantopusTextStyle.h3, color = PantopusColors.appText)
             Text(
                 text = "Your name and photo on your posts, comments, chats, tasks and notices. Change them in Edit profile.",
                 style = PantopusTextStyle.caption,

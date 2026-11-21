@@ -524,7 +524,7 @@ private fun GigOwnerBidRow(
                     if (identity?.resolvedVerified() == true) {
                         PantopusIconImage(
                             icon = PantopusIcon.ShieldCheck,
-                            contentDescription = "Verified neighbor",
+                            contentDescription = "Verified home",
                             size = 14.dp,
                             tint = PantopusColors.primary600,
                         )
@@ -1866,7 +1866,7 @@ private fun GigReviewSection(
                         tint = PantopusColors.success,
                     )
                     Text(
-                        text = "Reviewed — thanks for helping the neighborhood",
+                        text = "Reviewed — thanks for helping others",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.success,
@@ -2001,7 +2001,7 @@ private fun GigReviewSheetContent(
                 decorationBox = { inner ->
                     if (comment.isEmpty()) {
                         Text(
-                            text = "Anything the neighborhood should know? (optional)",
+                            text = "Anything others should know? (optional)",
                             style = PantopusTextStyle.body,
                             color = PantopusColors.appTextMuted,
                         )

@@ -187,7 +187,7 @@ class MailTaskListViewModelTest {
         model.confirmConvert()
         val state = model.state.value as MailTaskListUiState.Loaded
         assertTrue(state.active.first().isConvertedToGig)
-        assertTrue(model.toast.value?.contains("neighbor task") == true)
+        assertTrue(model.toast.value?.contains("posted as a task") == true)
     }
 
     @Test

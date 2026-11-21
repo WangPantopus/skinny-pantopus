@@ -743,7 +743,7 @@ internal fun profileFirstName(header: PublicProfileHeader): String =
         ?.removePrefix("@")
         ?.split(" ")
         ?.firstOrNull { it.isNotBlank() }
-        ?: "this neighbor"
+        ?: "this person"
 
 /**
  * T3 — render state for the plain Follow / Following control. A Beacon

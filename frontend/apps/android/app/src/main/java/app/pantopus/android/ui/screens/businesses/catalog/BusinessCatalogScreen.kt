@@ -266,7 +266,7 @@ private fun CatalogListFrame(
                             headline = "No catalog items yet",
                             subcopy =
                                 if (onAddItem != null) {
-                                    "Add the services or products you sell so neighbors can see " +
+                                    "Add the services or products you sell so people can see " +
                                         "what you offer and what it costs."
                                 } else {
                                     "This business hasn't listed anything yet."

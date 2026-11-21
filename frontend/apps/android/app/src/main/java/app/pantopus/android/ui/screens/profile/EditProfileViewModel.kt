@@ -441,20 +441,20 @@ class EditProfileViewModel
                 _toast.value = EditProfileToast("We couldn't read that photo. Try another one.", isError = true)
                 return
             }
-            changeNeighborPhoto("Neighbors now see your new photo") {
+            changeNeighborPhoto("Others now see your new photo") {
                 localProfiles.uploadPhoto(UploadFile(filename = filename, mimeType = mimeType, bytes = bytes))
             }
         }
 
         fun useAccountPhotoForNeighbors() {
             val url = _neighbors.value?.account?.avatarUrl ?: return
-            changeNeighborPhoto("Neighbors now see your account photo") {
+            changeNeighborPhoto("Others now see your account photo") {
                 localProfiles.update(LocalProfileUpdateRequest(photo = LocalProfileUpdateRequest.Photo.Url(url)))
             }
         }
 
         fun removeNeighborPhoto() {
-            changeNeighborPhoto("Neighbors now see your initials") {
+            changeNeighborPhoto("Others now see your initials") {
                 localProfiles.update(LocalProfileUpdateRequest(photo = LocalProfileUpdateRequest.Photo.None))
             }
         }
@@ -727,7 +727,7 @@ class EditProfileViewModel
                     seed(EditProfileField.NeighborName, result.data.profile.displayName)
                     null
                 }
-                is NetworkResult.Failure -> result.error.displayMessage("Couldn't save the name neighbors see.")
+                is NetworkResult.Failure -> result.error.displayMessage("Couldn't save the name others see.")
             }
         }
 
@@ -802,7 +802,7 @@ class EditProfileViewModel
             value(EditProfileField.City).takeIf { it.isNotEmpty() }?.let { lines += "City: $it" }
             if (_skills.value.isNotEmpty()) lines += "Skills: ${_skills.value.joinToString(", ")}"
             if (lines.isEmpty()) return ""
-            val instruction = "Write a short first-person profile bio (2-3 sentences) for this neighbor."
+            val instruction = "Write a short first-person profile bio (2-3 sentences) for this person."
             return (listOf(instruction) + lines).joinToString("\n").take(MAX_BIO_PROMPT_LENGTH)
         }
 
@@ -971,7 +971,7 @@ class EditProfileViewModel
                         FormValidator { value ->
                             val name = normalizedNeighborName(value)
                             when {
-                                name.isEmpty() -> "Enter the name neighbors should see."
+                                name.isEmpty() -> "Enter the name others should see."
                                 name.length > NEIGHBOR_NAME_LIMIT -> "Use 255 characters or fewer."
                                 else -> null
                             }

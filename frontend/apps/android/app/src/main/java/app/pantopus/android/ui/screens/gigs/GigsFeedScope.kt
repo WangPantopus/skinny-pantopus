@@ -44,7 +44,7 @@ enum class GigsFeedScope(
     val emptyBody: String
         get() =
             when (this) {
-                All -> "Be the first to post a task for your neighbors."
+                All -> "Be the first to post a task near you."
                 Tasks -> "Be the first to post one."
                 SupportTrains -> "Support Trains published near you will show up here."
             }

@@ -116,7 +116,7 @@ object PaymentsSampleData {
                             id = "payouts.stripe",
                             leadingBrand = PaymentMethodBrand.Stripe,
                             label = "Stripe Connect",
-                            subtext = "Receive payments from neighbors",
+                            subtext = "Receive payments from others",
                             trailing = PaymentsRowTrailing.CtaChip("Connect", PaymentsChipTone.Primary),
                         ),
                     payoutMethod =

@@ -320,7 +320,7 @@ private fun ShareSettingsCard(
     ) {
         BLToggleRow(
             label = "Show on my profile",
-            sub = "Neighbors see a Book button on your page.",
+            sub = "People see a Book button on your page.",
             icon = PantopusIcon.UserRound,
             on = showOnProfile,
             onToggle = onToggleProfile,

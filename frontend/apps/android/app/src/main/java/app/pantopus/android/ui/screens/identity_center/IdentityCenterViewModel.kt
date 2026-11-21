@@ -112,13 +112,13 @@ class IdentityCenterViewModel
                             IdentityBridgeRow(
                                 id = "showPublicOnLocal",
                                 label = "Show my Public profile on my Local Profile",
-                                subtext = "Neighbors can find your Public profile from your Local Profile.",
+                                subtext = "Others can find your Public profile from your Local Profile.",
                                 isOn = response.bridges?.showPersonaOnLocal ?: false,
                             ),
                             IdentityBridgeRow(
                                 id = "showLocalOnPublic",
                                 label = "Show my Local Profile on my Public profile",
-                                subtext = "Followers can see your neighbor name and home if they tap through.",
+                                subtext = "Followers can see your Local Profile name and home if they tap through.",
                                 isOn = response.bridges?.showLocalOnPersona ?: false,
                             ),
                         )
@@ -182,8 +182,8 @@ class IdentityCenterViewModel
                         id = "local",
                         kind = IdentityKind.Local,
                         overline = "Local Profile",
-                        name = "Set up your neighbor identity",
-                        summary = "Local Profile lets verified neighbors find you in posts, gigs, and marketplace.",
+                        name = "Set up your Local Profile",
+                        summary = "Local Profile lets people with a verified home find you in posts, gigs, and marketplace.",
                         status = IdentityStatus.SetupNeeded(cta = "Set up"),
                     )
                 }
@@ -194,7 +194,7 @@ class IdentityCenterViewModel
                     buildString {
                         append("$posts ${if (posts == 1) "post" else "posts"}")
                         append(" · $connections ${if (connections == 1) "connection" else "connections"}")
-                        if (verified) append(" · Verified neighbor")
+                        if (verified) append(" · Verified home")
                     }
                 return IdentityCardContent(
                     id = dto.id,
@@ -203,7 +203,7 @@ class IdentityCenterViewModel
                     name = dto.displayName ?: "Local Profile",
                     handle = dto.handle?.let { "/$it" },
                     stats = stats,
-                    summary = "For nearby posts, gigs, marketplace, and neighbors.",
+                    summary = "For nearby posts, gigs, marketplace, and people near you.",
                 )
             }
 

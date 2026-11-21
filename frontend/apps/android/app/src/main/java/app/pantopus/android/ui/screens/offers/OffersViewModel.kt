@@ -586,7 +586,7 @@ class OffersViewModel
                         icon = PantopusIcon.HandCoins,
                         headline = "No offers yet",
                         subcopy =
-                            "When a neighbor offers a price on one of your listings, " +
+                            "When someone offers a price on one of your listings, " +
                                 "it’ll land here. Listings with photos and a fair ask tend " +
                                 "to draw offers within a day.",
                         ctaTitle = "Post a task",

@@ -106,7 +106,7 @@ object HomeSettingsSampleData {
                         rows =
                             listOf(
                                 GroupedListRow("accessCodes", "Access codes", subtext = "2 active codes", control = RowControl.Chevron),
-                                GroupedListRow("privacy", "Privacy", subtext = "Verified neighbors only", control = RowControl.Chevron),
+                                GroupedListRow("privacy", "Privacy", subtext = "Verified homes only", control = RowControl.Chevron),
                             ),
                     ),
                     GroupedListGroup(

@@ -723,7 +723,7 @@ private fun RemovedPostNotice(modifier: Modifier = Modifier) {
                 color = PantopusColors.warning,
             )
             Text(
-                text = "Only you can see this post. Neighbors can't see it or reply.",
+                text = "Only you can see this post. Others can't see it or reply.",
                 fontSize = 13.sp,
                 color = PantopusColors.appText,
             )

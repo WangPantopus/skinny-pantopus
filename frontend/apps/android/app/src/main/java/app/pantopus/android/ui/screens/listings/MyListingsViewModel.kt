@@ -170,7 +170,7 @@ class MyListingsViewModel
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.Camera,
                         headline = "No active listings",
-                        subcopy = "Post your first item to start hearing from neighbors.",
+                        subcopy = "Post your first item to start hearing from people near you.",
                         ctaTitle = "List something",
                         onCta = onCompose,
                     )

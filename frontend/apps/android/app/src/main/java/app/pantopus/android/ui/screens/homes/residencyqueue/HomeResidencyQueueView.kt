@@ -53,7 +53,7 @@ fun HomeResidencyQueueView(
                     icon = PantopusIcon.CheckCheck,
                     headline = "No pending residency claims",
                     subcopy =
-                        "Neighbors asking to join this household will show up here " +
+                        "People asking to join this household will show up here " +
                             "with the role they requested.",
                     modifier = Modifier.weight(1f).testTag("homeClaimReview_residencyEmpty"),
                     tint = PantopusColors.successBg,

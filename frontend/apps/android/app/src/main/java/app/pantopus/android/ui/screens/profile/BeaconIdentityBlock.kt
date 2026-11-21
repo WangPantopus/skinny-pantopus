@@ -301,7 +301,7 @@ private fun BeaconNeighborChip() {
                 .clip(RoundedCornerShape(Radii.pill))
                 .background(PantopusColors.homeBg)
                 .padding(horizontal = 7.dp, vertical = 2.dp)
-                .semantics { contentDescription = "Verified neighbor" },
+                .semantics { contentDescription = "Verified home" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
@@ -312,7 +312,7 @@ private fun BeaconNeighborChip() {
             tint = PantopusColors.home,
         )
         Text(
-            text = "VERIFIED NEIGHBOR",
+            text = "VERIFIED HOME",
             fontSize = 9.5.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.home,

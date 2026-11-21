@@ -172,7 +172,7 @@ private fun defaultElfSummary(
     }
     val neighbors = community.attendeeCount
     val block = community.attendeesFromBlock ?: 0
-    var line = "$neighbors neighbor${if (neighbors == 1) "" else "s"} going"
+    var line = "$neighbors going"
     if (block > 0) line += " · $block from your block"
     community.event?.weatherSummary?.let { line += ". Weather: ${it.lowercase()}." }
     if (community.event?.weatherSummary == null) line += "."
@@ -185,7 +185,7 @@ private fun makeOpenBullets(community: CommunityDetailDto): List<AIElfBullet> {
         AIElfBullet(
             id = "neighbors",
             icon = PantopusIcon.Users,
-            label = "${community.attendeeCount} neighbors going",
+            label = "${community.attendeeCount} going",
             text = community.attendeesFromBlock?.let { "$it from your block" },
         ),
     )
@@ -1109,7 +1109,7 @@ private fun CommunityBodyCard(
                     color = PantopusColors.appText,
                 )
                 Text(
-                    text = "posted by neighbor",
+                    text = "posted by someone nearby",
                     fontSize = 10.5.sp,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -1288,7 +1288,7 @@ private fun CommunitySenderCard(
                         tint = PantopusColors.success,
                     )
                     Text(
-                        text = "Verified neighbor",
+                        text = "Verified home",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = PantopusColors.success,

@@ -2473,7 +2473,7 @@ class GigDetailViewModel
             ): ContentDetailCounterparty? {
                 val posterId = gig.userId?.takeIf { it.isNotEmpty() } ?: return null
                 val creator = gig.posterIdentity()
-                val name = creator?.resolvedDisplayName() ?: "Neighbor"
+                val name = creator?.resolvedDisplayName() ?: "Someone nearby"
                 val handle = creator?.resolvedHandle()?.let { "@$it" }
                 val showsButton = viewerUserId?.let { it != posterId } ?: true
                 return ContentDetailCounterparty(
@@ -2921,7 +2921,7 @@ class GigDetailViewModel
              */
             internal fun bidderTrustLine(bidder: GigCreator?): String? {
                 if (bidder == null) return null
-                if (bidder.resolvedVerified()) return "Verified neighbor"
+                if (bidder.resolvedVerified()) return "Verified home"
                 val rating = bidder.averageRating?.takeIf { it > 0 } ?: return null
                 val base = String.format(Locale.US, "%.1f", rating)
                 val jobs = bidder.gigsCompleted?.takeIf { it > 0 } ?: return base

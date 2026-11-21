@@ -231,7 +231,7 @@ private fun VerifiedNeighborChip() {
                 .clip(RoundedCornerShape(Radii.pill))
                 .background(PantopusColors.homeBg)
                 .padding(horizontal = Spacing.s2, vertical = Spacing.s1)
-                .semantics { contentDescription = "Verified neighbor" },
+                .semantics { contentDescription = "Verified home" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
@@ -242,7 +242,7 @@ private fun VerifiedNeighborChip() {
             tint = PantopusColors.home,
         )
         Text(
-            text = "VERIFIED NEIGHBOR",
+            text = "VERIFIED HOME",
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.home,

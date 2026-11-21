@@ -808,7 +808,7 @@ internal fun LocalProfilePosts(
                 LocalPostsEmpty(
                     icon = PantopusIcon.Leaf,
                     headline = "No posts yet",
-                    body = "What you post on Pulse shows up here for neighbors.",
+                    body = "What you post on Pulse shows up here for others.",
                     tag = "publicProfilePostsEmpty",
                 )
             joinedRecently ->
@@ -1022,7 +1022,7 @@ private fun verifiedRows(
     listOfNotNull(
         AboutRowSpec(
             icon = PantopusIcon.ShieldCheck,
-            title = trust.city?.let { "Lives in $it" } ?: "Verified neighbor",
+            title = trust.city?.let { "Lives in $it" } ?: "Verified home",
             subtitle = "Pantopus confirmed $firstName's home. The address itself is never shown.",
             iconTint = PantopusColors.home,
             iconBg = PantopusColors.homeBg,

@@ -446,7 +446,7 @@ private fun OwnerSections(
         OwnerEmptyBlock(
             icon = PantopusIcon.FileText,
             addTitle = "Add a description",
-            addBody = "Tell neighbors what makes your business worth hiring.",
+            addBody = "Tell people what makes your business worth hiring.",
             readOnlyTitle = "No description yet",
             readOnlyBody = "This business hasn't added a description.",
             onAdd = onEditPage.takeIf { canEditProfile },
@@ -466,7 +466,7 @@ private fun OwnerSections(
         OwnerEmptyBlock(
             icon = PantopusIcon.Clock,
             addTitle = "Set your hours",
-            addBody = "Add opening hours so neighbors know when you're available.",
+            addBody = "Add opening hours so people know when you're available.",
             readOnlyTitle = "No hours to show",
             readOnlyBody = "Opening hours appear here once they're set.",
             onAdd = onEditPage.takeIf { canEditHours },
@@ -486,7 +486,7 @@ private fun OwnerSections(
         OwnerEmptyBlock(
             icon = PantopusIcon.MapPin,
             addTitle = "Add a service area",
-            addBody = "Show neighbors where you work.",
+            addBody = "Show people where you work.",
             readOnlyTitle = "No service area yet",
             readOnlyBody = "This business hasn't added where it works.",
             onAdd = onEditPage.takeIf { canEditLocation },

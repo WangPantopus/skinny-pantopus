@@ -171,7 +171,7 @@ internal fun BusinessCatalogItemEditor(
                 )
                 ToggleRow(
                     title = "Save as draft",
-                    subtitle = "Drafts stay hidden from neighbors until you switch them to active.",
+                    subtitle = "Drafts stay hidden from others until you switch them to active.",
                     checked = draft.isDraft,
                     onToggle = { draft = draft.copy(isDraft = it) },
                     testTag = "businessCatalog.editor.draft",

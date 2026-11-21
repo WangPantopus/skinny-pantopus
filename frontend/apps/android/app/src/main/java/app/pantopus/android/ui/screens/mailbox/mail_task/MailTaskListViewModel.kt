@@ -388,7 +388,7 @@ class MailTaskListViewModel
                         is NetworkResult.Success -> {
                             markConverted(row.id)
                             val title = result.data.title ?: row.title
-                            _toast.value = "“$title” posted as a neighbor task"
+                            _toast.value = "“$title” posted as a task"
                         }
                         is NetworkResult.Failure ->
                             _alert.value = MailTaskListAlert("Error", "Could not convert to gig.")

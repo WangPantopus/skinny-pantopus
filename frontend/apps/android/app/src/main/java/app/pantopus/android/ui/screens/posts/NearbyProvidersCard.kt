@@ -77,7 +77,7 @@ object NearbyProviderFormat {
 
     fun neighborLabel(count: Int?): String? {
         if (count == null || count <= 0) return null
-        return "$count neighbor${if (count == 1) "" else "s"}"
+        return "$count near you"
     }
 
     /**
@@ -154,7 +154,7 @@ fun NearbyProvidersCard(
         if (showsTooltip) {
             Text(
                 text =
-                    "These providers are matched based on proximity, neighbor trust, " +
+                    "These providers are matched based on proximity, trust from people near you, " +
                         "and ratings — never paid placement.",
                 fontSize = 12.sp,
                 color = PantopusColors.appTextSecondary,

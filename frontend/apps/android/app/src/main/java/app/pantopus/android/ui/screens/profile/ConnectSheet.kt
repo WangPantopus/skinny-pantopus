@@ -224,7 +224,7 @@ private fun NoteField(
             decorationBox = { inner ->
                 if (value.isEmpty()) {
                     Text(
-                        text = "Hi $firstName, I'm a neighbor nearby. Would love to connect!",
+                        text = "Hi $firstName, I live nearby. Would love to connect!",
                         fontSize = 16.sp,
                         lineHeight = 22.sp,
                         color = PantopusColors.appTextMuted,

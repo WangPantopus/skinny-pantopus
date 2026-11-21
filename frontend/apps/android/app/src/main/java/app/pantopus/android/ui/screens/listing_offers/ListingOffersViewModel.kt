@@ -815,7 +815,7 @@ class ListingOffersViewModel
                 headline = "No offers on this listing yet",
                 subcopy =
                     "Most listings draw their first offer within 24 hours. Share it " +
-                        "with a few neighborhoods to speed things up.",
+                        "more widely to speed things up.",
                 ctaTitle = "Share listing",
                 onCta = { shareHandler() },
             )

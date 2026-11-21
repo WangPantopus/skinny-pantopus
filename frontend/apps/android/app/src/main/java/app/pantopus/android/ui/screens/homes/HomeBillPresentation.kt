@@ -91,9 +91,9 @@ internal object HomeBillPresentation {
         val neighbors = benchmark.avgAmounts[index]
         val label = amount(neighbors, currency)
         return when {
-            mine > neighbors -> "$period · Above the $label neighborhood average"
-            mine < neighbors -> "$period · Below the $label neighborhood average"
-            else -> "$period · In line with the $label neighborhood average"
+            mine > neighbors -> "$period · Above the $label nearby average"
+            mine < neighbors -> "$period · Below the $label nearby average"
+            else -> "$period · In line with the $label nearby average"
         }
     }
 }

@@ -420,7 +420,7 @@ class MyBidsViewModel
                         icon = PantopusIcon.Gavel,
                         headline = "You haven’t bid on any tasks yet",
                         subcopy =
-                            "Neighbors post small jobs here all the time — moves, " +
+                            "People near you post small jobs here all the time — moves, " +
                                 "mounts, dog walks, repairs. Place a bid and they’ll " +
                                 "get back to you within a day or two.",
                         ctaTitle = "Browse tasks",

@@ -365,7 +365,7 @@ private fun AssemblyGigCard(
             color = PantopusColors.appTextStrong,
         )
         Text(
-            text = "Post a task and a Verified Neighbor will help. Package details are pre-filled.",
+            text = "Post a task and someone with a verified home will help. Package details are pre-filled.",
             fontSize = 12.sp,
             color = PantopusColors.appTextSecondary,
         )

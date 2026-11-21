@@ -58,8 +58,8 @@ enum class ListingComposeCategory(
     Goods("goods", "Goods", "Sell something you own."),
     Rentals("rentals", "Rentals", "Rent something out by the day or week."),
     Vehicles("vehicles", "Vehicles", "Cars, bikes, scooters, trailers."),
-    Free("free", "Free", "Give something away to a neighbor."),
-    Wanted("wanted", "Wanted", "Ask the neighborhood for something."),
+    Free("free", "Free", "Give something away to someone nearby."),
+    Wanted("wanted", "Wanted", "Ask people near you for something."),
     ;
 
     /** Backend `layer`. Free + Wanted both map to `goods`. */
@@ -138,7 +138,7 @@ enum class ListingComposeFulfillment(
     val subtitle: String,
 ) {
     Pickup("pickup", "Pickup", "Buyer comes to you."),
-    Delivery("delivery", "Delivery", "You drop off within the neighborhood."),
+    Delivery("delivery", "Delivery", "You drop off nearby."),
     ;
 
     /** Maps onto the backend `meetup_preference` enum — only

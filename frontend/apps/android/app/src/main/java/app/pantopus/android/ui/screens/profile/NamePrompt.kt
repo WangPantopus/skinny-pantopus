@@ -181,7 +181,7 @@ fun NamePromptHost(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 Text(
-                    "Add your name so your household and neighbors know who you are.",
+                    "Add your name so your household and others know who you are.",
                     style = PantopusTextStyle.body,
                     color = PantopusColors.appTextSecondary,
                 )

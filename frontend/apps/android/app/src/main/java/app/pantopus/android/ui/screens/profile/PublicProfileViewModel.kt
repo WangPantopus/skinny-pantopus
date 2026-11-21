@@ -833,7 +833,7 @@ class PublicProfileViewModel
                         if (match == null) {
                             _connectState.value = PublicProfileActionState.Idle
                             reloadAfterConnectionChange()
-                            _toastMessage.value = "You're not connected to this neighbor."
+                            _toastMessage.value = "You're not connected to this person."
                             return@launch
                         }
                         when (val removed = connections.disconnect(match.id)) {
@@ -1579,5 +1579,5 @@ private fun neighborSince(
     val days = Duration.between(instant, Instant.now()).toDays()
     if (days < 14) return "Joined ${days.coerceAtLeast(0)} days ago"
     val year = instant.atZone(java.time.ZoneId.systemDefault()).year
-    return "Neighbor since $year"
+    return "On Pantopus since $year"
 }

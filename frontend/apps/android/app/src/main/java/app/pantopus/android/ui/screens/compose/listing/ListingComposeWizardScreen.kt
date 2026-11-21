@@ -1935,7 +1935,7 @@ private fun locationSummary(form: ListingComposeFormState): String {
 private fun SuccessStep() {
     SuccessHeroBlock(
         headline = "Your listing is live",
-        subcopy = "Neighbors can find it in Marketplace now. We'll notify you when an offer comes in.",
+        subcopy = "People near you can find it in Marketplace now. We'll notify you when an offer comes in.",
     )
 }
 

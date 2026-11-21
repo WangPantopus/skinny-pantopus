@@ -466,7 +466,7 @@ private fun SimilarOffersRail(offers: List<MailItemSampleData.SimilarOffer>) {
                     color = PantopusColors.appText,
                 )
                 Text(
-                    text = "From other verified neighbors and businesses",
+                    text = "From other verified homes and businesses",
                     fontSize = 11.sp,
                     color = PantopusColors.appTextSecondary,
                 )

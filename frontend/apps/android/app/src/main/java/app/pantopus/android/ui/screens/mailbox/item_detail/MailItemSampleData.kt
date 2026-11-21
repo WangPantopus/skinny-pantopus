@@ -175,12 +175,12 @@ object MailItemSampleData {
                     "https://example.com/pantopus/booklets/catalog/page-2.png",
                     "https://example.com/pantopus/booklets/catalog/page-3.png",
                 ),
-            summary = "Spring catalog with seasonal services, repair windows, and neighborhood-only pricing.",
+            summary = "Spring catalog with seasonal services, repair windows, and local-only pricing.",
             pageCount = 3,
             ocrTexts =
                 listOf(
-                    "SPRING CATALOG\nNeighborhood services & seasonal pricing\nValid through June 15",
-                    "GUTTER & ROOF\nSpring repair windows now booking\nNeighborhood-only pricing on inspections",
+                    "SPRING CATALOG\nLocal services & seasonal pricing\nValid through June 15",
+                    "GUTTER & ROOF\nSpring repair windows now booking\nLocal-only pricing on inspections",
                     "GARDEN & YARD\nWeekly and one-time visits\nBundle two services and save 10%",
                 ),
         )
@@ -755,7 +755,7 @@ object MailItemSampleData {
                     name = "Priya Ramanathan",
                     initials = "PR",
                     blurb = "Maple St · moved in last month",
-                    relationLabel = "Friend · neighbor",
+                    relationLabel = "Friend · lives nearby",
                     isVerified = true,
                 ),
             event =

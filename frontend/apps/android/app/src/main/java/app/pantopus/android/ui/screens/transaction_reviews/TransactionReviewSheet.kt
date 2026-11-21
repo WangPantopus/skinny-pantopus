@@ -242,9 +242,9 @@ private fun headerCopy(target: TransactionReviewSheetTarget): String {
     val name = target.reviewedName
     return if (!name.isNullOrEmpty()) {
         "How did your ${target.context.shortLabel.lowercase()} with $name go on " +
-            "${target.transactionTitle}? Your review helps the neighborhood."
+            "${target.transactionTitle}? Your review helps people near you."
     } else {
-        "How did this go on ${target.transactionTitle}? Your review helps the neighborhood."
+        "How did this go on ${target.transactionTitle}? Your review helps people near you."
     }
 }
 
@@ -395,7 +395,7 @@ private fun CommentField(
                 decorationBox = { inner ->
                     if (value.isEmpty()) {
                         Text(
-                            text = "Anything the neighborhood should know?",
+                            text = "Anything others should know?",
                             style = PantopusTextStyle.body,
                             color = PantopusColors.appTextMuted,
                         )
@@ -454,7 +454,7 @@ private fun SubmittedView(onClose: () -> Unit) {
             color = PantopusColors.appText,
         )
         Text(
-            text = "Thanks — your review helps neighbors trade with confidence.",
+            text = "Thanks — your review helps people trade with confidence.",
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,
         )

@@ -179,7 +179,7 @@ class SettingsViewModelsTest {
                     .first { it.id == "visibility" }
             assertEquals("Only you", row.subtext)
             assertEquals("Anyone", SettingsIndexViewModel.visibilitySubtext("public"))
-            assertEquals("Signed-in neighbors", SettingsIndexViewModel.visibilitySubtext("registered"))
+            assertEquals("Signed-in people", SettingsIndexViewModel.visibilitySubtext("registered"))
             assertNull(SettingsIndexViewModel.visibilitySubtext(null))
             assertNull(SettingsIndexViewModel.visibilitySubtext("something-new"))
         }

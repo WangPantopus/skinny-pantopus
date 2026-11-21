@@ -602,7 +602,7 @@ private fun ReviewsSection(
                 title = "No reviews yet",
                 body =
                     "Be the first to hire ${content.header.displayName}. Your review helps the next " +
-                        "neighbor decide.",
+                        "person decide.",
                 ctaLabel = "Hire to review",
                 ctaIcon = PantopusIcon.Pencil,
                 onCta = onContact,
@@ -711,7 +711,7 @@ private fun JustOpenedNote(
             Text(
                 text =
                     (if (isVerified) "This business is verified." else "This business is not verified.") +
-                        " Reviews and photos build up after the first few jobs — early neighbors set the tone.",
+                        " Reviews and photos build up after the first few jobs — early customers set the tone.",
                 color = PantopusColors.appTextStrong,
                 fontSize = 11.5.sp,
             )

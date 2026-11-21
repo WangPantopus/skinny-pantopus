@@ -83,7 +83,7 @@ enum class ViewerAudience(
 ) {
     Public("public", "Public", PantopusIcon.Globe, ViewerAudienceGroup.PersonaAudience),
     PersonaAudience("persona_audience", "Persona audience", PantopusIcon.Megaphone, ViewerAudienceGroup.PersonaAudience),
-    Neighbor("neighbor", "Neighbor", PantopusIcon.MapPin, ViewerAudienceGroup.PersonaAudience),
+    Neighbor("neighbor", "Someone nearby", PantopusIcon.MapPin, ViewerAudienceGroup.PersonaAudience),
     Connection("connection", "Connection", PantopusIcon.UserCheck, ViewerAudienceGroup.Personal),
     GigParticipant("gig_participant", "Gig participant", PantopusIcon.Briefcase, ViewerAudienceGroup.Personal),
     Household("household", "Household", PantopusIcon.Home, ViewerAudienceGroup.Home),

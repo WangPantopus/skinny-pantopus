@@ -3922,7 +3922,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
                         onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
-                        onInvite = { inviteShare.share(appContext, NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
+                        onInvite = { inviteShare.share(appContext, NEIGHBORHOOD_INVITE_MESSAGE, "Invite homes near you") },
                     )
                 }
                 composable(
@@ -6620,7 +6620,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                         appContext.composeEmail(
                                             subject = "Join Pantopus",
                                             body =
-                                                "I'd love to see your business on Pantopus — neighbors near " +
+                                                "I'd love to see your business on Pantopus — people near " +
                                                     "me are looking for trusted local pros. $link",
                                         )
                                     }
@@ -7693,7 +7693,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     if (!LaunchFeatures.mailbox) return@mailComposable LaunchCutPlaceholder("Mailbox", navController)
                     // Launch cut #4 (Open Gigs): hidden for the first launch.
-                    if (!LaunchFeatures.openGigs) return@mailComposable LaunchCutPlaceholder("Ask a neighbor", navController)
+                    if (!LaunchFeatures.openGigs) return@mailComposable LaunchCutPlaceholder("Ask for help nearby", navController)
                     // A17.8 → "Ask a Neighbor" — posts the package-help gig via
                     // `POST api/mailbox/v2/p2/package/:mailId/gig` and deep-links
                     // into the created gig, matching RN `mailbox/gig.tsx`.
@@ -7710,7 +7710,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onHelp = { navController.navigate(ChildRoutes.SETTINGS_HELP) },
                         onCashOut = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
                         onBrowseTasks = { navController.navigate(ChildRoutes.GIGS_FEED) },
-                        onReferNeighbor = { navController.navigate(ChildRoutes.placeholder("Refer a neighbor")) },
+                        onReferNeighbor = { navController.navigate(ChildRoutes.placeholder("Refer someone")) },
                         onOfferService = { navController.navigate(ChildRoutes.PROFESSIONAL_PROFILE) },
                         onManagePayout = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
                         onAddBank = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
@@ -8437,7 +8437,7 @@ private fun PlaceDashboardDestination(
         onComposeMessage = { address -> navController.navigate(ChildRoutes.neighborCompose(homeId, address)) },
         onOpenInbox = { navController.navigate(ChildRoutes.NEIGHBOR_INBOX) },
         onOpenVerifiedHomes = { navController.navigate(ChildRoutes.VERIFIED_HOMES_NEARBY) },
-        onInviteNeighbors = { inviteShare.share(context, NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
+        onInviteNeighbors = { inviteShare.share(context, NEIGHBORHOOD_INVITE_MESSAGE, "Invite homes near you") },
         // The just-moved card's mail step: a mailbox page, so it opens on the Mail tab.
         onOpenMailDay = { navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailDay()) },
         onOpenPrivacyMirror = { navController.navigate(ChildRoutes.placePrivacyMirror(homeId)) },

@@ -185,7 +185,7 @@ object TodayDetailMapper {
     }
 
     /** The Share card's line: what Share sends. */
-    const val SHARE_SUBTITLE = "Send today's weather and signals to a neighbor"
+    const val SHARE_SUBTITLE = "Send today's weather and signals to someone"
 
     private const val MINUTES_PER_HOUR = 60
     private const val EARLY_MORNING_UNTIL = 8

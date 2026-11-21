@@ -442,7 +442,7 @@ private fun EmptyMessage(
         )
         Spacer(modifier = Modifier.size(Spacing.s2))
         Text(
-            text = "Message a neighbor to get started.",
+            text = "Message someone to get started.",
             fontSize = 13.5.sp,
             color = PantopusColors.appTextSecondary,
         )
@@ -565,7 +565,7 @@ private fun FilterEmptyLine(
             ChatFilter.Unread -> "No unread messages" to "You’re all caught up."
             ChatFilter.Gigs -> "No gig conversations" to "Conversations about gigs show up here."
             ChatFilter.Market -> "No Market conversations" to "Conversations about Market listings show up here."
-            ChatFilter.All -> "No conversations yet" to "Message a neighbor to get started."
+            ChatFilter.All -> "No conversations yet" to "Message someone to get started."
         }
     Column(
         modifier =

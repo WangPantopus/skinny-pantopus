@@ -111,17 +111,17 @@ object ProfessionalProfileSampleData {
             listOf(
                 VisibilityRow(
                     id = "neighborSearch",
-                    label = "Show on neighbor search",
-                    sub = "Verified neighbors searching Pulse find your pro profile.",
+                    label = "Show in nearby search",
+                    sub = "Verified homes searching Pulse find your pro profile.",
                     isOn = true,
                     scope = "Elm Park · 0.6 mi radius",
                 ),
                 VisibilityRow(
                     id = "publicProfile",
                     label = "Public profile",
-                    sub = "Neighbors can open your professional profile from search and gigs.",
+                    sub = "People can open your professional profile from search and gigs.",
                     isOn = true,
-                    scope = "Pantopus neighbors",
+                    scope = "People on Pantopus",
                 ),
                 VisibilityRow(
                     id = "showCertifications",

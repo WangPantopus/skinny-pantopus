@@ -72,7 +72,7 @@ class BusinessLocationsViewModel
                         icon = PantopusIcon.MapPin,
                         headline = "No locations yet",
                         subcopy =
-                            "Add a storefront or service area so neighbors know where to find you.",
+                            "Add a storefront or service area so people know where to find you.",
                         tint = PantopusColors.businessBg,
                         accent = PantopusColors.business,
                     )

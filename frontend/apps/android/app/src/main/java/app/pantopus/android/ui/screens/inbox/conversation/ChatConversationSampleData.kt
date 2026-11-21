@@ -128,7 +128,7 @@ object ChatConversationSampleData {
                     side = ChatMessageSide.Incoming,
                     body =
                         ChatBubbleBody.AiReply(
-                            text = "For drywall, 3 shelves, ~1.5 hours of work, neighbors in Elm Park are paying:",
+                            text = "For drywall, 3 shelves, ~1.5 hours of work, people in Elm Park are paying:",
                             estimate =
                                 ChatEstimate(
                                     amount = "$55–70",

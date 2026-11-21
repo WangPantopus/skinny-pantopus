@@ -46,7 +46,7 @@ object MailTranslationSampleData {
             TranslationParagraph(
                 id = 0,
                 original = "Querida vecina,",
-                english = "Dear neighbor,",
+                english = "Dear friend,",
                 isHeading = true,
             ),
             TranslationParagraph(
@@ -70,7 +70,7 @@ object MailTranslationSampleData {
             TranslationParagraph(
                 id = 3,
                 original = "Con cariño, su vecina Lucía.",
-                english = "With love, your neighbor Lucía.",
+                english = "With love, Lucía.",
                 isSignoff = true,
             ),
         )
@@ -82,7 +82,7 @@ object MailTranslationSampleData {
                 term = "posada",
                 kind = "kept in Spanish",
                 note =
-                    "A traditional neighborhood gathering in the weeks before Christmas — " +
+                    "A traditional street gathering in the weeks before Christmas — " +
                         "no single English word captures it.",
             ),
             TranslationGlossaryNote(
@@ -97,8 +97,8 @@ object MailTranslationSampleData {
         TranslationSender(
             initials = "LH",
             name = "Lucía Herrera",
-            meta = "Neighbor · Elm Park · 3 doors down",
-            kind = "Verified neighbor",
+            meta = "Elm Park · 3 doors down",
+            kind = "Verified home",
             proof = "Address verified",
         )
 

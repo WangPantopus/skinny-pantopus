@@ -434,7 +434,7 @@ private fun TaskCardRow(
                     tint = PantopusColors.business,
                 )
                 Text(
-                    text = "Posted as a neighbor task",
+                    text = "Posted as a task",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.business,
@@ -461,7 +461,7 @@ private fun TaskCardRow(
                 )
                 Spacer(Modifier.size(Spacing.s2))
                 Text(
-                    text = if (isConverting) "Posting…" else "Convert to neighbor gig",
+                    text = if (isConverting) "Posting…" else "Convert to a gig",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.business,
@@ -615,7 +615,7 @@ private fun CreateFrame(
                 )
                 Spacer(Modifier.size(Spacing.s2))
                 Text(
-                    text = "Post as Neighbor Task Instead",
+                    text = "Post as a Task Instead",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = PantopusColors.business,

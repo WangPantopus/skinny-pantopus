@@ -625,7 +625,7 @@ private fun askerDisplayName(user: GigQuestionUser?): String {
     // No asker means the person has deleted their account; their question stays.
     if (user == null) return "Former member"
     val fullName = listOfNotNull(user.firstName, user.lastName).filter { it.isNotEmpty() }.joinToString(" ")
-    return listOf(user.displayName, user.name, fullName).firstOrNull { !it.isNullOrEmpty() } ?: user.username ?: "Neighbor"
+    return listOf(user.displayName, user.name, fullName).firstOrNull { !it.isNullOrEmpty() } ?: user.username ?: "Someone nearby"
 }
 
 private fun answererDisplayName(question: GigQuestionDto): String {

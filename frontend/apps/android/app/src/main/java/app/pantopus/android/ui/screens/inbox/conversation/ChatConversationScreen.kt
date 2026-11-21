@@ -1995,7 +1995,7 @@ private fun presenceFor(
                 val status =
                     when {
                         counterparty.online -> "Active now"
-                        counterparty.verified -> "Verified neighbor"
+                        counterparty.verified -> "Verified home"
                         else -> null
                     }
                 listOfNotNull(status, counterparty.locality)

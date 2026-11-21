@@ -72,7 +72,7 @@ internal fun GigSearchContent(
 
     Box(modifier = Modifier.fillMaxSize().testTag("gigSearch")) {
         SearchListShell(
-            placeholder = "Search gigs, skills, neighborhoods…",
+            placeholder = "Search gigs, skills, areas…",
             query = query,
             onQueryChange = onQueryChange,
             results = results,

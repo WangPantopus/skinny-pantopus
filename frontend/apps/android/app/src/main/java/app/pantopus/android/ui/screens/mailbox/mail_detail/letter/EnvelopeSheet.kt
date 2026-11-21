@@ -141,7 +141,7 @@ fun TrustChip(sender: MailSender) {
             MailSender.Neighbor -> PantopusIcon.User
             MailSender.Unknown -> PantopusIcon.AlertTriangle
         }
-    val label = if (sender == MailSender.Neighbor) "Pantopus neighbor" else sender.line
+    val label = if (sender == MailSender.Neighbor) "Pantopus member" else sender.line
     Row(
         modifier =
             Modifier

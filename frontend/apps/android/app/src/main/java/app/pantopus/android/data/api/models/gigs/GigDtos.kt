@@ -41,7 +41,7 @@ data class GigCreator(
             ?: name?.takeIf { it.isNotEmpty() }
             ?: MadeUpUsername.chosen(handle)
             ?: MadeUpUsername.chosen(username)
-            ?: "Neighbor"
+            ?: "Someone nearby"
 
     fun resolvedHandle(): String? = MadeUpUsername.chosen(handle) ?: MadeUpUsername.chosen(username)
 

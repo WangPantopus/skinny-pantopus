@@ -15,16 +15,16 @@ import app.pantopus.android.ui.theme.PantopusIcon
 fun TrustedNeighborsScreen(onBack: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize().testTag("trustedNeighbors")) {
         ContentDetailShell(
-            title = "Trusted neighbors",
+            title = "Trusted people",
             onBack = onBack,
             header = {},
             body = {
                 EmptyState(
                     icon = PantopusIcon.Users,
-                    headline = "No trusted neighbors yet",
+                    headline = "No trusted people yet",
                     subcopy =
-                        "Trusted neighbors can receive packages and help with access when you're away. " +
-                            "Approved neighbors will appear here.",
+                        "Trusted people can receive packages and help with access when you're away. " +
+                            "People you approve will appear here.",
                 )
             },
         )

@@ -327,9 +327,9 @@ object ExploreMapSampleData {
             mapOf(
                 ExploreKind.Task to "Help wanted nearby",
                 ExploreKind.Item to "For sale nearby",
-                ExploreKind.Post to "Neighbor asked a question",
+                ExploreKind.Post to "Someone nearby asked a question",
                 ExploreKind.Spot to "Local spot",
-                ExploreKind.Home to "Neighborhood home",
+                ExploreKind.Home to "Home nearby",
             )
         val metas =
             mapOf(
