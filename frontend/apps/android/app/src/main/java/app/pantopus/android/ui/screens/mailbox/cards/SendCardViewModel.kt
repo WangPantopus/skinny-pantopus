@@ -1113,7 +1113,7 @@ private fun NetworkError.storedCard(): SentHolidayCard? {
 }
 
 /** The machine code a refusal carried (`{ error, code }`), when the server sent one. */
-private fun NetworkError.serverCode(): String? {
+internal fun NetworkError.serverCode(): String? {
     val body =
         when (this) {
             is NetworkError.ClientError -> body

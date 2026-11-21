@@ -4,6 +4,9 @@ import android.content.Context
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.CardEmailedAgainResponse
+import app.pantopus.android.data.api.models.mailbox.CardPassOnBody
+import app.pantopus.android.data.api.models.mailbox.CardPassOnPreview
+import app.pantopus.android.data.api.models.mailbox.CardPassOnTakenBack
 import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.data.api.models.mailbox.CardSignatureBody
 import app.pantopus.android.data.api.models.mailbox.CardTownBody
@@ -335,6 +338,28 @@ class HolidayCardsRepository
                 }
                 is NetworkResult.Failure -> result
             }
+
+        /** `POST /api/mailbox/cards/:id/pass-on/preview`: a pass-on's checks (travelling card Part 4); nothing is sent. */
+        suspend fun passOnPreview(
+            cardId: String,
+            body: CardPassOnBody,
+        ): NetworkResult<CardPassOnPreview> = safeApiCall { api.passOnPreview(cardId, body) }
+
+        /** `POST /api/mailbox/cards/:id/pass-on`: "Send it on". Sent reads again; the link comes with the card by link. */
+        suspend fun passOn(
+            cardId: String,
+            body: CardPassOnBody,
+        ): NetworkResult<SentHolidayCard> =
+            when (val result = safeApiCall { api.passOn(cardId, body) }) {
+                is NetworkResult.Success -> {
+                    cardSentFlow.tryEmit(result.data.card.id)
+                    NetworkResult.Success(result.data.card.copy(link = result.data.link))
+                }
+                is NetworkResult.Failure -> result
+            }
+
+        /** `POST /api/mailbox/cards/:id/pass-on/take-back`: the card passed on comes back and its place is free. */
+        suspend fun takeBackPassOn(passedId: String): NetworkResult<CardPassOnTakenBack> = safeApiCall { api.takeBackPassOn(passedId) }
 
         /** `POST /api/mailbox/cards/batch/preview`: a list's look; nothing is stored or sent. */
         suspend fun previewList(body: SendHolidayCardListBody): NetworkResult<HolidayCardListPreview> =

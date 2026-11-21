@@ -162,6 +162,8 @@ internal fun CardTableControls(
     next: CardTableNext? = null,
     /** "Write back to Hazel" or "You wrote back" (plan Part 3). */
     reply: CardTableSendBack? = null,
+    /** A travelling card's "Pass it on" (travelling card plan Part 4). */
+    passOn: CardTablePassOn? = null,
 ) {
     val top = insets.calculateTopPadding()
     val bottom = insets.calculateBottomPadding()
@@ -171,10 +173,10 @@ internal fun CardTableControls(
     // card" keeps its corner button and its line in ⋯.
     val moment = state.sending
     val goneButtons = if (moment?.step == SendStep.Gone) gone else emptyList()
-    val row = if (moment == null && state.sendBackShows) quietRow(next, reply, sendBack) else emptyList()
+    val row = if (moment == null && state.sendBackShows) quietRow(next, reply, sendBack, passOn?.passedLine) else emptyList()
     Box(modifier = Modifier.fillMaxSize()) {
         Words(state, top)
-        ActionBlock(state, hidden, bottom, goneButtons, row)
+        ActionBlock(state, hidden, bottom, goneButtons, row, passOn.takeIf { moment == null })
         if (showsTurnTip) TurnTip()
         TopRow(state, top, hidden, canShare, menu.isNotEmpty(), onClose, onShare)
         if (state.menuOpen && menu.isNotEmpty()) MenuPanel(state, top, menu)
@@ -305,6 +307,7 @@ private fun ActionBlock(
     bottom: Dp,
     gone: List<CardTableSendBack>,
     row: List<QuietChoice>,
+    passOn: CardTablePassOn? = null,
 ) {
     val away = hidden || state.step == TableStep.Pulling
     val fade by animateFloatAsState(if (away) 0f else 1f, tween(350), label = "tableAct")
@@ -319,7 +322,18 @@ private fun ActionBlock(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            if (state.primaryLabel.isNotEmpty() && printButton) {
+            // A travelling card turned over: "Pass it on" beside "Turn it back" (travelling card plan Part 4).
+            val passOnLabel = passOn?.label?.takeIf { state.step == TableStep.Out && state.backUp && !state.enlarged }
+            if (state.primaryLabel.isNotEmpty() && passOnLabel != null && passOn != null) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    TablePill(state.primaryLabel, away, "cardTablePrimary", spoken = state.primarySpoken, onClick = state::primary)
+                    TablePill(passOnLabel, away, "cardTablePassOn", filled = passOn.filled, onClick = passOn.onClick)
+                    if (printButton) TablePill(READ_IT_IN_PRINT, away, "cardTableReadInPrint") { state.openPrint() }
+                }
+            } else if (state.primaryLabel.isNotEmpty() && printButton) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -344,13 +358,14 @@ private fun ActionBlock(
     }
 }
 
-/** The table's main button: a glass pill, 44 dp tall. */
+/** The table's main button: a glass pill, 44 dp tall; [filled] in cream (a travelling card's "Pass it on"). */
 @Composable
 private fun TablePill(
     words: String,
     away: Boolean,
     tag: String,
     spoken: String? = null,
+    filled: Boolean = false,
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(22.dp)
@@ -359,8 +374,8 @@ private fun TablePill(
             Modifier
                 .minimumInteractiveComponentSize()
                 .clip(shape)
-                .background(PantopusColors.tableGlass)
-                .border(0.5.dp, PantopusColors.tableGlassLine, shape)
+                .background(if (filled) PantopusColors.tableCream else PantopusColors.tableGlass)
+                .border(0.5.dp, if (filled) PantopusColors.tableCream else PantopusColors.tableGlassLine, shape)
                 .then(if (away) Modifier else Modifier.clickable(role = Role.Button, onClick = onClick))
                 .heightIn(min = 44.dp)
                 .padding(horizontal = 24.dp)
@@ -368,7 +383,35 @@ private fun TablePill(
                 .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
-        Text(words, style = tablePrimaryStyle)
+        Text(words, style = if (filled) tablePrimaryStyle.copy(color = PantopusColors.tableNight) else tablePrimaryStyle)
+    }
+}
+
+/**
+ * Pass it on, on a travelling card's table (travelling card plan Part 4): [label] is "Pass it on" ([filled], beside
+ * "Turn it back") or "Pass it on to one more" (quiet), null once both places are taken; then [passedLine] ("You passed
+ * it on to Ivy and Cass.") stands in the quiet row.
+ */
+internal class CardTablePassOn(
+    val label: String?,
+    val filled: Boolean,
+    val passedLine: String?,
+    val onClick: () -> Unit,
+)
+
+/** "You passed it on to Ivy and Cass.": words in the quiet row, not a button; on one line, as the row's buttons are. */
+@Composable
+private fun PassedLine(
+    words: String,
+    away: Boolean,
+    tag: String,
+) {
+    Box(
+        modifier = Modifier.alpha(if (away) 0f else 1f).heightIn(min = 44.dp).padding(horizontal = QUIET_PADDING.dp).testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        // At the largest text sizes it may take a second line rather than be cut; the table keeps it that room.
+        Text(words, style = tableQuietStyle, maxLines = 2, textAlign = TextAlign.Center)
     }
 }
 
@@ -385,6 +428,8 @@ internal class QuietChoice(
     val spoken: String,
     val tag: String,
     val onClick: () -> Unit,
+    /** Words in the row, not a button ("You passed it on to Ivy and Cass."). */
+    val words: Boolean = false,
 )
 
 /**
@@ -395,6 +440,8 @@ private fun quietRow(
     next: CardTableNext?,
     reply: CardTableSendBack?,
     sendBack: CardTableSendBack?,
+    /** A travelling card passed on to two: "You passed it on to Ivy and Cass." first (travelling card Part 4). */
+    passedLine: String? = null,
 ): List<QuietChoice> {
     val nextChoice =
         next?.let {
@@ -408,7 +455,8 @@ private fun quietRow(
         }
     val replyChoice = reply?.let { QuietChoice(it.title, it.short ?: it.title, it.title, "cardTableWriteBack", it.onClick) }
     val sendChoice = sendBack?.let { QuietChoice(it.title, it.short ?: it.title, it.title, "cardTableSendBack", it.onClick) }
-    return listOfNotNull(nextChoice, replyChoice, sendChoice).take(2)
+    val passed = passedLine?.let { QuietChoice(it, it, it, "cardTablePassedOn", onClick = {}, words = true) }
+    return listOfNotNull(passed, nextChoice, replyChoice, sendChoice).take(2)
 }
 
 /**
@@ -427,7 +475,13 @@ private fun QuietRow(
         val density = LocalDensity.current
         val shown = remember(choices, room, density) { with(density) { fitQuietRow(choices, room, measurer) } }
         Row(horizontalArrangement = Arrangement.Center) {
-            shown.forEach { (choice, words) -> QuietButton(words, choice.spoken, away, choice.tag, choice.onClick) }
+            shown.forEach { (choice, words) ->
+                if (choice.words) {
+                    PassedLine(words, away, choice.tag)
+                } else {
+                    QuietButton(words, choice.spoken, away, choice.tag, choice.onClick)
+                }
+            }
         }
     }
 }
@@ -445,6 +499,7 @@ private fun Density.fitQuietRow(
     val short = choices.map { it.short }
     if (short.sumOf(width) <= room) return choices.zip(short)
     val first = choices.first()
+    if (first.words) return listOf(first to first.full)
     return listOf(first to if (width(first.full) <= room) first.full else first.short)
 }
 

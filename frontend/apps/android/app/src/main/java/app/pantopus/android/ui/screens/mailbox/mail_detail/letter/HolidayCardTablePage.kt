@@ -20,6 +20,7 @@ import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardTimes
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardOnTable
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardPassOnViewModel
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardReplySent
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardReplySheet
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardReplyState
@@ -30,8 +31,11 @@ import app.pantopus.android.ui.screens.mailbox.cards.table.CardSenderSheets
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableMenuItem
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableNext
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTablePassOn
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableSendBack
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTravel
 import app.pantopus.android.ui.screens.mailbox.cards.table.JoinedCardView
+import app.pantopus.android.ui.screens.mailbox.cards.table.PassOnOverlay
 import app.pantopus.android.ui.screens.mailbox.cards.table.joined
 import app.pantopus.android.ui.screens.mailbox.components.MailSender
 import app.pantopus.android.ui.theme.PantopusColors
@@ -52,6 +56,7 @@ internal fun HolidayCardTablePage(
     senderUserId: String?,
     senderActions: CardSenderActionsViewModel = hiltViewModel(),
     replies: CardReplyViewModel = hiltViewModel(),
+    passOn: CardPassOnViewModel = hiltViewModel(),
 ) {
     // Under the table, in the moment before its window opens: the table's own dark, not a flash of the app.
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.tableNight).testTag("mailHolidayCard"))
@@ -92,6 +97,10 @@ internal fun HolidayCardTablePage(
     var showsJoined by rememberSaveable { mutableStateOf(false) }
     val onTable = card.onTable(letter)
     val reply = replyAction(replyState, onTable.fromFirst, onWrite = replies::open, onJoined = { showsJoined = true })
+    // A travelling card (travelling card plan Part 4): "Pass it on", from the journey as this page read it.
+    LaunchedEffect(letter.envelope.id) { passOn.load(letter.envelope.id, card.travel) }
+    val passOnState by passOn.state.collectAsStateWithLifecycle()
+    val passOnButton = passOnState.travel?.let { passOnAction(it, onOpen = passOn::open) }
     CardTableDialog(
         card = onTable,
         firstOpen = card.firstOpen,
@@ -111,7 +120,9 @@ internal fun HolidayCardTablePage(
                 showsJoined = showsJoined,
                 onCloseJoined = { showsJoined = false },
             )
+            if (passOnButton != null) PassOnOverlay(card = onTable, myName = letter.toName.orEmpty(), model = passOn)
         },
+        passOn = passOnButton,
     )
     if (person != null) {
         CardSenderSheets(
@@ -263,6 +274,20 @@ private fun personItems(
         CardTableMenuItem(if (memories) "Report this card" else "Report", "cardTableReport", onReport),
         CardTableMenuItem(block, "cardTableBlock", onBlock),
     )
+}
+
+/**
+ * "Pass it on" beside "Turn it back" while a place is left ("Pass it on to one more", quiet, after the first), and
+ * "You passed it on to Ivy and Cass." once both are taken; null while it can't be passed on (travelling card Part 4).
+ */
+private fun passOnAction(
+    travel: CardTravel,
+    onOpen: () -> Unit,
+): CardTablePassOn? {
+    val label = travel.passOnLabel
+    val passed = travel.passedLine
+    if (label == null && passed == null) return null
+    return CardTablePassOn(label = label, filled = travel.passedTo.isEmpty(), passedLine = passed, onClick = onOpen)
 }
 
 /** "Send Hazel a card", when there's a person to send one to and a way to; null otherwise. */

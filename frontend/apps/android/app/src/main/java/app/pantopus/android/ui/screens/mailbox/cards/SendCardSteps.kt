@@ -215,7 +215,7 @@ internal fun ToStep(
  * those on it), a tap puts them on it or takes them off, a check shows who's on it, and nobody more joins once it's [full].
  */
 @Composable
-private fun People(
+internal fun People(
     people: List<MailRecipientDto>,
     onChoose: (CardRecipient) -> Unit,
     listed: Set<String>? = null,
@@ -446,7 +446,7 @@ internal fun DeskField(
 }
 
 @Composable
-private fun Hint(
+internal fun Hint(
     text: String,
     problem: Boolean = false,
 ) {

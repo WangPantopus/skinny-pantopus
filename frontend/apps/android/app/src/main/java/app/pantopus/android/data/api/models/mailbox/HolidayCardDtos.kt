@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.models.mailbox
 
 import app.pantopus.android.data.api.models.mailbox.v2.MailCard
+import app.pantopus.android.data.api.models.mailbox.v2.MailCardPostmark
 import app.pantopus.android.data.api.models.mailbox.v2.MailPostmark
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -517,6 +518,50 @@ data class SendHolidayCardResponse(
     val card: SentHolidayCard,
     /** The link to send on, for a card by link. */
     val link: String? = null,
+)
+
+/**
+ * `POST /api/mailbox/cards/:id/pass-on` (and its look) body (travelling card plan Part 4): the same card goes on, free,
+ * to a person, an email address or by link, with the passer's note and signature, under one request ID per draft, in
+ * one of the card's two places (`piece.card.travel.next_place`).
+ */
+@JsonClass(generateAdapter = true)
+data class CardPassOnBody(
+    val to: HolidayCardRecipient,
+    val message: String,
+    val signature: CardSignature? = null,
+    @Json(name = "request_id") val requestId: String,
+    val place: Int,
+)
+
+/** `POST /api/mailbox/cards/:id/pass-on/preview` → 200: every check the pass-on runs passed; nothing was sent. */
+@JsonClass(generateAdapter = true)
+data class CardPassOnPreview(
+    @Json(name = "pass_on") val passOn: CardPassOnLook,
+)
+
+/** A pass-on as it would go: who it's to, how, when it arrives, until when it can come back, and the passer's town. */
+@JsonClass(generateAdapter = true)
+data class CardPassOnLook(
+    val place: Int? = null,
+    @Json(name = "to_name") val toName: String? = null,
+    @Json(name = "by_email") val byEmail: Boolean = false,
+    @Json(name = "by_link") val byLink: Boolean = false,
+    @Json(name = "arrives_at") val arrivesAt: String? = null,
+    @Json(name = "arrives_on") val arrivesOn: String? = null,
+    @Json(name = "take_back_until") val takeBackUntil: String? = null,
+    /** "Tampa, FL": the passer's town as it goes on the journey. */
+    val town: String? = null,
+    /** The postmark this pass-on strikes (the passer's town and today there): the sealing table's newest postmark. */
+    val postmark: MailCardPostmark? = null,
+)
+
+/** `POST /api/mailbox/cards/:id/pass-on/take-back` → 200: the place is free again. */
+@JsonClass(generateAdapter = true)
+data class CardPassOnTakenBack(
+    @Json(name = "taken_back") val takenBack: Boolean = false,
+    @Json(name = "card_id") val cardId: String? = null,
+    val place: Int? = null,
 )
 
 /** `GET /api/mailbox/cards/:id/link`: the link of a card by link that's still waiting for someone. */

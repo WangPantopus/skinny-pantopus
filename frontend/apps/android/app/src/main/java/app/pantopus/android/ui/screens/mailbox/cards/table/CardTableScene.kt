@@ -516,8 +516,14 @@ private fun EnvelopeFront(
                     val pen = faceArt?.pen ?: return@drawBehind
                     val moment = state.sending
                     val reveal = AddressReveal.of(moment)
-                    // A travelling card's newest postmark is struck as the envelope lands (travelling card Part 3).
-                    val strike = if (card.travel != null) state.strike else 1f
+                    // A travelling card's newest postmark is struck as the envelope lands (travelling card Part 3), or
+                    // as a pass-on is sealed, where today's postmark would land.
+                    val strike =
+                        when {
+                            card.travel == null -> 1f
+                            moment != null -> reveal.postmark
+                            else -> state.strike
+                        }
                     drawIntoCanvas { canvas ->
                         // A list: the envelopes under the top one, their edges showing.
                         if ((moment?.calls?.several ?: 1) > 1) {
