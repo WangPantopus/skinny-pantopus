@@ -104,8 +104,8 @@ data class MomentMarks(
         get() = if (labels.all { it.text.isNotBlank() }) this else copy(labels = labels.filter { it.text.isNotBlank() })
 }
 
-/** Which tool the editor opened with: the Post screen's "Text" or "Draw" pill. */
-enum class MomentMarksTool { Text, Draw }
+/** Which tool the editor opened with: the Post screen's "Text", "Draw" or "Resize" pill. */
+enum class MomentMarksTool { Text, Draw, Resize }
 
 /**
  * The marks editor while it is open: the marks as they are now, as they were when it opened (the X goes back to those),
@@ -126,12 +126,17 @@ data class MomentMarksEditing(
     val typing: Boolean = false,
     /** Text opened: a new label goes in the middle once the editor knows the picture's size. */
     val addsLabel: Boolean = false,
+    /** Resize: where the picture sits on the 9:16 canvas ([MomentPlacement]); null while it is as taken. */
+    val placement: MomentPlacement? = null,
+    val placementAtOpen: MomentPlacement? = null,
+    /** Resize: a finger has moved the picture in this visit (its hint goes). */
+    val gestured: Boolean = false,
 ) {
     /** The marks as Done keeps them. */
     val result: MomentMarks get() = marks.kept
 
     /** Something changed in this visit: the X asks before it drops it. */
-    val changed: Boolean get() = result != atOpen
+    val changed: Boolean get() = result != atOpen || placement != placementAtOpen
 
     /** The label picked, if any. */
     val picked: MomentLabel? get() = selected?.let { id -> marks.labels.firstOrNull { it.id == id } }
@@ -282,6 +287,16 @@ object MomentMarkRules {
         pictureWidth: Int,
         pictureHeight: Int,
     ): LabelBox = labelBox(pictureWidth.toFloat() / pictureHeight.coerceAtLeast(1))
+
+    /**
+     * The part of a picture of [shape] every phone shows, centred: as wide as a 9:21 screen shows and as tall as iPhone
+     * SE's viewer frame shows (on the 9:16 canvas, 0.762 × 0.893). Resize outlines it while the picture moves.
+     */
+    fun shownPart(shape: Float): LabelBox {
+        val width = min(1f, NARROWEST_FRAME / shape)
+        val height = min(1f, shape / WIDEST_FRAME)
+        return LabelBox((1f - width) / 2, (1f - height) / 2, (1f + width) / 2, (1f + height) / 2)
+    }
 
     /**
      * [labelBox] from the picture's shape alone (width over height), rounded to a ten-thousandth so the picture drawn

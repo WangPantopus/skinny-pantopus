@@ -43,6 +43,7 @@ import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarks
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksEditing
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksKeeper
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksTool
+import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacement
 import app.pantopus.android.ui.screens.moments.map.metersBetween
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -194,6 +195,8 @@ data class MomentsComposeUiState(
     val shareLaterKey: String? = null,
     /** Text and Draw: the marks drawn into the photo on the sheet, kept to change again. */
     val marks: MomentMarks = MomentMarks(),
+    /** Resize: where the photo sits on the 9:16 canvas it posts as; null while it is as taken. */
+    val placement: MomentPlacement? = null,
     /** The marks editor while it is open. */
     val marking: MomentMarksEditing? = null,
     /**
@@ -843,6 +846,7 @@ class MomentsComposeViewModel
                 it.copy(
                     media = null,
                     marks = MomentMarks(),
+                    placement = null,
                     marking = null,
                     step = if (current.media == null) ComposeStep.Text else ComposeStep.Camera,
                     notice = null,
@@ -852,51 +856,52 @@ class MomentsComposeViewModel
             }
         }
 
-        /** The Post screen's Text or Draw pill: the editor opens on the marks (never while a Post is in flight). */
+        /** The Post screen's Text, Draw or Resize pill: the editor opens on the marks (never while a Post is in flight). */
         fun openMarks(tool: MomentMarksTool) {
             val current = _state.value
             val media = current.media ?: return
             if (current.posting || current.marking != null) return
-            _state.update { it.copy(marking = marksKeeper.editing(tool, it.marks)) }
+            _state.update { it.copy(marking = marksKeeper.editing(tool, it.marks, it.placement)) }
             marksKeeper.read(media) { _state.update { it.copy(marking = null, notice = MARKS_UNREADABLE) } }
         }
 
-        /** A change in the open editor: a line drawn or undone, an ink or a width picked. */
+        /** A change in the open editor: a line drawn or undone, an ink or a width picked, the picture moved. */
         fun editMarks(change: (MomentMarksEditing) -> MomentMarksEditing) =
             _state.update { current -> current.marking?.let { current.copy(marking = change(it)) } ?: current }
 
         /**
-         * The editor's Done ([keep]) or its X. Done draws the marks into a new copy of the photo, which then posts (Post
-         * waits for it); the photo as it came is kept, to change the marks again. On a video it exports the video again
-         * with the marks over every frame (and every part); Post waits for that as for any video. Nothing changes under a
-         * Post in flight.
+         * The editor's Done ([keep]) or its X. Done draws the marks into a new copy of the photo (on the 9:16 canvas where
+         * Resize placed it), which then posts (Post waits for it); the photo as it came is kept, to change them again. On a
+         * video it exports the video again with the marks over every frame (and every part); Post waits for that as for any
+         * video. Nothing changes under a Post in flight.
          */
         fun closeMarks(keep: Boolean) {
             val current = _state.value
             val editing = current.marking ?: return
             marksKeeper.closed(editing)
             val media = current.media?.takeIf { keep && !current.posting }
-            if (media == null || editing.result == current.marks) {
+            if (media == null || (editing.result == current.marks && editing.placement == current.placement)) {
                 _state.update { it.copy(marking = null) }
                 return
             }
-            _state.update { it.copy(marking = null, marks = editing.result) }
+            _state.update { it.copy(marking = null, marks = editing.result, placement = editing.placement) }
             when (media) {
                 is MomentMediaFile.Video -> prepare(media)
                 is MomentMediaFile.Photo ->
                     marksKeeper.draw(
                         editing.result,
+                        editing.placement,
                         media.file,
                         onDrawn = { file -> _state.update { it.copy(media = MomentMediaFile.Photo(file)) } },
-                        onFailed = { drawn -> _state.update { it.copy(marks = drawn, notice = MARKS_FAILED) } },
+                        onFailed = { drawn, placed -> _state.update { it.copy(marks = drawn, placement = placed, notice = MARKS_FAILED) } },
                     )
             }
         }
 
-        /** Another picture takes the sheet: it starts with no marks, and nothing kept for the last one stays. */
+        /** Another picture takes the sheet: it starts with no marks, as taken, and nothing kept for the last one stays. */
         private fun forgetMarks() {
             marksKeeper.drop()
-            _state.update { it.copy(marks = MomentMarks(), marking = null) }
+            _state.update { it.copy(marks = MomentMarks(), placement = null, marking = null) }
         }
 
         /** Post right after the editor's Done waits for the marks to be drawn in, so what uploads carries them. */
@@ -1271,6 +1276,6 @@ class MomentsComposeViewModel
             const val FAR_PLACE = "That place is too far from this Moment's pin. Pick one nearby."
             const val NEEDS_CONNECTION = "A Moment with no location goes only to your connections. Add a connection first."
             const val MARKS_UNREADABLE = "Couldn't open this photo to draw on."
-            const val MARKS_FAILED = "Couldn't add your marks to the photo. Try again."
+            const val MARKS_FAILED = "Couldn't make your changes to the photo. Try again."
         }
     }

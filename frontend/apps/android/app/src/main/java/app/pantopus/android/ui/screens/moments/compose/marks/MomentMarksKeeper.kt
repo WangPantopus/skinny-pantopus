@@ -30,8 +30,9 @@ internal class MomentMarksKeeper(
     /** The photo as taken or picked, while the sheet shows a copy with marks drawn in; null otherwise. */
     private var original: File? = null
 
-    /** The marks drawn into the photo on the sheet: what a failed drawing goes back to. */
+    /** The marks drawn into the photo on the sheet, and where Resize placed it: what a failed drawing goes back to. */
     private var drawnMarks = MomentMarks()
+    private var drawnPlacement: MomentPlacement? = null
 
     private val _picture = MutableStateFlow<Bitmap?>(null)
 
@@ -52,11 +53,24 @@ internal class MomentMarksKeeper(
     /** The marks are still being drawn into the photo: Post waits. */
     val busy: Boolean get() = drawing?.isActive == true
 
-    /** The editor opening with [tool] on [marks], with what was picked last; Text adds a label to type. */
+    /** The editor opening with [tool] on [marks] and [placement], with what was picked last; Text adds a label to type. */
     fun editing(
         tool: MomentMarksTool,
         marks: MomentMarks,
-    ): MomentMarksEditing = MomentMarksEditing(tool, marks, marks, ink, width, textInk, style, addsLabel = tool == MomentMarksTool.Text)
+        placement: MomentPlacement?,
+    ): MomentMarksEditing =
+        MomentMarksEditing(
+            tool,
+            marks,
+            marks,
+            ink,
+            width,
+            textInk,
+            style,
+            addsLabel = tool == MomentMarksTool.Text,
+            placement = placement,
+            placementAtOpen = placement,
+        )
 
     /** The editor closed (Done or the X): its ink, width and style stay picked. */
     fun closed(editing: MomentMarksEditing) {
@@ -96,14 +110,16 @@ internal class MomentMarksKeeper(
     }
 
     /**
-     * Done: [marks] drawn into a new copy of the photo [shown] on the sheet. [onDrawn] gets the file that now posts (the
-     * photo as it came when no marks are left), and the copy it replaces goes; [onFailed] gets the marks still drawn in.
+     * Done: [marks] drawn into a new copy of the photo [shown] on the sheet, on the canvas at [placement] when Resize
+     * placed it. [onDrawn] gets the file that now posts (the photo as it came when there are no marks and it's as
+     * taken), and the copy it replaces goes; [onFailed] gets the marks and placement still drawn in.
      */
     fun draw(
         marks: MomentMarks,
+        placement: MomentPlacement?,
         shown: File,
         onDrawn: (File) -> Unit,
-        onFailed: (MomentMarks) -> Unit,
+        onFailed: (MomentMarks, MomentPlacement?) -> Unit,
     ) {
         val source = original ?: shown
         drawing?.cancel()
@@ -112,7 +128,7 @@ internal class MomentMarksKeeper(
                 var made: File? = null
                 val file =
                     try {
-                        if (marks.isEmpty) source else drawn(source, marks) { made = it }
+                        if (marks.isEmpty && placement == null) source else drawn(source, marks, placement) { made = it }
                     } catch (cancelled: CancellationException) {
                         made?.delete()
                         throw cancelled
@@ -120,12 +136,13 @@ internal class MomentMarksKeeper(
                         timber.log.Timber.tag("Moments").w(failure, "couldn't draw the marks in")
                         made?.delete()
                         drawnOk = false
-                        onFailed(drawnMarks)
+                        onFailed(drawnMarks, drawnPlacement)
                         return@launch
                     }
                 if (shown != source && shown != file) shown.delete()
                 original = source.takeIf { file != source }
                 drawnMarks = marks
+                drawnPlacement = placement
                 drawnOk = true
                 onDrawn(file)
             }
@@ -134,6 +151,7 @@ internal class MomentMarksKeeper(
     private suspend fun drawn(
         source: File,
         marks: MomentMarks,
+        placement: MomentPlacement?,
         made: (File) -> Unit,
     ): File {
         reading?.join()
@@ -141,7 +159,7 @@ internal class MomentMarksKeeper(
             _picture.value?.takeIf { pictureOf == source }
                 ?: withContext(Dispatchers.Default) { MomentMarksFlatten.picture(source) }
                 ?: error("Couldn't read the photo.")
-        return withContext(Dispatchers.Default) { MomentMarksFlatten.flatten(context, picture, marks).also(made) }
+        return withContext(Dispatchers.Default) { MomentMarksFlatten.flatten(context, picture, marks, placement).also(made) }
     }
 
     /** Post waiting for the marks to be drawn in: false when that failed or was called off (Retake, closing). */
@@ -165,6 +183,7 @@ internal class MomentMarksKeeper(
         _picture.value = null
         pictureOf = null
         drawnMarks = MomentMarks()
+        drawnPlacement = null
         drawnOk = true
     }
 }
