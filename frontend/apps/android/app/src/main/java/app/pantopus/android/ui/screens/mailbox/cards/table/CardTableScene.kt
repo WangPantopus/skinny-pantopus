@@ -516,12 +516,14 @@ private fun EnvelopeFront(
                     val pen = faceArt?.pen ?: return@drawBehind
                     val moment = state.sending
                     val reveal = AddressReveal.of(moment)
+                    // A travelling card's newest postmark is struck as the envelope lands (travelling card Part 3).
+                    val strike = if (card.travel != null) state.strike else 1f
                     drawIntoCanvas { canvas ->
                         // A list: the envelopes under the top one, their edges showing.
                         if ((moment?.calls?.several ?: 1) > 1) {
                             drawEnvelopeStack(canvas.nativeCanvas, art, size.width, size.height, paint)
                         }
-                        drawAddressSide(canvas.nativeCanvas, art, pen, card, day, size.width, size.height, paint, reveal)
+                        drawAddressSide(canvas.nativeCanvas, art, pen, card, day, size.width, size.height, paint, reveal, strike)
                     }
                 },
     )
@@ -537,6 +539,7 @@ private fun drawAddressSide(
     height: Float,
     paints: EnvelopePaints,
     reveal: AddressReveal = AddressReveal.All,
+    strike: Float = 1f,
 ) {
     canvas.drawBitmap(art.front, null, RectF(0f, 0f, width, height), paints.bitmap)
     drawPostage(canvas, art, card, day, width, height, paints, reveal)
@@ -605,11 +608,14 @@ private fun drawAddressSide(
         val label = if (card.letter) "A LETTER FOR YOU" else "CHRISTMAS CARD"
         canvas.drawText(label, width * 0.068f - size * 0.1f, baseline, paints.text)
     }
+    // The postmarks of the towns on its way here, over the names as stamped ink is; the first cancels the stamp.
+    if (card.travels) TravelPostmarks.draw(canvas, card.travel?.postmarks.orEmpty(), width, height, paints, strike)
 }
 
 /**
  * The stamp, and the postmark over it with the day it was mailed. While the sender's envelope is addressed ([reveal]),
- * each drops onto the paper: from a little larger, and faint, to where it lies.
+ * each drops onto the paper: from a little larger, and faint, to where it lies. A travelling card has the postmarks of
+ * the towns on its way here instead, drawn last by [drawAddressSide].
  */
 private fun drawPostage(
     canvas: Canvas,
@@ -634,6 +640,8 @@ private fun drawPostage(
         paints.bitmap.alpha = 255
         canvas.restoreToCount(saved)
     }
+    // A travelling card's postmarks are struck over the names, last (travelling card plan Part 3).
+    if (card.travels) return
     // A letter Pantopus puts straight in the box has no postmark (and the postmark says Christmas).
     if (reveal.postmark > 0f && !card.letter) {
         val saved = canvas.save()

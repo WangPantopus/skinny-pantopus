@@ -111,6 +111,17 @@ internal val tableWordsStyle =
         shadow = Shadow(PantopusColors.tableNight.copy(alpha = 0.35f), Offset(0f, 3f), blurRadius = 16f),
     )
 
+/** A travelling card's line under the words: the sample's small upright words in the soft cream (travelling card Part 3). */
+internal val tableCameStyle =
+    TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 1.4.em,
+        color = PantopusColors.tableCreamSoft,
+        textAlign = TextAlign.Center,
+        lineBreak = LineBreak.Heading,
+        shadow = Shadow(PantopusColors.tableNight.copy(alpha = 0.35f), Offset(0f, 3f), blurRadius = 16f),
+    )
+
 /** The hint under the button, 15 in white at 85% so it reads on the dark cloth (plan 8.2). */
 internal val tableHintStyle =
     TextStyle(
@@ -253,6 +264,23 @@ private fun Words(
     val fade by animateFloatAsState(if (shows && state.words.isNotEmpty()) 1f else 0f, tween(400), label = "tableWords")
     val words = state.words
     if (words.isEmpty() && fade == 0f) return
+    val came = state.cameLine
+    if (came.isNotEmpty()) {
+        // A travelling card's envelope: how far it came, under the words (travelling card plan Part 3).
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 24.dp, top = top + 54.dp)
+                    .alpha(fade)
+                    .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            verticalArrangement = Arrangement.spacedBy(CAME_GAP),
+        ) {
+            Text(words, style = tableWordsStyle, modifier = Modifier.fillMaxWidth().testTag("cardTableWords"))
+            Text(came, style = tableCameStyle, modifier = Modifier.fillMaxWidth().testTag("cardTableCameLine"))
+        }
+        return
+    }
     Text(
         words,
         style = tableWordsStyle,
@@ -265,6 +293,9 @@ private fun Words(
                 .testTag("cardTableWords"),
     )
 }
+
+/** Between the words and a travelling card's line under them. */
+internal val CAME_GAP = 6.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
