@@ -86,15 +86,18 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   const posted = mail.created_at || mail.delivered_at;
   // card_signature, card_media and card_photo_covered only carry a card's signature, photo and voice to cardView (GET
   // /api/mailbox/:id); apps read them under card. Which reports share a card is the server's and the admins' alone.
-  const { card_signature: _signature, card_media: _media, card_photo_covered: _covered, ...rest } = mail;
+  // card_travel carries a travelling card's view to cardView the same way (services/cardTravel readerView).
+  const { card_signature: _signature, card_media: _media, card_photo_covered: _covered, card_travel: _travel, ...rest } = mail;
   if (rest.mail_extracted?.reports) {
     const { reports: _reports, ...extracted } = rest.mail_extracted;
     rest.mail_extracted = extracted;
   }
   // The mark that a card carries its own photo or voice (it spent a bought stamp) is the server's alone: a sealed card
   // never says what's inside. So is where a card by email's email got to (services/cardEmail).
-  if (rest.mail_extracted?.card?.media_stamp !== undefined || rest.mail_extracted?.card?.email !== undefined) {
-    const { media_stamp: _mediaStamp, email: _email, ...card } = rest.mail_extracted.card;
+  // A travelling card's stored journey (its parent's id, who heard of it) is the server's too: apps read card.travel.
+  if (rest.mail_extracted?.card?.media_stamp !== undefined || rest.mail_extracted?.card?.email !== undefined
+    || rest.mail_extracted?.card?.travel !== undefined) {
+    const { media_stamp: _mediaStamp, email: _email, travel: _storedTravel, ...card } = rest.mail_extracted.card;
     rest.mail_extracted = { ...rest.mail_extracted, card };
   }
   return {

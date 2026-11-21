@@ -43,6 +43,8 @@ import CardRack from './CardRack';
 import { askTakeBack } from './takeBack';
 import { chosenPersonFor } from './sendOneBack';
 import { clearCardDraft, readCardDraft, saveCardDraft } from './cardDraft';
+import TownSheet from './TownSheet';
+import travelStyles from './CardTravel.module.css';
 import { cardMood, cardPicture, clockTime, emailGoesAt, firstNameOf, SERIF, shortDay, tableTint, WAX, WAX_BUTTON } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
@@ -275,6 +277,9 @@ function takeBackLine(card: SentHolidayCard): string | null {
 }
 
 // ── Header ───────────────────────────────────────────────────
+
+// After sending a card that travels (travelling card Part 2).
+const TRAVEL_SENT_LINE = 'It can travel. You’ll hear when it reaches a town.';
 
 function StepHeader({ step, title, onBack, headingRef, trailing = null }: { step: Step; title?: string; onBack: () => void; headingRef: RefObject<HTMLHeadingElement | null>; trailing?: ReactNode }) {
   const index = STEPS.indexOf(step);
@@ -1178,6 +1183,7 @@ function SealStep({
   onCloth = false,
   fade = PAGE_FADE,
   solid = PAGE_TINT,
+  travel = null,
 }: {
   cards: HolidayCards;
   to: Recipient;
@@ -1206,6 +1212,8 @@ function SealStep({
   fade?: string;
   /** That colour as "r, g, b": solid behind "Look it over" (design re-check of November 17). */
   solid?: string;
+  /** "Let it travel" (server key card_travel; travelling card Part 2): null while the server doesn't offer it. */
+  travel?: { on: boolean; who: string; onToggle: () => void } | null;
 }) {
   // No stamp left (for a list, fewer than its cards): the main button opens the stamp books, as Look it over's does.
   const count = to.kind === 'list' ? to.entries.length : 1;
@@ -1253,8 +1261,28 @@ function SealStep({
           </div>
         </fieldset>
         );
+        // "Let it travel": one row under the arrival choices, on the same paper (travelling card Part 2, D5).
+        const travelRow = travel ? (
+          <div className={onCloth ? 'mt-2.5' : 'mx-auto mt-2.5 max-w-[420px]'}>
+            <div className={travelStyles.travelRow} onClick={travel.onToggle} data-testid="sendCardTravelRow">
+              <span className={travelStyles.words}>
+                <b id="card-travel-label">Let it travel</b>
+                <span>{travel.who} can pass this card on. Its towns show on a map, never names.</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={travel.on}
+                aria-labelledby="card-travel-label"
+                className={travelStyles.switch}
+                onClick={(event) => { event.stopPropagation(); travel.onToggle(); }}
+                data-testid="sendCardTravel"
+              />
+            </div>
+          </div>
+        ) : null;
         // On the cloth, the same three choices lie on a cream slip (design plan Part 9).
-        return onCloth ? <div className="mt-6"><Slip>{choices}</Slip></div> : choices;
+        return onCloth ? <div className="mt-6"><Slip>{choices}{travelRow}</Slip></div> : <>{choices}{travelRow}</>;
       })()}
       <p className="mx-auto mt-3.5 max-w-[420px] rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
         {/* Before it's sent we don't know their clock; the sent card says the time on this one. */}
@@ -1629,6 +1657,7 @@ function SentCard({
           <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#4e5563]">{title}</p>
           <p className="mt-0.5 truncate text-[17px] font-semibold">{card.by_link && card.status !== 'claimed' ? 'To whoever opens your link' : `To ${card.to_name || 'them'}`}</p>
           <p className="mt-1 text-[14px] leading-5 text-[#374151]">{arrivalLine(card)}</p>
+          {card.travel ? <p className="mt-1 text-[14px] leading-5 text-[#374151]" data-testid="sendCardTravelSent">{TRAVEL_SENT_LINE}</p> : null}
         </div>
       </div>
       {linkWaiting ? (
@@ -1739,10 +1768,21 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const [sealing, setSealing] = useState<{ card: TableCard; note: string; fromName: string; toName: string; who: string; count: number } | null>(null);
   const [sealShare, setSealShare] = useState(false);
   const [linkSaid, setLinkSaid] = useState<string | null>(null);
+  // "Let it travel" (server key card_travel): on to begin with (D5). Someone with no town is asked once, "Where does it
+  // start?", when they turn it on or seal with it on (D4); `townFor` is what goes on once they've chosen.
+  const [travel, setTravel] = useState(true);
+  const [townFor, setTownFor] = useState<{ then: (() => void) | null } | null>(null);
   const sealingOpen = useRef(false);
   sealingOpen.current = Boolean(sealing);
 
   const data = cards.data;
+  const travelOffer = data?.travel ?? null;
+  const travelling = Boolean(travelOffer) && travel;
+  // Runs `then` now, or once they've given their town (asked only while it travels and they have none).
+  const withTown = (then: () => void) => {
+    if (travelling && !travelOffer?.town) { setTownFor({ then }); return; }
+    then();
+  };
   // Their saved signature (founder, 2026-11-16): the next card starts signed with it.
   const savedSignature = launchFeatures.cardTable ? data?.signature?.saved ?? null : null;
   const max = data?.max_recipients ?? 1;
@@ -1881,6 +1921,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       ...(signature ? { signature } : {}),
       // Each address keeps the list's choice where the server offers every email choice.
       ...(data?.arrivals.email_all ? { emails_keep_arrival: true } : {}),
+      ...(travelling ? { travel: true } : {}),
     };
   };
 
@@ -1929,6 +1970,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       ...(signature ? { signature } : {}),
       ...(photoReady ? { photo: photoReady.file_id, ...(photoAlt.trim() ? { photo_alt: photoAlt.trim() } : {}) } : {}),
       ...(voiceReady ? { voice: voiceReady.file_id } : {}),
+      ...(travelling ? { travel: true } : {}),
     };
   };
 
@@ -1996,6 +2038,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       },
       onError: (error) => {
         if (wentEarlier(error)) return;
+        if (error.serverCode === 'CARD_TRAVEL_NEEDS_TOWN') { preview.reset(); setTownFor({ then: doLook }); return; }
         if (lookIsUnavailable(error)) setLookUnavailable(true);
         // Its photo or voice needs a bought stamp: the stamp books open; step 4 says why, and the card stays as it is.
         if (error.serverCode === 'CARD_MEDIA_NEEDS_STAMP') { void stamps.refresh(); setStampShort(null); setStampReason(MEDIA_NEEDS_STAMP); setStampSheet(true); }
@@ -2042,6 +2085,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       },
       onError: (error) => {
         if (wentEarlier(error)) return;
+        if (error.serverCode === 'CARD_TRAVEL_NEEDS_TOWN') { preview.reset(); setTownFor({ then: doSealFromSeal }); return; }
         if (lookIsUnavailable(error)) {
           setLookUnavailable(true);
           preview.reset();
@@ -2423,8 +2467,17 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           sendsHere={lookUnavailable}
           sending={send.isPending}
           error={sealError ?? (lookUnavailable ? LOOK_UNAVAILABLE : preview.isError ? sendMessage(preview.error, to.kind === 'email') : null)}
-          onLook={doLook}
-          onSeal={doSealFromSeal}
+          onLook={() => withTown(doLook)}
+          onSeal={() => withTown(doSealFromSeal)}
+          travel={travelOffer ? {
+            on: travel,
+            who: to.kind === 'person' ? firstName(to.name) : 'They',
+            onToggle: () => {
+              setSealError(null); preview.reset(); previewList.reset();
+              if (!travel && !travelOffer.town) { setTravel(true); setTownFor({ then: null }); return; }
+              setTravel(!travel);
+            },
+          } : null}
           stamps={data.postage_enabled ? stamps : null}
           onGetStamps={() => {
             // A list short of stamps: the stamp books say how many more its cards need, as Look it over's do.
@@ -2502,6 +2555,13 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         </div>
       ) : null}
       </div>
+      {townFor ? (
+        <TownSheet
+          onDone={() => { const next = townFor.then; setTownFor(null); setTravel(true); if (next) next(); }}
+          // Closed without a town: a card turned on to travel goes back to an ordinary card.
+          onClose={() => { if (!townFor.then) setTravel(false); setTownFor(null); }}
+        />
+      ) : null}
       {sealing ? (
         <CardTable
           card={sealing.card}
@@ -2521,6 +2581,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
             gone: listSent ? (
               <>
                 <p>{listMissed ? `${listMissed === 1 ? 'One card' : `${listMissed} cards`} didn’t go. See which, and send them again.` : to ? takeBackBefore(to) : ''}</p>
+                {listSent.some((result) => result.status !== 'not_sent' && result.card.travel) ? <p data-testid="sealTravelLine">{TRAVEL_SENT_LINE}</p> : null}
                 <div data-row>
                   <button type="button" data-strong data-testid="sealDone" onClick={sealingDone}>{listMissed ? 'See which' : 'Done'}</button>
                   {listMissed ? null : <button type="button" data-testid="sealSeeThem" onClick={closeSealing}>See them</button>}
@@ -2532,6 +2593,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
             ) : sent ? (
               <>
                 <p>{arrivalLine(sent)}</p>
+                {sent.travel ? <p data-testid="sealTravelLine">{TRAVEL_SENT_LINE}</p> : null}
                 {sent.by_link && sentLink ? <p data-testid="sealLink" style={{ userSelect: 'text', WebkitUserSelect: 'text' }}>{sentLink}</p> : null}
                 {takeBackLine(sent) ? <p>{takeBackLine(sent)}</p> : null}
                 <div data-row>
