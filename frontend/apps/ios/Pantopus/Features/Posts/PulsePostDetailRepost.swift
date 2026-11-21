@@ -42,6 +42,7 @@ struct PulsePostDetailRepostSurfaces: ViewModifier {
                     onCancel: { viewModel.quoteDraft = nil },
                     onPosted: { _ in viewModel.quoteDraft = nil }
                 )
+                .readableColumn()
             }
     }
 }

@@ -773,7 +773,7 @@ public struct ChatConversationView: View {
                 },
                 onSendCard: sendCardAction
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetentsFittingContentOnIPad([.medium, .large])
             .presentationDragIndicator(.visible)
         }
         // A one-to-one chat with a person: may a Christmas card go to them (TABCARD)?

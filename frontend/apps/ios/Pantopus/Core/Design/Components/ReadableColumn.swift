@@ -46,6 +46,13 @@ public extension View {
         modifier(ReadableColumn(width: width))
     }
 
+    /// Keeps a prompt or form inside a full-screen cover (a card between spacers, under the cover's own Close) no
+    /// wider than the reading width, centered in the room it is offered. On a phone the reading width is wider than
+    /// the screen, so nothing changes.
+    func readableWidth() -> some View {
+        modifier(ReadableWidth())
+    }
+
     /// For a screen inside `readableColumn()` that lays out its own readable columns on a wide screen: where the
     /// screen is at least `width` wide, the column leaves this screen the whole width.
     func readableColumnWidens(from width: CGFloat) -> some View {
@@ -75,6 +82,15 @@ private struct ReadableColumnBesideFoldKey: PreferenceKey {
 
     static func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = value || nextValue()
+    }
+}
+
+private struct ReadableWidth: ViewModifier {
+    /// The reading width at the default text size; it grows with larger text, as the column's does.
+    @ScaledMetric(relativeTo: .body) private var width = ReadableColumn.readingWidth
+
+    func body(content: Content) -> some View {
+        content.frame(maxWidth: width)
     }
 }
 

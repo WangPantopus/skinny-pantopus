@@ -379,6 +379,8 @@ struct MomentsComposeGate: View {
             }
         }
         .padding(.horizontal, Spacing.s8)
+        // On a wide screen the card keeps to the reading width instead of running the screen's width.
+        .readableWidth()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("moments.gate.location")
     }

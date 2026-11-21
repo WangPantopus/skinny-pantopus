@@ -51,8 +51,7 @@ public struct FindHomeView: View {
             focusedOnOpen = true
             searchFocused = true
         }
-        // Reuse the shared T3.5 Token / Accept surface rather than
-        // re-implementing accept / decline here.
+        // The shared T3.5 Token / Accept surface, in the reading column as Place shows it.
         .fullScreenCover(item: $presentedInviteToken) { item in
             TokenAcceptView(
                 viewModel: TokenAcceptViewModel(
@@ -61,6 +60,7 @@ public struct FindHomeView: View {
                     onDeclined: { presentedInviteToken = nil }
                 )
             )
+            .readableColumn()
         }
         .accessibilityIdentifier("findHome")
     }

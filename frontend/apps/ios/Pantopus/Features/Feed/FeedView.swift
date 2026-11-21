@@ -312,6 +312,7 @@ public struct FeedView: View {
                     Task { await viewModel.refresh() }
                 }
             )
+            .readableColumn()
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pulseFeed")

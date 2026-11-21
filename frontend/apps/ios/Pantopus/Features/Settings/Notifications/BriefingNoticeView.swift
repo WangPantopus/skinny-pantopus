@@ -88,7 +88,7 @@ struct BriefingNoticeView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .foregroundStyle(Theme.Color.appText)
-                    .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+                    .presentationDetentsFittingContentOnIPad(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
                     .interactiveDismissDisabled(saving || needsPermission)
                     .accessibilityIdentifier("briefingDefaultsNotice")
                     .task { _ = await recordNotice() }
@@ -123,7 +123,7 @@ struct BriefingNoticeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .foregroundStyle(Theme.Color.appText)
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDetentsFittingContentOnIPad(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         // One tap answers it; closing it without one would only bring it back.
         .interactiveDismissDisabled()
         .accessibilityIdentifier("suggestionsNotice")

@@ -38,6 +38,7 @@ struct ProfilePostQuoteComposer: ViewModifier {
                     onCancel: { model.quoteDraft = nil },
                     onPosted: { _ in model.quoteDraft = nil }
                 )
+                .readableColumn()
             }
     }
 }

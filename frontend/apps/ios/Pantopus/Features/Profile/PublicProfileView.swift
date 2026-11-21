@@ -332,7 +332,7 @@ public struct PublicProfileView: View {
                 pickedPreview = audience
                 showPreviewMenu = false
             }
-            .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.fraction(0.62), .large])
+            .presentationDetentsFittingContentOnIPad(typeSize.isAccessibilitySize ? [.large] : [.fraction(0.62), .large])
         }
         .fullScreenCover(item: $shownPreview) { audience in
             previewCover(audience)

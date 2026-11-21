@@ -242,6 +242,7 @@ public struct GigDetailView: View {
                     toast = ToastMessage(text: "Shared to the feed.", kind: .success)
                 }
             )
+            .readableColumn()
         }
     }
 

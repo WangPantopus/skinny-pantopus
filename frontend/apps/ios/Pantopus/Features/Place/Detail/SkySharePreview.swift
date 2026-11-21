@@ -43,18 +43,21 @@ struct SkyShareButton: View {
             SkySharePreview(card: shown) { picked = $0 }
         }
         .fullScreenCover(item: $pantopus) { route in
-            switch route {
-            case let .pulse(attachment):
-                // A Local Update with the picture, both audiences offered, the words left to them.
-                PulseComposeFlowView(
-                    prefillDraft: PulseComposeDraft(postType: PulseComposePurpose.localUpdate.postType, body: ""),
-                    prefillPhotos: [attachment.photo],
-                    onCancel: { pantopus = nil },
-                    onPosted: { _ in pantopus = nil }
-                )
-            case let .chat(attachment):
-                SkyShareChatFlow(attachment: attachment) { pantopus = nil }
+            Group {
+                switch route {
+                case let .pulse(attachment):
+                    // A Local Update with the picture, both audiences offered, the words left to them.
+                    PulseComposeFlowView(
+                        prefillDraft: PulseComposeDraft(postType: PulseComposePurpose.localUpdate.postType, body: ""),
+                        prefillPhotos: [attachment.photo],
+                        onCancel: { pantopus = nil },
+                        onPosted: { _ in pantopus = nil }
+                    )
+                case let .chat(attachment):
+                    SkyShareChatFlow(attachment: attachment) { pantopus = nil }
+                }
             }
+            .readableColumn()
         }
     }
 
