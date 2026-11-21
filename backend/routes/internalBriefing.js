@@ -775,6 +775,19 @@ async function sendReminderPush({ userId, title, body, reminderType, data }) {
  * fails after its call was answered is told to the next call instead (500), so the caller's alarm still hears of it.
  */
 const MAIL_MORNING_ANSWER_MS = 45 * 1000;
+let travelArrivalsRunning = false;
+async function runTravelArrivals() {
+  if (travelArrivalsRunning) return;
+  travelArrivalsRunning = true;
+  try {
+    const travel = await require('../services/cardTravel').runArrivals();
+    if (!travel.skipped) logger.info('Travelling card arrivals', travel);
+  } catch (err) {
+    logger.warn('Travelling card arrivals failed', { error: err.message });
+  } finally {
+    travelArrivalsRunning = false;
+  }
+}
 let mailMorningLateFailure = null;
 router.post('/mail-morning', verifyInternalApiKey, async (req, res) => {
   // Launch cut #10 (Mailbox): no mail notices while the mailbox is off.
@@ -793,6 +806,9 @@ router.post('/mail-morning', verifyInternalApiKey, async (req, res) => {
       send: async (push) => (await sendReminderPush(push)).payload || { status: 'failed' },
     }).then((stats) => {
       logger.info('Mail morning notices', stats);
+      // Travelling cards (launch key card_travel) delivered this morning reach their towns, and everyone who held them
+      // hears (services/cardTravel). After the mail notices, on its own: it never slows or fails them.
+      runTravelArrivals();
       return stats;
     });
     let timer;

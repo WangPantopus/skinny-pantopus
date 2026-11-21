@@ -43,12 +43,14 @@ import CardRack from './CardRack';
 import { askTakeBack } from './takeBack';
 import { chosenPersonFor } from './sendOneBack';
 import { clearCardDraft, readCardDraft, saveCardDraft } from './cardDraft';
+import TownSheet from './TownSheet';
+import travelStyles from './CardTravel.module.css';
 import { cardMood, cardPicture, clockTime, emailGoesAt, firstNameOf, SERIF, shortDay, tableTint, WAX, WAX_BUTTON } from './cardArt';
 
 type Step = 'to' | 'pick' | 'write' | 'seal' | 'look' | 'sent';
 /** Someone on a list (digital stamps on): a person found by name, or an address. */
 type ListEntry = { kind: 'person'; userId: string; name: string } | { kind: 'email'; email: string };
-type Recipient = ListEntry | { kind: 'link' }
+export type Recipient = ListEntry | { kind: 'link' }
   /** Two or more people or addresses: a card each (POST /cards/batch). */
   | { kind: 'list'; entries: ListEntry[] };
 
@@ -154,7 +156,7 @@ function lookIsUnavailable(error: MailboxApiError | null): boolean {
 }
 
 /** The server's own sentence when it sent one (a card that can't go yet, a limit), else what went wrong. */
-function sendMessage(error: MailboxApiError | null, byEmail = false): string {
+export function sendMessage(error: MailboxApiError | null, byEmail = false): string {
   if (error?.serverCode && error.status < 500) return error.message;
   if (error?.serverCode === 'CARD_UNAVAILABLE') return error.message;
   // The server's own check of the address, stricter than ours (it knows which endings an address can have).
@@ -182,7 +184,7 @@ async function pickContactEmail(): Promise<string | null> {
   }
 }
 
-function firstName(name: string): string {
+export function firstName(name: string): string {
   return name.split(/\s+/)[0] || name;
 }
 
@@ -220,7 +222,7 @@ function envelopeName(to: Recipient): string {
 }
 
 /** How a sent card arrives, in a sentence. */
-function arrivalLine(card: SentHolidayCard): string {
+export function arrivalLine(card: SentHolidayCard): string {
   const who = card.to_name || 'They';
   if (card.status === 'withdrawn') return 'You took this card back.';
   if (card.by_link) {
@@ -267,7 +269,7 @@ function sendWords(to: Recipient): string {
   return to.kind === 'link' ? 'Seal it and get the link' : 'Seal and send';
 }
 
-function takeBackLine(card: SentHolidayCard): string | null {
+export function takeBackLine(card: SentHolidayCard): string | null {
   if (!card.can_take_back) return null;
   if (card.by_link) return 'You can take it back until someone opens it.';
   if (card.by_email) return 'You can take it back until they open it.';
@@ -275,6 +277,9 @@ function takeBackLine(card: SentHolidayCard): string | null {
 }
 
 // ── Header ───────────────────────────────────────────────────
+
+// After sending a card that travels (travelling card Part 2).
+const TRAVEL_SENT_LINE = 'It can travel. You’ll hear when it reaches a town.';
 
 function StepHeader({ step, title, onBack, headingRef, trailing = null }: { step: Step; title?: string; onBack: () => void; headingRef: RefObject<HTMLHeadingElement | null>; trailing?: ReactNode }) {
   const index = STEPS.indexOf(step);
@@ -307,15 +312,18 @@ function StepHeader({ step, title, onBack, headingRef, trailing = null }: { step
 
 // ── Step 1: who it's for ─────────────────────────────────────
 
-function ToStep({
+export function ToStep({
   onChoose,
   max = 1,
   listed = [],
   onToggle,
   onAdd,
   onContinue,
+  onPaper = false,
 }: {
   onChoose: (to: Recipient) => void;
+  /** On the cream paper of a sheet (Pass it on): the same picker, its lines always in the paper's ink. */
+  onPaper?: boolean;
   /** How many one card can go to at once; more than one (digital stamps on): people and addresses go on a list. */
   max?: number;
   listed?: ListEntry[];
@@ -337,6 +345,7 @@ function ToStep({
   const many = max > 1;
   const chosen = new Set(listed.map(entryKey));
   const full = listed.length >= max;
+  const m = onPaper ? 'text-[#4e5563]' : muted;
 
   // A list: the people and addresses on it, each taken off with its ×, and the button on to the next step.
   const list = many ? (
@@ -358,7 +367,7 @@ function ToStep({
           ))}
         </ul>
       ) : null}
-      <p className={`mt-2.5 text-[13px] leading-[18px] ${muted}`}>
+      <p className={`mt-2.5 text-[13px] leading-[18px] ${m}`}>
         {full ? `That’s ${max}, the most for one send. ` : null}Each person gets their own card. No one sees who else got one.
       </p>
     </div>
@@ -412,7 +421,7 @@ function ToStep({
           placeholder="name@example.com"
           className="mt-2 h-12 w-full rounded-xl border border-[#d6cbb6] bg-[#fffdf8] px-4 text-[16px] text-[#111827] focus:border-[#8b1d1d] focus:outline-none focus:ring-2 focus:ring-[#8b1d1d]/30"
         />
-        <p className={`mt-2 text-[14px] leading-5 ${muted}`}>
+        <p className={`mt-2 text-[14px] leading-5 ${m}`}>
           They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. The
           email never shows your note.
         </p>
@@ -446,13 +455,13 @@ function ToStep({
       </div>
       <div aria-live="polite" className="mt-3">
         {debounced.trim().length < 2 ? (
-          <p className={`px-1 text-[14px] leading-5 ${muted}`}>Type two letters or more of their name.</p>
+          <p className={`px-1 text-[14px] leading-5 ${m}`}>Type two letters or more of their name.</p>
         ) : results.isPending ? (
-          <p className={`flex items-center gap-2 px-1 text-[14px] ${muted}`}><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Looking…</p>
+          <p className={`flex items-center gap-2 px-1 text-[14px] ${m}`}><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Looking…</p>
         ) : results.isError ? (
           <p role="alert" className="px-1 text-[14px] text-[#a81a1a]">Couldn&rsquo;t search just now. {mailLoadMessage(results.error)}</p>
         ) : people.length === 0 ? (
-          <p className={`px-1 text-[14px] leading-5 ${muted}`}>No one by that name. Check the spelling, or send it to their email.</p>
+          <p className={`px-1 text-[14px] leading-5 ${m}`}>No one by that name. Check the spelling, or send it to their email.</p>
         ) : (
           <ul className="divide-y divide-[#e7dcc6] overflow-hidden rounded-xl border border-[#e3d8c3] bg-[#fffdf8]">
             {people.map((person) => {
@@ -491,7 +500,7 @@ function ToStep({
       </div>
       {/* Sending to someone not on Pantopus already invites them (design plan 11.6): said once, above both ways. */}
       {launchFeatures.cardTable ? (
-        <p data-testid="sendCardInviteLine" className={`mt-5 text-center text-[14px] leading-5 ${muted}`}>They don&rsquo;t need Pantopus yet. They join to open it.</p>
+        <p data-testid="sendCardInviteLine" className={`mt-5 text-center text-[14px] leading-5 ${m}`}>They don&rsquo;t need Pantopus yet. They join to open it.</p>
       ) : null}
       <button
         type="button"
@@ -511,12 +520,12 @@ function ToStep({
             type="button"
             data-testid="sendCardByLink"
             onClick={() => onChoose({ kind: 'link' })}
-            className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] [@media(prefers-color-scheme:dark)]:text-[#e8b996]"
+            className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-[#8b1d1d] hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]${onPaper ? '' : ' [@media(prefers-color-scheme:dark)]:text-[#e8b996]'}`}
           >
             <Link2 className="h-[18px] w-[18px]" aria-hidden />
             Send it by link
           </button>
-          <p className={`mx-auto mt-0.5 max-w-[340px] text-[13px] leading-[18px] ${muted}`}>Text it, or paste it anywhere. The first person to open it keeps the card.</p>
+          <p className={`mx-auto mt-0.5 max-w-[340px] text-[13px] leading-[18px] ${m}`}>Text it, or paste it anywhere. The first person to open it keeps the card.</p>
         </div>
       ) : null}
     </div>
@@ -1178,6 +1187,7 @@ function SealStep({
   onCloth = false,
   fade = PAGE_FADE,
   solid = PAGE_TINT,
+  travel = null,
 }: {
   cards: HolidayCards;
   to: Recipient;
@@ -1206,6 +1216,8 @@ function SealStep({
   fade?: string;
   /** That colour as "r, g, b": solid behind "Look it over" (design re-check of November 17). */
   solid?: string;
+  /** "Let it travel" (server key card_travel; travelling card Part 2): null while the server doesn't offer it. */
+  travel?: { on: boolean; who: string; onToggle: () => void } | null;
 }) {
   // No stamp left (for a list, fewer than its cards): the main button opens the stamp books, as Look it over's does.
   const count = to.kind === 'list' ? to.entries.length : 1;
@@ -1253,8 +1265,28 @@ function SealStep({
           </div>
         </fieldset>
         );
+        // "Let it travel": one row under the arrival choices, on the same paper (travelling card Part 2, D5).
+        const travelRow = travel ? (
+          <div className={onCloth ? 'mt-2.5' : 'mx-auto mt-2.5 max-w-[420px]'}>
+            <div className={travelStyles.travelRow} onClick={travel.onToggle} data-testid="sendCardTravelRow">
+              <span className={travelStyles.words}>
+                <b id="card-travel-label">Let it travel</b>
+                <span>{travel.who} can pass this card on. Its towns show on a map, never names.</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={travel.on}
+                aria-labelledby="card-travel-label"
+                className={travelStyles.switch}
+                onClick={(event) => { event.stopPropagation(); travel.onToggle(); }}
+                data-testid="sendCardTravel"
+              />
+            </div>
+          </div>
+        ) : null;
         // On the cloth, the same three choices lie on a cream slip (design plan Part 9).
-        return onCloth ? <div className="mt-6"><Slip>{choices}</Slip></div> : choices;
+        return onCloth ? <div className="mt-6"><Slip>{choices}{travelRow}</Slip></div> : <>{choices}{travelRow}</>;
       })()}
       <p className="mx-auto mt-3.5 max-w-[420px] rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
         {/* Before it's sent we don't know their clock; the sent card says the time on this one. */}
@@ -1629,6 +1661,7 @@ function SentCard({
           <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[#4e5563]">{title}</p>
           <p className="mt-0.5 truncate text-[17px] font-semibold">{card.by_link && card.status !== 'claimed' ? 'To whoever opens your link' : `To ${card.to_name || 'them'}`}</p>
           <p className="mt-1 text-[14px] leading-5 text-[#374151]">{arrivalLine(card)}</p>
+          {card.travel ? <p className="mt-1 text-[14px] leading-5 text-[#374151]" data-testid="sendCardTravelSent">{TRAVEL_SENT_LINE}</p> : null}
         </div>
       </div>
       {linkWaiting ? (
@@ -1739,10 +1772,21 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const [sealing, setSealing] = useState<{ card: TableCard; note: string; fromName: string; toName: string; who: string; count: number } | null>(null);
   const [sealShare, setSealShare] = useState(false);
   const [linkSaid, setLinkSaid] = useState<string | null>(null);
+  // "Let it travel" (server key card_travel): on to begin with (D5). Someone with no town is asked once, "Where does it
+  // start?", when they turn it on or seal with it on (D4); `townFor` is what goes on once they've chosen.
+  const [travel, setTravel] = useState(true);
+  const [townFor, setTownFor] = useState<{ then: (() => void) | null } | null>(null);
   const sealingOpen = useRef(false);
   sealingOpen.current = Boolean(sealing);
 
   const data = cards.data;
+  const travelOffer = data?.travel ?? null;
+  const travelling = Boolean(travelOffer) && travel;
+  // Runs `then` now, or once they've given their town (asked only while it travels and they have none).
+  const withTown = (then: () => void) => {
+    if (travelling && !travelOffer?.town) { setTownFor({ then }); return; }
+    then();
+  };
   // Their saved signature (founder, 2026-11-16): the next card starts signed with it.
   const savedSignature = launchFeatures.cardTable ? data?.signature?.saved ?? null : null;
   const max = data?.max_recipients ?? 1;
@@ -1881,6 +1925,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       ...(signature ? { signature } : {}),
       // Each address keeps the list's choice where the server offers every email choice.
       ...(data?.arrivals.email_all ? { emails_keep_arrival: true } : {}),
+      ...(travelling ? { travel: true } : {}),
     };
   };
 
@@ -1929,6 +1974,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       ...(signature ? { signature } : {}),
       ...(photoReady ? { photo: photoReady.file_id, ...(photoAlt.trim() ? { photo_alt: photoAlt.trim() } : {}) } : {}),
       ...(voiceReady ? { voice: voiceReady.file_id } : {}),
+      ...(travelling ? { travel: true } : {}),
     };
   };
 
@@ -1996,6 +2042,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       },
       onError: (error) => {
         if (wentEarlier(error)) return;
+        if (error.serverCode === 'CARD_TRAVEL_NEEDS_TOWN') { preview.reset(); setTownFor({ then: doLook }); return; }
         if (lookIsUnavailable(error)) setLookUnavailable(true);
         // Its photo or voice needs a bought stamp: the stamp books open; step 4 says why, and the card stays as it is.
         if (error.serverCode === 'CARD_MEDIA_NEEDS_STAMP') { void stamps.refresh(); setStampShort(null); setStampReason(MEDIA_NEEDS_STAMP); setStampSheet(true); }
@@ -2042,6 +2089,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       },
       onError: (error) => {
         if (wentEarlier(error)) return;
+        if (error.serverCode === 'CARD_TRAVEL_NEEDS_TOWN') { preview.reset(); setTownFor({ then: doSealFromSeal }); return; }
         if (lookIsUnavailable(error)) {
           setLookUnavailable(true);
           preview.reset();
@@ -2423,8 +2471,17 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           sendsHere={lookUnavailable}
           sending={send.isPending}
           error={sealError ?? (lookUnavailable ? LOOK_UNAVAILABLE : preview.isError ? sendMessage(preview.error, to.kind === 'email') : null)}
-          onLook={doLook}
-          onSeal={doSealFromSeal}
+          onLook={() => withTown(doLook)}
+          onSeal={() => withTown(doSealFromSeal)}
+          travel={travelOffer ? {
+            on: travel,
+            who: to.kind === 'person' ? firstName(to.name) : 'They',
+            onToggle: () => {
+              setSealError(null); preview.reset(); previewList.reset();
+              if (!travel && !travelOffer.town) { setTravel(true); setTownFor({ then: null }); return; }
+              setTravel(!travel);
+            },
+          } : null}
           stamps={data.postage_enabled ? stamps : null}
           onGetStamps={() => {
             // A list short of stamps: the stamp books say how many more its cards need, as Look it over's do.
@@ -2502,6 +2559,13 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         </div>
       ) : null}
       </div>
+      {townFor ? (
+        <TownSheet
+          onDone={() => { const next = townFor.then; setTownFor(null); setTravel(true); if (next) next(); }}
+          // Closed without a town: a card turned on to travel goes back to an ordinary card.
+          onClose={() => { if (!townFor.then) setTravel(false); setTownFor(null); }}
+        />
+      ) : null}
       {sealing ? (
         <CardTable
           card={sealing.card}
@@ -2521,6 +2585,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
             gone: listSent ? (
               <>
                 <p>{listMissed ? `${listMissed === 1 ? 'One card' : `${listMissed} cards`} didn’t go. See which, and send them again.` : to ? takeBackBefore(to) : ''}</p>
+                {listSent.some((result) => result.status !== 'not_sent' && result.card.travel) ? <p data-testid="sealTravelLine">{TRAVEL_SENT_LINE}</p> : null}
                 <div data-row>
                   <button type="button" data-strong data-testid="sealDone" onClick={sealingDone}>{listMissed ? 'See which' : 'Done'}</button>
                   {listMissed ? null : <button type="button" data-testid="sealSeeThem" onClick={closeSealing}>See them</button>}
@@ -2532,6 +2597,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
             ) : sent ? (
               <>
                 <p>{arrivalLine(sent)}</p>
+                {sent.travel ? <p data-testid="sealTravelLine">{TRAVEL_SENT_LINE}</p> : null}
                 {sent.by_link && sentLink ? <p data-testid="sealLink" style={{ userSelect: 'text', WebkitUserSelect: 'text' }}>{sentLink}</p> : null}
                 {takeBackLine(sent) ? <p>{takeBackLine(sent)}</p> : null}
                 <div data-row>

@@ -131,7 +131,7 @@ export { getHomes, attachToHome, detachFromHome } from './endpoints/homes';
 export { getChatRooms, getBusinessChatRooms, sendMessage, markMessagesAsRead, markMessagesAsReadForIdentity, getConversationMessages, markConversationAsRead } from './endpoints/chat';
 export { uploadProfilePicture, uploadPortfolio, getPortfolio } from './endpoints/files';
 export { getMailbox, markMailAsRead, createAdCampaign } from './endpoints/mailbox';
-export type { DeletedMail, CardSignature, CardMediaRef, CardPhoto, CardVoice, CardExchange, CardExchangePage, CardReplySummary, CardReplyBody, HolidayCards, HolidayCardDesign, HolidayCardCollection, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardNoteIdea, HolidayCardPreview, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, SentHolidayCard, SentPiece, SentPieceDetail, SentTrailStep, WaitingHolidayCard } from './endpoints/mailbox';
+export type { DeletedMail, CardSignature, CardMediaRef, CardPhoto, CardVoice, CardExchange, CardExchangePage, CardReplySummary, CardReplyBody, HolidayCards, HolidayCardDesign, HolidayCardCollection, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardNoteIdea, HolidayCardPreview, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, SentHolidayCard, SentPiece, SentPieceDetail, SentTrailStep, WaitingHolidayCard, CardTravel, CardTravelPostmark, CardTown, PassOnBody, PassOnPreview, CardJourney, CardJourneyStop, CardJourneyGoal } from './endpoints/mailbox';
 export { getBalance, createPaymentIntent, requestPayout } from './endpoints/payments';
 export {
   uploadGigMedia,

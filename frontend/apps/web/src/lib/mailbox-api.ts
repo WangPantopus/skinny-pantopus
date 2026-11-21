@@ -194,6 +194,23 @@ export async function takeBackCardReply(cardId: string): Promise<{ taken_back: t
   return call(() => mailbox.takeBackCardReply(cardId));
 }
 
+// The travelling card (server key card_travel): towns, passing a card on, and its journey.
+export async function getCardTowns(q?: string): Promise<{ towns: mailbox.CardTown[]; suggested?: mailbox.CardTown | null }> {
+  return call(() => mailbox.getCardTowns(q));
+}
+export async function saveCardTown(id: string): Promise<{ town: string }> {
+  return call(() => mailbox.saveCardTown(id));
+}
+export async function previewPassOn(cardId: string, body: mailbox.PassOnBody): Promise<{ pass_on: mailbox.PassOnPreview }> {
+  return call(() => mailbox.previewPassOn(cardId, body));
+}
+export async function passOnCard(cardId: string, body: mailbox.PassOnBody): Promise<{ card: mailbox.SentHolidayCard; link?: string }> {
+  return call(() => mailbox.passOnCard(cardId, body));
+}
+export async function takeBackPassOn(passedId: string): Promise<{ taken_back: true; card_id: string; place: number | null }> {
+  return call(() => mailbox.takeBackPassOn(passedId));
+}
+
 // ============================================================
 // SENT (launch key mailbox)
 // ============================================================

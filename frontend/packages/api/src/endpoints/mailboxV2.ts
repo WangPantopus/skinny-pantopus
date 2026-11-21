@@ -151,6 +151,40 @@ export interface MailCard {
     live?: { file_id: string; mime_type: string | null; duration_ms: number | null } | null;
   } | null;
   voice?: { file_id: string; duration_ms: number | null } | null;
+  /** A card that travels (server key card_travel), for the person it went to. Absent: an ordinary card. */
+  travel?: CardTravel | null;
+}
+
+/** A postmark on a travelling card's envelope: the town it left and the day it left it (by the sender's clock). */
+export interface CardTravelPostmark {
+  town: string;
+  /** Two letters; null for "Abroad". */
+  state: string | null;
+  /** YYYY-MM-DD */
+  on: string;
+}
+
+/**
+ * A travelling card as the person it went to reads it (server key card_travel): the journey's id (its public page is
+ * /cards/journey/<journey>), the postmarks on the way to them (oldest first; the first cancels the stamp), the miles
+ * and towns so far, and the cards they passed it on to. Say "It came {miles} miles through {towns} towns to reach you."
+ * only when `towns >= 2`.
+ */
+export interface CardTravel {
+  journey: string | null;
+  hop: number;
+  postmarks: CardTravelPostmark[];
+  miles: number;
+  towns: number;
+  places: number;
+  places_left: number;
+  next_place: number | null;
+  passed: {
+    place: number; id: string; first_name: string | null; to_name: string | null; by_email: boolean; by_link?: boolean;
+    status: string; can_take_back: boolean; take_back_until: string | null;
+  }[];
+  can_pass_on: boolean;
+  pass_on_refusal: { code: string; error: string } | null;
 }
 
 /** A reply to a Christmas card on a piece (`card` stays null): the card it answers and that card's picture. Note only. */
