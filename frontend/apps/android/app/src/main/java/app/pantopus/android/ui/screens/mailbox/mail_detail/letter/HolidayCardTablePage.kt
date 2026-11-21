@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,7 +37,9 @@ import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableSendBack
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTravel
 import app.pantopus.android.ui.screens.mailbox.cards.table.JoinedCardView
 import app.pantopus.android.ui.screens.mailbox.cards.table.PassOnOverlay
+import app.pantopus.android.ui.screens.mailbox.cards.table.SEE_ITS_JOURNEY
 import app.pantopus.android.ui.screens.mailbox.cards.table.joined
+import app.pantopus.android.ui.screens.mailbox.cards.table.openJourney
 import app.pantopus.android.ui.screens.mailbox.components.MailSender
 import app.pantopus.android.ui.theme.PantopusColors
 import kotlinx.coroutines.delay
@@ -101,6 +104,9 @@ internal fun HolidayCardTablePage(
     LaunchedEffect(letter.envelope.id) { passOn.load(letter.envelope.id, card.travel) }
     val passOnState by passOn.state.collectAsStateWithLifecycle()
     val passOnButton = passOnState.travel?.let { passOnAction(it, onOpen = passOn::open) }
+    // "See its journey": its web page, inside the app (decision D6).
+    val context = LocalContext.current
+    val journey = card.travel?.journey?.let { id -> CardTableSendBack(SEE_ITS_JOURNEY) { openJourney(context, id) } }
     CardTableDialog(
         card = onTable,
         firstOpen = card.firstOpen,
@@ -123,6 +129,7 @@ internal fun HolidayCardTablePage(
             if (passOnButton != null) PassOnOverlay(card = onTable, myName = letter.toName.orEmpty(), model = passOn)
         },
         passOn = passOnButton,
+        journey = journey,
     )
     if (person != null) {
         CardSenderSheets(

@@ -164,6 +164,8 @@ internal fun CardTableControls(
     reply: CardTableSendBack? = null,
     /** A travelling card's "Pass it on" (travelling card plan Part 4). */
     passOn: CardTablePassOn? = null,
+    /** A travelling card's "See its journey", in the quiet row (Part 4). */
+    journey: CardTableSendBack? = null,
 ) {
     val top = insets.calculateTopPadding()
     val bottom = insets.calculateBottomPadding()
@@ -173,7 +175,7 @@ internal fun CardTableControls(
     // card" keeps its corner button and its line in ⋯.
     val moment = state.sending
     val goneButtons = if (moment?.step == SendStep.Gone) gone else emptyList()
-    val row = if (moment == null && state.sendBackShows) quietRow(next, reply, sendBack, passOn?.passedLine) else emptyList()
+    val row = if (moment == null && state.sendBackShows) quietRow(next, reply, sendBack, passOn?.passedLine, journey) else emptyList()
     Box(modifier = Modifier.fillMaxSize()) {
         Words(state, top)
         ActionBlock(state, hidden, bottom, goneButtons, row, passOn.takeIf { moment == null })
@@ -442,6 +444,8 @@ private fun quietRow(
     sendBack: CardTableSendBack?,
     /** A travelling card passed on to two: "You passed it on to Ivy and Cass." first (travelling card Part 4). */
     passedLine: String? = null,
+    /** A travelling card's "See its journey", before "Write back" as the sample has it. */
+    journey: CardTableSendBack? = null,
 ): List<QuietChoice> {
     val nextChoice =
         next?.let {
@@ -456,7 +460,8 @@ private fun quietRow(
     val replyChoice = reply?.let { QuietChoice(it.title, it.short ?: it.title, it.title, "cardTableWriteBack", it.onClick) }
     val sendChoice = sendBack?.let { QuietChoice(it.title, it.short ?: it.title, it.title, "cardTableSendBack", it.onClick) }
     val passed = passedLine?.let { QuietChoice(it, it, it, "cardTablePassedOn", onClick = {}, words = true) }
-    return listOfNotNull(passed, nextChoice, replyChoice, sendChoice).take(2)
+    val journeyChoice = journey?.let { QuietChoice(it.title, "Its journey", it.title, "cardTableJourney", onClick = it.onClick) }
+    return listOfNotNull(passed, journeyChoice, nextChoice, replyChoice, sendChoice).take(2)
 }
 
 /**

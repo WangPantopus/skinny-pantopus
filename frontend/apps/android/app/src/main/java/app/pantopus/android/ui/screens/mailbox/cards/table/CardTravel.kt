@@ -2,7 +2,11 @@
 
 package app.pantopus.android.ui.screens.mailbox.cards.table
 
+import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.BuildConfig
+import app.pantopus.android.core.routing.WebLinkFallback
 import app.pantopus.android.data.api.models.mailbox.v2.MailCardTravel
 import java.text.NumberFormat
 import java.util.Locale
@@ -101,7 +105,33 @@ data class CardTravel(
             )
         }
 
+        /** The journey's public page (travelling card plan Part 5), on the website this build talks to. */
+        fun journeyUrl(journey: String): String = BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/') + "/cards/journey/" + journey
+
+        /**
+         * On its sender's Sent card (Part 6): "5 towns · 2,692 miles. Now in Tampa, FL."; before it reaches anyone, "It
+         * can travel. You’ll hear when it reaches a town."
+         */
+        fun sentLine(
+            towns: Int?,
+            miles: Int?,
+            nowIn: String?,
+        ): String {
+            if (nowIn.isNullOrBlank()) return "It can travel. You’ll hear when it reaches a town."
+            val count = towns ?: 1
+            return "$count ${if (count == 1) "town" else "towns"} · ${miles(miles ?: 0)}. Now in $nowIn."
+        }
+
         /** "2,692 miles", "1 mile". */
         fun miles(value: Int): String = "${NumberFormat.getIntegerInstance(Locale.US).format(value)} ${if (value == 1) "mile" else "miles"}"
     }
 }
+
+/** "See its journey": the journey's web page, opened inside the app in a browser tab over it (decision D6). */
+internal fun openJourney(
+    context: Context,
+    journey: String,
+) = WebLinkFallback.open(context, Uri.parse(CardTravel.journeyUrl(journey)))
+
+/** The words of the journey's link, on the table and on Sent. */
+internal const val SEE_ITS_JOURNEY = "See its journey"

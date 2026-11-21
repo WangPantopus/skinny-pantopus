@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -49,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.mailbox.SentCard
 import app.pantopus.android.data.api.models.mailbox.SentCardStep
+import app.pantopus.android.data.api.models.mailbox.SentCardTravel
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.Shimmer
@@ -74,8 +76,11 @@ import app.pantopus.android.ui.screens.mailbox.cards.table.CardReplyViewModel
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardShareSheet
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableDialog
 import app.pantopus.android.ui.screens.mailbox.cards.table.CardTableSendBack
+import app.pantopus.android.ui.screens.mailbox.cards.table.CardTravel
 import app.pantopus.android.ui.screens.mailbox.cards.table.LetterCardPrint
+import app.pantopus.android.ui.screens.mailbox.cards.table.SEE_ITS_JOURNEY
 import app.pantopus.android.ui.screens.mailbox.cards.table.joined
+import app.pantopus.android.ui.screens.mailbox.cards.table.openJourney
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
 import app.pantopus.android.ui.screens.mailbox.components.MailPieceMapper
 import app.pantopus.android.ui.screens.mailbox.mail_detail.letter.MailLetterCard
@@ -306,6 +311,8 @@ private fun SentCardPage(
             modifier = Modifier.padding(top = 2.dp),
         )
     }
+    // A card that travels (travelling card plan Part 6): how far it has gone, and its journey's page.
+    card.travel?.let { travel -> Travelling(travel) }
     // Its email didn't go out: said first, under where it is, before the envelope and the card.
     MailSentWords.emailTrouble(card)?.let { EmailTrouble(card, it, emailAgain) }
     emailAgain.error?.let { PageError(it, Modifier.testTag("mailSentPieceEmailError")) }
@@ -350,6 +357,29 @@ private fun SentCardPage(
     Trail(card, first, zone)
     if (card.canTakeBack) ChangedYourMind(card, zone, takingBack, onTakeBack)
     takeBackError?.let { PageError(it, Modifier.testTag("mailSentPieceError")) }
+}
+
+/** "5 towns · 2,692 miles. Now in Tampa, FL." and "See its journey", its web page inside the app (decision D6). */
+@Composable
+private fun Travelling(travel: SentCardTravel) {
+    val context = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+        Text(
+            CardTravel.sentLine(travel.towns, travel.miles, travel.nowIn),
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            color = PantopusColors.appText,
+            modifier = Modifier.testTag("sentTravelLine"),
+        )
+        travel.journey?.takeIf { it.isNotBlank() }?.let { journey ->
+            CardButton(
+                SEE_ITS_JOURNEY,
+                onClick = { openJourney(context, journey) },
+                kind = CardButtonKind.Paper,
+                modifier = Modifier.testTag("sentSeeJourney"),
+            )
+        }
+    }
 }
 
 /** Why something on the page didn't work, said as it appears. */

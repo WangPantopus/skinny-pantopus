@@ -109,9 +109,12 @@ internal fun CardTableDialog(
     overlay: (@Composable () -> Unit)? = null,
     /** A travelling card's "Pass it on" beside "Turn it back" (travelling card plan Part 4); null for every other card. */
     passOn: CardTablePassOn? = null,
+    /** A travelling card's "See its journey" in the quiet row and ⋯ (travelling card plan Part 4); null otherwise. */
+    journey: CardTableSendBack? = null,
 ) {
     FullScreenWindow(onDismissRequest = onClose) {
-        val sender = TableSending(sending, sealAnswer, goneActions, onLetterOut, next = next, reply = reply, passOn = passOn)
+        val sender =
+            TableSending(sending, sealAnswer, goneActions, onLetterOut, next = next, reply = reply, passOn = passOn, journey = journey)
         CardTable(card, firstOpen, onClose, onOpened, menu, message, mine, canShare, sendBack, sender)
         overlay?.invoke()
     }
@@ -130,6 +133,8 @@ private class TableSending(
     val reply: CardTableSendBack? = null,
     /** "Pass it on" for a travelling card (travelling card plan Part 4). */
     val passOn: CardTablePassOn? = null,
+    /** "See its journey" for a travelling card. */
+    val journey: CardTableSendBack? = null,
 )
 
 /**
@@ -149,6 +154,7 @@ private fun tableMenu(
         sending.reply?.let { add(CardTableMenuItem(it.title, "cardTableMenuReply", it.onClick)) }
         // "Pass it on" from either side of the card (travelling card plan Part 4).
         sending.passOn?.let { passOn -> passOn.label?.let { add(CardTableMenuItem(it, "cardTableMenuPassOn", passOn.onClick)) } }
+        sending.journey?.let { add(CardTableMenuItem(it.title, "cardTableMenuJourney", it.onClick)) }
         addAll(menu)
         if (canShare) add(CardTableMenuItem(SHARE_THIS_CARD, "cardTableMenuShare", onShare))
     }
@@ -157,7 +163,7 @@ private fun tableMenu(
 /** The reader's quiet row has something in it once the card is turned over: the table keeps it room from the start. */
 private fun TableSending.hasQuietRow(sendBack: CardTableSendBack?): Boolean {
     if (calls != null) return false
-    return next != null || reply != null || sendBack != null || passOn?.passedLine != null
+    return next != null || reply != null || sendBack != null || passOn?.passedLine != null || journey != null
 }
 
 @Composable
@@ -297,6 +303,7 @@ private fun CardTable(
             next = sending.next.takeIf { calls == null },
             reply = sending.reply.takeIf { calls == null },
             passOn = sending.passOn.takeIf { calls == null },
+            journey = sending.journey.takeIf { calls == null },
         )
         OpenedPhoto(openedPhoto)
     }

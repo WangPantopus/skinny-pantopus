@@ -696,6 +696,8 @@ data class SentCard(
     @Json(name = "email_to") val emailTo: String? = null,
     /** A reply this person wrote back to a card (plan Part 3): the card it answers; a letter otherwise. */
     @Json(name = "card_reply") val cardReply: CardReplyFace? = null,
+    /** A card that travels (the server's switch `card_travel`): its journey, towns, miles and the town it's in now. */
+    val travel: SentCardTravel? = null,
 )
 
 /** `POST /api/mailbox/cards/:id/email-again`: the card's email went this time. */

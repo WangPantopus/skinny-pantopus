@@ -737,6 +737,8 @@ object DeepLinkRouter {
             "holiday_card_claimed" to setOf(LaunchFeature.MAILBOX, LaunchFeature.HOLIDAY_CARDS),
             "holiday_card_expired" to setOf(LaunchFeature.MAILBOX, LaunchFeature.HOLIDAY_CARDS),
             "holiday_card_email_failed" to setOf(LaunchFeature.MAILBOX, LaunchFeature.HOLIDAY_CARDS),
+            // A travelling card reached another town (server switch card_travel): it opens the person's own Sent card.
+            "holiday_card_travelled" to setOf(LaunchFeature.MAILBOX, LaunchFeature.HOLIDAY_CARDS),
         )
 
     /**
