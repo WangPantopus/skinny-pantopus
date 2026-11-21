@@ -25,6 +25,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -34,6 +35,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -368,7 +371,7 @@ private fun EmailForm(
 
 /** A text box on the desk: card stock, a thin edge, wax red while it's being typed in. It asks for the keyboard at once. */
 @Composable
-private fun DeskField(
+internal fun DeskField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
@@ -379,11 +382,13 @@ private fun DeskField(
     keyboardType: KeyboardType = KeyboardType.Text,
     imeAction: ImeAction = ImeAction.Done,
     onDone: () -> Unit = {},
+    /** Takes the focus (and the keyboard) as it shows; off where the field isn't what the screen is for (Pass it on). */
+    autoFocus: Boolean = true,
 ) {
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { if (autoFocus) runCatching { focus.requestFocus() } }
     val shape = RoundedCornerShape(Radii.lg)
     BasicTextField(
         value = value,
@@ -1021,6 +1026,9 @@ internal fun SealStep(
     stamps: StampBalance? = null,
     /** Room at the end of the page for the pinned buttons. */
     endRoom: Dp = 0.dp,
+    /** "Let it travel" (travelling card plan Part 2): on or off; null where the server doesn't offer it. */
+    travel: Boolean? = null,
+    onTravel: (Boolean) -> Unit = {},
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
     val options = arrivalOptions(cards.arrivals, to, form.theirs)
@@ -1063,6 +1071,8 @@ internal fun SealStep(
                     ) { onArrival(arrival) }
                 }
             }
+            // On the same paper, under the arrival choices (travelling card plan Part 2).
+            travel?.let { on -> TravelChoice(to, on, onTravel, modifier = Modifier.padding(top = 10.dp)) }
         }
         // Before it's sent there's no knowing their clock; the sent card says the time on this one. Both lines show here,
         // so a sender who skips Look it over has read them (plan Part 5).
@@ -1244,6 +1254,63 @@ private fun ArrivalChoice(
         }
     }
 }
+
+/**
+ * "Let it travel" (travelling card plan Part 2, decision D5): one row under the arrival choices, on to begin with. Off,
+ * the card is an ordinary card and nothing about it is public.
+ */
+@Composable
+private fun TravelChoice(
+    to: CardRecipient,
+    on: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(Radii.lg)
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(PantopusColors.cardField)
+                .border(1.dp, PantopusColors.cardListEdge, shape)
+                .toggleable(value = on, role = Role.Switch, onValueChange = onChange)
+                .padding(14.dp)
+                .testTag("sendCardTravel"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Let it travel",
+                fontSize = 15.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.cardTextStrong,
+            )
+            Text(travelSentence(to), fontSize = 13.sp, lineHeight = 18.sp, color = PantopusColors.cardTextQuiet)
+        }
+        Switch(
+            checked = on,
+            onCheckedChange = null,
+            colors =
+                SwitchDefaults.colors(
+                    checkedTrackColor = PantopusColors.cardWax,
+                    checkedThumbColor = PantopusColors.cardField,
+                    uncheckedTrackColor = PantopusColors.cardFieldEdge,
+                    uncheckedThumbColor = PantopusColors.cardField,
+                    uncheckedBorderColor = PantopusColors.cardFieldEdge,
+                ),
+        )
+    }
+}
+
+/** "Maya can pass this card on. Its towns show on a map, never names." */
+private fun travelSentence(to: CardRecipient): String =
+    when (to) {
+        is CardRecipient.Person -> "${to.firstName} can pass this card on. Its towns show on a map, never names."
+        else -> "They can pass this card on. Its towns show on a map, never names."
+    }
 
 /**
  * A choice's title and its sentence. Their mail comes at 7 a.m. where they live: never turned into this clock's time.

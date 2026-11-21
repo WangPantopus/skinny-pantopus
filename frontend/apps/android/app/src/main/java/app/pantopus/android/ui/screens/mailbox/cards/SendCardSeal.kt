@@ -161,8 +161,9 @@ private fun goneWords(
     }
     val sent = form.sent ?: return SealAnswer.Took("On its way.", "")
     val zone = HolidayCardTimes.zone(cards.timeZone)
-    // Today's words under it: when it arrives, and until when it can be taken back.
-    val lines = listOfNotNull(arrivalLine(sent, zone), takeBackLine(sent, zone)).joinToString("\n")
+    // Today's words under it: when it arrives, and until when it can be taken back; a travelling card says so too.
+    val lines =
+        listOfNotNull(arrivalLine(sent, zone), takeBackLine(sent, zone), CAN_TRAVEL.takeIf { sent.travel != null }).joinToString("\n")
     return when (val to = form.to) {
         CardRecipient.Link -> SealAnswer.Took("Your card is ready.", lines)
         // Set for later, nothing is emailed yet: the line under it says when.
@@ -175,3 +176,6 @@ private fun goneWords(
         else -> SealAnswer.Took("On its way.", lines)
     }
 }
+
+/** Under "On its way to Maya." for a card that travels (travelling card plan Part 2). */
+internal const val CAN_TRAVEL = "It can travel. You’ll hear when it reaches a town."

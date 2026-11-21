@@ -3,6 +3,9 @@
 package app.pantopus.android.ui.screens.mailbox.cards.table
 
 import androidx.compose.animation.core.EaseIn
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
@@ -11,6 +14,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import app.pantopus.android.data.api.models.mailbox.CardSignature
 import app.pantopus.android.ui.screens.mailbox.components.MailStamp
@@ -18,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.asin
@@ -73,11 +78,19 @@ data class CardOnTable(
     val photo: CardPrintPhoto? = null,
     /** Its voice greeting (memories plan step 7): beside the photo once it's turned over; pressed to play. */
     val voice: CardGreetingVoice? = null,
+    /**
+     * A travelling card (travelling card plan, the server's switch `card_travel`): its envelope carries the postmarks of
+     * the towns on the way here. Null for every other card: then nothing on the table changes.
+     */
+    val travel: CardTravel? = null,
 ) {
     /** The first name, the only one a shared picture or the words on the table ever use. */
     val fromFirst: String = from.trim().substringBefore(' ').removeSuffix(",").ifEmpty { "Someone" }
 
     val stamp: MailStamp = if (letter) MailStamp.Peak else MailStamp.forCard(number, design) ?: MailStamp.Fir
+
+    /** Its envelope carries a travelling card's postmarks (travelling card plan Part 3); never a letter's. */
+    val travels: Boolean get() = !letter && !travel?.postmarks.isNullOrEmpty()
 
     /** What the table is called to a screen reader. */
     val kind: String get() = if (letter) "Letter" else "Christmas card"
@@ -166,6 +179,11 @@ internal class TableGeometry(
     keepsMediaRoom: Boolean = false,
     /** The reader's quiet row, part of [bottomRoom]: it shows only once the card is out and turned over. */
     quietRoom: Float = 0f,
+    /**
+     * A travelling card's line under the words (travelling card Part 3) can make them reach lower than 88 dp: the shut
+     * envelope is then sized to fit between the words and the buttons, as the card is on a short screen.
+     */
+    shutBelowWords: Boolean = false,
 ) {
     val cardWidth: Float
     val cardHeight: Float
@@ -201,7 +219,8 @@ internal class TableGeometry(
         // Tablets and wide windows go to 640 dp where the height allows (plan 6.3).
         val widest = min(width - side * 2f, (if (wide) 640f else 470f) * d)
         // Shut, the envelope sits at least 88 dp below the safe area and clear of the buttons; the quiet row isn't there yet.
-        val shutLimit = (height - safeTop - (bottomRoom - quietRoom) - 88f * d) / ENVELOPE_TALL
+        val shutTop = if (shutBelowWords) max(safeTop + 88f * d, wordsBottom) else safeTop + 88f * d
+        val shutLimit = (height - shutTop - (bottomRoom - quietRoom)) / ENVELOPE_TALL
 
         fun fitted(above: Float): Float =
             max(
@@ -271,6 +290,12 @@ private const val LEAST_PEEK = 0.13f
 /** How far below the safe area the laid-down card's top stays, in dp: clear of the round buttons. */
 private const val UNDER_TOP_BUTTONS = 62f
 
+/** The falling envelope has landed this close to its place (a share of the drop). */
+private const val LANDED = 0.04f
+
+/** A travelling card's newest postmark strikes this long after the envelope lands (travelling card Part 3). */
+private const val STRIKE_AFTER_LANDING_MS = 120L
+
 /** A second tap within this long, on the same spot, is a double-tap; one tap turns the card after it. */
 private const val DOUBLE_TAP_MS = 300L
 
@@ -337,6 +362,14 @@ internal class CardTableState(
     /** Santa's envelope lands with a little more bounce (damping 9.6, as web's same spring). */
     val drop = TableSpring(58f, if (mood == CardMood.Santa) 9.6f else 11.5f, start = 0f)
 
+    /**
+     * A travelling card's newest postmark (travelling card plan Part 3): struck once the falling envelope has landed,
+     * 0 … 1, with today's postmark's thump. 1 for every other card, and once it has been struck.
+     */
+    var strike by mutableFloatStateOf(1f)
+        private set
+    private var striking: Job? = null
+
     /** The card enlarged (plan 6.1). */
     val zoom =
         TableZoom(
@@ -356,6 +389,10 @@ internal class CardTableState(
     var cracked by mutableStateOf(false)
         private set
     var words by mutableStateOf("")
+        private set
+
+    /** Under the words, for a travelling card's envelope: "It came 2,692 miles through 4 towns to reach you." */
+    var cameLine by mutableStateOf("")
         private set
     var primaryLabel by mutableStateOf("")
         private set
@@ -490,7 +527,10 @@ internal class CardTableState(
             }
             saved != null -> restore(saved)
             !firstOpen && !card.sealed -> placeOnTable()
-            else -> drop.jump(if (reduceMotion) 0f else 1f)
+            else -> {
+                drop.jump(if (reduceMotion) 0f else 1f)
+                holdStrike()
+            }
         }
         mark()
     }
@@ -517,6 +557,8 @@ internal class CardTableState(
         controlsHidden = false
         drop.jump(if (reduceMotion) 0f else 1f)
         drop.target = 0f
+        holdStrike()
+        strikeOnLanding()
         mark()
         wake()
     }
@@ -524,7 +566,27 @@ internal class CardTableState(
     /** The envelope has its art and the picture is ready: it falls onto the table. */
     fun begin() {
         drop.target = 0f
+        strikeOnLanding()
         wake()
+    }
+
+    /** A travelling card's newest postmark waits for the envelope to land; with animations off it's there at once. */
+    private fun holdStrike() {
+        striking?.cancel()
+        strike = if (card.travels && !reduceMotion) 0f else 1f
+    }
+
+    /** Once the falling envelope lands, its newest postmark is struck, as the sender's postmark is when it's sealed. */
+    private fun strikeOnLanding() {
+        if (strike >= 1f) return
+        striking?.cancel()
+        striking =
+            scope.launch {
+                snapshotFlow { drop.x }.first { it < LANDED }
+                delay(STRIKE_AFTER_LANDING_MS)
+                animate(0f, 1f, animationSpec = tween(240, easing = FastOutSlowInEasing)) { value, _ -> strike = value }
+                onTap(TableTap.Crack)
+            }
     }
 
     // ---- Words and buttons follow what's on the table ----
@@ -538,6 +600,7 @@ internal class CardTableState(
             words = moment.words
             primaryLabel = moment.primary
             hint = moment.hint
+            cameLine = ""
             primarySpoken = null
             showsTopRight = false
             return
@@ -587,6 +650,8 @@ internal class CardTableState(
         }
         val letter = if (card.letter) LetterWords.of(step, first) else null
         words = letter?.words ?: nextWords
+        // Above the envelope only, as the words there are (travelling card plan Part 3).
+        cameLine = card.travel?.cameLine?.takeIf { step == TableStep.Front && card.travels }.orEmpty()
         primaryLabel = letter?.primary ?: nextPrimary
         primarySpoken = if (primaryLabel == READ_ON) READ_ON_SPOKEN else null
         hint = letter?.hint ?: nextHint

@@ -402,6 +402,9 @@ object PantopusColors {
     /** The day printed on the envelope's postmark: `rgb(19 13 15 / 80%)`. */
     val tablePostmarkDay = Color(0xCC130D0F)
 
+    /** A travelling card's postmarks: every third, starting with the second, in blue-black `rgb(14 22 52 / 84%)`. */
+    val tablePostmarkBlue = Color(0xD60E1634)
+
     /** A Mailbox row's postmark: the table's cream at 60%, so it reads on the envelope's dark red. */
     val tablePostmarkCream = Color(0x99F6ECD9)
 

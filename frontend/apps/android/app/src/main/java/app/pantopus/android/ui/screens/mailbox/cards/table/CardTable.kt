@@ -55,6 +55,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -459,7 +460,8 @@ private fun rememberTableGeometry(
             val wordsWidth = Constraints(maxWidth = (width - 48.dp.roundToPx()).coerceAtLeast(1))
             val longestWords = if (card.sealed) "It opens Christmas morning, in 56 days." else "A Christmas card from ${card.fromFirst}."
             val wordsHeight = measurer.measure(longestWords, tableWordsStyle, constraints = wordsWidth).size.height
-            val wordsBottom = safeTop + 54.dp.toPx() + wordsHeight + 8.dp.toPx()
+            val cameHeight = cameLineHeight(card, measurer, wordsWidth)
+            val wordsBottom = safeTop + 54.dp.toPx() + wordsHeight + cameHeight + 8.dp.toPx()
             // Sending, the words ("For Hazel.", or why the seal didn't take) show over the open flap: start below them.
             val sendingWords =
                 if (sending) measurer.measure(SENDING_LONGEST_WORDS, tableWordsStyle, constraints = wordsWidth).size.height else 0
@@ -473,9 +475,20 @@ private fun rememberTableGeometry(
                 // The geometry keeps what a full-size card leaves under it, once it's turned over.
                 keepsMediaRoom = media,
                 quietRoom = quietHeight,
+                shutBelowWords = cameHeight > 0,
             )
         }
     }
+}
+
+/** A travelling card's line under the words, "It came 2,692 miles through 4 towns to reach you." (Part 3): its height. */
+private fun Density.cameLineHeight(
+    card: CardOnTable,
+    measurer: TextMeasurer,
+    width: Constraints,
+): Int {
+    val line = card.travel?.cameLine?.takeIf { card.travels } ?: return 0
+    return measurer.measure(line, tableCameStyle, constraints = width).size.height + CAME_GAP.roundToPx()
 }
 
 /** How far the card's lowest edge can move: the light moves it 5.5 dp, and its 1° turn lowers a corner about 3.5. */
@@ -498,8 +511,12 @@ private fun sceneWords(
 ): String {
     val name = card.from.trim().ifEmpty { "Someone" }
     if (card.letter) return if (step == TableStep.Out) "The letter from $name. Opening it." else "A letter from $name"
-    if (card.sealed) return "Christmas card from $name, sealed until Christmas morning"
-    if (step != TableStep.Out && step != TableStep.Pulling) return "Christmas card from $name"
+    // A travelling card's envelope says which towns it came through (travelling card plan Part 3).
+    val postmarks = card.travel?.takeIf { card.travels }?.let { " ${it.spokenPostmarks}" }.orEmpty()
+    val sealedWords = "Christmas card from $name, sealed until Christmas morning"
+    if (card.sealed) return if (postmarks.isEmpty()) sealedWords else "$sealedWords.$postmarks"
+    val envelopeWords = "Christmas card from $name"
+    if (step != TableStep.Out && step != TableStep.Pulling) return if (postmarks.isEmpty()) envelopeWords else "$envelopeWords.$postmarks"
     val caption = card.caption.ifBlank { "A Christmas picture" }
     val sentence = if (caption.last() in ".!?") caption else "$caption."
     return "Card from $name: $sentence On the back: ${card.note}"
