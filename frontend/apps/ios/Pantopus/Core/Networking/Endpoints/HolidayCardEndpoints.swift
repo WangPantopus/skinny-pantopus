@@ -155,4 +155,37 @@ public enum HolidayCardEndpoints {
     public static func emailAgain(cardId: String) -> Endpoint {
         Endpoint(method: .post, path: "/api/mailbox/cards/\(cardId)/email-again", reportsServerErrors: false)
     }
+
+    // MARK: The travelling card (server switch `card_travel`, travelling card plan Part 1; 404 while it's off)
+
+    /// `GET /api/mailbox/cards/towns?q=` — route `backend/routes/mailbox.js` (travelling card routes). Up to 8 towns for
+    /// two letters or more, or 3 to 5 digits of a ZIP code, from the bundled Census lists; without `q`, the suggested
+    /// town ("Use Vancouver, WA") or none.
+    public static func towns(query: String?) -> Endpoint {
+        Endpoint(method: .get, path: "/api/mailbox/cards/towns", query: query.map { ["q": $0] } ?? [:])
+    }
+
+    /// `PUT /api/mailbox/cards/town` — route `backend/routes/mailbox.js` (travelling card routes). Keeps the chosen
+    /// town in the profile's town fields (D4: asked once).
+    public static func setTown(_ body: CardTownBody) -> Endpoint {
+        Endpoint(method: .put, path: "/api/mailbox/cards/town", body: body)
+    }
+
+    /// `POST /api/mailbox/cards/:id/pass-on/preview` — route `backend/routes/mailbox.js` (travelling card routes). The
+    /// same checks as passing it on, nothing stored; `:id` is the card the caller received.
+    public static func passOnPreview(cardId: String, _ body: CardPassOnBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/mailbox/cards/\(cardId)/pass-on/preview", body: body)
+    }
+
+    /// `POST /api/mailbox/cards/:id/pass-on` — route `backend/routes/mailbox.js` (travelling card routes). The same card
+    /// goes on, free, with this note; answers as `POST /cards` does (a repeat of the request ID, the same card).
+    public static func passOn(cardId: String, _ body: CardPassOnBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/mailbox/cards/\(cardId)/pass-on", body: body)
+    }
+
+    /// `POST /api/mailbox/cards/:id/pass-on/take-back` — route `backend/routes/mailbox.js` (travelling card routes).
+    /// `:id` is the passed-on card; its place is free again.
+    public static func takeBackPassOn(cardId: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/mailbox/cards/\(cardId)/pass-on/take-back")
+    }
 }

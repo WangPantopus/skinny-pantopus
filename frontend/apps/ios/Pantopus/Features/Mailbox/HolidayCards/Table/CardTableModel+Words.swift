@@ -102,6 +102,8 @@ extension CardTableModel {
         guard step == .out, !content.sealed, turnedOnce || fold.isSpread else { return [] }
         var items: [CardTableMenuItem] = []
         if let nextCard { items.append(nextCard) }
+        // A travelling card: "See its journey", or "You passed it on to Ivy and Cass." (travelling card plan Part 4).
+        items += travelButtons.quiet
         if let writeBack { items.append(writeBack) }
         if let sendBack { items.append(sendBack) }
         if offersShare {
@@ -205,7 +207,7 @@ extension CardTableModel {
         }
         return switch step {
         case .front, .back, .flap, .pulling:
-            "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")"
+            "Christmas card from \(content.firstName)\(content.sealed ? ", sealed until Christmas morning" : "")" + spokenMarks
         case .out:
             "Card from \(content.firstName): \(HolidayCardWords.captionSentence(content.caption)) On the back: \(content.note)"
                 + Self.withIt(content)

@@ -41,6 +41,8 @@ extension MailPaper {
     static let tableCardEdge = rgb(110, 80, 30).opacity(0.2)
     static let tablePaperDefault = rgb(0xF9, 0xF1, 0xE3)
     static let tablePostmarkInk = rgb(19, 13, 15).opacity(0.8)
+    /// Every third postmark of a travelling card, from the second, in blue-black (travelling card plan Part 3).
+    static let tablePostmarkBlue = rgb(14, 22, 52).opacity(0.84)
 
     /// The pen on the envelope.
     static let tableToName = rgb(0xFB, 0xEE, 0xD2)

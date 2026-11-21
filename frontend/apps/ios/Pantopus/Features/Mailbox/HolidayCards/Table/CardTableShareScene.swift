@@ -53,7 +53,7 @@ enum CardShareFormat: String, CaseIterable, Identifiable {
 }
 
 /// Where a paper slip lies and how big its words are, in the picture's own space.
-private struct CardShareSlip {
+struct CardShareSlip {
     let x: CGFloat
     let y: CGFloat
     let rotation: Double
@@ -101,6 +101,15 @@ struct CardTableShareScene: View {
 
     @ViewBuilder
     private var objects: some View {
+        if travel != nil, [.story, .post, .link].contains(format) {
+            travelObjects
+        } else {
+            plainObjects
+        }
+    }
+
+    @ViewBuilder
+    private var plainObjects: some View {
         // The coordinates web draws (MCSRV's share-layout, plan 1.11), so all three apps match: the Story card 800 px
         // of 1080 and the Post card 760, with nothing but the slip in Instagram's top 250 or bottom 340 px.
         switch format {
@@ -246,7 +255,7 @@ struct CardTableShareScene: View {
         .offset(x: x, y: y)
     }
 
-    private func front(width: CGFloat, x: CGFloat, y: CGFloat, rotation: Double) -> some View {
+    func front(width: CGFloat, x: CGFloat, y: CGFloat, rotation: Double) -> some View {
         cardBox(width: width, x: x, y: y, rotation: rotation) {
             CardTableFront(
                 picture: picture,
@@ -327,7 +336,7 @@ struct CardTableShareScene: View {
     }
 
     /// The link preview's words: the caption by hand, PANTOPUS POST and one line.
-    private var linkWords: some View {
+    var linkWords: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(content.sealed ? "A Christmas card" : content.caption)
                 .font(Font(content.sealed ? CardTableType.hand(29) : CardTableType.caption(content.caption, size: 29)))

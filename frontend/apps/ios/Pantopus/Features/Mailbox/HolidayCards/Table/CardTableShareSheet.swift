@@ -369,7 +369,9 @@ struct CardTableShareSheet: View {
 
     private func copyLink() {
         count("link")
-        UIPasteboard.general.string = cardPage
+        // A travelling card copies its journey page's address (travelling card plan Part 7).
+        let journey = content.sealed ? nil : content.travel?.journey.flatMap(CardJourneyPage.init)
+        UIPasteboard.general.string = journey?.url.absoluteString ?? cardPage
         say = "Link copied."
     }
 
