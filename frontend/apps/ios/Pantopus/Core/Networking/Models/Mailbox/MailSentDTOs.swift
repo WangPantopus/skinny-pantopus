@@ -97,6 +97,9 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
     public let note: String?
     /// The card's page only: where it has been, in order.
     public let trail: [TrailStep]
+    /// A card that travels (server switch `card_travel`, travelling card plan Part 6): its journey, and from this card on
+    /// its towns, miles and newest town; nil for every other card and older servers.
+    public let travel: SentCardTravel?
 
     /// Where a card by email's email is when it hasn't gone out: the server
     /// keeps trying for about an hour (`retrying`), then gives up (`failed`).
@@ -185,7 +188,7 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, subject, arrival, status, sealed, envelope, card, note, trail
+        case id, kind, subject, arrival, status, sealed, envelope, card, note, trail, travel
         case cardReply = "card_reply"
         case sentAt = "sent_at"
         case toName = "to_name"
@@ -229,5 +232,6 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
         cardReply = try? c.decodeIfPresent(CardReplyCard.self, forKey: .cardReply)
         note = try? c.decodeIfPresent(String.self, forKey: .note)
         trail = (try? c.decodeIfPresent([TrailStep].self, forKey: .trail)) ?? []
+        travel = try? c.decodeIfPresent(SentCardTravel.self, forKey: .travel)
     }
 }

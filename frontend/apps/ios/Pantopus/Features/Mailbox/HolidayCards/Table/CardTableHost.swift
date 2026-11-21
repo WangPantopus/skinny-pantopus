@@ -8,8 +8,6 @@
 //  up from the cover, not the screen under it. Closing it goes back.
 //
 
-// swiftlint:disable file_length
-
 import SwiftUI
 
 extension CardTableContent {
@@ -38,34 +36,7 @@ extension CardTableContent {
         photo = card.card.sealed ? nil : card.card.photo
         voice = card.card.sealed ? nil : card.card.voice
         mediaFrom = .piece(mailId: letter.piece.id)
-    }
-}
-
-extension CardTableContent {
-    /// A card in Sent, as the other person gets it.
-    init(sent piece: MailSentPiece, from: String, mailedOn: String?) {
-        design = piece.card.design
-        number = piece.card.number
-        caption = piece.card.caption ?? ""
-        paper = piece.card.paper
-        table = piece.card.table
-        slug = piece.card.slug
-        year = piece.card.year
-        self.mailedOn = mailedOn
-        note = MailPieceModel.firstText(piece.note) ?? ""
-        fromName = from
-        toName = piece.byLink && piece.status != .claimed ? "Their name" : piece.toName
-        sealed = false
-        sealedUntil = nil
-        sealedInDays = ""
-        sealedDayCount = 0
-        signature = piece.card.signature
-        // Your own photo: never covered here.
-        photo = piece.card.photo.map {
-            CardPhoto(fileId: $0.fileId, width: $0.width, height: $0.height, alt: $0.alt, live: $0.live)
-        }
-        voice = piece.card.voice
-        mediaFrom = .sent(cardId: piece.id)
+        travel = CardTravelEnvelope(card.card.travel, year: card.card.year)
     }
 }
 
@@ -335,6 +306,7 @@ private struct MailCardTablePage: View {
             .fullScreenCover(item: $joined) { pair in
                 CardTableJoinedPage(pair: pair, closeLabel: "Back to the card") { joined = nil }
             }
+            .modifier(CardTableTravelReader(viewModel: viewModel, model: model))
     }
 
     /// The card and its reply (experience plan Part 3): "Write back to {first name}" when the server says this reader
@@ -446,6 +418,8 @@ private struct MailCardTablePage: View {
             let identifier = writeBack.identifier == "cardTableWroteBack" ? "cardTableMenuWroteBack" : "cardTableMenuWriteBack"
             items.append(CardTableMenuItem(title: writeBack.title, identifier: identifier, action: writeBack.action))
         }
+        // A travelling card: "See its journey" (travelling card plan Part 4), as the quiet row may not show it.
+        items += model.travelButtons.menu
         items.append(CardTableMenuItem(title: "Who sent it and its trail", identifier: "cardTableMenuWho") {
             viewModel.showsSenderSheet = true
         })

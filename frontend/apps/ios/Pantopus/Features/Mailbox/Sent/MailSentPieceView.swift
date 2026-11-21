@@ -138,6 +138,10 @@ struct MailSentPieceView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.top, Spacing.s1)
+            // A card that travels: how far it has gone, and its journey (travelling card plan Part 6).
+            if let travel = piece.travel {
+                MailSentTravelLine(travel: travel)
+            }
             // An email that didn't go out shows first, before the envelope and the card.
             MailSentEmailBox(piece: piece, viewModel: viewModel)
             section(mailbox) {
@@ -162,6 +166,9 @@ struct MailSentPieceView: View {
                         tableContent = content
                     }
                     .accessibilityIdentifier("mailSentSeeIt")
+                    if let travel = piece.travel {
+                        MailSentJourneyButton(travel: travel)
+                    }
                     CardTableSentShareButton(content: content, sharesSealed: piece.sealed)
                 }
             }

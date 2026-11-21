@@ -194,6 +194,15 @@ final class HolidayCardFlowViewModel {
     var confirmsTakeBack = false
     /// "Seal and send" opened the table to seal it by hand (plan Part 2, `card_table`).
     var sealsAtTable = false
+    /// "Let it travel" (travelling card plan Part 2, `HolidayCardFlowViewModel+Travel.swift`): on to begin with.
+    var travels = true
+    /// The town just chosen on "Where does it start?" ("Vancouver, WA").
+    var travelTown: String?
+    /// "Where does it start?" is up, and what waits for its town.
+    var asksTown = false
+    @ObservationIgnored var afterTown: (@MainActor () -> Void)?
+    /// The card (or list) just sent travels: its sent words gain "It can travel."
+    var sentTravels = false
     /// One request ID per card, sent with every look and retry of it, so a
     /// send whose answer was lost is answered with the card it stored, never
     /// a second one. A new card starts once this one is sent or taken back.
@@ -435,6 +444,8 @@ final class HolidayCardFlowViewModel {
     @discardableResult
     func lookItOver(opens: Bool = true) async -> Bool {
         guard !previewing else { return false }
+        // A card that travels starts in the sender's town: asked once, before the look.
+        if askTownFirst(then: { [weak self] in Task { await self?.lookItOver(opens: opens) } }) { return false }
         if recipient?.entries != nil {
             return await lookOverList(opens: opens)
         }
@@ -456,6 +467,7 @@ final class HolidayCardFlowViewModel {
                 lookUnavailable = true
                 return false
             }
+            if needsTown(error, retry: { [weak self] in Task { await self?.lookItOver(opens: opens) } }) { return false }
             previewError = Self.refusal(error, fallback: "Couldn’t show your card just now. Try again in a moment.")
             await needsBoughtStamp(error)
             return false
@@ -540,7 +552,7 @@ final class HolidayCardFlowViewModel {
         case .link: to = .link
         case .list: return nil
         }
-        return SendHolidayCardBody(
+        var body = SendHolidayCardBody(
             design: design.id,
             message: message.trimmingCharacters(in: .whitespacesAndNewlines),
             arrival: arrival,
@@ -550,6 +562,8 @@ final class HolidayCardFlowViewModel {
             signature: cards?.signature == nil ? nil : signature,
             media: mediaPick
         )
+        body.travel = letsTravel ? true : nil
+        return body
     }
 
     /// The photo the card carries: one person's card only (a list goes without), and only while the server takes one.
@@ -583,6 +597,7 @@ final class HolidayCardFlowViewModel {
             requestId = nil
             sent = response.card
             sentLink = response.link
+            sentTravels = body.travel == true
             step = .sent
             tookBack = false
             HolidayCardDraftStore.clear()
@@ -598,6 +613,8 @@ final class HolidayCardFlowViewModel {
             }
             // Its photo or greeting needs a bought stamp and none is left: the same, saying why.
             if await needsBoughtStamp(error) { return }
+            // A card that travels needs the sender's town: asked once, then sealed again.
+            if needsTown(error, retry: { [weak self] in self?.sealOrSend() }) { return }
             let sentence = Self.refusal(error, fallback: "Couldn’t send your card just now. Try again in a moment.")
             let closed = Self.refusalCode(error) == "CARD_ARRIVAL_CLOSED"
             guard closed || step == .seal else {
@@ -683,6 +700,8 @@ final class HolidayCardFlowViewModel {
         query = ""
         email = ""
         byEmail = false
+        travels = true
+        sentTravels = false
         step = .to
     }
 
@@ -826,7 +845,7 @@ extension HolidayCardFlowViewModel {
             case .link, .list: nil
             }
         }
-        return SendHolidayCardListBody(
+        var body = SendHolidayCardListBody(
             design: design.id,
             message: message.trimmingCharacters(in: .whitespacesAndNewlines),
             arrival: arrival,
@@ -835,6 +854,8 @@ extension HolidayCardFlowViewModel {
             // Each address keeps the list's choice, worded with all four (else the older mapping).
             emailsKeepArrival: cards?.emailAllArrivals == nil ? nil : true
         )
+        body.travel = letsTravel ? true : nil
+        return body
     }
 
     /// "Look it over" for a list: every card's line, and the first card that
@@ -857,6 +878,7 @@ extension HolidayCardFlowViewModel {
             if opens || !allGo { step = .look }
             return allGo
         } catch {
+            if needsTown(error, retry: { [weak self] in Task { await self?.lookItOver(opens: opens) } }) { return false }
             previewError = Self.refusal(error, fallback: "Couldn’t show your cards just now. Try again in a moment.")
             return false
         }
@@ -877,9 +899,11 @@ extension HolidayCardFlowViewModel {
             listResults = response.results
             listPreview = nil
             tookBack = false
+            sentTravels = body.travel == true
             step = .sent
             HolidayCardDraftStore.clear()
         } catch {
+            if needsTown(error, retry: { [weak self] in self?.sealOrSend() }) { return }
             guard Self.refusalCode(error) == "STAMPS_REQUIRED" else {
                 sendError = Self.refusal(error, fallback: "Couldn’t send your cards just now. Try again in a moment.")
                 return

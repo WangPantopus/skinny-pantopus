@@ -46,6 +46,9 @@ struct CardTableContent: Equatable {
     var voice: CardVoice?
     /// Whose route its bytes come from: the reader's piece, the sender's Sent, or the uploader's own (Look it over).
     var mediaFrom: CardMediaFrom?
+    /// A travelling card (server switch `card_travel`, travelling card plan Part 3): the postmarks of the towns on the
+    /// way to its reader and how far it came; nil for every other card.
+    var travel: CardTravelEnvelope?
 
     var firstName: String {
         HolidayCardWords.firstName(fromName)
@@ -67,5 +70,33 @@ enum CardMediaFrom: Equatable {
         case let .sent(cardId): .sent(cardId: cardId, fileId: fileId)
         case .own: .own(fileId: fileId)
         }
+    }
+}
+
+extension CardTableContent {
+    /// A card in Sent, as the other person gets it.
+    init(sent piece: MailSentPiece, from: String, mailedOn: String?) {
+        design = piece.card.design
+        number = piece.card.number
+        caption = piece.card.caption ?? ""
+        paper = piece.card.paper
+        table = piece.card.table
+        slug = piece.card.slug
+        year = piece.card.year
+        self.mailedOn = mailedOn
+        note = MailPieceModel.firstText(piece.note) ?? ""
+        fromName = from
+        toName = piece.byLink && piece.status != .claimed ? "Their name" : piece.toName
+        sealed = false
+        sealedUntil = nil
+        sealedInDays = ""
+        sealedDayCount = 0
+        signature = piece.card.signature
+        // Your own photo: never covered here.
+        photo = piece.card.photo.map {
+            CardPhoto(fileId: $0.fileId, width: $0.width, height: $0.height, alt: $0.alt, live: $0.live)
+        }
+        voice = piece.card.voice
+        mediaFrom = .sent(cardId: piece.id)
     }
 }
