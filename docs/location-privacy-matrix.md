@@ -343,6 +343,23 @@ area), the server decides, whatever an app's sheet says:
   an `is_story` row, so a Moment's point, place label and text stay what the Moments routes stored, and it ends
   only through `DELETE /api/moments/:id` (which also deletes its private files, or keeps them for a review).
 
+### Travelling Christmas cards
+
+A Christmas card that travels (launch key `card_travel`; `docs/product/travelling-card-2026-11-21`, decided by the
+founder 2026-11-21) collects one stop per town it reaches. A stop is a town and a state, never a person's point.
+
+| Field | Where it comes from | Who sees it |
+|-------|---------------------|-------------|
+| Town and state ("Boise, ID") | the person's home's town, else the town they keep in their profile (`User.city`, `state`) | the public journey page (`GET /api/mailbox/cards/journeys/:journey`, web `/cards/journey/<id>`), the envelope's postmarks, the share pictures, the notices |
+| `lat` / `lon` | **the town's own centre** from the bundled Census lists (`backend/data/travelTowns.json`), the same for everyone in that town | the public journey page (to draw the map) |
+| A home's or person's own point | — | **NEVER** stored on the card or sent to any app |
+| Names, addresses, notes, ids of people or mail | — | **NEVER** on the journey page, the share pictures or the link preview |
+
+- Someone outside the United States is the stop "Abroad", with no point.
+- The journey's id is random and long; it is in the page's address and nowhere else public.
+- `GET /cards/towns` with no text suggests the nearest town to the person's resolved location; the location itself
+  is never returned or kept.
+
 ### Saved / Viewing Places
 
 These are per-user preferences stored locally or in `SavedPlace`.

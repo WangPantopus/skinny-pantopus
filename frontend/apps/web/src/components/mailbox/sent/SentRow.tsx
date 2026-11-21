@@ -13,7 +13,7 @@ import type { SentPiece } from '@pantopus/api';
 import { Loader2 } from 'lucide-react';
 import MailPiece from '../MailPiece';
 import { cardPicture } from '../cards/cardArt';
-import { sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, sentToLine } from './sentWords';
+import { sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, sentToLine, sentTravelLine } from './sentWords';
 import { launchFeatures } from '@/lib/featureFlags';
 
 export default function SentRow({
@@ -75,6 +75,8 @@ export default function SentRow({
             <span className="block break-words text-app-text-strong">{toLine}</span>
             {/* A card whose email didn't go out stands out in the list (its page says what to do). */}
             <span className={`block ${piece.email_status ? 'font-medium text-app-error' : 'text-app-text-secondary'}`}>{statusLine}</span>
+            {/* A card that travels: how far it has gone from here, and where it is now (travelling card Part 6). */}
+            {sentTravelLine(piece) ? <span className="block text-app-text-secondary" data-testid={`mailSentTravel.${piece.id}`}>{sentTravelLine(piece)}</span> : null}
           </span>
         </span>
       </Link>

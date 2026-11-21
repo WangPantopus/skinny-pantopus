@@ -11,10 +11,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import TravelPostmarks, { travelCameLine } from './TravelPostmarks';
+import travelStyles from './CardTravel.module.css';
 import { cardMood, cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, postmarkDay, seededRandom, TABLE_ART, tableEdge, tableTint } from './cardArt';
 import { cardPen } from './cardFont';
 import { playCardSound, preloadCardSounds } from './cardSounds';
-import type { CardPhoto, CardSignature, CardVoice } from '@pantopus/api';
+import type { CardPhoto, CardSignature, CardVoice, CardTravel } from '@pantopus/api';
 import CardPrint, { type PrintSource } from './CardPrint';
 import CardGreeting, { spokenLength } from './CardGreeting';
 import { PaperBack, PaperFront, PaperLeaf, useNoteLeaves } from './CardPaper';
@@ -65,6 +67,8 @@ export type TableCard = {
   photo?: CardPhoto | null;
   /** The card's own voice greeting (memories plan step 7); null while sealed. Plays only when pressed. */
   voice?: CardVoice | null;
+  /** A card that travels (server key card_travel): the postmarks of the towns on the way, and how far it came. */
+  travel?: Pick<CardTravel, 'postmarks' | 'miles' | 'towns'> | null;
 };
 
 /** A line in the ⋯ menu, or a quiet button under the card. A quiet button may also carry its short words (used when two
@@ -171,6 +175,8 @@ export default function CardTable({
   reply = null,
   nextCard = null,
   sendMoment = null,
+  passOn = null,
+  journey = null,
   onShare,
   onClose,
   overlay,
@@ -203,6 +209,10 @@ export default function CardTable({
   nextCard?: { count: number; onOpen: () => void } | null;
   /** Sealing it by hand instead of opening it. */
   sendMoment?: SendMoment | null;
+  /** "Pass it on" (travelling card Part 4): beside "Turn it back" once the card is turned over; filled, or quiet after one. */
+  passOn?: (TableMenuItem & { quiet?: boolean }) | null;
+  /** "See its journey" (Part 4): the first quiet button once the card is turned over. */
+  journey?: TableMenuItem | null;
   onShare?: () => void;
   onClose: () => void;
   /** Sheets and dialogs that belong over the table. */
@@ -518,6 +528,7 @@ export default function CardTable({
   // Sealing it, the card isn't sealed to the sender: only its envelope says so once it's addressed.
   const sealed = card.sealed && !sendMoment;
   let words = '';
+  let wordsSub: string | null = null;
   let primary = '';
   let hint = '';
   const reduce = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
@@ -544,6 +555,8 @@ export default function CardTable({
     else if (step === 'out') { primary = 'Read the letter'; }
   } else if (step === 'front') {
     words = sealed ? `${from} sealed this card.` : `A Christmas card from ${from}.`;
+    // A travelling card past its first stop (Part 3): how far it came, under the words.
+    if (!sealed) wordsSub = travelCameLine(card.travel);
     primary = 'Turn it over';
     hint = envTurnedOnce ? 'or swipe it' : 'or swipe it, the way you’d turn it in your hand';
   } else if (step === 'back') {
@@ -585,11 +598,16 @@ export default function CardTable({
   // a card, as on the iPhone and Android. On a reader's card (it has a ⋯ menu) "Share this card" is never in the row: it
   // keeps its corner button and its ⋯ line. The sender's own look at a card from Sent keeps it as its one quiet button.
   // The row's room is kept while any of them can be offered, so the card never moves when they show.
-  const rowRoom = !sendMoment && !isLetter && Boolean(nextCard || writeBack || sendBack || (quietShare && !menu.length));
+  const rowRoom = !sendMoment && !isLetter && Boolean(nextCard || journey || writeBack || sendBack || (quietShare && !menu.length));
   const quietButtons = ([
     nextCard && nextShown ? {
       key: 'next', full: `Open the next card (${nextCard.count} more)`, short: `Next card (${nextCard.count} more)`,
       spoken: `Open the next card, ${nextCard.count} more waiting`, testId: 'cardTableNextCard', onSelect: nextCard.onOpen,
+    } : null,
+    // A travelling card (Part 4): "See its journey" joins the row, before "Write back"; what doesn't fit is under ⋯.
+    journey && turnedOver ? {
+      key: 'journey', full: journey.label, short: journey.short || journey.label, spoken: journey.spoken || journey.label,
+      testId: 'cardTableJourney', onSelect: journey.onSelect,
     } : null,
     writeBack && turnedOver ? {
       key: 'write', full: writeBack.label, short: writeBack.short || writeBack.label, spoken: writeBack.spoken || writeBack.label,
@@ -620,7 +638,7 @@ export default function CardTable({
     ? [words, send === 'addressed' ? `Addressed to ${toName}.` : '', send === 'sending' ? 'Sealing it.' : ''].filter(Boolean).join(' ')
     : step === 'out' && !sealed
     ? `Card from ${fromName}: ${captionSentence} On the back: ${note}${mediaSentence}${reply ? ` ${reply.fromName} wrote back: ${reply.note}` : ''}`
-    : `Christmas card from ${fromName}${sealed ? ', sealed until Christmas morning' : ''}`;
+    : `Christmas card from ${fromName}${sealed ? ', sealed until Christmas morning' : ''}${wordsSub ? `. ${wordsSub}` : ''}`;
   const day = postmarkDay(mailedOn || new Date().toISOString());
   const [month, date] = day.split(' ');
   // On the table once it's turned over (how much of them shows follows the card's own turn, from the engine), and not
@@ -755,8 +773,11 @@ export default function CardTable({
             <Art src={envArt('env-front.webp')} />
             <div className={styles.frontWords}>
               <Art className={styles.stampImg} src={stampSrc} />
-              {/* A letter Pantopus puts straight in the box has no postmark (and the postmark says Christmas). */}
-              {isLetter ? null : (
+              {/* A letter Pantopus puts straight in the box has no postmark (and the postmark says Christmas). A travelling
+                  card carries a postmark for every town on its way (Part 3). */}
+              {!isLetter && card.travel?.postmarks?.length ? (
+                <TravelPostmarks marks={card.travel.postmarks} arrive={!sendMoment && !startOnTable && replay === 0} />
+              ) : isLetter ? null : (
                 <div className={styles.pmBox}>
                   <Art src={art('postmark-blank.webp')} />
                   <svg viewBox="0 0 622 365" aria-hidden="true">
@@ -864,7 +885,10 @@ export default function CardTable({
               ))}
             </div>
           ) : null}
-          <div className={`${styles.words} ${words && !toast ? '' : styles.hidden}`} data-el="words" aria-live="polite">{words}</div>
+          <div className={`${styles.words} ${words && !toast ? '' : styles.hidden}`} data-el="words" aria-live="polite">
+            {words}
+            {wordsSub && words ? <small className={travelStyles.wordsSub} data-el="wordsSub" data-testid="cardTableTravelLine">{wordsSub}</small> : null}
+          </div>
           <div className={`${styles.toast} ${toast ? styles.toastOn : ''}`} role="status">{toast}</div>
           {verseOpen && card.verse ? (
             <div className={styles.bookmarkShade} data-ui onClick={() => setVerseOpen(false)}>
@@ -920,6 +944,18 @@ export default function CardTable({
                 >
                   {primary || 'Turn it over'}
                 </button>
+                {/* "Pass it on" beside "Turn it back" (travelling card Part 4): filled, or quiet once it went to one person. */}
+                {passOn && turnedOver && !sendMoment && !ui.enlarged ? (
+                  <button
+                    type="button"
+                    className={passOn.quiet ? styles.primary : travelStyles.passOnFilled}
+                    data-ui
+                    data-testid="cardTablePassOn"
+                    onClick={() => { setMenuOpen(false); passOn.onSelect(); }}
+                  >
+                    {passOn.label}
+                  </button>
+                ) : null}
                 {printButton ? (
                   <button type="button" className={styles.primary} data-ui data-testid="cardTableReadInPrint" onClick={() => openPrint(printsReply ? 'reply' : 'card')}>Read it in print</button>
                 ) : null}
