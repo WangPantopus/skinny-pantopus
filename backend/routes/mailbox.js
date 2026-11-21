@@ -39,6 +39,8 @@ const { localDisplayNames } = require('../utils/identityProfiles');
 const { maskContact } = require('../jobs/mailEscrowExpiry');
 // Christmas cards (launch key holiday_cards): the season's pictures, arrivals and the sealed note.
 const holidayCards = require('../services/holidayCards');
+// The travelling card (launch key card_travel): towns, journeys and pass-ons.
+const cardTravel = require('../services/cardTravel');
 const cardEmail = require('../services/cardEmail');
 const cardMedia = require('../services/holidayCardMedia');
 const cardVoice = require('../services/cardVoice');
@@ -1771,6 +1773,8 @@ const sendCardSchema = Joi.object({
   // The card's own photo and voice (launch key holiday_card_memories): file ids from POST /cards/media, and the photo's
   // description for screen readers. A card with them always carries its request ID, which ties them to the card.
   ...CARD_MEDIA_FIELDS,
+  // "Let it travel" (launch key card_travel): the card starts a journey. While the key is off it's an ordinary card.
+  travel: Joi.boolean(),
 }).with('photo', 'request_id').with('voice', 'request_id').with('photo_live', 'request_id');
 
 // A list (POST /cards/batch and its look): the same picture, note and choice of arrival for up to 20 people or
@@ -1796,6 +1800,8 @@ const cardListSchema = Joi.object({
   signature: CARD_SIGNATURE_FIELD,
   // Accepted only to be refused clearly (CARD_MEDIA_ONE_PERSON): a photo or voice goes on a card to one person.
   ...CARD_MEDIA_FIELDS,
+  // "Let it travel" (card_travel): each card of the list starts a journey of its own.
+  travel: Joi.boolean(),
 });
 
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
@@ -1824,7 +1830,8 @@ async function cardsSentToday(senderId, timeZone, now = new Date()) {
     .order('created_at', { ascending: false })
     .order('id', { ascending: false });
   if (error) throw new Error(error.message);
-  return data || [];
+  // A card passed on (card_travel) is free and never the day's card.
+  return (data || []).filter((row) => !row.mail_extracted?.card?.travel?.parent);
 }
 
 // A card's stored note, removed with the card when it is taken back (or loses a same-day race). Best effort: the copy
@@ -1859,6 +1866,8 @@ const cardRequestDigest = (body) => holidayCards.requestDigest({
   toEmail: body.to.user_id ? null : (body.to.link ? 'link' : normalizeEscrowContact(body.to.email)),
   // The card's own photo and voice (holiday_card_memories); none leaves the digest as it was.
   media: cardMedia.digestMedia(body),
+  // A card that travels (card_travel); one that doesn't keeps the digest it always had.
+  travel: body.travel === true && cardTravel.travelOn(),
 });
 // A card by link's own link. Throws when the server has no secret to make it with (nothing is stored then).
 const cardLinkOf = (mailId) => {
@@ -1896,7 +1905,8 @@ async function cardOfRequest(rowId, senderId) {
  * it can't decide (a read or a write failed); a card with a request ID is then left for a retry to settle.
  */
 async function settleCard(mail, senderZone) {
-  if (mail.mail_extracted?.card?.postage_v1) return { outcome: mail.escrow_status === 'withdrawn' ? 'taken_back' : 'sent', mail };
+  // A card with a stamp is the database's to count, and a passed-on card (card_travel) is free: neither is the day's card.
+  if (mail.mail_extracted?.card?.postage_v1 || mail.mail_extracted?.card?.travel?.parent) return { outcome: mail.escrow_status === 'withdrawn' ? 'taken_back' : 'sent', mail };
   const request = cardRequestOf(mail);
   const day = await cardsSentToday(mail.sender_user_id, senderZone, new Date(mail.created_at));
   if (day[day.length - 1]?.id === mail.id) {
@@ -2055,7 +2065,15 @@ async function checkCardSender(senderId, body, now) {
   if (!mailStamps.enabled(senderId) && (await cardsSentToday(senderId, senderZone, now)).length) {
     return refuse(429, 'You’ve sent today’s card. You can send another tomorrow.', 'CARD_DAILY_LIMIT');
   }
-  return { design, message, sender, senderZone, signature: signed.signature, media: media.media, mediaFiles: media.files };
+  // "Let it travel" (card_travel): the journey starts in the sender's town, its first postmark. Asked once (D4).
+  let travelFrom = null;
+  if (body.travel === true && cardTravel.travelOn()) {
+    const town = await cardTravel.travelTown(senderId);
+    if (!town) return refuse(409, 'Where does it start? Choose your town first.', 'CARD_TRAVEL_NEEDS_TOWN');
+    travelFrom = cardTravel.stopOf(town, mailDelivery.localDate(now, senderZone));
+  }
+  return { design, message, sender, senderZone, signature: signed.signature, media: media.media, mediaFiles: media.files,
+    ...(travelFrom ? { travelFrom } : {}) };
 }
 
 // Whether this sender already has a card on its way to this person for the same morning (the same delivery time). A
@@ -2078,7 +2096,7 @@ const cardSameMorning = (name, arrival) => refuseCard(429, arrival === 'christma
 
 // The checks of who it goes to: the person (or the address), when it can arrive by their clock, and the email limits,
 // counting `earlierAddresses` (those before it on the same list) as sent. `from` is what checkCardSender answered.
-async function checkCardRecipient(senderId, body, now, from, { earlierAddresses = [], ownRowId = null } = {}) {
+async function checkCardRecipient(senderId, body, now, from, { earlierAddresses = [], ownRowId = null, travel = null, free = false } = {}) {
   const refuse = refuseCard;
   const { design, message, sender, senderZone, signature, media, mediaFiles } = from;
   const { arrival } = body;
@@ -2090,6 +2108,9 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
     design: design.id, caption: design.caption, holiday: holidayCards.SEASON.holiday, year: holidayCards.SEASON.year,
     arrival, sealed_until: null, take_back_until: null, to_name: null,
   };
+  // A card that travels (card_travel): a journey of its own when it starts one, or the pass-on's place in its journey.
+  if (travel) card.travel = travel;
+  else if (from.travelFrom) card.travel = { journey: crypto.randomUUID(), hop: 1, parent: null, place: null, from: from.travelFrom, to: null };
 
   if (toUserId) {
     const refusal = await personRefusal(senderId, toUserId);
@@ -2122,7 +2143,8 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
   // A link goes to no address, so the email limits don't count it; one card a day does. With digital stamps every card
   // takes a stamp, so a list can go to as many new addresses as there are stamps for (checkEscrowRateLimits).
   if (!byLink) {
-    const rateCheck = await checkEscrowRateLimits(senderId, toEmail, earlierAddresses, { stamps: mailStamps.enabled(senderId) });
+    // A pass-on uses no stamp: three new addresses a week, as without stamps.
+    const rateCheck = await checkEscrowRateLimits(senderId, toEmail, earlierAddresses, { stamps: !free && mailStamps.enabled(senderId) });
     if (rateCheck.limit === 'same_contact_scheduled') {
       return refuse(429, 'You already have a card waiting to be emailed to this address. One card to an address a month.', 'MAIL_SEND_LIMIT');
     }
@@ -2133,7 +2155,7 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
       return refuse(429, 'You sent mail to this email address in the last 30 days. One card to an address a month.', 'MAIL_SEND_LIMIT');
     }
     if (!rateCheck.allowed) {
-      return refuse(429, mailStamps.enabled(senderId)
+      return refuse(429, !free && mailStamps.enabled(senderId)
         ? 'You took back cards sent by email this week, so new email addresses wait a few days. People on Pantopus can still get one.'
         : 'You can email cards to 3 new people a week. You can send this one in a few days.', 'MAIL_SEND_LIMIT');
     }
@@ -2202,6 +2224,11 @@ router.get('/cards', verifyToken, async (req, res) => {
       max_recipients: postage ? CARD_LIST_MAX : 1,
       // "Help me write it" can be used now (launch key card_note_help). Absent: the apps show no button.
       ...(cardNoteHelpOn() ? { note_help: true } : {}),
+      // "Let it travel" (launch key card_travel): the switch is on to begin with (D5), the sender's town ("Boise, ID", or
+      // null: the apps ask "Where does it start?" once, D4) and how many people one person may pass a card to (D1).
+      // Absent while the key is off: the apps show no switch.
+      ...(cardTravel.travelOn() ? { travel: { on: true, town: await cardTravel.townLabel(senderId).catch(() => null),
+        places: cardTravel.PLACES } } : {}),
     });
   } catch (err) {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });
@@ -2528,10 +2555,12 @@ router.get('/cards/waiting', verifyToken, async (req, res) => {
  * first, or refuses it (mail_stamp_card_accounting), so a card that isn't stored costs nothing. `listSize`: it went
  * with others on one list (POST /cards/batch). Throws when it can't tell what became of the card.
  */
-async function storeCard({ senderId, checked, requestId, rowId, digest, now, listSize = null }) {
+async function storeCard({ senderId, checked, requestId, rowId, digest, now, listSize = null, free = false }) {
   const { design, message, signature, media, mediaFiles = [], arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
-  const postage = mailStamps.enabled(senderId);
-  if (requestId) card.request = { id: requestId, digest, ...(postage ? { settled_at: now.toISOString() } : {}) };
+  // `free`: a card passed on (card_travel) is stored with no postage mark, so the database takes no stamp for it, and it
+  // is never the day's card (settled as it's stored).
+  const postage = !free && mailStamps.enabled(senderId);
+  if (requestId) card.request = { id: requestId, digest, ...(postage || free ? { settled_at: now.toISOString() } : {}) };
   if (postage) card.postage_v1 = true;
   // A card with its own photo or voice spends a bought stamp, or isn't stored (mail_stamp_card_accounting). The mark is
   // the server's alone: GET routes never show it (services/mailPiece).
@@ -2682,7 +2711,8 @@ async function storeCard({ senderId, checked, requestId, rowId, digest, now, lis
 
   const onList = listSize ? { listSize } : {};
   const withMedia = media ? { withPhoto: Boolean(media.photo), withVoice: Boolean(media.voice), withLive: Boolean(media.live) } : {};
-  logMailEvent('holiday_card_sent', mail.id, senderId, { design: design.id, arrival, byEmail: Boolean(toEmail), ...(byLink ? { byLink } : {}), ...onList, ...withMedia });
+  const travelling = card.travel ? { travelHop: card.travel.hop } : {};
+  logMailEvent('holiday_card_sent', mail.id, senderId, { design: design.id, arrival, byEmail: Boolean(toEmail), ...(byLink ? { byLink } : {}), ...onList, ...withMedia, ...travelling });
   logger.info('Christmas card sent', { mailId: mail.id, senderId, arrival, byEmail: Boolean(toEmail), byLink, ...onList });
   return { status: 201, body: cardAnswer(mail, now) };
 }
@@ -2750,7 +2780,9 @@ async function cardLook(senderId, checked, now) {
       // Their own signature, photo and voice show here as their own note does, sealed or not, never covered; the photo
       // and voice open through GET /cards/media/:fileId.
       card: { ...holidayCards.cardView({ mail_extracted: { card } }, now), signature: signature || null,
-        ...holidayCards.mediaView({ card_media: media || null, card_photo_covered: false }, false) },
+        ...holidayCards.mediaView({ card_media: media || null, card_photo_covered: false }, false),
+        // A card that travels (card_travel): its first postmark, the town it starts in, as the envelope will carry it.
+        ...(card.travel ? { travel: cardTravel.previewView(card.travel) } : {}) },
     },
     arrives_on: arrivesOn,
     opens_on: opensOn,
@@ -2835,7 +2867,7 @@ async function checkCardList(senderId, body, now) {
   const items = body.recipients.map(({ to, request_id: id }) => {
     const single = { design: body.design, message: body.message,
       arrival: listArrival(body.arrival, Boolean(to.email), body.emails_keep_arrival === true), to,
-      signature: body.signature };
+      signature: body.signature, ...(body.travel === true ? { travel: true } : {}) };
     const requestId = String(id).toLowerCase();
     return { requestId, rowId: holidayCards.requestRowId(senderId, requestId), single, digest: cardRequestDigest(single) };
   });
@@ -3028,6 +3060,10 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
     if (error) throw new Error(error.message);
     if (!mail || String(mail.sender_user_id) !== String(senderId) || !holidayCards.isCard(mail)) return notHere();
     const now = new Date();
+    // A card passed on (card_travel) comes back as a pass-on does, which frees its place.
+    if (mail.mail_extracted?.card?.travel?.parent && mail.escrow_status !== 'withdrawn') {
+      return reply(res, await takeBackPassOn(senderId, mail, now));
+    }
     // Why it can't come back, as Sent says it: its email's or link's 90 days ended, they have it, or the carrier has it.
     const tooLate = (row) => res.status(409).json({
       error: holidayCards.sentStatus(row, now) === 'expired' ? cardReturnedWords(mail)
@@ -3345,6 +3381,331 @@ router.post('/cards/:id/reply/take-back', verifyToken, async (req, res) => {
   }
 });
 
+// ---- The travelling card (launch key card_travel; docs/product/travelling-card-2026-11-21, Part 1) ----
+// Whoever receives a card that travels can pass the same card on, free, with a note of their own, to up to two people
+// (D1): to a person on Pantopus, an email address or by link, as "Who it's for". A passed-on card is stored by storeCard
+// with no postage mark (no stamp, never the day's card), the same picture, the next hop, its parent and the journey's
+// id, under a row id made from its parent and its place (services/cardTravel placeRowId), so the database refuses a
+// third and two sends at once can't both take a place. services/cardTravel keeps the towns, journeys and notices.
+const travelRoutesOff = (res) => res.status(404).json({ error: 'Not found' });
+const travelUnavailable = () => ({ status: 503, body: { error: 'Couldn’t pass your card on just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' } });
+const travelTownSchema = Joi.object({ id: Joi.string().max(16).required() });
+const passOnSchema = Joi.object({
+  to: Joi.object({
+    user_id: Joi.string().uuid(),
+    email: Joi.string().email().max(320),
+    link: Joi.boolean().valid(true),
+  }).xor('user_id', 'email', 'link').required(),
+  message: Joi.string().allow('').max(4000).required(),
+  signature: CARD_SIGNATURE_FIELD,
+  // One per pass-on draft, sent again with every retry of it: a repeat answers with the card it stored.
+  request_id: Joi.string().uuid().required(),
+  // Which of the card's two places it takes (piece.card.travel.next_place).
+  place: Joi.number().integer().min(1).max(cardTravel.PLACES).required(),
+});
+const travelRefusal = (status, error, code) => ({ status, body: { error, code } });
+const TRAVEL_PLACE_GENERATIONS = 10;
+
+/**
+ * The row a pass-on in this place of this card stores, and what is there now: the place's rows are tried in order (one
+ * per earlier pass-on taken back by email or link, or withdrawn by a block, which keep their rows), and the first with
+ * no row is free. { rowId, occupied, withdrawn } where `occupied` is the live card in the place, if any, and
+ * `withdrawn` the request IDs of the place's withdrawn cards.
+ */
+async function travelPlace(parentId, place) {
+  const ids = Array.from({ length: TRAVEL_PLACE_GENERATIONS }, (_, g) => cardTravel.placeRowId(parentId, place, g));
+  const { data, error } = await supabaseAdmin.from('Mail').select(CARD_REQUEST_SELECT).in('id', ids);
+  if (error) throw new Error(error.message);
+  const byId = new Map((data || []).map((row) => [row.id, row]));
+  const withdrawn = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    if (!row) return { rowId: id, occupied: null, withdrawn };
+    if (row.escrow_status === 'withdrawn') {
+      if (cardRequestOf(row)?.id) withdrawn.push(cardRequestOf(row).id);
+      continue;
+    }
+    return { rowId: id, occupied: row, withdrawn };
+  }
+  return { rowId: null, occupied: null, withdrawn };
+}
+
+/**
+ * Every check a pass-on goes through, for it and its look alike: the card (a travelling card this person received,
+ * open, with a place left), a repeat of an earlier request, the note, the sender's town, who it goes to (not someone the
+ * card has been to on its way, not a business, the blocks, one card for one morning, the email limits) and when it
+ * arrives (a person's next 7 a.m.; an email goes now; a link works now). Answers { answer } to send at once, or what
+ * storeCard stores.
+ */
+async function checkPassOn(userId, cardId, body, now, { look = false } = {}) {
+  if (!UUID_REGEX.test(cardId)) return { answer: replyNotHere() };
+  const { data: parent, error } = await supabaseAdmin.from('Mail').select(`${REPLY_ROW_SELECT}, escrow_recipient_contact`)
+    .eq('id', cardId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!parent || !holidayCards.isCard(parent) || parent.escrow_status === 'withdrawn' || parent.deleted_at) {
+    return { answer: replyNotHere() };
+  }
+  if (String(parent.recipient_user_id) !== String(userId)) {
+    return { answer: travelRefusal(403, 'Only the person this card went to can pass it on.', 'CARD_TRAVEL_NOT_YOURS') };
+  }
+  const travel = parent.mail_extracted.card.travel;
+  if (!travel?.journey) return { answer: travelRefusal(403, 'This card doesn’t travel.', 'CARD_TRAVEL_OFF') };
+
+  const place = Number(body.place);
+  const requestId = String(body.request_id).toLowerCase();
+  const message = cardNote(body.message);
+  const signed = cardTableOn() ? holidayCards.cleanSignature(body.signature) : { signature: null };
+  const digest = cardTravel.passOnDigest({ parentId: parent.id, place, message, signature: signed.signature || null, to: body.to });
+  // A repeat of this request answers from the card it stored; a request taken back never sends again.
+  const slot = await travelPlace(parent.id, place);
+  if (slot.withdrawn.includes(requestId) || (travel.taken_back || []).includes(requestId)) return { answer: cardTakenBack(null) };
+  if (slot.occupied) {
+    const stored = slot.occupied;
+    if (cardRequestOf(stored)?.id === requestId) {
+      if (!look && cardRequestOf(stored).digest === digest) return { answer: { status: 200, body: cardAnswer(stored, now) } };
+      return { answer: cardRequestSent(stored, now) };
+    }
+  }
+  const rows = await cardTravel.journeyRows(travel.journey);
+  const tree = cardTravel.journeyTree(rows);
+  const own = tree.byId.get(parent.id);
+  if (!own) return { answer: replyNotHere() };
+  const places = cardTravel.placesOf(tree, own);
+  const refusal = cardTravel.passOnRefusal(own, userId, now, places.left);
+  if (refusal) return { answer: travelRefusal(refusal.code === 'CARD_TRAVEL_FULL' ? 409 : 403, refusal.error, refusal.code) };
+  if (!slot.rowId) return { answer: travelRefusal(429, 'You can pass it on again tomorrow.', 'CARD_TRAVEL_PLACE_TAKEN') };
+  if (slot.occupied || places.taken.has(place)) {
+    return { answer: travelRefusal(409, 'You just passed this card on. Open it again to see who has it.', 'CARD_TRAVEL_PLACE_TAKEN') };
+  }
+
+  if (!message) return { answer: travelRefusal(400, 'Write a few words first.', 'CARD_MESSAGE_EMPTY') };
+  if ([...message].length > holidayCards.MESSAGE_LIMIT) {
+    return { answer: travelRefusal(400, `Keep the note to ${holidayCards.MESSAGE_LIMIT} letters.`, 'CARD_MESSAGE_TOO_LONG') };
+  }
+  if (signed.refusal === 'CARD_SIGNATURE_TOO_LONG') {
+    return { answer: travelRefusal(400, 'Sign a little more simply, or leave your name typed.', signed.refusal) };
+  }
+  if (signed.refusal) {
+    return { answer: travelRefusal(400, 'Your signature didn’t come through. Sign again, or leave your name typed.', signed.refusal) };
+  }
+
+  const { data: sender, error: senderError } = await supabaseAdmin.from('User')
+    .select('id, email, account_type').eq('id', userId).maybeSingle();
+  if (senderError) throw new Error(senderError.message);
+  if (!sender || sender.account_type === 'business') {
+    return { answer: travelRefusal(403, 'Christmas cards are sent from a personal account.', 'CARD_SENDER_NOT_PERSON') };
+  }
+  const senderZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
+  if (!holidayCards.seasonOpen(senderZone, now)) {
+    return { answer: travelRefusal(410, 'Christmas cards are done for this year.', 'CARDS_CLOSED') };
+  }
+  const design = holidayCards.designById(parent.mail_extracted.card.design);
+  if (!design) return { answer: replyNotHere() };
+  const town = await cardTravel.travelTown(userId);
+  if (!town) return { answer: travelRefusal(409, 'Where does it start? Choose your town first.', 'CARD_TRAVEL_NEEDS_TOWN') };
+
+  // Not to someone the card has already been to on its way here: everyone who sent or received it, by account or address.
+  const chain = cardTravel.chainTo(tree, own);
+  const heldBy = new Set(chain.flatMap((row) => [row.sender_user_id, row.recipient_user_id]).filter(Boolean).map(String));
+  const been = () => ({ answer: travelRefusal(409, 'This card has already been to them.', 'CARD_TRAVEL_BEEN_THERE') });
+  if (body.to.user_id) {
+    if (heldBy.has(String(body.to.user_id)) && String(body.to.user_id) !== String(userId)) return been();
+    const { data: person, error: personError } = await supabaseAdmin.from('User').select('id, account_type')
+      .eq('id', body.to.user_id).maybeSingle();
+    if (personError) throw new Error(personError.message);
+    if (person?.account_type === 'business') {
+      return { answer: travelRefusal(403, 'A Christmas card goes to a person, not a business.', 'CARD_RECIPIENT_BUSINESS') };
+    }
+  } else if (body.to.email) {
+    const address = normalizeEscrowContact(body.to.email);
+    const addresses = new Set(chain.map((row) => normalizeEscrowContact(row.escrow_recipient_contact || '')).filter(Boolean));
+    if (heldBy.size) {
+      const { data: held } = await supabaseAdmin.from('User').select('email').in('id', [...heldBy]);
+      for (const row of held || []) if (row.email) addresses.add(normalizeEscrowContact(row.email));
+    }
+    if (address !== normalizeEscrowContact(sender.email || '') && addresses.has(address)) return been();
+  }
+
+  const from = { design, message, sender, senderZone, signature: signed.signature, media: null, mediaFiles: [] };
+  const checked = await checkCardRecipient(userId, { to: body.to, arrival: body.to.user_id ? 'next_morning' : 'now' }, now, from, {
+    ownRowId: slot.rowId, free: true,
+    travel: { journey: travel.journey, hop: Number(travel.hop) + 1, parent: parent.id, place,
+      from: cardTravel.stopOf(town, mailDelivery.localDate(now, senderZone)), to: null },
+  });
+  if (checked.refusal) return { answer: checked.refusal };
+  return { checked, rowId: slot.rowId, requestId, digest, place, town };
+}
+
+/**
+ * GET /api/mailbox/cards/towns?q=<a few letters or a ZIP code>
+ * "Your town or ZIP code" (D4): up to 8 towns from the Census lists bundled with the server, { towns: [{ id, town, state,
+ * label, zip? }] }, bigger towns first. With no q: { towns: [], suggested } where `suggested` is the town nearest where
+ * the person's location says they are ("Use Vancouver, WA"), or null. No call to an outside service.
+ */
+router.get('/cards/towns', verifyToken, async (req, res) => {
+  if (!cardTravel.travelOn()) return travelRoutesOff(res);
+  try {
+    const q = String(req.query.q || '').slice(0, 64);
+    if (!q.trim()) {
+      let suggested = null;
+      try {
+        // eslint-disable-next-line global-require
+        const { resolveLocation } = require('../services/context/locationResolver');
+        const here = await resolveLocation(req.user.id);
+        suggested = cardTravel.nearestTown(here?.latitude, here?.longitude);
+      } catch (_) { /* no suggestion */ }
+      return res.json({ towns: [], suggested });
+    }
+    return res.json({ towns: cardTravel.searchTowns(q) });
+  } catch (err) {
+    logger.error('Card towns read error', { error: err.message, userId: req.user.id });
+    return res.status(503).json({ error: 'Couldn’t look up towns just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
+  }
+});
+
+/**
+ * PUT /api/mailbox/cards/town  { id }  (an id from GET /cards/towns)
+ * Keeps the chosen town in the person's profile town fields (User.city, state and zipcode; D4), asked once. A card that
+ * reached them while they had no town reaches it now. Answers { town: "Vancouver, WA" }; 400 CARD_TOWN_UNKNOWN.
+ */
+router.put('/cards/town', verifyToken, cardSignatureLimiter, validate(travelTownSchema), async (req, res) => {
+  if (!cardTravel.travelOn()) return travelRoutesOff(res);
+  const userId = req.user.id;
+  try {
+    const town = cardTravel.townById(req.body.id);
+    if (!town) return res.status(400).json({ error: 'Choose a town from the list.', code: 'CARD_TOWN_UNKNOWN' });
+    const { data: user, error } = await supabaseAdmin.from('User').select('zipcode').eq('id', userId).maybeSingle();
+    if (error) throw new Error(error.message);
+    // Picked by its ZIP code: that ZIP. By name: their ZIP stays if it is in that town, else it goes.
+    const kept = user?.zipcode ? cardTravel.matchTown({ zipcode: user.zipcode }) : null;
+    const zipcode = town.zip || (kept && kept.town === town.town && kept.state === town.state ? user.zipcode : null);
+    const { error: updateError } = await supabaseAdmin.from('User')
+      .update({ city: town.town, state: town.state, zipcode }).eq('id', userId);
+    if (updateError) throw new Error(updateError.message);
+    const shown = cardTravel.label(await cardTravel.travelTown(userId)) || cardTravel.label(town);
+    logger.info('Travelling card town kept', { userId });
+    return res.json({ town: shown });
+  } catch (err) {
+    logger.error('Card town save error', { error: err.message, userId });
+    return res.status(503).json({ error: 'Couldn’t keep your town just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
+  }
+});
+
+/**
+ * POST /api/mailbox/cards/:id/pass-on/preview  (the body of POST /cards/:id/pass-on)
+ * Look it over for a pass-on: every check the pass-on runs, storing and sending nothing. { pass_on: { place, to_name,
+ * by_email, by_link?, arrives_at, arrives_on, take_back_until, town } }. `town` is the sender's town as it goes on the
+ * journey ("Tampa, FL"). A request whose card is already stored answers 409 CARD_REQUEST_SENT with it.
+ */
+router.post('/cards/:id/pass-on/preview', verifyToken, validate(passOnSchema), async (req, res) => {
+  if (!cardTravel.travelOn()) return travelRoutesOff(res);
+  const userId = req.user.id;
+  try {
+    const now = new Date();
+    const checked = await checkPassOn(userId, req.params.id, req.body, now, { look: true });
+    if (checked.answer) return reply(res, checked.answer);
+    const { card, toEmail, delivery } = checked.checked;
+    return res.json({ pass_on: { place: checked.place, to_name: card.to_name, by_email: Boolean(toEmail),
+      ...(card.by_link ? { by_link: true } : {}), arrives_at: toEmail || card.by_link ? null : delivery.delivered_at,
+      arrives_on: card.arrives_on || null, take_back_until: card.take_back_until || null, town: cardTravel.label(checked.town) } });
+  } catch (err) {
+    logger.error('Card pass-on preview error', { error: err.message, cardId: req.params.id, userId });
+    return res.status(503).json({ error: 'Couldn’t check your card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
+  }
+});
+
+/**
+ * POST /api/mailbox/cards/:id/pass-on  { to: { user_id } | { email } | { link: true }, message, signature?, request_id, place }
+ * "Send it on": the same card goes on, with the sender's note, to the next person, free. To a person it comes with their
+ * next 7 a.m. mail and can be taken back until then; an email goes now; a link works now. Answers 201 { card } as a
+ * send does (card.travel.journey, and { link } by link); a repeat of the same request 200. Refusals in plain words:
+ * 403 CARD_TRAVEL_NOT_YOURS, CARD_TRAVEL_NOT_OPEN, CARD_TRAVEL_SEALED, CARD_TRAVEL_OFF, CARD_RECIPIENT_BUSINESS,
+ * MAIL_RECIPIENT_BLOCKED, CARD_SENDER_NOT_PERSON; 409 CARD_TRAVEL_FULL, CARD_TRAVEL_PLACE_TAKEN, CARD_TRAVEL_BEEN_THERE,
+ * CARD_TRAVEL_NEEDS_TOWN, CARD_REQUEST_SENT, CARD_TAKEN_BACK; 429 CARD_SAME_MORNING, MAIL_SEND_LIMIT; 410 CARDS_CLOSED.
+ */
+router.post('/cards/:id/pass-on', verifyToken, validate(passOnSchema), async (req, res) => {
+  if (!cardTravel.travelOn()) return travelRoutesOff(res);
+  const userId = req.user.id;
+  try {
+    const now = new Date();
+    const checked = await checkPassOn(userId, req.params.id, req.body, now);
+    if (checked.answer) return reply(res, checked.answer);
+    const answer = await storeCard({ senderId: userId, checked: checked.checked, requestId: checked.requestId,
+      rowId: checked.rowId, digest: checked.digest, now, free: true });
+    if (answer.status === 201) {
+      logger.info('Travelling card passed on', { mailId: answer.body.card?.id, cardId: req.params.id, senderId: userId });
+      // A card by email or link is in nobody's mailbox until it's taken; a person's reaches them at 7 a.m.
+    }
+    return reply(res, answer);
+  } catch (err) {
+    logger.error('Card pass-on error', { error: err.message, cardId: req.params.id, userId });
+    return reply(res, travelUnavailable());
+  }
+});
+
+/**
+ * Take back a card the caller passed on ({ status, body }): to a person until the carrier's 7 a.m. pickup (its row goes,
+ * which frees its place, and its request ID is kept on the card it came from so a late retry never sends it), by email
+ * or link until it's opened (it stays withdrawn; its place's next card takes the next row). 200 { taken_back: true,
+ * card_id, place }.
+ */
+async function takeBackPassOn(userId, mail, now) {
+  const travel = mail.mail_extracted.card.travel;
+  const tooLate = () => ({ status: 409, body: { error: mail.escrow_status ? 'They already have your card.'
+    : 'The carrier has already picked up your card.', code: 'CARD_ALREADY_SENT' } });
+  if (mail.escrow_status) {
+    const { data: withdrawn, error } = await supabaseAdmin.from('Mail').update({ escrow_status: 'withdrawn' })
+      .eq('id', mail.id).eq('sender_user_id', userId).eq('escrow_status', 'pending').gt('escrow_expires_at', now.toISOString())
+      .select('id');
+    if (error) throw new Error(error.message);
+    if (!withdrawn?.length) return tooLate();
+  } else {
+    if (!(Date.parse(mail.delivered_at) > now.getTime())) return tooLate();
+    const requestId = cardRequestOf(mail)?.id;
+    if (requestId) {
+      const { data: parent, error } = await supabaseAdmin.from('Mail').select('id, mail_extracted').eq('id', travel.parent).maybeSingle();
+      if (error) throw new Error(error.message);
+      const parentTravel = parent?.mail_extracted?.card?.travel;
+      if (parentTravel && !(parentTravel.taken_back || []).includes(requestId)) {
+        const { error: markError } = await supabaseAdmin.from('Mail').update({ mail_extracted: { ...parent.mail_extracted,
+          card: { ...parent.mail_extracted.card, travel: { ...parentTravel, taken_back: [...(parentTravel.taken_back || []), requestId] } } } })
+          .eq('id', parent.id);
+        if (markError) throw new Error(markError.message);
+      }
+    }
+    const { data: removed, error: deleteError } = await supabaseAdmin.from('Mail').delete()
+      .eq('id', mail.id).eq('sender_user_id', userId).gt('delivered_at', now.toISOString()).select('id');
+    if (deleteError) throw new Error(deleteError.message);
+    if (!removed?.length) return tooLate();
+    await removeCardObject(mail.object_id);
+  }
+  logger.info('Travelling card pass-on taken back', { mailId: mail.id, cardId: travel.parent, senderId: userId });
+  return { status: 200, body: { taken_back: true, card_id: travel.parent, place: travel.place ?? null } };
+}
+
+/**
+ * POST /api/mailbox/cards/:id/pass-on/take-back  (`:id`: the card the caller passed on)
+ * As a card's take-back, for a pass-on: its place is free again. 404 CARD_NOT_FOUND; 409 CARD_ALREADY_SENT once the
+ * carrier or they have it.
+ */
+router.post('/cards/:id/pass-on/take-back', verifyToken, async (req, res) => {
+  if (!cardTravel.travelOn()) return travelRoutesOff(res);
+  const userId = req.user.id;
+  const { id } = req.params;
+  const notHere = () => res.status(404).json({ error: 'This card isn’t here any more.', code: 'CARD_NOT_FOUND' });
+  if (!UUID_REGEX.test(id)) return notHere();
+  try {
+    const { data: mail, error } = await supabaseAdmin.from('Mail').select(CARD_REQUEST_SELECT).eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!mail || String(mail.sender_user_id) !== String(userId) || !mail.mail_extracted?.card?.travel?.parent
+      || mail.escrow_status === 'withdrawn') return notHere();
+    return reply(res, await takeBackPassOn(userId, mail, new Date()));
+  } catch (err) {
+    logger.error('Card pass-on take-back error', { error: err.message, mailId: id, userId });
+    return res.status(503).json({ error: 'Couldn’t take your card back just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
+  }
+});
+
 // One page of the joined card for this reader ({ id, from_name, to_name, sent_on, delivered_on, card | card_reply, note,
 // photo, voice }), read from the piece's private stored copy. `own`: the reader wrote it (never covered, also while it
 // waits or is sealed for the other person). A sealed card shows no note, signature, photo or voice.
@@ -3541,6 +3902,13 @@ async function sentContexts(rows, userId) {
     [String(id), (await mailDelivery.personTimeZone(id)) || mailDelivery.FALLBACK_TIME_ZONE])));
   const toHousehold = (mail) => !mail.recipient_user_id && Boolean(mail.recipient_home_id);
   const ownHomes = new Set(rows.some(toHousehold) ? (await getAccessibleHomeIds(userId)).map(String) : []);
+  // Cards that travel (card_travel): their journeys, one read for the page; Sent still loads without them.
+  const travels = rows.some((mail) => mail.mail_extracted?.card?.travel)
+    ? await cardTravel.sentViews(rows).catch((err) => {
+      logger.warn('Sent journeys not read', { userId, error: err.message });
+      return new Map();
+    })
+    : new Map();
   // Someone who opened it with a code may have no name yet: their stand-in ("Pantopus member") isn't one, so the
   // address it went to stays.
   const claimerName = (mail) => {
@@ -3557,6 +3925,7 @@ async function sentContexts(rows, userId) {
     toHousehold: toHousehold(mail),
     senderName: people.get(String(userId))?.displayName || mail.sender_display || 'Someone',
     zone: zones.get(String(mail.recipient_user_id || userId)),
+    travel: travels.get(mail.id) || null,
   }));
 }
 
@@ -3744,6 +4113,8 @@ router.get('/:id', verifyToken, async (req, res) => {
     }
 
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    // A card that travels (card_travel): its postmarks, miles and pass-ons, for the person it went to.
+    await cardTravel.attachReaderView(mail, userId);
     res.json({ mail: await attachInvoices(await mailPiece.withBundleLabels(mailPiece.present(presentMailSender(await nameMailSender(mail, userId), userId), { timeZone }))) });
 
   } catch (err) {
@@ -4750,6 +5121,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
     // It arrives as the claimer's own letter, for them alone (Personal drawer, attention only), not as mail for
     // everyone at their Home. A Christmas card sealed until Christmas opens on Christmas morning where they live.
     const card = holidayCards.isCard(mail) ? mail.mail_extracted.card : null;
+
     let cardFields = {};
     if (card?.arrival === 'sealed_christmas') {
       const zone = (await mailDelivery.personTimeZone(claimerId)) || mailDelivery.FALLBACK_TIME_ZONE;
