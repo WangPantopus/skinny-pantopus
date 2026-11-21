@@ -354,6 +354,22 @@ fun SendCardScreen(
             onKeep = { confirmTakeBack = false },
         )
     }
+    // "Where does it start?" (travelling card plan Part 2): asked once, for a travelling card from someone with no town.
+    val askTown by viewModel.town.askTown.collectAsStateWithLifecycle()
+    if (askTown != null) {
+        CardTownSheet(
+            onKept = {
+                // What was asked for goes on with the town kept.
+                when (viewModel.town.kept()) {
+                    TownThen.Look -> viewModel.look()
+                    TownThen.Send -> viewModel.send()
+                    TownThen.SendList -> viewModel.sendList()
+                    TownThen.Nothing, null -> Unit
+                }
+            },
+            onDismiss = viewModel.town::dismissed,
+        )
+    }
 }
 
 /** Under a card just sent: "Send another card", and "Send this card to someone else" while another can go (Part 6). */
@@ -522,6 +538,9 @@ private fun Steps(
                         onArrival = viewModel::chooseArrival,
                         stamps = stamps,
                         endRoom = endRoom,
+                        // "Let it travel" (travelling card plan Part 2): only where the server offers it.
+                        travel = (!form.travelOff).takeIf { cards.travel?.on == true },
+                        onTravel = viewModel.town::set,
                     )
                 }
             }

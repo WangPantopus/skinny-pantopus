@@ -43,6 +43,50 @@ data class HolidayCardsResponse(
     val media: HolidayCardMediaRules? = null,
     /** "Help me write it" can be used now (the server's launch key `card_note_help`); absent: no button. */
     @Json(name = "note_help") val noteHelp: Boolean = false,
+    /** "Let it travel" (the server's switch `card_travel`, travelling card plan Part 2); absent while it's off: no switch. */
+    val travel: HolidayCardTravelRules? = null,
+)
+
+/**
+ * `travel` on `GET /api/mailbox/cards`: the switch is on to begin with ([on], decision D5), the sender's town ("Boise,
+ * ID"; null: "Where does it start?" is asked once, D4), and how many people one person may pass a card to (D1).
+ */
+@JsonClass(generateAdapter = true)
+data class HolidayCardTravelRules(
+    val on: Boolean = true,
+    val town: String? = null,
+    val places: Int = 2,
+)
+
+/** A town from `GET /api/mailbox/cards/towns` (the Census lists the server carries): its id, name, state and label. */
+@JsonClass(generateAdapter = true)
+data class CardTown(
+    val id: String,
+    val town: String,
+    val state: String? = null,
+    /** "Vancouver, WA". */
+    val label: String,
+    /** The ZIP code it was found by, when it was. */
+    val zip: String? = null,
+)
+
+/** `GET /api/mailbox/cards/towns?q=`: up to 8 towns; with no q, the town nearest where the person is ("Use …"), or null. */
+@JsonClass(generateAdapter = true)
+data class CardTownsResponse(
+    val towns: List<CardTown> = emptyList(),
+    val suggested: CardTown? = null,
+)
+
+/** `PUT /api/mailbox/cards/town` body: a town's id from the list. */
+@JsonClass(generateAdapter = true)
+data class CardTownBody(
+    val id: String,
+)
+
+/** `PUT /api/mailbox/cards/town` answer: the town as kept ("Vancouver, WA"). */
+@JsonClass(generateAdapter = true)
+data class CardTownKept(
+    val town: String? = null,
 )
 
 /** One note "Help me write it" offers: a way of saying it (`heartfelt`, `light` or `brief`) and the words. */
@@ -306,6 +350,20 @@ data class SentHolidayCard(
     @Json(name = "sent_at") val sentAt: String? = null,
     /** The link to send on, right after sending a card by link (the answer's own `link`, kept with the card here). */
     @Transient val link: String? = null,
+    /** A card that travels (the server's switch `card_travel`): its journey; absent for every other card. */
+    val travel: SentCardTravel? = null,
+)
+
+/**
+ * `travel` on a card its sender sees (travelling card plan Part 6): the journey's id, and on Sent, from this card on,
+ * the towns, the miles and the town it's in now ("5 towns · 2,692 miles. Now in Tampa, FL.").
+ */
+@JsonClass(generateAdapter = true)
+data class SentCardTravel(
+    val journey: String? = null,
+    val towns: Int? = null,
+    val miles: Int? = null,
+    @Json(name = "now_in") val nowIn: String? = null,
 )
 
 /** `POST /api/mailbox/cards`: today's card, to one person found by name or by email to someone not on Pantopus. */
@@ -329,6 +387,8 @@ data class SendHolidayCardBody(
     @Json(name = "photo_alt") val photoAlt: String? = null,
     /** The card's voice greeting's file id (needs [requestId]); null: none. */
     val voice: String? = null,
+    /** "Let it travel" left on (travelling card plan Part 2): true; null (left out) for an ordinary card. */
+    val travel: Boolean? = null,
 )
 
 /** `GET /api/mailbox/cards/share-video/:design` (the server's launch key `card_share_video`): where the picture's video is. */
@@ -379,6 +439,8 @@ data class SendHolidayCardListBody(
      * server offers every email choice ([HolidayCardArrivals.emailAll]), else left out.
      */
     @Json(name = "emails_keep_arrival") val emailsKeepArrival: Boolean? = null,
+    /** "Let it travel" left on: each card of the list starts a journey of its own; null (left out) otherwise. */
+    val travel: Boolean? = null,
 )
 
 /** A person or an address on a list, and its card's request ID. */

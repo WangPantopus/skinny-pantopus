@@ -213,6 +213,8 @@ data class SendCardForm(
     val listTakeBackError: Pair<String, String>? = null,
     /** "Send this card to someone else" (plan Part 6): its picture is kept, so step 1 goes straight to the note. */
     val samePicture: Boolean = false,
+    /** "Let it travel" turned off (travelling card plan Part 2): it's on to begin with wherever the server offers it (D5). */
+    val travelOff: Boolean = false,
 ) {
     /** The person or address on the list whose card has this request ID. */
     fun listEntry(requestId: String): CardRecipient? {
@@ -310,8 +312,9 @@ private const val LOOK_UNAVAILABLE = "Pantopus can’t show how your card will l
  * Reads `GET /api/mailbox/cards`; searches `GET /api/mailbox/compose/recipients?people=1`; looks it over with `POST
  * /api/mailbox/cards/preview`; sends `POST /api/mailbox/cards`; takes back `POST /api/mailbox/cards/:id/take-back`.
  */
+// The send flow's one model, at detekt's size limit before the travelling card; its switch and town are SendCardTown.
 @HiltViewModel
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 class SendCardViewModel
     @Inject
     constructor(
@@ -339,6 +342,9 @@ class SendCardViewModel
 
         /** The card's own photo and greeting while it's written (memories plan steps 4 and 7). */
         val drafts = SendCardMedia(viewModelScope, media, _form) { error, doing -> sendMessage(error, doing) }
+
+        /** "Let it travel" and "Where does it start?" (travelling card plan Part 2). */
+        internal val town = SendCardTown(cards, _form)
 
         /** "Send another card" (digital stamps on): a new card from the first step; [samePicture] keeps this one's (Part 6). */
         fun startAnotherCard(samePicture: Boolean = false) {
@@ -586,6 +592,7 @@ class SendCardViewModel
                     recipients,
                     signature = form.signature,
                     emailsKeepArrival = keep,
+                    travel = true.takeIf { town.travels(form) },
                 )
         }
 
@@ -595,11 +602,12 @@ class SendCardViewModel
          */
         private fun lookOverList() {
             val form = _form.value
-            if (form.previewing || form.sending || form.message.isBlank()) return
+            if (cantGoYet(form, TownThen.Look)) return
             val (started, body) = listToSend(form) ?: return
             _form.value = started.copy(previewing = true, sealError = null)
             viewModelScope.launch {
                 val result = repo.previewList(body)
+                if (result is NetworkResult.Failure && town.refused(result.error, TownThen.Look)) return@launch
                 _form.update {
                     when {
                         it.step != SendCardStep.Seal || it.to != started.to -> it.copy(previewing = false)
@@ -620,11 +628,12 @@ class SendCardViewModel
          */
         fun sendList() {
             val form = _form.value
-            if (form.sending || form.previewing) return
+            if (form.sending || form.previewing || town.askFirst(form, TownThen.SendList)) return
             val (started, body) = listToSend(form) ?: return
             _form.value = started.copy(sending = true, sendError = null)
             viewModelScope.launch {
                 val result = repo.sendList(body)
+                if (result is NetworkResult.Failure && town.refused(result.error, TownThen.SendList)) return@launch
                 if (result is NetworkResult.Failure && result.error.serverCode() == STAMPS_REQUIRED) {
                     val (needed, available) = result.error.stampCounts()
                     val cards = needed ?: body.recipients.size
@@ -688,12 +697,13 @@ class SendCardViewModel
             val to = form.to ?: return
             val design = form.design ?: return
             val arrival = form.arrival ?: return
-            if (form.previewing || form.sending || form.message.isBlank()) return
+            if (cantGoYet(form, TownThen.Look)) return
             val started = form.withRequestId()
             _form.value = started.copy(previewing = true, sealError = null)
             viewModelScope.launch {
                 val look =
                     repo.preview(
+                        travel = town.travels(form),
                         design = design,
                         message = form.message.trim(),
                         signature = form.signature,
@@ -706,7 +716,7 @@ class SendCardViewModel
                         requestId = started.requestId,
                         toLink = to is CardRecipient.Link,
                     )
-                if (!wentEarlier(look)) showLook(look, form)
+                if (!wentEarlier(look) && !town.refused((look as? CardLook.Failed)?.error, TownThen.Look)) showLook(look, form)
             }
         }
 
@@ -746,12 +756,13 @@ class SendCardViewModel
             val to = form.to ?: return
             val design = form.design ?: return
             val arrival = form.arrival ?: return
-            if (form.sending || form.previewing || form.message.isBlank()) return
+            if (cantGoYet(form, TownThen.Send)) return
             val started = form.withRequestId()
             _form.value = started.copy(sending = true, sendError = null, sealError = null)
             viewModelScope.launch {
                 val result =
                     repo.send(
+                        travel = town.travels(form),
                         design = design,
                         message = form.message.trim(),
                         signature = form.signature,
@@ -764,7 +775,7 @@ class SendCardViewModel
                         requestId = started.requestId,
                         toLink = to is CardRecipient.Link,
                     )
-                if (result is NetworkResult.Failure && wentEarlier(result.error)) return@launch
+                if (result is NetworkResult.Failure && answeredElsewhere(result.error)) return@launch
                 // The stamps ran out meanwhile (another device sent a card), or a photo or greeting has no bought stamp left:
                 // the stamp books open; the card, its photo and its greeting stay as they are.
                 if ((result as? NetworkResult.Failure)?.error?.wantsStamps(cards.value) == true) {
@@ -787,6 +798,18 @@ class SendCardViewModel
                 if (closed) readTheirs()
             }
         }
+
+        /**
+         * The send's refusal is answered by another screen: the card went earlier ([wentEarlier]), or a travelling card's
+         * town is asked for (travelling card plan Part 2), after which the send goes again.
+         */
+        private fun answeredElsewhere(error: NetworkError): Boolean = wentEarlier(error) || town.refused(error, TownThen.Send)
+
+        /** Not now: a look or send is running, there's no note, or a travelling card's town is asked for first ([then]). */
+        private fun cantGoYet(
+            form: SendCardForm,
+            then: TownThen,
+        ): Boolean = form.previewing || form.sending || form.message.isBlank() || town.askFirst(form, then)
 
         /** [wentEarlier] for a look that couldn't be shown. */
         private fun wentEarlier(look: CardLook): Boolean = look is CardLook.Failed && wentEarlier(look.error)
@@ -944,6 +967,7 @@ class SendCardViewModel
                 voice = voice,
                 arrival = saved.get<String>(KEY_ARRIVAL),
                 requestId = saved.get<String>(KEY_REQUEST_ID),
+                travelOff = saved.get<Boolean>(KEY_TRAVEL_OFF) == true,
                 listed = list?.first.orEmpty(),
                 listIds = list?.second.orEmpty(),
             )
@@ -1026,6 +1050,7 @@ class SendCardViewModel
                 }
             saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_REQUEST_ID] = form.requestId.takeIf { form.step != SendCardStep.Sent }
+            saved[KEY_TRAVEL_OFF] = form.travelOff.takeIf { form.step != SendCardStep.Sent && it }
         }
 
         private fun takeBackMessage(error: NetworkError): String =
@@ -1061,6 +1086,7 @@ class SendCardViewModel
             private const val STAMPS_REQUIRED = "STAMPS_REQUIRED"
 
             private const val KEY_STEP = "sendCard.step"
+            private const val KEY_TRAVEL_OFF = "sendCard.travelOff"
             private const val KEY_BY_EMAIL = "sendCard.byEmail"
             private const val KEY_EMAIL = "sendCard.email"
             private const val KEY_TO_USER = "sendCard.toUser"
