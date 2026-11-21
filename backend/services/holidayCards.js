@@ -268,11 +268,11 @@ function isByLink(mail) {
 }
 
 /** What a send asked for, as one digest: the same request ID with other content asks for another card. */
-function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null, media = null }) {
-  // A signed card's strokes count too, and a card's own photo and voice (their ids and the photo's description); a card
-  // without them has the digest it always had.
+function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null, media = null, travel = false }) {
+  // A signed card's strokes count too, and a card's own photo and voice (their ids and the photo's description), and
+  // whether it travels (card_travel); a card without them has the digest it always had.
   const parts = [design, message, arrival, toUserId || null, toEmail || null, ...(signature ? [signature] : []),
-    ...(media ? [{ media }] : [])];
+    ...(media ? [{ media }] : []), ...(travel ? [{ travel: true }] : [])];
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 }
 
@@ -430,6 +430,8 @@ function cardView(mail, now = new Date()) {
     // card_signature GET /api/mailbox/:id sets. Like the note, not before a seal lifts; null: set the typed name.
     signature: (!sealed && (mail.card_signature || signatureOf(mail.object_payload))) || null,
     ...mediaView(mail, sealed),
+    // A card that travels (card_travel), as its reader may see it: the route reads it (services/cardTravel readerView).
+    ...(mail.card_travel ? { travel: mail.card_travel } : {}),
   };
 }
 
@@ -518,6 +520,8 @@ function sentSummary(mail, now = new Date()) {
     can_take_back: canTakeBack,
     status,
     sent_at: mail.created_at || null,
+    // A card that travels (card_travel): its journey, for "See its journey".
+    ...(card.travel?.journey ? { travel: { journey: card.travel.journey } } : {}),
   };
 }
 
@@ -580,7 +584,7 @@ function instant(at) {
  * nobody has claimed). `toHousehold`: a letter to a Home itself, whose `toName` ("their household") is said whole, never
  * as a first name. Never the recipient's ids, address or time zone, nor anything they did with it.
  */
-function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = new Date() }) {
+function sentPiece(mail, { toName, toHousehold = false, senderName, zone, travel = null, now = new Date() }) {
   const notDelivered = notDeliveredOf(mail);
   if (notDelivered) {
     // Couldn't be delivered: its picture and the name it went to, nothing of when or why.
@@ -634,6 +638,9 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = 
     // replies).
     ...(isReply(mail) ? { card_reply: { ...replyOnSent(mail), can_take_back: status === 'waiting',
       take_back_until: status === 'waiting' ? instant(pickupAt(mail)) : null } } : {}),
+    // A card that travels (card_travel; services/cardTravel sentViews): its journey, and from this card on its towns,
+    // miles and newest town ("5 towns · 2,692 miles. Now in Tampa, FL.").
+    ...(travel ? { travel } : {}),
   };
 }
 
@@ -699,7 +706,7 @@ async function sentLine(userId, now = new Date()) {
 }
 
 module.exports = {
-  REPLY_TAG, REPLY_SUBJECT, isReply, replyRowId, replyDigest, replyView,
+  REPLY_TAG, REPLY_SUBJECT, isReply, replyRowId, replyDigest, replyView, uuidOf,
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS, EMAIL_ARRIVALS_ALL,
   SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf, mediaOf, mediaView,
   designById, isCard, isByLink, cardLinkToken, cardEmailToken, EMAIL_TRIES, emailTrouble, emailPicture, emailWent, emailSendAt, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,

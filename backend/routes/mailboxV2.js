@@ -15,6 +15,8 @@ const mailDelivery = require('../services/mailDelivery');
 // What the apps read about a piece (SRV-2): kind, from_pantopus, postmark, on_counter, summary; the kept summaries;
 // the Vault's folders (Home folders belong to the Home).
 const mailPiece = require('../services/mailPiece');
+// The travelling card (launch key card_travel): a travelling card's view for its reader.
+const cardTravel = require('../services/cardTravel');
 const holidayCards = require('../services/holidayCards');
 const cardMedia = require('../services/holidayCardMedia');
 const mailSummaries = require('../services/mailSummaries');
@@ -688,6 +690,8 @@ router.get('/item/:id', verifyToken, async (req, res) => {
       if (note && !mailPiece.keyFacts(mail.key_facts).length) mail.key_facts = note.key_facts;
     }
 
+    // A card that travels (card_travel): its postmarks, miles and pass-ons, for the person it went to.
+    await cardTravel.attachReaderView(mail, userId);
     const named = await nameMailSender(mail, userId);
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
     // A bundle opens to its pieces (SRV-5).
@@ -799,6 +803,7 @@ router.post('/item/:id/action', verifyToken, async (req, res) => {
         delete full.content;
       }
     }
+    if (full) await cardTravel.attachReaderView(full, userId);
     const named = full ? await nameMailSender(full, userId) : null;
     const timeZone = (await mailDelivery.personTimeZone(userId)) || mailDelivery.FALLBACK_TIME_ZONE;
     const piece = named ? mailPiece.present(presentMailSender({
