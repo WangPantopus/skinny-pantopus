@@ -28,7 +28,8 @@ data class CardTravelStop(
  */
 @Immutable
 data class CardTravel(
-    val journey: String,
+    /** The journey's id (its public page's address); null where it hasn't started yet. */
+    val journey: String?,
     val postmarks: List<CardTravelStop>,
     val miles: Int,
     val towns: Int,
@@ -53,11 +54,12 @@ data class CardTravel(
         }
 
     companion object {
-        /** From a piece's `card.travel`; null without a journey. */
+        /** From a piece's `card.travel`; null with neither a journey nor a postmark. */
         fun of(travel: MailCardTravel): CardTravel? {
-            if (travel.journey.isBlank()) return null
+            val journey = travel.journey?.takeIf { it.isNotBlank() }
+            if (journey == null && travel.postmarks.isEmpty()) return null
             return CardTravel(
-                journey = travel.journey,
+                journey = journey,
                 postmarks = travel.postmarks.filter { it.town.isNotBlank() }.map { CardTravelStop(it.town, it.state, it.on) },
                 miles = travel.miles,
                 towns = travel.towns,

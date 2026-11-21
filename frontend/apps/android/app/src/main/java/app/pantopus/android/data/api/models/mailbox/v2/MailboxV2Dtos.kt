@@ -132,7 +132,8 @@ data class MailCard(
  */
 @JsonClass(generateAdapter = true)
 data class MailCardTravel(
-    val journey: String,
+    /** The journey's id; null on Look it over, where the card hasn't started its journey yet. */
+    val journey: String? = null,
     val hop: Int = 1,
     val postmarks: List<MailCardPostmark> = emptyList(),
     val miles: Int = 0,
