@@ -403,7 +403,7 @@ class UniversalSearchViewModel
                 UniversalSearchResult(
                     id = user.id,
                     kind = UniversalSearchKind.Person,
-                    title = user.name?.nonBlank() ?: MadeUpUsername.chosen(user.username) ?: "Neighbor",
+                    title = user.name?.nonBlank() ?: MadeUpUsername.chosen(user.username) ?: "Someone nearby",
                     subtitle = MadeUpUsername.handle(user.username),
                     meta = locality(user.city, user.state),
                     imageUrl = user.profilePicture?.nonBlank(),

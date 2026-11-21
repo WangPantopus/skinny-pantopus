@@ -1342,7 +1342,7 @@ class ChatConversationViewModelTest {
             assertEquals("keeps spamming my inbox", bodySlot.captured.details)
             assertTrue(reported)
             assertEquals(
-                "Report submitted — thanks for keeping the neighborhood safe",
+                "Report submitted — thanks for keeping Pantopus safe",
                 vm.reportNotice.value,
             )
         }

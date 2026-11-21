@@ -174,13 +174,13 @@ fun OwnerLiveBar(
                         .background(PantopusColors.appSurface)
                         .clickable(onClick = onPreview)
                         .padding(horizontal = 11.dp, vertical = 6.dp)
-                        .semantics { contentDescription = "View as neighbor" }
+                        .semantics { contentDescription = "View as the public" }
                         .testTag("businessOwner.viewAsNeighbor"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
             ) {
                 PantopusIconImage(icon = PantopusIcon.Eye, contentDescription = null, size = 13.dp, tint = PantopusColors.appText)
-                Text(text = "View as neighbor", color = PantopusColors.appText, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                Text(text = "View as the public", color = PantopusColors.appText, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         HairlineBottom()

@@ -393,7 +393,7 @@ private fun GigsSearchBar(onOpenSearch: () -> Unit) {
             tint = PantopusColors.appTextSecondary,
         )
         Text(
-            text = "Search gigs, skills, neighborhoods…",
+            text = "Search gigs, skills, areas…",
             fontSize = 13.5.sp,
             fontWeight = FontWeight.Medium,
             color = PantopusColors.appTextSecondary,

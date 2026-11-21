@@ -153,7 +153,7 @@ internal fun ownerMonthLine(receipt: MonthlyReceiptDto): Pair<String, String>? {
     val c = receipt.community
     val parts =
         listOfNotNull(
-            c.neighborsHelped.takeIf { it > 0 }?.let { "$it ${if (it == 1) "neighbor" else "neighbors"} helped" },
+            c.neighborsHelped.takeIf { it > 0 }?.let { "$it ${if (it == 1) "person" else "people"} helped" },
             c.postsCreated.takeIf { it > 0 }?.let { "$it ${if (it == 1) "post" else "posts"}" },
             c.connectionsMade.takeIf { it > 0 }?.let { "$it new ${if (it == 1) "connection" else "connections"}" },
         )
@@ -181,10 +181,10 @@ enum class PreviewAudience(
     ),
     Neighbors(
         "neighbors",
-        "Neighbors",
+        "People on Pantopus",
         "People on Pantopus you aren't connected to.",
-        "Previewing as neighbors",
-        "What neighbors you aren't connected to see.",
+        "Previewing as people on Pantopus",
+        "What people you aren't connected to see.",
     ),
     Connections(
         "connections",

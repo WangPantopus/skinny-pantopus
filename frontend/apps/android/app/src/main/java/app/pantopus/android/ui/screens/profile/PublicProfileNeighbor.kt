@@ -277,7 +277,7 @@ private fun NeighborReviewsTab(content: NeighborProfileContent) {
             NeighborSectionTitle("What we can vouch for")
             NeighborVerificationLedger(content.verifications)
             content.mutuals?.let {
-                NeighborSectionTitle("Neighbors in common", action = "See all")
+                NeighborSectionTitle("Connections in common", action = "See all")
                 NeighborMutualsStrip(it)
             }
             content.welcome?.let {
@@ -307,7 +307,7 @@ private fun NeighborPostsTab(content: NeighborProfileContent) {
         EmptyState(
             icon = PantopusIcon.MessageCircle,
             headline = "No posts yet",
-            subcopy = "Neighborhood posts from ${content.hero.name} will appear here.",
+            subcopy = "Nearby posts from ${content.hero.name} will appear here.",
         )
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
@@ -762,7 +762,7 @@ internal fun NeighborMutualsStrip(mutuals: NeighborMutuals) {
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${mutuals.count} mutual ${if (mutuals.count == 1) "neighbor" else "neighbors"}",
+                text = "${mutuals.count} ${if (mutuals.count == 1) "connection" else "connections"} in common",
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,

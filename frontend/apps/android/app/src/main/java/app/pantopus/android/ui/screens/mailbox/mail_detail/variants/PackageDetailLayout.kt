@@ -183,7 +183,7 @@ private fun makeTopBar(
                         MailOverflowItem(
                             "askNeighbor",
                             PantopusIcon.UsersRound,
-                            "Ask a Verified Neighbor",
+                            "Ask a verified home",
                         ) { onAskNeighbor(isPreDelivery) },
                     )
                 }

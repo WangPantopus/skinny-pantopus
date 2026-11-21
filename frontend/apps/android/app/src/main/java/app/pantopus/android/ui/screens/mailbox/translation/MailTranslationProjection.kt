@@ -178,7 +178,7 @@ object MailTranslationProjection {
             "verified_gov" -> "Verified government"
             "verified_utility" -> "Verified utility"
             "verified_business" -> "Verified business"
-            "pantopus_user" -> "Verified neighbor"
+            "pantopus_user" -> "Verified home"
             else -> "Unverified sender"
         }
 

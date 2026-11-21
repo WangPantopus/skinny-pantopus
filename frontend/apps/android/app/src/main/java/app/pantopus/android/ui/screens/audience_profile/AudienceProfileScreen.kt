@@ -478,7 +478,7 @@ private fun OnboardingCard() {
     ) {
         Text(text = "Start in three steps", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
         OnboardingStep(number = 1, title = "Set up payments", subtitle = "Turn on tiers so supporters can join.")
-        OnboardingStep(number = 2, title = "Tell people you're here", subtitle = "Share your profile with neighbors and customers.")
+        OnboardingStep(number = 2, title = "Tell people you're here", subtitle = "Share your profile with people near you and customers.")
         OnboardingStep(number = 3, title = "Send your first broadcast", subtitle = "Post one useful update people can react to.")
     }
 }
@@ -1767,7 +1767,7 @@ private fun FollowerRow(
                 if (row.verifiedLocal) {
                     PantopusIconImage(
                         icon = PantopusIcon.ShieldCheck,
-                        contentDescription = "Verified neighbor",
+                        contentDescription = "Verified home",
                         size = Radii.lg,
                         strokeWidth = 2f,
                         tint = PantopusColors.success,

@@ -254,7 +254,7 @@ class ReviewClaimsViewModel
                         headline = "No claims to review",
                         subcopy =
                             "You're all caught up. New ownership claims will appear here when " +
-                                "neighbors submit address verification.",
+                                "people submit address verification.",
                         ctaTitle = "View approved",
                         onCta = { selectTab(ReviewClaimsTab.APPROVED) },
                     )

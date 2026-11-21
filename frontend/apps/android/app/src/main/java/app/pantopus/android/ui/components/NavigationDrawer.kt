@@ -255,7 +255,7 @@ private val personalSections: List<NavigationDrawerSection> =
                 listOf(
                     item(PantopusIcon.Rss, "Beacon Updates", NavigationDrawerDestination.BeaconUpdates),
                     item(PantopusIcon.Search, "Search", NavigationDrawerDestination.Search),
-                    item(PantopusIcon.Compass, "Discover Neighbors", NavigationDrawerDestination.DiscoverNeighbors),
+                    item(PantopusIcon.Compass, "Discover people", NavigationDrawerDestination.DiscoverNeighbors),
                 ),
         ),
         NavigationDrawerSection(

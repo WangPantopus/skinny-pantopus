@@ -411,7 +411,7 @@ class SettingsIndexViewModel
             fun visibilitySubtext(raw: String?): String? =
                 when (raw?.lowercase()) {
                     "public" -> "Anyone"
-                    "registered" -> "Signed-in neighbors"
+                    "registered" -> "Signed-in people"
                     "private" -> "Only you"
                     else -> null
                 }

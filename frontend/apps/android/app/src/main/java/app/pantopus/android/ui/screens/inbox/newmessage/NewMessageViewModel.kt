@@ -69,7 +69,7 @@ class NewMessageViewModel
         val emptyBody: String =
             "Find people by name or username, " +
                 "or invite someone who isn't on Pantopus yet."
-        val emptySearchHints: List<String> = listOf("A neighbor's name", "A username", "A local business")
+        val emptySearchHints: List<String> = listOf("A person's name", "A username", "A local business")
 
         private var accepted: List<RelationshipDto> = emptyList()
         private var recents: List<UnifiedConversationDto> = emptyList()
@@ -385,7 +385,7 @@ class NewMessageViewModel
                     "home" -> NewMessageIdentityBadge.Home
                     else -> NewMessageIdentityBadge.Personal
                 }
-            val locality = if (verified) "Verified neighbor" else null
+            val locality = if (verified) "Verified home" else null
             val sub = formatRelative(dto.lastMessageAt)?.let { "Last chat $it" } ?: "Last chat recently"
             return NewMessageContactRow(
                 id = "recent_$userId",

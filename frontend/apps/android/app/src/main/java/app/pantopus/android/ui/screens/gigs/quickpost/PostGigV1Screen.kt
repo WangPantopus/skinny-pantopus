@@ -866,7 +866,7 @@ private fun DescriptionField(
                 decorationBox = { inner ->
                     if (value.isEmpty()) {
                         Text(
-                            text = "Tell neighbors what to carry, where to meet, and any stairs or timing constraints.",
+                            text = "Tell helpers what to carry, where to meet, and any stairs or timing constraints.",
                             style = PantopusTextStyle.small,
                             color = PantopusColors.appTextMuted,
                         )

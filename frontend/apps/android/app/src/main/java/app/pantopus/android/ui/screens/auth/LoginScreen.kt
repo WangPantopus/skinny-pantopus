@@ -647,7 +647,7 @@ private fun BrandLockup() {
         // Mark + wordmark at 36.dp holds the h1-sized wordmark the hero had.
         PantopusLockup(size = 36.dp, variant = MarkVariant.Light)
         Text(
-            text = "Your neighborhood, verified.",
+            text = "Your home, verified.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )

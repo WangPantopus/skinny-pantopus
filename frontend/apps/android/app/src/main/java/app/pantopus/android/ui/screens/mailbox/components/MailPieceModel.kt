@@ -43,7 +43,7 @@ enum class MailSender(
     Government("Verified government", "GOVERNMENT", PantopusColors.success, PantopusIcon.ShieldCheck),
     Utility("Verified utility", "UTILITY", PantopusColors.success, PantopusIcon.ShieldCheck),
     Pantopus("From Pantopus", "PANTOPUS", PantopusColors.primary600, PantopusIcon.ShieldCheck),
-    Neighbor("Pantopus neighbor · verified address", null, PantopusColors.appTextSecondary, PantopusIcon.ShieldCheck),
+    Neighbor("Pantopus member · verified address", null, PantopusColors.appTextSecondary, PantopusIcon.ShieldCheck),
 
     /** A business with a Pantopus account that isn't verified yet, such as one invoicing a customer (SRV-7). */
     PantopusBusiness("Business on Pantopus", null, PantopusColors.info, PantopusIcon.Store),
@@ -54,7 +54,7 @@ enum class MailSender(
     val stamps: Boolean get() = this == Neighbor || this == PantopusBusiness
 
     /** [line], for a Christmas card when [card]: anyone with a personal account sends one, so no proven home is claimed. */
-    fun lineFor(card: Boolean): String = if (card && this == Neighbor) "Pantopus neighbor" else line
+    fun lineFor(card: Boolean): String = if (card && this == Neighbor) "Pantopus member" else line
 
     companion object {
         /**

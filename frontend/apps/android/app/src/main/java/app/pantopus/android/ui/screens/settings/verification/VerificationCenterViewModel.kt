@@ -38,7 +38,7 @@ class VerificationCenterViewModel
     ) : ViewModel() {
         val title: String = "Verification"
         val footerCaption: String =
-            "Verified neighbors can find you in search and reach you with confidence."
+            "People with a verified home can find you in search and reach you with confidence."
 
         private val _state = MutableStateFlow<GroupedListUiState>(GroupedListUiState.Loading)
         val state: StateFlow<GroupedListUiState> = _state.asStateFlow()

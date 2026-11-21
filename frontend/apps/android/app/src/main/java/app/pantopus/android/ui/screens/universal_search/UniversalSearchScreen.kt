@@ -698,7 +698,7 @@ private fun BrowseNearbyBusinessesCta(
                 color = PantopusColors.primary600,
             )
             Text(
-                text = "Find trusted businesses near you with neighbor recommendations",
+                text = "Find trusted businesses near you, recommended by people near you",
                 fontSize = 11.sp,
                 color = PantopusColors.appTextMuted,
             )

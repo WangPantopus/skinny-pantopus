@@ -112,7 +112,7 @@ class ReceivedReviewsViewModelTest {
         assertEquals("Sale", summary.rows[0].contextLabel)
         assertEquals("marcus", summary.rows[1].reviewerName)
         assertEquals("From seller", summary.rows[1].roleLabel)
-        assertEquals("Neighbor", summary.rows[2].reviewerName)
+        assertEquals("Someone nearby", summary.rows[2].reviewerName)
         assertNull(summary.rows[2].roleLabel)
     }
 

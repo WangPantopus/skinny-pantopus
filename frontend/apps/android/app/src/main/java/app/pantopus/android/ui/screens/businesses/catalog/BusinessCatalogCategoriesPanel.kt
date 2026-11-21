@@ -95,7 +95,7 @@ internal fun BusinessCatalogCategoriesPanel(
             if (categories.isEmpty()) {
                 Text(
                     text =
-                        "No categories yet. Group your services and products so neighbors " +
+                        "No categories yet. Group your services and products so people " +
                             "can scan your page faster.",
                     color = PantopusColors.appTextSecondary,
                     fontSize = 12.5.sp,

@@ -48,7 +48,7 @@ enum class FuzzStop(
     Block(18.dp, "Block"),
     QuarterMile(42.dp, "Quarter mile"),
     HalfMile(62.dp, "Half mile"),
-    Neighborhood(110.dp, "Neighborhood"),
+    Neighborhood(110.dp, "Area"),
 }
 
 /**

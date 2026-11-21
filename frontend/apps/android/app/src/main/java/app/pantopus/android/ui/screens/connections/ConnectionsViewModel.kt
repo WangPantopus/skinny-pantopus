@@ -505,7 +505,7 @@ class ConnectionsViewModel
                 ListOfRowsTab(id = ConnectionsTab.ALL, label = "All", count = filteredAccepted().size),
                 ListOfRowsTab(
                     id = ConnectionsTab.NEIGHBORS,
-                    label = "Neighbors",
+                    label = "Near you",
                     count = filteredNeighbors().size,
                 ),
                 ListOfRowsTab(id = ConnectionsTab.PENDING, label = "Pending", count = filteredPending().size),
@@ -530,7 +530,7 @@ class ConnectionsViewModel
 
         private fun makeSearchBar(text: String): SearchBarConfig =
             SearchBarConfig(
-                placeholder = "Search by name or neighborhood",
+                placeholder = "Search by name or area",
                 text = text,
                 onChange = { updateSearch(it) },
             )
@@ -566,17 +566,17 @@ class ConnectionsViewModel
                 ConnectionsTab.NEIGHBORS ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.MapPin,
-                        headline = "No neighbors yet",
+                        headline = "No one near you yet",
                         subcopy =
                             "Connections who share their locality show up here. " +
-                                "Invite a neighbor or accept a nearby request to get started.",
+                                "Invite someone near you or accept a nearby request to get started.",
                     )
                 else ->
                     ListOfRowsUiState.Empty(
                         icon = PantopusIcon.UserPlus,
                         headline = "No connections yet",
                         subcopy =
-                            "Meet verified neighbors. Browse the Pulse, reply to a post, " +
+                            "Meet people with a verified home. Browse Pulse, reply to a post, " +
                                 "or invite someone you know on the block.",
                         ctaTitle = "Find people",
                         onCta = { onFindPeople() },

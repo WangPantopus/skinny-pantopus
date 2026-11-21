@@ -404,7 +404,7 @@ private fun EmptyFrame(section: BusinessInboxSection) {
             EmptyState(
                 icon = PantopusIcon.MessageSquare,
                 headline = "No messages yet",
-                subcopy = "Conversations neighbors start with this business land here.",
+                subcopy = "Conversations people start with this business land here.",
                 tint = PantopusColors.businessBg,
                 accent = PantopusColors.business,
                 modifier = Modifier.testTag("businessInbox.empty"),
@@ -413,7 +413,7 @@ private fun EmptyFrame(section: BusinessInboxSection) {
             EmptyState(
                 icon = PantopusIcon.AtSign,
                 headline = "No posts mention your business yet",
-                subcopy = "Neighborhood posts matched to your categories show up here.",
+                subcopy = "Nearby posts matched to your categories show up here.",
                 tint = PantopusColors.businessBg,
                 accent = PantopusColors.business,
                 modifier = Modifier.testTag("businessInbox.empty"),

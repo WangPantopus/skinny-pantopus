@@ -65,10 +65,10 @@ enum class InviteFeatureTier(
     val threshold: Int,
     val label: String,
 ) {
-    ActivityMap("activity_map", 1, "Neighborhood Activity Map"),
-    NeighborhoodInsights("neighborhood_insights", 3, "Neighborhood Insights"),
+    ActivityMap("activity_map", 1, "Local Activity Map"),
+    NeighborhoodInsights("neighborhood_insights", 3, "Local Insights"),
     PriorityMatching("priority_matching", 5, "Priority Matching"),
-    FoundingBadge("founding_badge", 10, "Founding Neighbor Badge"),
+    FoundingBadge("founding_badge", 10, "Block Founder Badge"),
     ;
 
     companion object {
@@ -99,7 +99,7 @@ object MonthlyReceiptFormat {
         val earned = String.format(Locale.US, "%.2f", receipt.earnings.totalCents / 100.0)
         val highlight = receipt.highlight?.let { "$it " }.orEmpty()
         return "My ${receipt.period.label} on Pantopus: $highlight" +
-            "I earned \$$earned and helped ${receipt.community.neighborsHelped} neighbors."
+            "I earned \$$earned and helped ${receipt.community.neighborsHelped} people."
     }
 }
 
@@ -219,7 +219,7 @@ private fun ReceiptStatsGrid(receipt: MonthlyReceiptDto) {
                 tint = PantopusColors.business,
                 background = PantopusColors.appSurfaceSunken,
                 value = "${receipt.community.neighborsHelped}",
-                label = "Neighbors helped",
+                label = "People helped",
                 tag = "monthlyReceipt.neighborsHelped",
                 modifier = Modifier.weight(1f),
             )
@@ -358,7 +358,7 @@ fun InviteProgressCard(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Text(
-            text = "Invite neighbors, unlock features",
+            text = "Invite people, unlock features",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.appText,
@@ -436,7 +436,7 @@ fun InviteProgressCard(
                 )
                 Spacer(Modifier.width(Spacing.s2))
                 Text(
-                    text = "Invite a neighbor",
+                    text = "Invite someone",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = PantopusColors.appTextInverse,
@@ -515,5 +515,5 @@ internal fun shareText(
 internal fun nextUnlockText(next: InviteNextUnlockDto): String {
     val remaining = next.invitesRemaining.coerceAtLeast(0)
     val label = next.label ?: InviteFeatureTier.labelForKey(next.feature)
-    return "Invite $remaining more neighbor${if (remaining == 1) "" else "s"} to unlock $label"
+    return "Invite $remaining more ${if (remaining == 1) "person" else "people"} to unlock $label"
 }

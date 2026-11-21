@@ -286,13 +286,13 @@ private fun explainerFor(category: MailItemCategory): String =
         MailItemCategory.Delivery ->
             "A delivery update. Track the latest status and expected arrival."
         MailItemCategory.Social ->
-            "A neighborhood message. Catch up on what's happening nearby."
+            "A local message. Catch up on what's happening nearby."
         MailItemCategory.Party ->
             "A personal invite. Open it for the details and let the host know if you're coming."
         MailItemCategory.Records ->
             "An archived record. Filed for safekeeping — open it any time from your Vault."
         MailItemCategory.General ->
-            "Mail from your neighborhood. Open it to read the full message."
+            "Mail from near you. Open it to read the full message."
         else -> "Open this item to read the full message."
     }
 

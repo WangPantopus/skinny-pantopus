@@ -2412,7 +2412,7 @@ class ChatConversationViewModel
                         )
                     when (val result = reportsRepo.report(target.otherUserId, body)) {
                         is NetworkResult.Success -> {
-                            _reportNotice.value = "Report submitted — thanks for keeping the neighborhood safe"
+                            _reportNotice.value = "Report submitted — thanks for keeping Pantopus safe"
                             onReported()
                         }
                         is NetworkResult.Failure -> {

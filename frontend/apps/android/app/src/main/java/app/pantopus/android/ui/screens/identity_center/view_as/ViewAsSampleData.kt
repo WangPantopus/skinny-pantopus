@@ -65,7 +65,7 @@ object ViewAsSampleData {
                 ),
             badges =
                 listOf(
-                    ViewAsBadge("neighbor", PantopusIcon.BadgeCheck, "Verified neighbor", isOn = true),
+                    ViewAsBadge("neighbor", PantopusIcon.BadgeCheck, "Verified home", isOn = true),
                     ViewAsBadge("id", PantopusIcon.Lock, "ID verified", isOn = false),
                     ViewAsBadge("phone", PantopusIcon.Lock, "Phone verified", isOn = false),
                 ),
@@ -123,7 +123,7 @@ object ViewAsSampleData {
             note =
                 ViewAsContextNote(
                     icon = PantopusIcon.EyeOff,
-                    text = "Followers see your public creator card — your neighbor identity stays separate.",
+                    text = "Followers see your public creator card — your Local Profile stays separate.",
                     tone = ViewAsTone.Restricted,
                 ),
             footerText = "Followers of your public profile see only what you broadcast.",
@@ -136,7 +136,7 @@ object ViewAsSampleData {
             banner =
                 ViewAsBanner(
                     icon = PantopusIcon.MapPin,
-                    viewerLabel = "a neighbor",
+                    viewerLabel = "someone nearby",
                     subtitle = "This is what they see",
                     tone = ViewAsTone.Info,
                 ),
@@ -160,16 +160,16 @@ object ViewAsSampleData {
                     field("location", PantopusIcon.MapPin, "Location", ViewAsFieldDisclosure.Visible("Maple Heights · 4 blocks away")),
                     field("memberSince", PantopusIcon.Calendar, "Member since", ViewAsFieldDisclosure.Visible("March 2023 · 2 yrs")),
                     field("rating", PantopusIcon.Star, "Rating", ViewAsFieldDisclosure.Visible(RATING)),
-                    field("mutuals", PantopusIcon.Users, "Mutual connections", ViewAsFieldDisclosure.Visible("3 neighbors in common")),
+                    field("mutuals", PantopusIcon.Users, "Mutual connections", ViewAsFieldDisclosure.Visible("3 connections in common")),
                     field("contact", PantopusIcon.Phone, "Contact", ViewAsFieldDisclosure.Hidden),
                 ),
             note =
                 ViewAsContextNote(
                     icon = PantopusIcon.MapPin,
-                    text = "Verified neighbors nearby see your local profile and approximate location.",
+                    text = "Verified homes nearby see your local profile and approximate location.",
                     tone = ViewAsTone.Info,
                 ),
-            footerText = "Verified neighbors see your local profile within your area.",
+            footerText = "Verified homes see your local profile within your area.",
         )
 
     // ── Gig participant (someone on a shared job) ────────────────────
@@ -289,7 +289,7 @@ object ViewAsSampleData {
                     field("location", PantopusIcon.MapPin, "Location", ViewAsFieldDisclosure.Visible("Maple Heights · 2 blocks away")),
                     field("memberSince", PantopusIcon.Calendar, "Member since", ViewAsFieldDisclosure.Visible("March 2023 · 2 yrs")),
                     field("rating", PantopusIcon.Star, "Rating", ViewAsFieldDisclosure.Visible(RATING)),
-                    field("mutuals", PantopusIcon.Users, "Mutual connections", ViewAsFieldDisclosure.Visible("6 neighbors in common")),
+                    field("mutuals", PantopusIcon.Users, "Mutual connections", ViewAsFieldDisclosure.Visible("6 connections in common")),
                     field("contact", PantopusIcon.Phone, "Contact", ViewAsFieldDisclosure.Visible("Available on request")),
                 ),
             note =

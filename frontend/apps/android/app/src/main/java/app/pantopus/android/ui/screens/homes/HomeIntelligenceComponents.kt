@@ -1099,7 +1099,7 @@ private fun BillSharingRow(
                         color = PantopusColors.appText,
                     )
                     Text(
-                        "Help neighbors compare costs. Only averages are shared — never individual amounts.",
+                        "Help homes near you compare costs. Only averages are shared — never individual amounts.",
                         style = PantopusTextStyle.caption,
                         color = PantopusColors.appTextSecondary,
                     )
@@ -1161,7 +1161,7 @@ private fun monthlyBillComparison(
     if (benchmark == null || benchmark.insufficientData || index !in benchmark.avgAmounts.indices) {
         return "No comparison for this month"
     }
-    return "Neighborhood average: ${HomeBillPresentation.amount(benchmark.avgAmounts[index], currency)}"
+    return "Nearby average: ${HomeBillPresentation.amount(benchmark.avgAmounts[index], currency)}"
 }
 
 @Composable

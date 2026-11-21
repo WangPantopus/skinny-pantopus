@@ -162,9 +162,9 @@ fun LeaveReviewSheetContent(
 private fun headerCopy(target: LeaveReviewSheetTarget): String {
     val name = target.revieweeName
     return if (!name.isNullOrEmpty()) {
-        "How did $name do on ${target.gigTitle}? Your review helps the neighborhood."
+        "How did $name do on ${target.gigTitle}? Your review helps people near you."
     } else {
-        "How did this go on ${target.gigTitle}? Your review helps the neighborhood."
+        "How did this go on ${target.gigTitle}? Your review helps people near you."
     }
 }
 
@@ -260,7 +260,7 @@ private fun CommentField(
                 decorationBox = { inner ->
                     if (value.isEmpty()) {
                         Text(
-                            text = "Anything the neighborhood should know?",
+                            text = "Anything others should know?",
                             style = PantopusTextStyle.body,
                             color = PantopusColors.appTextMuted,
                         )

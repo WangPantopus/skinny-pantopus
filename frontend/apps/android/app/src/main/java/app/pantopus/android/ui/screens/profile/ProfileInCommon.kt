@@ -316,7 +316,7 @@ internal fun AroundTheNeighborhood(
     val rows = aroundRows(firstName, contributions ?: return)
     if (rows.isEmpty()) return
     Column {
-        AboutHeading("Around the neighborhood")
+        AboutHeading("Around here")
         AboutCard(tag = "publicProfileAboutAround") {
             rows.forEachIndexed { index, row ->
                 if (index > 0) AboutDivider()
@@ -344,8 +344,8 @@ internal fun aroundRows(
         },
         count(
             contributions.helpfulMarks,
-            "Neighbors marked $firstName's posts helpful once",
-            "Neighbors marked $firstName's posts helpful # times",
+            "Others marked $firstName's posts helpful once",
+            "Others marked $firstName's posts helpful # times",
         )?.let { AboutRowSpec(icon = PantopusIcon.ThumbsUp, title = it) },
     )
 }

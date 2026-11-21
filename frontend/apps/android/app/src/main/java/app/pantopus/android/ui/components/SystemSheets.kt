@@ -72,7 +72,7 @@ object InviteLinks {
 
     /** The invite's words; the person's own link follows them when it is shared. */
     const val INVITE_MESSAGE =
-        "Join me on Pantopus — your neighborhood for trusted home help and your whole household in one place."
+        "Join me on Pantopus — everything about your home, trusted home help and your whole household in one place."
 }
 
 // MARK: - Mail compose ───────────────────────────────────────────────────

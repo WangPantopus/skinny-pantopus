@@ -90,7 +90,7 @@ class MailTranslationProjectionTest {
         assertEquals("Dear neighbor,", content.paragraphs.first().english)
         assertEquals("Lucía Herrera", content.sender.name)
         assertEquals("LH", content.sender.initials)
-        assertEquals("Verified neighbor", content.sender.kind)
+        assertEquals("Verified home", content.sender.kind)
         // No translator-notes glossary exists on the wire.
         assertTrue(content.glossary.isEmpty())
         assertFalse(content.confirmed)

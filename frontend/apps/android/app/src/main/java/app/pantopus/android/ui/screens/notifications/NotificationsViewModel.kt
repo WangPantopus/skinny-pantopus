@@ -916,7 +916,7 @@ class NotificationsViewModel
                         headline = "You’re all caught up",
                         subcopy =
                             "No unread notifications. Replies, mentions, claim updates, " +
-                                "and safety alerts from your neighborhood will land here.",
+                                "and safety alerts from near you will land here.",
                         ctaTitle = "View all notifications",
                         onCta = { selectTab(NotificationsTab.ALL) },
                     )

@@ -113,7 +113,7 @@ fun CommunityMailScreen(
                                 icon = PantopusIcon.Megaphone,
                                 headline = "No community items",
                                 subcopy =
-                                    "Civic notices, neighborhood events, and shared mail from " +
+                                    "Civic notices, local events, and shared mail from " +
                                         "your block will appear here.",
                                 modifier = Modifier.testTag("communityMail_empty"),
                                 ctaTitle = "Refresh",
@@ -191,10 +191,10 @@ private fun subtitleFor(state: CommunityMailUiState): String =
     when (state) {
         is CommunityMailUiState.Loaded -> {
             val noun = if (state.total == 1) "item" else "items"
-            "${state.total} $noun in your neighborhood"
+            "${state.total} $noun near you"
         }
 
-        else -> "Your neighborhood feed"
+        else -> "Your local mail"
     }
 
 @Composable

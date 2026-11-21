@@ -225,7 +225,7 @@ private fun FormFrame(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Text(
-            text = "Ask a Neighbor",
+            text = "Ask for help nearby",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.appText,
@@ -258,7 +258,7 @@ private fun FormFrame(
                 OutlinedTextField(
                     value = description,
                     onValueChange = onDescriptionChange,
-                    label = { Text("Additional instructions for the neighbor…") },
+                    label = { Text("Additional instructions for your helper…") },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth().testTag("packageGig_field_description"),
                 )
@@ -438,7 +438,7 @@ private fun SafetyNote() {
             tint = PantopusColors.success,
         )
         Text(
-            text = "Only Verified Neighbors with trust scores can see and accept package gigs",
+            text = "Only verified homes with trust scores can see and accept package gigs",
             fontSize = 12.sp,
             color = PantopusColors.success,
         )
@@ -493,7 +493,7 @@ private fun SuccessFrame(
             Text(
                 text =
                     "“${created.title}” has been posted. " +
-                        "Verified Neighbors nearby will be notified.",
+                        "Verified homes nearby will be notified.",
                 fontSize = 13.sp,
                 color = PantopusColors.appTextSecondary,
                 textAlign = TextAlign.Center,
@@ -516,7 +516,7 @@ private fun SuccessFrame(
                             "Pre-filled from your delivery"
                         },
                 )
-                SuccessRow(label = "Visibility", value = "Verified Neighbors within 0.5 mi")
+                SuccessRow(label = "Visibility", value = "Verified homes within 0.5 mi")
             }
         }
 

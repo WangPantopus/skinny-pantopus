@@ -120,7 +120,7 @@ object ViewAsMapper {
             (context?.isConnection == true || context?.isNeighbor == true) &&
                 hidden.none { it.contains("mutual") || it.contains("connection") }
         val disclosure =
-            if (shared) ViewAsFieldDisclosure.Visible("Mutual neighbors in common") else ViewAsFieldDisclosure.Hidden
+            if (shared) ViewAsFieldDisclosure.Visible("Connections in common") else ViewAsFieldDisclosure.Hidden
         return ViewAsField("mutuals", PantopusIcon.Users, "Mutual connections", disclosure)
     }
 
@@ -141,7 +141,7 @@ object ViewAsMapper {
             ViewAsBadge(
                 "resident",
                 if (set.contains("verified_resident")) PantopusIcon.BadgeCheck else PantopusIcon.Lock,
-                "Verified neighbor",
+                "Verified home",
                 set.contains("verified_resident"),
             ),
             ViewAsBadge(

@@ -28,7 +28,7 @@ class ComponentA11yStringsParityTest {
         // iOS `InviteLinks.inviteMessage` — locked so a marketing copy
         // update has to flow to both platforms in lockstep.
         val expected =
-            "Join me on Pantopus — your neighborhood for trusted home help " +
+            "Join me on Pantopus — everything about your home, trusted home help " +
                 "and your whole household in one place."
         assertEquals(expected, InviteLinks.INVITE_MESSAGE)
     }

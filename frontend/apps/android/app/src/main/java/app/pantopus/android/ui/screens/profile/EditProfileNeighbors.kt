@@ -91,9 +91,9 @@ internal fun normalizedNeighborName(text: String): String = text.trim().split(Re
 /** Under the photo neighbors see: whose photo it is and what changes it. */
 internal fun neighborPhotoNote(view: OwnLocalProfileResponse): String =
     when {
-        view.profile.avatarUrl == null -> "Neighbors see your initials until you add one."
+        view.profile.avatarUrl == null -> "Others see your initials until you add one."
         view.followsAccount.avatarUrl -> "Your account photo: it changes when you change your account photo below."
-        else -> "A photo just for neighbors: changing your account photo won't change it."
+        else -> "A photo just for your profile: changing your account photo won't change it."
     }
 
 /** "How neighbors see you · updates as you type": the header neighbors get, as you edit it. */
@@ -101,7 +101,7 @@ internal fun neighborPhotoNote(view: OwnLocalProfileResponse): String =
 internal fun EditProfilePreviewCard(preview: EditPreview) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).testTag("editProfilePreview")) {
         Text(
-            text = "How neighbors see you · updates as you type",
+            text = "How others see you · updates as you type",
             fontSize = 13.sp,
             lineHeight = 18.sp,
             fontWeight = FontWeight.SemiBold,
@@ -161,7 +161,7 @@ internal fun EditProfilePreviewCard(preview: EditPreview) {
 /** "Verified neighbor · Vancouver · Joined Oct 2026", only what's true. */
 @Composable
 private fun EditPreviewTrustLine(trust: ProfileTrust) {
-    val words = listOfNotNull("Verified neighbor".takeIf { trust.verifiedNeighbor }, trust.city, trust.joined)
+    val words = listOfNotNull("Verified home".takeIf { trust.verifiedNeighbor }, trust.city, trust.joined)
     if (words.isEmpty()) return
     Row(
         modifier = Modifier.padding(top = 10.dp),
@@ -273,7 +273,7 @@ internal fun NeighborPhotoRow(
                         .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(Radii.pill))
                         .background(PantopusColors.primary100)
-                        .clickable(enabled = !busy, role = Role.Button, onClickLabel = "Change the photo neighbors see") {
+                        .clickable(enabled = !busy, role = Role.Button, onClickLabel = "Change the photo others see") {
                             if (photoUrl == null && accountPhotoUrl == null) {
                                 choosePhoto()
                             } else {

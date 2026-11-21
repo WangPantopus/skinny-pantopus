@@ -118,7 +118,7 @@ private fun defaultCommunityParagraphs(subtype: CommunityMailSubtype): List<Stri
     when (subtype) {
         CommunityMailSubtype.Event ->
             listOf(
-                "Hi neighbors - quick reminder that we are doing the spring playground cleanup this Saturday from 9 to 11 AM.",
+                "Hi everyone - quick reminder that we are doing the spring playground cleanup this Saturday from 9 to 11 AM.",
                 "If you have gardening gloves please bring them. We will have spares from the tool library and a few extra rakes.",
             )
         CommunityMailSubtype.Poll ->
@@ -127,7 +127,7 @@ private fun defaultCommunityParagraphs(subtype: CommunityMailSubtype): List<Stri
                     "and post the decision Friday afternoon.",
             )
         CommunityMailSubtype.NeighborhoodUpdate ->
-            listOf("Sharing the latest neighborhood notes so everyone has the same plan before the weekend.")
+            listOf("Sharing the latest local notes so everyone has the same plan before the weekend.")
     }
 
 @Composable
@@ -225,7 +225,7 @@ private fun communityMetaLine(community: CommunityDetailDto): String {
             community.group.memberCount?.let { add("$it members") }
             community.group.founded?.let { add(it) }
         }
-    return parts.ifEmpty { listOf("Verified neighborhood group") }.joinToString(" - ")
+    return parts.ifEmpty { listOf("Verified local group") }.joinToString(" - ")
 }
 
 @Composable
@@ -283,12 +283,12 @@ private fun communityInsightSummary(
     } else {
         when (community.subtype) {
             CommunityMailSubtype.Event ->
-                "${community.attendeeCount} neighbors are going" +
+                "${community.attendeeCount} people are going" +
                     (community.attendeesFromBlock?.let { " - $it from your block." } ?: ".")
             CommunityMailSubtype.Poll ->
-                "A quick neighborhood poll is open. Your response helps the group pick the next step."
+                "A quick local poll is open. Your response helps the group pick the next step."
             CommunityMailSubtype.NeighborhoodUpdate ->
-                "A verified neighborhood update was sent to households near you."
+                "A verified update was sent to households near you."
         }
     }
 
@@ -296,7 +296,7 @@ private fun communityInsightBullets(community: CommunityDetailDto): List<Pair<Pa
     when (community.subtype) {
         CommunityMailSubtype.Event ->
             listOf(
-                Pair(PantopusIcon.Users, "${community.attendeeCount} neighbors going"),
+                Pair(PantopusIcon.Users, "${community.attendeeCount} going"),
                 Pair(PantopusIcon.Calendar, community.event?.timeRange ?: "Schedule included"),
                 Pair(PantopusIcon.Info, community.event?.weatherSummary ?: "Details are ready"),
             )
@@ -308,7 +308,7 @@ private fun communityInsightBullets(community: CommunityDetailDto): List<Pair<Pa
             )
         CommunityMailSubtype.NeighborhoodUpdate ->
             listOf(
-                Pair(PantopusIcon.Radio, "Neighborhood-wide note"),
+                Pair(PantopusIcon.Radio, "Area-wide note"),
                 Pair(PantopusIcon.ShieldCheck, "Verified sender"),
                 Pair(PantopusIcon.MessageCircle, "Discussion thread linked"),
             )
@@ -532,7 +532,7 @@ private fun PollOptionRow(
 private fun CommunityBodyUpdateCard(update: CommunityUpdateInfo) {
     CommunityBodyCard(noPadding = true, modifier = Modifier.testTag("communityBody.updateCard")) {
         Column {
-            CommunityBodyCardHeader("Neighborhood update")
+            CommunityBodyCardHeader("Local update")
             Column(modifier = Modifier.padding(Spacing.s3), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), verticalAlignment = Alignment.Top) {
                     Box(
@@ -732,7 +732,7 @@ private fun CommunityBodyMessageCard(
                         style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.Bold),
                         color = PantopusColors.appText,
                     )
-                    Text(text = "posted by neighbor", style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+                    Text(text = "posted by someone nearby", style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
                 }
             }
             paragraphs.forEach {
@@ -967,8 +967,8 @@ private fun CommunityBodyCardHeader(title: String) {
 
 private val fallbackCommunityUpdate =
     CommunityUpdateInfo(
-        headline = "Neighborhood update",
-        summary = "A verified neighborhood group shared a new update.",
+        headline = "Local update",
+        summary = "A verified local group shared a new update.",
         items = listOf("Open the Pulse thread for discussion.", "Household members can be added to the thread."),
         statusLabel = "Verified community mail",
         footerLabel = null,

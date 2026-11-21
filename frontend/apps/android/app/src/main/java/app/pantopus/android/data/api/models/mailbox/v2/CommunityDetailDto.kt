@@ -146,7 +146,7 @@ data class CommunityDetailDto(
                     ?: emptyMap<String, Any?>()
             val group =
                 CommunityGroupInfo(
-                    name = (groupRaw["name"] as? String) ?: "Neighborhood group",
+                    name = (groupRaw["name"] as? String) ?: "Local group",
                     tagline = groupRaw["tagline"] as? String,
                     founded = groupRaw["founded"] as? String,
                     role =

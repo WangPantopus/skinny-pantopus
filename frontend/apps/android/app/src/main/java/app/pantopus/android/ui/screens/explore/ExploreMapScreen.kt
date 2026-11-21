@@ -1527,7 +1527,7 @@ internal fun exploreEmptyHint(
         } else {
             "$filterCount filters are narrowing this view. Try clearing them"
         }
-    return if (distanceNarrowed) "$lead, or widen the area to surface neighbors a little further out." else "$lead."
+    return if (distanceNarrowed) "$lead, or widen the area to see people a little further out." else "$lead."
 }
 
 @Composable

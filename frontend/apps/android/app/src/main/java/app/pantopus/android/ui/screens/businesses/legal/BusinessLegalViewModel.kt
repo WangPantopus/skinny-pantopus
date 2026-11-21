@@ -40,7 +40,7 @@ enum class BusinessVerificationTier(
     Unverified(
         "unverified",
         "Unverified",
-        "Neighbors see no verification badge yet. Attest to your legal details to get started.",
+        "Others see no verification badge yet. Attest to your legal details to get started.",
     ),
     SelfAttested(
         "self_attested",

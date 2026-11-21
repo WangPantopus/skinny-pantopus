@@ -543,9 +543,9 @@ private fun MethodsCard(
                 // Launch cut #3 (Marketplace): no listings to pay for.
                 body =
                     if (LaunchFeatures.marketplace) {
-                        "Add a card or bank account to hire neighbors and pay for marketplace listings."
+                        "Add a card or bank account to hire people near you and pay for marketplace listings."
                     } else {
-                        "Add a card or bank account to hire neighbors."
+                        "Add a card or bank account to hire people near you."
                     },
             )
             Divider()

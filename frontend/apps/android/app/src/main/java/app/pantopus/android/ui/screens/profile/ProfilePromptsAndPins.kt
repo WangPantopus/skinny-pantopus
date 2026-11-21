@@ -71,7 +71,7 @@ internal enum class ProfilePrompt(
     SomethingLearning("something_learning", "Something I'm learning…"),
     LivedHereSince("lived_here_since", "I've lived here since…"),
     BestWayToSayHi("best_way_to_say_hi", "Best way to say hi…"),
-    NeighborhoodTradition("neighborhood_tradition", "A neighborhood tradition I love…"),
+    NeighborhoodTradition("neighborhood_tradition", "A local tradition I love…"),
     ;
 
     companion object {

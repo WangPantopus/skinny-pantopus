@@ -34,7 +34,7 @@ class PublicProfileNeighborTest {
         assertEquals(47, c.reviewCount)
         assertEquals("Message", c.primaryCtaLabel)
         assertEquals(NeighborIdentity.Personal, c.hero.identity)
-        assertEquals("Neighbor since 2022", c.hero.kicker)
+        assertEquals("On Pantopus since 2022", c.hero.kicker)
         assertEquals(4, c.verifications.size)
         assertFalse(c.reviews.isEmpty())
         assertNull(c.mutuals)

@@ -401,7 +401,7 @@ internal fun ProfileTrustLine(
             text =
                 buildAnnotatedString {
                     if (trust.verifiedNeighbor) {
-                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = PantopusColors.home)) { append("Verified neighbor") }
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = PantopusColors.home)) { append("Verified home") }
                         if (facts.isNotEmpty()) append(" · ")
                     }
                     append(facts.joinToString(" · "))
@@ -418,7 +418,7 @@ private fun VerifiedNeighborLabel() {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PantopusIconImage(icon = PantopusIcon.ShieldCheck, contentDescription = null, size = 17.dp, tint = PantopusColors.home)
         Text(
-            text = "Verified neighbor",
+            text = "Verified home",
             fontSize = 15.sp,
             lineHeight = 20.sp,
             fontWeight = FontWeight.SemiBold,
@@ -439,15 +439,15 @@ internal fun ProfileTrustExplainer(
     val body =
         when {
             isOwner && trust.verifiedNeighbor ->
-                "Neighbors see “Verified neighbor” because you confirmed your home. Your address is never shown."
-            isOwner -> "Verify your home and neighbors see “Verified neighbor” next to your name. Your address is never shown."
+                "Others see “Verified home” because you confirmed your home. Your address is never shown."
+            isOwner -> "Verify your home and others see “Verified home” next to your name. Your address is never shown."
             trust.verifiedNeighbor && city != null -> "Pantopus confirmed $firstName lives in $city. Their address is never shown."
             trust.verifiedNeighbor -> "Pantopus confirmed where $firstName lives. Their address is never shown."
             else -> "$firstName hasn't verified a home on Pantopus yet."
         }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (trust.verifiedNeighbor) "Verified neighbor" else "Not verified yet") },
+        title = { Text(if (trust.verifiedNeighbor) "Verified home" else "Not verified yet") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Text(body)

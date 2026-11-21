@@ -24,7 +24,7 @@ object VacationHoldSampleData {
                     VacationHoldScope(
                         kind = VacationHoldScope.Kind.Packages,
                         label = "Packages",
-                        sub = "Carriers hold at neighborhood hub",
+                        sub = "Carriers hold at the local hub",
                         isOn = true,
                     ),
                     VacationHoldScope(

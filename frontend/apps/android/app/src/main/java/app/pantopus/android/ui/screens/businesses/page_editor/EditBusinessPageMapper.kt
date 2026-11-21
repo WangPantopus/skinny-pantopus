@@ -360,7 +360,7 @@ internal object EditBusinessPageMapper {
                 EditBusinessPagePrompt(
                     iconKey = "sparkles",
                     title = "Add at least one service",
-                    subtitle = "Show neighbors what this business offers.",
+                    subtitle = "Show people what this business offers.",
                     ctaLabel = "Add",
                 ),
             )
@@ -431,7 +431,7 @@ internal object EditBusinessPageMapper {
             EditBusinessPageDescriptionState.Prompt(
                 EditBusinessPagePrompt(
                     iconKey = "fileText",
-                    title = "Tell neighbors what you do",
+                    title = "Tell people what you do",
                     subtitle = "A short paragraph helps your page rank in local search.",
                     ctaLabel = "Write",
                 ),

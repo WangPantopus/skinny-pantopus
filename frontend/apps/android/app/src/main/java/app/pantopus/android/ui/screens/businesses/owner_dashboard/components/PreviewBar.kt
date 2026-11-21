@@ -60,7 +60,7 @@ fun PreviewBar(
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Text(
-                text = "Previewing as a neighbor",
+                text = "Previewing as the public",
                 color = PantopusColors.appTextInverse,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,

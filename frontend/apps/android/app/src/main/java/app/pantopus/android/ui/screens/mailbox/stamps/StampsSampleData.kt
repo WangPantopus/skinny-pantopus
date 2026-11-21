@@ -32,7 +32,7 @@ object StampsSampleData {
                 ),
             elfHeadline = "Pantopus checked your stamps",
             elfSummary =
-                "You've used 4 of 12 in this book — mostly neighbor mail. At about 2 sends a " +
+                "You've used 4 of 12 in this book — mostly mail to people near you. At about 2 sends a " +
                     "week you'll run low in roughly 4 weeks. Heads up: Express is down to 3.",
             insights =
                 listOf(
@@ -99,7 +99,7 @@ object StampsSampleData {
     val empty: StampsEmptyContent =
         StampsEmptyContent(
             headline = "No stamps yet",
-            body = "You'll need a stamp to send mail to a neighbor. Pick up a book and your postage lands here.",
+            body = "You'll need a stamp to send mail to someone. Pick up a book and your postage lands here.",
             buyLabel = "Buy stamps",
             starterBook =
                 StampStarterBook(
@@ -110,6 +110,6 @@ object StampsSampleData {
             howItWorksTitle = "One stamp per send",
             howItWorksBody =
                 "Replies to mail you receive are always free. Stamps are only spent when you " +
-                    "start a new thread with a neighbor or business.",
+                    "start a new thread with a person or a business.",
         )
 }

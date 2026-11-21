@@ -31,7 +31,7 @@ object EarnSampleData {
             ),
             EarnWayToEarn(
                 kind = EarnWayKind.Refer,
-                title = "Refer a neighbor",
+                title = "Refer someone",
                 meta = "+\$10 when they finish a task",
                 accent = EarnAccent.Home,
             ),
