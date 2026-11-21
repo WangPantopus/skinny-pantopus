@@ -36,7 +36,7 @@ import kotlin.math.roundToInt
  * Each ring is drawn once into a small picture of its own at the envelope's size, with the sample's ink grain, and kept;
  * the envelope then lays the pictures down turned and inked, so moving the envelope draws nothing new.
  */
-internal object TravelPostmarks {
+internal object CardTravelPostmarks {
     /** At most this many postmarks show. */
     const val MOST = 9
 

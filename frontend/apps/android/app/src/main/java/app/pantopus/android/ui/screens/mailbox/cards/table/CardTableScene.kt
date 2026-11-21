@@ -609,7 +609,7 @@ private fun drawAddressSide(
         canvas.drawText(label, width * 0.068f - size * 0.1f, baseline, paints.text)
     }
     // The postmarks of the towns on its way here, over the names as stamped ink is; the first cancels the stamp.
-    if (card.travels) TravelPostmarks.draw(canvas, card.travel?.postmarks.orEmpty(), width, height, paints, strike)
+    if (card.travels) CardTravelPostmarks.draw(canvas, card.travel?.postmarks.orEmpty(), width, height, paints, strike)
 }
 
 /**
