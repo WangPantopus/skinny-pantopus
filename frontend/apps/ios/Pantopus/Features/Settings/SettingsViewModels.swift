@@ -231,7 +231,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         } ?? .chevron
         return GroupedListGroup(
             id: "thisIPhone",
-            overline: "This iPhone",
+            overline: "This \(DeviceWords.name)",
             rows: [
                 GroupedListRow(id: "storageData", label: "Storage & data", subtext: "Photos and saved pages", control: size)
             ]

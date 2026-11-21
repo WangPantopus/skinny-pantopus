@@ -197,7 +197,7 @@ struct AddToCalendarSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             sheetHeader(title: "Choose a calendar", showBack: true)
 
-            Text("Where should we add it on this iPhone?")
+            Text("Where should we add it on this \(DeviceWords.name)?")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .padding(.horizontal, Spacing.s4)
@@ -278,7 +278,7 @@ struct AddToCalendarSheet: View {
         } label: {
             HStack(spacing: Spacing.s2) {
                 Icon(.calendarPlus, size: 17, strokeWidth: 2.2, color: Theme.Color.appSurface)
-                Text("Add to iPhone Calendar")
+                Text("Add to \(DeviceWords.name) Calendar")
                     .font(.system(size: 14, weight: .bold))
                     .tracking(-0.1)
                     .foregroundStyle(Theme.Color.appSurface)
@@ -326,7 +326,7 @@ struct AddToCalendarSheet: View {
             rowContent(
                 leading: .disc(icon: added ? .check : .calendar, done: added),
                 label: added ? "Added to Apple Calendar" : "Apple Calendar",
-                sub: added ? "With a reminder 10 minutes before" : "Save to your iPhone",
+                sub: added ? "With a reminder 10 minutes before" : "Save to your \(DeviceWords.name)",
                 labelColor: added ? Theme.Color.success : Theme.Color.appText,
                 trailing: added ? .done : .chevron
             )

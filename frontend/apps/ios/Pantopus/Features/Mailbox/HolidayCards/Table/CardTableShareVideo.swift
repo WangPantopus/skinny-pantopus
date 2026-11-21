@@ -94,7 +94,7 @@ struct CardShareVideoSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .shadow(color: .black.opacity(0.5), radius: 13, x: 0, y: 8)
                 .frame(maxWidth: .infinity)
-                .frame(height: min(UIScreen.main.bounds.height * 0.46, 430))
+                .frame(height: min((AppWindow.height ?? .infinity) * 0.46, 430))
                 .accessibilityElement()
                 .accessibilityLabel("The video to share: the card arriving and opening, with no note or name in it.")
                 .accessibilityIdentifier("cardShareVideoPreview")
@@ -217,7 +217,8 @@ extension CardShareStories {
             }
             return "Saved to your photos."
         } catch {
-            return "We couldn’t save it to your photos. Check that there’s room on your phone, then try again."
+            let device = await DeviceWords.plainName
+            return "We couldn’t save it to your photos. Check that there’s room on your \(device), then try again."
         }
     }
 }

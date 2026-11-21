@@ -376,7 +376,7 @@ public struct MailDayView: View {
                         .foregroundStyle(Theme.Color.appText)
                     Text(
                         "Quiet paper sounds as a card slides, its seal breaks and it's set down, when your ringer is on. "
-                            + "On this phone only."
+                            + "On this \(DeviceWords.plainName) only."
                     )
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)

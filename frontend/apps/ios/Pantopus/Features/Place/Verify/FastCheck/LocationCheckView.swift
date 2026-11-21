@@ -74,13 +74,14 @@ struct LocationCheckView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            (Text("We check your phone's location once and compare it with ") + Text(viewModel.address).bold() + Text("."))
+            (Text("We check your \(DeviceWords.plainName)'s location once and compare it with ")
+                + Text(viewModel.address).bold() + Text("."))
                 .scaledFont(16)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             LocationCheckPicture()
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                point("Works when you're inside your home, in the iPhone and Android apps.")
+                point("Works when you're inside your home, in the \(DeviceWords.isPad ? "iPhone, iPad" : "iPhone") and Android apps.")
                 point("We keep match or no match and the date. Never where you were.")
                 point(
                     "We check once more on another day when you open Pantopus at home.",

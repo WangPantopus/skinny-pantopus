@@ -48,13 +48,13 @@ public enum PlaceVerifyMethod: String, CaseIterable, Hashable, Sendable {
         }
     }
 
-    var sub: String {
+    @MainActor var sub: String {
         switch self {
         case .document: "A utility bill, lease, or ID. A person reviews it."
         case .mail: "A postcard with a code, 3–7 days. Yours to keep."
         case .landlord: "Your landlord confirms that you live here."
         case .phone: "We text a code, then match the number to this address."
-        case .location: "One tap. We check your phone's location once."
+        case .location: "One tap. We check your \(DeviceWords.plainName)'s location once."
         }
     }
 }

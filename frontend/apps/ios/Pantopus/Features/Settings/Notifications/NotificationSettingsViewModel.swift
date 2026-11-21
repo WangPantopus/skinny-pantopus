@@ -467,7 +467,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
         GroupedListGroup(
             id: GroupID.push,
             overline: "Account",
-            helper: isOn ? nil : "Push is off, so nothing below will reach your phone.",
+            helper: isOn ? nil : "Push is off, so nothing below will reach your \(DeviceWords.plainName).",
             rows: [
                 GroupedListRow(
                     id: RowID.pushNotifications,

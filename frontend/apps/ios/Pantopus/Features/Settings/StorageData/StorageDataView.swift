@@ -58,7 +58,7 @@ struct StorageDataView: View {
                 .pantopusTextStyle(.h1)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityIdentifier("storageDataTotal")
-            Text("Pantopus on this iPhone")
+            Text("Pantopus on this \(DeviceWords.name)")
                 .pantopusTextStyle(.small)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             StorageMeter(sizes: viewModel.sizes, limitBytes: viewModel.limitMegabytes * 1024 * 1024)

@@ -134,7 +134,7 @@ struct CardTableShareSheet: View {
     }
 
     private var preview: some View {
-        let height = min(UIScreen.main.bounds.height * 0.46, 430)
+        let height = min((AppWindow.height ?? .infinity) * 0.46, 430)
         return Group {
             if let image = drawn[key] {
                 Image(uiImage: image)
@@ -424,7 +424,8 @@ enum CardShareStories {
             }
             return "Saved to your photos."
         } catch {
-            return "We couldn’t save it to your photos. Check that there’s room on your phone, then try again."
+            let device = await DeviceWords.plainName
+            return "We couldn’t save it to your photos. Check that there’s room on your \(device), then try again."
         }
     }
 }

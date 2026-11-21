@@ -77,10 +77,13 @@ final class LocationCheckViewModel {
             case "too_rough":
                 stage = .missed(Self.tooRough)
             case "no_match":
-                stage = .missed("We couldn't place your phone at \(address). Step inside and try again, or verify another way.")
+                stage = .missed(
+                    "We couldn't place your \(DeviceWords.plainName) at \(address). "
+                        + "Step inside and try again, or verify another way."
+                )
             default:
                 // Not counted: the reading couldn't be tied to a real copy of the app on a real phone.
-                stage = .missed("This check couldn't be counted on this phone. Verify another way.")
+                stage = .missed("This check couldn't be counted on this \(DeviceWords.plainName). Verify another way.")
             }
         } catch {
             stage = .missed(PhoneCheckViewModel.message(for: error))
@@ -91,7 +94,9 @@ final class LocationCheckViewModel {
         stage = .ready
     }
 
-    static let tooRough = "Your phone's location was too rough to tell. Try again near a window, or verify another way."
+    static var tooRough: String {
+        "Your \(DeviceWords.plainName)'s location was too rough to tell. Try again near a window, or verify another way."
+    }
 
     /// The reading as JSON text, which the proof signs with the challenge: the same values the body sends.
     static func readingJSON(_ reading: FastCheckReading) -> String {

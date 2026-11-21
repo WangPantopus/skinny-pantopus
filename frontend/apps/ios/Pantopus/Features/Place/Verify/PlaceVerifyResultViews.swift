@@ -14,10 +14,10 @@ import SwiftUI
 enum FastCheckKind: String {
     case phone, location, bill
 
-    var matchSentence: (lead: String, tail: String) {
+    @MainActor var matchSentence: (lead: String, tail: String) {
         switch self {
         case .phone: ("Your phone number matches ", ".")
-        case .location: ("Your phone was at ", ".")
+        case .location: ("Your \(DeviceWords.plainName) was at ", ".")
         case .bill: ("Your bill matches ", ".")
         }
     }

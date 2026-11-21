@@ -192,7 +192,7 @@ struct PlaceVerifyStatusView: View {
         case .mail: "We've mailed a postcard to your address. Enter the code when it arrives — 3–7 days. Keep the card."
         case .landlord: "We've asked your landlord to confirm that you live here. This usually takes 1–3 business days."
         case .phone: "We're checking your phone number against this address."
-        case .location: "We're checking your phone's location against this address."
+        case .location: "We're checking your \(DeviceWords.plainName)'s location against this address."
         }
     }
 }

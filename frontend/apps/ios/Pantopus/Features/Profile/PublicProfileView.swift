@@ -350,7 +350,10 @@ public struct PublicProfileView: View {
             }
             .accessibilityIdentifier("profileSignOutConfirm")
         } message: {
-            Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.")
+            Text(
+                "You'll need to sign in again to use your account. "
+                    + "Signing out removes what Pantopus saved on this \(DeviceWords.plainName)."
+            )
         }
         // A saved edit (name, username, tagline…) changes the page.
         .onReceive(NotificationCenter.default.publisher(for: .pantopusProfileDidChange)) { _ in

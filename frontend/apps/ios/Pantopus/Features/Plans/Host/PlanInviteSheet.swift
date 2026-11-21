@@ -307,7 +307,7 @@ extension PlanInviteSheet {
                     iconSquare(.messageCircle)
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Text an invite").planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
-                        Text("Send a link from your phone. It works for one person, so make one for each friend.")
+                        Text("Send a link from your \(DeviceWords.plainName). It works for one person, so make one for each friend.")
                             .planFont(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .fixedSize(horizontal: false, vertical: true)

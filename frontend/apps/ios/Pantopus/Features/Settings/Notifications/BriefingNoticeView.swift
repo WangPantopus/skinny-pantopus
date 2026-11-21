@@ -66,7 +66,7 @@ struct BriefingNoticeView: View {
                             Text("Times follow your briefing location’s time zone. We only notify you when there’s something useful.")
                             Text(
                                 "Change the times or turn either briefing off in Settings → Notifications. " +
-                                    "Your phone also needs to allow Pantopus notifications."
+                                    "Your \(DeviceWords.plainName) also needs to allow Pantopus notifications."
                             )
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             if let error { Text(error).foregroundStyle(Theme.Color.error) }
