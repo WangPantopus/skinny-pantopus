@@ -701,6 +701,15 @@ private suspend fun linkPreview(
 private fun mailAppsExist(context: Context): Boolean =
     Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")).resolveActivity(context.packageManager) != null
 
+/** The link a share carries: a travelling card's journey page (travelling card plan Part 7), else the card's page. */
+private suspend fun shareLink(
+    card: CardOnTable,
+    viewModel: CardShareViewModel,
+): String {
+    val journey = card.travel?.journey?.takeIf { card.travels && !card.sealed } ?: return viewModel.cardPageLink(card)
+    return CardTravel.journeyUrl(journey)
+}
+
 /** Does what the tile says, and answers with what to tell the person. */
 private suspend fun runAction(
     context: Context,
@@ -713,7 +722,7 @@ private suspend fun runAction(
     action: ShareAction,
     drawAll: suspend () -> List<Bitmap>?,
 ): String {
-    val link = viewModel.cardPageLink(card)
+    val link = shareLink(card, viewModel)
     if (action == ShareAction.All) {
         viewModel.shared(card.design, action.key, ShareFormat.Post.counted, showNote && !card.sealed)
         return shareAll(context, drawAll)

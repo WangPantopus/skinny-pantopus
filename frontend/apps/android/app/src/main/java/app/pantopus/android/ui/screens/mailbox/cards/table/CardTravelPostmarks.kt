@@ -108,6 +108,8 @@ internal object CardTravelPostmarks {
         height: Float,
         paints: EnvelopePaints,
         strike: Float = 1f,
+        /** Pixels per unit of [canvas] (a share picture is drawn at twice its layout's size), for sharp rings. */
+        resolution: Float = 1f,
     ) {
         if (stops.isEmpty() || width <= 0f) return
         val shown = stops.takeLast(MOST)
@@ -117,7 +119,7 @@ internal object CardTravelPostmarks {
             val struck = if (newest) strike.coerceIn(0f, 1f) else 1f
             if (struck <= 0f) return@forEachIndexed
             val (sx, sy, turn) = SLOTS[i].let { Triple(it[0], it[1], it[2]) }
-            val picture = picture(stop, waves = i == 0, unit = unit, seed = i)
+            val picture = picture(stop, waves = i == 0, unit = unit * resolution, seed = i)
             val paint = if (i % 3 == 1) inkBlue else inkBlack
             paint.alpha = (255 * struck).roundToInt()
             val cx = width * sx
@@ -130,7 +132,7 @@ internal object CardTravelPostmarks {
                 canvas.scale(grow, grow)
             }
             val half = RING / 2f * unit
-            place.set(-half, -half, -half + picture.width, -half + picture.height)
+            place.set(-half, -half, -half + picture.width / resolution, -half + picture.height / resolution)
             canvas.drawBitmap(picture, null, place, paint)
             canvas.restoreToCount(saved)
             paint.alpha = 255

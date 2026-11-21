@@ -55,6 +55,9 @@ internal class CardSharePictures(
     private val shadow = Paint(Paint.ANTI_ALIAS_FLAG)
     private val paints = EnvelopePaints()
 
+    /** A travelling card (travelling card plan Part 7): its postmarked envelope and the journey's slip; never a sealed one. */
+    private val travel = card.travel?.takeIf { card.travels && !card.sealed }
+
     /** A Story, Post or Open card picture; Link preview is kept on the website instead. */
     fun draw(
         format: ShareFormat,
@@ -83,10 +86,15 @@ internal class CardSharePictures(
         fun one(lay: (Canvas) -> Unit) =
             picture(ShareFormat.Post) { canvas ->
                 lay(canvas)
-                slip(canvas, 139f, 612f, -1.2f, 262f, 46f, 12f, 12f)
+                postSlip(canvas)
             }
         return buildList {
-            add(one { shutEnvelope(it, 410f, 65f, 90f, -2.2f, 122f) })
+            // A travelling card's first picture is its envelope's postmarks (travelling card plan Part 7).
+            add(
+                one { canvas ->
+                    travel?.let { addressEnvelope(canvas, it, 400f, 70f, 70f, -2.2f) } ?: shutEnvelope(canvas, 410f, 65f, 90f, -2.2f, 122f)
+                },
+            )
             add(one { cardFront(it, 400f, 70f, 92f, -2.2f) })
             if (showNote && card.note.isNotBlank()) add(one { cardBack(it, 400f, 70f, 92f, 2.2f) })
         }
@@ -114,16 +122,22 @@ internal class CardSharePictures(
      * 340 px of 1920 (125 and 170 here). The card is 800 px wide of 1080 on a Story, 760 on a Post.
      */
     private fun storyCard(canvas: Canvas) {
+        if (travel != null) return storyJourney(canvas, travel)
         openEnvelope(canvas, 400f * 1.012f, 68f, 298f, 2.4f)
         cardFront(canvas, 400f, 70f, 302f, -2.6f)
         slip(canvas, 122f, 806f, -1.6f, 296f, 54f, 13.5f, 13.5f)
     }
 
     private fun storyNote(canvas: Canvas) {
-        openEnvelope(canvas, 372f, 84f, 300f, 4f)
+        envelopeBehind(canvas, 372f, 84f, 300f, 4f)
         cardFront(canvas, 360f, 16f, 138f, -4f)
         cardBack(canvas, 360f, 164f, 346f, 3.2f)
-        slip(canvas, 26f, 806f, -2.2f, 250f, 50f, 12f, 12.5f)
+        val journey = travel
+        if (journey != null) {
+            travelSlip(canvas, journey, 26f, 790f, -2.2f, 300f, 70f)
+        } else {
+            slip(canvas, 26f, 806f, -2.2f, 250f, 50f, 12f, 12.5f)
+        }
     }
 
     private fun storySealed(canvas: Canvas) {
@@ -134,16 +148,17 @@ internal class CardSharePictures(
     }
 
     private fun postCard(canvas: Canvas) {
+        if (travel != null) return postJourney(canvas, travel)
         openEnvelope(canvas, 380f * 1.012f, 78f, 112f, 3f)
         cardFront(canvas, 380f, 80f, 110f, -2.6f)
         slip(canvas, 139f, 612f, -1.2f, 262f, 46f, 12f, 12f)
     }
 
     private fun postNote(canvas: Canvas) {
-        openEnvelope(canvas, 300f, 120f, 150f, 2.5f)
+        envelopeBehind(canvas, 300f, 120f, 150f, 2.5f)
         cardFront(canvas, 272f, 6f, 104f, -3.2f)
         cardBack(canvas, 272f, 262f, 116f, 2.8f)
-        slip(canvas, 139f, 612f, -1.2f, 262f, 46f, 12f, 12f)
+        postSlip(canvas)
     }
 
     private fun postSealed(canvas: Canvas) {
@@ -174,10 +189,15 @@ internal class CardSharePictures(
             cardBack(canvas, 350f, 400f, 60f, 0f)
             foldShade(canvas, 400f, 60f, 350f, 420f)
         } else {
-            openEnvelope(canvas, 260f, 445f, 171f, 0f)
+            envelopeBehind(canvas, 260f, 445f, 171f, 0f)
             cardFront(canvas, 350f, 50f, 60f, 0f)
         }
-        slip(canvas, 261f, 504f, -1.2f, 262f, 46f, 12f, 12f)
+        val journey = travel
+        if (journey != null) {
+            travelSlip(canvas, journey, 250f, 496f, -1.2f, 300f, 64f)
+        } else {
+            slip(canvas, 261f, 504f, -1.2f, 262f, 46f, 12f, 12f)
+        }
     }
 
     /** The crease where an open card folds: each page a little darker toward the fold (as on the open Duo), the right lighter. */
@@ -267,6 +287,156 @@ internal class CardSharePictures(
         grain.xfermode = PorterDuffXfermode(PorterDuff.Mode.OVERLAY)
         grain.alpha = (0.34f * 255f).toInt()
         canvas.drawRect(0f, 0f, width, height, grain)
+    }
+
+    /*
+     * A travelling card (travelling card plan Part 7; the sample's sixth screen, in its 252 x 448 Story scaled to 540
+     * wide): the envelope's address side with its postmarks, turned 6°, up and right; the card's picture below it,
+     * turned -3.5°; and the journey's slip at the foot. No name, address or note.
+     */
+    private fun storyJourney(
+        canvas: Canvas,
+        travel: CardTravel,
+    ) {
+        addressEnvelope(canvas, travel, 407f, 99f, 40f, 6f)
+        cardFront(canvas, 330f, 40f, 372f, -3.5f)
+        travelSlip(canvas, travel, 70f, 800f, 1.2f, 400f, 82f)
+    }
+
+    private fun postJourney(
+        canvas: Canvas,
+        travel: CardTravel,
+    ) {
+        addressEnvelope(canvas, travel, 330f, 170f, 28f, 6f)
+        cardFront(canvas, 262f, 50f, 236f, -3.5f)
+        travelSlip(canvas, travel, 120f, 596f, 1.2f, 300f, 64f)
+    }
+
+    /** A Post's slip: the card's, or a travelling card's journey slip (Part 7). */
+    private fun postSlip(canvas: Canvas) {
+        val journey = travel
+        if (journey != null) {
+            travelSlip(canvas, journey, 120f, 596f, -1.2f, 300f, 64f)
+        } else {
+            slip(canvas, 139f, 612f, -1.2f, 262f, 46f, 12f, 12f)
+        }
+    }
+
+    /** The open envelope behind the cards, or for a travelling card its postmarked address side (Part 7). */
+    private fun envelopeBehind(
+        canvas: Canvas,
+        w: Float,
+        x: Float,
+        top: Float,
+        turn: Float,
+    ) {
+        val journey = travel
+        if (journey != null) addressEnvelope(canvas, journey, w, x, top, turn) else openEnvelope(canvas, w, x, top, turn)
+    }
+
+    /**
+     * The envelope's address side as the reader received it, without a name: the paper, the stamp, CHRISTMAS CARD and the
+     * postmarks of the towns on its way (drawn sharp at the picture's own pixels).
+     */
+    private fun addressEnvelope(
+        canvas: Canvas,
+        travel: CardTravel,
+        w: Float,
+        x: Float,
+        top: Float,
+        turn: Float,
+    ) {
+        val h = w * 1392f / 1200f
+
+        fun lay(target: Canvas) {
+            target.drawBitmap(art.front, null, RectF(0f, 0f, w, h), bitmaps)
+            cardStamp(art.stamps, art.star, card.stamp, card.number, card.design)?.let { stamp ->
+                val left = w * 0.755f
+                val stampTop = h * 0.0345f
+                val stampWidth = w * 0.2017f
+                val stampHeight = stampWidth * stamp.height / stamp.width
+                target.drawBitmap(stamp, null, RectF(left, stampTop, left + stampWidth, stampTop + stampHeight), bitmaps)
+            }
+        }
+        val restore = canvas.save()
+        canvas.rotate(turn, x + w / 2f, top + h / 2f)
+        canvas.translate(x, top)
+        dropShadow(canvas, w, h, 0f, 3f, 8f, 11f, 0.55f, ::lay)
+        lay(canvas)
+        val size = w * 0.0235f
+        val text = paints.text
+        text.reset()
+        text.isAntiAlias = true
+        text.textAlign = Paint.Align.LEFT
+        text.typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+        text.textSize = size
+        text.letterSpacing = 0.2f
+        text.color = PantopusColors.tableGold.toArgb()
+        canvas.drawText("CHRISTMAS CARD", w * 0.068f - size * 0.1f, h * (1f - 0.054f) - size * 0.2f, text)
+        CardTravelPostmarks.draw(canvas, travel.postmarks, w, h, paints, resolution = 2f)
+        canvas.restoreToCount(restore)
+    }
+
+    /**
+     * The journey's slip (Part 7): "5 TOWNS · 2,692 MILES", "Still travelling", "Start one at pantopus.com/cards", centred
+     * on the same paper as the card's slip. Towns count the reader's own, where the card is now.
+     */
+    private fun travelSlip(
+        canvas: Canvas,
+        travel: CardTravel,
+        x: Float,
+        y: Float,
+        turn: Float,
+        w: Float,
+        h: Float,
+    ) {
+        val restore = canvas.save()
+        canvas.rotate(turn, x + w / 2f, y + h / 2f)
+        softRect(canvas, x, y, x + w, y + h, 1.5f, 1f, 2f, 5f, 0.45f)
+        val paper = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PantopusColors.tableSlip.toArgb() }
+        canvas.drawRoundRect(x, y, x + w, y + h, 1.5f, 1.5f, paper)
+        val grain = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        grain.shader =
+            BitmapShader(faceArt.paper, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).apply {
+                val scale = 220f / faceArt.paper.width
+                setLocalMatrix(Matrix().apply { setScale(scale, scale) })
+            }
+        grain.xfermode = PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
+        canvas.drawRoundRect(x, y, x + w, y + h, 1.5f, 1.5f, grain)
+        val big = h * 0.25f
+        val small = h * 0.19f
+        val lines = listOf(big * 1.25f, small * 1.3f, small * 1.3f)
+        var lineTop = y + (h - lines.sum()) / 2f
+        val text = paints.text
+        val center = x + w / 2f
+
+        fun line(
+            words: String,
+            size: Float,
+            serif: Boolean,
+            spacing: Float,
+            color: Int,
+            height: Float,
+        ) {
+            text.reset()
+            text.isAntiAlias = true
+            text.textAlign = Paint.Align.CENTER
+            text.typeface = if (serif) Typeface.create(Typeface.SERIF, Typeface.BOLD) else Typeface.DEFAULT
+            text.textSize = size
+            text.letterSpacing = spacing
+            text.color = color
+            val fit = min(1f, (w * 0.94f) / text.measureText(words).coerceAtLeast(1f))
+            text.textSize = size * fit
+            canvas.drawText(words, center, boxBaseline(text, lineTop, height), text)
+            lineTop += height
+        }
+        val towns = travel.postmarks.size + 1
+        val figures = "$towns TOWNS · ${CardTravel.miles(travel.miles).uppercase()}"
+        line(figures, big, true, 0.13f, PantopusColors.tableSlipName.toArgb(), lines[0])
+        line("Still travelling", small, false, 0.06f, PantopusColors.tableSlipLine.toArgb(), lines[1])
+        line("Start one at pantopus.com/cards", small, false, 0.06f, PantopusColors.tableSlipLine.toArgb(), lines[2])
+        text.textAlign = Paint.Align.LEFT
+        canvas.restoreToCount(restore)
     }
 
     /** The open envelope lying behind: its lining, the flap up, and the pocket. */
