@@ -417,16 +417,27 @@ final class MomentsComposerModel {
     }
 }
 
-// MARK: - Text and Draw's Done
+// MARK: - Text, Draw and Resize's Done
 
 extension MomentsComposerModel {
-    /// The marks editor's Done (`+Marks`): the photo, at most 2048 px, carries `marks`. The draft and its export
-    /// change in one step, and the export draws them in off the main thread, so a Post tapped next waits for them.
-    func use(marked base: UIImage, _ marks: MomentMarks) {
+    /// The marks editor's Done (`+Marks`): the photo, at most 2048 px, carries `marks`, and goes up as the 9:16 canvas
+    /// when it's placed (Resize). The draft and its export change in one step, and the export draws them in off the
+    /// main thread, so a Post tapped next waits for them.
+    func use(marked base: UIImage, _ marks: MomentMarks, placement: MomentPlacement? = nil) {
         guard !isPosting, case .photo = draft else { return }
+        let backdrop = marking.backdrop
         draft = .photo(base)
-        marking.keep(marks, base: base)
-        prepare([{ folder in try await MomentMarksDrawing.export(base, marks, into: folder) }])
+        marking.keep(marks, base: base, placement: placement, backdrop: backdrop)
+        // Done before the colours were read: the Post screen reads them again (the export reads them for itself).
+        if placement != nil, backdrop == nil { marking.sampleBackdrop(base) }
+        if let placement {
+            let export: @MainActor (URL) async throws -> MomentPreparedMedia = { folder in
+                try await MomentPlacementDrawing.export(base, at: placement, backdrop: backdrop, marks, into: folder)
+            }
+            prepare([export])
+        } else {
+            prepare([{ folder in try await MomentMarksDrawing.export(base, marks, into: folder) }])
+        }
     }
 
     /// The same for a video: every part is exported again with the marks over every frame; Post waits for it.

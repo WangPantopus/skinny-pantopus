@@ -101,20 +101,29 @@ extension MomentsMarksEditor {
     }
 }
 
-/// The picture as the viewer frames it (filling `size`, a video playing muted), its marks, and a finger drawing a line
-/// on it. Its own view: it redraws with every point, the editor's controls don't.
+/// The picture as the viewer frames it (filling `size`, a video playing muted), or its canvas once it's placed, its
+/// marks, and a finger drawing a line on it. Its own view: it redraws with every point, the editor's controls don't.
 struct MomentsMarksDrawArea: View {
     let marking: MomentsMarking
     let media: MomentsMarkedMedia
+    /// What the marks are drawn over: the picture's own size, or the canvas's.
+    let surface: CGSize
     let size: CGSize
     /// Text: VoiceOver's "Add words", which adds a label as opening Text does.
     var addWords: (() -> Void)?
 
     var body: some View {
-        let fill = MomentMarks.fill(media.size, in: size)
+        let fill = MomentMarks.fill(surface, in: size)
         Group {
             switch media {
-            case let .photo(image): Image(uiImage: image).resizable().scaledToFill()
+            case let .photo(image):
+                if let placement = marking.editingPlacement {
+                    MomentPlacedCanvas(image: image, placement: placement, backdrop: marking.backdrop)
+                        .frame(width: fill.width, height: fill.height)
+                        .position(x: fill.midX, y: fill.midY)
+                } else {
+                    Image(uiImage: image).resizable().scaledToFill()
+                }
             case let .video(url, _): MomentsMarksVideo(url: url)
             }
         }
@@ -122,7 +131,7 @@ struct MomentsMarksDrawArea: View {
         // An overlay, so the marks (as large as the whole picture, cropped edges included) never resize the frame.
         // The label being typed in is its text field (`MomentsMarksTextLayer`), not drawn under it.
         .overlay(alignment: .topLeading) {
-            MomentMarksCanvas(marks: marking.shown)
+            MomentMarksCanvas(marks: marking.shown, aspect: marking.aspect)
                 .frame(width: fill.width, height: fill.height)
                 .offset(x: fill.minX, y: fill.minY)
         }

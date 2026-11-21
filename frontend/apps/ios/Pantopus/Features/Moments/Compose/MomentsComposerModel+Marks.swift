@@ -2,9 +2,10 @@
 //  MomentsComposerModel+Marks.swift
 //  Pantopus
 //
-//  Text and Draw on the photo on the Post screen (boards T1–T3): the marks
-//  the picture carries, the editor while it's open and what's being changed
-//  in it (the line being drawn, the label being typed or moved), all held by
+//  Text, Draw and Resize on the photo on the Post screen (boards T1–T3): the
+//  marks the picture carries and where it sits on the canvas, the editor
+//  while it's open and what's being changed in it (the line being drawn, the
+//  label being typed or moved, the picture being moved), all held by
 //  the composer's model so a fold on the iPhone Duo keeps them. Done flattens the marks into the photo that goes up
 //  (`use(marked:_:)`); the X drops what changed in that visit. A new picture
 //  starts clean (the draft's `didSet`), so several picked together never
@@ -18,7 +19,7 @@ import UIKit
 @MainActor
 final class MomentsMarking {
     enum Tool: Equatable {
-        case draw, text
+        case draw, text, resize
     }
 
     /// The photo at 2048 px or less, made when the editor first opens: what Done draws the marks onto.
@@ -27,6 +28,20 @@ final class MomentsMarking {
     private(set) var video: (size: CGSize, seconds: Double)?
     /// The marks on the Post screen's picture: what Done kept.
     private(set) var marks = MomentMarks()
+    /// Where Done left the picture on the canvas (Resize, `+Resize`); nil: as taken.
+    private(set) var placement: MomentPlacement?
+    /// While the editor is open: where the picture is being moved to, nil while it's at cover. Resize changes it through
+    /// `place(_:)`, which moves the marks when the picture changes state.
+    var editingPlacement: MomentPlacement?
+    /// The placed canvas's background, read from the photo when the editor first opens on it.
+    var backdrop: MomentPlacement.Backdrop?
+    /// Resize: a finger has touched the picture in this visit (the hint goes), and the picture is moving now (the part
+    /// every phone shows is outlined).
+    var resizeTouched = false
+    var resizeMoving = false
+    /// Resize: the gesture moving the picture, before its sticking.
+    @ObservationIgnored var gesture: MomentPlacement?
+    @ObservationIgnored var sampling: Task<Void, Never>?
     /// The editor is showing.
     private(set) var isOpen = false
     /// While the editor is open: the marks as they are being changed.
@@ -41,8 +56,8 @@ final class MomentsMarking {
     /// Text's look and ink for the next label (board T2 starts on Label, white): the picked label's once one is.
     private(set) var style = MomentMarks.Style.label
     private(set) var textInk = MomentMarks.Ink.white
-    /// The picture's shape (width over height): what the part every phone shows is worked out from.
-    @ObservationIgnored private(set) var aspect: CGFloat = 1
+    /// The picture's own shape (width over height).
+    @ObservationIgnored private(set) var pictureAspect: CGFloat = 1
     /// Text was opened: a new label appears in the middle with the keyboard up (once, so a fold doesn't add another).
     @ObservationIgnored var addsLabel = false
     /// Where a label was when a drag or a pinch on it began.
@@ -66,17 +81,27 @@ final class MomentsMarking {
 
     /// Something changed in this visit to the editor.
     var changed: Bool {
-        isOpen && editing != marks
+        isOpen && (editing != marks || editingPlacement != placement)
+    }
+
+    /// The shape the marks are in (width over height), what the part every phone shows is worked out from: the
+    /// picture's, or the canvas's once the picture is placed.
+    var aspect: CGFloat {
+        editingPlacement == nil ? pictureAspect : MomentPlacement.canvas
     }
 
     /// A new picture, Retake, or the composer starting again: no marks, the editor closed.
     func clear() {
         making?.cancel()
         making = nil
+        sampling?.cancel()
+        sampling = nil
         base = nil
         video = nil
         marks = MomentMarks()
         editing = MomentMarks()
+        (placement, editingPlacement, backdrop, gesture) = (nil, nil, nil, nil)
+        (resizeTouched, resizeMoving) = (false, false)
         isOpen = false
         asksCancel = false
         asksRetake = false
@@ -90,11 +115,14 @@ final class MomentsMarking {
     func open(_ tool: Tool, size: CGSize, photo image: UIImage?) {
         self.tool = tool
         editing = marks
+        editingPlacement = placement
         drawing = false
         (typing, picked) = (nil, nil)
-        aspect = size.height > 0 ? size.width / size.height : 1
+        (resizeTouched, resizeMoving, gesture) = (false, false, nil)
+        pictureAspect = size.height > 0 ? size.width / size.height : 1
         addsLabel = tool == .text && marks.labels.count < MomentMarks.maxLabels
         isOpen = true
+        if tool == .resize, let image { sampleBackdrop(image) }
         guard let image, base == nil, making == nil else { return }
         making = Task { [weak self] in
             let made = await MomentMarksDrawing.base(image)
@@ -108,12 +136,23 @@ final class MomentsMarking {
         video = (size, seconds)
     }
 
-    /// Done: the picture carries `marks` now, drawn on `base` (a photo's) or over every frame (a video's).
-    func keep(_ marks: MomentMarks, base: UIImage?, video: (size: CGSize, seconds: Double)? = nil) {
+    /// Done: the picture carries `marks` now, drawn on `base` (a photo's) or over every frame (a video's), and sits at
+    /// `placement` on the canvas (nil: as taken).
+    func keep(
+        _ marks: MomentMarks,
+        base: UIImage?,
+        video: (size: CGSize, seconds: Double)? = nil,
+        placement: MomentPlacement? = nil,
+        backdrop: MomentPlacement.Backdrop? = nil
+    ) {
         self.marks = marks
         self.base = base
         self.video = video
+        self.placement = placement
+        self.backdrop = backdrop
         editing = marks
+        editingPlacement = placement
+        (resizeMoving, gesture) = (false, nil)
         (typing, picked) = (nil, nil)
         isOpen = false
     }
@@ -121,6 +160,8 @@ final class MomentsMarking {
     /// The X (after asking, when something changed): what changed in this visit goes.
     func cancel() {
         editing = marks
+        editingPlacement = placement
+        (resizeMoving, gesture) = (false, nil)
         asksCancel = false
         (typing, picked) = (nil, nil)
         isOpen = false
@@ -146,6 +187,11 @@ final class MomentsMarking {
 
     func endLine() {
         drawing = false
+    }
+
+    /// Resize (`+Resize`): the marks being changed, moved to the coordinates of the picture's new state.
+    func moveMarks(_ moved: MomentMarks) {
+        editing = moved
     }
 
     /// Undo: the last line goes.
@@ -384,7 +430,7 @@ extension MomentsComposerModel {
         marking.endTyping()
         guard marking.changed else { return marking.cancel() }
         switch draft {
-        case let .photo(image): use(marked: marking.base ?? image, marking.editing)
+        case let .photo(image): use(marked: marking.base ?? image, marking.editing, placement: marking.editingPlacement)
         case let .video(url): if let video = marking.video { use(marked: url, video: video, marking.editing) }
         case .text, nil: marking.cancel()
         }
@@ -400,10 +446,10 @@ extension MomentsComposerModel {
         }
     }
 
-    /// Retake on a picture with marks asks first ("Discard this Moment?").
+    /// Retake on a picture with marks, or a placed one, asks first ("Discard this Moment?").
     func askRetake() {
         guard !isSending else { return }
-        if marking.marks.isEmpty {
+        if marking.marks.isEmpty, marking.placement == nil {
             retake()
         } else {
             marking.asksRetake = true

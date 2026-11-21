@@ -26,11 +26,15 @@ extension MomentsPostStage {
                     .clipShape(UnevenRoundedRectangle(bottomTrailingRadius: 24, topTrailingRadius: 24, style: .continuous))
             }
             .ignoresSafeArea()
+            // Inside the column, so a row too wide for it wraps (`pillRow`).
             pillRow
+                .frame(width: max(duo.column.width - 2 * Spacing.s3, 0), alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { pillsHeight = $0 }
                 .padding(.leading, Spacing.s3)
                 .padding(.top, Spacing.s3)
             VStack(spacing: 0) {
-                Spacer(minLength: 96)
+                // Below the pills, a second row of them too.
+                Spacer(minLength: max(96, Spacing.s3 + pillsHeight + Spacing.s2))
                 sheet(mapHeight: 110)
                     .layoutPriority(1)
             }
@@ -112,7 +116,14 @@ extension MomentsPostStage {
         switch model.draft {
         case let .photo(image):
             Color(white: 0.067)
-                .overlay { MomentsMarkedPhoto(image: image, marks: model.marking.marks) }
+                .overlay {
+                    MomentsMarkedPhoto(
+                        image: image,
+                        marks: model.marking.marks,
+                        placement: model.marking.placement,
+                        backdrop: model.marking.backdrop
+                    )
+                }
                 .clipped()
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("The photo you're posting")
@@ -139,11 +150,15 @@ extension MomentsPostStage {
         case let .photo(image):
             Color.black
                 .overlay {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .scaleEffect(1.18)
-                        .blur(radius: 38)
+                    // A placed picture's own canvas, background and all.
+                    MomentsMarkedPhoto(
+                        image: image,
+                        marks: MomentMarks(),
+                        placement: model.marking.placement,
+                        backdrop: model.marking.backdrop
+                    )
+                    .scaleEffect(1.18)
+                    .blur(radius: 38)
                 }
                 .overlay { Color.black.opacity(0.5) }
                 .clipped()

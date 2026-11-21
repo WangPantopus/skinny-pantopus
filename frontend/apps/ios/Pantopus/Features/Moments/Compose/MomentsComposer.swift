@@ -84,7 +84,7 @@ struct MomentsComposer: View {
         } message: {
             Text("What you wrote won't be saved.")
         }
-        // Retake on a photo with marks (`+Marks`): on the model, so a fold keeps the question.
+        // Retake on a photo with marks, or a placed one (`+Marks`): on the model, so a fold keeps the question.
         .alert(
             "Discard this Moment?",
             isPresented: Binding(get: { model.marking.asksRetake }, set: { model.marking.asksRetake = $0 })
@@ -94,7 +94,7 @@ struct MomentsComposer: View {
             Button("Keep editing", role: .cancel) {}
                 .accessibilityIdentifier("moments.post.retake.keep")
         } message: {
-            Text("What you drew or wrote on it won't be saved.")
+            Text(model.marking.marks.isEmpty ? "How you resized it won't be saved." : "What you drew or wrote on it won't be saved.")
         }
         // A fold or a turn switches layouts at once.
         .readsMomentsDuoScreen(Binding(get: { duo }, set: { screen in

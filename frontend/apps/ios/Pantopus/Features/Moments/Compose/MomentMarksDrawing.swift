@@ -212,28 +212,37 @@ extension MomentMarksDrawing {
 /// The marks over a picture that fills this view (an overlay on the picture as it's framed).
 struct MomentMarksCanvas: View {
     let marks: MomentMarks
+    /// The shape the labels are placed by, when the frame's own is rounded from it (a placed picture's canvas).
+    var aspect: CGFloat?
 
     var body: some View {
         Canvas { context, size in
-            context.withCGContext { MomentMarksDrawing.draw(marks, in: $0, size: size) }
+            context.withCGContext { MomentMarksDrawing.draw(marks, in: $0, size: size, aspect: aspect) }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 }
 
-/// A photo filling its frame as the viewer shows it (centered, cropped), with its marks on it.
+/// A photo filling its frame as the viewer shows it (centered, cropped), with its marks on it; a placed one (Resize) as
+/// its canvas.
 struct MomentsMarkedPhoto: View {
     let image: UIImage
     let marks: MomentMarks
+    var placement: MomentPlacement?
+    var backdrop: MomentPlacement.Backdrop?
 
     var body: some View {
-        Image(uiImage: image)
-            .resizable()
-            .scaledToFill()
-            .overlay {
-                if !marks.isEmpty { MomentMarksCanvas(marks: marks) }
-            }
+        if let placement {
+            MomentsPlacedPhoto(image: image, placement: placement, backdrop: backdrop, marks: marks)
+        } else {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .overlay {
+                    if !marks.isEmpty { MomentMarksCanvas(marks: marks) }
+                }
+        }
     }
 }
 

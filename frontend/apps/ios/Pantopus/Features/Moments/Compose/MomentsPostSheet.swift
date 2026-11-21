@@ -18,6 +18,8 @@ struct MomentsPostStage: View {
     let model: MomentsComposerModel
     let onPosted: () -> Void
     @State var player: AVPlayer?
+    /// How tall the pills are (one row or two): the closed Duo's sheet starts below them.
+    @State var pillsHeight: CGFloat = 40
     @Environment(\.momentsDuoScreen) var duo
 
     var body: some View {
@@ -68,9 +70,14 @@ struct MomentsPostStage: View {
     var backdrop: some View {
         switch model.draft {
         case let .photo(image):
-            MomentsMarkedPhoto(image: image, marks: model.marking.marks)
-                .overlay(Color.black.opacity(0.3))
-                .accessibilityLabel("The photo you're posting")
+            MomentsMarkedPhoto(
+                image: image,
+                marks: model.marking.marks,
+                placement: model.marking.placement,
+                backdrop: model.marking.backdrop
+            )
+            .overlay(Color.black.opacity(0.3))
+            .accessibilityLabel("The photo you're posting")
         case let .video(url):
             videoSurface(url: url)
                 .overlay { MomentMarksOverVideo(marks: model.marking.marks, picture: model.marking.video?.size) }

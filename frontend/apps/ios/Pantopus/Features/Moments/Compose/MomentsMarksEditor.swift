@@ -2,10 +2,11 @@
 //  MomentsMarksEditor.swift
 //  Pantopus
 //
-//  Text and Draw on the photo being posted (boards T2, T3). The picture is
-//  shown in the viewer's own frame (the phone's full width above the reply
-//  bar, filled and cropped as people will see it), with a dashed line where
-//  labels may begin, below the lowest any viewer's top bar reaches. On the
+//  Text, Draw and Resize on the photo being posted (boards T2, T3). The
+//  picture (or, once it's placed, its 9:16 canvas) is shown in the viewer's
+//  own frame (the phone's full width above the reply bar, filled and cropped
+//  as people will see it), with a dashed line where labels may begin, below
+//  the lowest any viewer's top bar reaches. On the
 //  iPhone Duo it is the same card the Post screen shows for each pose, with
 //  the controls over it. X drops what
 //  changed in this visit (asking first when something did); Done keeps it.
@@ -26,6 +27,11 @@ struct MomentsMarksEditor: View {
 
     var marking: MomentsMarking {
         model.marking
+    }
+
+    /// What fills the frame and carries the marks: the picture, or its canvas while it's placed and all through Resize.
+    var surface: CGSize {
+        marking.tool == .resize || marking.editingPlacement != nil ? MomentPlacement.pixels : media.size
     }
 
     var body: some View {
@@ -83,10 +89,10 @@ struct MomentsMarksEditor: View {
         let free = (room.minY + 48 - frame.minY)...max(room.minY + 48 - frame.minY, footerTop - frame.minY - Spacing.s1)
         return ZStack(alignment: .topLeading) {
             Color.black
-            MomentsMarksDrawArea(marking: marking, media: media, size: frame.size, addWords: addWords(frame: frame, free: free))
+            pictureArea(frame: frame, free: free)
                 .overlay {
                     if marking.tool == .text {
-                        MomentsMarksTextLayer(marking: marking, picture: media.size, size: frame.size, free: free)
+                        MomentsMarksTextLayer(marking: marking, picture: surface, size: frame.size, free: free)
                     }
                 }
                 .overlay(alignment: .top) { viewerStrip(frame) }
@@ -101,16 +107,37 @@ struct MomentsMarksEditor: View {
                 topBar
                 Spacer(minLength: Spacing.s2)
                 Group {
-                    if marking.tool == .text { textFooter(width: room.width, typing: typing) } else { drawFooter(width: room.width) }
+                    switch marking.tool {
+                    case .text: textFooter(width: room.width, typing: typing)
+                    case .draw: drawFooter(width: room.width)
+                    case .resize: resizeFooter(width: room.width, aboveEdge: max(room.maxY - frame.maxY, 0) + Spacing.s3)
+                    }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { footerTop = $0 }
             }
             .frame(width: room.width, height: room.height)
             .overlay(alignment: .trailing) { if marking.tool == .draw { widthColumn } }
             .offset(x: room.minX, y: room.minY)
+            if marking.tool == .resize, resetOnStrip { stripReset(below: frame, width: size.width) }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
         .ignoresSafeArea()
+    }
+
+    /// The picture under the marks: Resize's, which the fingers move, or Draw and Text's.
+    @ViewBuilder
+    private func pictureArea(frame: CGRect, free: ClosedRange<CGFloat>) -> some View {
+        if marking.tool == .resize, case let .photo(image) = media {
+            MomentsResizeArea(marking: marking, image: image, size: frame.size)
+        } else {
+            MomentsMarksDrawArea(
+                marking: marking,
+                media: media,
+                surface: surface,
+                size: frame.size,
+                addWords: addWords(frame: frame, free: free)
+            )
+        }
     }
 
     // MARK: - Where things go
@@ -163,8 +190,8 @@ struct MomentsMarksEditor: View {
     /// Text: VoiceOver's "Add words" on the picture, a label as opening Text adds; at five it says so.
     private func addWords(frame: CGRect, free: ClosedRange<CGFloat>) -> (() -> Void)? {
         guard marking.tool == .text else { return nil }
-        return { [marking, media] in
-            if !MomentsMarksTextLayer.addLabel(marking: marking, picture: media.size, size: frame.size, free: free) {
+        return { [marking, surface] in
+            if !MomentsMarksTextLayer.addLabel(marking: marking, picture: surface, size: frame.size, free: free) {
                 AccessibilityNotification.Announcement("Five labels is the most.").post()
             }
         }
@@ -173,8 +200,8 @@ struct MomentsMarksEditor: View {
     /// The viewer's top gradient, and a dashed line where labels may begin: below the lowest line any phone's viewer
     /// top bar reaches in this picture (`MomentMarks.safeBox`), the same place in the picture on every phone.
     func viewerStrip(_ frame: CGRect) -> some View {
-        let fill = MomentMarks.fill(media.size, in: frame.size)
-        let line = max(fill.minY + MomentMarks.safeBox(aspect: media.size.width / max(media.size.height, 1)).minY * fill.height, 0)
+        let fill = MomentMarks.fill(surface, in: frame.size)
+        let line = max(fill.minY + MomentMarks.safeBox(aspect: surface.width / max(surface.height, 1)).minY * fill.height, 0)
         return ZStack(alignment: .top) {
             LinearGradient(colors: [Color.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
                 .frame(height: max(line + 60, 170))
