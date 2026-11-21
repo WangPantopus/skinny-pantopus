@@ -653,7 +653,10 @@ export class CardTableEngine {
     const free = h - safeTop - bottom;
     // Large text: the words above it may take two lines.
     const wordSize = parseFloat(getComputedStyle(this.$('words')).fontSize) || 18;
-    const envY = safeTop + Math.max(88, 54 + wordSize * 1.3 * (wordSize >= 24 ? 2 : 1) + 6, (free - eh) * 0.56);
+    // A travelling card's line under the words ("It came 2,692 miles through 4 towns to reach you."): its room too.
+    const sub = this.root.querySelector<HTMLElement>('[data-el="wordsSub"]');
+    const subRoom = sub ? sub.offsetHeight + 7 : 0;
+    const envY = safeTop + Math.max(88, 54 + wordSize * 1.3 * (wordSize >= 24 ? 2 : 1) + 6 + subRoom, (free - eh) * 0.56);
     const envTopOut = Math.min(h - eh * 0.5, cw * 1.2 * 0.8 + 8);
     this.g = {
       w, h, cw, ch: cw * 1.2, ew, eh, fd, cardTop: front.top, cardTopBack: back.top, envTopFinal: front.env,

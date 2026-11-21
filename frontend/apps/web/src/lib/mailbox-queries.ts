@@ -79,6 +79,7 @@ export const mailboxKeys = {
   sentCard: (id: string) => [...mailboxKeys.all, 'sent', 'card', id] as const,
   // The card and its reply, joined (Write back).
   cardExchange: (id: string) => [...mailboxKeys.all, 'card-exchange', id] as const,
+  cardTowns: (q: string) => [...mailboxKeys.all, 'card-towns', q] as const,
   deleted: () => [...mailboxKeys.all, 'deleted'] as const,
 
   // Counter
@@ -283,6 +284,32 @@ export function useTakeBackCardReply(cardId: string) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'card-exchange'] });
       invalidateSentCards(qc);
+    },
+  });
+}
+
+// ── The travelling card (server key card_travel) ─────────────────
+
+/** "Your town or ZIP code": up to 8 towns for two letters or more (or a ZIP); with nothing typed, the town to suggest. */
+export function useCardTowns(query: string, enabled = true) {
+  const q = query.trim();
+  return useQuery<{ towns: Awaited<ReturnType<typeof api.getCardTowns>>['towns']; suggested?: Awaited<ReturnType<typeof api.getCardTowns>>['suggested'] }, MailboxApiError>({
+    queryKey: mailboxKeys.cardTowns(q.toLowerCase()),
+    queryFn: () => api.getCardTowns(q || undefined),
+    enabled: enabled && (q.length === 0 || q.length >= 2),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Keep the chosen town (asked once); the cards' screens read it from GET /cards `travel.town`. */
+export function useSaveCardTown() {
+  const qc = useQueryClient();
+  return useMutation<{ town: string }, MailboxApiError, string>({
+    mutationFn: api.saveCardTown,
+    onSuccess: ({ town }) => {
+      qc.setQueryData<HolidayCards>(mailboxKeys.holidayCards(), (old) =>
+        old?.travel ? { ...old, travel: { ...old.travel, town } } : old);
+      void qc.invalidateQueries({ queryKey: mailboxKeys.holidayCards() });
     },
   });
 }
