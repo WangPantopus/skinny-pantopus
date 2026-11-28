@@ -59,8 +59,7 @@ final class GuidanceCenter {
         didSet { if !waitingCardCheck, oldValue { scheduleEvaluation() } }
     }
 
-    /// A Christmas card the reader joined Pantopus for is on screen (cards-next 4.1, `card.joined_for`): no guidance card
-    /// and no daily briefings notice until they're out of it. Observed, so the briefings notice waits too.
+    /// A card the reader joined for is on screen (cards-next 4.1, `card.joined_for`): no guidance card or briefings notice.
     var joinedForCardOnScreen = false {
         didSet { if !joinedForCardOnScreen, oldValue { scheduleEvaluation() } }
     }
