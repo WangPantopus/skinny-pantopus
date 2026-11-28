@@ -84,7 +84,7 @@ struct ReinventedPulseSheet<Content: View, Add: View, Accessory: View>: View {
                     .fill(Theme.Color.appBorder)
                     .frame(width: 36, height: 5)
                 Text(line)
-                    .font(.system(size: 13, weight: .semibold))
+                    .pulseFont(sized: 13, weight: .semibold)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .opacity(lineDimmed ? 0.45 : 1)
                     .animation(.easeOut(duration: 0.15), value: lineDimmed)

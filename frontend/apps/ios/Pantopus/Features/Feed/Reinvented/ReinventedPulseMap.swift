@@ -328,7 +328,7 @@ struct ReinventedMapPin: View {
         HStack(spacing: 4) {
             Icon(.calendarCheck, size: 13, strokeWidth: 2.2, color: .white)
             Text(ticket.title)
-                .font(.system(size: 12, weight: .bold))
+                .pulseFont(12, weight: .bold)
                 .foregroundStyle(.white)
                 .lineLimit(1)
         }
@@ -352,7 +352,7 @@ struct ReinventedTimeRow: View {
                     let on = model.time == time.key
                     Button { model.pick(time: time.key) } label: {
                         Text(time.title)
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .pulseFont(13.5, weight: .semibold)
                             .foregroundStyle(on ? Color.white : Theme.Color.appText)
                             .padding(.horizontal, Spacing.s3)
                             .frame(height: 32)
@@ -407,11 +407,11 @@ struct ReinventedPeekDeck: View {
                     .frame(width: 64, height: 72)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title(item))
-                        .font(.system(size: 15, weight: .bold))
+                        .pulseFont(15, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(2)
                     Text(subtitle(item))
-                        .font(.system(size: 13))
+                        .pulseFont(13)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineLimit(1)
                 }

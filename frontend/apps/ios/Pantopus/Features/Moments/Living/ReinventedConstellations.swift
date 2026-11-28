@@ -83,7 +83,7 @@ struct ReinventedConstellations: View {
             if let found, !found.isEmpty {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Text("Near you")
-                        .font(.system(size: 15, weight: .bold))
+                        .pulseFont(15, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: Spacing.s2) {
@@ -122,13 +122,13 @@ struct ReinventedConstellations: View {
             VStack(alignment: .leading, spacing: 3) {
                 Icon(icon, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryTint)
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .pulseFont(14, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 if !line.isEmpty {
                     Text(line)
-                        .font(.system(size: 12))
+                        .pulseFont(12)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
             }

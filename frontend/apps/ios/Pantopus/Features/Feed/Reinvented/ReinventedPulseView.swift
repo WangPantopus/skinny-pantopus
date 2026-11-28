@@ -279,7 +279,7 @@ extension ReinventedPulseView {
                     Task { await model.refresh() }
                 } label: {
                     Text("Couldn\u{2019}t refresh \u{00B7} Try again")
-                        .font(.system(size: 12, weight: .semibold))
+                        .pulseFont(sized: 12, weight: .semibold)
                         .foregroundStyle(Theme.Color.primaryTint)
                         .lineLimit(1)
                         .frame(minHeight: 44)
@@ -301,7 +301,7 @@ extension ReinventedPulseView {
                 HStack(spacing: 4) {
                     Icon(on ? .checkCircle : .mapPinOff, size: 13, strokeWidth: 2.2, color: on ? .white : Theme.Color.appTextSecondary)
                     Text("No place")
-                        .font(.system(size: 12, weight: .semibold))
+                        .pulseFont(12, weight: .semibold)
                         .foregroundStyle(on ? Color.white : Theme.Color.appTextSecondary)
                 }
                 .padding(.horizontal, 8)

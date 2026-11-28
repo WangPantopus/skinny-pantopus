@@ -151,12 +151,12 @@ struct ReinventedWentBecauseOfYou: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
                 Text("Went because of you")
-                    .font(.system(size: 16, weight: .bold))
+                    .pulseFont(16, weight: .bold)
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
                 if model.unseenCount > 0 {
                     Text("\(model.unseenCount) new")
-                        .font(.system(size: 12, weight: .bold))
+                        .pulseFont(12, weight: .bold)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -165,12 +165,12 @@ struct ReinventedWentBecauseOfYou: View {
                 }
             }
             Text("Only you see these. Nobody else is told.")
-                .font(.system(size: 13))
+                .pulseFont(13)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ForEach(Array(model.groups.enumerated()), id: \.element.id) { index, group in
                 if index == 0 || model.groups[index - 1].day != group.day {
                     Text(Self.dayWords(group.day))
-                        .font(.system(size: 13, weight: .semibold))
+                        .pulseFont(13, weight: .semibold)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .padding(.top, Spacing.s1)
                 }
@@ -178,7 +178,7 @@ struct ReinventedWentBecauseOfYou: View {
             }
             if model.nextCursor != nil {
                 Button(model.loadingMore ? "Loading…" : "Show more") { Task { await model.loadMore() } }
-                    .font(.system(size: 14, weight: .semibold))
+                    .pulseFont(14, weight: .semibold)
                     .disabled(model.loadingMore)
             }
         }
@@ -201,12 +201,12 @@ struct ReinventedWentBecauseOfYou: View {
                 .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(group.label)
-                        .font(.system(size: 14.5, weight: .semibold))
+                        .pulseFont(14.5, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
                         .multilineTextAlignment(.leading)
                     if let caption = group.source.caption {
                         Text(caption)
-                            .font(.system(size: 13))
+                            .pulseFont(13)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .lineLimit(1)
                     }

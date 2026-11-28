@@ -122,10 +122,10 @@ struct ReinventedTownFilmCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 16, weight: .bold))
+                        .pulseFont(16, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
                     Text("\(film.count) Moments by \(film.people) people today")
-                        .font(.system(size: 13))
+                        .pulseFont(13)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer(minLength: 0)

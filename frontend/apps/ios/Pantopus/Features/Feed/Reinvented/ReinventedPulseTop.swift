@@ -54,7 +54,7 @@ struct ReinventedPulseTopLine: View {
             HStack(spacing: 5) {
                 Icon(scopeIcon, size: 14, strokeWidth: 2.2, color: Theme.Color.primaryTint)
                 Text(scopeTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .pulseFont(sized: 13, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -106,7 +106,7 @@ struct ReinventedPulseTopLine: View {
     private func switchButton(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .pulseFont(sized: 13, weight: .semibold)
                 .foregroundStyle(on ? Color.white : Theme.Color.appText)
                 .padding(.horizontal, 8)
                 .frame(height: 32)
