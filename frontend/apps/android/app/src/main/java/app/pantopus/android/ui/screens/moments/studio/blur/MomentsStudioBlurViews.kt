@@ -66,6 +66,7 @@ import app.pantopus.android.ui.screens.moments.compose.MomentsComposeUiState
 import app.pantopus.android.ui.screens.moments.compose.MomentsComposeViewModel
 import app.pantopus.android.ui.screens.moments.studio.RailTool
 import app.pantopus.android.ui.screens.moments.studio.rememberStudioPicture
+import app.pantopus.android.ui.screens.moments.studio.studioPair
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
