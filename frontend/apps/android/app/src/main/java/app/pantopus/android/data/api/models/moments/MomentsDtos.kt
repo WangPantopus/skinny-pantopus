@@ -194,6 +194,8 @@ data class MomentDto(
     val whole: Boolean = false,
     /** "Pulse, reinvented" (CONTRACT 10c): the two colours a whole picture sits on; else null. */
     val backdrop: MomentBackdropDto? = null,
+    /** "Pulse, reinvented" (CONTRACT 8i): the pinboard it starts or is a piece of, for a reader whose switch is on; else null. */
+    val pinboard: app.pantopus.android.data.api.models.reinvented.MomentPinboardStateDto? = null,
 )
 
 /**

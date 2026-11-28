@@ -177,6 +177,9 @@ struct MomentsStudioTools {
     var textTint: MomentMarks.Tint?
     /// The eyedropper is out: a finger on the picture takes the ink under it.
     var dropping = false
+    /// See the picture first (`MomentsStudioWhole`): fingers on the first screen move the picture through Resize's
+    /// editor, open without its screen.
+    var adjusting = false
     /// The picture the marks are on, small, to read its colors from: made when Text or Draw opens in the Studio.
     var picture: MomentsStudioSample?
     /// Behind the subject: Vision is lifting it now, or found none in this picture.
@@ -214,6 +217,10 @@ struct MomentsStudioTools {
     var pickedPlay: String?
     /// Loop (`MomentsStudioLoop`, CONTRACT 7j): the loop made from the video, and the video it was made from.
     var loop: MomentsStudioLoopMade?
+    /// A Live Photo's motion (`MomentsStudioMotion`): its clip, the photo it's being copied for, and "Motion on".
+    var motion: MomentsStudioMotionClip?
+    var motionFor: String?
+    var keepsMotion = true
 
     /// A line just begun: made with the pen and ink picked here.
     func dress(_ stroke: inout MomentMarks.Stroke) {

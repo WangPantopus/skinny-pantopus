@@ -52,6 +52,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.reinvented.MomentReplyDto
 import app.pantopus.android.data.api.models.reinvented.shownConvergence
+import app.pantopus.android.data.api.models.reinvented.shownPinboard
 import app.pantopus.android.data.api.models.reinvented.shownRetake
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -79,10 +80,15 @@ internal object MomentRepliesState {
     /** The replies sheet is up. */
     val sheet = mutableStateOf(false)
 
-    /** The viewer holds still: the sheet is up, a pin is being dropped or one is open (8b), or a Retake (8e) or sky piece (8h) is open. */
+    /**
+     * The viewer holds still: the sheet is up, a pin is being dropped or one is open (8b), or a Retake (8e), a sky piece
+     * (8h), a pinboard or a crowd's scene (8i) is open.
+     */
     val open: State<Boolean> =
         derivedStateOf {
-            val together = MomentRetakeState.inViewer.value != null || MomentConvergenceState.inViewer.value != null
+            val together =
+                MomentRetakeState.inViewer.value != null || MomentConvergenceState.inViewer.value != null ||
+                    MomentPinboardState.inViewer.value != null || MomentCrowdState.inViewer.value != null
             sheet.value || MomentPinsState.holds || together
         }
 }
@@ -232,23 +238,30 @@ fun MomentRepliesChip(
         MomentPinsControls(moment, shown)
         MomentRetakeChip(moment, onClose, Modifier.padding(start = Spacing.s2))
         MomentConvergenceChip(moment, Modifier.padding(start = Spacing.s2))
+        MomentPinboardChip(moment, onClose, Modifier.padding(start = Spacing.s2))
+        MomentCrowdChip(moment, Modifier.padding(start = Spacing.s2))
     }
     if (open) {
         RepliesSheet(moment, mine, shown, canReply = state.canReply && shown, ui = ui, viewModel = viewModel) { open = false }
     }
 }
 
-/** The Retake's (8e) and the sky piece's (8h) chips on a Moment whose replies don't show. */
+/** The Retake's (8e), the sky piece's (8h), the pinboard's and the crowd's (8i) chips on a Moment whose replies don't show. */
 @Composable
 private fun OtherChips(
     moment: MomentDto,
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
-    if (moment.shownRetake == null && moment.shownConvergence == null) return
+    // The crowd's chip shows once its scene is read: the first look asks for it.
+    val crowd = rememberCrowdScene(moment) != null
+    val together = moment.shownRetake != null || moment.shownConvergence != null || moment.shownPinboard != null
+    if (!crowd && !together) return
     Row(modifier = modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
         MomentRetakeChip(moment, onClose)
         MomentConvergenceChip(moment, Modifier.padding(start = Spacing.s2))
+        MomentPinboardChip(moment, onClose, Modifier.padding(start = Spacing.s2))
+        MomentCrowdChip(moment, Modifier.padding(start = Spacing.s2))
     }
 }
 

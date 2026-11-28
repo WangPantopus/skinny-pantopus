@@ -103,6 +103,8 @@ internal fun LookStep(
     to: CardRecipient,
     design: HolidayCardDesign,
     preview: HolidayCardPreview,
+    /** A link's name on its envelope (the card improvements, Wave 3.2). */
+    linkName: String? = null,
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
     val from = preview.piece.senderDisplay.trim().ifEmpty { "Someone" }
@@ -129,7 +131,7 @@ internal fun LookStep(
         when (to) {
             is CardRecipient.Person -> PersonLook(to, preview, card, from, sealed)
             is CardRecipient.Email -> EmailLook(to, preview, card, from, sealed, zone)
-            CardRecipient.Link -> LinkLook(preview, card, from, sealed, zone)
+            CardRecipient.Link -> LinkLook(preview, card, from, sealed, zone, linkName)
             // A list's look shows its first card, to that one person or address (ListLookStep).
             is CardRecipient.Several -> Unit
         }
@@ -267,11 +269,12 @@ private fun LinkLook(
     from: String,
     sealed: Boolean,
     zone: ZoneId,
+    linkName: String? = null,
 ) {
     preview.linkPage?.let { page ->
         LookSection("The page your link opens", horizontal = Spacing.s3) { LinkPagePicture(page, zone) }
     }
-    val envelope = lookEnvelope(preview, "Their name", card)
+    val envelope = lookEnvelope(preview, linkName ?: "Their name", card)
     val state = if (sealed) "sealed until Christmas morning" else "in its envelope"
     val spoken = "Christmas card from $from, $state."
     LookSection("After they join", horizontal = Spacing.s3) {
@@ -879,8 +882,14 @@ internal fun LookEndLines(
 }
 
 /** Step 5's take-back line for one card. */
-internal fun lookTakeBackLine(to: CardRecipient?): String =
-    if (to is CardRecipient.Email || to is CardRecipient.Link) {
+internal fun lookTakeBackLine(
+    to: CardRecipient?,
+    /** "Right away" to a person (the card improvements, Wave 3.3) can't be taken back. */
+    arrival: String? = null,
+): String =
+    if (comesRightAway(to, arrival)) {
+        RIGHT_AWAY_NO_TAKE_BACK
+    } else if (to is CardRecipient.Email || to is CardRecipient.Link) {
         "You can take it back until they open it."
     } else {
         "You can take it back until the carrier picks it up at 7 a.m. their time."

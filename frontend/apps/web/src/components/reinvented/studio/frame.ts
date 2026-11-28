@@ -45,3 +45,34 @@ export function stageFrame(size: { w: number; h: number } | null, stageIsPicture
     },
   };
 }
+
+/**
+ * Whether any of `points` (on the 9:16 stage) lies off the picture's own box, as the stage draws a picture `size` whole
+ * and upright (PHASE-6 F2: things placed anywhere on the canvas, the backdrop included). A picture posted at its own
+ * shape would pull such a thing back onto its edge, so then the Moment goes up in its canvas form instead.
+ */
+export function offPicture(size: { w: number; h: number } | null, points: { x: number; y: number }[]): boolean {
+  if (!size || !size.w || !size.h || !points.length) return false;
+  const s = Math.min(STAGE_W / size.w, STAGE_H / size.h);
+  const pw = size.w * s,
+    ph = size.h * s;
+  const left = (STAGE_W - pw) / 2 / STAGE_W,
+    top = (STAGE_H - ph) / 2 / STAGE_H,
+    right = 1 - left,
+    bottom = 1 - top;
+  const slack = 0.002;
+  return points.some((p) => p.x < left - slack || p.x > right + slack || p.y < top - slack || p.y > bottom + slack);
+}
+
+/** PHASE-6 K2: how much of an item, in px, always stays on the canvas, on both axes. */
+export const KEEP_ON_PX = 24;
+
+/**
+ * The middle (0 to 1 of the canvas, `lo`..`hi` at most) an item of `size` px may take on a canvas `total` px long so that at
+ * least 24 px of the item's own box stays on it (the whole item when it is smaller than that). PHASE-6 K2.
+ */
+export function keepOn(v: number, size: number, total: number, lo = 0, hi = 1): number {
+  if (!(total > 0) || !(size > 0)) return clamp(v, lo, hi);
+  const m = (Math.min(KEEP_ON_PX, size) - size / 2) / total;
+  return clamp(v, Math.max(lo, m), Math.min(hi, 1 - m));
+}

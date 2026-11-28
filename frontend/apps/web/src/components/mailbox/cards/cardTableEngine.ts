@@ -75,6 +75,11 @@ const REPLY_BELOW = 0.76;
 const REPLY_BELOW_NOTE = 0.82;
 /** The press that seals it, in milliseconds. */
 const SEAL_HOLD = 600;
+/** Quick seal (Wave 3.5): the press's short beat once the card is in and the flap is down, then the stamp and postmark
+ * after the envelope turns (CardTable.module.css keeps the same times under [data-quick]). */
+const QUICK_PRESS = 320;
+const QUICK_STAMP_AT = 450;
+const QUICK_POSTMARK_AT = 620;
 /** The gold seal stays in sight this long before the envelope turns over. */
 const SEAL_BEAT = 800;
 /** After the seal: the envelope turns over, the name is written (0.7 s), the stamp drops, the postmark thumps (and a
@@ -174,6 +179,8 @@ export class CardTableEngine {
   private sendTimers: number[] = [];
 
   private sealedMark = false;
+  /** Quick seal (Wave 3.5): this send's seal and stamp play as one short beat. */
+  private quick = false;
 
   /** When the seal went on: it stays in sight a moment before the envelope turns over, however fast the answer is. */
   private sealedAt = 0;
@@ -364,6 +371,8 @@ export class CardTableEngine {
     const set = (key: SpringKey, x: number) => { this.v[key].x = x; this.v[key].t = x; this.v[key].v = 0; };
     this.clearSendTimers();
     this.sealedMark = options.sealedMark;
+    this.quick = false;
+    delete this.root.dataset.quick;
     set('drop', 0); set('envDeg', 180); set('pull', 1); set('lay', 1); set('deg', 180);
     this.heard = null;
     this.step = 'out';
@@ -426,7 +435,7 @@ export class CardTableEngine {
     if (this.send !== 'sending') return;
     if (!ok) { tick(20); this.setSend('seal'); return; }
     const reduce = reducedMotion();
-    const beat = reduce ? 0 : Math.max(0, SEAL_BEAT - (performance.now() - this.sealedAt));
+    const beat = reduce || this.quick ? 0 : Math.max(0, SEAL_BEAT - (performance.now() - this.sealedAt));
     if (beat > 0) { this.sendTimers.push(window.setTimeout(() => this.address(), beat)); return; }
     this.address();
   }
@@ -443,6 +452,13 @@ export class CardTableEngine {
       this.sendTimers.push(window.setTimeout(() => this.setSend('gone'), 1200));
       return;
     }
+    // Quick seal: the envelope turns, its name, stamp and postmark land in one short beat (CardTable.module.css), and it goes.
+    if (this.quick) {
+      this.sendTimers.push(window.setTimeout(() => tick(16), QUICK_STAMP_AT));
+      this.sendTimers.push(window.setTimeout(() => tick(24), QUICK_POSTMARK_AT));
+      this.sendTimers.push(window.setTimeout(() => { this.v.drop.t = 1; this.setSend('gone'); }, QUICK_POSTMARK_AT + 380));
+      return;
+    }
     this.sendTimers.push(window.setTimeout(() => tick(16), STAMP_AT));
     this.sendTimers.push(window.setTimeout(() => tick(24), POSTMARK_AT));
     if (this.sealedMark) this.sendTimers.push(window.setTimeout(() => tick(16), SEALED_MARK_AT));
@@ -452,15 +468,44 @@ export class CardTableEngine {
     }, (this.sealedMark ? SEALED_MARK_AT : POSTMARK_AT) + 900));
   }
 
+  /**
+   * Quick seal (Wave 3.5): the card goes in and the flap comes down at once, the seal is pressed home in one short
+   * beat, and the card goes into the same send the ritual ends in. With Reduce Motion, all at once.
+   */
+  quickSeal() {
+    if (!this.sending || this.holdStart || !(this.send === 'ready' || this.send === 'in' || this.send === 'seal')) return;
+    this.lastTouch = performance.now();
+    this.sealAll(!reducedMotion());
+  }
+
+  /**
+   * The seal-all step: the card in, the flap down and the seal pressed home in one go, into the same send. With Reduce
+   * Motion the main button does this; Quick seal (Wave 3.5) does it too, with `beat`: the press shows for QUICK_PRESS ms
+   * first, and the stamping after it is quicker (QUICK_* times, [data-quick] in CardTable.module.css).
+   */
+  private sealAll(beat = false) {
+    const set = (key: SpringKey, x: number) => { this.v[key].x = x; this.v[key].t = x; this.v[key].v = 0; };
+    set('lay', 0); set('pull', 0);
+    this.step = 'back';
+    this.render();
+    if (!beat) { this.sealNow(); return; }
+    this.quick = true;
+    this.root.dataset.quick = '1';
+    this.setSend('seal');
+    // The press, from near its end: its shadow grows over the spot for QUICK_PRESS ms, then the seal is home.
+    this.holdStart = performance.now() - (SEAL_HOLD - QUICK_PRESS);
+    const from = (SEAL_HOLD - QUICK_PRESS) / SEAL_HOLD;
+    this.holdTicks = [0.3, 0.55, 0.72, 0.84, 0.93].filter((at) => from >= at).length;
+    this.root.dataset.pressing = '1';
+    tick(6);
+    this.wake();
+  }
+
   /** The button under the table while sealing it: whatever comes next. With Reduce Motion it does all of it. */
   private sendPrimary() {
     const reduce = reducedMotion();
     if (reduce && (this.send === 'ready' || this.send === 'in' || this.send === 'seal')) {
-      const set = (key: SpringKey, x: number) => { this.v[key].x = x; this.v[key].t = x; this.v[key].v = 0; };
-      set('lay', 0); set('pull', 0);
-      this.step = 'back';
-      this.render();
-      this.sealNow();
+      this.sealAll();
       return;
     }
     if (this.send === 'ready') this.putIn();

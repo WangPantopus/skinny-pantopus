@@ -39,7 +39,8 @@ interface Props {
   layoutKey: string;
   flyTo: FlyTarget | null;
   selected: string | null;
-  onBox(box: Box): void;
+  /** The box in view (the map's own reads) and the box of the part left open by the top line and the list (the list's). */
+  onBox(box: Box, open: Box): void;
   onPick(key: string): void;
   /** Heights and floating are on for this reader (the read's `heights_on` and `float_on`). */
   float?: boolean;
@@ -49,6 +50,8 @@ interface Props {
   lit?: Lit | null;
   /** Listen to the town (CONTRACT 9g): the place sounds in view, heard by moving across the map. */
   sounds?: PlaceSound[] | null;
+  /** The map started moving (true) and came to rest (false): the rail fades meanwhile (PHASE-6 A2). */
+  onMoving?(moving: boolean): void;
 }
 
 // How near, in pixels, the pointer must come to a place sound to hear it; it is louder nearer.
@@ -173,27 +176,38 @@ function pinTitle(pin: Pin): string {
   return `Plan: ${pin.ticket.title}`;
 }
 
-/** How far the controls over the top of the map and the list over its bottom reach into it, in pixels. */
-function coveredInsets(mapEl: HTMLElement | null): { top: number; bottom: number } {
+interface Cover {
+  top: number;
+  bottom: number;
+  left: number;
+}
+
+/**
+ * How far the top line over the map, the sheet over its bottom (a phone's width) and the floating panel over its left (a
+ * wide screen, PHASE-6 E) reach into it, in pixels: the map counts only the part left open.
+ */
+function coveredInsets(mapEl: HTMLElement | null): Cover {
   const board = mapEl?.closest('.rp-board');
-  if (!mapEl || !board) return { top: 0, bottom: 0 };
+  if (!mapEl || !board) return { top: 0, bottom: 0, left: 0 };
   const m = mapEl.getBoundingClientRect();
   const overlaps = (r: DOMRect) => r.width > 0 && r.left < m.right - 1 && r.right > m.left + 1;
-  let top = 0, bottom = 0;
-  const above = board.querySelector('.rp-map-top');
+  let top = 0, bottom = 0, left = 0;
+  const above = board.querySelector('.rp-top');
   if (above) {
     const r = above.getBoundingClientRect();
     if (overlaps(r)) top = Math.max(0, Math.min(m.height, r.bottom - m.top));
   }
-  const sheet = board.querySelector('.rp-sheet');
+  const sheet = board.querySelector<HTMLElement>('.rp-sheet');
   if (sheet) {
     const r = sheet.getBoundingClientRect();
-    if (overlaps(r) && r.top < m.bottom) bottom = Math.max(0, Math.min(m.height, m.bottom - r.top));
+    if (sheet.dataset.wide !== undefined) {
+      if (overlaps(r)) left = Math.max(0, Math.min(m.width, r.right - m.left));
+    } else if (overlaps(r) && r.top < m.bottom) bottom = Math.max(0, Math.min(m.height, m.bottom - r.top));
   }
-  return { top, bottom };
+  return { top, bottom, left };
 }
 
-export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey, flyTo, selected, onBox, onPick, float = false, beams, lit = null, sounds = null }: Props) {
+export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey, flyTo, selected, onBox, onPick, float = false, beams, lit = null, sounds = null, onMoving }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   // The globe where it can load, else the flat map (also when the globe's basemap errors or is slow).
   const [flat, setFlat] = useState(() => !globePossible());
@@ -204,9 +218,9 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
   const [sun, setSun] = useState<Sun | null>(null);
   const elements = useRef(new Map<string, HTMLElement>());
   const fitted = useRef<string | null>(null);
-  const latest = useRef({ onPick, onBox, selected });
-  latest.current = { onPick, onBox, selected };
-  const insets = useRef({ top: 0, bottom: 0 });
+  const latest = useRef({ onPick, onBox, selected, onMoving });
+  latest.current = { onPick, onBox, selected, onMoving };
+  const insets = useRef<Cover>({ top: 0, bottom: 0, left: 0 });
   const [tilesMissing, setTilesMissing] = useState(!MAP_PUBLIC_TOKEN);
 
   useEffect(() => {
@@ -243,10 +257,12 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
       relight = light;
       light();
       // The box in view, once the map has its first view; the map reads it again after each move.
+      m.onMoveStart(() => latest.current.onMoving?.(true));
       m.onSettled(() => {
+        latest.current.onMoving?.(false);
         if (!fitted.current) return;
         window.clearTimeout(timer);
-        timer = window.setTimeout(() => latest.current.onBox(m.box()), 250);
+        timer = window.setTimeout(() => latest.current.onBox(m.box(), m.openBox({ ...coveredInsets(el), right: 0 })), 250);
       });
       resize.observe(el);
       // A fresh map fits the list again.
@@ -282,10 +298,10 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
     fitted.current = fitKey;
     const cover = (insets.current = coveredInsets(ref.current));
     if (points.length) {
-      map.fit(points, { top: 40 + Math.round(cover.top), bottom: 40 + Math.round(cover.bottom), side: 40 }, 14);
+      map.fit(points, { top: 40 + Math.round(cover.top), bottom: 40 + Math.round(cover.bottom), side: 40, left: Math.round(cover.left) }, 14);
     } else if (fallback) {
       map.show(fallback, 12);
-      map.panBy(0, (cover.bottom - cover.top) / 2);
+      map.panBy(-cover.left / 2, (cover.bottom - cover.top) / 2);
     }
     map.settle();
   }, [map, listItems, fitKey, fallback]);
@@ -424,7 +440,8 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
       const before = insets.current, after = coveredInsets(ref.current);
       insets.current = after;
       const dy = (after.bottom - after.top - (before.bottom - before.top)) / 2;
-      if (Math.abs(dy) > 2) map.panBy(0, dy);
+      const dx = -(after.left - before.left) / 2;
+      if (Math.abs(dy) > 2 || Math.abs(dx) > 2) map.panBy(dx, dy);
     }, 300);
     return () => window.clearTimeout(timer);
   }, [layoutKey]);
@@ -434,7 +451,7 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
     if (!flyTo || !map) return;
     // Centre the place in the part of the map left open.
     const cover = coveredInsets(ref.current);
-    map.flyTo(flyTo, Math.max(map.zoom(), 15), (cover.bottom - cover.top) / 2, !!flyTo.keepZoom);
+    map.flyTo(flyTo, Math.max(map.zoom(), 15), (cover.bottom - cover.top) / 2, !!flyTo.keepZoom, cover.left / 2);
   }, [flyTo]);
 
   return (

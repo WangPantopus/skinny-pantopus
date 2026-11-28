@@ -215,6 +215,12 @@ data class SendCardForm(
     val samePicture: Boolean = false,
     /** "Let it travel" turned off (travelling card plan Part 2): it's on to begin with wherever the server offers it (D5). */
     val travelOff: Boolean = false,
+    /** "Let this card travel" turned on, where it starts off (the card improvements, Wave 3.4: `travel.default_on`). */
+    val travelOn: Boolean = false,
+    /** Step 1 shows the link's form, with the name on its envelope (the card improvements, Wave 3.2). */
+    val byLink: Boolean = false,
+    /** The name on a link's envelope as typed ("Mom"); it goes trimmed and folded ([envelopeName]). */
+    val linkName: String = "",
 ) {
     /** The person or address on the list whose card has this request ID. */
     fun listEntry(requestId: String): CardRecipient? {
@@ -346,10 +352,14 @@ class SendCardViewModel
         /** "Let it travel" and "Where does it start?" (travelling card plan Part 2). */
         internal val town = SendCardTown(cards, _form)
 
+        /** The card improvements are on, as the last read of `GET /cards` says (never kept beyond it). */
+        private val improved: Boolean get() = cards.value?.improved == true
+
         /** "Send another card" (digital stamps on): a new card from the first step; [samePicture] keeps this one's (Part 6). */
         fun startAnotherCard(samePicture: Boolean = false) {
             _query.value = ""
-            _form.value = SendCardForm(signature = signatureKeeper.saved).withPictureOf(_form.value.takeIf { samePicture })
+            val fresh = SendCardForm(signature = signatureKeeper.saved).withPictureOf(_form.value.takeIf { samePicture })
+            _form.value = fresh.inOrder(improved)
         }
 
         private val _stampsNeeded = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
@@ -419,6 +429,8 @@ class SendCardViewModel
             val lookAgain = saved.get<String>(KEY_STEP) == SendCardStep.Look.name
             // What's chosen so far, kept with the screen's saved state.
             viewModelScope.launch { _form.collect { save(it) } }
+            // The first step follows the switch each time the cards are read (Pick a card first while improved, Wave 3.1).
+            viewModelScope.launch { cards.collect { read -> _form.update { it.inOrder(read?.improved == true) } } }
             reload()
             readTheirs()
             if (lookAgain) look()
@@ -450,7 +462,21 @@ class SendCardViewModel
         }
 
         fun showEmail(show: Boolean) {
-            _form.update { it.copy(byEmail = show) }
+            _form.update { it.copy(byEmail = show, byLink = false) }
+        }
+
+        /** "Send it by link" with the improvements: the link's form, with the name on its envelope (Wave 3.2). */
+        fun showLink(show: Boolean) {
+            _form.update { it.copy(byLink = show, byEmail = false) }
+        }
+
+        fun onLinkNameChange(text: String) {
+            _form.update { it.copy(linkName = text.takeLetters(LINK_NAME_LIMIT)) }
+        }
+
+        /** Who it's for's "Change" under the card chosen (Wave 3.1): back to Pick a card, everything kept. */
+        fun changeCard() {
+            _form.update { it.copy(step = SendCardStep.Pick) }
         }
 
         fun onEmailChange(text: String) {
@@ -461,7 +487,8 @@ class SendCardViewModel
         fun choose(to: CardRecipient) {
             _form.update {
                 val theirs = it.theirs.takeIf { _ -> it.to == to }
-                it.copy(to = to, step = it.stepAfterTo, tookBack = false, theirs = theirs, arrival = arrivalFor(to, it.arrival, theirs))
+                val step = it.stepAfterChoosing(improved)
+                it.copy(to = to, step = step, tookBack = false, theirs = theirs, arrival = arrivalFor(to, it.arrival, theirs))
             }
             readTheirs()
         }
@@ -516,7 +543,7 @@ class SendCardViewModel
         fun next() {
             _form.update { form ->
                 when {
-                    form.step == SendCardStep.Pick && form.design != null -> form.copy(step = SendCardStep.Write)
+                    form.step == SendCardStep.Pick && form.design != null -> form.copy(step = form.stepAfterPick(improved))
                     form.step == SendCardStep.Write && form.message.isNotBlank() && form.mediaReady ->
                         form.copy(step = SendCardStep.Seal, lookUnavailable = false)
                     else -> form
@@ -529,10 +556,10 @@ class SendCardViewModel
         /** The back arrow: the step before, with everything chosen kept; false when there's none (leave the flow). */
         fun back(): Boolean {
             val form = _form.value
-            val index = SendCardStep.steps.indexOf(form.step)
+            val steps = stepOrder(improved)
+            val index = steps.indexOf(form.step)
             if (index <= 0) return false
-            _form.value =
-                form.copy(step = SendCardStep.steps[index - 1], preview = null, listPreview = null, sendError = null, sealError = null)
+            _form.value = form.copy(step = steps[index - 1], preview = null, listPreview = null, sendError = null, sealError = null)
             return true
         }
 
@@ -584,6 +611,8 @@ class SendCardViewModel
                 }
             // Each address keeps the list's choice where the server offers every email choice.
             val keep = true.takeIf { cards.value?.arrivals?.emailAll != null }
+            // A photo and a greeting go on a list only while the card improvements are on (Wave 2).
+            val media = form.takeIf { cards.value?.improved == true }
             return form.copy(listIds = ids) to
                 SendHolidayCardListBody(
                     design,
@@ -591,6 +620,9 @@ class SendCardViewModel
                     arrival,
                     recipients,
                     signature = form.signature,
+                    photo = media?.photo?.fileId,
+                    photoAlt = media?.photo?.sentAlt,
+                    voice = media?.voice?.fileId,
                     emailsKeepArrival = keep,
                     travel = true.takeIf { town.travels(form) },
                 )
@@ -608,16 +640,20 @@ class SendCardViewModel
             viewModelScope.launch {
                 val result = repo.previewList(body)
                 if (result is NetworkResult.Failure && town.refused(result.error, TownThen.Look)) return@launch
+                // The list's photo or greeting needs more bought stamps than are left: the stamp books, saying why.
+                val forMedia = (result as? NetworkResult.Failure)?.error?.let { it.forMedia() && it.wantsStamps(cards.value) } == true
                 _form.update {
                     when {
                         it.step != SendCardStep.Seal || it.to != started.to -> it.copy(previewing = false)
                         result is NetworkResult.Success ->
                             it.copy(previewing = false, listPreview = result.data, step = SendCardStep.Look, sendError = null)
+                        forMedia -> it.copy(previewing = false)
                         result is NetworkResult.Failure ->
                             it.copy(previewing = false, sealError = sendMessage(result.error, doing = "show how your cards will look"))
                         else -> it
                     }
                 }
+                if (forMedia) _stampsNeeded.tryEmit(true)
             }
         }
 
@@ -634,6 +670,11 @@ class SendCardViewModel
             viewModelScope.launch {
                 val result = repo.sendList(body)
                 if (result is NetworkResult.Failure && town.refused(result.error, TownThen.SendList)) return@launch
+                if (result is NetworkResult.Failure && result.error.forMedia() && result.error.wantsStamps(cards.value)) {
+                    _form.update { it.copy(sending = false) }
+                    _stampsNeeded.tryEmit(true)
+                    return@launch
+                }
                 if (result is NetworkResult.Failure && result.error.serverCode() == STAMPS_REQUIRED) {
                     val (needed, available) = result.error.stampCounts()
                     val cards = needed ?: body.recipients.size
@@ -715,6 +756,7 @@ class SendCardViewModel
                         toEmail = (to as? CardRecipient.Email)?.email,
                         requestId = started.requestId,
                         toLink = to is CardRecipient.Link,
+                        linkName = envelopeName(form.linkName).takeIf { improved },
                     )
                 if (!wentEarlier(look) && !town.refused((look as? CardLook.Failed)?.error, TownThen.Look)) showLook(look, form)
             }
@@ -774,6 +816,7 @@ class SendCardViewModel
                         toEmail = (to as? CardRecipient.Email)?.email,
                         requestId = started.requestId,
                         toLink = to is CardRecipient.Link,
+                        linkName = envelopeName(form.linkName).takeIf { improved },
                     )
                 if (result is NetworkResult.Failure && answeredElsewhere(result.error)) return@launch
                 // The stamps ran out meanwhile (another device sent a card), or a photo or greeting has no bought stamp left:
@@ -838,7 +881,7 @@ class SendCardViewModel
                 }
                 TAKEN_BACK -> {
                     _query.value = ""
-                    _form.value = SendCardForm(signature = signatureKeeper.saved, takenBackNote = sendMessage(error))
+                    _form.value = SendCardForm(signature = signatureKeeper.saved, takenBackNote = sendMessage(error)).inOrder(improved)
                 }
                 else -> return false
             }
@@ -855,7 +898,7 @@ class SendCardViewModel
                 when (val result = repo.takeBack(card.id)) {
                     is NetworkResult.Success -> {
                         _query.value = ""
-                        _form.value = SendCardForm(signature = signatureKeeper.saved, tookBack = true)
+                        _form.value = SendCardForm(signature = signatureKeeper.saved, tookBack = true).inOrder(improved)
                     }
                     is NetworkResult.Failure ->
                         _form.update { it.copy(takingBack = false, takeBackError = takeBackMessage(result.error)) }
@@ -875,7 +918,7 @@ class SendCardViewModel
             val arrivals = cards.value?.arrivals ?: return current
             val options =
                 when {
-                    to is CardRecipient.Person -> theirs?.arrivals ?: arrivals.person
+                    to is CardRecipient.Person -> personArrivals(arrivals, theirs, improved)
                     // Every email choice where the server offers them, as step 4 shows them; else the two, as before.
                     arrivals.emailAll != null -> arrivalOptions(arrivals, to, theirs)
                     else -> arrivals.email
@@ -968,6 +1011,9 @@ class SendCardViewModel
                 arrival = saved.get<String>(KEY_ARRIVAL),
                 requestId = saved.get<String>(KEY_REQUEST_ID),
                 travelOff = saved.get<Boolean>(KEY_TRAVEL_OFF) == true,
+                travelOn = saved.get<Boolean>(KEY_TRAVEL_ON) == true,
+                byLink = saved.get<Boolean>(KEY_BY_LINK) == true,
+                linkName = saved.get<String>(KEY_LINK_NAME).orEmpty(),
                 listed = list?.first.orEmpty(),
                 listIds = list?.second.orEmpty(),
             )
@@ -1051,6 +1097,9 @@ class SendCardViewModel
             saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_REQUEST_ID] = form.requestId.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_TRAVEL_OFF] = form.travelOff.takeIf { form.step != SendCardStep.Sent && it }
+            saved[KEY_TRAVEL_ON] = form.travelOn.takeIf { form.step != SendCardStep.Sent && it }
+            saved[KEY_BY_LINK] = form.byLink
+            saved[KEY_LINK_NAME] = form.linkName.takeIf { form.step != SendCardStep.Sent && it.isNotEmpty() }
         }
 
         private fun takeBackMessage(error: NetworkError): String =
@@ -1087,6 +1136,9 @@ class SendCardViewModel
 
             private const val KEY_STEP = "sendCard.step"
             private const val KEY_TRAVEL_OFF = "sendCard.travelOff"
+            private const val KEY_TRAVEL_ON = "sendCard.travelOn"
+            private const val KEY_BY_LINK = "sendCard.byLink"
+            private const val KEY_LINK_NAME = "sendCard.linkName"
             private const val KEY_BY_EMAIL = "sendCard.byEmail"
             private const val KEY_EMAIL = "sendCard.email"
             private const val KEY_TO_USER = "sendCard.toUser"

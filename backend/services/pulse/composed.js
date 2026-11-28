@@ -9,6 +9,9 @@
 // the 2.1.6 apps get today's picture and today's video.
 
 const PLACEMENT_KEYS = ['width', 'x', 'y', 'turn'];
+// A placed video's width, as a share of the 9:16 canvas's width: Resize zooms to four times cover, and a video wider than
+// the canvas has a cover wider than it (a 16:9 video's is 3.16), so the width may go well past 4 (CONTRACT 10c).
+const WIDEST = 32;
 const BACKDROP_KEYS = ['top', 'bottom'];
 const COLOUR = /^#[0-9A-Fa-f]{6}$/;
 
@@ -59,7 +62,7 @@ function parse(body, { kind }) {
   return {
     whole: true,
     placement: {
-      width: number(p.width, 0.25, 4, 'width'),
+      width: number(p.width, 0.25, WIDEST, 'width'),
       x: number(p.x, 0, 1, 'x'),
       y: number(p.y, 0, 1, 'y'),
       turn: number(p.turn, -180, 180, 'turn'),

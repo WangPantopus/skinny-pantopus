@@ -56,6 +56,11 @@ data class HolidayCardsResponse(
      * [collections]' order. Absent from older servers: the collections' order.
      */
     val opening: List<String> = emptyList(),
+    /**
+     * The card improvements of November 28 are on (the server's `CARD_IMPROVEMENTS`): the send flow draws the new
+     * experience only while this read says so. Absent while it's off, and from older servers: the flow as it was.
+     */
+    val improved: Boolean = false,
 )
 
 /**
@@ -67,6 +72,11 @@ data class HolidayCardTravelRules(
     val on: Boolean = true,
     val town: String? = null,
     val places: Int = 2,
+    /**
+     * Where the switch starts while the card improvements are on (Wave 3.4): false, off to begin with. Absent: on, as
+     * [on] always started it.
+     */
+    @Json(name = "default_on") val defaultOn: Boolean? = null,
 )
 
 /** A town from `GET /api/mailbox/cards/towns` (the Census lists the server carries): its id, name, state and label. */
@@ -135,6 +145,15 @@ data class HolidayCardMediaRules(
     val voice: CardMediaRule? = null,
     /** A photo or voice greeting goes only on a card sent with a bought stamp (founder 2026-11-11); absent on older servers. */
     @Json(name = "bought_stamp") val boughtStamp: CardBoughtStamp? = null,
+    /** The free photo or voice cards a person has, while the card improvements are on (cards-next Wave 2). */
+    @Json(name = "free_allowance") val freeAllowance: CardFreeAllowance? = null,
+)
+
+/** `media.free_allowance`: the first [limit] cards with a photo or greeting need no bought stamp; [remaining] are left. */
+@JsonClass(generateAdapter = true)
+data class CardFreeAllowance(
+    val limit: Int = 0,
+    val remaining: Int = 0,
 )
 
 /**
@@ -148,8 +167,8 @@ data class CardBoughtStamp(
     val remaining: Int? = null,
     val state: String? = null,
 ) {
-    val toBuy: Boolean get() = state == "buy"
-    val unavailable: Boolean get() = state == "unavailable"
+    val toBuy: Boolean get() = required && state == "buy"
+    val unavailable: Boolean get() = required && state == "unavailable"
 }
 
 /** One kind of card media: [usable] is false while the key is off; the size and length limits the server keeps. */
@@ -326,6 +345,11 @@ data class HolidayCardArrivals(
      * Absent from an older server: [email] then.
      */
     @Json(name = "email_all") val emailAll: List<String>? = null,
+    /**
+     * To a person, with "Right away" too, while the card improvements are on (Wave 3.3): `next_morning`, `now`, and
+     * before Christmas morning `sealed_christmas` and `christmas_morning`. Absent: [person].
+     */
+    @Json(name = "person_all") val personAll: List<String>? = null,
 )
 
 /**
@@ -350,6 +374,8 @@ data class HolidayCardWaiting(
 data class HolidayCardArrivalsFor(
     /** The arrivals open to them now. */
     val arrivals: List<String> = emptyList(),
+    /** [arrivals] with "Right away" too, while the card improvements are on (Wave 3.3); absent: [arrivals]. */
+    @Json(name = "arrivals_all") val arrivalsAll: List<String>? = null,
     /** The day of their next 7 a.m. mail where they live ("2026-10-31"). */
     @Json(name = "next_round_on") val nextRoundOn: String? = null,
 )
@@ -453,6 +479,8 @@ data class HolidayCardRecipient(
     val email: String? = null,
     /** By a link: the first person to open it keeps the card (launch key `card_table`). */
     val link: Boolean? = null,
+    /** By a link, the name written on its envelope ("Mom"; Wave 3.2, only while the card improvements are on). */
+    val name: String? = null,
 )
 
 /**
@@ -470,6 +498,10 @@ data class SendHolidayCardListBody(
     @Json(name = "use_stamp") val useStamp: Boolean = true,
     /** One signature for the whole list, as one note (plan 8.2). */
     val signature: CardSignature? = null,
+    /** The photo, its words and the voice greeting each card of the list carries (only while [HolidayCardsResponse.improved]). */
+    val photo: String? = null,
+    @Json(name = "photo_alt") val photoAlt: String? = null,
+    val voice: String? = null,
     /**
      * Each address keeps the list's choice too (its email at the sender's 7 a.m. or on Christmas morning): true where the
      * server offers every email choice ([HolidayCardArrivals.emailAll]), else left out.

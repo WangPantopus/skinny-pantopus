@@ -63,6 +63,8 @@ import app.pantopus.android.ui.screens.feed.living.LivingAtlasSearch
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentConvergenceListSheet
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentConvergenceState
+import app.pantopus.android.ui.screens.feed.reinvented.after.MomentPinboardListSheet
+import app.pantopus.android.ui.screens.feed.reinvented.after.MomentPinboardState
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentRetakeListSheet
 import app.pantopus.android.ui.screens.feed.reinvented.after.MomentRetakeState
 import app.pantopus.android.ui.screens.feed.reinvented.after.TogetherStudio
@@ -171,6 +173,7 @@ fun ReinventedPulseScreen(
     // Phase 3 (CONTRACT 8e): the Retake opened from the list, and the Studio it asks for.
     MomentRetakeListSheet()
     MomentConvergenceListSheet()
+    MomentPinboardListSheet()
     TogetherStudioOpener(actions.onCompose)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         ReinventedToast(toast, onDismiss = viewModel::dismissToast)
@@ -253,6 +256,8 @@ private class ReinventedWatch(
         if (MomentRetakeState.opens(moment)) return
         // So does a Moment of a convergence's piece (8h).
         if (MomentConvergenceState.opens(moment)) return
+        // And a pinboard's Moment opens the board (8i).
+        if (MomentPinboardState.opens(moment)) return
         viewModel.watch(moment)
         onWatch()
     }

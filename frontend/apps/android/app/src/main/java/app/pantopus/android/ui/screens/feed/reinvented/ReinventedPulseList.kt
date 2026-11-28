@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.moments.MomentDto
 import app.pantopus.android.data.api.models.reinvented.PulseTravelDto
 import app.pantopus.android.data.api.models.reinvented.shownConvergence
+import app.pantopus.android.data.api.models.reinvented.shownPinboard
 import app.pantopus.android.data.api.models.reinvented.shownRetake
 import app.pantopus.android.data.pulse.ReinventedPoint
 import app.pantopus.android.ui.components.EmptyState
@@ -370,7 +371,7 @@ private fun KeptCard(
     ) {
         Text(
             // A Retake's row (CONTRACT 8e) says so; it opens the whole Retake.
-            text = moment.shownRetake?.tag ?: moment.shownConvergence?.tag ?: "Kept · stays",
+            text = moment.shownRetake?.tag ?: moment.shownConvergence?.tag ?: moment.shownPinboard?.tag ?: "Kept · stays",
             fontSize = 12.5.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.primary600,

@@ -69,6 +69,8 @@ struct HolidayCardDraft: Codable, Equatable {
     var requestId: String?
     /// A list's request ID for each person or address on it (by `HolidayCardRecipient.key`).
     var listIds: [String: String]
+    /// The name on a link's envelope (`improved`, cards-next 3.2); nil in drafts kept before it, or without one.
+    var linkName: String?
 }
 
 /// Where the draft is kept: this device's defaults, one draft at a time, with the moment it was kept.

@@ -31,8 +31,11 @@ export default function CardLinkScene({
   envelope = true,
   front = null,
   postmarks = null,
+  improved = false,
   children,
 }: {
+  /** The card improvements of November 28 (the read's `improved`): the guest page's tighter layout. */
+  improved?: boolean;
   /** A travelling card (Part 7): its envelope, address side up with these postmarks and no names, behind the card. */
   postmarks?: { town: string; state: string | null; on: string }[] | null;
   /** Inside Look it over, in place of the whole page. */
@@ -46,7 +49,7 @@ export default function CardLinkScene({
   useDarkPage(!framed, tableEdge(cloth));
 
   return (
-    <main className={`${styles.scene} ${framed ? styles.framed : ''}`} data-testid="cardLinkPage">
+    <main className={`${styles.scene} ${framed ? styles.framed : ''} ${improved ? styles.improved : ''}`} data-testid="cardLinkPage">
       <div className={styles.layers} aria-hidden="true" style={front ? { backgroundColor: tableEdge(cloth) } : undefined}>
         <div className={styles.table} style={{ backgroundImage: `url(${art('table-cloth.webp')})`, backgroundColor: tableTint(cloth) }} />
         <div className={styles.light} style={{ backgroundImage: `url(${art('light.webp')})` }} />

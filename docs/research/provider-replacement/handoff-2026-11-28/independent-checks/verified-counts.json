@@ -1,0 +1,71 @@
+{
+  "registry_and_home_record": {
+    "roster": 49155,
+    "registryExact": 48431,
+    "priorParcelIDs": 0,
+    "cohortID": 97,
+    "matchesSAMPhysicalSite": 94,
+    "matchesSAMSiteAndCity": 92,
+    "exactRegistryAtSite": 92,
+    "twoCityTablesSameSite": 97,
+    "protectedHit": 0,
+    "existingExact": 0,
+    "hasPriorChildID": 0,
+    "q1DuplicateSite": 0,
+    "ownThree": 97,
+    "intersection": 92,
+    "parentsInIntersection": 35,
+    "baselineModes": {
+      "unsupported": 97
+    }
+  },
+  "source_semantics": {
+    "prior_annual_any_candidate_id": 0,
+    "q1_candidate_parent_crosswalk_unique": 97,
+    "annual_bedrooms_pairs": 74239,
+    "annual_bedrooms_same_numeric": 74239,
+    "annual_full_bath_pairs": 74239,
+    "annual_full_bath_same_numeric": 74239,
+    "annual_half_bath_pairs": 74239,
+    "annual_half_bath_same_numeric": 74236,
+    "annual_half_bath_missing_one": 3,
+    "annual_living_area_pairs": 74239,
+    "annual_living_area_same_numeric": 74160,
+    "annual_living_area_missing_one": 79,
+    "q1_candidate_rows_6": 0,
+    "q1_candidate_rows_9": 97,
+    "q1_condo_attr_residential_class": 97,
+    "q1_candidate_rows_13": 97
+  },
+  "public_permit_screen": {
+    "permits_for_child_parent_or_exact_site": 333,
+    "mentions_bed_and_bath": 4,
+    "mentions_bed_bath_positive_job_sqft": 1
+  },
+  "public_sale_reference_screen": {
+    "candidates": 92,
+    "missing_child_sale_row": 92
+  },
+  "protection_marker_screen": {
+    "13_marker": {
+      "source_rows": 0,
+      "candidate_child_matches": 0,
+      "candidate_parent_matches": 0
+    },
+    "13_blank": {
+      "source_rows": 0,
+      "candidate_child_matches": 0,
+      "candidate_parent_matches": 0
+    },
+    "15_marker": {
+      "source_rows": 0,
+      "candidate_child_matches": 0,
+      "candidate_parent_matches": 0
+    },
+    "15_blank": {
+      "source_rows": 0,
+      "candidate_child_matches": 0,
+      "candidate_parent_matches": 0
+    }
+  }
+}

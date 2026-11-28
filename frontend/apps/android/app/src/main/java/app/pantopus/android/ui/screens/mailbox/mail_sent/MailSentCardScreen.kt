@@ -289,7 +289,9 @@ private fun SentCardPage(
     emailAgain: EmailAgain,
 ) {
     val waitingLink = card.byLink && card.status != "claimed"
-    val to = if (waitingLink) "whoever opens your link" else card.toName?.takeIf { it.isNotBlank() } ?: "them"
+    // A link waiting with the name on its envelope (the card improvements, Wave 3.2) is "to Mom" too.
+    val named = card.toName?.takeIf { it.isNotBlank() }
+    val to = if (waitingLink && named == null) "whoever opens your link" else named ?: "them"
     // A household is said whole ("their household’s 7 a.m. mail"), a person by their first name.
     val first = if (card.toHousehold) to else to.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotEmpty() } ?: to
     val sent = HolidayCardTimes.shortDay(card.sentAt, zone)

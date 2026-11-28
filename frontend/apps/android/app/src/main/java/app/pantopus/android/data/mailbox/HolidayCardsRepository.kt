@@ -215,13 +215,14 @@ class HolidayCardsRepository
             photoAlt: String? = null,
             voice: String? = null,
             travel: Boolean = false,
+            linkName: String? = null,
         ): CardLook {
             val body =
                 SendHolidayCardBody(
                     design,
                     message,
                     arrival,
-                    recipient(toUserId, toEmail, toLink),
+                    recipient(toUserId, toEmail, toLink, linkName),
                     requestId,
                     useStamp =
                         true.takeIf {
@@ -252,12 +253,13 @@ class HolidayCardsRepository
             }
         }
 
-        /** A person, an email address or a link: one of the three. */
+        /** A person, an email address or a link (with the name on its envelope, if any): one of the three. */
         private fun recipient(
             toUserId: String?,
             toEmail: String?,
             toLink: Boolean,
-        ) = HolidayCardRecipient(userId = toUserId, email = toEmail, link = true.takeIf { toLink })
+            linkName: String?,
+        ) = HolidayCardRecipient(userId = toUserId, email = toEmail, link = true.takeIf { toLink }, name = linkName?.takeIf { toLink })
 
         /** `GET /api/mailbox/cards/:id/link`: the link of a card by link that's still waiting for someone. */
         suspend fun cardLink(id: String): NetworkResult<String> =
@@ -295,13 +297,14 @@ class HolidayCardsRepository
             photoAlt: String? = null,
             voice: String? = null,
             travel: Boolean = false,
+            linkName: String? = null,
         ): NetworkResult<SentHolidayCard> {
             val body =
                 SendHolidayCardBody(
                     design,
                     message,
                     arrival,
-                    recipient(toUserId, toEmail, toLink),
+                    recipient(toUserId, toEmail, toLink, linkName),
                     requestId,
                     useStamp =
                         true.takeIf {

@@ -37,7 +37,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.moments.MomentMediaFile
 import app.pantopus.android.ui.screens.moments.compose.MomentsComposeUiState
+import app.pantopus.android.ui.screens.moments.studio.studioPair
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 import coil.compose.AsyncImage
@@ -62,9 +64,14 @@ fun TogetherStudioRows(
     when (val opened = TogetherStudio.context.value) {
         is TogetherStudio.Context.RetakeFrame -> AddingRow(opened)
         is TogetherStudio.Context.EyesOnAnswer -> AnsweringRow(opened)
+        is TogetherStudio.Context.PinboardPiece -> {
+            PieceRow(opened, photo = state.media is MomentMediaFile.Photo && state.studioPair == null)
+            if (state.offersSky) JoinSkyRow()
+        }
         null -> {
             if (state.offersSky) JoinSkyRow()
             if (state.offersRetake) StartRetakeRow()
+            if (state.offersPinboard) StartPinboardRow()
         }
     }
 }
@@ -114,6 +121,71 @@ private fun AnsweringRow(answer: TogetherStudio.Context.EyesOnAnswer) {
             lineHeight = 16.sp,
             color = PantopusColors.appTextSecondary,
         )
+    }
+}
+
+/** "Adding your piece to “Best fall tree on your walk”" (8i). */
+@Composable
+private fun PieceRow(
+    piece: TogetherStudio.Context.PinboardPiece,
+    photo: Boolean,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s5)
+                .padding(top = 6.dp)
+                .testTag("together.studio.piece")
+                .semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "Adding your piece to “${piece.prompt}”",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+        )
+        Text(
+            if (photo) {
+                "Your photo joins the pinboard and stays. One piece each."
+            } else {
+                "Only a photo joins the pinboard. This posts as an ordinary Moment."
+            },
+            fontSize = 12.5.sp,
+            lineHeight = 16.sp,
+            color = PantopusColors.appTextSecondary,
+        )
+    }
+}
+
+/** "Start a pinboard", and its prompt (8i). */
+@Composable
+private fun StartPinboardRow() {
+    val on by TogetherStudio.startsPinboard
+    val prompt by TogetherStudio.pinboardPrompt
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5).padding(top = 6.dp)) {
+        SwitchRow(
+            title = "Start a pinboard",
+            line = "A prompt others add their own photo to for a week, one each. It stays.",
+            on = on,
+            tag = "together.studio.pinboard",
+        ) { TogetherStudio.startsPinboard.value = it }
+        if (on) {
+            OutlinedTextField(
+                value = prompt,
+                onValueChange = { TogetherStudio.pinboardPrompt.value = it.take(TogetherStudio.PROMPT_MAX) },
+                placeholder = { Text("Best fall tree on your walk") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = Spacing.s2)
+                        .testTag("together.studio.pinboardPrompt")
+                        .semantics { contentDescription = "The pinboard's prompt" },
+            )
+        }
     }
 }
 
