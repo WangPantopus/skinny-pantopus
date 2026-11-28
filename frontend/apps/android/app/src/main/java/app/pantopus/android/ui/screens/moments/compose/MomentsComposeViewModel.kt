@@ -6,6 +6,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.compose.ui.unit.IntSize
 import androidx.core.content.FileProvider
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -59,17 +60,22 @@ import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksEditing
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksKeeper
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksTool
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacement
+import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacementPainter
+import app.pantopus.android.ui.screens.moments.compose.marks.shape
 import app.pantopus.android.ui.screens.moments.map.metersBetween
 import app.pantopus.android.ui.screens.moments.studio.StudioMention
 import app.pantopus.android.ui.screens.moments.studio.StudioPair
 import app.pantopus.android.ui.screens.moments.studio.holdsStudioChoices
+import app.pantopus.android.ui.screens.moments.studio.sentBackdrop
 import app.pantopus.android.ui.screens.moments.studio.sentDots
 import app.pantopus.android.ui.screens.moments.studio.sentGuess
 import app.pantopus.android.ui.screens.moments.studio.sentMentions
 import app.pantopus.android.ui.screens.moments.studio.sentPlay
 import app.pantopus.android.ui.screens.moments.studio.sentStamps
+import app.pantopus.android.ui.screens.moments.studio.sentWhole
 import app.pantopus.android.ui.screens.moments.studio.stampElevation
 import app.pantopus.android.ui.screens.moments.studio.studioPair
+import app.pantopus.android.ui.screens.moments.studio.wholeMoved
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -252,6 +258,9 @@ data class MomentsComposeUiState(
     val dots: List<MomentDotDto> = emptyList(),
     /** "Pulse, reinvented"'s Studio: playable items placed on the picture (CONTRACT 7b, 7k). Only the Studio sets them. */
     val items: List<MomentPlayItemDto> = emptyList(),
+    /** "Pulse, reinvented"'s Studio (PHASE-5 A, CONTRACT 10c): the photo posts whole, on these colours. Only the Studio sets it. */
+    val whole: Boolean = false,
+    val wholeBackdrop: MomentPlacementPainter.Backdrop? = null,
 ) {
     val kind: String
         get() =
@@ -1044,6 +1053,36 @@ class MomentsComposeViewModel
         /** "Pulse, reinvented"'s Studio: its playable items as they are now (added, moved, turned, removed). */
         fun setItems(items: List<MomentPlayItemDto>) = _state.update { it.copy(items = items) }
 
+        /** "Pulse, reinvented"'s Studio (PHASE-5 A): the photo shows and posts whole, on [backdrop]'s two colours. */
+        fun setWhole(backdrop: MomentPlacementPainter.Backdrop) =
+            _state.update { if (it.media is MomentMediaFile.Photo) it.copy(whole = true, wholeBackdrop = backdrop) else it }
+
+        /**
+         * "Pulse, reinvented"'s Studio's first screen (PHASE-5 A): the whole photo of [picture] px (as it came) moved, sized,
+         * turned or filled on the canvas ([next]), or whole as taken again (null). It is drawn in as Resize's Done draws it.
+         */
+        fun placeWhole(
+            next: MomentPlacement?,
+            picture: IntSize,
+        ) {
+            val current = _state.value
+            val media = current.media as? MomentMediaFile.Photo ?: return
+            if (!current.whole || current.posting || current.marking != null) return
+            if (current.placement == next) return
+            // Between whole as taken and the canvas, what lies on the photo moves with it, so it stays where it was.
+            val moved = if ((current.placement == null) == (next == null)) current else current.wholeMoved(picture.shape, next == null)
+            _state.update {
+                it.copy(marks = moved.marks, stamps = moved.stamps, dots = moved.dots, items = moved.items, placement = next)
+            }
+            marksKeeper.draw(
+                moved.marks,
+                next,
+                media.file,
+                onDrawn = { file -> _state.update { it.copy(media = MomentMediaFile.Photo(file)) } },
+                onFailed = { drawn, placed -> _state.update { it.copy(marks = drawn, placement = placed, notice = MARKS_FAILED) } },
+            )
+        }
+
         /** "Pulse, reinvented"'s Studio tray: the two words over before and after's halves. */
         fun setPairWords(
             before: String,
@@ -1130,7 +1169,7 @@ class MomentsComposeViewModel
         /** Another picture takes the sheet: it starts with no marks, as taken, and nothing kept for the last one stays. */
         private fun forgetMarks() {
             marksKeeper.drop()
-            _state.update { it.copy(marks = MomentMarks(), placement = null, marking = null) }
+            _state.update { it.copy(marks = MomentMarks(), placement = null, marking = null, whole = false, wholeBackdrop = null) }
         }
 
         /** Post right after the editor's Done waits for the marks to be drawn in, so what uploads carries them. */
@@ -1187,6 +1226,8 @@ class MomentsComposeViewModel
                         pair = null,
                         dots = emptyList(),
                         items = emptyList(),
+                        whole = false,
+                        wholeBackdrop = null,
                     )
                 }
             }
@@ -1306,6 +1347,8 @@ class MomentsComposeViewModel
                         dots = current.sentDots,
                         // Live beams (CONTRACT 9h): the compass nearest this Moment's own shot, with the Live mark and switch on only.
                         heading = current.livingHeading(pulse.on.value, usable, now),
+                        whole = current.sentWhole,
+                        backdrop = current.sentBackdrop,
                     )
                 if (publish(body, current, videos, usable.latitude to usable.longitude, retried)) {
                     saveChoices(current)
@@ -1494,6 +1537,8 @@ class MomentsComposeViewModel
                         mentions = current.sentMentions,
                         play = current.sentPlay,
                         dots = current.sentDots,
+                        whole = current.sentWhole,
+                        backdrop = current.sentBackdrop,
                     )
                 if (publish(body, current, videos, pinned = null, retried = true)) {
                     choices.edit().putInt("$accountId.hours", current.hours).apply()

@@ -200,10 +200,10 @@ internal fun StudioMentionRow(
 
 /**
  * What only the Studio sets on the Moment being made is still there (stamps, the made-up name, a guess, mentions, a
- * before and after's item, dots, playable items):
+ * before and after's item, dots, playable items, a whole photo):
  * today's Post screen lets them go when it takes the Moment back (the view model's `leaveStudio`).
  */
 internal val MomentsComposeUiState.holdsStudioChoices: Boolean
     get() =
         stamps.isNotEmpty() || madeUp || guess || mentions.isNotEmpty() || pair != null || dots.isNotEmpty() ||
-            items.isNotEmpty()
+            items.isNotEmpty() || whole

@@ -284,6 +284,8 @@ fun MomentsComposeScreen(
                             ),
                         onDots = viewModel::setDots,
                         onItems = viewModel::setItems,
+                        onWhole = viewModel::setWhole,
+                        onPlaceWhole = viewModel::placeWhole,
                     )
                 } else {
                     ReviewStep(
