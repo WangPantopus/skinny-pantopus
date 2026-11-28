@@ -58,6 +58,7 @@ import app.pantopus.android.ui.screens.moments.compose.marks.MomentLook
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarks
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksEditing
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksKeeper
+import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksPainter
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksTool
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacement
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacementPainter
@@ -1214,7 +1215,8 @@ class MomentsComposeViewModel
          * Today's Post screen takes the Moment from the Studio (the switch went off): the picture and the words stay; the
          * stamps, the made-up name and the mentions, which today's screens don't offer, go. Nothing changes when there were none.
          */
-        fun leaveStudio() =
+        fun leaveStudio() {
+            val before = _state.value
             _state.update {
                 if (!it.holdsStudioChoices) {
                     it
@@ -1232,6 +1234,34 @@ class MomentsComposeViewModel
                     )
                 }
             }
+            heldToTodaysLabelBox(before)
+        }
+
+        /**
+         * "Pulse, reinvented" (PHASE-6 I): words the Studio put beyond today's label box on its canvas come back into it once
+         * when today's Post screen takes the Moment, and are drawn in again as the editor's Done draws them.
+         */
+        private fun heldToTodaysLabelBox(before: MomentsComposeUiState) {
+            val placed = before.placement?.takeIf { before.whole } ?: return
+            val canvas = MomentPlacement.CANVAS
+            val labels =
+                before.marks.labels.map { if (it.text.isBlank()) it else MomentMarksPainter.keptIn(it, canvas.width, canvas.height) }
+            val held = before.marks.copy(labels = labels)
+            if (held == before.marks) return
+            _state.update { it.copy(marks = held) }
+            when (val media = before.media) {
+                is MomentMediaFile.Video -> prepare(media)
+                is MomentMediaFile.Photo ->
+                    marksKeeper.draw(
+                        held,
+                        placed,
+                        media.file,
+                        onDrawn = { file -> _state.update { it.copy(media = MomentMediaFile.Photo(file)) } },
+                        onFailed = { drawn, place -> _state.update { it.copy(marks = drawn, placement = place, notice = MARKS_FAILED) } },
+                    )
+                null -> Unit
+            }
+        }
 
         /** The Sky's rows (`MomentsComposeSky.kt`). */
         fun setPinAtPlace(on: Boolean) = _state.update { it.withPinAtPlace(on) }

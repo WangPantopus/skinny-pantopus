@@ -124,7 +124,8 @@ internal class LabelFrame(
                 box.bottom > floor -> -(box.bottom - floor).coerceAtMost(box.top - upper)
                 else -> 0f
             }
-        return if (shift != 0f) inside.copy(y = inside.y + shift / height) else inside
+        // "Pulse, reinvented"'s Studio: its canvas is drawn between the editor's controls, so they hold nothing back.
+        return if (shift != 0f && keep == 0f) inside.copy(y = inside.y + shift / height) else inside
     }
 
     /** [label] moved by [dx], [dy] px and scaled by [zoom], kept as [kept] keeps it. */
