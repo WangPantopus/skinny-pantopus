@@ -129,7 +129,7 @@ object MomentsStudioSounds {
         }
 
     private fun NetworkError.passing(): Boolean =
-        this is NetworkError.Transport || this is NetworkError.Server || this == NetworkError.RetriesExhausted || code == 408
+        this is NetworkError.Transport || this is NetworkError.Server || this == NetworkError.RetriesExhausted || code == HTTP_TIMEOUT
 
     private fun tell(
         context: Context,
@@ -139,4 +139,5 @@ object MomentsStudioSounds {
     }
 
     private const val RETRY_MS = 1_500L
+    private const val HTTP_TIMEOUT = 408
 }

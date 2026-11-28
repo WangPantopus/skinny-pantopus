@@ -43,6 +43,7 @@ class MomentSoundRecorder(
 
     /** The samples heard until [stop] or [maxMs], or null when the microphone couldn't be opened. Blocking: call off the main thread. */
     @SuppressLint("MissingPermission") // The Studio asks for the microphone before it records.
+    @Suppress("ReturnCount")
     fun record(onElapsed: (Long) -> Unit): MomentSoundSamples? {
         val min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (min <= 0) return null

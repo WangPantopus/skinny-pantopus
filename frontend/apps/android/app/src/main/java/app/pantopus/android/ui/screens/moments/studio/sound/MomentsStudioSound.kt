@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber")
+
 package app.pantopus.android.ui.screens.moments.studio.sound
 
 import android.Manifest
@@ -243,84 +245,110 @@ private fun StudioSoundSheet(
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 13.sp,
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                when {
-                    ui.recording ->
-                        SoundChip(
-                            words = "Stop · ${seconds(ui.elapsedMs)} / ${seconds(MomentSoundDto.SHORT_MS)}",
-                            icon = PantopusIcon.Square,
-                            on = true,
-                            tag = "moments.studio.sound.place",
-                            onClick = viewModel::stop,
-                        )
-                    else ->
-                        SoundChip(
-                            words = if (kept == null) "Record 3 seconds" else "Record again",
-                            icon = PantopusIcon.Mic,
-                            on = false,
-                            enabled = !ui.working,
-                            tag = "moments.studio.sound.place",
-                            onClick = record,
-                        )
-                }
-                kept?.takeIf { !ui.recording }?.let { sound ->
-                    PlayChip(sound.file, sound.durationMs)
-                    SoundChip(
-                        words = "",
-                        icon = PantopusIcon.X,
-                        on = false,
-                        enabled = !ui.working,
-                        tag = "moments.studio.sound.place.off",
-                        spoken = "Take the sound off",
-                        onClick = { viewModel.remove(context) },
-                    )
-                }
-            }
-            kept?.takeIf { !ui.recording }?.let { sound ->
-                SoundChip(
-                    words =
-                        when {
-                            ui.working -> "Cleaning the wind…"
-                            sound.cleaned -> "Wind cleaned · your sound says so"
-                            else -> "Clean the wind"
-                        },
-                    icon = PantopusIcon.Wind,
-                    on = sound.cleaned,
-                    enabled = !ui.working,
-                    tag = "moments.studio.sound.wind",
-                    spoken =
-                        if (sound.cleaned) {
-                            "Wind cleaned. Tap to put the sound back as it was."
-                        } else {
-                            "Clean the wind from this sound, on your phone"
-                        },
-                    onClick = { viewModel.toggleWind(context) },
-                )
-            }
+            PlaceSoundControls(ui, kept, viewModel, record)
             val note =
                 when {
                     denied -> "Pantopus needs the microphone to record sound. You can allow it in your phone's settings."
                     ui.error != null -> ui.error
                     else -> null
                 }
-            note?.let { Text(it, color = PantopusColors.warmAmberBorder, fontSize = 13.sp, modifier = Modifier.testTag("moments.studio.sound.note")) }
-            Text(
-                "Done",
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier =
-                    Modifier
-                        .align(Alignment.End)
-                        .clip(RoundedCornerShape(20.dp))
-                        .clickable(role = Role.Button) {
-                            viewModel.stop()
-                            onDone()
-                        }.padding(horizontal = Spacing.s4, vertical = Spacing.s2)
-                        .testTag("moments.studio.sound.done"),
+            note?.let {
+                Text(it, color = PantopusColors.warmAmberBorder, fontSize = 13.sp, modifier = Modifier.testTag("moments.studio.sound.note"))
+            }
+            DoneButton(
+                Modifier.align(Alignment.End),
+                onClick = {
+                    viewModel.stop()
+                    onDone()
+                },
             )
         }
     }
+}
+
+/** Record, stop, hear it, take it off; then "Clean the wind" on what was kept. */
+@Composable
+private fun PlaceSoundControls(
+    ui: StudioSoundUi,
+    kept: MomentsStudioRecording?,
+    viewModel: MomentsStudioSoundViewModel,
+    record: () -> Unit,
+) {
+    val context = LocalContext.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        when {
+            ui.recording ->
+                SoundChip(
+                    words = "Stop · ${seconds(ui.elapsedMs)} / ${seconds(MomentSoundDto.SHORT_MS)}",
+                    icon = PantopusIcon.Square,
+                    on = true,
+                    tag = "moments.studio.sound.place",
+                    onClick = viewModel::stop,
+                )
+            else ->
+                SoundChip(
+                    words = if (kept == null) "Record 3 seconds" else "Record again",
+                    icon = PantopusIcon.Mic,
+                    on = false,
+                    enabled = !ui.working,
+                    tag = "moments.studio.sound.place",
+                    onClick = record,
+                )
+        }
+        kept?.takeIf { !ui.recording }?.let { sound ->
+            PlayChip(sound.file, sound.durationMs)
+            SoundChip(
+                words = "",
+                icon = PantopusIcon.X,
+                on = false,
+                enabled = !ui.working,
+                tag = "moments.studio.sound.place.off",
+                spoken = "Take the sound off",
+                onClick = { viewModel.remove(context) },
+            )
+        }
+    }
+    kept?.takeIf { !ui.recording }?.let { sound ->
+        SoundChip(
+            words =
+                when {
+                    ui.working -> "Cleaning the wind…"
+                    sound.cleaned -> "Wind cleaned · your sound says so"
+                    else -> "Clean the wind"
+                },
+            icon = PantopusIcon.Wind,
+            on = sound.cleaned,
+            enabled = !ui.working,
+            tag = "moments.studio.sound.wind",
+            spoken =
+                if (sound.cleaned) {
+                    "Wind cleaned. Tap to put the sound back as it was."
+                } else {
+                    "Clean the wind from this sound, on your phone"
+                },
+            onClick = { viewModel.toggleWind(context) },
+        )
+    }
+}
+
+/** "Done": closes the sheet; what was recorded stays for the Moment. */
+@Composable
+private fun DoneButton(
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    Text(
+        "Done",
+        color = Color.White,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(20.dp))
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                .testTag("moments.studio.sound.done"),
+    )
 }
 
 /** Plays the kept sound on the phone, once per tap. */
