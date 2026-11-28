@@ -59,6 +59,12 @@ final class GuidanceCenter {
         didSet { if !waitingCardCheck, oldValue { scheduleEvaluation() } }
     }
 
+    /// A Christmas card the reader joined Pantopus for is on screen (cards-next 4.1, `card.joined_for`): no guidance card
+    /// and no daily briefings notice until they're out of it. Observed, so the briefings notice waits too.
+    var joinedForCardOnScreen = false {
+        didSet { if !joinedForCardOnScreen, oldValue { scheduleEvaluation() } }
+    }
+
     /// The side menu is open (`RootTabView`).
     @ObservationIgnored var sideMenuOpen = false {
         didSet { if !sideMenuOpen, oldValue { scheduleEvaluation() } }

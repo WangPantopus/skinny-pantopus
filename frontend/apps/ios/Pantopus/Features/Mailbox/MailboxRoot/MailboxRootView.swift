@@ -267,6 +267,18 @@ private struct MailboxPieceList: View {
                     HolidayCardMantel(cards: mantel) { viewModel.openMail($0) }
                         .padding(.bottom, Spacing.s1)
                 }
+                // The welcome strip under the mantel (cards-next 4.1, only while the cards' read carries `welcome`).
+                if let welcome = viewModel.cardWelcome {
+                    HolidayCardWelcomeStrip(
+                        welcome: welcome,
+                        stamps: viewModel.christmasCards?.stamps,
+                        onWriteBack: { viewModel.writeBackFromWelcome(welcome) },
+                        onSendCard: { viewModel.openChristmasCards() },
+                        onDismiss: { viewModel.dismissCardWelcome() }
+                    )
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s2)
+                }
                 // Christmas cards (holiday_cards): the way in, at the top of your own mail.
                 if viewModel.showsChristmasCardRow, let cards = viewModel.christmasCards {
                     HolidayCardRow(cards: cards) { viewModel.openChristmasCards() }

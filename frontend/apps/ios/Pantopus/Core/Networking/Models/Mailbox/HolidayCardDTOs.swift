@@ -94,10 +94,13 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// the flow draws the new experience only while this read says so; false (left out) keeps every card screen as it
     /// was. Never kept beyond this read.
     public let improved: Bool
+    /// The welcome strip under the mantel (cards-next 4.1, only while `improved`): a new account that opened a card and
+    /// has sent none. Nil: no strip.
+    public let welcome: HolidayCardWelcome?
 
     private enum CodingKeys: String, CodingKey {
         case open, holiday, year, designs, collections, arrivals, today, stamps, signature, media, travel, shelves, opening
-        case improved
+        case improved, welcome
         case noteHelp = "note_help"
         case maxRecipients = "max_recipients"
         case postageEnabled = "postage_enabled"
@@ -151,6 +154,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         shelves = (try? c.decodeIfPresent(Bool.self, forKey: .shelves)) ?? false
         opening = try? c.decodeIfPresent([String].self, forKey: .opening)
         improved = (try? c.decodeIfPresent(Bool.self, forKey: .improved)) == true
+        welcome = improved ? try? c.decodeIfPresent(HolidayCardWelcome.self, forKey: .welcome) : nil
     }
 
     /// "Add a photo" shows (the server takes one now, and this build carries the memories), unless no bought stamp
@@ -184,6 +188,33 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     /// stamp books) or `unavailable`.
     var mediaStamp: HolidayCardMediaSpec.BoughtStamp.State {
         media?.boughtStamp?.state ?? .ready
+    }
+}
+
+/// `welcome` on `GET /api/mailbox/cards` (cards-next 4.1): the card a new account opened, and what the strip offers.
+public struct HolidayCardWelcome: Decodable, Sendable, Hashable {
+    /// The opened card "Write back" answers.
+    public let cardId: String
+    /// The first word of its sender's name as the Mailbox names them ("Someone" when it can't be read).
+    public let fromFirstName: String
+    /// A reply can be written to that card now.
+    public let canWriteBack: Bool
+    /// Stamps they can send with now; nil when the balance couldn't be read.
+    public let stamps: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case stamps
+        case cardId = "card_id"
+        case fromFirstName = "from_first_name"
+        case canWriteBack = "can_write_back"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        cardId = try c.decode(String.self, forKey: .cardId)
+        fromFirstName = MailPieceModel.firstText(try? c.decodeIfPresent(String.self, forKey: .fromFirstName)) ?? "Someone"
+        canWriteBack = (try? c.decodeIfPresent(Bool.self, forKey: .canWriteBack)) == true
+        stamps = try? c.decodeIfPresent(Int.self, forKey: .stamps)
     }
 }
 
@@ -865,11 +896,15 @@ public struct MailCard: Decodable, Sendable, Hashable {
     public let travel: CardTravel?
     /// The table it opens on, named by the server (card shelves A4); nil from older servers.
     public let mood: String?
+    /// The reader joined Pantopus for this card (cards-next 4.1, `joined_for`): while it's on screen no guidance card
+    /// and no daily briefings notice show. False from older servers and with the switch off.
+    public let joinedFor: Bool
 
     private enum CodingKeys: String, CodingKey {
         case design, number, caption, paper, height, holiday, year, arrival, sealed, slug, table, verse, signature
         case photo, voice, travel, mood
         case sealedUntil = "sealed_until"
+        case joinedFor = "joined_for"
     }
 
     /// The card a reply answers (experience plan Part 3), drawn with that card's picture in the reply's row.
@@ -892,6 +927,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         voice = nil
         travel = nil
         mood = reply.mood
+        joinedFor = false
     }
 
     /// A card not sent yet, as its envelope is drawn while it's being sealed.
@@ -914,6 +950,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         voice = nil
         travel = nil
         mood = design.mood
+        joinedFor = false
     }
 
     private init(copying card: MailCard, sealed: Bool) {
@@ -935,6 +972,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         voice = card.voice
         travel = card.travel
         mood = card.mood
+        joinedFor = card.joinedFor
     }
 
     /// The same card on the morning its seal lifts.
@@ -962,6 +1000,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         voice = sealed ? nil : try? c.decodeIfPresent(CardVoice.self, forKey: .voice)
         travel = try? c.decodeIfPresent(CardTravel.self, forKey: .travel)
         mood = try? c.decodeIfPresent(String.self, forKey: .mood)
+        joinedFor = (try? c.decodeIfPresent(Bool.self, forKey: .joinedFor)) == true
     }
 }
 
