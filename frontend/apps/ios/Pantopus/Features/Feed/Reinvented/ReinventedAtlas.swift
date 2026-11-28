@@ -119,7 +119,7 @@ struct ReinventedAtlasView: View {
             case .failed:
                 VStack(spacing: Spacing.s3) {
                     Text("Your Atlas couldn't load.")
-                        .font(.system(size: 15, weight: .semibold))
+                        .pulseFont(15, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
                     Button("Try again") { Task { await model.load() } }
                         .accessibilityIdentifier("reinventedAtlas.retry")
@@ -144,7 +144,7 @@ struct ReinventedAtlasView: View {
         LazyVStack(alignment: .leading, spacing: Spacing.s3) {
             ReinventedAtlasSearch() // phase 4: Atlas search (CONTRACT 9b)
             Text("My Atlas: every Moment you take is kept here for you alone, after it fades for everyone else.")
-                .font(.system(size: 13))
+                .pulseFont(13)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             // Strands (CONTRACT 8c): "Dana went because of your Moment", private to you; nothing when there are none.
@@ -152,14 +152,14 @@ struct ReinventedAtlasView: View {
             ReinventedStrandsYoureIn(model: strandsMine)
             if model.moments.isEmpty {
                 Text("Nothing here yet. The Moments you post from now on are kept here.")
-                    .font(.system(size: 15))
+                    .pulseFont(15)
                     .foregroundStyle(Theme.Color.appText)
                     .padding(.vertical, Spacing.s6)
                     .accessibilityIdentifier("reinventedAtlas.empty")
             }
             ForEach(model.days, id: \.day) { day in
                 Text(day.day)
-                    .font(.system(size: 15, weight: .bold))
+                    .pulseFont(15, weight: .bold)
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
                 LazyVGrid(columns: columns, spacing: 6) {
@@ -184,7 +184,7 @@ struct ReinventedAtlasView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(alignment: .bottomLeading) {
                     Text(ReinventedAtlasModel.timeWords(moment.createdAtDate))
-                        .font(.system(size: 11, weight: .semibold))
+                        .pulseFont(11, weight: .semibold)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -219,7 +219,7 @@ struct ReinventedAtlasPicture: View {
             LinearGradient(colors: [colors.top, colors.bottom], startPoint: UnitPoint(x: 0.33, y: 0), endPoint: UnitPoint(x: 0.67, y: 1))
                 .overlay {
                     Text(moment.text ?? "")
-                        .font(.system(size: large ? 24 : 14, weight: .semibold))
+                        .pulseFont(large ? 24 : 14, weight: .semibold)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
                         .lineLimit(large ? 8 : 5)
@@ -255,20 +255,20 @@ struct ReinventedAtlasItem: View {
                 .frame(height: 300)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             Text(ReinventedAtlasModel.dayWords(moment.createdAtDate))
-                .font(.system(size: 17, weight: .bold))
+                .pulseFont(17, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
             Text([ReinventedAtlasModel.timeWords(moment.createdAtDate), moment.placeLabel].filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.system(size: 14))
+                .pulseFont(14)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             if let caption = moment.caption, !caption.isEmpty {
-                Text(caption).font(.system(size: 15)).foregroundStyle(Theme.Color.appText)
+                Text(caption).pulseFont(15).foregroundStyle(Theme.Color.appText)
             }
             Text("Only you see your Atlas.")
-                .font(.system(size: 13))
+                .pulseFont(13)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             if let error {
                 Text(error)
-                    .font(.system(size: 14, weight: .semibold))
+                    .pulseFont(14, weight: .semibold)
                     .foregroundStyle(Theme.Color.error)
                     .accessibilityIdentifier("reinventedAtlas.error")
             }
@@ -283,7 +283,7 @@ struct ReinventedAtlasItem: View {
     @ViewBuilder private var actions: some View {
         if asking {
             Text("Delete this Moment for good? Its picture is removed now and can't come back.")
-                .font(.system(size: 14))
+                .pulseFont(14)
                 .foregroundStyle(Theme.Color.appText)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: Spacing.s3) {

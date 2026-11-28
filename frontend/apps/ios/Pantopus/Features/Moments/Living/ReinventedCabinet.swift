@@ -141,21 +141,21 @@ struct ReinventedCabinet: View {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Your cabinet")
-                            .font(.system(size: 15, weight: .bold))
+                            .pulseFont(15, weight: .bold)
                             .foregroundStyle(Theme.Color.appText)
                         if let since = Self.since(cabinet.since) {
                             Text(since)
-                                .font(.system(size: 12))
+                                .pulseFont(12)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }
                         Spacer()
                         Button("Make my \(String(Self.year)) poster") { poster = true }
-                            .font(.system(size: 13, weight: .bold))
+                            .pulseFont(13, weight: .bold)
                             .accessibilityIdentifier("reinventedCabinet.poster")
                     }
                     if cabinet.shelves.isEmpty {
                         Text("Nothing on the shelves yet. Moments, answers and Retakes fill them.")
-                            .font(.system(size: 13))
+                            .pulseFont(13)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     } else {
                         LazyVGrid(columns: columns, spacing: 8) {
@@ -166,7 +166,7 @@ struct ReinventedCabinet: View {
                     }
                     Toggle(isOn: Binding(get: { cabinet.shownTo == "people_you_know" }, set: { show($0) })) {
                         Text("Show my cabinet to people I know")
-                            .font(.system(size: 14))
+                            .pulseFont(14)
                             .foregroundStyle(Theme.Color.appText)
                     }
                     .disabled(saving)
@@ -218,10 +218,10 @@ private struct ReinventedShelf: View {
             Icon(shelf.icon, size: 18, strokeWidth: 2.2, color: Theme.Color.primaryTint)
             VStack(alignment: .leading, spacing: 0) {
                 Text(shelf.big)
-                    .font(.system(size: 17, weight: .bold))
+                    .pulseFont(17, weight: .bold)
                     .foregroundStyle(Theme.Color.appText)
                 Text(shelf.words)
-                    .font(.system(size: 12))
+                    .pulseFont(12)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .lineLimit(1)
             }
@@ -253,12 +253,12 @@ private struct ReinventedPosterView: View {
                         if let picture {
                             ShareLink(item: picture, preview: SharePreview("Pantopus \(String(year))", image: picture)) {
                                 Text("Save or share the picture")
-                                    .font(.system(size: 15, weight: .bold))
+                                    .pulseFont(15, weight: .bold)
                             }
                             .accessibilityIdentifier("reinventedPoster.share")
                         }
                         Text("Made on this phone. Nothing is shared unless you share it.")
-                            .font(.system(size: 13))
+                            .pulseFont(13)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     .padding(Spacing.s4)
@@ -299,12 +299,12 @@ private struct ReinventedPosterArt: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(poster.year))
-                .font(.system(size: 44, weight: .heavy))
+                .pulseFont(44, weight: .heavy)
                 .foregroundStyle(.white)
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(poster.numbers.shelves) { shelf in
                     Text("\(shelf.big) \(shelf.words)")
-                        .font(.system(size: 15, weight: .semibold))
+                        .pulseFont(15, weight: .semibold)
                         .foregroundStyle(.white.opacity(0.92))
                 }
             }
@@ -318,7 +318,7 @@ private struct ReinventedPosterArt: View {
                         }
                         // On a dark chip, so it reads over a month's picture too.
                         Text(Calendar.current.shortMonthSymbols[month - 1])
-                            .font(.system(size: 10, weight: .bold))
+                            .pulseFont(10, weight: .bold)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -330,7 +330,7 @@ private struct ReinventedPosterArt: View {
                 }
             }
             Text("Pantopus")
-                .font(.system(size: 12, weight: .bold))
+                .pulseFont(12, weight: .bold)
                 .foregroundStyle(.white.opacity(0.7))
         }
         .padding(20)

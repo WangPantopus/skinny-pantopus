@@ -68,7 +68,7 @@ struct ReinventedCircleDetail: View {
                     Task { await model.send(ReinventedCirclesEndpoints.keepFaded(circle.id, keep: keep)) }
                 })) {
                     Text(ReinventedCircleWords.keep)
-                        .font(.system(size: 13.5))
+                        .pulseFont(13.5)
                         .foregroundStyle(Theme.Color.appText)
                 }
                 .tint(Theme.Color.primarySolid)
@@ -93,13 +93,13 @@ struct ReinventedCircleDetail: View {
     private func magazineButton(_ circle: ReinventedCircleDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Its magazine comes each \(ReinventedCircleWords.day(circle.weekDay)).")
-                .font(.system(size: 14))
+                .pulseFont(14)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Button { path.append(.magazine(circle.id)) } label: {
                 HStack(spacing: Spacing.s2) {
                     Icon(.newspaper, size: 18, strokeWidth: 2.2, color: .white)
                     Text(circle.magazineReady ? "This week's magazine · new" : "This week's magazine")
-                        .font(.system(size: 15, weight: .semibold))
+                        .pulseFont(15, weight: .semibold)
                         .foregroundStyle(.white)
                 }
                 .padding(.horizontal, Spacing.s4)
@@ -119,10 +119,10 @@ struct ReinventedCircleDetail: View {
                     MomentAvatar(author: member.person, size: 34)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(member.person.name)
-                            .font(.system(size: 15, weight: .semibold))
+                            .pulseFont(15, weight: .semibold)
                             .foregroundStyle(Theme.Color.appText)
                         Text(member.person.id == circle.owner?.id ? "Made it" : member.isIn ? "In" : "Invited")
-                            .font(.system(size: 13))
+                            .pulseFont(13)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     Spacer(minLength: 0)

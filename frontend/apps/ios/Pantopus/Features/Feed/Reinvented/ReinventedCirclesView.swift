@@ -52,7 +52,7 @@ struct ReinventedCirclesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 Text(Self.about)
-                    .font(.system(size: 14))
+                    .pulseFont(14)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if model.reading == .reading, model.circles.isEmpty, model.invites.isEmpty {
@@ -60,7 +60,7 @@ struct ReinventedCirclesView: View {
                 } else if model.reading == .failed {
                     ReinventedCircleNote("Your circles couldn't load.")
                     Button("Try again") { Task { await model.read() } }
-                        .font(.system(size: 15, weight: .semibold))
+                        .pulseFont(15, weight: .semibold)
                 } else {
                     if !model.invites.isEmpty { invites }
                     circles
@@ -95,7 +95,7 @@ struct ReinventedCirclesView: View {
             if model.circles.isEmpty, model.reading == .read { ReinventedCircleNote("No circles yet.") }
             Button { path.append(.new) } label: {
                 Label { Text("New circle") } icon: { Icon(.plus, size: 16, strokeWidth: 2.4, color: .white) }
-                    .font(.system(size: 15, weight: .semibold))
+                    .pulseFont(15, weight: .semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, Spacing.s4)
                     .frame(height: 44)
@@ -112,10 +112,10 @@ struct ReinventedCirclesView: View {
             ReinventedCircleFaces(people: circle.members.filter(\.isIn).map(\.person))
             VStack(alignment: .leading, spacing: 2) {
                 Text(circle.name)
-                    .font(.system(size: 16, weight: .bold))
+                    .pulseFont(16, weight: .bold)
                     .foregroundStyle(Theme.Color.appText)
                 Text(Self.summary(circle))
-                    .font(.system(size: 13))
+                    .pulseFont(13)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: 0)
@@ -152,16 +152,16 @@ struct ReinventedCircleInviteRow: View {
                 ReinventedCircleFaces(people: circle.members.filter(\.isIn).map(\.person))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(circle.name)
-                        .font(.system(size: 16, weight: .bold))
+                        .pulseFont(16, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
                     Text("\(circle.owner?.name ?? "Someone") asked you to join · \(circle.inCount) in")
-                        .font(.system(size: 13))
+                        .pulseFont(13)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
             }
             Toggle(isOn: $keep) {
                 Text(ReinventedCircleWords.keep)
-                    .font(.system(size: 13.5))
+                    .pulseFont(13.5)
                     .foregroundStyle(Theme.Color.appText)
             }
             .tint(Theme.Color.primarySolid)
@@ -197,7 +197,7 @@ struct ReinventedNewCircleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text("Its name (only its people see it)")
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .pulseFont(13.5, weight: .semibold)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 TextField("Sunday walkers", text: $name)
                     .textFieldStyle(.roundedBorder)
@@ -207,7 +207,7 @@ struct ReinventedNewCircleView: View {
                     "Who's in it (\(people.count) of up to \(ReinventedCircleWords.maxOthers)). "
                         + "They're invited, and in only when they say yes."
                 )
-                .font(.system(size: 13.5, weight: .semibold))
+                .pulseFont(13.5, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 ReinventedCirclePeoplePicker(picked: $people, max: ReinventedCircleWords.maxOthers)
@@ -277,7 +277,7 @@ struct ReinventedCirclePeoplePicker: View {
                     let name = all.first { $0.id == id }?.name ?? "Someone"
                     Button { picked.removeAll { $0 == id } } label: {
                         Text("\(name) ×")
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .pulseFont(13.5, weight: .semibold)
                             .foregroundStyle(Theme.Color.primaryTint)
                             .padding(.horizontal, Spacing.s3)
                             .frame(height: 32)
@@ -304,7 +304,7 @@ struct ReinventedCirclePeoplePicker: View {
                     color: on ? Theme.Color.primarySolid : Theme.Color.appTextSecondary
                 )
                 Text(person.name)
-                    .font(.system(size: 15))
+                    .pulseFont(15)
                     .foregroundStyle(full ? Theme.Color.appTextSecondary : Theme.Color.appText)
                 Spacer(minLength: 0)
             }
@@ -329,7 +329,7 @@ struct ReinventedCircleNote: View {
 
     var body: some View {
         Text(words)
-            .font(.system(size: 14))
+            .pulseFont(14)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -344,7 +344,7 @@ struct ReinventedCircleHeading: View {
 
     var body: some View {
         Text(words)
-            .font(.system(size: 13, weight: .bold))
+            .pulseFont(13, weight: .bold)
             .foregroundStyle(Theme.Color.appTextSecondary)
             .textCase(.uppercase)
             .accessibilityAddTraits(.isHeader)
@@ -360,7 +360,7 @@ struct ReinventedCircleProblem: View {
 
     var body: some View {
         Text(words)
-            .font(.system(size: 13.5, weight: .semibold))
+            .pulseFont(13.5, weight: .semibold)
             .foregroundStyle(Theme.Color.error)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("reinventedCircles.problem")
@@ -385,7 +385,7 @@ struct ReinventedCircleButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .pulseFont(15, weight: .semibold)
                 .foregroundStyle(strong ? .white : danger ? Theme.Color.error : Theme.Color.appText)
                 .padding(.horizontal, Spacing.s4)
                 .frame(height: 40)

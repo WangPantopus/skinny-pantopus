@@ -39,7 +39,7 @@ struct ReinventedAliveStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Alive right now")
-                .font(.system(size: 13, weight: .bold))
+                .pulseFont(13, weight: .bold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .padding(.horizontal, Spacing.s4)
                 .accessibilityAddTraits(.isHeader)
@@ -77,11 +77,11 @@ struct ReinventedAliveStrip: View {
                         HStack(spacing: 4) {
                             MomentsLiveSign(size: 11, color: MomentsPalette.live)
                             Text("Live")
-                                .font(.system(size: 11, weight: .bold))
+                                .pulseFont(11, weight: .bold)
                         }
                         if let weather = moment.live.weather {
                             Text(weather.text)
-                                .font(.system(size: 11, weight: .semibold))
+                                .pulseFont(11, weight: .semibold)
                                 .lineLimit(1)
                         }
                     }
@@ -102,10 +102,10 @@ struct ReinventedAliveStrip: View {
                 VStack(alignment: .leading, spacing: Spacing.s2) {
                     Icon(.calendarCheck, size: 20, strokeWidth: 2.2, color: .white)
                     Text("Starting soon")
-                        .font(.system(size: 11, weight: .bold))
+                        .pulseFont(11, weight: .bold)
                         .foregroundStyle(.white.opacity(0.85))
                     Text(plan.title)
-                        .font(.system(size: 13, weight: .bold))
+                        .pulseFont(13, weight: .bold)
                         .foregroundStyle(.white)
                         .lineLimit(4)
                     Spacer(minLength: 0)
@@ -127,7 +127,7 @@ struct ReinventedAliveStrip: View {
                     Spacer(minLength: 0)
                     MomentRingFace(ring: ring)
                     Text(ring.author.shortName)
-                        .font(.system(size: 12, weight: .semibold))
+                        .pulseFont(12, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(1)
                     Spacer(minLength: 0)

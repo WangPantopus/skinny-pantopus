@@ -91,10 +91,10 @@ struct ReinventedEchoes: View {
                     Toggle(isOn: Binding(get: { choice != "off" }, set: { set($0 ? "on" : "off") })) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Echoes: tell me when others caught the same moment")
-                                .font(.system(size: 14, weight: .semibold))
+                                .pulseFont(14, weight: .semibold)
                                 .foregroundStyle(Theme.Color.appText)
                             Text("Only at public places, never at home. Others see you as a count.")
-                                .font(.system(size: 12))
+                                .pulseFont(12)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                         }
                     }
@@ -102,7 +102,7 @@ struct ReinventedEchoes: View {
                     if choice != "off" {
                         Toggle(isOn: Binding(get: { choice == "names" }, set: { set($0 ? "names" : "on") })) {
                             Text("Show my first name to others who show theirs")
-                                .font(.system(size: 14))
+                                .pulseFont(14)
                                 .foregroundStyle(Theme.Color.appText)
                         }
                         .accessibilityIdentifier("reinventedEchoes.names")
@@ -126,13 +126,13 @@ struct ReinventedEchoes: View {
                         Icon(line.momentId == nil ? .leaf : .sparkles, size: 15, strokeWidth: 2.2, color: Theme.Color.primaryTint)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(line.line)
-                                .font(.system(size: 14))
+                                .pulseFont(14)
                                 .foregroundStyle(Theme.Color.appText)
                                 .multilineTextAlignment(.leading)
                             // Names only when the server sends them (both people chose names).
                             if let withNames = line.withNames {
                                 Text(withNames)
-                                    .font(.system(size: 13, weight: .medium))
+                                    .pulseFont(13, weight: .medium)
                                     .foregroundStyle(Theme.Color.appTextSecondary)
                                     .multilineTextAlignment(.leading)
                             }
@@ -147,7 +147,7 @@ struct ReinventedEchoes: View {
             }
         } else if found != nil {
             Text("No echoes today yet.")
-                .font(.system(size: 13))
+                .pulseFont(13)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
     }

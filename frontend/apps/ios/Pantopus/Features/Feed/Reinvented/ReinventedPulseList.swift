@@ -137,7 +137,7 @@ struct ReinventedPulseList: View {
         if model.hasMore, let pause = model.pause {
             // Explore pauses: more only when asked.
             Button(pause) { Task { await model.loadMore() } }
-                .font(.system(size: 15, weight: .bold))
+                .pulseFont(15, weight: .bold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Spacing.s4)
                 .accessibilityIdentifier("reinventedPulse.keepExploring")
@@ -150,7 +150,7 @@ struct ReinventedPulseList: View {
                 .task(id: model.nextPage) { await model.loadMore() }
         } else if let end = model.end, !(model.reach == "explore" && model.isEmpty) {
             Text(end)
-                .font(.system(size: 14, weight: .semibold))
+                .pulseFont(14, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
@@ -164,7 +164,7 @@ struct ReinventedPulseList: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             // A Retake's row (CONTRACT 8e) says so; it opens the whole Retake.
             Text(moment.together.retake?.tag ?? moment.together.convergence?.tag ?? moment.together.pinboard?.tag ?? "Kept · stays")
-                .font(.system(size: 12.5, weight: .bold))
+                .pulseFont(12.5, weight: .bold)
                 .foregroundStyle(Theme.Color.primaryTint)
                 .padding(.horizontal, Spacing.s4)
                 .padding(.top, Spacing.s3)
@@ -180,7 +180,7 @@ struct ReinventedPulseList: View {
 
     private func heading(_ words: String) -> some View {
         Text(words)
-            .font(.system(size: 17, weight: .bold))
+            .pulseFont(17, weight: .bold)
             .foregroundStyle(Theme.Color.appText)
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s2)
@@ -192,7 +192,7 @@ struct ReinventedPulseList: View {
         HStack(spacing: 6) {
             Icon(.info, size: 13, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
             Text(why)
-                .font(.system(size: 12.5, weight: .medium))
+                .pulseFont(12.5, weight: .medium)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
         .padding(.horizontal, Spacing.s4)
@@ -204,10 +204,10 @@ struct ReinventedPulseList: View {
     private var emptyNote: some View {
         VStack(spacing: Spacing.s2) {
             Text(Self.emptyTitle(model.reach))
-                .font(.system(size: 17, weight: .bold))
+                .pulseFont(17, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
             Text(Self.emptyLine(model.reach))
-                .font(.system(size: 14))
+                .pulseFont(14)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
             if model.filters != nil {
@@ -218,7 +218,7 @@ struct ReinventedPulseList: View {
                     Button("Look wider") { Task { await widen() } }
                         .accessibilityIdentifier("reinventedPulse.empty.wider")
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .pulseFont(14, weight: .semibold)
                 .frame(minHeight: 44)
             }
         }
@@ -243,7 +243,7 @@ struct ReinventedPulseList: View {
         HStack(spacing: Spacing.s2) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
             Text(band.label)
-                .font(.system(size: 12, weight: .semibold))
+                .pulseFont(12, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .fixedSize()
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
@@ -264,7 +264,7 @@ struct ReinventedPulseList: View {
         return VStack(alignment: .leading, spacing: 0) {
             if let status = Self.status(of: card) {
                 Text(status)
-                    .font(.system(size: 12.5, weight: .bold))
+                    .pulseFont(12.5, weight: .bold)
                     .foregroundStyle(Theme.Color.primaryTint)
                     .padding(.horizontal, Spacing.s4)
                     .padding(.top, Spacing.s3)
@@ -272,7 +272,7 @@ struct ReinventedPulseList: View {
             }
             if let line = model.travel(of: postId)?.line {
                 Text(line)
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .pulseFont(12.5, weight: .semibold)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.horizontal, Spacing.s4)
                     .padding(.top, Spacing.s1)
@@ -353,7 +353,7 @@ struct ReinventedMomentRow: View {
                     .overlay(alignment: .topLeading) { header.padding(Spacing.s3) }
                 if let caption = moment.caption, !caption.isEmpty {
                     Text(caption)
-                        .font(.system(size: 15, weight: .medium))
+                        .pulseFont(15, weight: .medium)
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(2)
                         .padding(.horizontal, Spacing.s4)
@@ -384,16 +384,16 @@ struct ReinventedMomentRow: View {
     private var header: some View {
         HStack(spacing: 6) {
             Text(moment.author.shortName)
-                .font(.system(size: 13, weight: .bold))
+                .pulseFont(13, weight: .bold)
             if !kept {
                 Text("·")
                 Text(timeLeft)
-                    .font(.system(size: 13, weight: .semibold))
+                    .pulseFont(13, weight: .semibold)
             }
             if !moment.placeLabel.isEmpty {
                 Text("·")
                 Text(moment.placeLabel)
-                    .font(.system(size: 13, weight: .medium))
+                    .pulseFont(13, weight: .medium)
                     .lineLimit(1)
             }
         }
