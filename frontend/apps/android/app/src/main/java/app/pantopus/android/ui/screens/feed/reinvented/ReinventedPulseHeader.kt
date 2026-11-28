@@ -4,6 +4,7 @@ package app.pantopus.android.ui.screens.feed.reinvented
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -71,6 +73,7 @@ internal fun ReinventedPulseHeader(
     onPickCircle: (String, String) -> Unit = { _, _ -> },
     lens: ReinventedLens = ReinventedLens(),
     lensActions: ReinventedLensActions = ReinventedLensActions({}, {}),
+    onPullDown: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var showsDial by rememberSaveable { mutableStateOf(false) }
@@ -80,6 +83,7 @@ internal fun ReinventedPulseHeader(
         modifier =
             modifier
                 .fillMaxWidth()
+                .then(if (onPullDown != null) Modifier.pullsDown(onPullDown) else Modifier)
                 .background(if (onList) PantopusColors.appBg else Color.Transparent)
                 .statusBarsPadding()
                 .padding(bottom = Spacing.s2),
@@ -95,9 +99,7 @@ internal fun ReinventedPulseHeader(
                 onHeight = onHeight,
                 onAtlas = onAtlas,
             )
-            // The place's chips under the top line until the Filters sheet takes them; none over the map alone or in My Atlas.
-            val chipsHere = state.chips.size > 1 && state.reach != ReinventedPulseViewModel.EXPLORE
-            if (!atlas && height != ReinventedHeight.Map && chipsHere) ChipsRow(state, onPickChip)
+            // The chips are the Filters sheet's kinds now (PHASE-6 A2: the rail replaces the chips row).
             return@Column
         }
         Row(
@@ -242,6 +244,23 @@ private fun SmallSwitchButton(
         }
     }
 }
+
+/** Pulling down on the top line drops the Filters sheet (PHASE-6 A3); a tap still goes to the control under the finger. */
+private fun Modifier.pullsDown(onPull: () -> Unit): Modifier =
+    pointerInput(onPull) {
+        var pulled = 0f
+        detectVerticalDragGestures(onDragStart = { pulled = 0f }) { change, dy ->
+            pulled += dy
+            if (pulled > PULL_PX * density) {
+                pulled = Float.NEGATIVE_INFINITY
+                change.consume()
+                onPull()
+            }
+        }
+    }
+
+/** How far down the top line is pulled before the Filters sheet drops, in dp. */
+private const val PULL_PX = 40f
 
 /** A round button that stands on its own over the map. */
 @Composable

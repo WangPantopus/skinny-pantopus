@@ -42,20 +42,27 @@ interface ReinventedApi {
     suspend fun list(
         @Query("reach") reach: String,
         @Query("miles") miles: Int?,
-        @Query("chip") chip: String,
+        // Null only while filters (CONTRACT 10a) are sent: the chip and the kinds never go together.
+        @Query("chip") chip: String?,
         @Query("latitude") latitude: String?,
         @Query("longitude") longitude: String?,
         @Query("cursor") cursor: String?,
         @Query("limit") limit: Int = PAGE,
         // CONTRACT 8d: with reach=close, only this circle's people who are in.
         @Query("circle") circle: String? = null,
+        // CONTRACT 10a, the filters: each left out while null, so a read with none is exactly as before.
+        @Query("kinds") kinds: String? = null,
+        @Query("when") whenTime: String? = null,
+        @Query("from") from: String? = null,
+        @Query("state") state: String? = null,
+        @Query("since") since: String? = null,
     ): ReinventedListResponse
 
     /**
      * `GET /api/reinvented/map` (CONTRACT 6b): rings, marks, tickets and kept Moments for a box and a time (`live`,
      * `today`, `week`, `all`, `tonight`, `weekend`). Route `backend/routes/reinvented.js` (map).
      */
-    @Suppress("LongParameterList") // The box's four sides and the time.
+    @Suppress("LongParameterList") // The box's four sides, the time and the filters.
     @GET("api/reinvented/map")
     suspend fun map(
         @Query("south") south: String,
@@ -63,6 +70,11 @@ interface ReinventedApi {
         @Query("north") north: String,
         @Query("east") east: String,
         @Query("time") time: String,
+        // CONTRACT 10a, the filters (the map takes no `when`: its time row is its When); each left out while null.
+        @Query("kinds") kinds: String? = null,
+        @Query("from") from: String? = null,
+        @Query("state") state: String? = null,
+        @Query("since") since: String? = null,
     ): ReinventedMapResponse
 
     /** `GET /api/reinvented/strip` (CONTRACT 6c): Alive right now. Route `backend/routes/reinvented.js` (strip). */

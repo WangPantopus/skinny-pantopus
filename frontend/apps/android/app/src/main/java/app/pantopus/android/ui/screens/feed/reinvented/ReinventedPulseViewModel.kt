@@ -18,6 +18,7 @@ import app.pantopus.android.data.moments.MomentsPlayback
 import app.pantopus.android.data.moments.MomentsRepository
 import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.pulse.ReinventedFilterQuery
 import app.pantopus.android.data.pulse.ReinventedPoint
 import app.pantopus.android.data.pulse.ReinventedRepository
 import app.pantopus.android.ui.screens.profile.ProfilePostCards
@@ -118,6 +119,24 @@ class ReinventedPulseViewModel
             reading = viewModelScope.launch { read(cursor) }
         }
 
+        /** PHASE-5 B, the filters while any is on (CONTRACT 10a); null reads the list exactly as before. */
+        private var filters: ReinventedFilterQuery? = null
+
+        /**
+         * The filters changed: the list reads again from its first page (the first read already carries them). One kind
+         * alone and nothing else is today's chip ([chip]), so what a chip shows (Eyes on near you under Ask) still shows.
+         */
+        fun filter(
+            query: ReinventedFilterQuery?,
+            chip: String = ALL,
+        ) {
+            if (query == filters && chip == _state.value.chip) return
+            filters = query
+            _state.update { it.copy(chip = chip) }
+            // Before the list's first read nothing is asked again: that read carries them.
+            if (reading != null) refresh()
+        }
+
         fun pickChip(chip: String) {
             if (chip == _state.value.chip) return
             _state.update { it.copy(chip = chip) }
@@ -203,6 +222,7 @@ class ReinventedPulseViewModel
                     at = here.takeIf { start.reach == AROUND },
                     cursor = cursor,
                     circle = start.circleId.takeIf { start.reach == CLOSE },
+                    filters = filters,
                 )
             if (answer is NetworkResult.Failure && start.circleId != null && answer.error.circleGone) {
                 // No longer in that circle (it ended, or they left): all their connections again.

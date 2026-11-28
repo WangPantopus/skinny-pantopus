@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.plans.PlanLocationResolver
 import app.pantopus.android.data.pulse.ReinventedBox
+import app.pantopus.android.data.pulse.ReinventedFilterQuery
 import app.pantopus.android.data.pulse.ReinventedPoint
 import app.pantopus.android.data.pulse.ReinventedRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -117,6 +118,9 @@ class ReinventedMapViewModel
         private var box: ReinventedBox? = null
         private var reading: Job? = null
 
+        /** PHASE-5 B, the filters while any is on (CONTRACT 10a, no `when`); null reads the map exactly as before. */
+        private var filters: ReinventedFilterQuery? = null
+
         init {
             // The phone's place, when it already has one, without waiting: the map opens there.
             location.cachedCoordinate()?.let { fix -> _state.update { it.copy(center = ReinventedPoint(fix.latitude, fix.longitude)) } }
@@ -152,6 +156,13 @@ class ReinventedMapViewModel
         /** Read again (a pull on the list, coming back to the tab). */
         fun refresh() = readSoon(waitMs = 0L)
 
+        /** The filters changed (PHASE-5 B): the map reads again with them. */
+        fun filter(query: ReinventedFilterQuery?) {
+            if (query == filters) return
+            filters = query
+            readSoon(waitMs = 0L)
+        }
+
         /** The deck moved to [item]: its pin lights and the map glides to it. */
         fun focus(item: ReinventedMapItem) {
             _state.update { it.copy(focused = item.id) }
@@ -172,7 +183,7 @@ class ReinventedMapViewModel
                 viewModelScope.launch {
                     if (waitMs > 0) delay(waitMs)
                     val time = _state.value.time
-                    val answer = repository.map(area, time) as? NetworkResult.Success ?: return@launch
+                    val answer = repository.map(area, time, filters) as? NetworkResult.Success ?: return@launch
                     val map = answer.data
                     val items =
                         map.rings.filterNot { it.noLocation }.map(ReinventedMapItem::Ring) +

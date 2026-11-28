@@ -64,18 +64,48 @@ class ReinventedRepository
             cursor: String?,
             // CONTRACT 8d: one circle of the reader's, with `close`.
             circle: String? = null,
+            // CONTRACT 10a: the filters, each left out while null.
+            filters: ReinventedFilterQuery? = null,
         ): NetworkResult<ReinventedListResponse> =
             // A circle's 404 is the circle gone (CIRCLE_NOT_FOUND), not an older server: today's Pulse stays out of it.
             guarded(behindOn404 = circle == null) {
-                api.list(reach, miles, chip, at?.latitude?.let(::degrees), at?.longitude?.let(::degrees), cursor, circle = circle)
+                api.list(
+                    reach,
+                    miles,
+                    // With filters the chip goes only when it is one kind alone (never beside `kinds`, never `all`).
+                    chip.takeIf { filters == null || (filters.kinds == null && it != "all") },
+                    at?.latitude?.let(::degrees),
+                    at?.longitude?.let(::degrees),
+                    cursor,
+                    circle = circle,
+                    kinds = filters?.kinds,
+                    whenTime = filters?.whenTime,
+                    from = filters?.from,
+                    state = filters?.state,
+                    since = filters?.since,
+                )
             }
 
-        /** The map for a box and a time (CONTRACT 6b). */
+        /** The map for a box and a time (CONTRACT 6b), and the filters (10a) while any is on. */
         suspend fun map(
             box: ReinventedBox,
             time: String,
+            // CONTRACT 10a: the filters, without `when` (the time is the map's When).
+            filters: ReinventedFilterQuery? = null,
         ): NetworkResult<ReinventedMapResponse> =
-            guarded { api.map(degrees(box.south), degrees(box.west), degrees(box.north), degrees(box.east), time) }
+            guarded {
+                api.map(
+                    degrees(box.south),
+                    degrees(box.west),
+                    degrees(box.north),
+                    degrees(box.east),
+                    time,
+                    kinds = filters?.kinds,
+                    from = filters?.from,
+                    state = filters?.state,
+                    since = filters?.since,
+                )
+            }
 
         /** Alive right now (CONTRACT 6c). An older server's 404 only leaves the strip out. */
         suspend fun strip(at: ReinventedPoint?): NetworkResult<ReinventedStripResponse> =
