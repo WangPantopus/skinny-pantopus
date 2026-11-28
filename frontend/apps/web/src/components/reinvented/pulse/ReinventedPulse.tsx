@@ -11,7 +11,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { BookOpen, ChevronDown, LocateFixed, Map as MapGlyph, Menu, Plus, Search, UserRoundSearch, X } from 'lucide-react';
+import { BookOpen, ChevronDown, LocateFixed, Map as MapGlyph, Menu, Plus, Search, X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/api';
 import { useMe } from '@/lib/me';
@@ -1025,14 +1025,18 @@ export default function ReinventedPulse() {
       {canFilter && lensOpen && (
         // The lens is one field: the words typed ask the map ("Ask the map: …"); the pins that match light up.
         <div className="rp-lens-card">
-          <AskTheMap box={box} time={time} data={map.data} lit={lit} shown={lit ? pins.filter((p) => lit.pins.has(p.key)).length : 0} onLit={setLit} />
-          {phoneTop && (
-            // The app's own Search (people and places) stepped aside with its top bar: it is reached from the lens here.
-            <button type="button" className="rp-lens-more" onClick={() => router.push('/app/discover')}>
-              <UserRoundSearch size={16} aria-hidden />
-              Search people and places
-            </button>
-          )}
+          {/* One field for both jobs: the typed words ask the map, or search people and places in today's Discover (as the
+              app's own search does); at a phone's width, where that search stepped aside, it is offered with no words too. */}
+          <AskTheMap
+            box={box}
+            time={time}
+            data={map.data}
+            lit={lit}
+            shown={lit ? pins.filter((p) => lit.pins.has(p.key)).length : 0}
+            onLit={setLit}
+            onSearch={(words) => router.push(words ? `/app/discover?q=${encodeURIComponent(words)}` : '/app/discover')}
+            searchAlways={phoneTop}
+          />
         </div>
       )}
       {phoneTop && (

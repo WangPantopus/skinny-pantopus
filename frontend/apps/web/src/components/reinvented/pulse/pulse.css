@@ -338,6 +338,13 @@
   color: var(--rp-ink);
   font-size: 13px;
   font-weight: 600;
+  text-align: left;
+}
+.rp-lens-more > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* One small pill under the top line says which filters are on; nothing shows when none is. */
 .rp-filter-pill {
