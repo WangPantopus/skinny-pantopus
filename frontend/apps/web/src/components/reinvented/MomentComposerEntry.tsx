@@ -18,7 +18,16 @@ const Studio = dynamic(() => import('./studio/Studio'), { ssr: false });
  * slower). When the server says the switch went off while the Studio was open, the switch is read again and today's
  * composer takes over with the person's words (CONTRACT §1).
  */
-export default function MomentComposerEntry(props: ComponentProps<typeof MomentComposer>) {
+export default function MomentComposerEntry({
+  onHandBack,
+  ...props
+}: ComponentProps<typeof MomentComposer> & {
+  /**
+   * The new Pulse's "+" (handBack.ts): where the words go when the switch is found off, since today's composer can't
+   * open inside the new Pulse as it gives way. True when they were taken; otherwise today's composer opens here.
+   */
+  onHandBack?(words: MomentChatDraft): Promise<boolean>;
+}) {
   const flag = usePulseReinvented();
   // A server older than this website: today's composer, as when the switch is off.
   const behind = useServerBehind();
@@ -29,9 +38,12 @@ export default function MomentComposerEntry(props: ComponentProps<typeof MomentC
     <Studio
       {...props}
       onSwitchedOff={(words) => {
-        void reread();
-        setKept(words);
-        setStudio(false);
+        void (async () => {
+          if (onHandBack && (await onHandBack(words))) return;
+          void reread();
+          setKept(words);
+          setStudio(false);
+        })();
       }}
     />
   ) : (

@@ -25,7 +25,10 @@ struct MomentPhotoSurface: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        if flags.isOn, let pair = moment.layers.beforeAfter {
+        if flags.isOn, moment.layers.whole, moment.layers.beforeAfter == nil {
+            // See the picture first (phase 5, CONTRACT 10c): the author's whole picture, fitted, on its backdrop.
+            MomentWholePicture(moment: moment, image: image)
+        } else if flags.isOn, let pair = moment.layers.beforeAfter {
             MomentBeforeAfterView(picture: image, item: pair)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("\(moment.author.shortName)'s before and after")

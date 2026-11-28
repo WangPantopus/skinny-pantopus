@@ -105,6 +105,7 @@ const draftBusinessReminder = require('./draftBusinessReminder');
 // Mail escrow expiry
 const mailEscrowExpiry = require('./mailEscrowExpiry');
 const cardEmailSend = require('./cardEmailSend');
+const cardNotice = require('../services/cardNotice');
 const mailDeletedPurge = require('./mailDeletedPurge');
 // Home intelligence jobs
 const nfipTractWarm = require('./nfipTractWarm');
@@ -771,6 +772,13 @@ function startJobs(options = {}) {
   // Every 5 minutes: sends the emails of Christmas cards by email that are due (the sender's 7 a.m., Christmas morning)
   // and tries again those that didn't go out.
   scheduleCron('*/5 * * * *', wrapJob('cardEmailSend', cardEmailSend), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // Every 5 minutes: the push of a Christmas card that went right away, once the person's quiet hours end, or one a
+  // server left unsent; dropped when the card was opened meanwhile (services/cardNotice). Each send is claimed first.
+  scheduleCron('*/5 * * * *', wrapJob('cardNoticeHeldPushes', cardNotice.releaseHeld), {
     scheduled: true,
     timezone: 'UTC',
   });

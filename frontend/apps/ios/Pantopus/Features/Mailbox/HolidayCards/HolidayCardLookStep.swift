@@ -166,6 +166,18 @@ struct HolidayCardLookStep: View {
     }
 
     private var intro: String {
+        // With `improved` and guest opening on, they can read it before joining (the web's words).
+        if recipient.isEmail, viewModel.improved, let page = preview.linkPage, page.guestOpen {
+            if recipient.isLink {
+                return "Anyone with your link can open and read the card"
+                    + (page.sealed ? " once Christmas morning arrives" : " right away")
+                    + " — no account needed. The first person to save it keeps it."
+            }
+            let after = page.sealed
+                ? "they get a reminder on Christmas morning when it opens."
+                : "they can open and read the card right away without an account, and join free to keep it or write back."
+            return "They aren’t on Pantopus yet. The email never shows your note; " + after
+        }
         if recipient.isEmail {
             if recipient.isLink {
                 return "The first person to open your link keeps the card. "
@@ -523,7 +535,7 @@ struct HolidayCardLookEnd: View {
                 text: viewModel.recipient?.isLink == true ? HolidayCardWords.sealNoteByLink : HolidayCardWords.sealNote(byEmail: byEmail)
             )
             if viewModel.cards?.postageEnabled == true, let design = viewModel.design {
-                StampPostageLine(store: viewModel.stamps, design: design.id, media: viewModel.carriesMedia)
+                StampPostageLine(store: viewModel.stamps, design: design.id, media: viewModel.mediaSpendsBoughtStamp)
             }
         }
         .padding(.top, Spacing.s3)
@@ -563,7 +575,7 @@ struct HolidayCardLookFooter: View {
     }
 
     private var needsBoughtStamp: Bool {
-        viewModel.carriesMedia && viewModel.boughtStampsLeft == 0
+        viewModel.mediaNeedsBoughtStamp
     }
 
     var body: some View {

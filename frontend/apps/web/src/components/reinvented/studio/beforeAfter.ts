@@ -2,7 +2,8 @@
 // side by side, the same size and shape, as ONE picture (left before, right after). No second upload: today's screens
 // and the apps in the stores show that picture as it is; the new viewer shows one half over the other.
 
-import { canvasOf, edited, jpeg, paintMedia, type Artwork } from '@/components/moments/momentArtwork';
+import { canvasOf, edited, jpeg, paintOverlay, type Artwork } from '@/components/moments/momentArtwork';
+import { backdropOf, paintPicture } from './whole';
 
 // The posted picture's widest side (both halves together).
 const MAX_WIDE = 3200;
@@ -48,7 +49,8 @@ export async function cutToShape(file: File, shape: { w: number; h: number }): P
 
 /**
  * The picture that is posted: `before` (already prepared: blurs, words, drawing and crop drawn in) on the left and the
- * after on the right, drawn the same way (the same crop, words and drawing), so the halves line up.
+ * after on the right, drawn the same way (the same crop, words and drawing; a moved after sits on its own colours, as
+ * the before does: PHASE-5 A), so the halves line up.
  */
 export async function sideBySide(before: Blob, after: File, art: Artwork): Promise<Blob> {
   let left: HTMLImageElement, right: HTMLImageElement;
@@ -61,8 +63,10 @@ export async function sideBySide(before: Blob, after: File, art: Artwork): Promi
   const w = Math.max(1, Math.round(left.naturalWidth * k)),
     h = Math.max(1, Math.round(left.naturalHeight * k));
   const half = canvasOf(w, h);
-  if (edited(art)) paintMedia(half.ctx, right, right.naturalWidth, right.naturalHeight, art);
-  else half.ctx.drawImage(right, 0, 0, w, h);
+  if (edited(art)) {
+    paintPicture(half.ctx, right, right.naturalWidth, right.naturalHeight, art, backdropOf(right));
+    paintOverlay(half.ctx, art);
+  } else half.ctx.drawImage(right, 0, 0, w, h);
   const { ctx, canvas } = canvasOf(w * 2, h);
   ctx.drawImage(left, 0, 0, w, h);
   ctx.drawImage(half.canvas, w, 0);

@@ -94,7 +94,8 @@ struct MomentsStudioComposer: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if model.marking.isOpen, let media = model.markedMedia {
+            // Fingers moving the picture on the first screen (`MomentsStudioWhole`) keep the first screen.
+            if model.marking.isOpen, model.marking.studio?.adjusting != true, let media = model.markedMedia {
                 // Text and Draw: today's editor, in this stack (not a cover), so a fold keeps it.
                 MomentsMarksEditor(model: model, media: media, studio: true)
                     .environment(\.colorScheme, .dark)

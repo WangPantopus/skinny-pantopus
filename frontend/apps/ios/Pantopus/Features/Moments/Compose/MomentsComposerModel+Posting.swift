@@ -189,6 +189,10 @@ extension MomentsComposerModel {
         body.dots = studioDots
         // The camera's heading for live beams (CONTRACT 9h), only with the Live mark and the switch on; left out otherwise.
         body.heading = marks.takenHere == true ? studioHeading : nil
+        // See the picture first (CONTRACT 10c): a composed whole, its backdrop and a whole video's place; left out otherwise.
+        body.whole = studioWhole
+        body.placement = studioWhole == true ? studioWholePlacement : nil
+        body.backdrop = studioWhole == true ? studioBackdrop : nil
         // The Studio's stamps, and the phone's height for an elevation stamp; left out otherwise.
         if !studioStamps.isEmpty {
             body.stamps = studioStamps

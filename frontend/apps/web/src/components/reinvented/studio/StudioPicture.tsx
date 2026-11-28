@@ -1,25 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { paintMedia, paintOverlay, type Artwork, type Stroke, type XY } from '@/components/moments/momentArtwork';
+import { paintOverlay, type Artwork, type Stroke, type XY } from '@/components/moments/momentArtwork';
 import { useSpanLoop, type LoopSpan } from '../loop/loop';
+import { backdropCss, paintPicture, stuckTurn, turnOf, zoomRange, type Backdrop } from './whole';
 
 export type StudioTool = 'text' | 'draw' | 'resize' | null;
 /** Draw's brushes (design, the Studio's rail: "Draw: brush, highlighter, arrow, eyedropper, eraser"). */
 export type StudioBrush = 'pen' | 'highlighter' | 'arrow' | 'eraser';
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-/** A moved picture within 2% of the middle sits exactly in it. */
-const toMiddle = (v: number) => (Math.abs(v) < 0.02 ? 0 : v);
-
-/** How far a picture is zoomed when it fills the 9:16 frame, at a quarter turn or not (1 when it already fits exactly). */
-export function fillZoom(w: number, h: number, rotation: number) {
-  if (!w || !h) return 1;
-  const side = rotation % 180 !== 0,
-    pw = side ? h : w,
-    ph = side ? w : h;
-  return Math.max(9 / pw, 16 / ph) / Math.min(9 / pw, 16 / ph);
-}
+/** A moved picture within 2% of the middle sits exactly in it; its middle stays on the canvas. */
+const toMiddle = (v: number) => (Math.abs(v) < 0.02 ? 0 : clamp(v, -0.5, 0.5));
+/** The angle between two fingers, in degrees. */
+const angleOf = (a: XY, b: XY) => (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
 // The posted frame in pixels (9:16, as the canvas below): lengths and angles are worked out here, not in fractions.
 const W = 720,
   H = 1280;
@@ -68,9 +62,10 @@ function distance(p: XY, stroke: Stroke) {
 }
 
 /**
- * The picture in the Studio: the photo or video fills the 9:16 frame that is posted (the same frame, artwork and
- * drawing rules as today's MomentEditor, so what is seen is what goes out). With Resize (or no tool) dragging moves the
- * picture and the wheel or two fingers zoom it; with Text the drag moves the words; with Draw it draws.
+ * The picture in the Studio, on the 9:16 frame that is posted: whole and upright at first, on its own colours (whole.ts
+ * draws what goes out with the same numbers, so what is seen is what goes out). With Resize (or no tool) dragging moves
+ * the picture, the wheel or two fingers size it, and two fingers or Shift and the wheel turn it to any angle; with Text
+ * the drag moves the words; with Draw it draws.
  */
 export default function StudioPicture({
   file,
@@ -85,6 +80,7 @@ export default function StudioPicture({
   onBeforeStrokes,
   onPicture,
   loop = null,
+  backdrop = null,
 }: {
   file: File;
   art: Artwork;
@@ -103,6 +99,8 @@ export default function StudioPicture({
   onPicture?(el: HTMLImageElement | HTMLVideoElement, width: number, height: number): void;
   /** A loop (CONTRACT 7j): the video plays only this part, over and over, as the new viewers will. */
   loop?: LoopSpan | null;
+  /** The picture's own two colours (PHASE-5 A), drawn where it doesn't reach, as readers will see it. */
+  backdrop?: Backdrop | null;
 }) {
   const [url, setUrl] = useState(''),
     [unreadable, setUnreadable] = useState(false),
@@ -113,7 +111,7 @@ export default function StudioPicture({
     media = useRef<HTMLImageElement | HTMLVideoElement | null>(null),
     rubbed = useRef<XY | null>(null),
     fingers = useRef(new Map<number, XY>()),
-    pinch = useRef<{ span: number; zoom: number } | null>(null);
+    pinch = useRef<{ span: number; zoom: number; angle: number; rotation: number } | null>(null);
   useEffect(() => {
     const u = URL.createObjectURL(file);
     setUrl(u);
@@ -144,7 +142,7 @@ export default function StudioPicture({
       c.height = H;
       const ctx = c.getContext('2d', { willReadFrequently: true });
       if (!ctx) return null;
-      paintMedia(ctx, el, dimensions.w, dimensions.h, { ...art, strokes: [], text: '' });
+      paintPicture(ctx, el, dimensions.w, dimensions.h, { ...art, strokes: [], text: '' }, backdrop);
       const [r, g, b] = ctx.getImageData(Math.min(W - 1, Math.round(p.x * W)), Math.min(H - 1, Math.round(p.y * H)), 1, 1).data;
       return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
     } catch {
@@ -168,21 +166,25 @@ export default function StudioPicture({
     const [a, b] = [...fingers.current.values()];
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   };
+  const twist = () => {
+    const [a, b] = [...fingers.current.values()];
+    return a && b ? angleOf(a, b) : 0;
+  };
+  const sizes = zoomRange(dimensions.w, dimensions.h);
   // See the picture first (PHASE-5 A1): every picture opens whole, never cut, as it will look to readers; Fit / Fill,
-  // Turn and Reset on the same screen (Studio.tsx), and dragging or zooming here, change it.
+  // Turn and Reset on the same screen (Studio.tsx), and dragging, zooming and turning here, change it. The picture is
+  // whole and upright at zoom 1, then sized and turned to any angle (whole.ts, the same numbers as what is posted).
   const measured = (w: number, h: number) => setDimensions({ w, h });
-  const side = art.rotation % 180 !== 0;
-  const scale =
-    Math.min(9 / (side ? dimensions.h : dimensions.w), 16 / (side ? dimensions.w : dimensions.h)) * art.zoom;
+  const scale = Math.min(9 / dimensions.w, 16 / dimensions.h) * art.zoom;
   const style = {
     width: ((dimensions.w * scale) / 9) * 100 + '%',
     height: ((dimensions.h * scale) / 16) * 100 + '%',
     left: 50 + 100 * art.offset.x + '%',
     top: 50 + 100 * art.offset.y + '%',
-    transform: 'translate(-50%, -50%) rotate(' + art.rotation + 'deg)',
+    transform: 'translate(-50%, -50%) rotate(' + turnOf(art.rotation) + 'deg)',
   };
   return (
-    <div className="st-picture" ref={frame}>
+    <div className="st-picture" ref={frame} style={backdrop ? { background: backdropCss(backdrop) } : undefined}>
       {url &&
         (file.type.startsWith('video/') ? (
           <video
@@ -232,7 +234,9 @@ export default function StudioPicture({
         }
         onWheel={(e) => {
           if (tool === 'text' || tool === 'draw') return;
-          onChange({ ...art, zoom: clamp(art.zoom * (e.deltaY < 0 ? 1.06 : 1 / 1.06), 0.5, 3) });
+          // Shift and the wheel turn it, five degrees a step, sticking at quarter turns; the wheel alone sizes it.
+          if (e.shiftKey) onChange({ ...art, rotation: stuckTurn(art.rotation + ((e.deltaY || e.deltaX) < 0 ? -5 : 5)) });
+          else onChange({ ...art, zoom: clamp(art.zoom * (e.deltaY < 0 ? 1.06 : 1 / 1.06), sizes.min, sizes.max) });
         }}
         onPointerDown={(e) => {
           try {
@@ -248,7 +252,7 @@ export default function StudioPicture({
           }
           if ((!tool || tool === 'resize') && fingers.current.size === 2) {
             drag.current = null;
-            pinch.current = { span: span(), zoom: art.zoom };
+            pinch.current = { span: span(), zoom: art.zoom, angle: twist(), rotation: art.rotation };
             return;
           }
           const p = point(e);
@@ -271,9 +275,15 @@ export default function StudioPicture({
         }}
         onPointerMove={(e) => {
           if (fingers.current.has(e.pointerId)) fingers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          // Two fingers size it and turn it to any angle, sticking at quarter turns (as the phones' Resize does).
           if (pinch.current) {
             const now = span();
-            if (now && pinch.current.span) onChange({ ...art, zoom: clamp((pinch.current.zoom * now) / pinch.current.span, 0.5, 3) });
+            if (now && pinch.current.span)
+              onChange({
+                ...art,
+                zoom: clamp((pinch.current.zoom * now) / pinch.current.span, sizes.min, sizes.max),
+                rotation: stuckTurn(pinch.current.rotation + twist() - pinch.current.angle),
+              });
             return;
           }
           if (!drag.current) return;

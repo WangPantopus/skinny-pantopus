@@ -20,6 +20,8 @@ export interface CardLinkFront { design: string; caption: string; paper: string;
  * never the letter itself (GET /api/mailbox/claim/:mailId).
  */
 export interface EscrowedMailView {
+  /** The card improvements of November 28 are on (server env CARD_IMPROVEMENTS). Absent: the page from before them. */
+  improved?: boolean;
   mail: {
     id: string;
     senderName: string;

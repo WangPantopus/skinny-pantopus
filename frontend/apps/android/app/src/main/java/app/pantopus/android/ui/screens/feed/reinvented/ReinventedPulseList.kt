@@ -41,11 +41,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.moments.MomentDto
+import app.pantopus.android.data.api.models.reinvented.PulseTravelDto
+import app.pantopus.android.data.api.models.reinvented.shownConvergence
+import app.pantopus.android.data.api.models.reinvented.shownPinboard
 import app.pantopus.android.data.api.models.reinvented.shownRetake
 import app.pantopus.android.data.pulse.ReinventedPoint
 import app.pantopus.android.ui.components.EmptyState
+import app.pantopus.android.ui.screens.feed.living.LivingFollowedPlaces
+import app.pantopus.android.ui.screens.feed.living.LivingWindowsRow
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCard
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
+import app.pantopus.android.ui.screens.feed.reinvented.after.EyesOnNearSection
+import app.pantopus.android.ui.screens.feed.reinvented.after.PulsePassItOn
+import app.pantopus.android.ui.screens.feed.reinvented.after.PulseTravelLine
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentImages
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
@@ -140,6 +148,14 @@ private fun LoadedRows(
         // Always the first slot, empty until the strip comes: the strip then grows in place at the top instead of
         // landing above the row the list keeps in view.
         item(key = "top") { top?.invoke() }
+        // Eyes on near you (CONTRACT 8f): only once the Ask chip is picked, never beside what opens the tab.
+        if (state.chip == ASK_CHIP) item(key = "eyesOn") { EyesOnNearSection(actions.viewer) }
+        // Places you follow (phase 4, `feed/living/LivingPlaces.kt`), at the top of Explore only.
+        if (state.reach == ReinventedPulseViewModel.EXPLORE) {
+            item(key = "followed") { LivingFollowedPlaces(state.followed, actions.onRefresh, actions.onOpenMoment) }
+        }
+        // Windows (phase 4, `feed/living/LivingWindows.kt`), at the top of Close circle only.
+        if (state.reach == ReinventedPulseViewModel.CLOSE) item(key = "windows") { LivingWindowsRow() }
         if (state.items.isEmpty()) item(key = "empty") { EmptyNote(state.reach) }
         items(rows, key = { it.key }) { row ->
             when (row) {
@@ -150,7 +166,7 @@ private fun LoadedRows(
                     } else {
                         ReinventedMomentRow(row.moment, nowMs, onShowOnMap = actions.onShowOnMap) { actions.onOpenMoment(row.moment) }
                     }
-                is ReinventedRow.Post -> PostThatStays(row.card, actions.cards)
+                is ReinventedRow.Post -> PostThatStays(row.card, actions.cards, row.travel, actions.viewer)
                 is ReinventedRow.Heading -> Heading(row.words)
                 is ReinventedRow.Why -> WhyLine(row.words)
             }
@@ -292,6 +308,8 @@ private fun BandLine(row: ReinventedRow.Band) {
 private fun PostThatStays(
     card: PulsePostCardContent,
     actions: ProfilePostCardActions,
+    travel: PulseTravelDto? = null,
+    viewer: String? = null,
 ) {
     val shape = RoundedCornerShape(Radii.lg)
     Column(
@@ -313,6 +331,8 @@ private fun PostThatStays(
                 modifier = Modifier.padding(horizontal = Spacing.s4).padding(top = Spacing.s3).testTag("reinventedPulse.status.${card.id}"),
             )
         }
+        // Who carried it here, who passed it on, or an Eyes-on Ask's window (CONTRACT 8f).
+        PulseTravelLine(travel, Modifier.padding(horizontal = Spacing.s4).padding(top = 2.dp))
         val going = { actions.onReact(card.id) }
         PulsePostCard(
             content = card,
@@ -325,6 +345,7 @@ private fun PostThatStays(
             onToggleRepost = { actions.onToggleRepost(card.id) },
             onOpenQuoted = actions.onOpenQuoted,
         )
+        PulsePassItOn(card.id, travel, viewer)
     }
 }
 
@@ -350,7 +371,7 @@ private fun KeptCard(
     ) {
         Text(
             // A Retake's row (CONTRACT 8e) says so; it opens the whole Retake.
-            text = moment.shownRetake?.tag ?: "Kept · stays",
+            text = moment.shownRetake?.tag ?: moment.shownConvergence?.tag ?: moment.shownPinboard?.tag ?: "Kept · stays",
             fontSize = 12.5.sp,
             fontWeight = FontWeight.Bold,
             color = PantopusColors.primary600,
@@ -479,3 +500,6 @@ private fun momentPoint(moment: MomentDto): ReinventedPoint? {
 
 private val MOMENT_HEIGHT = 380.dp
 private const val ROWS_BEFORE_END = 4
+
+/** The chip whose list draws "Eyes on near you" over it. */
+private const val ASK_CHIP = "ask"

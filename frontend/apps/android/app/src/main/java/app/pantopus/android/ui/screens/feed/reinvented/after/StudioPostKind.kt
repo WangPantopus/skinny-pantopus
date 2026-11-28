@@ -77,6 +77,8 @@ data class StudioPostDraft(
     val venue: String = "",
     /** "Also show in Explore" (CONTRACT 6f), off by default; kept by the server only where it may be. */
     val explore: Boolean = false,
+    /** "Eyes on: ask people who are there now" on a Question (CONTRACT 8f), off by default. */
+    val eyesOn: Boolean = false,
     /** Names this post: a second Post tap (say after the photo failed to go up) gets the same post back. */
     val requestId: String? = null,
 ) {

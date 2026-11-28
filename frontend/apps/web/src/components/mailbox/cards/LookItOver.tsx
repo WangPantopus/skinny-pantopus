@@ -112,7 +112,10 @@ export default function LookItOver({
   byEmail,
   byLink = false,
   onCloth = false,
+  improved = false,
 }: {
+  /** The card improvements of November 28 are on (GET /cards `improved`): the link page as a guest opens it. */
+  improved?: boolean;
   preview: HolidayCardPreview;
   /** Their name as step 1 showed it, or the address typed for them. */
   toName: string;
@@ -166,7 +169,7 @@ export default function LookItOver({
     </div>
   ) : null;
 
-  const guestOpen = Boolean(preview.link_page?.guest_open);
+  const guestOpen = improved && Boolean(preview.link_page?.guest_open);
   const intro = byLink
     ? guestOpen
       ? `Anyone with your link can open and read the card${sealed ? ' once Christmas morning arrives' : ' right away'} — no account needed. The first person to save it keeps it.`
@@ -191,7 +194,7 @@ export default function LookItOver({
     sentTo: preview.link_page.sent_to,
     createdAt: preview.link_page.sent_on,
     card: { holiday: card.holiday, year: card.year, sealed: preview.link_page.sealed, front: preview.link_page.front ?? null,
-      by_link: preview.link_page.by_link, guest_open: preview.link_page.guest_open },
+      by_link: preview.link_page.by_link, ...(guestOpen ? { guest_open: true } : {}) },
   } : null;
 
   return (
@@ -243,7 +246,7 @@ export default function LookItOver({
               <h3 className={`${sectionLabel} px-1`}>The page its link opens</h3>
               {launchFeatures.cardTable ? (
                 <div className="mt-2">
-                  <CardLinkScene framed front={linkPageFront(linkPage)}>
+                  <CardLinkScene framed front={linkPageFront(linkPage)} improved={improved}>
                     <CardLinkWords letter={linkPage} />
                     <CardLinkSignIn letter={linkPage} />
                   </CardLinkScene>

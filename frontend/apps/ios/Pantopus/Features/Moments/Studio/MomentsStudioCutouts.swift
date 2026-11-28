@@ -225,7 +225,7 @@ extension MomentsComposerModel {
     var studioCutoutSurface: CGSize? {
         // A before and after takes stamps only (`MomentsStudioBeforeAfter`).
         if studioPair != nil { return nil }
-        if marking.placement != nil { return MomentPlacement.pixels }
+        if studioShownPlacement != nil { return MomentPlacement.pixels }
         switch draft {
         case let .photo(image): return image.size
         case .video: return marking.video?.size
@@ -270,11 +270,25 @@ struct MomentsStudioCutoutLayer: View {
         GeometryReader { geo in
             if let surface = model.studioCutoutSurface {
                 let frame = MomentMarks.fill(surface, in: geo.size)
+                // While the picture shows whole (`MomentsStudioWhole`), fingers on it move, size and turn it, and a press
+                // held still lifts a cutout as before.
+                let whole = model.studioWholeOffered ? MomentsStudioWholeFrames.canvas(around: geo.frame(in: .global), model: model) : nil
                 ZStack {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .gesture(longPress(frame: frame))
+                    if let whole {
+                        MomentsStudioWholeTouches(
+                            model: model,
+                            canvas: whole,
+                            onHold: { point in Task { await lift(at: point) } },
+                            onHoldEnd: { model.marking.studio?.pickedCutout = nil },
+                            onTap: { model.marking.studio?.pickedCutout = nil }
+                        )
                         .accessibilityHidden(true)
+                    } else {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .gesture(longPress(frame: frame))
+                            .accessibilityHidden(true)
+                    }
                     ForEach(model.marking.studio?.cutouts ?? []) { cutout in
                         MomentsStudioPlacedCutout(model: model, cutout: cutout, frame: frame)
                     }

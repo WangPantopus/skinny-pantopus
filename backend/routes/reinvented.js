@@ -53,16 +53,37 @@ const listSchema = Joi.object({
   from: Joi.string().max(16),
   state: Joi.string().max(40),
   since: Joi.string().max(40),
+  // The map's box (CONTRACT 11a): all four or none, as the map takes them.
+  south: Joi.number().min(-90).max(90),
+  west: Joi.number().min(-180).max(180),
+  north: Joi.number().min(-90).max(90),
+  east: Joi.number().min(-180).max(180),
+  // Posts and Moments without a place after the placed ones (CONTRACT 11b).
+  no_place: Joi.boolean().truthy('1').falsy('0'),
 }).and('latitude', 'longitude');
+
+const BOX_SIDES = ['south', 'west', 'north', 'east'];
 
 /** GET /list — Close circle or Around me: the Moments and posts the caller may see, mixed (CONTRACT 6a). */
 router.get('/list', async (req, res) => {
   try {
     const { error, value } = listSchema.validate(req.query || {}, { abortEarly: true, stripUnknown: true });
     if (error) return res.status(400).json({ error: error.details[0].message.replace(/"/g, ''), code: 'LIST_INVALID' });
-    const { kinds: _k, when: _w, from: _f, state: _s, since: _si, ...asked } = value;
+    const {
+      kinds: _k, when: _w, from: _f, state: _s, since: _si, south, west, north, east, no_place: noPlace, ...asked
+    } = value;
+    // The map's box (CONTRACT 11a): all four sides or none; south < north and west < east, as the map takes it.
+    const sides = BOX_SIDES.filter((side) => value[side] !== undefined).length;
+    if (sides && sides < 4) {
+      return res.status(400).json({ error: "Send the map's area as south, west, north and east.", code: 'LIST_INVALID' });
+    }
+    if (sides && (south >= north || west >= east)) {
+      return res.status(400).json({ error: 'Send a map area with south < north and west < east.', code: 'LIST_INVALID' });
+    }
     const filters = pulseFilters.parse(req.query, { code: 'LIST_INVALID' });
-    res.json(await list.listFor(req.user.id, { ...asked, ...(filters ? { filters } : {}) }));
+    res.json(await list.listFor(req.user.id, {
+      ...asked, ...(filters ? { filters } : {}), ...(sides ? { box: { south, west, north, east } } : {}), ...(noPlace ? { noPlace } : {}),
+    }));
   } catch (error) {
     sendError(res, error, 'list');
   }

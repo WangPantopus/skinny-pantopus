@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.MessagesButton
 import app.pantopus.android.ui.components.NavigationMenuButton
+import app.pantopus.android.ui.screens.feed.living.LivingAskBar
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -93,6 +94,7 @@ internal fun ReinventedPulseHeader(
         if (atlas) return@Column
         if (height == ReinventedHeight.Map) {
             ReinventedTimeRow(time, onPickTime)
+            LivingAskBar()
         } else if (state.chips.size > 1 && state.reach != ReinventedPulseViewModel.EXPLORE) {
             ChipsRow(state, onPickChip)
         }

@@ -1084,3 +1084,24 @@
 .st-filmlooks button[aria-pressed='true'] img {
   border-color: #7dd3fc;
 }
+/* Several picked at once (PHASE-5 A5): the picture before and the next one, beside "2 of 3". */
+.st-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.st-browse {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(11, 18, 32, 0.72);
+  color: #fff;
+  cursor: pointer;
+}
+.st-browse:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

@@ -17,13 +17,30 @@ struct ReinventedEchoesDTO: Decodable {
     struct Line: Decodable, Identifiable {
         let line: String
         let momentId: String?
+        /// The first names of others who also chose names (CONTRACT 9e: only when both people said yes); often none.
+        let names: [String]
         var id: String {
             (momentId ?? "") + line
         }
 
+        /// "With Maya", "With Maya and Sam", "With Maya, Sam and Lee"; nil when the server sends no names.
+        var withNames: String? {
+            let shown = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            guard let last = shown.last else { return nil }
+            let rest = shown.dropLast()
+            return rest.isEmpty ? "With \(last)" : "With \(rest.joined(separator: ", ")) and \(last)"
+        }
+
         private enum CodingKeys: String, CodingKey {
-            case line
+            case line, names
             case momentId = "moment_id"
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            line = try c.decode(String.self, forKey: .line)
+            momentId = try c.decodeIfPresent(String.self, forKey: .momentId)
+            names = (try? c.decodeIfPresent([String].self, forKey: .names)) ?? []
         }
     }
 
@@ -107,10 +124,19 @@ struct ReinventedEchoes: View {
                 } label: {
                     HStack(spacing: Spacing.s2) {
                         Icon(line.momentId == nil ? .leaf : .sparkles, size: 15, strokeWidth: 2.2, color: Theme.Color.primaryTint)
-                        Text(line.line)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.Color.appText)
-                            .multilineTextAlignment(.leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(line.line)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.Color.appText)
+                                .multilineTextAlignment(.leading)
+                            // Names only when the server sends them (both people chose names).
+                            if let withNames = line.withNames {
+                                Text(withNames)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(Theme.Color.appTextSecondary)
+                                    .multilineTextAlignment(.leading)
+                            }
+                        }
                         Spacer(minLength: 0)
                     }
                     .padding(10)

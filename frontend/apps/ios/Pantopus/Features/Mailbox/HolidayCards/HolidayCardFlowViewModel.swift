@@ -257,6 +257,9 @@ final class HolidayCardFlowViewModel {
     var stampShort: StampShort?
     /// The stamp books opened for the card's photo or greeting, which go only with a bought stamp.
     var stampsForMedia = false
+    /// A list's "needs N bought stamps" sentence from the server (`improved`), shown under the choices until stamps are
+    /// bought.
+    @ObservationIgnored private var listMediaRefusal: String?
 
     // A list (digital stamps on): who's on it, a request ID for each (kept
     // for the whole card, so every look and retry of the list finds the
@@ -325,6 +328,12 @@ final class HolidayCardFlowViewModel {
     var cards: HolidayCardsResponse? {
         if case let .loaded(cards) = state { return cards }
         return nil
+    }
+
+    /// The cards' read says the next round of improvements is on (cards-next contract section 1): only then does the
+    /// flow draw the new experience. Read afresh with each load, never kept.
+    var improved: Bool {
+        cards?.improved == true
     }
 
     /// The card sent today, while it still counts.
@@ -511,12 +520,25 @@ final class HolidayCardFlowViewModel {
     @discardableResult
     private func needsBoughtStamp(_ error: any Error) async -> Bool {
         guard Self.refusalCode(error) == "CARD_MEDIA_NEEDS_STAMP" else { return false }
-        // Seal it for the day says it in the app's words, whatever an older server says, and clears it once bought.
-        if previewError != nil { previewError = HolidayCardMediaRow.needsStampLine }
+        // Seal it for the day says it in the app's words, whatever an older server says, and clears it once bought. A
+        // list (`improved`) keeps the server's sentence: it says how many bought stamps the list needs.
+        if improved, recipient?.entries != nil {
+            listMediaRefusal = previewError ?? sendError
+        } else if previewError != nil {
+            previewError = HolidayCardMediaRow.needsStampLine
+        }
         openStampsForMedia()
         await stamps.refresh()
         await rereadCards()
         return true
+    }
+
+    /// Bought stamps came (or went): a list's "needs N bought stamps" sentence no longer holds.
+    func boughtStampsChanged() {
+        guard let said = listMediaRefusal else { return }
+        listMediaRefusal = nil
+        if previewError == said { previewError = nil }
+        if sendError == said { sendError = nil }
     }
 
     /// The season's answer again, keeping what's shown when it can't be read: after stamps were bought, a photo and
@@ -597,9 +619,10 @@ final class HolidayCardFlowViewModel {
         return body
     }
 
-    /// The photo the card carries: one person's card only (a list goes without), and only while the server takes one.
+    /// The photo the card carries, only while the server takes one: one person's card only (a list goes without), or a
+    /// list too with `improved` (cards-next Wave 2).
     var mediaPick: HolidayCardMediaPick {
-        guard recipient?.entries == nil, cards?.takesMemories == true else { return .none }
+        guard improved || recipient?.entries == nil, cards?.takesMemories == true else { return .none }
         return attachments.pick
     }
 
@@ -634,6 +657,8 @@ final class HolidayCardFlowViewModel {
             HolidayCardDraftStore.clear()
             // The guidance card "It's on its way" follows in Mail, after the first letter or card.
             GuidanceCenter.shared.pend(.doneFirstLetter)
+            // The free photo cards left (`improved`), for the next card.
+            if improved, body.photo != nil || body.voice != nil { await rereadCards() }
         } catch {
             if await wentEarlier(error) { return }
             // The stamps ran out meanwhile (another device sent a card): the stamp books open; the card stays as it is.
@@ -882,6 +907,7 @@ extension HolidayCardFlowViewModel {
             arrival: arrival,
             recipients: recipients,
             signature: cards?.signature == nil ? nil : signature,
+            media: mediaPick,
             // Each address keeps the list's choice, worded with all four (else the older mapping).
             emailsKeepArrival: cards?.emailAllArrivals == nil ? nil : true
         )
@@ -911,6 +937,7 @@ extension HolidayCardFlowViewModel {
         } catch {
             if needsTown(error, retry: { [weak self] in Task { await self?.lookItOver(opens: opens) } }) { return false }
             previewError = Self.refusal(error, fallback: "Couldn’t show your cards just now. Try again in a moment.")
+            if improved { await needsBoughtStamp(error) }
             return false
         }
     }
@@ -933,8 +960,16 @@ extension HolidayCardFlowViewModel {
             sentTravels = body.travel == true
             step = .sent
             HolidayCardDraftStore.clear()
+            if improved, body.photo != nil || body.voice != nil { await rereadCards() }
         } catch {
             if needsTown(error, retry: { [weak self] in self?.sealOrSend() }) { return }
+            // Its photo or greeting needs more bought stamps than are left (`improved`): the server's sentence says
+            // how many, and the stamp books open.
+            if improved, Self.refusalCode(error) == "CARD_MEDIA_NEEDS_STAMP" {
+                sendError = Self.refusal(error, fallback: HolidayCardMediaRow.needsStampLine)
+                await needsBoughtStamp(error)
+                return
+            }
             guard Self.refusalCode(error) == "STAMPS_REQUIRED" else {
                 sendError = Self.refusal(error, fallback: "Couldn’t send your cards just now. Try again in a moment.")
                 return
@@ -964,6 +999,8 @@ extension HolidayCardFlowViewModel {
             let _: TakeBackHolidayCardResponse = try await answer(HolidayCardEndpoints.takeBack(cardId: card.id))
             listTakenBack.insert(card.id)
             await stamps.refresh()
+            // A card taken back hands its free photo card back (`improved`).
+            if improved { await rereadCards() }
         } catch {
             listTakeBackError = (card.id, Self.refusal(error, fallback: "Couldn’t take your card back just now. Try again in a moment."))
         }

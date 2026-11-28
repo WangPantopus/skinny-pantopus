@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanPinDto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import com.squareup.moshi.Moshi
 
 /*
  * "Pulse, reinvented" phase 1, the one Pulse tab (CONTRACT 6, `~/pantopus-moments/pulse-reinvented/coord/CONTRACT.md`,
@@ -44,7 +45,17 @@ data class ReinventedListItemDto(
     val moment: MomentDto? = null,
     val post: FeedPost? = null,
     val why: String? = null,
-)
+    /** The post's phase 3 keys (CONTRACT 8f), read beside today's post from the same answer. */
+    @Transient val travel: PulseTravelDto? = null,
+) : ReadsBeside {
+    override fun beside(
+        raw: Any?,
+        moshi: Moshi,
+    ): Any {
+        val post = (raw as? Map<*, *>)?.get("post") ?: return this
+        return copy(travel = moshi.adapter(PulseTravelDto::class.java).fromJsonValue(post))
+    }
+}
 
 /** `GET /api/reinvented/list` (CONTRACT 6a): one page, by reach, chip and cursor. */
 @JsonClass(generateAdapter = true)
@@ -95,6 +106,9 @@ data class ReinventedMapResponse(
     @Lossy val kept: List<ReinventedKeptDto> = emptyList(),
     /** CONTRACT 5d/6b: the live guess-the-spot Moments the reader may see in the area, with no point: a list, never marks. */
     @Json(name = "guess_spots") @Lossy val guessSpots: List<MomentGuessSpotDto> = emptyList(),
+    /** CONTRACT 6b: heights are on for the reader and rings float (`moment_float`): the living map (phase 4) floats them. */
+    @Json(name = "heights_on") val heightsOn: Boolean = false,
+    @Json(name = "float_on") val floatOn: Boolean = false,
 )
 
 /** A Moment live from here, with its band. */
@@ -127,6 +141,8 @@ data class ReinventedExploreResponse(
     @Lossy val items: List<ReinventedListItemDto> = emptyList(),
     @Json(name = "next_cursor") val nextCursor: String? = null,
     val pause: String? = null,
+    /** CONTRACT 9c: the first page's items near the places the reader follows (phase 4, `feed/living/LivingPlaces.kt`). */
+    @Lossy val followed: List<ReinventedListItemDto> = emptyList(),
 )
 
 /**

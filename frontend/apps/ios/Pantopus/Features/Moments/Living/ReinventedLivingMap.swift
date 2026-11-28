@@ -170,12 +170,12 @@ final class ReinventedLivingMap {
             if !beams.isEmpty { beams = [] }
             return
         }
-        let half = (lat: region.span.latitudeDelta / 2, lng: region.span.longitudeDelta / 2)
+        let box = ReinventedMapBox(region) // inside the world, as the map's own read
         let endpoint = ReinventedEndpoints.beams(
-            south: region.center.latitude - half.lat,
-            west: region.center.longitude - half.lng,
-            north: region.center.latitude + half.lat,
-            east: region.center.longitude + half.lng
+            south: box.south,
+            west: box.west,
+            north: box.north,
+            east: box.east
         )
         beamsRead = Task { [weak self, api] in
             guard let response = try? await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true),

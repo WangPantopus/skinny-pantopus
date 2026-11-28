@@ -71,6 +71,9 @@ class ReinventedPulseViewModel
 
         private val viewerId: String? get() = (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id
 
+        /** The signed-in person, for what is offered only under others' posts (CONTRACT 8f). */
+        val viewer: String? get() = viewerId
+
         /** The posts' cards and what the viewer's taps did to them. */
         val cards: ProfilePostCards =
             ProfilePostCards(
@@ -243,6 +246,7 @@ class ReinventedPulseViewModel
                             cursor = page.nextCursor,
                             end = if (page.nextCursor == null) EXPLORE_END else null,
                             pause = page.pause,
+                            followed = if (appending) now.followed else page.followed.filter(keep),
                             loadingMore = false,
                             refreshing = false,
                             load = ReinventedPulseState.Load.Loaded,
@@ -338,6 +342,8 @@ data class ReinventedPulseState(
     val pickedCount: Int = 0,
     /** Explore pauses here ("Keep exploring?") until the person asks for more. */
     val pause: String? = null,
+    /** Explore's first page: items from the places the reader follows (phase 4, `feed/living/LivingPlaces.kt`). */
+    val followed: List<ReinventedListItemDto> = emptyList(),
 ) {
     /** Explore has more and waits for "Keep exploring?". */
     val pausedForMore: Boolean

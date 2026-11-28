@@ -2,6 +2,7 @@ package app.pantopus.android.data.api.models.moments
 
 import app.pantopus.android.data.api.models.reinvented.MomentPlanDto
 import app.pantopus.android.data.api.models.reinvented.MomentRepliesStateDto
+import app.pantopus.android.data.living.MomentHeadingBody
 import com.squareup.moshi.FromJson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
@@ -187,6 +188,10 @@ data class MomentDto(
     val dots: List<MomentDotDto>? = null,
     /** "Pulse, reinvented" (CONTRACT 8e): the Retake it belongs to, for a reader whose switch is on; else null. */
     val retake: app.pantopus.android.data.api.models.reinvented.MomentRetakeStateDto? = null,
+    /** "Pulse, reinvented" (CONTRACT 8h): the convergence it joined, for a reader whose switch is on; else null. */
+    val convergence: app.pantopus.android.data.api.models.reinvented.MomentConvergenceStateDto? = null,
+    /** "Pulse, reinvented" (CONTRACT 8i): the pinboard it starts or is a piece of, for a reader whose switch is on; else null. */
+    val pinboard: app.pantopus.android.data.api.models.reinvented.MomentPinboardStateDto? = null,
 )
 
 /**
@@ -419,6 +424,8 @@ data class CreateMomentBody(
     val play: List<MomentPlayItemDto>? = null,
     /** The Studio's dots (CONTRACT 7c): up to eight; left out otherwise. */
     val dots: List<MomentDotDto>? = null,
+    /** CONTRACT 9h: the compass at the camera's own shot, switch on only (`data/living/LivingCompass.kt`); null left out. */
+    val heading: MomentHeadingBody? = null,
 )
 
 /**

@@ -139,13 +139,14 @@ final class ReinventedMapModel {
 
     private func read() async {
         guard let region else { return }
-        let half = (lat: region.span.latitudeDelta / 2, lng: region.span.longitudeDelta / 2)
-        if atlas { return await readAtlas(region: region, half: half) }
+        // Held inside the world (`ReinventedMapBox`): out at the globe, the server answers it.
+        let box = ReinventedMapBox(region)
+        if atlas { return await readAtlas(box) }
         let endpoint = ReinventedEndpoints.map(
-            south: region.center.latitude - half.lat,
-            west: region.center.longitude - half.lng,
-            north: region.center.latitude + half.lat,
-            east: region.center.longitude + half.lng,
+            south: box.south,
+            west: box.west,
+            north: box.north,
+            east: box.east,
             time: time
         )
         guard let response = try? await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true),
@@ -168,12 +169,12 @@ final class ReinventedMapModel {
     }
 
     /// My Atlas on the map: every kept Moment of the person's in the box, as their own pins.
-    private func readAtlas(region: MKCoordinateRegion, half: (lat: Double, lng: Double)) async {
+    private func readAtlas(_ box: ReinventedMapBox) async {
         let endpoint = ReinventedEndpoints.atlasBox(
-            south: region.center.latitude - half.lat,
-            west: region.center.longitude - half.lng,
-            north: region.center.latitude + half.lat,
-            east: region.center.longitude + half.lng
+            south: box.south,
+            west: box.west,
+            north: box.north,
+            east: box.east
         )
         guard let page: ReinventedAtlasPage = try? await api.request(endpoint), !Task.isCancelled, atlas else { return }
         items = page.moments.filter { !$0.noLocation }.map { moment in
@@ -187,6 +188,9 @@ final class ReinventedMapModel {
 struct ReinventedPulseMap: View {
     let model: ReinventedMapModel
     let onOpen: (ReinventedMapModel.Item) -> Void
+    /// Zoomed far out, the satellite globe you can turn, as today's Pulse and Moments maps (`MapGlobe`; founder,
+    /// 2026-11-28: the globe stays everywhere). Close in, the map's own look and its living layers are unchanged.
+    @State private var globe = MapGlobe()
 
     var body: some View {
         Map(position: Binding(get: { model.position }, set: { model.position = $0 })) {
@@ -199,8 +203,11 @@ struct ReinventedPulseMap: View {
             }
             ReinventedBeamsContent(beams: model.atlas ? [] : ReinventedLivingMap.shared.beams, night: ReinventedLivingMap.shared.night)
         }
+        .mapGlobe(globe, closeIn: .standard)
         .reinventedNight() // phase 4: the map turns dark when the sun is down over it
         .mapControls {}
+        // The globe follows the zoom as it happens, not after the map stops.
+        .onMapCameraChange(frequency: .continuous) { context in globe.follow(context.region) }
         .onMapCameraChange(frequency: .onEnd) { context in model.moved(to: context.region) }
         .accessibilityIdentifier("reinventedPulse.map")
     }

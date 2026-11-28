@@ -44,15 +44,15 @@ private struct ReinventedTownSoundsAnswer: Decodable {
 
 private extension ReinventedEndpoints {
     static func sounds(_ region: MKCoordinateRegion, time: String) -> Endpoint {
-        let half = (lat: region.span.latitudeDelta / 2, lng: region.span.longitudeDelta / 2)
+        let box = ReinventedMapBox(region) // inside the world, as the map's own read
         return Endpoint(
             method: .get,
             path: "/api/reinvented/sounds",
             query: [
-                "south": String(format: "%.5f", region.center.latitude - half.lat),
-                "west": String(format: "%.5f", region.center.longitude - half.lng),
-                "north": String(format: "%.5f", region.center.latitude + half.lat),
-                "east": String(format: "%.5f", region.center.longitude + half.lng),
+                "south": String(format: "%.5f", box.south),
+                "west": String(format: "%.5f", box.west),
+                "north": String(format: "%.5f", box.north),
+                "east": String(format: "%.5f", box.east),
                 "time": time
             ],
             cachePolicy: .reloadIgnoringLocalCacheData

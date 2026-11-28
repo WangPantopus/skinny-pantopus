@@ -68,7 +68,18 @@ struct MomentsStudioRail: View {
                     Icon(.eyeOff, size: 19, strokeWidth: 2.2, color: .white)
                 } action: { openBlur() }
             }
-            if model.offersResize, model.studioPair == nil {
+            if model.studioWholeOffered {
+                // See the picture first (phase 5 A): the picture is adjusted on this screen; Fill, then Fit, and Reset.
+                let filled = model.studioWholeFilled
+                tool(filled ? "Fit" : "Fill", id: "moments.studio.rail.fill") {
+                    Icon(filled ? .image : .maximize, size: 19, strokeWidth: 2.2, color: .white)
+                } action: { filled ? model.studioWholeReset() : model.studioWholeFill() }
+                if model.studioWholeMoved {
+                    tool("Reset", id: "moments.studio.rail.reset") {
+                        Icon(.rotateCcw, size: 19, strokeWidth: 2.2, color: .white)
+                    } action: { model.studioWholeReset() }
+                }
+            } else if model.offersResize, model.studioPair == nil {
                 tool("Resize", id: "moments.studio.rail.resize") {
                     Icon(.maximize, size: 19, strokeWidth: 2.2, color: .white)
                 } action: { model.openMarks(.resize) }

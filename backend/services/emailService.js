@@ -324,16 +324,21 @@ If you don't know the sender, you can safely ignore this email.
  *   footnote: string, footer: string[] }}
  */
 function cardWaitingEmailContent({
-  senderName, expiresAt, sealed, stillSealed = true, design = null, reminder = false, unsealedReminder = false, timeZone = 'UTC',
+  senderName, expiresAt, sealed, stillSealed = true, design = null, reminder = false, unsealedReminder: unsealedAsked = false, timeZone = 'UTC',
 }) {
   const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone });
   const web = (process.env.PUBLIC_WEB_URL || APP_URL).trim().replace(/\/+$/, '');
   const tableOn = areLaunchFeaturesEnabled(['mailbox', 'holiday_cards', 'card_table']);
-  const { cardGuestOpenEnabled } = require('../utils/featureFlags');
+  // The card round (featureFlags cardImprovementsOn): opening before signing up (guestOpen is false while it is off),
+  // a sealed card's own front once its seal has lifted, and the Christmas-morning reminder's words. Off, every word
+  // and the picture are as before it.
+  const { cardImprovementsOn, cardGuestOpenEnabled } = require('../utils/featureFlags');
+  const improved = cardImprovementsOn();
   const guestOpen = tableOn && cardGuestOpenEnabled();
+  const unsealedReminder = improved && unsealedAsked;
   // Required here, not at the top: holidayCards reads the database client, which this service never needs otherwise.
   const shown = tableOn
-    ? require('./holidayCards').emailPicture({ design, sealed: sealed && stillSealed }) : null;
+    ? require('./holidayCards').emailPicture({ design, sealed: improved ? sealed && stillSealed : sealed }) : null;
   // The card's own front is in the picture: "this" card.
   const front = Boolean(shown?.caption);
   const card = front ? 'this Christmas card' : 'a Christmas card';

@@ -19,6 +19,8 @@ import {
   ArrowRight,
   Camera,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Crop,
   Eraser,
@@ -37,6 +39,7 @@ import {
   Maximize2,
   Minimize2,
   RotateCw,
+  Scissors,
   Sparkles,
   Type,
   Undo2,
@@ -47,7 +50,7 @@ import { readCaptureMetadata, type CaptureMetadata } from '@/components/feed/com
 import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 import { withFreshFix } from '@/lib/freshPostFix';
 import MomentCamera, { type CameraCapture } from '@/components/moments/MomentCamera';
-import { blankArt, edited, inks, type Stroke } from '@/components/moments/momentArtwork';
+import { blankArt, edited, inks, type Artwork, type Stroke } from '@/components/moments/momentArtwork';
 import { stageFrame } from './frame';
 import { BlurLayer, blurInto, type BlurBox } from './BlurTool';
 import { cutToShape, sideBySide } from './beforeAfter';
@@ -76,7 +79,22 @@ import { timedWords, uploadSound, type Recording } from '../sound/record';
 import { DotEditLayer, DotEditPanel, dotsWire, MAX_DOTS, newDot, usePantopusAiOn, type DotDraft } from '../dots/DotEdit';
 import { safeBox, STAMP_KINDS, stampLabel, type PlacedStamp, type StampKind, type StampValues } from '../stamps/stampTypes';
 import { isSwitchedOff } from '../switchOff';
-import StudioPicture, { fillZoom, type StudioBrush, type StudioTool } from './StudioPicture';
+import StudioPicture, { type StudioBrush, type StudioTool } from './StudioPicture';
+import {
+  backdropOf,
+  bakePhoto,
+  fillZoom,
+  fitZoom,
+  placementOf,
+  stuckTurn,
+  turnOf,
+  unmoved,
+  zoomRange,
+  type Backdrop,
+  type Placement as WholePlacement,
+} from './whole';
+import { composeVideo } from './wholeVideo';
+import { heldTrim, TrimPanel, type TrimSpan } from './TrimPanel';
 import { FILM_LOOKS, lookPreviews, photostrip, withLook, type FilmLook } from './looks';
 import { fontReady, TEXT_LOOKS, type TextLook } from './fonts';
 import { sampleColors } from './sampleColors';
@@ -111,6 +129,19 @@ const HOME_NOTE_KEY = 'pantopus.studio.homeAreaNoteSeen';
 const DECK_NOTE_KEY = 'pantopus.studio.deckNoteSeen';
 type Placement = 'exact' | 'area' | 'place' | 'none';
 type PostAs = 'personal' | 'pen_name';
+/** What one of several pictures picked together keeps while another shows (PHASE-5 A5). */
+interface KeptPicture {
+  art: Artwork;
+  caption: string;
+  look: FilmLook;
+  lookFile: File | null;
+  blurs: BlurBox[];
+  trimSpan: TrimSpan | null;
+  mentioned: Mentioned[];
+  voiceRec: Recording | null;
+  voiceWords: string;
+  placeRec: Recording | null;
+}
 
 function useWide() {
   const [wide, setWide] = useState(false);
@@ -230,6 +261,8 @@ export default function Studio({
     [dots, setDots] = useState<DotDraft[]>([]),
     // The picture's own width and height, for where placed things land on it (frame.ts).
     [shape, setShape] = useState<{ w: number; h: number } | null>(null),
+    // The picture's own two colours (PHASE-5 A, CONTRACT 10c): the backdrop where it doesn't reach, shown and posted.
+    [backdrop, setBackdrop] = useState<Backdrop | null>(null),
     [illuminate, setIlluminate] = useState(false),
     [pickedDot, setPickedDot] = useState<string | null>(null),
     // Sound (phase 2, CONTRACT 7e): Voice Spark with its words, and place sound; sent after the Moment is made.
@@ -285,7 +318,10 @@ export default function Studio({
   // Loop (CONTRACT 7j): the part of the video that repeats, whether its panel is open, and the video's own length.
   const [loopSpan, setLoopSpan] = useState<LoopSpan | null>(null),
     [loopOpen, setLoopOpen] = useState(false),
-    [videoMs, setVideoMs] = useState<number | null>(null);
+    [videoMs, setVideoMs] = useState<number | null>(null),
+    // Trim (PHASE-5 A2): the part of a video that goes up, and whether its panel is open.
+    [trimSpan, setTrimSpan] = useState<TrimSpan | null>(null),
+    [trimOpen, setTrimOpen] = useState(false);
   const client = useQueryClient();
   // One id per post being made, so trying again after a failed photo upload never posts twice (today's composer).
   const postRequest = useRef<string | null>(null);
@@ -427,12 +463,28 @@ export default function Studio({
   });
   const p = preview.data;
   // "The switch is off for you": back to today's composer with the words (the card's, or the caption).
-  const handBack = () =>
+  const handedBack = useRef(false);
+  const handBack = () => {
+    handedBack.current = true;
     onSwitchedOff?.(
       mode === 'text'
         ? { kind: 'text', text, background: bg, hours, audience }
         : { kind: 'photo', caption: caption.trim() || null, hours, audience },
     );
+  };
+  // The app read the switch off on its own while the Studio was open (before Post), and the screen holding the Studio
+  // gave way to today's: what was being made goes the same way as after a refused post, so nothing typed is lost.
+  const lastHandBack = useRef(handBack);
+  lastHandBack.current = handBack;
+  const composingNow = useRef(false);
+  composingNow.current = mode === 'media' ? !!file : mode === 'text' && !!text.trim();
+  useEffect(
+    () => () => {
+      const off = client.getQueryData<{ enabled?: boolean }>(['featureFlag', 'pulse_reinvented'])?.enabled === false;
+      if (off && composingNow.current && !handedBack.current) lastHandBack.current();
+    },
+    [client],
+  );
   // Before going back the person is told what comes with them (lead, 2026-11-27: the words, and the photo is picked
   // again in today's composer).
   const [wentOff, setWentOff] = useState(false);
@@ -553,16 +605,24 @@ export default function Studio({
   // A loop goes on a picked MP4 or QuickTime video, never one the browser recorded, and only one short enough to post
   // whole (a longer one goes out in parts). Each video starts without one; another tool opening closes its panel.
   const loopMax = limits.data?.video.max_seconds || fallback.max_seconds;
-  const canLoop = mode === 'media' && !!file && isVideo && capture?.file !== file && loopsFile(file);
+  // A trimmed video has picked its part; a loop picks its own (one or the other).
+  const canLoop = mode === 'media' && !!file && isVideo && capture?.file !== file && loopsFile(file) && !trimSpan;
   const loopFits = videoMs != null && videoMs >= LOOP_MIN_MS && videoMs / 1000 - 0.025 <= loopMax;
   const loopOut = canLoop && loopFits && loopSpan && videoMs != null ? fitSpan(loopSpan, videoMs) : null;
   useEffect(() => {
     setLoopSpan(null);
     setLoopOpen(false);
     setVideoMs(null);
+    setTrimSpan(null);
+    setTrimOpen(false);
   }, [file]);
+  const canTrim = mode === 'media' && !!file && isVideo && !loopSpan;
+  const trimOut = canTrim ? heldTrim(trimSpan, videoMs) : null;
   useEffect(() => {
-    if (tool || illuminate || soundOpen || trayOpen) setLoopOpen(false);
+    if (tool || illuminate || soundOpen || trayOpen) {
+      setLoopOpen(false);
+      setTrimOpen(false);
+    }
   }, [tool, illuminate, soundOpen, trayOpen]);
   // Opened, the loop is on: the first three seconds (or the whole of a shorter video), as soon as the length is known.
   useEffect(() => {
@@ -665,6 +725,29 @@ export default function Studio({
     setSide('before');
     setPlay((old) => (old.some((p) => p.kind === 'before_after') ? old.filter((p) => p.kind !== 'before_after') : old));
   }, [file]);
+  // Several picked at once (PHASE-5 A5): each picture keeps its own fit, words, drawing, caption, look, blurs, trim and
+  // recordings while the author moves between them; put back here, after the resets above, when one shows again.
+  const keptPictures = useRef(new Map<File, KeptPicture>()),
+    posted = useRef(new Set<File>());
+  useEffect(() => {
+    const k = file ? keptPictures.current.get(file) : undefined;
+    if (!k) return;
+    lookFor.current = file;
+    setArt(k.art);
+    setCaption(k.caption);
+    setLook(k.look);
+    setLookFile(k.lookFile);
+    setBlurs(k.blurs);
+    setTrimSpan(k.trimSpan);
+    setMentioned(k.mentioned);
+    setVoiceRec(k.voiceRec);
+    setVoiceWords(k.voiceWords);
+    setPlaceRec(k.placeRec);
+  }, [file]);
+  useEffect(() => {
+    keptPictures.current.clear();
+    posted.current.clear();
+  }, [files]);
   useEffect(() => {
     if (hasPair) return;
     setAfterFile(null);
@@ -903,6 +986,35 @@ export default function Studio({
     else if (penMe.pen_name) choosePenName();
     else setSetupOpen(true);
   }
+  /** The next picture not posted yet, `step` along (wrapping), or -1 when every other one is posted. */
+  function nextUnposted(step: number) {
+    for (let n = 1; n < files.length; n++) {
+      const to = (((index + step * n) % files.length) + files.length) % files.length;
+      if (!posted.current.has(files[to])) return to;
+    }
+    return -1;
+  }
+  // Moving between the pictures picked together keeps this one as it is (each its own fit). A step deck keeps its
+  // order, and a before and after is one picture with its after.
+  const canBrowse = mode === 'media' && !!file && files.length > 1 && !deckOn && !pair && !busy;
+  function browse(step: number) {
+    const to = canBrowse ? nextUnposted(step) : -1;
+    if (to < 0 || !file) return;
+    keptPictures.current.set(file, { art, caption, look, lookFile, blurs, trimSpan, mentioned, voiceRec, voiceWords, placeRec });
+    setIndex(to);
+  }
+  // The keyboard's left and right keys do the same, unless a field or slider has them.
+  useEffect(() => {
+    if (!canBrowse || tool) return;
+    const onKey = (e: KeyboardEvent) => {
+      const at = e.target instanceof Element ? e.target : null;
+      if (e.defaultPrevented || e.altKey || e.metaKey || e.ctrlKey || at?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (e.key === 'ArrowLeft') browse(-1);
+      else if (e.key === 'ArrowRight') browse(1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
   async function deliver(job: Job, signal: AbortSignal) {
     const result = await postJob(job, signal, (s) => {
       if (mounted.current) setBusy(s);
@@ -951,11 +1063,45 @@ export default function Studio({
                 ? `Step ${step.index} of ${step.count} shared.`
                 : 'Moment shared.';
     if (soundFailed) setError(msg + ' Its sound couldn’t be added.');
-    if (file && index + 1 < files.length) {
-      setIndex((i) => i + 1);
+    if (file) {
+      posted.current.add(file);
+      keptPictures.current.delete(file);
+    }
+    const next = file && !deckOn ? nextUnposted(1) : file && index + 1 < files.length ? index + 1 : -1;
+    if (next >= 0) {
+      setIndex(next);
       setBusy('');
       setError(msg + (step ? ` Review step ${step.index + 1}.` : ' Review the next item.'));
     } else onDone(msg);
+  }
+  /**
+   * The picture as it goes up, as the author composed it on the first screen (PHASE-5 A, CONTRACT 10c). A photo left as
+   * it was picked, with nothing drawn on it, goes up as taken (today's path, at its own shape and full size); a moved,
+   * sized, turned or drawn-on one goes up as the 9:16 canvas on its backdrop. A video keeps its own file and its
+   * `placement` on the canvas; only words or drawing on it make it again as the drawn canvas (wholeVideo.ts). The same
+   * numbers draw the preview (StudioPicture), so what the author sees is what readers get.
+   */
+  async function composed(source: File, signal: AbortSignal): Promise<{ prepared: Awaited<ReturnType<typeof prepareMedia>>; placement: WholePlacement | null }> {
+    const videoLimits = limits.data?.video || fallback;
+    if (!(source.type.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(source.name))) {
+      if (!edited(art)) return { prepared: await prepareMedia(source, art, videoLimits, signal, () => {}), placement: null };
+      return { prepared: [{ file: await bakePhoto(source, art, backdrop) }], placement: null };
+    }
+    const drawn = !!(art.strokes.length || art.text.trim());
+    const trim = trimOut ? { from: trimOut.from_ms / 1000, to: trimOut.to_ms / 1000 } : null;
+    const video = drawn || trim
+      ? await composeVideo(source, {
+          drawn: drawn ? { art, backdrop } : null,
+          trim,
+          limits: videoLimits,
+          signal,
+          progress: (f) => setBusy((drawn ? 'Drawing your video · ' : 'Trimming your video · ') + Math.round(f * 100) + '%'),
+        })
+      : source;
+    const prepared = await prepareMedia(video, blankArt(), videoLimits, signal, (f) =>
+      setBusy('Preparing video · ' + Math.round(f * 100) + '%'),
+    );
+    return { prepared, placement: !drawn && !unmoved(art) && shape ? placementOf(shape.w, shape.h, art) : null };
   }
   async function submit(retry?: Job) {
     if (submitting.current) return;
@@ -986,12 +1132,15 @@ export default function Studio({
             : 'photo';
       // The look's font is in before the words are drawn into the picture that is posted.
       if (file && art.text.trim()) await fontReady(art.font, art.text);
-      let prepared = file
-        ? await prepareMedia(canBlur && blurs.length ? await blurInto(lookFile ?? file, blurs) : lookFile ?? file, art, limits.data?.video || fallback, controller.signal, (f) =>
-            setBusy('Preparing video · ' + Math.round(f * 100) + '%'),
-          )
-        : [];
+      // As the author composed it (PHASE-5 A, CONTRACT 10c): see `composed` below.
+      const shaped = file ? await composed(canBlur && blurs.length ? await blurInto(lookFile ?? file, blurs) : lookFile ?? file, controller.signal) : null;
+      let prepared = shaped?.prepared ?? [];
       if (pair && prepared.length === 1) prepared = [await withAfter(prepared[0])];
+      // Shown whole, on its backdrop, on every screen (a before and after keeps its own two-halves look).
+      const wholeOut =
+        shaped && !pair
+          ? { whole: true as const, ...(backdrop ? { backdrop } : {}), ...(shaped.placement ? { placement: shaped.placement } : {}) }
+          : {};
       // A loop is one short video, and its still is the frame where it starts (CONTRACT 7j).
       if (loopOut && prepared.length > 1) throw new Error('A loop is one short video. Take the loop off to post this video in parts.');
       if (loopOut && prepared.length === 1) {
@@ -1039,6 +1188,9 @@ export default function Studio({
             stamps?: PlacedStamp[];
             elevation?: { meters: number; accuracy_m?: number | null; speed_mps?: number | null };
             loop?: LoopSpan;
+            whole?: true;
+            placement?: WholePlacement;
+            backdrop?: Backdrop;
           } = {
             client_request_id: crypto.randomUUID(),
             kind,
@@ -1091,6 +1243,7 @@ export default function Studio({
             ...(deckOn && deckId.current ? { deck: { id: deckId.current, index: index + 1, count: files.length } } : {}),
             ...(toExplore ? { explore: true as const } : {}),
             ...(i === 0 && count === 1 && loopOut ? { loop: loopOut } : {}),
+            ...wholeOut,
             ...(kept.length && i === 0
               ? { stamps: kept.map(({ kind, x, y, scale, rotation }) => ({ kind, ...frame.point(x, y), scale: frame.scale(scale), rotation })) }
               : {}),
@@ -1166,7 +1319,10 @@ export default function Studio({
       let photo: File | null = null;
       if (file) {
         if (art.text.trim()) await fontReady(art.font, art.text);
-        const [first] = await prepareMedia(canBlur && blurs.length ? await blurInto(lookFile ?? file, blurs) : lookFile ?? file, art, limits.data?.video || fallback, controller.signal, () => {});
+        const source = canBlur && blurs.length ? await blurInto(lookFile ?? file, blurs) : lookFile ?? file;
+        const [first] = isVideo
+          ? await prepareMedia(source, art, limits.data?.video || fallback, controller.signal, () => {})
+          : (await composed(source, controller.signal)).prepared;
         const prepared = await withAfter(first);
         photo = new File([prepared.file], 'studio.jpg', { type: prepared.file.type || 'image/jpeg' });
       }
@@ -1413,9 +1569,19 @@ export default function Studio({
   const gate = jobs.length > 0 || !attested;
   const composing = !gate && !camera && mode !== 'none';
   // The picture fills the frame (Fill) or not, and whether it already does when whole (a 9:16 picture): PHASE-5 A2.
-  const fillsAlready = !!shape && Math.abs(fillZoom(shape.w, shape.h, art.rotation) - 1) < 0.005;
-  const filled =
-    !!shape && !fillsAlready && !art.offset.x && !art.offset.y && Math.abs(art.zoom - fillZoom(shape.w, shape.h, art.rotation)) < 0.005;
+  // Both at the angle it is turned to (any angle: whole.ts).
+  const fitAt = (turn: number) => (shape ? fitZoom(shape.w, shape.h, turn) : 1),
+    fillAt = (turn: number) => (shape ? fillZoom(shape.w, shape.h, turn) : 1);
+  const centred = !art.offset.x && !art.offset.y;
+  const fillsAlready = !!shape && Math.abs(fillAt(art.rotation) - fitAt(art.rotation)) < 0.005;
+  const filled = !!shape && !fillsAlready && centred && Math.abs(art.zoom - fillAt(art.rotation)) < 0.005;
+  const fitted = centred && Math.abs(art.zoom - fitAt(art.rotation)) < 0.005;
+  // A quarter turn keeps a picture that was whole whole, and one that filled the frame filling it.
+  function turnQuarter() {
+    const rotation = stuckTurn(art.rotation + 90);
+    setArt({ ...art, rotation, zoom: filled ? fillAt(rotation) : fitted ? fitAt(rotation) : art.zoom });
+  }
+  const sizes = shape ? zoomRange(shape.w, shape.h) : { min: 0.5, max: 3 };
 
   const settings = (
     <section
@@ -1884,6 +2050,7 @@ export default function Studio({
             ) : gate ? null : mode === 'media' && file ? (
               <StudioPicture
                 file={showAfter ? afterFile! : lookFile ?? file}
+                backdrop={backdrop}
                 art={art}
                 onChange={setArt}
                 tool={tool}
@@ -1903,10 +2070,11 @@ export default function Studio({
                     : (el, w, h) => {
                         setPhotoInks(sampleColors(el, w, h, inks));
                         setShape({ w, h });
+                        setBackdrop(backdropOf(el));
                         setVideoMs(el instanceof HTMLVideoElement && Number.isFinite(el.duration) ? Math.round(el.duration * 1000) : null);
                       }
                 }
-                loop={loopOut}
+                loop={loopOut ?? trimOut}
               />
             ) : mode === 'text' ? (
               <div className="st-words">
@@ -1990,7 +2158,19 @@ export default function Studio({
                 <X size={20} strokeWidth={2.4} />
               </button>
               {composing && files.length > 1 && file && (
-                <span className="st-count">{deckOn ? `Step ${index + 1} of ${files.length}` : `${index + 1} of ${files.length}`}</span>
+                <span className="st-count">
+                  {canBrowse && nextUnposted(-1) >= 0 && (
+                    <button type="button" className="st-browse" aria-label="The picture before" onClick={() => browse(-1)}>
+                      <ChevronLeft size={16} aria-hidden="true" />
+                    </button>
+                  )}
+                  {deckOn ? `Step ${index + 1} of ${files.length}` : `${index + 1} of ${files.length}`}
+                  {canBrowse && nextUnposted(1) >= 0 && (
+                    <button type="button" className="st-browse" aria-label="The next picture" onClick={() => browse(1)}>
+                      <ChevronRight size={16} aria-hidden="true" />
+                    </button>
+                  )}
+                </span>
               )}
               {composing && pair && (
                 <div className="st-ba-switch" role="group" aria-label="Which photo the Studio shows">
@@ -2081,6 +2261,7 @@ export default function Studio({
                       setIlluminate(false);
                       setSoundOpen(false);
                       setTrayOpen(false);
+                      setTrimOpen(false);
                       setLoopOpen(!loopOpen);
                     }}
                   >
@@ -2179,6 +2360,18 @@ export default function Studio({
               onDone={() => setSoundOpen(false)}
             />
           )}
+          {composing && canTrim && trimOpen && !tool && !illuminate && !soundOpen && (
+            <TrimPanel
+              durationMs={videoMs}
+              span={trimOut}
+              onSpan={(next) => setTrimSpan(heldTrim(next, videoMs) ?? null)}
+              onOff={() => {
+                setTrimSpan(null);
+                setTrimOpen(false);
+              }}
+              onDone={() => setTrimOpen(false)}
+            />
+          )}
           {composing && canLoop && loopOpen && !tool && !illuminate && !soundOpen && (
             <LoopPanel
               durationMs={videoMs}
@@ -2218,24 +2411,32 @@ export default function Studio({
             >
               {tool === 'resize' && (
                 <>
-                  <small className="st-hint">Drag the picture to move it.</small>
+                  <small className="st-hint">Drag the picture to move it. Two fingers, or Shift and the wheel, turn it.</small>
                   <div className="st-picture-row">
                     <label className="st-field">
                       Zoom
                       <input
                         type="range"
-                        min=".5"
-                        max="3"
-                        step=".05"
-                        value={art.zoom}
+                        min={sizes.min}
+                        max={sizes.max}
+                        step=".01"
+                        value={Math.min(sizes.max, Math.max(sizes.min, art.zoom))}
                         onChange={(e) => setArt({ ...art, zoom: Number(e.target.value) })}
                       />
                     </label>
-                    <button
-                      type="button"
-                      className="st-chip"
-                      onClick={() => setArt({ ...art, rotation: (art.rotation + 90) % 360 })}
-                    >
+                    {/* Any angle (PHASE-5 A2), sticking at quarter turns as the phones' Resize does. */}
+                    <label className="st-field">
+                      Angle {Math.round(turnOf(art.rotation))}°
+                      <input
+                        type="range"
+                        min="-180"
+                        max="180"
+                        step="1"
+                        value={turnOf(art.rotation)}
+                        onChange={(e) => setArt({ ...art, rotation: stuckTurn(Number(e.target.value)) })}
+                      />
+                    </label>
+                    <button type="button" className="st-chip" onClick={turnQuarter}>
                       <RotateCw size={15} aria-hidden="true" />
                       Turn
                     </button>
@@ -2575,7 +2776,7 @@ export default function Studio({
               <p>
                 {mode === 'text'
                   ? 'Your words go with you to the Moment composer.'
-                  : 'Your caption goes with you to the Moment composer. Pick the photo again there.'}
+                  : `Your caption goes with you to the Moment composer. Pick the ${isVideo ? 'video' : 'photo'} again there.`}
               </p>
               <button type="button" className="st-post" autoFocus onClick={handBack}>
                 Continue
@@ -2646,7 +2847,7 @@ export default function Studio({
                         className="st-chip"
                         disabled={!!busy || (!filled && fillsAlready)}
                         onClick={() =>
-                          setArt({ ...art, zoom: filled || !shape ? 1 : fillZoom(shape.w, shape.h, art.rotation), offset: { x: 0, y: 0 } })
+                          setArt({ ...art, zoom: filled ? fitAt(art.rotation) : fillAt(art.rotation), offset: { x: 0, y: 0 } })
                         }
                       >
                         {filled ? <Minimize2 size={15} aria-hidden="true" /> : <Maximize2 size={15} aria-hidden="true" />}
@@ -2656,18 +2857,30 @@ export default function Studio({
                         type="button"
                         className="st-chip"
                         disabled={!!busy}
-                        onClick={() => {
-                          const rotation = (art.rotation + 90) % 360;
-                          setArt({ ...art, rotation, zoom: filled && shape ? fillZoom(shape.w, shape.h, rotation) : art.zoom });
-                        }}
+                        onClick={turnQuarter}
                       >
                         <RotateCw size={15} aria-hidden="true" />
                         Turn
                       </button>
+                      {canTrim && (
+                        <button
+                          type="button"
+                          className="st-chip"
+                          disabled={!!busy}
+                          aria-pressed={trimOpen}
+                          onClick={() => {
+                            setLoopOpen(false);
+                            setTrimOpen(!trimOpen);
+                          }}
+                        >
+                          <Scissors size={15} aria-hidden="true" />
+                          {trimOut ? `Trim · ${(trimOut.from_ms / 1000).toFixed(1)}–${(trimOut.to_ms / 1000).toFixed(1)} s` : 'Trim'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="st-chip"
-                        disabled={!!busy || (art.zoom === 1 && !art.rotation && !art.offset.x && !art.offset.y)}
+                        disabled={!!busy || unmoved(art)}
                         onClick={() => setArt({ ...art, zoom: 1, rotation: 0, offset: { x: 0, y: 0 } })}
                       >
                         <Undo2 size={15} aria-hidden="true" />

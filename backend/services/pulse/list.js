@@ -11,6 +11,9 @@
 // Close circle: newest first. Around me: by band, nearest band first, newest first inside a band. A band is the
 // distance from the reader's place to the point everyone sees, and nothing finer leaves this file: a post's
 // `distance_meters` is taken off, and the reader's own point is never sent.
+//
+// Phase 6 (CONTRACT 11): with the map's box the list is what the map shows there (the map's own reads), nearest the box's
+// middle first; with `no_place` the reader's own and connections' posts and Moments without a place follow as one more band.
 
 const feedService = require('../feedService');
 const store = require('../moments/momentStore');
@@ -57,6 +60,12 @@ const END_LINES = {
   close: 'Caught up on your circle. Keep exploring?',
   around: 'Caught up around you. Keep exploring?',
 };
+// The map's box (CONTRACT 11a): the last page's words, and how many posts the map draws at most (its own cap, map.js).
+const BOX_END = "That's everything on the map here.";
+const MAP_CAP = 200;
+// Without a place (CONTRACT 11b): the band they follow under, and how many of each (posts, Moments) at most.
+const NO_PLACE_BAND = { band: 'no_place', label: 'Without a place' };
+const MAX_NO_PLACE = 100;
 
 // How many reads of each kind one page may take when the reads keep coming back with nothing to show.
 const MAX_ROUNDS = 4;
@@ -98,7 +107,12 @@ function encodeCursor(state) {
   return Buffer.from(JSON.stringify({ v: 1, ...state })).toString('base64url');
 }
 
-function decodeCursor(text, { reach, miles, chip, circle = null, filters = null }) {
+/** The map's box as a cursor names it (CONTRACT 11a), or null without one. */
+function boxSignature(box) {
+  return box ? [box.south, box.west, box.north, box.east].map((n) => Number(n).toFixed(6)).join(',') : null;
+}
+
+function decodeCursor(text, { reach, miles, chip, circle = null, filters = null, box = null, noPlace = false }) {
   if (text == null || text === '') return null;
   let state;
   try {
@@ -107,7 +121,20 @@ function decodeCursor(text, { reach, miles, chip, circle = null, filters = null 
     state = null;
   }
   const sameAsk = state && state.v === 1 && state.r === reach && state.mi === miles && state.c === chip
-    && (state.ci || null) === (circle || null) && (state.f || null) === filtersOf.signature(filters);
+    && (state.ci || null) === (circle || null) && (state.f || null) === filtersOf.signature(filters)
+    && (state.x || null) === boxSignature(box) && Boolean(state.np) === Boolean(noPlace);
+  // The map's box (CONTRACT 11a) and the part without a place (11b) go on from a mark of their own.
+  if (sameAsk && state.z === 'box' && box) {
+    const key = state.k;
+    if (key == null || (Number.isFinite(key.d) && Number.isFinite(key.at) && typeof key.id === 'string')) {
+      return { stage: 'box', key: key ?? null };
+    }
+  }
+  if (sameAsk && state.z === 'np' && noPlace) {
+    const mark = state.m;
+    if (mark == null || (Number.isFinite(mark.at) && typeof mark.id === 'string')) return { stage: 'np', mark: mark ?? null };
+  }
+  if (box || state?.z) throw fail(400, 'INVALID_CURSOR', 'This list has changed. Pull to refresh.');
   const band = state?.b;
   if (!sameAsk || !Number.isInteger(band) || band < 0 || band >= BANDS.length) {
     throw fail(400, 'INVALID_CURSOR', 'This list has changed. Pull to refresh.');
@@ -284,12 +311,28 @@ async function readerPlace(userId, latitude, longitude) {
  */
 async function listFor(userId, {
   reach = 'around', miles = MAX_MILES, chip = 'all', latitude = null, longitude = null, cursor = null, limit = 20, circle = null,
-  filters = null,
+  filters = null, box = null, noPlace: noPlaceAsked = false,
 }) {
   if (!REACHES.includes(reach)) throw fail(400, 'LIST_INVALID', 'Choose Close circle or Around me.');
   if (!CHIP_NAMES.includes(chip)) throw fail(400, 'LIST_INVALID', 'Choose one of the chips.');
   if (circle && reach !== 'close') throw fail(400, 'LIST_INVALID', 'A circle goes with Close circle.');
-  const from = decodeCursor(cursor, { reach, miles, chip, circle, filters });
+  if (box && reach !== 'around') throw fail(400, 'LIST_INVALID', "The map's area goes with Around me.");
+  // Without a place (CONTRACT 11b): Close circle already lists them by time, so there it changes nothing.
+  const noPlace = Boolean(noPlaceAsked) && reach === 'around';
+  const from = decodeCursor(cursor, { reach, miles, chip, circle, filters, box, noPlace });
+  // The map's box (CONTRACT 11a): what the map shows there, in a read of its own.
+  if (box) return boxListFor(userId, { box, chip, filters, from, limit, noPlace, miles });
+  // Around me's part without a place, once its placed bands are all read (CONTRACT 11b).
+  if (from?.stage === 'np') {
+    const shape = filters ? (await filteredShape(userId, filters, { placeRead: readerPlace(userId, latitude, longitude) })) : null;
+    const np = await noPlacePage(userId, { shape: shape ? shape.shape : CHIPS[chip], filtered: shape, chip, mark: from.mark, room: limit });
+    const bands = [...bandsUpTo(miles, null), NO_PLACE_BAND];
+    return answer({
+      userId, reach, miles, chip, chipsRead: null, readyRead: null, place: null, bands,
+      items: np.items.map((item) => ({ ...item, bandIndex: bands.length - 1 })),
+      next: np.more ? { z: 'np', m: np.mark, np: 1 } : null, filters,
+    });
+  }
   const firstPage = !from;
   // Filters (CONTRACT 10a): the chip's shape becomes the filters' own (several kinds, when, from, state, since, with the
   // Heads-ups always); without any, the chip's shape as before.
@@ -492,10 +535,153 @@ async function listFor(userId, {
     chipsRead = chipsFromPage(chipContext, seen, complete);
   }
   const town = await townRead;
+  const shownBands = bandsUpTo(miles, town);
+  if (noPlace) {
+    // Without a place (CONTRACT 11b): once every placed band is read, they follow as one more band, on the same page
+    // when it has room. The cursor says so (`np`), so a next page asks for them alike.
+    shownBands.push(NO_PLACE_BAND);
+    if (next) {
+      next = { ...next, np: 1 };
+    } else if (items.length < limit) {
+      const np = await noPlacePage(userId, { shape, filtered, chip, mark: null, room: limit - items.length });
+      items.push(...np.items.map((item) => ({ ...item, bandIndex: shownBands.length - 1 })));
+      next = np.more ? { z: 'np', m: np.mark, np: 1 } : null;
+    } else {
+      next = { z: 'np', m: null, np: 1 };
+    }
+  }
   return answer({
-    userId, reach, miles, chip, chipsRead, readyRead, place: { label: town }, bands: bandsUpTo(miles, town), items, next, studioInBox, recentPasses,
+    userId, reach, miles, chip, chipsRead, readyRead, place: { label: town }, bands: shownBands, items, next, studioInBox, recentPasses,
     filters,
   });
+}
+
+// ─── The map's box (CONTRACT 11a) and without a place (11b) ────────────────
+
+/** Whether a post is in the list's chip or passes its filters (the tests the list's own reads make; Heads-ups always). */
+function postPasses(post, { shape, filtered, chip }) {
+  if (!shape.posts) return false;
+  if (filtered) return filtered.tests.post(post);
+  return chip === 'all' || inChip(chip, post);
+}
+
+function inBox(point, box) {
+  return point && point.latitude != null && point.longitude != null
+    && point.latitude >= box.south && point.latitude <= box.north && point.longitude >= box.west && point.longitude <= box.east;
+}
+
+// Nearest the box's middle first, then newest first, then by id: the order of the box's items, and what its cursor names.
+function nearerFirst(a, b) {
+  if (a.key.d !== b.key.d) return a.key.d - b.key.d;
+  return newerFirst(a, b);
+}
+
+function afterKey(key, mark) {
+  if (!mark) return true;
+  if (key.d !== mark.d) return key.d > mark.d;
+  return below(key, mark);
+}
+
+/**
+ * GET /list with the map's box (CONTRACT 11a): what the map shows in it, by the map's own reads (map.js: the Place map's
+ * posts, cap and all; the Moments and kept Moments the reader may see whose shown point is in it), read once, side by
+ * side; then the chip or filters, the order (nearest the middle first) and the page. Only the page's Moments are made ready.
+ */
+async function boxListFor(userId, { box, chip, filters, from, limit, noPlace, miles }) {
+  const middle = { latitude: (box.south + box.north) / 2, longitude: (box.west + box.east) / 2 };
+  const askMarks = { x: boxSignature(box), ...(noPlace ? { np: 1 } : {}) };
+  const bands = noPlace ? [NO_PLACE_BAND] : [];
+  const filteredRead = filters ? filteredShape(userId, filters, { placeRead: Promise.resolve(middle) }) : null;
+  filteredRead?.catch(() => {});
+  if (from?.stage === 'np') {
+    const filtered = await filteredRead;
+    const np = await noPlacePage(userId, { shape: filtered ? filtered.shape : CHIPS[chip], filtered, chip, mark: from.mark, room: limit });
+    return answer({
+      userId, reach: 'around', miles, chip, chipsRead: null, readyRead: null, place: null, bands,
+      items: np.items.map((item) => ({ ...item, bandIndex: 0 })),
+      next: np.more ? { z: 'np', m: np.mark, ...askMarks } : null, filters, endLine: BOX_END, extra: { count: null },
+    });
+  }
+  // The page's Studio parts (stamps, playable items, dots) are read beside the box's posts, as the map reads its stamps.
+  const studioInBox = postStudio.partsInBox(box);
+  studioInBox.catch(() => {});
+  // eslint-disable-next-line global-require
+  const recentPasses = require('./passOn').recentPasses();
+  recentPasses.catch(() => {});
+  const distance = (point) => Math.round(haversineMeters(middle.latitude, middle.longitude, point.latitude, point.longitude) * 10) / 10;
+  const momentsRead = withKept(store.shownInBox(userId, box), store.shownKept(userId, { box }));
+  // The page's Moments are among the `limit` nearest Moments after the cursor: they are made ready as soon as the
+  // Moments are read, beside the posts' read, not after it (the opening time, as 6a's prepare).
+  const placedMomentsRead = Promise.all([momentsRead, filteredRead]).then(([moments, filtered]) => {
+    const shape = filtered ? filtered.shape : CHIPS[chip];
+    const placed = moments.filter((entry) => inBox(entry.point, box));
+    const listed = (shape.moments ? keptByFilters(placed, filtered) : []).map((entry) => ({
+      ...momentItem(entry), key: { d: distance(entry.point), at: micros(store.shownAt(entry.row)), id: entry.row.id },
+    })).sort(nearerFirst);
+    return { placed, listed };
+  });
+  const readyRead = prepare(userId, placedMomentsRead.then(({ listed }) => listed
+    .filter((item) => afterKey(item.key, from?.key ?? null)).slice(0, limit)));
+  const [posts, { placed: placedMoments, listed }, filtered] = await Promise.all([
+    feedService.getMapFeed({ userId, surface: 'place', ...box, limit: MAP_CAP }),
+    placedMomentsRead,
+    filteredRead,
+  ]);
+  const shape = filtered ? filtered.shape : CHIPS[chip];
+  const placedPosts = posts.filter((post) => inBox(post, box));
+  const all = [
+    ...placedPosts.filter((post) => postPasses(post, { shape, filtered, chip })).map((post) => ({
+      type: 'post', key: { d: distance(post), at: micros(post.created_at), id: post.id }, post,
+    })),
+    ...listed,
+  ].sort(nearerFirst);
+  const left = all.filter((item) => afterKey(item.key, from?.key ?? null));
+  const items = left.slice(0, limit).map((item) => ({ ...item, bandIndex: null }));
+  let next = left.length > limit ? { z: 'box', k: items[items.length - 1].key, ...askMarks } : null;
+  if (!next && noPlace) {
+    if (items.length < limit) {
+      const np = await noPlacePage(userId, { shape, filtered, chip, mark: null, room: limit - items.length });
+      items.push(...np.items.map((item) => ({ ...item, bandIndex: 0 })));
+      next = np.more ? { z: 'np', m: np.mark, ...askMarks } : null;
+    } else {
+      next = { z: 'np', m: null, ...askMarks };
+    }
+  }
+  // The chips this box has (first page): from everything the map shows here, before the chip or filters.
+  const firstPage = !from;
+  const chipsRead = firstPage ? Promise.resolve([
+    placedMoments.length ? 'live' : null,
+    ...POST_CHIPS.filter((name) => placedPosts.some((post) => inChip(name, post))),
+  ]) : null;
+  return answer({
+    userId, reach: 'around', miles, chip, chipsRead, readyRead, place: null, bands, items, next, studioInBox, recentPasses,
+    filters, endLine: BOX_END,
+    extra: { count: firstPage ? all.length : null, ...(firstPage && posts.length >= MAP_CAP ? { count_more: true } : {}) },
+  });
+}
+
+/**
+ * The reader's own and connections' posts and Moments without a place (CONTRACT 11b), newest first, from `mark`: the
+ * Connections map's "posts with no place" (feedService.getUnplacedConnectionPosts) and those people's live and kept
+ * Moments with no place the reader may see, at most MAX_NO_PLACE of each, with the list's chip or filters.
+ */
+async function noPlacePage(userId, { shape, filtered, chip, mark, room }) {
+  const peopleRead = store.connectionIds(userId).then((ids) => [String(userId), ...ids.map(String)]);
+  const [unplaced, moments] = await Promise.all([
+    shape.posts ? feedService.getUnplacedConnectionPosts({ userId, limit: MAX_NO_PLACE }) : { posts: [] },
+    shape.moments
+      ? peopleRead.then((people) => withKept(store.shownOfPeople(userId, people), store.shownKept(userId, { people })))
+      : [],
+  ]);
+  const all = [
+    ...unplaced.posts.filter((post) => postPasses(post, { shape, filtered, chip })).map((post) => ({
+      type: 'post', key: { at: micros(post.created_at), id: post.id }, post,
+    })),
+    ...keptByFilters(moments.filter((entry) => entry.point?.latitude == null || entry.point?.longitude == null), filtered).slice(0, MAX_NO_PLACE).map((entry) => momentItem(entry)),
+  ].sort(newerFirst);
+  const left = all.filter((item) => below(item.key, mark));
+  const items = left.slice(0, room);
+  return { items, more: left.length > room, mark: items.length ? items[items.length - 1].key : mark };
 }
 
 /**
@@ -544,6 +730,7 @@ function prepare(userId, itemsRead) {
 /** The page as the apps read it: Moments serialized as GET /api/moments/:id answers them, posts as the feed lists them. */
 async function answer({
   userId, reach, miles, chip, chipsRead, readyRead, place, bands, items, next, studioInBox = null, recentPasses = null, filters = null,
+  endLine = null, extra = null,
 }) {
   const pagePosts = items.filter((item) => item.type === 'post').map((item) => item.post);
   // A post made in the Studio shows its stamps, its playable items and its dots here (CONTRACT 6d, 7b, 7c); a failed read
@@ -584,7 +771,8 @@ async function answer({
     bands: bands.map(({ band, label }) => ({ band, label })),
     items: out,
     next_cursor: next ? encodeCursor({ r: reach, mi: miles, c: chip, ...next, ...(filters ? { f: filtersOf.signature(filters) } : {}) }) : null,
-    end: next ? null : END_LINES[reach],
+    end: next ? null : (endLine || END_LINES[reach]),
+    ...(extra || {}),
     ...filtersOf.echo(filters),
   };
 }

@@ -106,6 +106,12 @@ public struct MomentCreateBody: Encodable, Sendable, Hashable {
     public var loop: MomentLoopBody?
     /// The camera's heading at the shot (CONTRACT 9h, `MomentsStudioCompass`); left out otherwise.
     public var heading: MomentHeadingBody?
+    /// The Studio's whole picture (CONTRACT 10c): shown as composed, never cut; left out otherwise.
+    public var whole: Bool?
+    /// A whole video's place on the 9:16 canvas (CONTRACT 10c); left out otherwise.
+    public var placement: MomentWholePlacementDTO?
+    /// The two backdrop colours around a whole picture (CONTRACT 10c); left out otherwise.
+    public var backdrop: MomentBackdropDTO?
 
     private enum CodingKeys: String, CodingKey {
         case kind, hours, audience, caption, text, background, location, altitude, series, pin
@@ -113,7 +119,7 @@ public struct MomentCreateBody: Encodable, Sendable, Hashable {
         case takenHere = "taken_here"
         case showWeather = "show_weather"
         case postAs = "post_as"
-        case stamps, elevation, guess, explore, play, mentions, dots, deck, loop, heading
+        case stamps, elevation, guess, explore, play, mentions, dots, deck, loop, heading, whole, placement, backdrop
         case showArea = "show_area"
         case clientRequestId = "client_request_id"
         case placeKey = "place_key"
