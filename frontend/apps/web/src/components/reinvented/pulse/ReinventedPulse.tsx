@@ -1362,7 +1362,27 @@ export default function ReinventedPulse() {
               </ol>
               <div ref={sentinel} className="rp-sentinel" />
               {isFetchingNextPage && <p className="rp-muted rp-center">Loading more…</p>}
-              {!hasNextPage && last?.end && <p className="rp-end">{last.end}</p>}
+              {/* The end of the reach's list asks "Keep exploring?" (CONTRACT 6a): the question is the way to Explore (round 7). */}
+              {!hasNextPage && last?.end && (
+                <p className="rp-end">
+                  {last.end.replace(/\s*Keep exploring\?$/, '')}
+                  {/Keep exploring\?$/.test(last.end) && (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        className="rp-end-more"
+                        onClick={() => {
+                          setReach('explore');
+                          setCircle(null);
+                        }}
+                      >
+                        Keep exploring?
+                      </button>
+                    </>
+                  )}
+                </p>
+              )}
             </>
           )}
       </PulseSheet>

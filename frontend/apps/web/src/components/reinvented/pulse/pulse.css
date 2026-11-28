@@ -1157,6 +1157,22 @@
   text-align: center;
   font-size: 12px;
 }
+.rp-end-more {
+  position: relative;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--rp-brand);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.rp-end-more::before {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
 .rp-muted {
   color: var(--rp-muted);
   font-size: 13px;
