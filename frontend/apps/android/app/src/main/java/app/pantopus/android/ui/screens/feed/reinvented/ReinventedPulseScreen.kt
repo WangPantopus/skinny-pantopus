@@ -116,7 +116,10 @@ fun ReinventedPulseScreen(
     viewModel: ReinventedPulseViewModel = hiltViewModel(),
     mapModel: ReinventedMapViewModel = hiltViewModel(),
     atlasModel: ReinventedAtlasViewModel = hiltViewModel(),
+    filtersModel: ReinventedFiltersViewModel = hiltViewModel(),
 ) {
+    // PHASE-5 B: the filters kept for this person, carried by the list's and the map's first reads.
+    ReadsFiltered(filtersModel, viewModel, mapModel)
     val state by viewModel.state.collectAsStateWithLifecycle()
     val cards by viewModel.cards.cards.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
@@ -156,6 +159,7 @@ fun ReinventedPulseScreen(
         height = height,
         onHeight = { height = it },
         state = state,
+        filtersModel = filtersModel,
         actions = actions,
         onPickChip = viewModel::pickChip,
         onPickReach = viewModel::pickReach,
@@ -202,6 +206,33 @@ private fun ReadsInOrder(
             viewModel.readStrip()
         }
     }
+}
+
+/**
+ * The filters into the reads (PHASE-5 B): the kept time is the map's before anything is read, and each change of the
+ * filters or the time sends the list and the map their CONTRACT 10a fields (none while nothing is on).
+ */
+@Composable
+private fun ReadsFiltered(
+    filtersModel: ReinventedFiltersViewModel,
+    viewModel: ReinventedPulseViewModel,
+    mapModel: ReinventedMapViewModel,
+) {
+    // The kept time goes to the map once; until the map has it, the list's first read already carries it.
+    val kept = filtersModel.keptTime
+    var taken by remember(kept) { mutableStateOf(kept == null) }
+    LaunchedEffect(kept) { kept?.let(mapModel::pickTime) }
+    val mapState by mapModel.state.collectAsStateWithLifecycle()
+    val mapTime = mapState.time
+    LaunchedEffect(mapTime) { if (mapTime == kept) taken = true }
+    val time = if (taken || kept == null) mapTime else kept
+    val filters by filtersModel.filters.collectAsStateWithLifecycle()
+    val listQuery = filters.query(time, filtersModel.since, list = true)
+    val mapQuery = filters.query(time, filtersModel.since, list = false)
+    val chip = filters.chip() ?: ReinventedPulseViewModel.ALL
+    LaunchedEffect(listQuery, chip) { viewModel.filter(listQuery, chip) }
+    LaunchedEffect(mapQuery) { mapModel.filter(mapQuery) }
+    LaunchedEffect(time) { filtersModel.keep(time) }
 }
 
 /** My Atlas's hook: entering it reads its first page and the kept Moments in the box the map already shows. */
@@ -348,6 +379,7 @@ private fun ReinventedPulseLayout(
     height: ReinventedHeight,
     onHeight: (ReinventedHeight) -> Unit,
     state: ReinventedPulseState,
+    filtersModel: ReinventedFiltersViewModel,
     actions: ReinventedPulseActions,
     onPickChip: (String) -> Unit,
     onPickReach: (String, Int) -> Unit,
@@ -382,11 +414,15 @@ private fun ReinventedPulseLayout(
                 if (height == ReinventedHeight.Map) onHeight(ReinventedHeight.Middle)
             },
         )
+    val filters by filtersModel.filters.collectAsStateWithLifecycle()
+    var filtersOpen by rememberSaveable { mutableStateOf(false) }
     val rail =
         ReinventedRailActions(
             time = mapState.time,
             onPickTime = mapModel::pickTime,
             atlas = atlas.on,
+            filterCount = filters.count(mapState.time),
+            onFilters = { filtersOpen = true },
             onMyPlace = {
                 mapState.center?.let { at ->
                     scope.launch { camera.animate(CameraUpdateFactory.newLatLng(LatLng(at.latitude, at.longitude)), FLY_MS) }
@@ -429,6 +465,7 @@ private fun ReinventedPulseLayout(
                         onPickCircle = onPickCircle,
                         lens = lens,
                         lensActions = lensActions,
+                        onPullDown = { if (!atlas.on) filtersOpen = true },
                         modifier = modifier,
                     )
                 },
@@ -468,6 +505,20 @@ private fun ReinventedPulseLayout(
                 onAdd = onAdd,
                 list = list,
             )
+        if (filtersOpen) {
+            ReinventedFiltersSheet(
+                filters = filters,
+                time = mapState.time,
+                canFresh = filtersModel.since != null,
+                onFilters = { filtersModel.set(it, mapState.time) },
+                onTime = mapModel::pickTime,
+                onClear = {
+                    filtersModel.clear(ReinventedMapState.LIVE)
+                    mapModel.pickTime(ReinventedMapState.LIVE)
+                },
+                onDismiss = { filtersOpen = false },
+            )
+        }
         if (wide) {
             ReinventedSideBySide(height, parts)
         } else {
@@ -475,7 +526,16 @@ private fun ReinventedPulseLayout(
             ReinventedOverMap(height, onHeight, maxHeight, line, parts) { top ->
                 val railTop = top + REINVENTED_RAIL_GAP
                 // The pill first, so the When card (the rail's) opens over it.
-                ReinventedRailPill(ask, Modifier.reinventedPillPlace(railTop))
+                ReinventedRailPill(
+                    ask = ask,
+                    // The server's own account of what it applied (CONTRACT 10a), the phone's choice until it answers.
+                    filterWords = reinventedFilterLine(mapState.applied, filters, mapState.time).takeUnless { atlas.on },
+                    onClearFilters = {
+                        filtersModel.clear(ReinventedMapState.LIVE)
+                        mapModel.pickTime(ReinventedMapState.LIVE)
+                    },
+                    modifier = Modifier.reinventedPillPlace(railTop),
+                )
                 ReinventedRail(rail, moving = camera.isMoving, top = railTop, ask = ask, modifier = Modifier.fillMaxWidth())
                 ReinventedLensSuggestions(lens, lensActions, Modifier.padding(top = top + 4.dp, start = Spacing.s4, end = Spacing.s4))
             }

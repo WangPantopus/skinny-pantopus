@@ -92,6 +92,9 @@ internal class ReinventedRailActions(
     val onPickTime: (String) -> Unit,
     val atlas: Boolean,
     val onMyPlace: () -> Unit,
+    /** How many filters are on (PHASE-5 B), and the sheet that changes them. */
+    val filterCount: Int = 0,
+    val onFilters: () -> Unit = {},
 )
 
 /**
@@ -118,6 +121,7 @@ internal fun ReinventedRail(
             modifier = Modifier.align(Alignment.TopEnd).padding(end = 8.dp).alpha(fade).testTag("reinventedPulse.rail"),
         ) {
             if (!actions.atlas) {
+                ReinventedFiltersButton(actions.filterCount, actions.onFilters)
                 RailButton(
                     words = "When: ${reinventedWhenWords(actions.time)}. Change when",
                     tag = "reinventedPulse.rail.when",
@@ -225,16 +229,18 @@ private fun WhenCard(
 }
 
 /**
- * The one small glass pill under the top line: what Ask the map lit (or found nothing, or could not ask) and what Listen
- * hears, with ✕ to clear the ask and stop listening. Nothing shows while neither is on.
+ * The one small glass pill under the top line: the filters that are on ("Ask · Tonight"), what Ask the map lit (or found
+ * nothing, or could not ask) and what Listen hears, with ✕ to clear them all. Nothing shows while none is on.
  */
 @Composable
 internal fun ReinventedRailPill(
     ask: LivingAskViewModel,
+    filterWords: String?,
+    onClearFilters: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by ask.state.collectAsStateWithLifecycle()
-    val words = reinventedAskWords(state) ?: return
+    val words = listOfNotNull(filterWords, reinventedAskWords(state)).joinToString(" · ").takeIf { it.isNotEmpty() } ?: return
     val shape = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier.heightIn(min = 32.dp).glass(shape).padding(start = 12.dp).testTag("reinventedPulse.pill"),
@@ -256,9 +262,10 @@ internal fun ReinventedRailPill(
                 Modifier
                     .size(RAIL_TOUCH)
                     .clickable(role = Role.Button) {
+                        onClearFilters()
                         ask.clear()
                         ask.stopListening()
-                    }.semantics { contentDescription = "Clear and show every pin" }
+                    }.semantics { contentDescription = "Clear the filters and show every pin" }
                     .testTag("reinventedPulse.pill.clear"),
         ) {
             PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 14.dp, tint = PantopusColors.appTextSecondary)
