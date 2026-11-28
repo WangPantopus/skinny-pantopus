@@ -27,9 +27,14 @@ const CW = 9,
   CH = 16;
 /** Until the picture's own colours are read. */
 export const DARK_BACKDROP: Backdrop = { top: '#111111', bottom: '#111111' };
-/** The width's limits, as a share of the canvas's (10c's `placement.width`, the phones' Resize). */
+/**
+ * The width's limits, as a share of the canvas's (10c's `placement.width`, the phones' Resize): at least a quarter of the
+ * canvas; sized up to four times the canvas, or four times Fill when Fill is wider (a wide video, as the phones' Resize
+ * zooms to four times cover). The server takes a placed video's width up to 32 (#5245).
+ */
 const SMALLEST = 0.25,
-  LARGEST = 4;
+  LARGEST = 4,
+  WIDEST = 32;
 /** A turn sticks to a quarter turn within 3 degrees, as the phones' Resize does. */
 const STICK_DEGREES = 3;
 
@@ -70,11 +75,12 @@ export function fillZoom(w: number, h: number, turn: number) {
     s = Math.abs(Math.sin((turn * Math.PI) / 180));
   return Math.max((CW * c + CH * s) / p.w, (CW * s + CH * c) / p.h);
 }
-/** How far the picture may be sized: its width a quarter of the canvas's to four times it. */
+/** How far the picture may be sized: its width a quarter of the canvas's, up to four times the canvas or four times Fill. */
 export function zoomRange(w: number, h: number) {
   if (!w || !h) return { min: 0.5, max: 3 };
   const p = upright(w, h);
-  return { min: (SMALLEST * CW) / p.w, max: (LARGEST * CW) / p.w };
+  const max = Math.min((WIDEST * CW) / p.w, Math.max((LARGEST * CW) / p.w, 4 * fillZoom(w, h, 0)));
+  return { min: (SMALLEST * CW) / p.w, max };
 }
 /** True when the picture is placed as it was picked: whole, upright, in the middle. */
 export const unmoved = (a: Artwork) => a.zoom === 1 && !turnOf(a.rotation) && !a.offset.x && !a.offset.y;
@@ -83,7 +89,7 @@ export const unmoved = (a: Artwork) => a.zoom === 1 && !turnOf(a.rotation) && !a
 export function placementOf(w: number, h: number, a: Artwork): Placement {
   const p = upright(w, h);
   return {
-    width: round(clamp((p.w * a.zoom) / CW, SMALLEST, LARGEST)),
+    width: round(clamp((p.w * a.zoom) / CW, SMALLEST, WIDEST)),
     x: round(clamp(0.5 + a.offset.x, 0, 1)),
     y: round(clamp(0.5 + a.offset.y, 0, 1)),
     turn: round(clamp(turnOf(a.rotation), -180, 180)),
