@@ -129,7 +129,7 @@ struct MomentsStudioLooksRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Film looks")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -259,7 +259,7 @@ struct MomentsStudioStripRow: View {
         let count = model.stripPartners.count
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Photostrip")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
             Button {
@@ -273,14 +273,16 @@ struct MomentsStudioStripRow: View {
                 HStack(spacing: 6) {
                     Icon(.image, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryTint)
                     Text(making ? "Making the strip…" : "This and the next \(count == 1 ? "photo" : "\(count) photos") in one strip")
-                        .font(.system(size: 14.5, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
                 }
                 .padding(.horizontal, 12)
-                .frame(height: 38)
+                .frame(height: 28)
                 .background(Capsule().fill(Theme.Color.appSurfaceRaised))
                 .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: 1))
-                .contentShape(Capsule())
+                // One step smaller to the eye (PHASE-6 C), 44 pt to the finger.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(making)

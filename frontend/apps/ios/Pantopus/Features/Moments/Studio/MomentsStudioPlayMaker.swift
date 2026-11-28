@@ -63,7 +63,7 @@ struct MomentsStudioPlayMaker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(model.offersGuess ? "More to play" : "Play")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
             if !model.offersMorePlay {
@@ -155,7 +155,7 @@ struct MomentsStudioPlayMaker: View {
         }
         Button { put(kind) } label: {
             Text("Put it on the picture")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
@@ -284,13 +284,15 @@ struct MomentsStudioPlayMaker: View {
 
     private func chip(_ words: String, on: Bool) -> some View {
         Text(words)
-            .font(.system(size: 14.5, weight: .semibold))
+            .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(on ? Color.white : Theme.Color.appText)
             .padding(.horizontal, 12)
-            .frame(height: 36)
+            .frame(height: 28)
             .background(Capsule().fill(on ? Theme.Color.primarySolid : Theme.Color.appSurfaceRaised))
             .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: on ? 0 : 1))
-            .contentShape(Capsule())
+            // One step smaller to the eye (PHASE-6 C), 44 pt to the finger.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
     }
 }
 

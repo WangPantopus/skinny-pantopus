@@ -122,7 +122,7 @@ struct MomentsStudioLoopSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text("Loop")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
                 Text("This part plays over and over, without sound. Anyone whose app doesn't loop yet sees it play once.")
@@ -136,7 +136,7 @@ struct MomentsStudioLoopSheet: View {
                     Toggle(isOn: $bounce) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Bounce")
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(Theme.Color.appText)
                             Text("Forward, then back. Up to three seconds each way.")
                                 .font(.system(size: 12.5))
@@ -216,7 +216,7 @@ struct MomentsStudioLoopSheet: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Theme.Color.appText)
                 Spacer()
                 Text(String(format: "%.1f s", value.wrappedValue))
@@ -236,10 +236,10 @@ struct MomentsStudioLoopSheet: View {
     private func button(_ words: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(words)
-                .font(.system(size: 14.5, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(on ? Color.white : Theme.Color.appText)
                 .padding(.horizontal, 14)
-                .frame(height: 40)
+                .frame(minHeight: 44)
                 .background(Capsule().fill(on ? Theme.Color.primarySolid : Theme.Color.appSurfaceRaised))
                 .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: on ? 0 : 1))
                 .contentShape(Capsule())

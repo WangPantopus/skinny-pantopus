@@ -34,7 +34,7 @@ struct MomentsStudioTray: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
                 Text("Checked by Pantopus")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
                 Text("Nobody can type these")
@@ -98,15 +98,17 @@ struct MomentsStudioTray: View {
             HStack(spacing: 6) {
                 Icon(MomentStampView.icon(kind), size: 16, strokeWidth: 2.2, color: placed ? .white : Theme.Color.primaryTint)
                 Text(words)
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(placed ? Color.white : Theme.Color.appText)
                     .lineLimit(1)
             }
             .padding(.horizontal, 12)
-            .frame(height: 38)
+            .frame(height: 28)
             .background(Capsule().fill(placed ? Theme.Color.primarySolid : Theme.Color.appSurfaceRaised))
             .overlay(Capsule().stroke(Theme.Color.appBorder, lineWidth: placed ? 0 : 1))
-            .contentShape(Capsule())
+            // One step smaller to the eye (PHASE-6 C), 44 pt to the finger.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(MomentStampView.name(kind)): \(words)")
