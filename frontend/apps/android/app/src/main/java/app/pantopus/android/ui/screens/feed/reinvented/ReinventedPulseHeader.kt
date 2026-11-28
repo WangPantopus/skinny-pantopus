@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,13 +78,14 @@ internal fun ReinventedPulseHeader(
     modifier: Modifier = Modifier,
 ) {
     var showsDial by rememberSaveable { mutableStateOf(false) }
+    val pullDown by rememberUpdatedState(onPullDown)
     // Over the list (its own background, buttons in line) rather than floating over the map.
     val onList = height == ReinventedHeight.List || (sideBySide && height == ReinventedHeight.Middle)
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .then(if (onPullDown != null) Modifier.pullsDown(onPullDown) else Modifier)
+                .then(if (onPullDown != null) Modifier.pullsDown { pullDown?.invoke() } else Modifier)
                 .background(if (onList) PantopusColors.appBg else Color.Transparent)
                 .statusBarsPadding()
                 .padding(bottom = Spacing.s2),
@@ -247,7 +249,8 @@ private fun SmallSwitchButton(
 
 /** Pulling down on the top line drops the Filters sheet (PHASE-6 A3); a tap still goes to the control under the finger. */
 private fun Modifier.pullsDown(onPull: () -> Unit): Modifier =
-    pointerInput(onPull) {
+    // Keyed on nothing: a redraw never restarts the gesture under the finger (the header hands it the latest action).
+    pointerInput(Unit) {
         var pulled = 0f
         detectVerticalDragGestures(onDragStart = { pulled = 0f }) { change, dy ->
             pulled += dy
