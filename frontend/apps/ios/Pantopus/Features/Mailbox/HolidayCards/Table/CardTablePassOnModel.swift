@@ -66,6 +66,8 @@ final class CardTablePassOnModel {
 
     private(set) var signature: CardSignature?
     private(set) var messageLimit = 300
+    /// The card round's switch, from the cards' read: the sent words say a card by email opens before joining.
+    @ObservationIgnored private var improved = false
     /// The reader's town ("Tampa, FL"); nil until they have one.
     var town: String?
     private(set) var readCards = false
@@ -134,6 +136,7 @@ final class CardTablePassOnModel {
         guard let cards else { return }
         signature = cards.signature?.saved
         messageLimit = cards.messageLimit
+        improved = cards.improved
         if town == nil { town = cards.travel?.town }
     }
 
@@ -300,7 +303,7 @@ final class CardTablePassOnModel {
             return .sent(words: "Your card is ready.", primary: "Done", buttons: [copy, share])
         }
         let first = pick?.firstName ?? MailPieceModel.firstText(card.toName).map(HolidayCardWords.firstName) ?? "them"
-        let lines = [HolidayCardWords.arrivalLine(card), HolidayCardWords.takeBackLine(card)].compactMap(\.self)
+        let lines = [HolidayCardWords.arrivalLine(card, improved: improved), HolidayCardWords.takeBackLine(card)].compactMap(\.self)
         var buttons: [CardTableMenuItem] = []
         if card.canTakeBack {
             buttons.append(CardTableMenuItem(title: "Take it back", identifier: "cardPassOnTakeBack") { [weak model] in

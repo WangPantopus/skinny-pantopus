@@ -170,7 +170,7 @@ struct HolidayCardToStep: View {
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(MailPaper.wax)
                         }
-                        Text("Text it, or paste it anywhere. The first person to open it keeps the card.")
+                        Text(HolidayCardWords.linkLine(improved: viewModel.improved))
                             .font(.system(size: 13))
                             .foregroundStyle(HolidayCardDesk.muted(scheme))
                             .multilineTextAlignment(.center)
@@ -338,13 +338,10 @@ struct HolidayCardToStep: View {
                 )
                 .accessibilityLabel("Their email address")
                 .accessibilityIdentifier("sendCardEmail")
-            Text(
-                "They get an email saying you sent them a Christmas card. They join Pantopus with this address to open it. "
-                    + "The email never shows your note."
-            )
-            .font(.system(size: 14))
-            .foregroundStyle(HolidayCardDesk.muted(scheme))
-            .fixedSize(horizontal: false, vertical: true)
+            Text(HolidayCardWords.emailLine(improved: viewModel.improved))
+                .font(.system(size: 14))
+                .foregroundStyle(HolidayCardDesk.muted(scheme))
+                .fixedSize(horizontal: false, vertical: true)
             HolidayCardWaxButton(
                 title: many ? "Add to the list" : "Continue",
                 isEnabled: viewModel.emailIsValid && !(many && viewModel.listIsFull)
