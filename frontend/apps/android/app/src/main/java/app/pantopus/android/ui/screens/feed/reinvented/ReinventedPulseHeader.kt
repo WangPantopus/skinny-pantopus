@@ -46,8 +46,8 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Spacing
 
 /**
- * Over the map: the top row (the side menu, the scope pill, the chat button), the big List | Map switch (the middle
- * height reads as List), and the chips the place has. Drawn on the page's background at the List height; over the map
+ * Over the map: the top row (the side menu, the scope pill, the chat button), the Map | Atlas switch (on a wide window
+ * still List | Map | Atlas), and the chips the place has. Drawn on the page's background at the List height; over the map
  * each control floats on its own. Side by side on a wide window ([sideBySide]) it sits over the list's column, and both
  * List and Map read as lit while both are shown.
  */
@@ -177,7 +177,10 @@ internal fun scopeTitle(state: ReinventedPulseState): String =
         else -> state.placeLabel?.let { "$it · ${state.miles} mi" } ?: "Around me"
     }
 
-/** The big List | Map switch. */
+/**
+ * The big Map | Atlas switch (PHASE-6 A1: the List button is gone, the list is the sheet). Map leaves My Atlas and, when
+ * the sheet is full, lowers it to half so the map shows; Atlas shows the person's own kept Moments in the sheet.
+ */
 @Composable
 private fun ViewSwitch(
     height: ReinventedHeight,
@@ -197,15 +200,11 @@ private fun ViewSwitch(
                 .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        SwitchButton("List", PantopusIcon.List, on = !atlas && height != ReinventedHeight.Map) {
+        SwitchButton("Map", PantopusIcon.Map, on = !atlas) {
             onAtlas(false)
-            onHeight(ReinventedHeight.List)
+            if (height == ReinventedHeight.List) onHeight(ReinventedHeight.Middle)
         }
-        SwitchButton("Map", PantopusIcon.Map, on = !atlas && height == ReinventedHeight.Map) {
-            onAtlas(false)
-            onHeight(ReinventedHeight.Map)
-        }
-        // My Atlas: the person's own kept Moments in the list's place, and on the map.
+        // My Atlas: the person's own kept Moments in the sheet, and on the map.
         SwitchButton("Atlas", PantopusIcon.Layers, on = atlas) {
             onAtlas(true)
             if (height == ReinventedHeight.Map) onHeight(ReinventedHeight.Middle)

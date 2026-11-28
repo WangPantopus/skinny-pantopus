@@ -60,10 +60,12 @@ internal class ReinventedLayoutParts(
     val map: @Composable (bottomPadding: Dp) -> Unit,
     /** The time row over the map when both are shown; null in My Atlas, which has none. */
     val timeRow: (@Composable (Modifier) -> Unit)?,
-    /** At the Map height: "Guess the spot" under the top row, and the peek deck. */
-    val mapExtras: @Composable BoxScope.(guessTop: Dp, deck: Modifier) -> Unit,
-    /** + : the Studio. */
+    /** At the Map height: "Guess the spot" under the top row, and the peek deck where [deck] is given (a wide window). */
+    val mapExtras: @Composable BoxScope.(guessTop: Dp, deck: Modifier?) -> Unit,
+    /** + : the Studio, as a round button. */
     val add: @Composable (Modifier) -> Unit,
+    /** What + does, for the small + in the phone's sheet header at full. */
+    val onAdd: () -> Unit,
     /** The list (or My Atlas's). */
     val list: @Composable (Modifier) -> Unit,
 )
