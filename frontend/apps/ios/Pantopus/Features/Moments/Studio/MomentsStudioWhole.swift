@@ -265,8 +265,12 @@ extension MomentsComposerModel {
     var studioWholePlacement: MomentWholePlacementDTO? {
         guard case .video = draft, marking.marks.isEmpty, let aspect = studioPictureAspect else { return nil }
         let placement = marking.placement ?? .fit(aspect: aspect)
+        // CONTRACT 10c takes a width of 0.25 to 32 (a very wide video's Fill is wider than four canvases).
         return MomentWholePlacementDTO(
-            width: Double(placement.width), x: Double(placement.center.x), y: Double(placement.center.y), turn: Double(placement.turn)
+            width: min(max(Double(placement.width), 0.25), 32),
+            x: Double(placement.center.x),
+            y: Double(placement.center.y),
+            turn: Double(placement.turn)
         )
     }
 
