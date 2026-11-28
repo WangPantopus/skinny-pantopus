@@ -387,7 +387,10 @@ internal fun rememberFollowArea(
     return area
 }
 
-/** The map's area between two heights on screen (its four corners, so a turned map is held whole); null when unknown. */
+/**
+ * The map's area between two heights on screen (its four corners, so a turned map is held whole); null when unknown.
+ * Across the date line the box is the side holding the area's middle (as the web's), never the whole width of the world.
+ */
 internal fun CameraPositionState.boxBetween(
     top: Float,
     bottom: Float,
@@ -399,16 +402,23 @@ internal fun CameraPositionState.boxBetween(
         listOf(0f to top, width to top, 0f to bottom, width to bottom).map { (x, y) ->
             projection.fromScreenLocation(Point(x.roundToInt(), y.roundToInt()))
         }
+    val middle = projection.fromScreenLocation(Point((width / 2f).roundToInt(), ((top + bottom) / 2f).roundToInt())).longitude
+    // Each corner's longitude as a step east or west of the middle, so a corner past the date line stays on its own side.
+    val steps = corners.map { wrapLongitude(it.longitude - middle) }
     val south = corners.minOf { it.latitude }.coerceIn(-MAX_LAT, MAX_LAT)
     val north = corners.maxOf { it.latitude }.coerceIn(-MAX_LAT, MAX_LAT)
-    val west = corners.minOf { it.longitude }.coerceIn(-MAX_LNG, MAX_LNG)
-    val east = corners.maxOf { it.longitude }.coerceIn(-MAX_LNG, MAX_LNG)
+    val west = (middle + steps.min()).coerceIn(-MAX_LNG, MAX_LNG)
+    val east = (middle + steps.max()).coerceIn(-MAX_LNG, MAX_LNG)
     if (south >= north || west >= east) return null
     return ReinventedBox(south = south, west = west, north = north, east = east)
 }
 
+/** A longitude difference brought into -180..180. */
+private fun wrapLongitude(degrees: Double): Double = ((degrees + MAX_LNG) % FULL_TURN + FULL_TURN) % FULL_TURN - MAX_LNG
+
 private const val MAX_LAT = 90.0
 private const val MAX_LNG = 180.0
+private const val FULL_TURN = 360.0
 
 /** The pin a Moment of the list is drawn in: its ring, or its kept mark. */
 internal fun ReinventedMapState.pinForMoment(momentId: String): ReinventedMapItem? =
