@@ -3,9 +3,11 @@
 package app.pantopus.android.ui.screens.feed.reinvented
 
 import android.graphics.Point
+import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -51,6 +53,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -58,9 +61,12 @@ import kotlin.math.roundToLong
 /*
  * PHASE-6 B (the founder's point 8): at peek and half the list shows what is on the map now, the part of the map not
  * under the top line or the sheet, nearest the map's middle first (CONTRACT 11a). When the map comes to rest (250 ms
- * without a move) the list is asked again for the new area; a read in flight is dropped; the old rows stay, dimmed to
- * 60%, until the new ones are there, with no spinner and no empty flash. The last answer for each area is kept for the
- * visit. At full the list is the reach's whole list, as before. "No place" adds what has no location (11b).
+ * without a move) the list is asked again for the new area; one read at a time: a read in flight is dropped and its
+ * answer thrown away. The old rows stay, dimmed to 60%, until the new ones are there, with no spinner and no empty flash;
+ * after 2 seconds without an answer, or on a failure, they stop being dimmed and the sheet's header offers "Couldn't
+ * refresh · Try again" (PHASE-6 H). The last answer for each of the last 20 areas is kept for the visit: an area seen
+ * before shows its kept rows at once and refreshes quietly behind them. At full the list is the reach's whole list, as
+ * before. "No place" adds what has no location (11b).
  */
 
 /** What the following list shows: the rows as the list draws them, how many the map holds there, and whether it is old. */
@@ -70,8 +76,10 @@ data class ReinventedFollowState(
     val count: Int? = null,
     /** The map's cap was reached: "200+ here". */
     val countMore: Boolean = false,
-    /** A read for a new area is out: the rows on screen are the last area's (drawn at 60%). */
+    /** A read for a new area is out: the rows on screen are the last area's (drawn at 60%, the count dimmed too). */
     val stale: Boolean = false,
+    /** The last read failed or took over 2 seconds: the last rows stay, and the header offers to try again. */
+    val failed: Boolean = false,
 )
 
 @HiltViewModel
@@ -106,6 +114,12 @@ class ReinventedFollowViewModel
         private var on = false
         private var reading: Job? = null
 
+        /** Which read is the newest: an answer to any other is thrown away. */
+        private var serial = 0
+
+        /** When the map came to rest (or the list was asked again), for the timing line. */
+        private var restedAt = 0L
+
         /** The first page of each area read in this visit, by area, chip and filters. */
         private val kept = LinkedHashMap<String, ReinventedListResponse>()
 
@@ -124,6 +138,7 @@ class ReinventedFollowViewModel
         fun moved(next: ReinventedBox) {
             if (next == box) return
             box = next
+            restedAt = SystemClock.elapsedRealtime()
             readSoon(waitMs = SETTLE_MS)
         }
 
@@ -138,9 +153,9 @@ class ReinventedFollowViewModel
             readSoon(waitMs = 0L)
         }
 
-        /** Read the area again (a pull on the list). */
+        /** Read the area again (a pull on the list, "Try again"). */
         fun refresh() {
-            box?.let { kept.remove(key(it)) }
+            restedAt = SystemClock.elapsedRealtime()
             readSoon(waitMs = 0L)
         }
 
@@ -165,28 +180,42 @@ class ReinventedFollowViewModel
             if (!on) return
             val area = box ?: return
             reading?.cancel()
+            val mine = ++serial
             val id = key(area)
-            kept[id]?.let { answer ->
-                // Kept from earlier in this visit: shown at once, and read again quietly.
-                show(answer, appending = false, revision = cards.actionRevision)
+            val seen = kept[id]
+            if (seen != null) {
+                // Seen before in this visit: its rows at once, refreshed quietly behind them.
+                show(seen, appending = false, revision = cards.actionRevision)
+            } else if (_state.value.list.items.isNotEmpty()) {
+                _state.update { it.copy(stale = true, failed = false) }
             }
-            if (_state.value.list.items.isNotEmpty() && kept[id] == null) _state.update { it.copy(stale = true) }
             reading =
                 viewModelScope.launch {
                     if (waitMs > 0) delay(waitMs)
                     val revision = cards.actionRevision
-                    when (val answer = repository.listInBox(area, chip, filters, cursor = null)) {
+                    // After 2 seconds without an answer the last rows stop being dimmed and the header offers to try again.
+                    val slow =
+                        launch {
+                            delay(SLOW_MS)
+                            if (serial == mine) _state.update { it.copy(stale = false, failed = it.list.items.isNotEmpty()) }
+                        }
+                    val answer = repository.listInBox(area, chip, filters, cursor = null)
+                    slow.cancel()
+                    if (serial != mine) return@launch
+                    when (answer) {
                         is NetworkResult.Success -> {
+                            kept.remove(id)
                             kept[id] = answer.data
                             while (kept.size > KEPT_AREAS) kept.remove(kept.keys.first())
                             show(answer.data, appending = false, revision = revision)
+                            Timber.tag(TIMING).d("follow rows sinceRest=%d", SystemClock.elapsedRealtime() - restedAt)
                         }
                         is NetworkResult.Failure ->
                             _state.update {
                                 if (it.list.items.isEmpty()) {
                                     it.copy(stale = false, list = it.list.copy(load = ReinventedPulseState.Load.Failed(FAILED)))
                                 } else {
-                                    it.copy(stale = false)
+                                    it.copy(stale = false, failed = true)
                                 }
                             }
                     }
@@ -205,6 +234,7 @@ class ReinventedFollowViewModel
                     count = if (appending) now.count else page.count,
                     countMore = if (appending) now.countMore else page.countMore,
                     stale = false,
+                    failed = false,
                     list =
                         now.list.copy(
                             load = ReinventedPulseState.Load.Loaded,
@@ -229,7 +259,9 @@ class ReinventedFollowViewModel
 
         private companion object {
             const val SETTLE_MS = 250L
-            const val KEPT_AREAS = 40
+            const val SLOW_MS = 2_000L
+            const val KEPT_AREAS = 20
+            const val TIMING = "ISPerf"
             const val PLACES = 100_000.0
             const val FAILED = "Couldn't load what's on the map. Check your connection and try again."
         }
@@ -388,3 +420,18 @@ internal fun ReinventedMapState.pinForMoment(momentId: String): ReinventedMapIte
 /** The mark a post of the list is drawn as. */
 internal fun ReinventedMapState.pinForPost(postId: String): ReinventedMapItem? =
     items.firstOrNull { it is ReinventedMapItem.Mark && it.mark.post.id == postId }
+
+/** In the sheet's header after a read failed or was slow: "Couldn't refresh · Try again"; a tap asks again. */
+@Composable
+internal fun ReinventedFollowRetry(onRetry: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier
+                .heightIn(min = 44.dp)
+                .clickable(role = Role.Button, onClick = onRetry)
+                .testTag("reinventedPulse.follow.retry"),
+    ) {
+        Text("Couldn't refresh · Try again", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.primary600)
+    }
+}

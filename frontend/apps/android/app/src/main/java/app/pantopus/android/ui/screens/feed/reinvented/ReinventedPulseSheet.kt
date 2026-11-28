@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -189,6 +190,7 @@ internal fun ReinventedSheet(
     headerEnd: @Composable RowScope.() -> Unit,
     list: @Composable (Modifier) -> Unit,
     half: Float? = null,
+    lineDim: Boolean = false,
 ) {
     val density = LocalDensity.current
     val settled = sheet.settledValue
@@ -209,7 +211,7 @@ internal fun ReinventedSheet(
                 .background(PantopusColors.appBg)
                 .testTag("reinventedPulse.sheet"),
     ) {
-        SheetHeader(sheet, line, headerEnd)
+        SheetHeader(sheet, line, lineDim, headerEnd)
         list(Modifier.fillMaxWidth().weight(1f).padding(bottom = hidden))
     }
 }
@@ -219,6 +221,7 @@ internal fun ReinventedSheet(
 private fun SheetHeader(
     sheet: AnchoredDraggableState<ReinventedHeight>,
     line: String,
+    dim: Boolean,
     end: @Composable RowScope.() -> Unit,
 ) {
     val settled = sheet.settledValue
@@ -270,7 +273,8 @@ private fun SheetHeader(
                 color = PantopusColors.appText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).testTag("reinventedPulse.sheet.line"),
+                // Dimmed while a read for a new area is out: an old count never reads as the new one (PHASE-6 H).
+                modifier = Modifier.weight(1f).alpha(if (dim) 0.5f else 1f).testTag("reinventedPulse.sheet.line"),
             )
             end()
         }

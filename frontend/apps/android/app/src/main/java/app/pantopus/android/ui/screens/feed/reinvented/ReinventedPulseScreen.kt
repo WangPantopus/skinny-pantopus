@@ -581,10 +581,13 @@ private fun ReinventedPulseLayout(
                 followState.takeIf { followOn }?.let { reinventedFollowLine(it, mapState.time) }
                     ?: reinventedSheetLine(mapState.items.size, mapState.time, atlas.on)
             val sheetEnd: @Composable RowScope.(ReinventedHeight) -> Unit = { settled ->
+                // PHASE-6 H: after a failed or slow read the last rows stay and the header offers to try again.
+                if (followOn && followState.failed) ReinventedFollowRetry(followModel::refresh)
                 if (!atlas.on && state.reach == ReinventedPulseViewModel.AROUND) ReinventedNoPlaceToggle(noPlace, filtersModel::noPlace)
                 if (settled == ReinventedHeight.List) ReinventedSheetHeaderAdd(onAdd)
             }
-            ReinventedOverMap(height, onHeight, maxHeight, line, parts, sheetEnd, follow::uncovered) { top ->
+            val lineDim = followOn && followState.stale
+            ReinventedOverMap(height, onHeight, maxHeight, line, parts, sheetEnd, follow::uncovered, lineDim) { top ->
                 ReinventedPhoneOverMap(tools, top, atlas.on, camera.isMoving, mapModel)
             }
         }
@@ -596,6 +599,7 @@ private fun ReinventedPulseLayout(
  * ([ReinventedSheet]), moved only by its header. + rides over the sheet up to half and sits in its header at full.
  */
 @Composable
+@Suppress("LongParameterList") // Its rest and size, the parts, the sheet's line and end, and what goes over the map.
 private fun BoxScope.ReinventedOverMap(
     height: ReinventedHeight,
     onHeight: (ReinventedHeight) -> Unit,
@@ -604,6 +608,7 @@ private fun BoxScope.ReinventedOverMap(
     parts: ReinventedLayoutParts,
     sheetEnd: @Composable RowScope.(ReinventedHeight) -> Unit,
     onUncovered: (top: Float, bottom: Float) -> Unit,
+    lineDim: Boolean,
     overMap: @Composable BoxScope.(top: Dp) -> Unit,
 ) {
     val density = LocalDensity.current
@@ -628,6 +633,7 @@ private fun BoxScope.ReinventedOverMap(
         headerEnd = { sheetEnd(settled) },
         list = { modifier -> parts.list(modifier, settled != ReinventedHeight.List) },
         half = half,
+        lineDim = lineDim,
     )
     parts.header(Modifier.onSizeChanged { headerPx = it.height })
     // "Guess the spot" stands at the bottom left over the sheet at peek, level with +; the top is the rail's and the pill's.
