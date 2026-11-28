@@ -60,6 +60,8 @@ data class ReinventedListItemDto(
 /** `GET /api/reinvented/list` (CONTRACT 6a): one page, by reach, chip and cursor. */
 @JsonClass(generateAdapter = true)
 data class ReinventedListResponse(
+    /** CONTRACT 10a: what the server applied, whenever a filter was sent; null otherwise. */
+    val filters: ReinventedAppliedFiltersDto? = null,
     val reach: String = "around",
     val miles: Int? = null,
     val place: ReinventedPlaceDto? = null,
@@ -99,6 +101,8 @@ data class ReinventedKeptDto(
  */
 @JsonClass(generateAdapter = true)
 data class ReinventedMapResponse(
+    /** CONTRACT 10a: what the server applied, whenever a filter was sent; null otherwise. */
+    val filters: ReinventedAppliedFiltersDto? = null,
     val time: String = "live",
     @Lossy val rings: List<MomentRingDto> = emptyList(),
     @Lossy val marks: List<ReinventedMarkDto> = emptyList(),

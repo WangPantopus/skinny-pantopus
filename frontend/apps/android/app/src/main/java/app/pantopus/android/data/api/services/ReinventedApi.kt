@@ -42,13 +42,19 @@ interface ReinventedApi {
     suspend fun list(
         @Query("reach") reach: String,
         @Query("miles") miles: Int?,
-        @Query("chip") chip: String,
+        @Query("chip") chip: String?,
         @Query("latitude") latitude: String?,
         @Query("longitude") longitude: String?,
         @Query("cursor") cursor: String?,
         @Query("limit") limit: Int = PAGE,
         // CONTRACT 8d: with reach=close, only this circle's people who are in.
         @Query("circle") circle: String? = null,
+        // CONTRACT 10a (PHASE-5 B): the filters, each left out when off; with none on the request is today's.
+        @Query("kinds") kinds: String? = null,
+        @Query("when") whenKey: String? = null,
+        @Query("from") from: String? = null,
+        @Query("state") state: String? = null,
+        @Query("since") since: String? = null,
     ): ReinventedListResponse
 
     /**
@@ -63,6 +69,11 @@ interface ReinventedApi {
         @Query("north") north: String,
         @Query("east") east: String,
         @Query("time") time: String,
+        // CONTRACT 10a: the same filters as the list (the time row is the map's When), each left out when off.
+        @Query("kinds") kinds: String? = null,
+        @Query("from") from: String? = null,
+        @Query("state") state: String? = null,
+        @Query("since") since: String? = null,
     ): ReinventedMapResponse
 
     /** `GET /api/reinvented/strip` (CONTRACT 6c): Alive right now. Route `backend/routes/reinvented.js` (strip). */

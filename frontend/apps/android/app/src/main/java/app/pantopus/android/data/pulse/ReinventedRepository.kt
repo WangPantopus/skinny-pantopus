@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.reinvented.ReinventedCircleMakeBody
 import app.pantopus.android.data.api.models.reinvented.ReinventedCirclesResponse
 import app.pantopus.android.data.api.models.reinvented.ReinventedExploreResponse
 import app.pantopus.android.data.api.models.reinvented.ReinventedKeepBody
+import app.pantopus.android.data.api.models.reinvented.ReinventedFilters
 import app.pantopus.android.data.api.models.reinvented.ReinventedListResponse
 import app.pantopus.android.data.api.models.reinvented.ReinventedMagazineResponse
 import app.pantopus.android.data.api.models.reinvented.ReinventedMapResponse
@@ -64,18 +65,46 @@ class ReinventedRepository
             cursor: String?,
             // CONTRACT 8d: one circle of the reader's, with `close`.
             circle: String? = null,
+            // CONTRACT 10a: none on is today's request; with kinds chosen the chip is left out (they don't go together).
+            filters: ReinventedFilters = ReinventedFilters(),
         ): NetworkResult<ReinventedListResponse> =
             // A circle's 404 is the circle gone (CIRCLE_NOT_FOUND), not an older server: today's Pulse stays out of it.
             guarded(behindOn404 = circle == null) {
-                api.list(reach, miles, chip, at?.latitude?.let(::degrees), at?.longitude?.let(::degrees), cursor, circle = circle)
+                api.list(
+                    reach,
+                    miles,
+                    chip.takeIf { filters.kinds.isEmpty() },
+                    at?.latitude?.let(::degrees),
+                    at?.longitude?.let(::degrees),
+                    cursor,
+                    circle = circle,
+                    kinds = filters.kindsQuery,
+                    whenKey = filters.whenKey,
+                    from = filters.from,
+                    state = filters.stateQuery,
+                    since = filters.since,
+                )
             }
 
         /** The map for a box and a time (CONTRACT 6b). */
         suspend fun map(
             box: ReinventedBox,
             time: String,
+            filters: ReinventedFilters = ReinventedFilters(),
         ): NetworkResult<ReinventedMapResponse> =
-            guarded { api.map(degrees(box.south), degrees(box.west), degrees(box.north), degrees(box.east), time) }
+            guarded {
+                api.map(
+                    degrees(box.south),
+                    degrees(box.west),
+                    degrees(box.north),
+                    degrees(box.east),
+                    time,
+                    kinds = filters.kindsQuery,
+                    from = filters.from,
+                    state = filters.stateQuery,
+                    since = filters.since,
+                )
+            }
 
         /** Alive right now (CONTRACT 6c). An older server's 404 only leaves the strip out. */
         suspend fun strip(at: ReinventedPoint?): NetworkResult<ReinventedStripResponse> =
