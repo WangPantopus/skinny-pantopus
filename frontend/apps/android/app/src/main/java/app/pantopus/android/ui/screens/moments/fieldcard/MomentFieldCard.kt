@@ -222,11 +222,11 @@ fun MomentFieldCard(
         if (card == null) {
             val guess = dot.label?.takeIf { it.isNotBlank() }?.let { "Maybe $it" } ?: "Something in the photo"
             Text(guess, color = Color.White, fontSize = 15.sp)
-            Text(ui.problem ?: if (ui.busy) "Naming it…" else "", color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
+            Text(ui.problem ?: if (ui.busy) "Naming it…" else "", color = PantopusColors.studioPillSecondary, fontSize = 12.sp)
             if (ui.problem != null) CardAction("Try again", tag = "moments.viewer.fieldCard.retry") { viewModel.retry(moment, dot.id) }
         } else {
             Named(card)
-            ui.problem?.let { Text(it, color = PantopusColors.studioPillSecondary, fontSize = 13.sp) }
+            ui.problem?.let { Text(it, color = PantopusColors.studioPillSecondary, fontSize = 12.sp) }
             Actions(
                 card = card,
                 busy = ui.busy,
@@ -294,7 +294,7 @@ private fun Named(card: MomentFieldCardDto) {
                 strokeWidth = 2.2f,
                 tint = PantopusColors.studioPillSecondary,
             )
-            Text(source.title ?: url, color = PantopusColors.studioPillSecondary, fontSize = 13.sp, maxLines = 2)
+            Text(source.title ?: url, color = PantopusColors.studioPillSecondary, fontSize = 12.sp, maxLines = 2)
         }
     }
     Text(madeBy(card), color = PantopusColors.studioPillSecondary, fontSize = 12.sp)
@@ -386,7 +386,7 @@ private fun NotRightSheet(
             Text(
                 "Say what you think it is. The card stays as it is; its author sees what people say.",
                 color = PantopusColors.studioPillSecondary,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
             )
             CardField(name, "What it is", NAME_LETTERS, "moments.viewer.fieldCard.nameField") { name = it }
             CardField(note, "How you know (optional)", NOTE_LETTERS, "moments.viewer.fieldCard.note") { note = it }
@@ -460,13 +460,13 @@ private fun FieldGuideSheet(
                     .testTag("moments.viewer.fieldGuide"),
         ) {
             SheetTitle("Your field guide")
-            Text("Only you see what you collect.", color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
+            Text("Only you see what you collect.", color = PantopusColors.studioPillSecondary, fontSize = 12.sp)
             if (guide.entries.isEmpty() && !guide.loading && guide.problem == null) {
                 Text("Nothing collected yet.", color = Color.White, fontSize = 14.sp)
             }
             guide.entries.forEach { entry -> GuideRow(entry, onLetGo = { viewModel.letGo(entry) }) }
             guide.problem?.let {
-                Text(it, color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
+                Text(it, color = PantopusColors.studioPillSecondary, fontSize = 12.sp)
                 CardAction("Try again", tag = "moments.viewer.fieldGuide.retry") { viewModel.loadGuide() }
             }
             if (guide.next != null && !guide.loading) {
@@ -513,5 +513,5 @@ private const val NOTE_LETTERS = 140
 
 @Composable
 private fun SheetTitle(words: String) {
-    Text(words, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+    Text(words, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
 }

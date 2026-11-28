@@ -154,7 +154,7 @@ fun MomentsStudioThingEditor(
         Text(
             "A reader's tap names it with a source (Pantopus AI). It always says “likely”, and people can correct it.",
             color = PantopusColors.studioPillSecondary,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
         )
     }
 }
