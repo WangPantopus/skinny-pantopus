@@ -92,33 +92,41 @@ fun MomentPlaceSound(moment: MomentDto?) {
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
-        Row(
+        // Bottom left, clear of the elevation scale on the right; a 44 dp touch area around a 28 dp pill (PHASE-6 C).
+        Box(
+            contentAlignment = Alignment.CenterStart,
             modifier =
                 Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 150.dp)
-                    .heightIn(min = 32.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 150.dp)
+                    .heightIn(min = 44.dp)
                     .clickable(role = Role.Button) { play() }
-                    .padding(horizontal = 10.dp)
                     .testTag("moments.viewer.placeSound")
                     .clearAndSetSemantics {
                         contentDescription =
                             if (sound.cleaned) "Place sound, wind cleaned. Plays it again" else "Place sound. Plays it again"
                         role = Role.Button
                     },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            PantopusIconImage(
-                icon = PantopusIcon.Volume2,
-                contentDescription = null,
-                size = 14.dp,
-                strokeWidth = 2.2f,
-                tint = Color.White.copy(alpha = if (playing) 1f else 0.8f),
-            )
-            Text(if (sound.cleaned) "Place sound · wind cleaned" else "Place sound", color = Color.White, fontSize = 12.5.sp)
+            Row(
+                modifier =
+                    Modifier
+                        .heightIn(min = 28.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.Volume2,
+                    contentDescription = null,
+                    size = 14.dp,
+                    strokeWidth = 2.2f,
+                    tint = Color.White.copy(alpha = if (playing) 1f else 0.8f),
+                )
+                Text(if (sound.cleaned) "Place sound · wind cleaned" else "Place sound", color = Color.White, fontSize = 13.sp)
+            }
         }
     }
 }
