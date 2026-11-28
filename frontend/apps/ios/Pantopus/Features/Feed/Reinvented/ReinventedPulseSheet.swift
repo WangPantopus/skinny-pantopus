@@ -20,6 +20,8 @@ struct ReinventedPulseSheet<Content: View, Add: View, Accessory: View>: View {
     let fullTop: CGFloat
     /// The header's one line: "23 here · Live".
     let line: String
+    /// Dimmed while the list's new read is out (PHASE-6 H: never an old number shown as new).
+    var lineDimmed = false
     /// Small, right-aligned in the header: "No place" (PHASE-6 A3).
     let accessory: Accessory
     /// The list, or My Atlas.
@@ -84,6 +86,8 @@ struct ReinventedPulseSheet<Content: View, Add: View, Accessory: View>: View {
                 Text(line)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .opacity(lineDimmed ? 0.45 : 1)
+                    .animation(.easeOut(duration: 0.15), value: lineDimmed)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Spacing.s4)

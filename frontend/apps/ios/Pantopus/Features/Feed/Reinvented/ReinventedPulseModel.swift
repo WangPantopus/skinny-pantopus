@@ -88,6 +88,11 @@ final class ReinventedPulseModel {
     private(set) var countMore = false
     /// The rows are an older area's while the new one's read is out: drawn dimmed until the new rows are here.
     private(set) var stale = false
+    /// PHASE-6 H: the last read failed, or gave no answer within 2 seconds: the last rows stay, undimmed, and the sheet's
+    /// header offers "Couldn't refresh · Try again". Cleared by the next answer.
+    private(set) var couldNotRefresh = false
+    /// A read of the list's first page is out (the count is dimmed meanwhile: never an old number shown as new).
+    private(set) var counting = false
     /// A pin tapped: the row the list scrolls to.
     var scrollTarget: String?
     let cards: ProfilePostCardsModel
@@ -100,8 +105,11 @@ final class ReinventedPulseModel {
     @ObservationIgnored private var cursor: String?
     @ObservationIgnored private var reading: Task<Void, Never>?
     @ObservationIgnored private var following: Task<Void, Never>?
-    /// The last first page per area, filters and "No place", for this visit (PHASE-6 B).
-    @ObservationIgnored private var kept: [String: (page: ReinventedListResponse, at: Date)] = [:]
+    /// The last first page per area, filters and "No place", for this visit: the last 20 areas (PHASE-6 B, H).
+    @ObservationIgnored private var kept: [String: ReinventedListResponse] = [:]
+    @ObservationIgnored private var keptOrder: [String] = []
+    /// Counts first-page reads, so a 2-second watch knows whether its read is still the one out.
+    @ObservationIgnored private var readNumber = 0
     @ObservationIgnored private let api: APIClient
     @ObservationIgnored private let viewerId: String?
 
@@ -197,12 +205,13 @@ final class ReinventedPulseModel {
             try? await Task.sleep(for: .milliseconds(250))
             guard let self, !Task.isCancelled else { return }
             box = next
-            if let hit = kept[keepKey], hit.at.timeIntervalSinceNow > -60 {
+            if let hit = kept[keepKey] {
+                // An area seen before: its kept rows at once, refreshed quietly behind them (no dimming).
                 reading?.cancel()
-                show(hit.page, appending: false, revision: cards.actionRevision)
-                return
+                show(hit, appending: false, revision: cards.actionRevision)
+            } else {
+                stale = !items.isEmpty
             }
-            stale = !items.isEmpty
             await refresh()
         }
     }
@@ -280,16 +289,20 @@ final class ReinventedPulseModel {
             box: box,
             noPlace: noPlace
         )
+        let number = startRead(firstPage: cursor == nil)
         guard let data = await fetch(endpoint) else {
-            if !Task.isCancelled { stale = false }
+            // Cancelled: a newer read is out and owns the state. Failed: the last rows stay with "Try again".
+            if !Task.isCancelled, number == readNumber { endRead(failed: !items.isEmpty) }
             return
         }
+        guard !Task.isCancelled, number == readNumber || cursor != nil else { return } // a late answer is thrown away
         guard let page = try? JSONDecoder().decode(ReinventedListResponse.self, from: data) else {
-            stale = false
+            endRead(failed: !items.isEmpty)
             if items.isEmpty { load = .failed("Couldn't load Pulse. Try again.") }
             return
         }
-        if cursor == nil { kept[keepKey] = (page, Date()) }
+        if cursor == nil { keep(page) }
+        endRead(failed: false)
         show(page, appending: cursor != nil, revision: revision)
     }
 
@@ -375,5 +388,44 @@ final class ReinventedPulseModel {
             return nil
         }
         cards.show(posts, readRevision: revision)
+    }
+}
+
+// MARK: - The list that follows the map (PHASE-6 H)
+
+extension ReinventedPulseModel {
+    /// A first page's read starts: the count dims; if no answer comes within 2 seconds the rows stop being dimmed and
+    /// "Couldn't refresh · Try again" shows (PHASE-6 H). Answers the read's number.
+    func startRead(firstPage: Bool) -> Int {
+        guard firstPage else { return readNumber }
+        readNumber += 1
+        let number = readNumber
+        counting = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, number == readNumber, counting else { return }
+            if !items.isEmpty {
+                stale = false
+                couldNotRefresh = true
+            }
+        }
+        return number
+    }
+
+    func endRead(failed: Bool) {
+        counting = false
+        stale = false
+        couldNotRefresh = failed
+    }
+
+    /// The last 20 areas' first pages, newest last.
+    func keep(_ page: ReinventedListResponse) {
+        let key = keepKey
+        kept[key] = page
+        keptOrder.removeAll { $0 == key }
+        keptOrder.append(key)
+        while keptOrder.count > 20 {
+            kept[keptOrder.removeFirst()] = nil
+        }
     }
 }

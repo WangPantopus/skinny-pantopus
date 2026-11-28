@@ -247,6 +247,7 @@ extension ReinventedPulseView {
             height: geo.size.height,
             fullTop: topHeight,
             line: sheetLine,
+            lineDimmed: !inAtlas && model.box != nil && model.counting,
             accessory: noPlaceToggle,
             content: panelContent
         ) { small in
@@ -270,7 +271,28 @@ extension ReinventedPulseView {
     }
 
     /// "No place" (PHASE-6 A3, CONTRACT 11b): posts and Moments without a location follow the placed ones. Off at first.
-    @ViewBuilder private var noPlaceToggle: some View {
+    private var noPlaceToggle: some View {
+        HStack(spacing: Spacing.s1) {
+            // PHASE-6 H: the last rows stay when a read fails or is slow; one small line offers to ask again.
+            if !inAtlas, model.couldNotRefresh {
+                Button {
+                    Task { await model.refresh() }
+                } label: {
+                    Text("Couldn\u{2019}t refresh \u{00B7} Try again")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.Color.primaryTint)
+                        .lineLimit(1)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("reinventedPulse.retry")
+            }
+            noPlaceButton
+        }
+    }
+
+    @ViewBuilder private var noPlaceButton: some View {
         if !inAtlas, model.reach == "around" {
             let on = model.noPlace
             Button {
