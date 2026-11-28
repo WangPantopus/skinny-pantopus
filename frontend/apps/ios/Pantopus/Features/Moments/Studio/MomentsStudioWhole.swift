@@ -260,9 +260,11 @@ extension MomentsComposerModel {
         return true
     }
 
-    /// A whole video's place on the canvas (CONTRACT 10c), while it keeps its own file: moved, with no marks drawn in.
+    /// A whole video's place on the canvas (CONTRACT 10c), while it keeps its own file (no marks drawn in): where it was
+    /// put, or, left whole, its fit, so readers always draw it on its canvas as its author saw it.
     var studioWholePlacement: MomentWholePlacementDTO? {
-        guard case .video = draft, marking.marks.isEmpty, let placement = marking.placement else { return nil }
+        guard case .video = draft, marking.marks.isEmpty, let aspect = studioPictureAspect else { return nil }
+        let placement = marking.placement ?? .fit(aspect: aspect)
         return MomentWholePlacementDTO(
             width: Double(placement.width), x: Double(placement.center.x), y: Double(placement.center.y), turn: Double(placement.turn)
         )
