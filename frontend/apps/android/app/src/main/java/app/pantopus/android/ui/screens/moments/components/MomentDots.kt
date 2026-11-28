@@ -70,6 +70,7 @@ fun MomentDotDto.kindWords(): String =
         MomentDotKinds.NOTE -> "A note"
         MomentDotKinds.RATING -> "A rating"
         MomentDotKinds.LINK -> "A link"
+        MomentDotKinds.WHISPER -> "A whisper"
         else -> "A dot"
     }
 
@@ -83,6 +84,7 @@ fun MomentDotMarker(
         when (kind) {
             MomentDotKinds.RATING -> PantopusIcon.Star
             MomentDotKinds.LINK -> PantopusIcon.Link
+            MomentDotKinds.WHISPER -> PantopusIcon.Mic
             else -> PantopusIcon.MessageSquare
         }
     Box(
@@ -220,6 +222,7 @@ private fun DotCard(
                 dot.title?.takeIf { it.isNotBlank() }?.let { Text(text = it, color = Color.White, fontSize = 15.sp) }
                 CardButton("Opens $host", tag = "moments.viewer.dotLink") { dot.url?.let { runCatching { uri.openUri(it.trim()) } } }
             }
+            MomentDotKinds.WHISPER -> app.pantopus.android.ui.screens.moments.viewer.sound.MomentWhisperPlay(dot)
         }
         if (mine) {
             CardButton(if (removing) "Removing…" else "Remove this dot", tag = "moments.viewer.dotRemove") {

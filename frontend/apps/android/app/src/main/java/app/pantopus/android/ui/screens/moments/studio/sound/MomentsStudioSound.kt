@@ -86,6 +86,8 @@ import javax.inject.Inject
 /** What the Sound sheet shows. */
 data class StudioSoundUi(
     val recording: Boolean = false,
+    /** What is being recorded or written: null for place sound, else the whisper dot's id. */
+    val dot: String? = null,
     val elapsedMs: Long = 0,
     /** Writing the sound, or cleaning the wind from it. */
     val working: Boolean = false,
@@ -115,24 +117,28 @@ class MomentsStudioSoundViewModel
             }
         }
 
-        /** Three seconds of the microphone, written as an .m4a, kept for the Moment being made. */
-        fun record(context: Context) {
+        /** Three seconds of the microphone, written as an .m4a, kept for the Moment being made: place sound, or [dot]'s whisper. */
+        fun record(
+            context: Context,
+            dot: String? = null,
+        ) {
             if (_ui.value.recording || _ui.value.working) return
             val app = context.applicationContext
             val next = MomentSoundRecorder(MomentSoundDto.SHORT_MS)
             recorder = next
-            _ui.value = StudioSoundUi(recording = true)
+            _ui.value = StudioSoundUi(recording = true, dot = dot)
             viewModelScope.launch {
                 val heard = withContext(Dispatchers.IO) { next.record { ms -> _ui.update { it.copy(elapsedMs = ms) } } }
                 recorder = null
                 if (heard == null) {
-                    _ui.value = StudioSoundUi(error = "Your phone's microphone couldn't record. Try again.")
+                    _ui.value = StudioSoundUi(dot = dot, error = "Your phone's microphone couldn't record. Try again.")
                     return@launch
                 }
-                _ui.value = StudioSoundUi(working = true)
+                _ui.value = StudioSoundUi(working = true, dot = dot)
                 val kept = withContext(Dispatchers.IO) { write(app, heard, heard, cleaned = false) }
-                _ui.value = StudioSoundUi(error = "Your sound couldn't be saved on your phone. Try again.".takeIf { kept == null })
-                if (kept != null) MomentsStudioSounds.setPlace(app, kept)
+                _ui.value = StudioSoundUi(dot = dot, error = "Your sound couldn't be saved on your phone. Try again.".takeIf { kept == null })
+                if (kept == null) return@launch
+                if (dot == null) MomentsStudioSounds.setPlace(app, kept) else MomentsStudioSounds.setWhisper(app, dot, kept)
             }
         }
 
@@ -160,8 +166,11 @@ class MomentsStudioSoundViewModel
             }
         }
 
-        fun remove(context: Context) {
-            MomentsStudioSounds.setPlace(context, null)
+        fun remove(
+            context: Context,
+            dot: String? = null,
+        ) {
+            if (dot == null) MomentsStudioSounds.setPlace(context, null) else MomentsStudioSounds.setWhisper(context, dot, null)
             _ui.value = StudioSoundUi()
         }
 
@@ -289,7 +298,7 @@ private fun PlaceSoundControls(
     val context = LocalContext.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         when {
-            ui.recording ->
+            ui.recording && ui.dot == null ->
                 SoundChip(
                     words = "Stop · ${seconds(ui.elapsedMs)} / ${seconds(MomentSoundDto.SHORT_MS)}",
                     icon = PantopusIcon.Square,
@@ -302,13 +311,13 @@ private fun PlaceSoundControls(
                     words = if (kept == null) "Record 3 seconds" else "Record again",
                     icon = PantopusIcon.Mic,
                     on = false,
-                    enabled = !ui.working,
+                    enabled = !ui.working && !ui.recording,
                     tag = "moments.studio.sound.place",
                     onClick = record,
                 )
         }
         kept?.takeIf { !ui.recording }?.let { sound ->
-            PlayChip(sound.file, sound.durationMs)
+            PlayChip(sound.file, sound.durationMs, "Play your place sound")
             SoundChip(
                 words = "",
                 icon = PantopusIcon.X,
@@ -368,6 +377,7 @@ private fun DoneButton(
 private fun PlayChip(
     file: File,
     durationMs: Long,
+    spoken: String,
 ) {
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     DisposableEffect(file) {
@@ -381,7 +391,7 @@ private fun PlayChip(
         icon = PantopusIcon.Play,
         on = false,
         tag = "moments.studio.sound.play",
-        spoken = "Play your place sound",
+        spoken = spoken,
         onClick = {
             player?.release()
             player =
@@ -424,6 +434,78 @@ private fun SoundChip(
     ) {
         PantopusIconImage(icon = icon, contentDescription = null, size = 16.dp, strokeWidth = 2.2f, tint = Color.White)
         if (words.isNotEmpty()) Text(words, color = Color.White.copy(alpha = if (enabled) 1f else 0.5f), fontSize = 13.5.sp)
+    }
+}
+
+/**
+ * A whisper dot's three seconds, in Illuminate's editor (CONTRACT 7c, 7e): record, hear it, record again or take it off.
+ * The dot goes out with the Moment only once it holds a whisper; the whisper goes up after the Moment is made. Never
+ * under a made-up name (the editor isn't offered then).
+ */
+@Composable
+fun MomentsStudioWhisperEditor(
+    dot: String,
+    viewModel: MomentsStudioSoundViewModel = hiltViewModel(),
+) {
+    val context = LocalContext.current
+    val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val whispers by MomentsStudioSounds.whispers.collectAsStateWithLifecycle()
+    val kept = whispers[dot]
+    var denied by remember { mutableStateOf(false) }
+    val ask =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            denied = !granted
+            if (granted) viewModel.record(context, dot)
+        }
+    val mine = ui.dot == dot
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.testTag("moments.studio.dot.whisper")) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            if (ui.recording && mine) {
+                SoundChip(
+                    words = "Stop · ${seconds(ui.elapsedMs)} / ${seconds(MomentSoundDto.SHORT_MS)}",
+                    icon = PantopusIcon.Square,
+                    on = true,
+                    tag = "moments.studio.dot.whisper.record",
+                    onClick = viewModel::stop,
+                )
+            } else {
+                SoundChip(
+                    words = if (kept == null) "Whisper 3 seconds" else "Whisper again",
+                    icon = PantopusIcon.Mic,
+                    on = false,
+                    enabled = !ui.working && !ui.recording,
+                    tag = "moments.studio.dot.whisper.record",
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            denied = false
+                            viewModel.record(context, dot)
+                        } else {
+                            ask.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                )
+            }
+            kept?.takeIf { !(ui.recording && mine) }?.let { sound ->
+                PlayChip(sound.file, sound.durationMs, "Play your whisper")
+                SoundChip(
+                    words = "",
+                    icon = PantopusIcon.X,
+                    on = false,
+                    enabled = !ui.working,
+                    tag = "moments.studio.dot.whisper.off",
+                    spoken = "Take the whisper off",
+                    onClick = { viewModel.remove(context, dot) },
+                )
+            }
+        }
+        val note =
+            when {
+                denied -> "Pantopus needs the microphone to record a whisper. You can allow it in your phone's settings."
+                mine && ui.error != null -> ui.error
+                kept == null -> "This dot goes out once it holds a whisper."
+                else -> null
+            }
+        note?.let { Text(it, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp) }
     }
 }
 

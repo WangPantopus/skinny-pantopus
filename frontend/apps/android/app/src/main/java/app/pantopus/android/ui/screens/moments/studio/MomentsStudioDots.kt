@@ -89,13 +89,18 @@ internal val MomentsComposeUiState.sentDots: List<MomentDotDto>?
     get() =
         dots
             .takeIf { media != null }
-            ?.filter { it.ready && !(madeUp && it.kind == MomentDotKinds.LINK) }
+            ?.filter { it.ready && !(madeUp && (it.kind == MomentDotKinds.LINK || it.kind == MomentDotKinds.WHISPER)) }
             ?.map { it.trimmed() }
             ?.takeIf { it.isNotEmpty() }
 
-/** Whole enough to go out: a link only as an https address (the server refuses the Moment otherwise). */
+/** Whole enough to go out: a link only as an https address (the server refuses the Moment otherwise), a whisper once recorded. */
 private val MomentDotDto.ready: Boolean
-    get() = if (kind == MomentDotKinds.LINK) httpsLink(url) != null else drawable
+    get() =
+        when (kind) {
+            MomentDotKinds.LINK -> httpsLink(url) != null
+            MomentDotKinds.WHISPER -> app.pantopus.android.data.moments.sound.MomentsStudioSounds.whispers.value.containsKey(id)
+            else -> drawable
+        }
 
 /** A dot's words as they go out: trimmed, a link as its https address, an empty title left out. */
 private fun MomentDotDto.trimmed(): MomentDotDto =
@@ -252,8 +257,12 @@ private fun IlluminateBody(
     if (dots.size < MomentDotDto.MOST) {
         Text("Add a dot", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            listOf(MomentDotKinds.NOTE to "A note", MomentDotKinds.RATING to "A rating", MomentDotKinds.LINK to "A link")
-                .filterNot { madeUp && it.first == MomentDotKinds.LINK }
+            listOf(
+                MomentDotKinds.NOTE to "A note",
+                MomentDotKinds.RATING to "A rating",
+                MomentDotKinds.LINK to "A link",
+                MomentDotKinds.WHISPER to "A whisper",
+            ).filterNot { madeUp && (it.first == MomentDotKinds.LINK || it.first == MomentDotKinds.WHISPER) }
                 .forEach { (kind, words) ->
                     Pill(words, tag = "moments.studio.dot.add.$kind") {
                         val dot = newDot(kind, dots)
@@ -262,7 +271,7 @@ private fun IlluminateBody(
                     }
                 }
         }
-        if (madeUp) Hint("A made-up name can't post a link: this one stays off.")
+        if (madeUp) Hint("A made-up name can't post a link or a whisper: these stay off.")
     } else {
         Hint("Up to ${MomentDotDto.MOST} dots on one picture.")
     }
@@ -325,6 +334,12 @@ private fun DotEditor(
                         "This one won't go out: only an https link."
                     },
                 )
+            }
+        MomentDotKinds.WHISPER ->
+            if (madeUp) {
+                Hint("A made-up name can't carry sound: a voice tells who you are. This one stays off.")
+            } else {
+                app.pantopus.android.ui.screens.moments.studio.sound.MomentsStudioWhisperEditor(dot.id)
             }
     }
 }
