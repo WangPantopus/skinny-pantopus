@@ -3,9 +3,8 @@
 //  Pantopus
 //
 //  "Pulse, reinvented" phase 5, piece A on the iPhone (see the picture first; CONTRACT 10c), a video's side for readers:
-//  a video its author marked `whole` is shown as they approved it, never cut, on every screen shape. With a `placement`
-//  it is laid on its 9:16 canvas as placed (Resize's own `MomentPlacedCanvas`) and the canvas is fitted, as large as it
-//  fits; without one it is fitted by its own size. Its backdrop is the Moment's two colours, or the poster's own top and
+//  a video its author marked `whole` and placed (`placement`) is shown as they approved it, never cut, on every screen
+//  shape: laid on its 9:16 canvas as placed (Resize's own `MomentPlacedCanvas`), the canvas fitted as large as it fits. Its backdrop is the Moment's two colours, or the poster's own top and
 //  bottom ones. Stamps, items and dots sit over the canvas for a placed video, over the video's own box otherwise
 //  (LEAD-6, 02:46). Only while the switch is on for the reader; any other video is today's, untouched: one line in
 //  today's viewer hands it to `MomentWholeVideoFrame`, which gives today's view back unchanged.
@@ -23,7 +22,8 @@ struct MomentWholeVideoFrame: ViewModifier {
     @State private var flags = PulseReinventedFlags.shared
 
     func body(content: Content) -> some View {
-        if flags.isOn, moment.layers.whole, let size = moment.pictureSize {
+        // Only a whole video with a place on its canvas that reads; anything else (none, or a malformed one) is today's.
+        if flags.isOn, moment.layers.whole, moment.layers.placement != nil, let size = moment.pictureSize {
             MomentWholeVideo(moment: moment, player: player, poster: poster, size: size)
         } else {
             content
