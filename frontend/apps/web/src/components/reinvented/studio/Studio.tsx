@@ -159,29 +159,43 @@ function useWide() {
  * and closed by dragging its header down. A tap stays the control's own; only a clear vertical drag does `act`.
  */
 function useDragTo(direction: 'up' | 'down', act: () => void) {
-  const start = useRef<{ id: number; x: number; y: number; done: boolean } | null>(null);
   const skipClick = useRef(false);
+  const stop = useRef<(() => void) | null>(null);
+  const latest = useRef(act);
+  latest.current = act;
+  useEffect(() => () => stop.current?.(), []);
   return {
+    // The press is followed on the window from the moment it lands, so a long mouse drag that leaves the summary line or
+    // the header still counts (LEAD-7's look, 05:26); a tap stays the control's own click.
     onPointerDown: (e: React.PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      start.current = { id: e.pointerId, x: e.clientX, y: e.clientY, done: false };
+      stop.current?.();
+      const id = e.pointerId,
+        x0 = e.clientX,
+        y0 = e.clientY;
+      const move = (ev: PointerEvent) => {
+        if (ev.pointerId !== id) return;
+        const dy = ev.clientY - y0,
+          dx = Math.abs(ev.clientX - x0);
+        if ((direction === 'up' ? -dy : dy) > 28 && Math.abs(dy) > dx * 1.5) {
+          end();
+          skipClick.current = true;
+          window.setTimeout(() => (skipClick.current = false), 300);
+          latest.current();
+        }
+      };
+      const up = (ev: PointerEvent) => ev.pointerId === id && end();
+      const end = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        stop.current = null;
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+      stop.current = end;
     },
-    onPointerMove: (e: React.PointerEvent) => {
-      const g = start.current;
-      if (!g || g.id !== e.pointerId || g.done) return;
-      const dy = e.clientY - g.y,
-        dx = Math.abs(e.clientX - g.x);
-      if ((direction === 'up' ? -dy : dy) > 28 && Math.abs(dy) > dx * 1.5) {
-        g.done = true;
-        skipClick.current = true;
-        window.setTimeout(() => (skipClick.current = false), 300);
-        act();
-      }
-    },
-    onPointerUp: (e: React.PointerEvent) => {
-      if (start.current?.id === e.pointerId) start.current = null;
-    },
-    onPointerCancel: () => (start.current = null),
     // The click that ends a drag is not a tap.
     onClickCapture: (e: React.MouseEvent) => {
       if (!skipClick.current) return;
