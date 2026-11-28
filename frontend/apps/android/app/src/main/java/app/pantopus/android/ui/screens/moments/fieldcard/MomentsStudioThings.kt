@@ -140,7 +140,9 @@ fun MomentsStudioThingEditor(
                             .border(1.dp, PantopusColors.studioPillOutline, shape)
                             .padding(horizontal = 12.dp),
                 ) {
-                    if (label.isEmpty()) Text("What you think it is (optional)", color = PantopusColors.studioPillSecondary, fontSize = 15.sp)
+                    if (label.isEmpty()) {
+                        Text("What you think it is (optional)", color = PantopusColors.studioPillSecondary, fontSize = 15.sp)
+                    }
                     field()
                 }
             },

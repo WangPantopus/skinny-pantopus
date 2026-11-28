@@ -185,7 +185,8 @@ class MomentFieldCardRepository
         /** The person's own Pantopus AI choice; on when it can't be read (the server decides again on each call). */
         suspend fun pantopusAi(): NetworkResult<Boolean> = guarded { api.settings().pantopusAi }
 
-        suspend fun setPantopusAi(on: Boolean): NetworkResult<Boolean> = guarded { api.setPantopusAi(MomentPantopusAiChoice(on)).pantopusAi }
+        suspend fun setPantopusAi(on: Boolean): NetworkResult<Boolean> =
+            guarded { api.setPantopusAi(MomentPantopusAiChoice(on)).pantopusAi }
 
         private suspend fun <T> guarded(call: suspend () -> T): NetworkResult<T> {
             val answer = safeApiCall { call() }

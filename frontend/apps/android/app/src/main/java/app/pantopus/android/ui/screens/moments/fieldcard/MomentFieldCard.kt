@@ -6,8 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -163,7 +163,8 @@ class MomentFieldCardViewModel
                                 entries = if (more) now.entries + page.data.cards else page.data.cards,
                                 next = page.data.nextCursor,
                             )
-                    is NetworkResult.Failure -> _guide.value = now.copy(loading = false, problem = "Your field guide didn't load. Try again.")
+                    is NetworkResult.Failure ->
+                        _guide.value = now.copy(loading = false, problem = "Your field guide didn't load. Try again.")
                 }
             }
         }
@@ -219,7 +220,8 @@ fun MomentFieldCard(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("moments.viewer.fieldCard")) {
         val card = ui.card
         if (card == null) {
-            Text(dot.label?.takeIf { it.isNotBlank() }?.let { "Maybe $it" } ?: "Something in the photo", color = Color.White, fontSize = 15.sp)
+            val guess = dot.label?.takeIf { it.isNotBlank() }?.let { "Maybe $it" } ?: "Something in the photo"
+            Text(guess, color = Color.White, fontSize = 15.sp)
             Text(ui.problem ?: if (ui.busy) "Naming it…" else "", color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
             if (ui.problem != null) CardAction("Try again", tag = "moments.viewer.fieldCard.retry") { viewModel.retry(moment, dot.id) }
         } else {
@@ -265,7 +267,13 @@ private fun Named(card: MomentFieldCardDto) {
     }
     card.why?.takeIf { it.isNotBlank() }?.let { Text(it, color = Color.White, fontSize = 14.sp) }
     card.caution?.takeIf { it.isNotBlank() }?.let {
-        Text(it, color = PantopusColors.warmAmberBorder, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.testTag("moments.viewer.fieldCard.caution"))
+        Text(
+            it,
+            color = PantopusColors.warmAmberBorder,
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.testTag("moments.viewer.fieldCard.caution"),
+        )
     }
     val source = card.source
     source?.url?.takeIf { it.startsWith("https://") }?.let { url ->
@@ -279,7 +287,13 @@ private fun Named(card: MomentFieldCardDto) {
                     .testTag("moments.viewer.fieldCard.source")
                     .semantics { contentDescription = "Source: ${source.title ?: url}. Opens it" },
         ) {
-            PantopusIconImage(icon = PantopusIcon.ExternalLink, contentDescription = null, size = 13.dp, strokeWidth = 2.2f, tint = PantopusColors.studioPillSecondary)
+            PantopusIconImage(
+                icon = PantopusIcon.ExternalLink,
+                contentDescription = null,
+                size = 13.dp,
+                strokeWidth = 2.2f,
+                tint = PantopusColors.studioPillSecondary,
+            )
             Text(source.title ?: url, color = PantopusColors.studioPillSecondary, fontSize = 13.sp, maxLines = 2)
         }
     }
@@ -288,7 +302,10 @@ private fun Named(card: MomentFieldCardDto) {
 
 private fun madeBy(card: MomentFieldCardDto): String {
     val words = StringBuilder("Named by ${card.namedBy ?: "Pantopus AI"}. It can be wrong.")
-    if (card.corrections > 0) words.append(" ${card.corrections} ${if (card.corrections == 1) "person said" else "people said"} it's something else.")
+    if (card.corrections > 0) {
+        val who = if (card.corrections == 1) "person said" else "people said"
+        words.append(" ${card.corrections} $who it's something else.")
+    }
     return words.toString()
 }
 
@@ -313,7 +330,11 @@ private fun Actions(
             )
             if (kept) CardAction("Open the guide", icon = PantopusIcon.BookOpen, tag = "moments.viewer.fieldCard.guide", onClick = onGuide)
         }
-        CardAction(card.myCorrection?.let { "You said: ${it.name}" } ?: "Not right?", tag = "moments.viewer.fieldCard.correct", onClick = onCorrect)
+        CardAction(
+            card.myCorrection?.let { "You said: ${it.name}" } ?: "Not right?",
+            tag = "moments.viewer.fieldCard.correct",
+            onClick = onCorrect,
+        )
     }
 }
 
@@ -361,14 +382,14 @@ private fun NotRightSheet(
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s5),
         ) {
-            Text("Not right?", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+            SheetTitle("Not right?")
             Text(
                 "Say what you think it is. The card stays as it is; its author sees what people say.",
                 color = PantopusColors.studioPillSecondary,
                 fontSize = 13.sp,
             )
-            CardField(name, "What it is", 60, "moments.viewer.fieldCard.nameField") { name = it }
-            CardField(note, "How you know (optional)", 140, "moments.viewer.fieldCard.note") { note = it }
+            CardField(name, "What it is", NAME_LETTERS, "moments.viewer.fieldCard.nameField") { name = it }
+            CardField(note, "How you know (optional)", NOTE_LETTERS, "moments.viewer.fieldCard.note") { note = it }
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                 CardAction("Send", tag = "moments.viewer.fieldCard.send", enabled = name.isNotBlank()) { onSend(name, note) }
             }
@@ -431,7 +452,7 @@ private fun FieldGuideSheet(
                     .padding(bottom = Spacing.s5)
                     .testTag("moments.viewer.fieldGuide"),
         ) {
-            Text("Your field guide", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+            SheetTitle("Your field guide")
             Text("Only you see what you collect.", color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
             if (guide.entries.isEmpty() && !guide.loading && guide.problem == null) {
                 Text("Nothing collected yet.", color = Color.White, fontSize = 14.sp)
@@ -441,7 +462,9 @@ private fun FieldGuideSheet(
                 Text(it, color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
                 CardAction("Try again", tag = "moments.viewer.fieldGuide.retry") { viewModel.loadGuide() }
             }
-            if (guide.next != null && !guide.loading) CardAction("Show more", tag = "moments.viewer.fieldGuide.more") { viewModel.loadGuide(more = true) }
+            if (guide.next != null && !guide.loading) {
+                CardAction("Show more", tag = "moments.viewer.fieldGuide.more") { viewModel.loadGuide(more = true) }
+            }
         }
     }
 }
@@ -464,10 +487,24 @@ private fun GuideRow(
     ) {
         PantopusIconImage(icon = PantopusIcon.Leaf, contentDescription = null, size = 18.dp, strokeWidth = 2.2f, tint = Color.White)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(entry.card.name?.let { "Likely $it" } ?: "Not sure what this is", color = Color.White, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
-            entry.card.scientific?.takeIf { it.isNotBlank() }?.let { Text(it, color = PantopusColors.studioPillSecondary, fontSize = 12.5.sp, fontStyle = FontStyle.Italic) }
-            entry.card.why?.takeIf { it.isNotBlank() }?.let { Text(it, color = PantopusColors.studioPillSecondary, fontSize = 12.5.sp, maxLines = 2) }
+            val title = entry.card.name?.let { "Likely $it" } ?: "Not sure what this is"
+            Text(title, color = Color.White, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
+            entry.card.scientific?.takeIf { it.isNotBlank() }?.let {
+                Text(it, color = PantopusColors.studioPillSecondary, fontSize = 12.5.sp, fontStyle = FontStyle.Italic)
+            }
+            entry.card.why?.takeIf { it.isNotBlank() }?.let {
+                Text(it, color = PantopusColors.studioPillSecondary, fontSize = 12.5.sp, maxLines = 2)
+            }
         }
         CardAction("Let it go", tag = "moments.viewer.fieldGuide.letGo", onClick = onLetGo)
     }
+}
+
+/** "Not right?" takes a name up to 60 letters and a note up to 140 (CONTRACT 7d). */
+private const val NAME_LETTERS = 60
+private const val NOTE_LETTERS = 140
+
+@Composable
+private fun SheetTitle(words: String) {
+    Text(words, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
 }
