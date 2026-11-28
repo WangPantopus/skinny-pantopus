@@ -1057,7 +1057,10 @@ class MomentsComposeViewModel
 
         /** "Pulse, reinvented"'s Studio (PHASE-5 A): the photo shows and posts whole, on [backdrop]'s two colours. */
         fun setWhole(backdrop: MomentPlacementPainter.Backdrop) =
-            _state.update { if (it.media is MomentMediaFile.Photo) it.copy(whole = true, wholeBackdrop = backdrop) else it }
+            _state.update {
+                val shown = it.media is MomentMediaFile.Photo || it.media is MomentMediaFile.Video
+                if (shown) it.copy(whole = true, wholeBackdrop = backdrop) else it
+            }
 
         /**
          * "Pulse, reinvented"'s Studio's first screen (PHASE-5 A): the whole photo of [picture] px (as it came) moved, sized,
@@ -1068,7 +1071,7 @@ class MomentsComposeViewModel
             picture: IntSize,
         ) {
             val current = _state.value
-            val media = current.media as? MomentMediaFile.Photo ?: return
+            val media = current.media ?: return
             if (!current.whole || current.posting || current.marking != null) return
             if (current.placement == next) return
             // Between whole as taken and the canvas, what lies on the photo moves with it, so it stays where it was.
@@ -1076,6 +1079,8 @@ class MomentsComposeViewModel
             _state.update {
                 it.copy(marks = moved.marks, stamps = moved.stamps, dots = moved.dots, items = moved.items, placement = next)
             }
+            // A video is exported again where it is placed, as Resize's Done exports it (PHASE-5 A on a video).
+            if (media is MomentMediaFile.Video) return prepare(media)
             marksKeeper.draw(
                 moved.marks,
                 next,

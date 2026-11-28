@@ -98,9 +98,12 @@ internal fun MomentsComposeUiState.itemsBeyond(shape: Float): Boolean {
     return points.any { (x, y) -> x !in inX || y !in inY }
 }
 
-/** The Studio shows and posts this photo whole: a photo, not before and after (whose halves are drawn as they are). */
+/**
+ * The Studio shows and posts this photo or video whole: not before and after (whose halves are drawn as they are). A video
+ * placed on the canvas is exported there with Resize's own export, so it posts as that canvas, whole.
+ */
 internal val MomentsComposeUiState.showsWhole: Boolean
-    get() = whole && media is MomentMediaFile.Photo && studioPair == null
+    get() = whole && (media is MomentMediaFile.Photo || media is MomentMediaFile.Video) && studioPair == null
 
 /** CONTRACT 10c's `whole`: `true` for a whole photo; left out otherwise. */
 internal val MomentsComposeUiState.sentWhole: Boolean?
@@ -198,7 +201,8 @@ internal fun rememberStudioWhole(
     read: () -> Unit,
     onWhole: (MomentPlacementPainter.Backdrop) -> Unit,
 ): StudioWholeView? {
-    val photo = (state.media as? MomentMediaFile.Photo)?.takeIf { state.studioPair == null }
+    // A photo, or a video's still (PHASE-5 A on a video).
+    val photo = state.media?.takeIf { (it is MomentMediaFile.Photo || it is MomentMediaFile.Video) && state.studioPair == null }
     val asCame by lookPicture.collectAsStateWithLifecycle()
     LaunchedEffect(photo?.file) { if (photo != null) read() }
     val look = state.marks.look
@@ -276,7 +280,7 @@ internal fun StudioItemsOver(
     room: StudioRoom,
     items: @Composable () -> Unit,
 ) {
-    if (whole == null || (state.media as? MomentMediaFile.Photo) == null) {
+    if (whole == null || state.media == null) {
         Box(modifier = Modifier.fillMaxSize()) { items() }
         return
     }
@@ -365,9 +369,12 @@ internal fun StudioWholeStage(
     room: StudioRoom,
     layers: @Composable () -> Unit,
 ) {
-    val photo = (state.media as? MomentMediaFile.Photo)?.file ?: return
-    // The photo drawn where it was moved arrived (or the drawing failed): it shows again in place of the live one.
-    LaunchedEffect(photo, state.notice) { live.value = null }
+    val media = state.media?.takeIf { it is MomentMediaFile.Photo || it is MomentMediaFile.Video } ?: return
+    val photo = media.file
+    val video = media is MomentMediaFile.Video
+    // The photo drawn where it was moved arrived (or the drawing failed): it shows again in place of the live one. A video's
+    // still is drawn where it was placed at once (its export runs behind).
+    LaunchedEffect(photo, state.notice, state.placement.takeIf { video }) { live.value = null }
     // An item put beyond the photo's own box: the Moment takes its canvas form, so readers see the item there (PHASE-6 F).
     val beyond = state.placement == null && state.itemsBeyond(view.shape)
     LaunchedEffect(beyond) {
@@ -395,10 +402,18 @@ internal fun StudioWholeStage(
                 MomentPlacedStill(view.looked, moving, marks, "Your photo", Modifier.fillMaxSize())
             }
         }
+        // A video: its still, where it is placed on the canvas (whole as taken: at fit), with its marks.
+        if (video && live.value == null) {
+            AtRect(canvas) {
+                val placed = state.placement ?: wholeFit(view.shape)
+                val marks = if (state.placement == null) state.marks.onWholeCanvas(view.shape, back = false) else state.marks
+                MomentPlacedStill(view.looked, placed, marks, "Your video", Modifier.fillMaxSize())
+            }
+        }
         // The items on the photo may go anywhere on the canvas, in shares of the photo's own frame.
         val reach = studioReach(canvas, pictureBox, KEEP_ON_CANVAS_DP * LocalDensity.current.density)
         AtRect(pictureBox) {
-            if (live.value == null) {
+            if (live.value == null && !video) {
                 AsyncImage(
                     model = photo,
                     contentDescription = "Your photo",
