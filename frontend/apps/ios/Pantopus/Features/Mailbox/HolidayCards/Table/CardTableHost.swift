@@ -297,6 +297,9 @@ private struct MailCardTablePage: View {
             .task(id: sendBackPerson?.id) { await checkSendBack() }
             .onAppear(perform: offerNextCard)
             .task(id: model.content.sealed) { await readExchange() }
+            // The reader joined Pantopus for this card (cards-next 4.1): guidance cards and the briefings notice wait.
+            .onChange(of: letter?.card?.card.joinedFor == true, initial: true) { GuidanceCenter.shared.joinedForCardOnScreen = $1 }
+            .onDisappear { GuidanceCenter.shared.joinedForCardOnScreen = false }
             .task(id: senderPersonId) { await readBlocked() }
             .fullScreenCover(isPresented: $writingBack) {
                 CardTableReplySheet(cardId: viewModel.mailId, content: model.content) { sent in
@@ -328,6 +331,8 @@ private struct MailCardTablePage: View {
             ) {
                 writingBack = true
             }
+            // Opened from the welcome strip's "Write back" (cards-next 4.1): straight to the reply.
+            if CardTableWriteBackIntent.take(viewModel.mailId) { writingBack = true }
         } else if let reply = exchange.reply, let pair = CardReplyPair(exchange) {
             // The row drops the day (the joined card shows it); VoiceOver still hears it.
             model.writeBack = CardTableMenuItem(

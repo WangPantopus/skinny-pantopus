@@ -121,6 +121,7 @@ enum GuidanceBlockers {
         if AppLockManager.shared.isLocked || AppLockManager.shared.isPrompting { return "Face ID" }
         if center.briefingNoticeBusy { return "the daily briefings sheet" }
         if center.sideMenuOpen { return "the side menu" }
+        if center.joinedForCardOnScreen { return "the card they joined for" }
         if DeepLinkRouter.shared.pending != nil || center.waitsForLink || center.waitingCardCheck { return "a link that is opening" }
         // A new account's plan may still open, or is open (JOURNEYS section 2, change 3).
         if PlanFirstOpen.shared.deciding || PlanFirstOpen.shared.planId != nil { return "the plan a new account opens on" }
