@@ -1,16 +1,17 @@
 'use client';
 
-// The one Pulse tab as it opens (Pulse, reinvented, phase 1, board B1), shown only while `pulse_reinvented` is on for the
-// person (PulsePick); today's Pulse is untouched beside it. A list laid over a live map: the list rests at three heights
-// (the middle, how it opens; List, full; Map, full with the list tucked down), pulled by its handle or set by the
-// switch. At desktop width the list and the map sit side by side. One request draws the first screen
-// (GET /api/reinvented/list, coord/CONTRACT.md §6a).
+// The one Pulse tab as it opens (Pulse, reinvented, phase 1, board B1; laid out again for PHASE-6 A, D and E), shown only
+// while `pulse_reinvented` is on for the person (PulsePick); today's Pulse is untouched beside it. The map is the screen.
+// Three things sit on it: one top line (the scope pill, Map | Atlas, the search lens), a rail of small round buttons at the
+// right edge (Filters, When, Listen, My place), and the list as a sheet at the bottom with three rests (peek, half, full),
+// moved only by its header (PulseSheet). At 700 px wide or more the sheet is a floating panel at the left of the map. One
+// request draws the first screen (GET /api/reinvented/list, coord/CONTRACT.md §6a).
 
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { ChevronDown, Headphones, LocateFixed, Plus } from 'lucide-react';
+import { ChevronDown, LocateFixed, Plus, Search, X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/api';
 import { useMe } from '@/lib/me';
@@ -19,11 +20,12 @@ import { reactedPostPatch, serverReactionPatch } from '@/components/feed/PostRea
 import { studioViewer } from '../viewer/studioViewer';
 import { isSwitchedOff, useRereadSwitch } from '../switchOff';
 import { useBackWhenMissing } from '../serverBehind';
-import { isChip, readAtlasBox, readExplore, readList, readMap, readStrip, type Box, type ExploreItem, type ExplorePage, type ListMoment, type Chip, type ListItem, type ListPage, type MapTime, type Point, type Reach } from './listApi';
+import { MAP_TIME_WORDS, readAtlasBox, readExplore, readList, readMap, readStrip, type Box, type ExploreItem, type ExplorePage, type ListMoment, type Chip, type ListItem, type ListPage, type MapTime, type Point, type Reach } from './listApi';
 import MomentRow from './MomentRow';
 import PostRow from './PostRow';
 import { itemPoint, type FlyTarget } from './PulseMap';
-import { PeekDeck, TimeRow } from './MapDeck';
+import PulseSheet, { type Rest } from './PulseSheet';
+import PulseRail from './PulseRail';
 import { explorePins, keptPins, pinsOf, roundBox, type Pin } from './pins';
 import ExploreView from './ExploreView';
 import AtlasView, { AtlasItem, dropFromAtlas } from './AtlasView';
@@ -37,7 +39,7 @@ import Constellations from './Constellations';
 import Echoes from '../echoes/Echoes';
 import Windows from '../circles/Windows';
 import ReachDial from './ReachDial';
-import { FilterRow, FilterSheet, NO_FILTERS, filterCount, filterParams, useKeptFilters, type Kind } from './filters';
+import { FilterSheet, NO_FILTERS, filterCount, filterParams, filterWords, useKeptFilters, type Kind } from './filters';
 import { DeckNav, deckOf } from '../deck/StepDeck';
 import { retakeOf } from '../retake/RetakeView';
 import { convergenceOf, convergenceTitle } from '../sky/Convergence';
@@ -60,9 +62,13 @@ const EyesOnNear = dynamic(() => import('../eyeson/EyesOnNear'), { ssr: false })
 // Place relics near where the reader is now (CONTRACT 8g), on Around me.
 const RelicsNear = dynamic(() => import('../seal/RelicsNear'), { ssr: false });
 
-type Height = 'middle' | 'list' | 'map';
-const UP: Record<Height, Height> = { map: 'middle', middle: 'list', list: 'list' };
-const DOWN: Record<Height, Height> = { list: 'middle', middle: 'map', map: 'map' };
+/** The board's width from which the list is a floating panel at the left of the map (PHASE-6 E). */
+const WIDE_PX = 700;
+/** Where the sheet stops at full: under the top line (8 px from the top, 44 px high, 8 px of air); under the filter pill too. */
+const TOP_LINE_PX = 60;
+const PILL_PX = 34;
+/** A pull down this far on the top line drops the Filters sheet (PHASE-6 A3). */
+const PULL_PX = 40;
 
 const REACH_NAMES: Record<Reach, string> = { close: 'Close circle', around: 'Around me', explore: 'The world' };
 
@@ -81,7 +87,10 @@ export default function ReinventedPulse() {
   const [reach, setReach] = useState<Reach>('around');
   // One of the person's circles inside Close circle (CONTRACT 8d); null is all their connections.
   const [circle, setCircle] = useState<{ id: string; name: string } | null>(null);
-  const [height, setHeight] = useState<Height>('middle');
+  // The sheet's rest (phone width) and the panel's fold (wide); the sheet opens at half, as the list opened at its middle.
+  const [rest, setRest] = useState<Rest>('half');
+  const [folded, setFolded] = useState(false);
+  const [lensOpen, setLensOpen] = useState(false);
   const [point, setPoint] = useState<Point | null>(null);
   const [locating, setLocating] = useState<'idle' | 'busy' | 'refused'>('idle');
   const [viewing, setViewing] = useState<{ id: string; ids: string[] } | null>(null);
@@ -97,9 +106,6 @@ export default function ReinventedPulse() {
   // A single kind on is today's chip for the rows that follow one (Eyes on, Relics…); several or none is All.
   const chip: Chip = filters.kinds.length === 1 ? filters.kinds[0] : 'all';
   const shows = (k: Kind) => !filters.kinds.length || filters.kinds.includes(k);
-  // The row steps aside while the list scrolls down and comes back when it scrolls up.
-  const [rowHidden, setRowHidden] = useState(false);
-  const lastTop = useRef(0);
   const [box, setBox] = useState<Box | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   // Pulse, or My Atlas (the switch's third choice): the person's own kept Moments in the list's place and on the map.
@@ -132,14 +138,24 @@ export default function ReinventedPulse() {
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
-  // At desktop width the list sits beside the map (pulse.css), so it covers none of it.
-  const [sideBySide, setSideBySide] = useState(false);
-  useEffect(() => {
-    const wide = window.matchMedia('(min-width: 1024px)');
-    const read = () => setSideBySide(wide.matches);
+  // At 700 px wide or more (the board's own width, beside the app's side bar) the list is a floating panel at the left.
+  const board = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(false);
+  useLayoutEffect(() => {
+    const el = board.current;
+    if (!el) return undefined;
+    const read = () => setWide(el.clientWidth >= WIDE_PX);
     read();
-    wide.addEventListener('change', read);
-    return () => wide.removeEventListener('change', read);
+    const watch = new ResizeObserver(read);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  // The rail fades while the map moves: set on the board itself, so nothing is rendered again for it.
+  const onMoving = useCallback((moving: boolean) => {
+    const el = board.current;
+    if (!el) return;
+    if (moving) el.dataset.moving = '';
+    else delete el.dataset.moving;
   }, []);
   useEffect(() => {
     if (!toast) return undefined;
@@ -277,11 +293,6 @@ export default function ReinventedPulse() {
   // With filters on, Heads-ups always come back (CONTRACT 10a): a list of only those is still an empty result.
   const onlyHeadsUps = filtered && items.length > 0 && items.every((i) => i.type === 'post' && i.post.post_type === 'alert');
   const last = pages?.[pages.length - 1];
-  // The chips this reach and place have something for, as the first page names them; kept while another chip loads.
-  const [chips, setChips] = useState<Chip[]>(['all']);
-  useEffect(() => {
-    if (first?.chips) setChips(first.chips.filter(isChip));
-  }, [first?.chips]);
   const bandLabels = useMemo(() => new Map((first?.bands || []).map((b) => [b.band, b.label])), [first?.bands]);
 
   // More as the list nears its end.
@@ -301,10 +312,9 @@ export default function ReinventedPulse() {
     return () => watch.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
 
-  // A new reach or other filters start the list from its top, with the row in view.
+  // A new reach or other filters start the list from its top.
   useEffect(() => {
     scroller.current?.scrollTo({ top: 0 });
-    setRowHidden(false);
   }, [reach, filterKey]);
 
   // ── Posts: today's card, its answers patched into this list's pages ──
@@ -523,7 +533,8 @@ export default function ReinventedPulse() {
   );
   const flyTo = useCallback((p: Point) => {
     setFly({ ...p, serial: Date.now() });
-    setHeight((h) => (h === 'list' ? 'middle' : h));
+    // The map was covered: the sheet steps down to half, so the place is in view.
+    setRest((r) => (r === 'full' ? 'half' : r));
   }, []);
 
   // ── The map's pins and the peek deck ──
@@ -541,65 +552,97 @@ export default function ReinventedPulse() {
     },
     [openPost, router, openExplored],
   );
-  // At the Map height a pin chosen on the map brings its card up (a second tap opens it); elsewhere a tap opens it.
+  // A pin tapped on the map opens it.
   const onPick = useCallback(
     (key: string) => {
       const pin = pins.find((p) => p.key === key);
-      if (!pin) return;
-      if (height === 'map' && selected !== key) setSelected(key);
-      else openPin(pin);
+      if (pin) openPin(pin);
     },
-    [pins, height, selected, openPin],
-  );
-  const onDeckSelect = useCallback(
-    (key: string) => {
-      setSelected(key);
-      const pin = pins.find((p) => p.key === key);
-      if (pin) setFly({ ...pin.point, serial: Date.now(), keepZoom: true });
-    },
-    [pins],
+    [pins, openPin],
   );
 
-  // ── The list's three heights: pulled by the handle, or set by the switch ──
-  const pull = useRef<{ y: number; moved: boolean } | null>(null);
-  const onHandleDown = (e: ReactPointerEvent) => {
-    pull.current = { y: e.clientY, moved: false };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const onHandleUp = (e: ReactPointerEvent) => {
-    const start = pull.current;
-    pull.current = null;
-    if (!start) return;
-    const dy = e.clientY - start.y;
-    if (dy < -36) setHeight((h) => UP[h]);
-    else if (dy > 36) setHeight((h) => DOWN[h]);
-    else setHeight((h) => (h === 'middle' ? 'list' : 'middle'));
-  };
-  const pick = (to: 'list' | 'map') => {
-    if (view === 'atlas') {
-      setView('pulse');
-      setSelected(null);
-      return setHeight(to === 'map' ? 'map' : 'middle');
-    }
-    setHeight((h) => (h === to ? 'middle' : to));
-  };
-  const toAtlas = () => {
+  // Map | Atlas (the List button is gone: the list is the sheet).
+  const toView = (v: 'pulse' | 'atlas') => {
     setSelected(null);
-    setView((v) => (v === 'atlas' ? 'pulse' : 'atlas'));
-    setHeight((h) => (h === 'map' ? 'middle' : h));
+    setLensOpen(false);
+    setView(v);
   };
 
-  const locate = () => {
+  const locate = (then?: (p: Point) => void) => {
     if (!navigator.geolocation) return setLocating('refused');
     setLocating('busy');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating('idle');
-        setPoint({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        const p = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setPoint(p);
+        then?.(p);
       },
       () => setLocating('refused'),
       { maximumAge: 60_000, timeout: 15_000 },
     );
+  };
+  // My place (the rail): back to where the person shared they are, else their home, else ask the browser where.
+  const myPlace = () => {
+    const at = point ?? (home ? { latitude: home.lat, longitude: home.lng } : null);
+    if (at) setFly({ ...at, serial: Date.now() });
+    else locate((p) => setFly({ ...p, serial: Date.now() }));
+  };
+
+  // A pull down on the top line drops the Filters sheet (the gesture the founder asked for). A tap on its buttons stays theirs.
+  // The press is followed on the window from the moment it lands, so a mouse that leaves the 44 px line still pulls (LEAD-7's
+  // look, 04:50); the click that ends a pull is not a tap on the button it started on.
+  const canFilter = view === 'pulse' && reach !== 'explore';
+  const endPull = useRef<(() => void) | null>(null);
+  const pulled = useRef(false);
+  useEffect(() => () => endPull.current?.(), []);
+  const onTopDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!canFilter || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    // The reach dial and the lens's card open from the top line: a drag inside them is theirs.
+    if ((e.target as HTMLElement).closest('.rp-dial, .rp-lens-card')) return;
+    endPull.current?.();
+    const id = e.pointerId, y0 = e.clientY, x0 = e.clientX;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      const dy = ev.clientY - y0, dx = Math.abs(ev.clientX - x0);
+      if (dy > PULL_PX && dy > dx * 1.5) {
+        stop();
+        pulled.current = true;
+        window.setTimeout(() => (pulled.current = false), 300);
+        setScopeOpen(false);
+        setLensOpen(false);
+        setFiltersOpen(true);
+      }
+    };
+    const end = (ev: PointerEvent) => ev.pointerId === id && stop();
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      endPull.current = null;
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    endPull.current = stop;
+  };
+  // Escape, or a press anywhere outside the top line, closes the lens's card (PHASE-6 G: Escape closes the topmost card).
+  useEffect(() => {
+    if (!lensOpen) return undefined;
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && setLensOpen(false);
+    const away = (e: PointerEvent) => !(e.target as HTMLElement).closest?.('.rp-top') && setLensOpen(false);
+    window.addEventListener('keydown', key);
+    document.addEventListener('pointerdown', away, true);
+    return () => {
+      window.removeEventListener('keydown', key);
+      document.removeEventListener('pointerdown', away, true);
+    };
+  }, [lensOpen]);
+  const onTopClick = (e: ReactMouseEvent) => {
+    if (!pulled.current) return;
+    pulled.current = false;
+    e.stopPropagation();
+    e.preventDefault();
   };
 
   const placeName =
@@ -608,20 +651,44 @@ export default function ReinventedPulse() {
   const fallback = point ?? (home ? { latitude: home.lat, longitude: home.lng } : null);
   let prevBand: string | null = null;
 
-  const head = (
-    <header className="rp-head">
+  const whenWord = time === 'live' ? 'Now' : MAP_TIME_WORDS[time];
+  // The sheet's one line: how many are listed here, and when.
+  const sheetLine =
+    view === 'atlas'
+      ? 'My Atlas · your kept Moments'
+      : reach === 'explore'
+        ? 'Explore · from elsewhere'
+        : list.isPending
+          ? 'Loading…'
+          : list.isError
+            ? 'Pulse couldn’t load'
+            : first?.needs_place
+              ? 'No place yet'
+              : `${shown.length ? `${shown.length}${hasNextPage ? '+' : ''}` : 'Nothing'} here · ${whenWord}`;
+  const words = canFilter ? filterWords(filters, time) : '';
+  const topInset = TOP_LINE_PX + (words ? PILL_PX : 0);
+  const clearFilters = () => {
+    setFilters(NO_FILTERS);
+    setTime('live');
+  };
+
+  const topLine = (
+    <div className="rp-top" onPointerDown={onTopDown} onClickCapture={onTopClick}>
       <div className="rp-scope-wrap">
         <button
           type="button"
           className="rp-scope"
           aria-haspopup="dialog"
           aria-expanded={scopeOpen}
-          onClick={() => setScopeOpen((o) => !o)}
+          onClick={() => {
+            setLensOpen(false);
+            setScopeOpen((o) => !o);
+          }}
         >
           <span className="rp-scope-dot" data-reach={reach} aria-hidden />
           <strong>{placeName}</strong>
           <span className="rp-scope-reach">{reach === 'around' && miles < 25 ? `${REACH_NAMES.around} · ${miles} mi` : REACH_NAMES[reach]}</span>
-          <ChevronDown size={16} aria-hidden />
+          <ChevronDown size={14} aria-hidden />
         </button>
         {scopeOpen && (
           <ReachDial
@@ -643,133 +710,112 @@ export default function ReinventedPulse() {
         )}
       </div>
 
-      <div className="rp-switch" role="group" aria-label="List or map">
-        <button type="button" aria-pressed={view === 'pulse' && height !== 'map'} data-lit={(view === 'pulse' && height !== 'map') || undefined} onClick={() => pick('list')}>
-          List
-        </button>
-        <button type="button" aria-pressed={view === 'pulse' && height !== 'list'} data-lit={(view === 'pulse' && height !== 'list') || undefined} onClick={() => pick('map')}>
+      <div className="rp-switch" role="group" aria-label="Map or Atlas">
+        <button type="button" aria-pressed={view === 'pulse'} data-lit={view === 'pulse' || undefined} onClick={() => toView('pulse')}>
           Map
         </button>
-        <button type="button" aria-pressed={view === 'atlas'} data-lit={view === 'atlas' || undefined} onClick={toAtlas}>
+        <button type="button" aria-pressed={view === 'atlas'} data-lit={view === 'atlas' || undefined} onClick={() => toView('atlas')}>
           Atlas
         </button>
       </div>
 
-      {view === 'pulse' && reach !== 'explore' && (
-        <FilterRow
-          filters={filters}
-          time={time}
-          chips={chips}
-          hidden={rowHidden && height !== 'map'}
-          onFilters={setFilters}
-          onClear={() => {
-            setFilters(NO_FILTERS);
-            setTime('live');
+      {canFilter && (
+        <button
+          type="button"
+          className="rp-lens"
+          aria-label="Search the map"
+          title="Search the map"
+          aria-expanded={lensOpen}
+          data-on={lensOpen || !!lit || undefined}
+          onClick={() => {
+            setScopeOpen(false);
+            setLensOpen((o) => !o);
           }}
-          onOpen={() => setFiltersOpen(true)}
-        />
+        >
+          <Search size={18} aria-hidden />
+        </button>
       )}
-      {view === 'pulse' && reach !== 'explore' && (height === 'map' || sideBySide) && (
-        <AskTheMap box={box} time={time} data={map.data} lit={lit} shown={lit ? pins.filter((p) => lit.pins.has(p.key)).length : 0} onLit={setLit} />
-      )}
-      {view === 'pulse' && reach !== 'explore' && (height === 'map' || sideBySide) && (
-        <div className="rp-listen">
-          <button type="button" aria-pressed={listening} onClick={() => setListening((on) => !on)}>
-            <Headphones size={15} aria-hidden />
-            {listening ? 'Listening' : 'Listen to the town'}
-          </button>
-          {listening && (
-            <small role="status">
-              {sounds.data?.sounds.length
-                ? 'Put on headphones and move across the map, or tap a ♪: you hear the sounds people kept here.'
-                : sounds.isFetching
-                  ? 'Finding sounds…'
-                  : 'No sounds kept here. Move the map.'}
-            </small>
-          )}
+      {canFilter && lensOpen && (
+        // The lens is one field: the words typed ask the map ("Ask the map: …"); the pins that match light up.
+        <div className="rp-lens-card">
+          <AskTheMap box={box} time={time} data={map.data} lit={lit} shown={lit ? pins.filter((p) => lit.pins.has(p.key)).length : 0} onLit={setLit} />
         </div>
       )}
-    </header>
+    </div>
   );
 
   return (
-    <div className="rp-board" data-height={height}>
-      <div className="rp-map-layer" aria-hidden={height === 'list' || undefined}>
+    <div ref={board} className="rp-board" data-wide={wide || undefined}>
+      <div className="rp-map-layer" aria-hidden={(!wide && rest === 'full') || undefined}>
         <PulseMap
           pins={pins}
           listItems={reach === 'explore' ? exploreListItems : first?.items ?? []}
           fitKey={fitKey}
           fallback={fallback}
-          layoutKey={`${height}|${sideBySide}`}
+          layoutKey={`${wide}|${wide ? folded : rest}|${topInset}`}
           flyTo={fly}
           selected={selected}
           onBox={onBox}
           onPick={onPick}
+          onMoving={onMoving}
           float={view === 'pulse' && reach !== 'explore' && !!map.data?.heights_on && !!map.data?.float_on}
           lit={view === 'pulse' && reach !== 'explore' ? lit : null}
           sounds={listening && view === 'pulse' && reach !== 'explore' ? sounds.data?.sounds ?? null : null}
           beams={view === 'pulse' && reach !== 'explore' && time === 'live' ? beams.data?.beams : undefined}
         />
       </div>
-      {height === 'map' && <div className="rp-map-top">{head}</div>}
-      {sideBySide && height === 'middle' && reach !== 'explore' && (
-        <div className="rp-map-time">
-          <TimeRow time={time} onTime={setTime} />
-        </div>
+
+      {topLine}
+      {words && (
+        <p className="rp-filter-pill" role="status">
+          <span>{words}</span>
+          <button type="button" aria-label="Clear the filters" onClick={clearFilters}>
+            <X size={14} aria-hidden />
+          </button>
+        </p>
       )}
 
-      <section className="rp-sheet" aria-label="Pulse">
-        <div
-          className="rp-handle"
-          role="button"
-          tabIndex={0}
-          aria-label={height === 'list' ? 'Show the map' : 'Show more of the list'}
-          onPointerDown={onHandleDown}
-          onPointerUp={onHandleUp}
-          onPointerCancel={() => (pull.current = null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setHeight((h) => (h === 'middle' ? 'list' : 'middle'));
-            } else if (e.key === 'ArrowUp') setHeight((h) => UP[h]);
-            else if (e.key === 'ArrowDown') setHeight((h) => DOWN[h]);
-          }}
-        >
-          <span />
-        </div>
+      <PulseRail
+        count={canFilter ? filterCount(filters, time) : 0}
+        time={time}
+        onTime={setTime}
+        onFilters={canFilter ? () => setFiltersOpen(true) : undefined}
+        showWhen={canFilter}
+        listen={
+          canFilter
+            ? {
+                on: listening,
+                toggle: () => setListening((on) => !on),
+                note: sounds.data?.sounds.length
+                  ? 'Put on headphones and move across the map, or tap a ♪: you hear the sounds people kept here.'
+                  : sounds.isFetching
+                    ? 'Finding sounds…'
+                    : 'No sounds kept here. Move the map.',
+              }
+            : undefined
+        }
+        onMyPlace={myPlace}
+        locating={locating === 'busy'}
+      />
 
-        {height !== 'map' && head}
-
-        {height === 'map' && (
-          <div className="rp-map-bottom">
-            {reach !== 'explore' && <TimeRow time={time} onTime={setTime} />}
-            {reach === 'explore' ? (
-              pins.length ? (
-                <PeekDeck pins={pins} selected={selected} now={now} onSelect={onDeckSelect} onOpen={openPin} />
-              ) : (
-                <p className="rp-deck-empty">{explore.isPending ? 'Loading Explore…' : 'Nothing from elsewhere on the map right now.'}</p>
-              )
-            ) : map.isError && !isSwitchedOff(map.error) ? (
-              <p className="rp-deck-empty">The map couldn’t load. Move it to try again.</p>
-            ) : map.data ? (
-              <PeekDeck pins={pins} selected={selected} now={now} onSelect={onDeckSelect} onOpen={openPin} />
-            ) : (
-              <p className="rp-deck-empty">Loading the map…</p>
-            )}
-          </div>
-        )}
-        <div
-          ref={scroller}
-          className="rp-list"
-          aria-busy={list.isFetching || undefined}
-          aria-hidden={height === 'map' || undefined}
-          onScroll={(e) => {
-            const top = e.currentTarget.scrollTop;
-            if (top > lastTop.current + 8 && top > 80) setRowHidden(true);
-            else if (top < lastTop.current - 8 || top <= 80) setRowHidden(false);
-            if (Math.abs(top - lastTop.current) > 8 || top <= 80) lastTop.current = top;
-          }}
-        >
+      <PulseSheet
+        rest={rest}
+        onRest={setRest}
+        wide={wide}
+        folded={folded}
+        onFold={setFolded}
+        topInset={topInset}
+        line={sheetLine}
+        create={
+          !creating && (
+            <button type="button" className="rp-create" aria-label="Create" title="Create" onClick={() => setCreating(true)}>
+              <Plus size={22} strokeWidth={2.6} aria-hidden />
+            </button>
+          )
+        }
+        scrollerRef={scroller}
+        busy={list.isFetching}
+      >
           {view === 'atlas' && account ? (
             <AtlasView
               account={account}
@@ -832,7 +878,7 @@ export default function ReinventedPulse() {
             <div className="rp-empty">
               <p>Pulse shows what’s around a place. Share where you are, or add your home on Place.</p>
               <div className="rp-empty-actions">
-                <button type="button" className="rp-button" onClick={locate} disabled={locating === 'busy'}>
+                <button type="button" className="rp-button" onClick={() => locate()} disabled={locating === 'busy'}>
                   <LocateFixed size={16} aria-hidden />
                   {locating === 'busy' ? 'Finding you…' : 'Use my location'}
                 </button>
@@ -979,12 +1025,11 @@ export default function ReinventedPulse() {
               {!hasNextPage && last?.end && <p className="rp-end">{last.end}</p>}
             </>
           )}
-        </div>
-      </section>
+      </PulseSheet>
 
-      {!creating && (
+      {wide && !creating && (
         <button type="button" className="rp-create" aria-label="Create" title="Create" onClick={() => setCreating(true)}>
-          <Plus size={24} strokeWidth={2.6} aria-hidden />
+          <Plus size={22} strokeWidth={2.6} aria-hidden />
         </button>
       )}
       {skyOpen && <ConvergenceView id={skyOpen} onClose={() => setSkyOpen(null)} />}
