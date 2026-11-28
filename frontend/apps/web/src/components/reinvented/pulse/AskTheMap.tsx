@@ -5,7 +5,7 @@
 // kept. The server answers only what this reader's map already shows for the time in view; the map lights those.
 
 import { useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, UserRoundSearch, X } from 'lucide-react';
 import type { Ring } from '@pantopus/api/endpoints/moments';
 import { post } from '@pantopus/api/client';
 import { isSwitchedOff, useRereadSwitch } from '../switchOff';
@@ -45,6 +45,8 @@ export default function AskTheMap({
   lit,
   shown,
   onLit,
+  onSearch,
+  searchAlways = false,
 }: {
   box: Box | null;
   time: MapTime;
@@ -53,6 +55,13 @@ export default function AskTheMap({
   /** How many lit pins the map draws now. */
   shown: number;
   onLit(lit: Lit | null): void;
+  /**
+   * The lens is one field for both jobs (PHASE-6 A1; LEAD-8, 11:09): under "Ask the map", the typed words can search people
+   * and places in today's Discover instead.
+   */
+  onSearch?(words: string): void;
+  /** Offer the search with no words typed too (at a phone's width, where the app's own search stepped aside). */
+  searchAlways?: boolean;
 }) {
   const reread = useRereadSwitch();
   const [text, setText] = useState(lit?.q ?? '');
@@ -109,6 +118,12 @@ export default function AskTheMap({
           </button>
         )}
       </form>
+      {onSearch && (text.trim() || searchAlways) && (
+        <button type="button" className="rp-lens-more" onClick={() => onSearch(text.trim().slice(0, 100))}>
+          <UserRoundSearch size={16} aria-hidden />
+          <span>{text.trim() ? `Search people and places for “${text.trim().slice(0, 100)}”` : 'Search people and places'}</span>
+        </button>
+      )}
       {(lit || error) && (
         <p className="am-said" role="status">
           {error || (count ? `${count} lit for “${lit!.q}”${lit!.more ? ', and more beyond these' : ''}` : `Nothing here for “${lit!.q}”. Move the map or try other words.`)}
