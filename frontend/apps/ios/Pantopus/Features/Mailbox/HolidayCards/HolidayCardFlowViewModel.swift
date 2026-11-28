@@ -481,8 +481,12 @@ final class HolidayCardFlowViewModel {
     private func fetch() async {
         do {
             let response: HolidayCardsResponse = try await api.request(HolidayCardEndpoints.cards())
-            // A link can name a picture that isn't one of this year's: nothing is chosen then.
-            if let designId, !response.designs.contains(where: { $0.id == designId }) { self.designId = nil }
+            // A link can name a picture that isn't one of this year's: nothing is chosen then. A photo card's ("Send
+            // this card to someone else" from Sent) opens the studio empty, its photo went with that card (4.2).
+            if let designId, !response.designs.contains(where: { $0.id == designId }) {
+                self.designId = nil
+                if response.improved, designId == response.photoCard?.design { makesPhotoCard = true }
+            }
             state = .loaded(response)
             savedSignature = response.signature?.saved
             HolidayCardWords.postageOn = response.postageEnabled
