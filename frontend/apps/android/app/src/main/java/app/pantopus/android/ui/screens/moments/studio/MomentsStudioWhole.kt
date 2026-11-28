@@ -60,6 +60,7 @@ import app.pantopus.android.ui.screens.moments.compose.MomentsComposeUiState
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentCutout
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentLooks
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarks
+import app.pantopus.android.ui.screens.moments.compose.marks.MomentMarksTool
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacedStill
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacement
 import app.pantopus.android.ui.screens.moments.compose.marks.MomentPlacementPainter
@@ -92,7 +93,8 @@ internal fun MomentsComposeUiState.itemsBeyond(shape: Float): Boolean {
     val box = FitBox(shape)
     val inX = if (placement == null) 0.0..1.0 else box.left.toDouble()..(box.left + box.width).toDouble()
     val inY = if (placement == null) 0.0..1.0 else box.top.toDouble()..(box.top + box.height).toDouble()
-    val points = stamps.map { it.x to it.y } + dots.map { it.x to it.y } + items.map { it.x to it.y }
+    val words = marks.labels.map { it.x.toDouble() to it.y.toDouble() }
+    val points = stamps.map { it.x to it.y } + dots.map { it.x to it.y } + items.map { it.x to it.y } + words
     return points.any { (x, y) -> x !in inX || y !in inY }
 }
 
@@ -407,6 +409,21 @@ internal fun StudioWholeStage(
             CompositionLocalProvider(LocalStudioReach provides reach) { layers() }
         }
     }
+}
+
+/** Words go anywhere on a whole photo's canvas (PHASE-6 I): Text opens on its canvas form; then [onMarks] opens [tool]. */
+internal fun openMarksOnCanvas(
+    tool: MomentMarksTool,
+    whole: StudioWholeView?,
+    state: MomentsComposeUiState,
+    live: MutableState<MomentPlacement?>,
+    onPlace: (MomentPlacement?, IntSize) -> Unit,
+    onMarks: (MomentMarksTool) -> Unit,
+) {
+    if (tool == MomentMarksTool.Text && whole != null && state.placement == null) {
+        placeWholeAt(whole, wholeFit(whole.shape), null, live, onPlace, keepCanvas = true)
+    }
+    onMarks(tool)
 }
 
 /** An item that lies beyond the photo turns the Moment into its canvas form once the finger has rested this long. */

@@ -99,16 +99,25 @@ internal class LabelFrame(
     val pictureHeight: Int,
     val floor: Float = Float.MAX_VALUE,
     val ceiling: Float = 0f,
+    // "Pulse, reinvented"'s Studio on its canvas (PHASE-6 I): px of a label that stay on the picture as drawn, anywhere
+    // on it; 0 keeps today's rules.
+    val keep: Float = 0f,
 ) {
     /**
      * [label] kept inside the part every phone shows, below the editor's top buttons ([ceiling]) and above its bottom
      * controls ([floor]), so it can always be picked up again; the top buttons win where both can't be met.
      */
     fun kept(label: MomentLabel): MomentLabel {
-        val inside = MomentMarksPainter.keptIn(label, pictureWidth, pictureHeight)
+        val inside =
+            if (keep > 0f) {
+                val keepX = keep * pictureWidth / width
+                MomentMarksPainter.keptAnywhere(label, pictureWidth, pictureHeight, keepX, keep * pictureHeight / height)
+            } else {
+                MomentMarksPainter.keptIn(label, pictureWidth, pictureHeight)
+            }
         // The upright box around it, when it's turned.
         val box = MomentMarksPainter.turnedBounds(MomentMarksPainter.layout(inside, width, height).box, inside.turn)
-        val upper = max(ceiling, MomentMarkRules.labelBox(pictureWidth, pictureHeight).top * height)
+        val upper = if (keep > 0f) ceiling else max(ceiling, MomentMarkRules.labelBox(pictureWidth, pictureHeight).top * height)
         val shift =
             when {
                 box.top < upper -> upper - box.top
@@ -136,7 +145,7 @@ internal class LabelFrame(
     ): MomentLabel {
         if (turn == label.turn) return label
         val candidate = label.copy(turn = turn)
-        return if (MomentMarksPainter.fitsTurned(candidate, pictureWidth, pictureHeight)) kept(candidate) else label
+        return if (keep > 0f || MomentMarksPainter.fitsTurned(candidate, pictureWidth, pictureHeight)) kept(candidate) else label
     }
 }
 

@@ -261,7 +261,7 @@ internal fun MomentsStudioStep(
             enabled = !state.posting,
             // Before and after takes stamps only: its words and drawings are drawn in.
             media = state.media.takeIf { pair == null },
-            onOpen = onMarks,
+            onOpen = { tool -> openMarksOnCanvas(tool, whole, state, wholeLive, onPlaceWhole, onMarks) },
             onStamps =
                 {
                     tray = true

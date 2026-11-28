@@ -280,7 +280,7 @@ internal fun MomentsMarksEditor(
                 .pointerInput(Unit) { detectTapGestures { } }
                 .testTag("moments.marks"),
     ) {
-        if (picture != null) MarksCanvas(picture, editing, onEdit, video)
+        if (picture != null) MarksCanvas(picture, editing, onEdit, video, studio)
         // The viewer's own top fade, over the strip its top bar covers and a little below.
         Box(
             modifier =
@@ -444,6 +444,7 @@ private fun MarksCanvas(
     editing: MomentMarksEditing,
     onEdit: ((MomentMarksEditing) -> MomentMarksEditing) -> Unit,
     video: File?,
+    studio: Boolean = false,
 ) {
     val image = remember(picture) { picture.asImageBitmap() }
     val backdrop = remember(picture) { MomentPlacementPainter.backdrop(picture) }
@@ -476,7 +477,9 @@ private fun MarksCanvas(
         // And below the editor's top buttons (with the phone turned sideways, the label box's top can be above them).
         val ceiling =
             WindowInsets.statusBars.getTop(density) + with(density) { TOP_BUTTONS_BELOW_FRAME_TOP.toPx() } - (frameHeight - drawnHeight) / 2
-        val frame = LabelFrame(drawnWidth, drawnHeight, surface.width, surface.height, floor, ceiling)
+        // "Pulse, reinvented"'s Studio on its canvas (PHASE-6 I): words go anywhere on it, 24 dp of them kept on.
+        val keep = if (studio && editing.placement != null) with(density) { STUDIO_KEEP_ON.toPx() } else 0f
+        val frame = LabelFrame(drawnWidth, drawnHeight, surface.width, surface.height, floor, ceiling, keep)
         // A new label's letters: 22 dp on this screen, kept as a share of the picture's width (never below the smallest).
         val letters = with(density) { MomentMarkRules.NEW_LABEL_POINTS.dp.toPx() } / drawnWidth
         val stroke by rememberUpdatedState { points: List<Float> -> onEdit { it.drawn(points, lineWidth) } }
@@ -916,3 +919,6 @@ internal fun Inks(
         }
     }
 }
+
+/** "Pulse, reinvented"'s Studio: how much of a label stays on its canvas (PHASE-6 F2, I). */
+private val STUDIO_KEEP_ON = 24.dp
