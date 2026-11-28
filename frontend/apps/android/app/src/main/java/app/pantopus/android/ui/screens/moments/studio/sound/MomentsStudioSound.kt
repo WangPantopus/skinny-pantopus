@@ -265,7 +265,7 @@ private fun StudioSoundSheet(
             Text(
                 "Three seconds of where you are, heard once when your Moment opens.",
                 color = Color.White.copy(alpha = 0.75f),
-                fontSize = 13.sp,
+                fontSize = 12.sp,
             )
             PlaceSoundControls(ui, kept, viewModel, record)
             val note =
@@ -275,7 +275,7 @@ private fun StudioSoundSheet(
                     else -> null
                 }
             note?.let {
-                Text(it, color = PantopusColors.warmAmberBorder, fontSize = 13.sp, modifier = Modifier.testTag("moments.studio.sound.note"))
+                Text(it, color = PantopusColors.warmAmberBorder, fontSize = 12.sp, modifier = Modifier.testTag("moments.studio.sound.note"))
             }
             DoneButton(
                 Modifier.align(Alignment.End),
@@ -506,7 +506,7 @@ fun MomentsStudioWhisperEditor(
                 kept == null -> "This dot goes out once it holds a whisper."
                 else -> null
             }
-        note?.let { Text(it, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp) }
+        note?.let { Text(it, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp) }
     }
 }
 
