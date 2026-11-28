@@ -56,7 +56,8 @@ function MailboxFrame({ day, children }: { day: string; children: ReactNode }) {
  */
 function Back({ piece, forName }: { piece: MailItemV2; forName: string }) {
   const card = piece.card!;
-  const photo = card.photo ?? null;
+  // A photo card's photo is its front (Wave 4.2): not laid beside it again.
+  const photo = card.front ? null : card.photo ?? null;
   const voice = card.voice ?? null;
   const mood = cardMood(card.number, card.design, card.mood);
   return (

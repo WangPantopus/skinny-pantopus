@@ -36,6 +36,8 @@ export type CardDraft = {
    * once. Gone from the draft as soon as the flow keeps it again.
    */
   fromAssistant?: boolean;
+  /** A photo card's front (Wave 4.2): its frame, caption and the photo's shape (width / height). */
+  front?: { frame: 'heirloom' | 'midnight' | 'arch'; caption: string; aspect: number } | null;
 };
 
 const isText = (x: unknown, max = 2000): x is string => typeof x === 'string' && x.length <= max;
@@ -68,6 +70,8 @@ export function readCardDraft(user: string): CardDraft | null {
       photo: isMedia(d.photo, 'photo') ? d.photo : null,
       voice: isMedia(d.voice, 'voice') ? d.voice : null,
       requestId: isText(d.requestId, 64) ? d.requestId : null,
+      front: d.front && ['heirloom', 'midnight', 'arch'].includes(d.front.frame) && isText(d.front.caption, 200) && Number.isFinite(d.front.aspect)
+        ? { frame: d.front.frame, caption: d.front.caption, aspect: d.front.aspect } : null,
       listIds: Array.isArray(d.listIds) ? d.listIds.filter((pair) => Array.isArray(pair) && isText(pair[0], 400) && isText(pair[1], 64)) : [],
     };
   } catch {

@@ -772,6 +772,22 @@ export interface HolidayCards {
    * card experience from before them. Never kept beyond this read.
    */
   improved?: boolean;
+  /**
+   * Wave 4.1, only while `improved`: a new account's first opened card, for the welcome strip under the mantel. Absent:
+   * no strip. `stamps` is null when the balance couldn't be read.
+   */
+  welcome?: { card_id: string; from_first_name: string; can_write_back: boolean; stamps: number | null };
+  /**
+   * Wave 4.2, only while `improved` and a photo can be added: "Make a photo card". Its design is never in `designs`.
+   * Shapes are width:height.
+   */
+  photo_card?: {
+    design: string;
+    frames: CardFrame[];
+    default_frame: CardFrame;
+    caption_limit: number;
+    shapes: { id: CardShape; w: number; h: number }[];
+  };
   /** Which of a card's own photo and voice can be added now (launch key holiday_card_memories), and their limits. */
   media?: {
     photo: { usable: boolean; max_bytes: number; long_side: number };
@@ -835,6 +851,11 @@ export interface HolidayCards {
     /** While `improved`: where the switch starts (false: off); absent, it starts on as before. */
     default_on?: boolean };
 }
+
+/** A photo card's frame (Wave 4.2): Heirloom Cream, Midnight Velvet, Winter Arch. */
+export type CardFrame = 'heirloom' | 'midnight' | 'arch';
+/** A photo card's shape, cropped on the device: 4:5, 1:1 or 4:3. */
+export type CardShape = 'portrait' | 'square' | 'landscape';
 
 /** GET /api/mailbox/cards */
 export async function getHolidayCards(): Promise<HolidayCards> {
@@ -917,6 +938,8 @@ export async function sendHolidayCard(data: {
    * characters; left out for none.
    */
   to: { user_id: string } | { email: string } | { link: true; name?: string };
+  /** A photo card (Wave 4.2, design `photo_card.design`): `photo` is its front, in this frame, with this caption. */
+  front?: { frame: CardFrame; caption?: string };
   /**
    * One per card draft, sent again with every look and retry of it: a repeat of a send answers with the card it
    * stored (200), CARD_TAKEN_BACK once that card was taken back, or CARD_REQUEST_SENT (with `card`) when the draft
@@ -993,6 +1016,8 @@ export interface HolidayCardList {
   photo_alt?: string;
   photo_live?: string;
   voice?: string;
+  /** A photo card (Wave 4.2): as on one card. */
+  front?: { frame: CardFrame; caption?: string };
   /** Each address keeps the list's choice (send it when the server offers `arrivals.email_all`). */
   emails_keep_arrival?: boolean;
   /** "Let it travel" (server key card_travel): each card starts a journey of its own. */
@@ -1080,6 +1105,8 @@ export interface SentPiece {
   /** The envelope as it reaches them: no postmark until the carrier has it. */
   envelope: { from: string; postmarked_on: string | null };
   card: { design: string | null; number: number | null; caption: string | null; paper: string | null; year: number | null;
+    /** A photo card's front (Wave 4.2; the detail read only): its `photo` in this frame. */
+    front?: { frame: CardFrame; caption: string | null } | null;
     /** The picture's height in px at 960 px wide. */
     height?: number | null;
     /** Its public page, and the colour of the cloth it lies on (launch key card_table). */

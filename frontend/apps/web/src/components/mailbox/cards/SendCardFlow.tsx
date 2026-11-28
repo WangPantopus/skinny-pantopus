@@ -16,8 +16,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { mailbox } from '@pantopus/api';
-import type { CardMediaRef, CardSignature, HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
-import { ChevronLeft, Check, Link2, Loader2, Mail, Search, Send, X } from 'lucide-react';
+import type { CardFrame, CardMediaRef, CardSignature, HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardList, HolidayCardListLine, HolidayCardListPreview, HolidayCardListResult, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
+import { ChevronLeft, Check, Image as ImageIcon, Link2, Loader2, Mail, Search, Send, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
 import { useCardArrivals, useCardRecipients, useForgetCardSignature, useHolidayCards, usePreviewHolidayCard, usePreviewHolidayCardList, useSaveCardSignature, useSendHolidayCard, useSendHolidayCardList, useTakeBackHolidayCard } from '@/lib/mailbox-queries';
@@ -30,7 +30,9 @@ import CardFront from './CardFront';
 import CardBack, { writingStyle } from './CardBack';
 import { useNoteFit, useNoteLeaves } from './CardPaper';
 import { SignaturePad, sameSignature } from './cardSignature';
-import CardPrint from './CardPrint';
+import CardPrint, { useCardMediaUrl } from './CardPrint';
+import PhotoCardStudio, { type PhotoCardMade } from './PhotoCardStudio';
+import { PhotoFrontContext, type PhotoFront } from './PhotoCardFront';
 import { canRecordGreeting, GreetingObject, greetingLength, recordingClock, useGreetingPlayer, useGreetingRecorder } from './CardGreeting';
 import { ON_CLOTH_BUTTON, ON_CLOTH_MUTED, Slip, StepsAtTable } from './AtTheTable';
 import CardFlip from './CardFlip';
@@ -367,17 +369,21 @@ const LINK_NAME_MAX = 40;
 const linkEnvelopeName = (typed: string) => [...typed.replace(/\s+/g, ' ').trim()].slice(0, LINK_NAME_MAX).join('').trim();
 
 /** Pick a card first (Wave 3.1): on Who it's for, the card just chosen, small, with its caption and "Change". */
-function ChosenCardLine({ design, onChange }: { design: HolidayCardDesign; onChange: () => void }) {
+function ChosenCardLine({ design, onChange, picture = null, caption = null }: {
+  design: HolidayCardDesign; onChange: () => void;
+  /** A photo card (Wave 4.2): its photo and front caption in place of the stock picture's. */
+  picture?: string | null; caption?: string | null;
+}) {
   return (
     <div data-testid="sendCardChosenCard" className="mx-4 mt-2 flex min-h-[52px] items-center gap-3 rounded-xl border border-[#e3d8c3] bg-[#fffdf8] py-1.5 pl-3 pr-1.5">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={cardPicture(design.id, 'thumb')} alt="" className="w-8 flex-shrink-0 -rotate-2 rounded-[2px] shadow-[0_3px_8px_rgba(60,40,10,0.25)]" />
-      <p className="min-w-0 flex-1 truncate text-[14px] font-medium leading-[18px] text-[#374151]">{design.caption}</p>
+      <img src={picture ?? cardPicture(design.id, 'thumb')} alt="" className="h-10 w-8 flex-shrink-0 -rotate-2 rounded-[2px] object-cover shadow-[0_3px_8px_rgba(60,40,10,0.25)]" />
+      <p className="min-w-0 flex-1 truncate text-[14px] font-medium leading-[18px] text-[#374151]">{caption ?? design.caption}</p>
       <button
         type="button"
         data-testid="sendCardChangeCard"
         onClick={onChange}
-        aria-label={`Change the card (${design.caption})`}
+        aria-label={`Change the card (${caption ?? design.caption})`}
         className="flex min-h-[44px] flex-shrink-0 items-center rounded-lg px-2.5 text-[14px] font-semibold text-[#8b1d1d] underline underline-offset-4 hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
       >
         Change
@@ -1072,6 +1078,7 @@ function WriteStep({
   mediaStamp = null,
   mediaNeedsStampLine = MEDIA_NEEDS_STAMP,
   freeMediaHint = null,
+  photoIsFront = false,
   onGetStamps,
   noteHelp = null,
   onCloth = false,
@@ -1118,6 +1125,8 @@ function WriteStep({
   mediaStamp?: MediaStamp | null;
   mediaNeedsStampLine?: string;
   freeMediaHint?: string | null;
+  /** A photo card (Wave 4.2): its photo is the front, so it isn't offered again here; Seal it still waits for it. */
+  photoIsFront?: boolean;
   onGetStamps?: () => void;
   /**
    * "Help me write it" (GET /cards `note_help`, launch key card_note_help): the first names the card is to and how
@@ -1165,7 +1174,7 @@ function WriteStep({
       ? (voice.status === 'failed' ? 'The greeting didn’t upload. Try again, or remove it.' : 'Waiting for the greeting to finish uploading.')
       : null;
   const mediaWait = photoWait || voiceWait;
-  const showPhoto = canAddPhoto || Boolean(photo);
+  const showPhoto = !photoIsFront && (canAddPhoto || Boolean(photo));
   const showVoice = (canAddVoice && canRecord) || Boolean(voice) || recorder.recording;
   // No bought stamp left: adding or recording opens the stamp books instead, and says why.
   const needsStamp = mediaStamp === 'buy';
@@ -1339,7 +1348,7 @@ function WriteStep({
           {needsStamp ? <p className={`mt-3 text-[13px] ${quiet}`} data-testid="sendCardMediaNeedsStamp">{mediaNeedsStampLine}</p> : null}
           {!needsStamp && freeMediaHint ? <p className={`mt-3 text-[13px] ${quiet}`} data-testid="sendCardMediaFreeHint">{freeMediaHint}</p> : null}
           {recorder.refused ? <p role="alert" className={`mt-3 text-[13px] ${quiet}`} data-testid="sendCardMicRefused">{recorder.refused}</p> : null}
-          {photo ? (
+          {photo && !photoIsFront ? (
             <label className={`mt-3 block text-[13px] ${quiet}`}>
               Describe the photo (optional, for screen readers)
               <input
@@ -2045,6 +2054,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   // A person's arrivals and day go by their clock, read once they're chosen and again on the last step.
   const theirs = useCardArrivals(to?.kind === 'person' ? to.userId : null);
   const [designId, setDesignId] = useState<string | null>(chosenDesign);
+  // A photo card (Wave 4.2): the studio, and the front it made (frame, caption, the photo's shape).
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [front, setFront] = useState<{ frame: CardFrame; caption: string; aspect: number } | null>(null);
   // Send this card to someone else (Part 6): the picture is already chosen, so Who it's for goes on to Write on the back.
   const [keepPicture, setKeepPicture] = useState(Boolean(sendAgain && chosenDesign && launchFeatures.cardTable));
   const [message, setMessage] = useState('');
@@ -2111,7 +2123,11 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const restart = (at: Step) => { setFirstState(at); setStep(at); };
   /** On to Write on the back, remembering where from (its Back goes there). */
   const toWrite = (from: 'pick' | 'to') => { setWriteFrom(from); setStep('write'); };
-  const travelOffer = data?.travel ?? null;
+  // A photo card (Wave 4.2, `photo_card` on the read while `improved`): its design is never in `designs`.
+  const photoCard = improved ? data?.photo_card ?? null : null;
+  const isPhotoCard = Boolean(photoCard && designId === photoCard.design);
+  // A photo card never travels (no travel switch).
+  const travelOffer = isPhotoCard ? null : data?.travel ?? null;
   // Let this card travel (Wave 3.4): while `improved` the switch starts from `travel.default_on` (absent: on, as before).
   const travelStartsOn = improved ? travelOffer?.default_on ?? true : true;
   const travelStarted = useRef(false);
@@ -2146,7 +2162,11 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const refreshCards = () => { if (improved) void cards.refetch(); };
   // Why the stamp books opened for a photo or voice: the server's words while `improved`, else the line from before.
   const mediaStampReason = (error: { message?: string }) => (improved ? error.message || mediaNeedsStampLine : MEDIA_NEEDS_STAMP);
-  const design = useMemo(() => data?.designs.find((d) => d.id === designId) ?? null, [data, designId]);
+  const design = useMemo<HolidayCardDesign | null>(() => data?.designs.find((d) => d.id === designId)
+    // The photo card's stock fields, as list reads and older builds print them ("Merry Christmas" on its stock picture).
+    ?? (photoCard && designId === photoCard.design
+      ? { id: photoCard.design, number: 0, caption: 'Merry Christmas', paper: '#f7f0e2', table: null, mood: null }
+      : null), [data, designId, photoCard]);
   // "Pick a card" as shelves (server key card_shelves, card shelves SPEC Part C): null for today's screen. A collection's
   // page opens inside step 2 with its own entry in the browser's history (?collection=<slug>), so the browser's Back
   // returns to the shelves, where they were scrolled.
@@ -2252,6 +2272,12 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     // A new card starts with their saved signature beside FROM (founder, 2026-11-16); a draft brought back keeps its own.
     const saved = launchFeatures.cardTable ? data.signature?.saved ?? null : null;
     if (saved) setSignature(saved);
+    // "Send this card again" from a photo card (?again=christmas-2026-photo): its photo went with it; the studio opens empty.
+    if (chosenDesign && data.improved && data.photo_card && chosenDesign === data.photo_card.design) {
+      setDesignId(null);
+      setStudioOpen(true);
+      return;
+    }
     if (chosenPerson || chosenDesign) return;
     const draft = readCardDraft(me.id);
     if (!draft || !data.open) return;
@@ -2260,7 +2286,10 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       setTo(!improved && draft.to.kind === 'link' ? { kind: 'link' } : draft.to);
       setListed(draft.to.kind === 'list' ? draft.to.entries : draft.to.kind === 'link' ? [] : [draft.to]);
     }
-    const designHere = Boolean(draft.designId && data.designs.some((d) => d.id === draft.designId));
+    // A photo card (Wave 4.2) comes back with its photo and front, while the read still offers photo cards.
+    const photoCardHere = Boolean(data.improved && data.photo_card && draft.designId === data.photo_card.design && draft.photo && draft.front);
+    const designHere = Boolean(draft.designId && (data.designs.some((d) => d.id === draft.designId) || photoCardHere));
+    if (photoCardHere) setFront(draft.front ?? null);
     if (designHere) setDesignId(draft.designId);
     setMessage(draft.message.slice(0, data.message_limit));
     // A card from the assistant is a new card: it starts with their saved signature too.
@@ -2304,8 +2333,9 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       arrival,
       requestId: requestId.current,
       listIds: [...listIds.current],
+      front,
     });
-  }, [me?.id, step, sent, listSent, to, designId, message, signature, photo, photoAlt, voice, arrival, sending]);
+  }, [me?.id, step, sent, listSent, to, designId, message, signature, photo, photoAlt, voice, arrival, sending, front]);
 
   // Each step starts at its heading, for keyboards and screen readers.
   useEffect(() => { headingRef.current?.focus(); }, [step]);
@@ -2354,6 +2384,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       // A list's photo and voice go only while `improved` (Wave 2); before it a list went without.
       ...(improved && photoReady ? { photo: photoReady.file_id, ...(photoAlt.trim() ? { photo_alt: photoAlt.trim() } : {}) } : {}),
       ...(improved && voiceReady ? { voice: voiceReady.file_id } : {}),
+      ...frontToSend,
       // Each address keeps the list's choice where the server offers every email choice.
       ...(data?.arrivals.email_all ? { emails_keep_arrival: true } : {}),
       ...(travelling ? { travel: true } : {}),
@@ -2377,6 +2408,13 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     setPhotoAlt('');
   };
   const photoReady = photo?.status === 'ready' && photo.ref ? photo.ref : null;
+  // The photo card's front wherever this flow draws the card (PaperFront reads it): the photo as chosen here, or after
+  // a reload its upload, read back from the sender's own route.
+  const { url: ownFrontUrl } = useCardMediaUrl(isPhotoCard && front && !photo?.localUrl && photo?.ref ? { own: photo.ref.file_id } : null);
+  const flowFront: PhotoFront | null = isPhotoCard && front && photoCard
+    ? { design: photoCard.design, frame: front.frame, caption: front.caption || null, aspect: front.aspect, src: photo?.localUrl ?? ownFrontUrl }
+    : null;
+  const frontToSend = isPhotoCard && front ? { front: { frame: front.frame, ...(front.caption ? { caption: front.caption } : {}) } } : {};
 
   const uploadVoice = (blob: Blob) => {
     setVoice((before) => {
@@ -2407,6 +2445,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       ...(signature ? { signature } : {}),
       ...(photoReady ? { photo: photoReady.file_id, ...(photoAlt.trim() ? { photo_alt: photoAlt.trim() } : {}) } : {}),
       ...(voiceReady ? { voice: voiceReady.file_id } : {}),
+      ...frontToSend,
       ...(travelling ? { travel: true } : {}),
     };
   };
@@ -2422,9 +2461,27 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
     setTo(null); setDesignId(null); setMessage(''); setSignature(savedSignature); removePhoto(); removeVoice(); setArrival(null); setLook(null); setLookUnavailable(false);
     setListed([]); setListLook(null); setListSent(null); setListError(null); setListTakenBack(new Set()); setListTakeBackError(null);
     setKeepPicture(false);
+    setFront(null); setStudioOpen(false);
     // A new card's travel switch starts where the server says (Wave 3.4, `improved`); before, it kept the last one's.
     if (improved) setTravel(travelStartsOn);
     restart(improved ? 'pick' : 'to');
+  };
+
+  // "Make a photo card" (Wave 4.2): the studio, or with no stamp to carry a photo, the stamp books and why.
+  const openStudio = () => {
+    if (mediaStamp === 'buy') { setStampShort(null); setStampReason(mediaNeedsStampLine); void stamps.refresh(); setStampSheet(true); return; }
+    setStudioOpen(true);
+  };
+  // "Use this photo card": its design, its front, and its cropped photo through the card's own upload; then on.
+  const takePhotoCard = (made: PhotoCardMade) => {
+    if (!photoCard) return;
+    leavePick();
+    setDesignId(photoCard.design);
+    setFront({ frame: made.frame, caption: made.caption, aspect: made.aspect });
+    setPhotoAlt('');
+    uploadPhoto(made.file);
+    setStudioOpen(false);
+    if (to) toWrite('pick'); else setStep('to');
   };
 
   // "Send this card to someone else" (mail-cards-experience Part 6): the same picture and the saved signature; the note
@@ -2432,6 +2489,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const sendThisAgain = () => {
     const picture = designId;
     startOver();
+    // A photo card's photo went with that card: the studio opens empty (Wave 4.2).
+    if (photoCard && picture === photoCard.design) { setStudioOpen(true); return; }
     if (picture) { setDesignId(picture); setKeepPicture(true); if (improved) restart('to'); }
   };
 
@@ -2898,6 +2957,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
   const widePage = step === 'pick' && Boolean(shelves);
 
   return (
+    <PhotoFrontContext.Provider value={flowFront}>
     <div className={`${page} pb-6`}>
       <div className={`mx-auto w-full ${widePage ? 'max-w-[1240px]' : 'max-w-[560px]'}`}>
       <StepHeader
@@ -2919,9 +2979,34 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
       {step !== 'to' && step !== 'sent' && to ? (
         <p className={`mt-1 px-4 text-[14px] leading-5 ${muted}`}>To {toName(to)}</p>
       ) : null}
+      {/* A photo card (Wave 4.2): one quiet pill under the heading; the catalog and its order are untouched. */}
+      {step === 'pick' && photoCard && mediaStamp !== 'unavailable' ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2.5 px-4" data-testid="sendCardPhotoCardRow">
+          <button
+            type="button"
+            data-testid="sendCardMakePhotoCard"
+            onClick={openStudio}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#e3d8c3] bg-[#fbf6ec] px-4 text-[14px] font-semibold text-[#374151] transition hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] [@media(prefers-color-scheme:dark)]:brightness-[0.94]"
+          >
+            <ImageIcon className="h-4 w-4" aria-hidden />
+            Make a photo card
+          </button>
+          {isPhotoCard && front ? (
+            <button type="button" data-testid="sendCardPhotoCardNext" onClick={() => { leavePick(); if (to) toWrite('pick'); else setStep('to'); }}
+              className="inline-flex min-h-11 items-center rounded-full px-4 text-[14px] font-semibold text-[#fff7ed] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] focus-visible:ring-offset-2"
+              style={{ backgroundColor: WAX }}>
+              {to ? 'Write on your photo card' : 'Choose who it’s for'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {studioOpen && photoCard ? (
+        <PhotoCardStudio config={photoCard} year={data.year} onClose={() => setStudioOpen(false)} onUse={takePhotoCard} />
+      ) : null}
 
       {step === 'to' && improved && design ? (
-        <ChosenCardLine design={design} onChange={() => setStep('pick')} />
+        <ChosenCardLine design={design} onChange={() => setStep('pick')}
+          picture={isPhotoCard ? flowFront?.src ?? null : null} caption={isPhotoCard ? front?.caption || 'Your photo card' : null} />
       ) : null}
       {step === 'to' ? (
         <ToStep
@@ -2944,7 +3029,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           collections={data.collections ?? []}
           year={data.year}
           chosen={designId}
-          onChoose={setDesignId}
+          // Leaving a photo card for a card from the catalog: its photo was its front, so it goes too (Wave 4.2).
+          onChoose={(id) => { if (isPhotoCard) { removePhoto(); setFront(null); } setDesignId(id); }}
           // Pick a card first (`improved`): on to Who it's for while no one is chosen yet, else straight to Write.
           onNext={() => { leavePick(); if (improved && !to) setStep('to'); else toWrite('pick'); }}
           nextLabel={improved && !to ? 'Choose who it’s for' : 'Write on this card'}
@@ -2984,6 +3070,7 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
           mediaStamp={mediaStamp}
           mediaNeedsStampLine={mediaNeedsStampLine}
           freeMediaHint={freeMediaHint}
+          photoIsFront={isPhotoCard}
           onGetStamps={() => { setStampShort(null); setStampReason(mediaNeedsStampLine); void stamps.refresh(); setStampSheet(true); }}
           voice={voice}
           greetingFor={to?.kind === 'person' ? firstName(to.name) : 'you'}
@@ -3154,7 +3241,8 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
                   {sent.can_take_back ? (
                     <button type="button" data-testid="sealTakeBack" disabled={takeBack.isPending} onClick={() => { void doTakeBack(); }}>Take it back</button>
                   ) : null}
-                  {sent.by_link ? null : <button type="button" data-testid="sealShare" onClick={() => setSealShare(true)}>Share this card</button>}
+                  {/* A photo card (Wave 4.2) has no share picture or video. */}
+                  {sent.by_link || isPhotoCard ? null : <button type="button" data-testid="sealShare" onClick={() => setSealShare(true)}>Share this card</button>}
                   {canSendAgain ? (
                     <button type="button" data-testid="sealSendAgain" onClick={() => { setSealing(null); setSealShare(false); sendThisAgain(); }}>Send this card to someone else</button>
                   ) : null}
@@ -3174,5 +3262,6 @@ export default function SendCardFlow({ chosenDesign = null, chosenPerson = null,
         />
       ) : null}
     </div>
+    </PhotoFrontContext.Provider>
   );
 }

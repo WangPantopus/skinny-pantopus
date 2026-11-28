@@ -9,12 +9,13 @@
 // table a long note runs onto a second leaf in the largest pen instead (Part 9).
 // ============================================================
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { cardTrimmedPicture, firstNameOf, isVerseReference, PAPER_SERIF, postmarkDay, seededRandom } from './cardArt';
 import { cardHand, cardPen } from './cardFont';
 import { SignatureInk, drawableSignature } from './cardSignature';
 import type { CardSignature } from '@pantopus/api';
 import styles from './CardPaper.module.css';
+import PhotoCardFront, { PhotoFrontContext } from './PhotoCardFront';
 
 const SERIF_VAR = { '--card-serif': PAPER_SERIF } as CSSProperties;
 const PEN_STACK = `${cardPen.style.fontFamily}, ui-serif, Georgia, serif`;
@@ -323,9 +324,14 @@ export function PaperFront({
   /** What moves over the face on the table (sheen, shade). */
   children?: ReactNode;
 }) {
+  // A photo card (Wave 4.2): where the page knows its photo and frame, its front is the photo in its frame.
+  const photoFront = useContext(PhotoFrontContext);
   const text = caption || '';
   const captionSize = Math.min(4.8, 70 / Math.max(1, text.length * 0.53));
   const day = postmarkDay(mailedOn || new Date().toISOString());
+  if (photoFront && photoFront.design === design) {
+    return <PhotoCardFront front={photoFront} year={year} mailedOn={mailedOn} className={className} style={style}>{children}</PhotoCardFront>;
+  }
   return (
     <div className={`${styles.face} ${className}`} style={{ ...SERIF_VAR, ...style }}>
       <div className={styles.inner} style={{ backgroundColor: paper }}>

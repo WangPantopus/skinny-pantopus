@@ -35,6 +35,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import type { SentHolidayCard } from '@pantopus/api';
 import PassOnSheet, { type PassOnReady } from './PassOnSheet';
 import { arrivalLine, firstName, sendMessage, takeBackLine } from './SendCardFlow';
+import { holdForCard } from './cardNoticeHold';
 
 /** "Ivy and Cass" from the cards a reader passed on: first names, a masked address, or "someone" for a link not yet opened. */
 function passedNames(passed: { first_name: string | null; to_name: string | null; by_link?: boolean }[]): string {
@@ -103,6 +104,9 @@ export default function CardTablePiece({
   // side up, with the reply lying on it. The card itself (or, once gone, the reply's own picture) comes from the joined read.
   const replyPiece = piece.card_reply ?? null;
   const joined = useCardExchange(piece.card?.sealed ? null : piece.id);
+  // Wave 4.1: someone who just came to this card from its email or link sees no briefing notice or guidance over it.
+  const joinedFor = Boolean(piece.card?.joined_for);
+  useEffect(() => (joinedFor ? holdForCard() : undefined), [joinedFor]);
   const exchange = joined.data ?? null;
   const original = replyPiece ? exchange?.original ?? null : null;
   const card: TableCard = piece.card ?? original?.card ?? {
@@ -303,7 +307,7 @@ export default function CardTablePiece({
     items.push({ label: 'Shred', onSelect: () => { void shred(); } });
     if (!card.sealed && !replyPiece) items.push({ label: 'Open it again', onSelect: () => setReplay((n) => n + 1) });
     // "Share this card" is never in the quiet row on a reader's card: its corner button and this line (Part 3, Fix 1).
-    if (!card.sealed && !replyPiece) items.push({ label: 'Share this card', onSelect: () => setSheet('share') });
+    if (!card.sealed && !replyPiece && !card.front) items.push({ label: 'Share this card', onSelect: () => setSheet('share') });
     if (sendBack) items.push({ label: sendBack.label, onSelect: sendBack.onSelect });
     if (piece.sender_user_id) {
       // As drawn for card memories (wave 4 drawing 6): the card itself is reported, and the person is named.
@@ -344,7 +348,8 @@ export default function CardTablePiece({
       writeBack={passedAll ? null : writeBack}
       reply={reply}
       nextCard={nextCard}
-      onShare={replyPiece ? undefined : () => setSheet('share')}
+      // A photo card (Wave 4.2) has no public page, share picture or share video.
+      onShare={replyPiece || card.front ? undefined : () => setSheet('share')}
       onClose={onClose}
       overlay={(
         <>

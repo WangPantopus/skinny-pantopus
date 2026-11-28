@@ -24,6 +24,7 @@ import SendCardRow from '@/components/mailbox/cards/SendCardRow';
 import SentList from '@/components/mailbox/sent/SentList';
 import { startCardRun } from '@/components/mailbox/cards/cardRun';
 import MailMantel, { mantelCards } from '@/components/mailbox/cards/MailMantel';
+import CardWelcomeStrip from '@/components/mailbox/cards/CardWelcomeStrip';
 import { MailboxRest, useMailWide } from '@/components/mailbox/MailboxToday';
 
 // ── Types ────────────────────────────────────────────────────
@@ -255,6 +256,8 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
   const mantel = drawer === 'personal' && launchFeatures.cardTable && !homeId && mantelCards(allItems).length > 0
     ? <MailMantel items={allItems} onOpen={handleItemClick} />
     : null;
+  // Under the mantel, a new account's welcome (Wave 4.1; only when GET /cards says `improved` and carries `welcome`).
+  const welcomeStrip = drawer === 'personal' && launchFeatures.cardTable && !homeId ? <CardWelcomeStrip /> : null;
 
   // Phones scroll the page (the Mailbox layout); from md up the list and the
   // letter scroll side by side.
@@ -282,6 +285,7 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
           {/* The mantel (mail-cards-experience Part 7): this season's opened cards on a shelf, the first thing in your
               own mail; it scrolls away with the list. A wide window gives it the pane beside the list. */}
           {mantel && !wide ? mantel : null}
+          {!wide ? welcomeStrip : null}
           {/* Christmas cards (holiday_cards): the way in, at the top of your own mail */}
           {drawer === 'personal' ? <SendCardRow /> : null}
           {!homeLocked ? lockedHomes.map((home) => <HomeLockedBox key={home.home_id} home={home} compact />) : null}
@@ -378,7 +382,7 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
         }`}
       >
         {/* A wide window with no mail open: the mantel along the top, your mailbox and today's delivery under it. */}
-        {wide && !isItemView ? <MailboxRest personal={drawer === 'personal'} line="Choose a piece of mail to open it.">{mantel}</MailboxRest> : children}
+        {wide && !isItemView ? <MailboxRest personal={drawer === 'personal'} line="Choose a piece of mail to open it.">{mantel}{welcomeStrip}</MailboxRest> : children}
       </div>
 
       {/* The welcome letter arrives on the table (design plan Part 10, launch key card_table): the cream envelope with

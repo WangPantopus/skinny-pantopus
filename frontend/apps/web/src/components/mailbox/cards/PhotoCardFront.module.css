@@ -1,0 +1,42 @@
+/* A photo as the card's front (Wave 4.2): three frames drawn in code. 1cqw is 1% of the card's width (CardPaper). */
+.heirloom { background-color: #f7f0e2; }
+.midnight { background-color: #1c2233; }
+.arch { background-color: #f7f3ea; }
+
+.box { position: absolute; overflow: hidden; background: #e9e1d0; }
+.box_heirloom { box-shadow: 0 0 0 0.5px rgba(70, 50, 20, 0.3), 0 0.3cqw 0.8cqw rgba(70, 50, 20, 0.16); }
+.box_midnight { background: #262d40; }
+/* A gently rounded top arch: the corners round into a wide curve across the top. */
+.box_arch { border-radius: 50% 50% 0.6cqw 0.6cqw / 24% 24% 0.6cqw 0.6cqw; box-shadow: 0 0.2cqw 0.9cqw rgba(70, 55, 30, 0.2); }
+
+.hairline { position: absolute; border: 0.28cqw solid #d8b76f; opacity: 0.9; pointer-events: none; }
+
+.photo {
+  position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: cover; display: block;
+  filter: contrast(1.02) saturate(1.03); -webkit-user-drag: none; user-select: none;
+}
+.waiting { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(0, 0, 0, 0.04)); }
+
+/* Covered until the reader taps it (memories contract 10): the photo's box, plain, with the words. Inside the box, so
+   it outranks the table's own `.stage button` reset. */
+.box .veil {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 6cqw; border: 0;
+  background: linear-gradient(160deg, #efe6d4, #e2d6bf); color: #3a2f24; cursor: pointer; text-align: center;
+  font: 600 4.2cqw/1.25 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+}
+.midnight .box .veil { background: linear-gradient(160deg, #2a3248, #20273a); color: #f6ecd9; }
+.box .veil span { border-radius: 999px; padding: 2.2cqw 4.4cqw; background: rgba(255, 255, 255, 0.55); box-shadow: 0 0 0 0.3cqw rgba(90, 70, 40, 0.2); }
+.midnight .box .veil span { background: rgba(246, 236, 217, 0.12); box-shadow: 0 0 0 0.3cqw rgba(216, 183, 111, 0.45); }
+.box .veil:focus-visible { outline: 0.6cqw solid #8b1d1d; outline-offset: -1cqw; }
+
+.caption { position: absolute; white-space: nowrap; line-height: 1; }
+.caption_heirloom { left: 4.2cqw; top: 107.4cqw; color: #1d2b63; }
+.caption_midnight { left: 5cqw; top: 105.6cqw; color: #f6ecd9; font-family: var(--card-serif); font-style: italic; letter-spacing: 0.01em; }
+.caption_arch { left: 0; right: 0; top: 103.4cqw; text-align: center; color: #4a4036; font-family: var(--card-serif); font-style: italic; }
+
+.year { position: absolute; font: 2.2cqw/1 var(--card-serif); letter-spacing: 0.42em; white-space: nowrap; }
+.year_heirloom { left: 4.2cqw; top: 114.2cqw; color: #2b2622; }
+.year_midnight { left: 5cqw; top: 113.6cqw; color: rgba(246, 236, 217, 0.85); }
+.year_arch { left: 0; right: 0; top: 112.6cqw; text-align: center; color: #6b5f52; letter-spacing: 0.5em; }
+
+.grainDark { opacity: 0.14; mix-blend-mode: screen; }

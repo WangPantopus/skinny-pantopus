@@ -33,6 +33,7 @@ import { PaperFront } from './cards/CardPaper';
 import CardTable, { type TableMenuItem } from './cards/CardTable';
 import { firstNameOf } from './cards/cardArt';
 import { travelCameLine } from './cards/TravelPostmarks';
+import { markCardClaimPath } from './cards/cardNoticeHold';
 
 type Letter = EscrowedMailView['mail'];
 
@@ -889,6 +890,8 @@ export default function OpenLetterView({ mailId, token, isCard = false }: {
     const targetHref = intent && intent !== 'save' ? `${letterHref}?intent=${encodeURIComponent(intent)}` : letterHref;
     try {
       await api.mailCompose.claimEscrowedMail(mailId, token);
+      // Wave 4.1: on the way to their card, nothing is put over it (cardNoticeHold); only from a read that said `improved`.
+      if (state.phase === 'ready' && state.improved && state.letter.card) markCardClaimPath(mailId);
       clearStoredIntent();
       if (justNamed.current && (!intent || intent === 'save')) {
         const mine = await api.homes.getMyHomes().catch(() => null);
