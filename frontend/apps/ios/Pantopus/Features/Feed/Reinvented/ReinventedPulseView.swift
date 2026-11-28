@@ -38,19 +38,18 @@ struct ReinventedPulseView: View {
     @State private var atlasItem: MomentDTO?
     /// "This Moment has ended." after a link to one that can't be played.
     @State private var linkNote: String?
-    /// Regular width (an iPad, the iPhone Duo open) puts the list and the map side by side where they fit.
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// 700 pt wide or more (PHASE-6 E): the list floats as a panel at the left, folded away to a peek when asked.
+    @State private var folded = false
 
     var body: some View {
         // Read in layout, so the first pass already picks over the map or beside it.
         GeometryReader { geo in
-            let sideBySide = ReinventedPulseColumns.fits(width: geo.size.width, sizeClass: horizontalSizeClass)
+            let sideBySide = ReinventedPulseColumns.fits(width: geo.size.width)
             ZStack(alignment: .top) {
                 ReinventedPulseMap(model: map, onOpen: open)
                     .ignoresSafeArea()
-                    .padding(.leading, ReinventedPulseColumns.mapInset(height, sideBySide: sideBySide))
                 if sideBySide {
-                    besideMap
+                    panel(in: geo)
                 } else {
                     overMap(in: geo)
                 }
@@ -60,9 +59,10 @@ struct ReinventedPulseView: View {
             .onChange(of: height) { _, _ in follow(in: geo, sideBySide: sideBySide) }
             .onChange(of: inAtlas) { _, _ in follow(in: geo, sideBySide: sideBySide) }
             .onChange(of: model.reach) { _, _ in follow(in: geo, sideBySide: sideBySide) }
+            .onChange(of: folded) { _, _ in follow(in: geo, sideBySide: sideBySide) }
         }
         // The tab keeps its pages to a reading column: where the map fits beside the list, Pulse takes the width.
-        .readableColumnWidens(from: ReinventedPulseColumns.widensFrom(sizeClass: horizontalSizeClass))
+        .readableColumnWidens(from: ReinventedPulseColumns.widensFrom)
         .task {
             // The kept filters and When first (PHASE-5 B: remembered per person on this phone), so the first reads carry them.
             filterStore.read()
@@ -137,6 +137,7 @@ struct ReinventedPulseView: View {
 
     /// List, Map or Atlas: Atlas shows the person's kept Moments in the list's place and on the map.
     private func show(atlas: Bool, at next: Height) {
+        if atlas { folded = false }
         inAtlas = atlas
         map.show(atlas: atlas)
         setHeight(next)
@@ -257,16 +258,18 @@ extension ReinventedPulseView {
             .background(height == .full ? Theme.Color.appBg : Color.clear)
     }
 
-    /// An iPad or the open iPhone Duo held sideways (PHASE-1 §2.2): the list and the map side by side.
-    private var besideMap: some View {
-        ReinventedPulseSideBySide(
-            height: height,
-            map: map,
+    /// 700 pt wide or more (PHASE-6 E): the map fills the screen and the list floats as a panel at the left.
+    private func panel(in geo: GeometryProxy) -> some View {
+        ReinventedPulsePanel(
+            folded: $folded,
+            width: geo.size.width,
             header: header(sideBySide: true),
+            line: sheetLine,
+            lineDimmed: !inAtlas && model.box != nil && model.counting,
+            accessory: noPlaceToggle,
             content: panelContent,
             add: addButton,
-            rail: rail,
-            onOpen: open
+            rail: rail
         )
     }
 
@@ -326,8 +329,17 @@ extension ReinventedPulseView {
             return
         }
         if sideBySide {
-            // Beside the list the whole map is uncovered (the map starts past the column).
-            return model.follow(ReinventedMapBox(region))
+            // The panel covers the map's left part: what shows is to its right (the map runs under the side insets).
+            let inset = geo.safeAreaInsets
+            let whole = geo.size.width + inset.leading + inset.trailing
+            let left = (inset.leading + ReinventedPulseColumns.covered(in: geo.size.width, folded: folded)) / whole
+            let span = region.span.longitudeDelta
+            let west = region.center.longitude - span / 2
+            let shown = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: region.center.latitude, longitude: west + span * (left + 1) / 2),
+                span: MKCoordinateSpan(latitudeDelta: region.span.latitudeDelta, longitudeDelta: span * max(1 - left, 0.05))
+            )
+            return model.follow(ReinventedMapBox(shown))
         }
         // The map is drawn under the status bar and the tab bar too: what shows is between the top line and the sheet.
         let inset = geo.safeAreaInsets
@@ -431,15 +443,16 @@ extension ReinventedPulseView {
         map.pick(time: "live")
     }
 
-    /// Map from the switch. On a phone the sheet lowers to its peek to show the map. Side by side, Map shows the map
-    /// alone, and tapped again both.
+    /// Map from the switch. On a phone the sheet lowers to its peek to show the map; on a big screen the panel folds
+    /// away to its peek, and back. From My Atlas, back to Pulse.
     private func pick(_ next: Height, sideBySide: Bool) {
         if !sideBySide {
             show(atlas: false, at: next)
         } else if inAtlas {
             show(atlas: false, at: .half)
         } else {
-            show(atlas: false, at: height == next ? .half : next)
+            // The panel: Map folds it away to show the map, and brings it back.
+            withAnimation(.interpolatingSpring(duration: 0.35, bounce: 0.14)) { folded.toggle() }
         }
     }
 }
