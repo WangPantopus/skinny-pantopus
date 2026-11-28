@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Pulse, reinvented" phase 3 (CONTRACT 8j): the postcard widget. Its receiver is off in the manifest and turned on by
+     the app only while the switch is on for the person (PostcardWidgetSync), so the widget list is today's otherwise. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_postcard_description"
+    android:initialLayout="@layout/widget_postcard"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="110dp"
+    android:previewLayout="@layout/widget_postcard"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

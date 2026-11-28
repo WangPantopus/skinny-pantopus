@@ -258,6 +258,21 @@
                 android:resource="@xml/widget_tasks_near_me_info" />
         </receiver>
 
+        <!-- "Pulse, reinvented" (CONTRACT 8j): the postcard widget. Off here, so the widget list is today's; the app turns it
+             on only while the pulse_reinvented switch is on for the person (PostcardWidgetSync), and off again. -->
+        <receiver
+            android:name=".widget.PostcardWidgetProvider"
+            android:enabled="false"
+            android:exported="true"
+            android:label="@string/widget_postcard_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_postcard_info" />
+        </receiver>
+
         <service
             android:name=".data.chats.ChatOutboxJobService"
             android:exported="true"
