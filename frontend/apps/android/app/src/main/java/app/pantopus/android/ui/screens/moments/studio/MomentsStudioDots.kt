@@ -130,6 +130,8 @@ internal fun StudioDotLayer(
     BoxWithConstraints(modifier = Modifier.fillMaxSize().testTag("moments.studio.dots")) {
         val frame = stampFrame(picture, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
         val dotPx = DOT * LocalDensity.current.density
+        // The whole stage's reach (PHASE-6 F): a dot may go anywhere on the canvas.
+        val reach = LocalStudioReach.current
         dots.forEach { dot ->
             val cx = frame.left + dot.x.toFloat() * frame.width
             val cy = frame.top + dot.y.toFloat() * frame.height
@@ -138,10 +140,11 @@ internal fun StudioDotLayer(
                 modifier =
                     Modifier
                         .offset { IntOffset((cx - dotPx / 2).roundToInt(), (cy - dotPx / 2).roundToInt()) }
+                        .studioItemDrag()
                         .pointerInput(dot.id, enabled) {
                             if (!enabled) return@pointerInput
                             detectTapGestures { onOpen(dot.id) }
-                        }.pointerInput(dot.id, enabled, frame) {
+                        }.pointerInput(dot.id, enabled, frame, reach) {
                             if (!enabled) return@pointerInput
                             detectDragGestures { change, amount ->
                                 change.consume()
@@ -151,8 +154,8 @@ internal fun StudioDotLayer(
                                             it
                                         } else {
                                             it.copy(
-                                                x = (it.x + amount.x / frame.width).coerceIn(0.04, 0.96),
-                                                y = (it.y + amount.y / frame.height).coerceIn(0.04, 0.96),
+                                                x = dotX(it.x + amount.x / frame.width, reach, dotPx / 2 / frame.width),
+                                                y = dotY(it.y + amount.y / frame.height, reach, dotPx / 2 / frame.height),
                                             )
                                         }
                                     },
@@ -393,3 +396,19 @@ private fun Pill(
 private fun Hint(words: String) {
     Text(words, color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
 }
+
+/**
+ * A dot's middle across: anywhere on the whole stage's canvas ([reach]) with 24 dp of it ([half] each side, a share of the
+ * frame) on the canvas, else inside the picture as before.
+ */
+private fun dotX(
+    x: Double,
+    reach: StudioReach?,
+    half: Float,
+): Double = reach?.x(x, half.toDouble()) ?: x.coerceIn(0.04, 0.96)
+
+private fun dotY(
+    y: Double,
+    reach: StudioReach?,
+    half: Float,
+): Double = reach?.y(y, half.toDouble()) ?: y.coerceIn(0.04, 0.96)
