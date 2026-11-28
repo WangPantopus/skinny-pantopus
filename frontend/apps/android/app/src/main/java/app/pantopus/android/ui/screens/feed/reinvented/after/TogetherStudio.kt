@@ -16,15 +16,18 @@ import com.squareup.moshi.Moshi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 /**
  * What the open Studio adds to the Moment it makes for "Pulse, reinvented" phase 3 ("together and back outside",
  * CONTRACT 8; iPhone's `TogetherStudio.swift`): what the Studio was opened for (a frame for someone's Retake, 8e) and the
- * person's own choices in the drawer (start a Retake, join tonight's sky, start a pinboard). Each rides the create
- * request as one more key ([TogetherCreate]). Only while the switch is on, and only for the Studio on screen: today's
- * Post screen never shows the rows, so it never sends any of this, and with nothing chosen the request is exactly
- * today's.
+ * person's own choices in the drawer (start a Retake, join tonight's sky, start a pinboard, seal it). Each rides the
+ * create request as one more key ([TogetherCreate]). Only while the switch is on, and only for the Studio on screen:
+ * today's Post screen never shows the rows, so it never sends any of this, and with nothing chosen the request is
+ * exactly today's.
  */
 internal object TogetherStudio {
     /** What the Studio was opened for, from a screen of this build's own. */
@@ -66,6 +69,10 @@ internal object TogetherStudio {
     val startsPinboard = mutableStateOf(false)
     val pinboardPrompt = mutableStateOf("")
 
+    /** "Seal it" (8g): [SEAL_NONE], `date`, `place` or `rain`, and when a `date` seal opens. */
+    val sealOpens = mutableStateOf(SEAL_NONE)
+    val sealAt = mutableStateOf(defaultSealAt())
+
     /** The Studio's screen holding the choices: set by its stage ([TogetherStudioGhost]); null while none shows. */
     @Volatile internal var owner: TogetherStudioViewModel? = null
 
@@ -93,6 +100,8 @@ internal object TogetherStudio {
         retakeTitle.value = ""
         startsPinboard.value = false
         pinboardPrompt.value = ""
+        sealOpens.value = SEAL_NONE
+        sealAt.value = defaultSealAt()
         opening.value = null
         pending = false
     }
@@ -136,11 +145,35 @@ internal object TogetherStudio {
             // The server decides whether a window is open; only a photo the author let join may join one.
             if (joinsSky.value && state.offersSky) put("join_convergence", true)
             if (board) put("pinboard", mapOf("prompt" to prompt))
+            sealChoice(state)?.let { put("seal", it) }
         }
     }
 
+    /**
+     * The seal chosen, where it may be (8g): a date from an hour to five years ahead (61 minutes, not 60: the server
+     * measures "an hour from now" when the request arrives); a place or rain only on an exact place.
+     */
+    private fun sealChoice(state: MomentsComposeUiState): Map<String, Any>? {
+        if (!state.offersSeal) return null
+        return when (val opens = sealOpens.value) {
+            "date" -> {
+                val now = Instant.now()
+                val at = sealAt.value.coerceIn(now.plus(Duration.ofMinutes(SEAL_SOONEST_MIN)), now.plus(Duration.ofDays(SEAL_LATEST_DAYS)))
+                mapOf("opens" to opens, "at" to at.truncatedTo(ChronoUnit.SECONDS).toString())
+            }
+            "place", "rain" -> if (state.sealPlaceOK) mapOf("opens" to opens) else null
+            else -> null
+        }
+    }
+
+    /** A date seal starts a day ahead. */
+    private fun defaultSealAt(): Instant = Instant.now().plus(Duration.ofDays(1)).truncatedTo(ChronoUnit.MINUTES)
+
     const val TITLE_MAX = 60
     const val PROMPT_MAX = 80
+    const val SEAL_NONE = "none"
+    const val SEAL_SOONEST_MIN = 61L
+    const val SEAL_LATEST_DAYS = 5L * 365
 
     /** A Studio asked for longer ago than this is not opened any more (Pulse wasn't there to open it). */
     const val OPENING_MS = 15_000L
@@ -174,6 +207,19 @@ internal val MomentsComposeUiState.offersPinboard: Boolean
     get() =
         media is MomentMediaFile.Photo && studioPair == null && pickedTogether <= 1 && !madeUp && !guess &&
             studioPostKind(StudioPostState.draft.value) == null
+
+/**
+ * "Seal it" may be chosen (8g): a photo, a video or words under the person's own name, not a guess spot, not a Pulse post,
+ * not a before and after. The server checks again (`400 SEAL_INVALID`).
+ */
+internal val MomentsComposeUiState.offersSeal: Boolean
+    get() =
+        (media != null || text.isNotBlank()) && studioPair == null && !madeUp && !guess &&
+            studioPostKind(StudioPostState.draft.value) == null
+
+/** A place or a rain seal needs the exact place of a photo or words, away from home. */
+internal val MomentsComposeUiState.sealPlaceOK: Boolean
+    get() = media !is MomentMediaFile.Video && !noLocationOn && pin != null && !floats && place?.atHome != true
 
 /**
  * Holds the Studio's phase 3 choices for the screen it belongs to ([TogetherStudio.owner]), with what sends them. When the

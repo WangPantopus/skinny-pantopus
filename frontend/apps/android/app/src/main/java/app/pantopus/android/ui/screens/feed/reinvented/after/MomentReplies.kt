@@ -54,6 +54,7 @@ import app.pantopus.android.data.api.models.reinvented.MomentReplyDto
 import app.pantopus.android.data.api.models.reinvented.shownConvergence
 import app.pantopus.android.data.api.models.reinvented.shownPinboard
 import app.pantopus.android.data.api.models.reinvented.shownRetake
+import app.pantopus.android.data.api.models.reinvented.unopenedSeal
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.pulse.TogetherRepository
@@ -209,13 +210,13 @@ fun MomentRepliesChip(
 ) {
     val state = moment.replies
     if (state == null) {
-        OtherChips(moment, onClose, modifier)
+        OtherChips(moment, mine, onClose, modifier)
         return
     }
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val shown = ui.shown.takeIf { ui.momentId == moment.id } ?: state.shown
     if (!shown && !mine) {
-        OtherChips(moment, onClose, modifier)
+        OtherChips(moment, mine, onClose, modifier)
         return
     }
     var open by MomentRepliesState.sheet
@@ -240,28 +241,35 @@ fun MomentRepliesChip(
         MomentConvergenceChip(moment, Modifier.padding(start = Spacing.s2))
         MomentPinboardChip(moment, onClose, Modifier.padding(start = Spacing.s2))
         MomentCrowdChip(moment, Modifier.padding(start = Spacing.s2))
+        MomentSealMark(moment, mine, Modifier.padding(start = Spacing.s2))
     }
     if (open) {
         RepliesSheet(moment, mine, shown, canReply = state.canReply && shown, ui = ui, viewModel = viewModel) { open = false }
     }
 }
 
-/** The Retake's (8e), the sky piece's (8h), the pinboard's and the crowd's (8i) chips on a Moment whose replies don't show. */
+/**
+ * The Retake's (8e), the sky piece's (8h), the pinboard's and the crowd's (8i) chips, and the author's seal (8g), on a
+ * Moment whose replies don't show.
+ */
 @Composable
 private fun OtherChips(
     moment: MomentDto,
+    mine: Boolean,
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
     // The crowd's chip shows once its scene is read: the first look asks for it.
     val crowd = rememberCrowdScene(moment) != null
+    val sealed = mine && moment.unopenedSeal != null
     val together = moment.shownRetake != null || moment.shownConvergence != null || moment.shownPinboard != null
-    if (!crowd && !together) return
+    if (!crowd && !sealed && !together) return
     Row(modifier = modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
         MomentRetakeChip(moment, onClose)
         MomentConvergenceChip(moment, Modifier.padding(start = Spacing.s2))
         MomentPinboardChip(moment, onClose, Modifier.padding(start = Spacing.s2))
         MomentCrowdChip(moment, Modifier.padding(start = Spacing.s2))
+        MomentSealMark(moment, mine, Modifier.padding(start = Spacing.s2))
     }
 }
 

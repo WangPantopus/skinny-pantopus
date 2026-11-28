@@ -13,7 +13,9 @@ import app.pantopus.android.data.api.models.reinvented.MomentReplyBody
 import app.pantopus.android.data.api.models.reinvented.MomentReplyDto
 import app.pantopus.android.data.api.models.reinvented.MomentReplyReportBody
 import app.pantopus.android.data.api.models.reinvented.PinboardDto
+import app.pantopus.android.data.api.models.reinvented.RelicDto
 import app.pantopus.android.data.api.models.reinvented.RetakeDto
+import app.pantopus.android.data.api.models.reinvented.SealPlaceBody
 import app.pantopus.android.data.api.models.reinvented.SkyStripDayDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
@@ -94,6 +96,19 @@ class TogetherRepository
 
         /** CONTRACT 8i: the scene around a Moment from every phone, or null where fewer than three caught it. */
         suspend fun crowd(id: String): NetworkResult<CrowdDto?> = guarded { api.crowd(id).crowd }
+
+        /** CONTRACT 8g: place relics near the reader. */
+        suspend fun relicsNear(
+            latitude: Double,
+            longitude: Double,
+        ): NetworkResult<List<RelicDto>> = guarded { api.sealsNear(SealPlaceBody(latitude, longitude)).relics }
+
+        /** CONTRACT 8g: a place relic, whole for a reader standing where it was left. */
+        suspend fun openRelic(
+            id: String,
+            latitude: Double,
+            longitude: Double,
+        ): NetworkResult<MomentDto> = guarded { api.openSeal(id, SealPlaceBody(latitude, longitude)).moment }
 
         /** CONTRACT 8: a Moment made in the Studio with phase 3's keys ([TogetherCreate]). */
         suspend fun createMoment(body: Map<String, Any?>): NetworkResult<MomentDto> = guarded { api.createMoment(body).moment }
