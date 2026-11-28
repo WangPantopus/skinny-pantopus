@@ -117,6 +117,14 @@ function cardGuestOpenEnabled(env = process.env) {
   return cardImprovementsOn(env) && isOn(env, 'CARD_GUEST_OPEN');
 }
 
+// Year-round thank-you cards (the card round, Wave 5; docs/product/card-improvements-2026-11-28/CONTRACT-wave5.md):
+// the "Thank You" collection that opens on January 1 and has no end. OFF unless CARD_EVERYDAY=1, because the app
+// builds already in the stores print "CHRISTMAS" under every card they are sent. It counts only while
+// cardImprovementsOn is on. The Christmas thank-you cards (December 26 to January 15) don't wait for it.
+function cardEverydayOn(env = process.env) {
+  return cardImprovementsOn(env) && String(env.CARD_EVERYDAY || '').trim() === '1';
+}
+
 // A card's own photo or voice greeting is free on a person's first cards that carry one (founder, November 28, 2026:
 // two); past them each such card spends a bought stamp, as every one did before. How many: CARD_MEDIA_FREE_LIMIT
 // (a whole number from 0 up; unset or unreadable, 2). CARD_MEDIA_FREE=0 is its emergency off (none are free). Part of
@@ -328,6 +336,7 @@ module.exports = {
   todayHouseEnabled,
   cardEmailRemindersEnabled,
   cardImprovementsOn,
+  cardEverydayOn,
   cardGuestOpenEnabled,
   cardMediaFreeLimit,
   LAUNCH_FEATURE_KEYS,

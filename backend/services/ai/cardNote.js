@@ -69,7 +69,7 @@ function toLine(names, count) {
  * `design` is a picture from holidayCards.designById.
  */
 function userContent({ design, to, count, hint, note, passedOver }) {
-  const collection = holidayCards.COLLECTIONS.find((c) => c.id === design.collection);
+  const collection = holidayCards.collectionOf(design);
   const lines = [
     `Card picture: caption "${design.caption}"${collection ? `, from the collection "${collection.name}" (${collection.line})` : ''}`,
     toLine(namesOf(to), count),

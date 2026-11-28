@@ -89,7 +89,7 @@ function present(mail, { timeZone = FALLBACK_TIME_ZONE } = {}) {
   // card_travel carries a travelling card's view to cardView the same way (services/cardTravel readerView).
   // card_joined_for says the reader joined for this card (holidayCards.joinedFor), the same way.
   const { card_signature: _signature, card_media: _media, card_photo_covered: _covered, card_travel: _travel,
-    card_joined_for: _joinedFor, ...rest } = mail;
+    card_joined_for: _joinedFor, card_send_thank_you: _sendThankYou, ...rest } = mail;
   if (rest.mail_extracted?.reports) {
     const { reports: _reports, ...extracted } = rest.mail_extracted;
     rest.mail_extracted = extracted;

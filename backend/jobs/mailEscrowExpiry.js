@@ -53,7 +53,7 @@ async function mailEscrowExpiry() {
         await notificationService.createNotification(holidayCards.isCard(mail) ? {
           userId: mail.sender_user_id,
           type: 'holiday_card_expired',
-          title: 'Your Christmas card came back',
+          title: `Your ${holidayCards.cardWords(mail.mail_extracted?.card).name} came back`,
           body: holidayCards.isByLink(mail)
             ? 'Nobody opened your link in 90 days. Your card stays in Sent.'
             : `They didn’t open the email in 90 days. Your card to ${maskedContact} stays in Sent.`,

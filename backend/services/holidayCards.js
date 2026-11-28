@@ -14,7 +14,7 @@
 const crypto = require('crypto');
 const { DateTime } = require('luxon');
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { cardImprovementsOn } = require('../utils/featureFlags');
+const { cardImprovementsOn, cardEverydayOn } = require('../utils/featureFlags');
 
 const CARD_TAG = 'holiday_card';
 const MESSAGE_LIMIT = 300;
@@ -326,6 +326,139 @@ const PERSON_ARRIVALS_ALL = ['next_morning', 'now', 'sealed_christmas', 'christm
 // going at the sender's 7 a.m. (the person's time zone isn't known), and Right away. Older apps get EMAIL_ARRIVALS.
 const EMAIL_ARRIVALS_ALL = ['next_morning', 'sealed_christmas', 'christmas_morning', 'now'];
 
+// ---- Thank-you cards (the card round, Wave 5; docs/product/card-improvements-2026-11-28/CONTRACT-wave5.md) ----
+// Twelve of the founder's pictures in two collections of their own, after every Christmas collection: the Christmas
+// thank-you cards (December 26 to January 15 where the sender lives) and the year-round ones (from January 1, no end,
+// behind CARD_EVERYDAY). A thank-you card is a card like any other on the wire (the same tag, routes, stamps, photo,
+// voice, list, email, link, replies); it is told apart by its design and by the new fields kindFields adds to a read.
+// They are NOT in DESIGNS or COLLECTIONS: every field an app from before this reads stays Christmas alone and says
+// what it says today, so for those apps cards still end on December 31. A thank-you card never travels, has no share
+// video and stands on no mantel. The pictures are square (960 high at 960 px wide).
+const THANK_YOU = Object.freeze({ kind: 'thank_you', name: 'thank-you card', plural: 'thank-you cards', envelope: 'cream',
+  entry: 'Send a thank-you card', subject: 'A thank-you card', replySubject: 'A reply to a thank-you card', tag: 'thank_you' });
+const CHRISTMAS_WORDS = Object.freeze({ name: 'Christmas card', plural: 'Christmas cards' });
+const thankYouIdOf = (number) => `thank-you-${String(number).padStart(2, '0')}`;
+const THANK_YOU_COLLECTIONS = [
+  { id: 'thank-you-christmas', name: 'Thank You', short: 'Thank You', slug: 'thank-you-christmas',
+    line: 'For the gift, the dinner, the welcome.', numbers: [1, 2, 3, 4, 5, 6, 7, 8], pick: 1,
+    opens_on: '2026-12-26', closes_on: '2027-01-15', everyday: false },
+  { id: 'thank-you', name: 'Thank You', short: 'Thank You', slug: 'thank-you',
+    line: 'For any kindness, any time of year.', numbers: [9, 10, 11, 12], pick: 12,
+    opens_on: '2027-01-01', closes_on: null, everyday: true },
+].map(({ numbers, pick, ...collection }) => {
+  if (!numbers.includes(pick)) throw new Error(`Collection ${collection.id}: its pick ${pick} must be one of its own cards`);
+  return { ...collection, designs: numbers.map(thankYouIdOf), pick: thankYouIdOf(pick) };
+});
+const THANK_YOU_DESIGNS = [
+  ['It was just what I wanted.', 'it-was-just-what-i-wanted', '#704b51'],
+  ['Thank you for having us.', 'thank-you-for-having-us', '#6e4b30'],
+  ['Thank you for the warmest welcome.', 'thank-you-for-the-warmest-welcome', '#2c4071'],
+  ['Here’s to you. Thank you.', 'heres-to-you-thank-you', '#704b51'],
+  ['Thinking of your kindness.', 'thinking-of-your-kindness', '#3b4c6e'],
+  ['Thank you for a beautiful dinner.', 'thank-you-for-a-beautiful-dinner', '#6e4b30'],
+  ['A little note to say thank you.', 'a-little-note-to-say-thank-you', '#6e4b30'],
+  ['Thank you. It’s already a favorite.', 'thank-you-its-already-a-favorite', '#704b51'],
+  ['Thank you for a lovely afternoon.', 'thank-you-for-a-lovely-afternoon', '#3b4c6e'],
+  ['Thanks for the company.', 'thanks-for-the-company', '#6e4b30'],
+  ['Thank you. It didn’t last the day.', 'thank-you-it-didnt-last-the-day', '#6e4b30'],
+  ['Thank you for being next door.', 'thank-you-for-being-next-door', '#2c4071'],
+].map(([caption, slug, table], index) => {
+  const id = thankYouIdOf(index + 1);
+  return { id, number: null, caption, paper: '#f7f0e2',
+    collection: THANK_YOU_COLLECTIONS.find((collection) => collection.designs.includes(id)).id,
+    height: 960, slug, table, mood: 'nostalgia' };
+});
+const THANK_YOU_BY_ID = new Map(THANK_YOU_DESIGNS.map((design) => [design.id, design]));
+const isThankYouDesign = (id) => THANK_YOU_BY_ID.has(String(id || ''));
+/** Whether this piece (or its card) is a thank-you card. */
+const isThankYou = (mail) => isThankYouDesign((mail?.mail_extracted?.card || mail)?.design);
+/** A collection as the apps read it (the shape of COLLECTIONS, with the days it is open). */
+const thankYouCollectionView = ({ everyday: _everyday, ...collection }) => collection;
+/** The thank-you collections there are now: none while the round is off, the year-round one only with CARD_EVERYDAY. */
+function thankYouCollections() {
+  if (!cardImprovementsOn()) return [];
+  return THANK_YOU_COLLECTIONS.filter((collection) => !collection.everyday || cardEverydayOn());
+}
+// A collection's days in this time zone: 'open', or 'before' / 'after' them.
+function collectionWindow(collection, timeZone, now = new Date()) {
+  const here = DateTime.fromJSDate(now, { zone: timeZone });
+  if (here < DateTime.fromISO(collection.opens_on, { zone: timeZone }).startOf('day')) return 'before';
+  if (collection.closes_on && here >= DateTime.fromISO(collection.closes_on, { zone: timeZone }).plus({ days: 1 }).startOf('day')) return 'after';
+  return 'open';
+}
+/** The thank-you collections a person in this time zone can send from now. */
+function thankYouOpen(timeZone, now = new Date()) {
+  return thankYouCollections().filter((collection) => collectionWindow(collection, timeZone, now) === 'open');
+}
+/**
+ * Whether a thank-you design can be sent from this time zone now: 'open'; 'closed' once its collection's days are
+ * over; 'unknown' before they begin, while its collection doesn't exist (CARD_EVERYDAY, the round's switch), and for
+ * anything that isn't a thank-you design: nothing about it is in any answer yet, so it is no design at all.
+ */
+function thankYouSendable(id, timeZone, now = new Date()) {
+  const design = THANK_YOU_BY_ID.get(String(id || ''));
+  const collection = design && thankYouCollections().find((c) => c.id === design.collection);
+  if (!collection) return 'unknown';
+  const window = collectionWindow(collection, timeZone, now);
+  if (window === 'open') return 'open';
+  return window === 'after' ? 'closed' : 'unknown';
+}
+/** Whether any card can be sent from this time zone now: a Christmas card, or a thank-you card. */
+function sendingOpen(timeZone, now = new Date()) {
+  return seasonOpen(timeZone, now) || thankYouOpen(timeZone, now).length > 0;
+}
+/** What a thank-you card sent in this year prints under its picture. */
+const thankYouStrip = (year) => `THANK YOU, ${year}`;
+/**
+ * GET /cards `thank_you`: what the apps need to offer a thank-you card now, or null while none can be sent. `only`:
+ * Christmas cards are closed, so the entry reads `entry` and Pick a card shows these collections alone.
+ */
+function thankYouControls(timeZone, now = new Date()) {
+  const open = thankYouOpen(timeZone, now);
+  if (!open.length) return null;
+  const ids = new Set(open.flatMap((collection) => collection.designs));
+  return {
+    only: !seasonOpen(timeZone, now), entry: THANK_YOU.entry, name: THANK_YOU.name, plural: THANK_YOU.plural,
+    strip: thankYouStrip(DateTime.fromJSDate(now, { zone: timeZone }).year), envelope: THANK_YOU.envelope,
+    // The last day one can be sent here; null while a collection with no end is open.
+    closes_on: open.some((collection) => !collection.closes_on) ? null
+      : open.map((collection) => collection.closes_on).sort().pop(),
+    collections: open.map(thankYouCollectionView),
+    designs: THANK_YOU_DESIGNS.filter((design) => ids.has(design.id)),
+    // Nothing sealed: thank-you cards open after Christmas morning. A link goes when its sender shares it.
+    arrivals: { person: ['next_morning', 'now'], email: ['next_morning', 'now'], link: ['now'] },
+  };
+}
+/** The public list's `thank_you` (GET /cards/designs): every collection there is, with whether it is open by `timeZone`. */
+function thankYouPublic(timeZone, now = new Date()) {
+  const collections = thankYouCollections();
+  if (!collections.length) return null;
+  const ids = new Set(collections.flatMap((collection) => collection.designs));
+  return {
+    collections: collections.map((collection) => ({ ...thankYouCollectionView(collection),
+      open: collectionWindow(collection, timeZone, now) === 'open' })),
+    designs: THANK_YOU_DESIGNS.filter((design) => ids.has(design.id)),
+  };
+}
+/**
+ * What a read of a thank-you card adds to tell it from a Christmas card (which has none of these): what it is, what
+ * to call it, what to print under its picture (with the year it was sent) and the envelope it lies on. `short`: only
+ * what it is and its name, for the rows that list cards.
+ */
+function kindFields(card, { short = false } = {}) {
+  if (!isThankYouDesign(card?.design)) return {};
+  return { kind: THANK_YOU.kind, name: THANK_YOU.name,
+    ...(short ? {} : { strip: thankYouStrip(card.year || SEASON.year), envelope: THANK_YOU.envelope }) };
+}
+/** What to call this card, one and several: "Christmas card(s)" or "thank-you card(s)" (a design id works too). */
+const cardWords = (cardOrDesign) => (isThankYouDesign(cardOrDesign?.design || cardOrDesign) ? THANK_YOU : CHRISTMAS_WORDS);
+/** A card's subject as its piece carries it, and the subject of a reply to it. */
+const subjectOf = (cardOrDesign) => (isThankYouDesign(cardOrDesign?.design || cardOrDesign) ? THANK_YOU.subject : SUBJECT);
+const replySubjectOf = (cardOrDesign) => (isThankYouDesign(cardOrDesign?.design || cardOrDesign) ? THANK_YOU.replySubject : REPLY_SUBJECT);
+/** The collection a design is from, among the Christmas ones and the thank-you ones (for "Help me write it"). */
+const collectionOf = (design) => COLLECTIONS.find((c) => c.id === design?.collection)
+  || THANK_YOU_COLLECTIONS.find((c) => c.id === design?.collection) || null;
+
 function designById(id) {
   return DESIGN_BY_ID.get(String(id || '')) || null;
 }
@@ -335,7 +468,14 @@ function designById(id) {
  * alone, for everything a photo card never has (a public page, a share picture, a video, an email picture, a journey).
  */
 function designOf(id) {
-  return isPhotoCardDesign(id) ? PHOTO_CARD : designById(id);
+  return isPhotoCardDesign(id) ? PHOTO_CARD : (THANK_YOU_BY_ID.get(String(id || '')) || designById(id));
+}
+/**
+ * A design whose own picture may show before a card is opened (its email's picture, its link's page): a catalog card
+ * or a thank-you card. Never the photo card, whose front is the sender's own photo.
+ */
+function pictureDesign(id) {
+  return THANK_YOU_BY_ID.get(String(id || '')) || designById(id);
 }
 
 function isCard(mail) {
@@ -425,9 +565,10 @@ function emailTrouble(mail, now = new Date()) {
  * know gets the sealed envelope too. Answers { path, alt, caption }.
  */
 function emailPicture({ design, sealed }) {
-  const picked = sealed ? null : designById(design);
+  const picked = sealed ? null : pictureDesign(design);
   if (!picked) return { path: '/holiday-cards/share/sealed-link.jpg', alt: 'A sealed red envelope with a gold wax seal', caption: null };
-  return { path: `/holiday-cards/share/${picked.id}-link.jpg`, alt: `A Christmas card: ${picked.caption}`, caption: picked.caption };
+  const called = isThankYouDesign(picked.id) ? 'A thank-you card' : 'A Christmas card';
+  return { path: `/holiday-cards/share/${picked.id}-link.jpg`, alt: `${called}: ${picked.caption}`, caption: picked.caption };
 }
 
 /** Whether a card's email went out (or it never kept a record, before this was kept). */
@@ -521,6 +662,34 @@ async function joinedFor(mail, readerId, now = new Date()) {
   if (error) return false;
   const joined = Date.parse(data?.created_at);
   return Number.isFinite(joined) && now.getTime() - joined < JOINED_FOR_MS;
+}
+
+/**
+ * "Send a thank-you card" on a Christmas card someone received (piece.card.send_thank_you; the card round, Wave 5):
+ * { label, to: { user_id, name } }, the card's sender to choose in the send flow, or null. Only for the person the
+ * card went to, once it has arrived and its seal has lifted, while its sender is a person still on Pantopus and the
+ * reader can send a thank-you card now by their own clock (from December 26). Never on a thank-you card itself.
+ * Null when it can't be read: the action is then just not offered.
+ */
+async function sendThankYou(mail, readerId, now = new Date()) {
+  if (!cardImprovementsOn() || !isCard(mail) || isThankYou(mail) || !mail.sender_user_id || mail.sender_entity_id) return null;
+  if (!readerId || String(mail.recipient_user_id) !== String(readerId)) return null;
+  if (!(Date.parse(mail.delivered_at) <= now.getTime()) || isSealed(mail, now)) return null;
+  try {
+    // Required here: both read the database through services this module doesn't otherwise need.
+    // eslint-disable-next-line global-require
+    const mailDelivery = require('./mailDelivery');
+    const zone = (await mailDelivery.personTimeZone(readerId)) || mailDelivery.FALLBACK_TIME_ZONE;
+    if (!thankYouOpen(zone, now).length) return null;
+    const { data: sender, error } = await supabaseAdmin.from('User').select('id, account_type').eq('id', mail.sender_user_id).maybeSingle();
+    if (error || !sender || sender.account_type === 'business') return null;
+    // eslint-disable-next-line global-require
+    const people = await require('./chatPeople').loadChatPeople([mail.sender_user_id]);
+    return { label: THANK_YOU.entry,
+      to: { user_id: mail.sender_user_id, name: people.get(String(mail.sender_user_id))?.displayName || mail.sender_display || null } };
+  } catch (_) {
+    return null;
+  }
 }
 
 /** A photo card's front as its private stored copy keeps it ({ frame, caption }), beside the note; else null. */
@@ -639,6 +808,8 @@ function cardView(mail, now = new Date()) {
     mood: design?.mood || null,
     holiday: card.holiday || SEASON.holiday,
     year: card.year || SEASON.year,
+    // A thank-you card: what it is, its name, the line under its picture and its envelope. A Christmas card has none.
+    ...kindFields(card),
     arrival: card.arrival || null,
     sealed_until: card.sealed_until || null,
     sealed,
@@ -653,6 +824,8 @@ function cardView(mail, now = new Date()) {
     ...mediaView(mail, sealed),
     // The reader joined for this card (joinedFor; the routes that read one piece set card_joined_for). Absent otherwise.
     ...(mail.card_joined_for ? { joined_for: true } : {}),
+    // "Send a thank-you card" for this Christmas card (sendThankYou, set the same way). Absent otherwise.
+    ...(mail.card_send_thank_you ? { send_thank_you: mail.card_send_thank_you } : {}),
     // A card that travels (card_travel), as its reader may see it: the route reads it (services/cardTravel readerView).
     ...(mail.card_travel ? { travel: mail.card_travel } : {}),
   };
@@ -679,6 +852,8 @@ function replyView(mail) {
     table: design?.table || null,
     mood: design?.mood || null,
     year: reply.year || SEASON.year,
+    // A reply to a thank-you card says so (a reply to a Christmas card has neither).
+    ...kindFields({ design: reply.design }, { short: true }),
     signature: mail.card_signature || signatureOf(mail.object_payload) || null,
     photo: null,
     voice: null,
@@ -731,6 +906,8 @@ function sentSummary(mail, now = new Date()) {
   return {
     id: mail.id,
     design: card.design || null,
+    // A thank-you card: what it is and what to call it (a Christmas card has neither).
+    ...kindFields(card, { short: true }),
     to_name: card.to_name || null,
     by_email: byEmail,
     // By link it also counts as by email (older apps read it that way); newer apps say it in link words.
@@ -816,13 +993,13 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, travel
     // Couldn't be delivered: its picture and the name it went to, nothing of when or why.
     const view = cardView({ mail_extracted: { card: { design: notDelivered.design } } }, now) || {};
     return {
-      id: mail.id, kind: 'card', subject: SUBJECT, sent_at: instant(mail.created_at), to_name: notDelivered.to_name || toName || null,
+      id: mail.id, kind: 'card', subject: subjectOf(notDelivered.design), sent_at: instant(mail.created_at), to_name: notDelivered.to_name || toName || null,
       to_household: false, by_email: false, arrival: null, status: 'not_delivered', arrives_at: null, arrives_on: null,
       opens_on: null, sealed: false, can_take_back: false, take_back_until: null,
       envelope: { from: senderName, postmarked_on: null },
       card: { design: view.design || null, number: view.number ?? null, caption: view.caption || null, paper: view.paper || null,
         year: view.year || null, height: view.height ?? null, slug: view.slug || null, table: view.table || null,
-        mood: view.mood || null, verse: null },
+        mood: view.mood || null, verse: null, ...kindFields({ design: notDelivered.design }, { short: true }) },
     };
   }
   const isHolidayCard = isCard(mail);
@@ -836,7 +1013,7 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, travel
   return {
     id: mail.id,
     kind: isHolidayCard ? 'card' : 'letter',
-    subject: isHolidayCard ? SUBJECT : (mail.subject || mail.display_title || 'A letter'),
+    subject: isHolidayCard ? subjectOf(card) : (mail.subject || mail.display_title || 'A letter'),
     sent_at: instant(mail.created_at),
     to_name: toName || null,
     to_household: Boolean(toHousehold),
@@ -860,7 +1037,9 @@ function sentPiece(mail, { toName, toHousehold = false, senderName, zone, travel
       year: view.year || null, height: view.height ?? null, slug: view.slug || null, table: view.table || null,
       mood: view.mood || null,
       // The whole verse on a Christmas with Jesus Christ picture ("Read the verse"), not while it's sealed (cardView).
-      verse: view.verse || null },
+      verse: view.verse || null,
+      // A thank-you card: what it is, its name, the line under its picture and its envelope (kindFields).
+      ...kindFields(card) },
     // A reply they wrote (card_replies): the card it answers, and its own take-back, which goes through
     // POST /cards/:card_id/reply/take-back (the piece stays a letter, with can_take_back false, for builds that don't know
     // replies).
@@ -938,6 +1117,8 @@ module.exports = {
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, OPENING, DESIGNS, pickACardDesign, PERSON_ARRIVALS, EMAIL_ARRIVALS,
   EMAIL_ARRIVALS_ALL, PERSON_ARRIVALS_ALL, TO_NAME_LIMIT, cleanToName,
   PHOTO_CARD, isPhotoCardDesign, photoCardControls, photoCardShape, cleanFront, frontOf, designOf, joinedFor,
+  THANK_YOU, isThankYouDesign, isThankYou, thankYouOpen, thankYouSendable, sendingOpen, thankYouControls, thankYouPublic,
+  kindFields, cardWords, subjectOf, replySubjectOf, collectionOf, pictureDesign, sendThankYou,
   SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf, mediaOf, mediaView,
   designById, isCard, isByLink, cardLinkToken, cardEmailToken, EMAIL_TRIES, emailTrouble, emailPicture, emailWent, emailSendAt, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
   daysBetween, arrivalsFor,

@@ -138,7 +138,9 @@ async function tellSender(senderId, cards) {
     await notificationService.createNotification({
       userId: senderId,
       type: 'holiday_card_email_failed',
-      title: one ? 'Your Christmas card’s email didn’t go out' : 'Some Christmas card emails didn’t go out',
+      // Named for what it is: a thank-you card says so; several of both kinds are just cards.
+      title: one ? `Your ${holidayCards.cardWords(one.mail_extracted?.card).name}’s email didn’t go out`
+        : `Some ${cards.every((card) => holidayCards.isThankYou(card)) ? 'thank-you card' : cards.some((card) => holidayCards.isThankYou(card)) ? 'card' : 'Christmas card'} emails didn’t go out`,
       body: one
         ? `We couldn’t email your card to ${maskContact(one.escrow_recipient_contact || '')}. Open Sent to email it again or take it back.`
         : `We couldn’t email ${cards.length} of your cards. Open Sent to email them again or take them back.`,
