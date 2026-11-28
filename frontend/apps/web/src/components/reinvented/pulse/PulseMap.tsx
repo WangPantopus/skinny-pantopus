@@ -39,7 +39,8 @@ interface Props {
   layoutKey: string;
   flyTo: FlyTarget | null;
   selected: string | null;
-  onBox(box: Box): void;
+  /** The box in view (the map's own reads) and the box of the part left open by the top line and the list (the list's). */
+  onBox(box: Box, open: Box): void;
   onPick(key: string): void;
   /** Heights and floating are on for this reader (the read's `heights_on` and `float_on`). */
   float?: boolean;
@@ -261,7 +262,7 @@ export default function PulseMap({ pins, listItems, fitKey, fallback, layoutKey,
         latest.current.onMoving?.(false);
         if (!fitted.current) return;
         window.clearTimeout(timer);
-        timer = window.setTimeout(() => latest.current.onBox(m.box()), 250);
+        timer = window.setTimeout(() => latest.current.onBox(m.box(), m.openBox({ ...coveredInsets(el), right: 0 })), 250);
       });
       resize.observe(el);
       // A fresh map fits the list again.

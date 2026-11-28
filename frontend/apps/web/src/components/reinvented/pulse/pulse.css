@@ -474,6 +474,62 @@
   padding-right: 64px;
 }
 
+/* PHASE-6 H: the count dimmed while a read is out; "Couldn't refresh · Try again" in the header when one fails or is slow. */
+.rp-count {
+  transition: opacity 0.15s ease;
+}
+.rp-count[data-dim] {
+  opacity: 0.5;
+}
+/* "Couldn't refresh · Try again" and "No place" (CONTRACT 11b) in the sheet's header: 44 px tall boxes to the finger, the
+   28 px pill drawn inside (LEAD-7's look of 05:26 measured No place at 74 by 42). */
+.rp-retry,
+.rp-noplace {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rp-retry > span,
+.rp-noplace > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+}
+.rp-retry > span {
+  background: color-mix(in srgb, #b45309 14%, transparent);
+  color: #92400e;
+}
+.rp-noplace > span {
+  border: 1px solid var(--rp-line);
+  background: var(--rp-paper);
+  color: var(--rp-muted);
+}
+.rp-noplace[aria-checked='true'] > span {
+  border-color: var(--rp-ink);
+  background: var(--rp-ink);
+  color: var(--rp-paper);
+}
+/* While the list follows the map (PHASE-6 B): the old area's rows stay, dimmed, until the new area's are there; the row
+   chosen from the map (or that flew the map) is lit with its pin. */
+.rp-items {
+  transition: opacity 0.15s ease;
+}
+.rp-items[data-stale] {
+  opacity: 0.6;
+}
+.rp-items > li[data-selected] {
+  border-radius: 18px;
+  box-shadow: 0 0 0 2px var(--rp-brand);
+}
+
 /* The one camera's +: 12 px above the sheet's top edge and 16 px from the right, riding up with it; in its header at full. */
 .rp-create {
   position: absolute;

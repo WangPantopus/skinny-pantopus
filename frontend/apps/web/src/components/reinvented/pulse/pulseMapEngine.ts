@@ -54,6 +54,11 @@ export interface MapEngine {
   zoom(): number;
   /** The box in view as the server takes it: inside ±90 and ±180, west before east. */
   box(): Box;
+  /**
+   * The box of the part of the map left open by what covers it (pixels from each edge), as the server takes it: what the
+   * list follows (PHASE-6 B). The whole box when that part is too small or the globe is seen whole.
+   */
+  openBox(cover: { top: number; bottom: number; left: number; right: number }): Box;
   /** A point's pixel in the map, or null when it's on the far side of the globe. */
   spot(p: Point): Spot | null;
   /** `left`: more room on the left (the floating list panel on a wide screen), beside `side` on both sides. */
@@ -113,6 +118,16 @@ export function openFlat(el: HTMLElement, tiles: (missing: boolean) => void): Ma
     box: () => {
       const b = map.getBounds();
       return serverBox(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
+    },
+    openBox: (c) => {
+      const size = map.getSize();
+      if (size.x - c.left - c.right < 40 || size.y - c.top - c.bottom < 40) {
+        const b = map.getBounds();
+        return serverBox(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
+      }
+      const a = map.containerPointToLatLng([c.left, c.top]),
+        z = map.containerPointToLatLng([size.x - c.right, size.y - c.bottom]);
+      return serverBox(Math.min(a.lat, z.lat), Math.min(a.lng, z.lng), Math.max(a.lat, z.lat), Math.max(a.lng, z.lng));
     },
     spot: (p) => map.latLngToContainerPoint([p.latitude, p.longitude]),
     fit: (points, pad, maxZoom) =>
@@ -299,6 +314,18 @@ export async function openGlobe(el: HTMLElement, failed: () => void, firstLight:
     box: () => {
       const b = map.getBounds();
       return b ? serverBox(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()) : serverBox(-90, -180, 90, 180);
+    },
+    openBox: (c) => {
+      const el = map.getContainer();
+      const w = el.clientWidth,
+        h = el.clientHeight;
+      const b = map.getBounds();
+      const whole = b ? serverBox(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()) : serverBox(-90, -180, 90, 180);
+      // Zoomed out to the globe, the corners can fall off the world: the whole view then.
+      if (map.getZoom() < 3 || w - c.left - c.right < 40 || h - c.top - c.bottom < 40) return whole;
+      const a = map.unproject([c.left, c.top]),
+        z = map.unproject([w - c.right, h - c.bottom]);
+      return serverBox(Math.min(a.lat, z.lat), Math.min(a.lng, z.lng), Math.max(a.lat, z.lat), Math.max(a.lng, z.lng));
     },
     spot: (p) => {
       const at = new gl.LngLat(p.longitude, p.latitude);
