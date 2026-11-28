@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -283,6 +284,6 @@ internal fun reinventedAskWords(state: LivingAskState): String? {
     }
 }
 
-/** The pill sits under the top line at the left, clear of the rail. */
+/** The pill sits under the top line at the left, clear of the rail, as wide as its words (never a bar). */
 internal fun Modifier.reinventedPillPlace(top: Dp): Modifier =
-    this.fillMaxWidth().padding(top = top, start = 16.dp, end = REINVENTED_RAIL_WIDTH + 8.dp)
+    this.fillMaxWidth().padding(top = top, start = 16.dp, end = REINVENTED_RAIL_WIDTH + 8.dp).wrapContentWidth(Alignment.Start)
