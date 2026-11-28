@@ -1717,9 +1717,11 @@
   position: fixed;
   z-index: 1101;
   left: 50%;
-  bottom: 0;
+  /* Above the app's own bottom tab bar at a phone's width (the shell's --fab-lift, 64 px there, 0 elsewhere): its footer's
+     buttons were under the bar (LEAD-7's look, 05:26). */
+  bottom: var(--fab-lift, 0px);
   width: min(100%, 560px);
-  max-height: min(86vh, 720px);
+  max-height: min(calc(86vh - var(--fab-lift, 0px)), 720px);
   overflow-y: auto;
   transform: translateX(-50%);
   display: grid;
