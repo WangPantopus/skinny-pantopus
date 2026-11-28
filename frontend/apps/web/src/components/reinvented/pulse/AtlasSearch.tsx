@@ -151,6 +151,13 @@ export default function AtlasSearch({
           placeholder="Search your Atlas: mushroom, sunset, the bench…"
           aria-label="Search your Atlas"
           enterKeyHint="search"
+          onKeyDown={(e) => {
+            // Escape clears the search; on an empty field it leaves it (PHASE-6 G: Escape closes the topmost thing).
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            if (text || q) clear();
+            else e.currentTarget.blur();
+          }}
         />
         {q && (
           <button type="button" className="as-clear" onClick={clear} aria-label="Clear the search">
