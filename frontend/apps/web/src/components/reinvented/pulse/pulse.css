@@ -33,6 +33,10 @@
   position: absolute;
   inset: 0;
 }
+/* Behind everything on the board, whatever its place in the page (it comes last, for the keyboard's order). */
+.rp-map-layer {
+  z-index: 0;
+}
 .rp-leaflet {
   z-index: 0;
   background: #e6e9ec;
@@ -485,6 +489,11 @@
   .rp-filter-pill {
     max-width: calc(100% - 200px);
   }
+  /* The flat map's zoom buttons step under the rail's row (Listen lay over the zoom-in: LEAD-8's look, 10:3x). */
+  .rp-board .leaflet-top.leaflet-right {
+    top: 108px;
+    right: 8px;
+  }
 }
 .rp-rail-card-when {
   width: min(400px, calc(100vw - 72px));
@@ -745,6 +754,9 @@
   display: flex;
   gap: 4px;
   margin: 0 16px;
+  /* A mouse drags it sideways (TimeRow): no text selection on the way. */
+  user-select: none;
+  -webkit-user-select: none;
   padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;

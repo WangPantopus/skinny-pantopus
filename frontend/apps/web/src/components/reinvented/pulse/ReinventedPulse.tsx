@@ -187,7 +187,10 @@ export default function ReinventedPulse() {
   }, []);
   // At 700 px wide or more (the board's own width, beside the app's side bar) the list is a floating panel at the left.
   const board = useRef<HTMLDivElement>(null);
-  const [wide, setWide] = useState(false);
+  // Read from the window at once (this page renders in the browser only), so a Back on a wide screen never draws the phone's
+  // sheet first while the board's width is measured (LEAD-8's look, 10:3x: the panel came after 1.5 s); 64 px is the app's
+  // folded side bar.
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.innerWidth - 64 >= WIDE_PX);
   useLayoutEffect(() => {
     const el = board.current;
     if (!el) return undefined;
@@ -1076,27 +1079,9 @@ export default function ReinventedPulse() {
         if ((e.target as HTMLElement).closest?.('.mo-watch-media, .rp-sheet img')) e.preventDefault();
       }}
     >
-      <div className="rp-map-layer" aria-hidden={(!wide && rest === 'full') || undefined}>
-        <PulseMap
-          pins={pins}
-          listItems={reach === 'explore' ? exploreListItems : first?.items ?? []}
-          fitKey={fitKey}
-          fallback={fallback}
-          layoutKey={`${wide}|${wide ? folded : rest}|${topInset}`}
-          flyTo={fly}
-          selected={selected}
-          onBox={onBox}
-          onPick={onPick}
-          onMoving={onMoving}
-          restore={restoreView}
-          view={mapView}
-          float={view === 'pulse' && reach !== 'explore' && !!map.data?.heights_on && !!map.data?.float_on}
-          lit={view === 'pulse' && reach !== 'explore' ? lit : null}
-          sounds={listening && view === 'pulse' && reach !== 'explore' ? sounds.data?.sounds ?? null : null}
-          beams={view === 'pulse' && reach !== 'explore' && time === 'live' ? beams.data?.beams : undefined}
-        />
-      </div>
 
+      {/* The map's layer comes last in the page (it is drawn behind everything by its z-index), so Tab reaches the top line,
+          the rail and the list before the map's own stops (LEAD-8's look, 10:3x: 95 map stops came first). */}
       {topLine}
       {words && (
         <p className="rp-filter-pill" role="status">
@@ -1387,6 +1372,26 @@ export default function ReinventedPulse() {
           <Plus size={22} strokeWidth={2.6} aria-hidden />
         </button>
       )}
+      <div className="rp-map-layer" aria-hidden={(!wide && rest === 'full') || undefined}>
+        <PulseMap
+          pins={pins}
+          listItems={reach === 'explore' ? exploreListItems : first?.items ?? []}
+          fitKey={fitKey}
+          fallback={fallback}
+          layoutKey={`${wide}|${wide ? folded : rest}|${topInset}`}
+          flyTo={fly}
+          selected={selected}
+          onBox={onBox}
+          onPick={onPick}
+          onMoving={onMoving}
+          restore={restoreView}
+          view={mapView}
+          float={view === 'pulse' && reach !== 'explore' && !!map.data?.heights_on && !!map.data?.float_on}
+          lit={view === 'pulse' && reach !== 'explore' ? lit : null}
+          sounds={listening && view === 'pulse' && reach !== 'explore' ? sounds.data?.sounds ?? null : null}
+          beams={view === 'pulse' && reach !== 'explore' && time === 'live' ? beams.data?.beams : undefined}
+        />
+      </div>
       {skyOpen && <ConvergenceView id={skyOpen} onClose={() => setSkyOpen(null)} />}
       {boardOpen && (
         <PinboardView
