@@ -286,6 +286,7 @@ fun MomentsComposeScreen(
                         onItems = viewModel::setItems,
                         onWhole = viewModel::setWhole,
                         onPlaceWhole = viewModel::placeWhole,
+                        onTrim = viewModel::setTrim,
                     )
                 } else {
                     ReviewStep(

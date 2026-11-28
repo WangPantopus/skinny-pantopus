@@ -206,4 +206,4 @@ internal fun StudioMentionRow(
 internal val MomentsComposeUiState.holdsStudioChoices: Boolean
     get() =
         stamps.isNotEmpty() || madeUp || guess || mentions.isNotEmpty() || pair != null || dots.isNotEmpty() ||
-            items.isNotEmpty() || whole
+            items.isNotEmpty() || whole || trim != null

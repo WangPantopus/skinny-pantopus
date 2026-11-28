@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -40,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,7 +55,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -168,6 +174,7 @@ internal fun MomentsStudioStep(
     // See the picture first (PHASE-5 A, CONTRACT 10c): the photo shows and posts whole on these colours; moved there.
     onWhole: (MomentPlacementPainter.Backdrop) -> Unit = {},
     onPlaceWhole: (MomentPlacement?, IntSize) -> Unit = { _, _ -> },
+    onTrim: (LongRange?) -> Unit = {},
     gate: MomentsStudioGateViewModel = hiltViewModel(),
     penNames: PenNameChoiceViewModel = hiltViewModel(),
 ) {
@@ -210,29 +217,19 @@ internal fun MomentsStudioStep(
         // A photo shows whole, on its own colours (PHASE-5 A); a video, a text card and before and after as before.
         val whole = rememberStudioWhole(state, lookPicture, read = onTrayOpen, onWhole = onWhole)
         val wholeLive = remember { mutableStateOf<MomentPlacement?>(null) }
+        // The canvas fits between the status bar and the bottom bar, which never covers it (PHASE-6 K1).
+        var barHeight by remember { mutableIntStateOf(0) }
+        val room = StudioRoom(top = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat(), bottom = barHeight.toFloat())
         StudioPictureAndLayers(
             whole = whole,
             state = state,
             live = wholeLive,
             onPlace = onPlaceWhole,
+            room = room,
             picture = { if (pair != null) StudioBeforeAfterPicture(pair) else StudioPicture(state) },
         ) {
             TogetherStudioGhost(state)
             if (pair == null) StudioCutoutPress(state, onLift = onLiftCutout)
-            // The stamps sit on the picture, under the X, the tools, the caption and the bar.
-            StudioStampLayer(state = state, onStamps = onStamps)
-            StudioDotLayer(state.dots, rememberStudioPicture(state), enabled = !state.posting, onDots = onDots) { id ->
-                pickedDot = id
-                illuminate = true
-            }
-            StudioPlayLayer(state.items, rememberStudioPicture(state), enabled = !state.posting, onItems = onItems) { id ->
-                // Moving words open their own form; a poll or a countdown opens the play form.
-                val words = state.items.any { it.id == id && it.movingWords }
-                wordsItem = id.takeIf { words }
-                wordsForm = words
-                playItem = id.takeUnless { words }
-                playForm = !words
-            }
         }
         // The fades keep the rail and the caption readable over a bright picture.
         Box(
@@ -256,7 +253,8 @@ internal fun MomentsStudioStep(
             enabled = state.canRetake,
             card = state.media == null,
             onClick = onBack,
-            modifier = Modifier.statusBarsPadding().padding(start = Spacing.s4, top = 11.dp),
+            // While an item is dragged the X and the tools fade and take no touches (PHASE-6 K3).
+            modifier = Modifier.fadesWhileAnItemMoves().statusBarsPadding().padding(start = Spacing.s4, top = 11.dp),
         )
         // Text, Draw and Resize change a photo or a video; Stamps and Play reads the spot, so it needs a place (a text
         // card has only Stamps and Play).
@@ -264,15 +262,42 @@ internal fun MomentsStudioStep(
             enabled = !state.posting,
             // Before and after takes stamps only: its words and drawings are drawn in.
             media = state.media.takeIf { pair == null },
-            onOpen = onMarks,
+            onOpen = { tool -> openMarksOnCanvas(tool, whole, state, wholeLive, onPlaceWhole, onMarks) },
             onStamps =
                 {
                     tray = true
                     onTrayOpen()
                 }.takeIf { !state.noLocationOn },
             onIlluminate = { illuminate = true }.takeIf { state.media != null },
-            modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(end = Spacing.s4, top = 11.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .fadesWhileAnItemMoves()
+                    .statusBarsPadding()
+                    .padding(end = Spacing.s4, top = 11.dp),
         )
+        // The items on the picture: over the X and the tools, so an item under one gets the touch (PHASE-6 K3), and under
+        // the caption and the bar.
+        StudioItemsOver(whole, state, room) {
+            // A swatch slider's part of the photo (CONTRACT 7g), under the stamps and items.
+            StudioSwatchBoxLayer(state.items, rememberStudioPicture(state), enabled = !state.posting, onItems = onItems) { id ->
+                playItem = id
+                playForm = true
+            }
+            StudioStampLayer(state = state, onStamps = onStamps)
+            StudioDotLayer(state.dots, rememberStudioPicture(state), enabled = !state.posting, onDots = onDots) { id ->
+                pickedDot = id
+                illuminate = true
+            }
+            StudioPlayLayer(state.items, rememberStudioPicture(state), enabled = !state.posting, onItems = onItems) { id ->
+                // Moving words open their own form; a poll or a countdown opens the play form.
+                val words = state.items.any { it.id == id && it.movingWords }
+                wordsItem = id.takeIf { words }
+                wordsForm = words
+                playItem = id.takeUnless { words }
+                playForm = !words
+            }
+        }
         Column(
             modifier =
                 Modifier
@@ -304,6 +329,10 @@ internal fun MomentsStudioStep(
             StudioGuessLine(state)
             // A whole photo: Fill or Fit, and Reset (PHASE-5 A).
             StudioWholeRow(state, whole, wholeLive, onPlaceWhole, Modifier.padding(start = Spacing.s4, bottom = Spacing.s3))
+            // A motion photo: "Keep the motion" (PHASE-5 C).
+            StudioMotionRow(state, Modifier.padding(start = Spacing.s4, bottom = Spacing.s3))
+            // A video: the part of it that posts (PHASE-5 A).
+            StudioTrimRow(state, onTrim, Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s3))
             // A caption goes with a photo or a video; a text card is its own words.
             if (state.media != null) {
                 // After "@" at the end of the caption: the author's connections (never under a made-up name).
@@ -324,28 +353,17 @@ internal fun MomentsStudioStep(
                 )
                 Spacer(Modifier.height(Spacing.s4))
             }
-            StudioBar(
-                state = state,
-                homeNoteDue = gate.homeNoteDue,
-                onHomeNoteShown = gate::homeNoteShown,
-                postAs = postAs,
-                refused = refused,
-                onAudience = { key ->
-                    refused = null
-                    penNames.choose(PenNameVoice.Own)
-                    onAudience(key)
-                },
-                onMadeUp = {
-                    refused =
-                        when {
-                            state.noLocationLocked -> MADE_UP_NEEDS_PLACE
-                            else -> postAs?.refusal?.ifBlank { MADE_UP_NOT_HERE }
-                        }
-                    if (refused == null) penNames.choose(PenNameVoice.MadeUp)
-                },
-                onOpenDrawer = { drawer = true },
-                onPost = onPost,
-            )
+            Box(modifier = Modifier.onSizeChanged { barHeight = it.height }) {
+                StudioBar(
+                    state = state,
+                    homeNoteDue = gate.homeNoteDue,
+                    onHomeNoteShown = gate::homeNoteShown,
+                    postAs = postAs,
+                    refused = refused,
+                    onOpenDrawer = { drawer = true },
+                    onPost = onPost,
+                )
+            }
         }
         // The drawer: today's Post sheet, without what the bar already holds (who sees it, the caption, Post).
         AnimatedVisibility(visible = drawer, enter = fadeIn(), exit = fadeOut()) {
@@ -367,24 +385,46 @@ internal fun MomentsStudioStep(
             exit = slideOutVertically { it },
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            MomentsPostSheet(
-                state = state,
-                avatarUrl = avatarUrl,
-                onShowArea = onShowArea,
-                onHours = onHours,
-                onAudience = onAudience,
-                onCaption = onCaption,
-                onPost = onPost,
-                modifier = Modifier.statusBarsPadding().padding(top = 64.dp).testTag("moments.studio.drawer"),
-                onPlace = onPlace,
-                onFindPlace = onFindPlace,
-                onNoLocation = onNoLocation,
-                onShowHeight = onShowHeight,
-                onShowWeather = onShowWeather,
-                sky = sky,
-                onOpenMap = { fullMap = true },
-                studio = true,
-            )
+            // See the picture first (PHASE-5 A): who sees it is the drawer's first row; the bar keeps one line and Post.
+            Column(modifier = Modifier.statusBarsPadding().padding(top = 64.dp)) {
+                StudioWhoSeesIt(
+                    state = state,
+                    postAs = postAs,
+                    refused = refused,
+                    onAudience = { key ->
+                        refused = null
+                        penNames.choose(PenNameVoice.Own)
+                        onAudience(key)
+                    },
+                    onMadeUp = {
+                        refused =
+                            when {
+                                state.noLocationLocked -> MADE_UP_NEEDS_PLACE
+                                else -> postAs?.refusal?.ifBlank { MADE_UP_NOT_HERE }
+                            }
+                        if (refused == null) penNames.choose(PenNameVoice.MadeUp)
+                    },
+                    onClose = { drawer = false },
+                )
+                MomentsPostSheet(
+                    state = state,
+                    avatarUrl = avatarUrl,
+                    onShowArea = onShowArea,
+                    onHours = onHours,
+                    onAudience = onAudience,
+                    onCaption = onCaption,
+                    onPost = onPost,
+                    modifier = Modifier.testTag("moments.studio.drawer"),
+                    onPlace = onPlace,
+                    onFindPlace = onFindPlace,
+                    onNoLocation = onNoLocation,
+                    onShowHeight = onShowHeight,
+                    onShowWeather = onShowWeather,
+                    sky = sky,
+                    onOpenMap = { fullMap = true },
+                    studio = true,
+                )
+            }
         }
         StudioStampTray(
             visible = tray,
@@ -488,7 +528,7 @@ private fun StudioClose(
                 .semantics { contentDescription = if (card) "Back to your card" else "Back to the camera" },
         contentAlignment = Alignment.Center,
     ) {
-        PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 22.dp, strokeWidth = 2.2f, tint = Color.White)
+        PantopusIconImage(icon = PantopusIcon.X, contentDescription = null, size = 20.dp, strokeWidth = 2.2f, tint = Color.White)
     }
 }
 
@@ -566,7 +606,7 @@ private fun MarksTool(
     RailTool(label = label, spoken = spoken, enabled = enabled, tag = label.lowercase(), onClick = { onOpen(tool) }) {
         when (tool) {
             MomentMarksTool.Text ->
-                Text(text = "Aa", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+                Text(text = "Aa", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
             MomentMarksTool.Draw ->
                 PantopusIconImage(
                     icon = PantopusIcon.Pencil,
@@ -607,7 +647,7 @@ internal fun RailTool(
         Text(
             text = label,
             color = Color.White,
-            fontSize = 14.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             style = TextStyle(shadow = OnPicture),
         )
@@ -694,7 +734,10 @@ internal fun StudioCaption(
     )
 }
 
-/** The bar at the bottom (board B2): who sees it, then the pill (how long and where) and Post. */
+/**
+ * The bar at the bottom (board B2, PHASE-5 A): one line of details (where, how long, who sees it), which opens the
+ * drawer, and Post. Nothing of the details covers the picture until asked.
+ */
 @Composable
 private fun StudioBar(
     state: MomentsComposeUiState,
@@ -702,10 +745,39 @@ private fun StudioBar(
     onHomeNoteShown: () -> Unit,
     postAs: PenNamePostAsUi?,
     refused: String?,
-    onAudience: (String) -> Unit,
-    onMadeUp: () -> Unit,
     onOpenDrawer: () -> Unit,
     onPost: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(PantopusColors.studioBar)
+                .navigationBarsPadding()
+                // A real sheet (PHASE-6 F3): dragging the bar up opens the details.
+                .studioSheetDrag(up = true, onDone = onOpenDrawer)
+                .padding(start = Spacing.s3, end = Spacing.s3, top = Spacing.s2, bottom = Spacing.s3)
+                .testTag("moments.studio.bar"),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        StudioGrabber()
+        StudioBarRest(state = state, homeNoteDue = homeNoteDue, onHomeNoteShown = onHomeNoteShown, postAs = postAs, refused = refused) {
+            StudioWhenPill(state = state, onClick = onOpenDrawer, modifier = Modifier.weight(1f))
+            StudioPost(state = state, onPost = onPost)
+        }
+    }
+}
+
+/** Who sees it, the drawer's first row (PHASE-5 A): Nearby, Friends, and the made-up name once `/me` has answered. */
+@Composable
+private fun StudioWhoSeesIt(
+    state: MomentsComposeUiState,
+    postAs: PenNamePostAsUi?,
+    refused: String?,
+    onAudience: (String) -> Unit,
+    onMadeUp: () -> Unit,
+    onClose: () -> Unit,
 ) {
     // "Don't show where": no pin, connections only (as today's Post sheet).
     val unplaced = state.noLocationOn
@@ -715,11 +787,14 @@ private fun StudioBar(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(PantopusColors.studioBar)
-                .navigationBarsPadding()
-                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4, bottom = Spacing.s3)
-                .testTag("moments.studio.bar"),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+                // The sheet's top: dragging it down closes the details (PHASE-6 F3).
+                .studioSheetDrag(up = false, onDone = onClose)
+                .padding(start = Spacing.s3, end = Spacing.s3, top = Spacing.s2, bottom = Spacing.s3)
+                .testTag("moments.studio.whoSees"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
+        StudioGrabber()
+        Text(text = "Who sees it", color = PantopusColors.studioPillSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         Row(
             modifier = Modifier.semantics { contentDescription = "Who sees it" },
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -741,10 +816,7 @@ private fun StudioBar(
                 StudioChip(text = MADE_UP_NAME, on = state.madeUp, usable = !state.posting, tag = "madeUp", onClick = onMadeUp)
             }
         }
-        StudioBarRest(state = state, homeNoteDue = homeNoteDue, onHomeNoteShown = onHomeNoteShown, postAs = postAs, refused = refused) {
-            StudioWhenPill(state = state, onClick = onOpenDrawer, modifier = Modifier.weight(1f))
-            StudioPost(state = state, onPost = onPost)
-        }
+        refused?.let { Text(text = it, color = Color.White, fontSize = 12.sp) }
     }
 }
 
@@ -757,15 +829,12 @@ internal fun StudioChip(
     tag: String,
     onClick: () -> Unit,
 ) {
+    // 28 dp drawn, 44 dp to the finger (PHASE-6 C).
     Box(
         modifier =
             Modifier
-                .height(38.dp)
-                .clip(RoundedCornerShape(19.dp))
-                .background(if (on) Color.White else Color.Transparent)
-                .then(if (on) Modifier else Modifier.border(1.dp, PantopusColors.studioChipOutline, RoundedCornerShape(19.dp)))
+                .height(44.dp)
                 .clickable(enabled = usable, role = Role.RadioButton, onClick = onClick)
-                .padding(horizontal = Spacing.s4)
                 .testTag("moments.studio.audience.$tag")
                 .clearAndSetSemantics {
                     contentDescription = text
@@ -774,18 +843,39 @@ internal fun StudioChip(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            color =
-                when {
-                    on -> PantopusColors.appText
-                    usable -> Color.White
-                    else -> Color.White.copy(alpha = 0.4f)
-                },
-        )
+        Box(
+            modifier =
+                Modifier
+                    .height(28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (on) Color.White else Color.Transparent)
+                    .then(if (on) Modifier else Modifier.border(1.dp, PantopusColors.studioChipOutline, RoundedCornerShape(14.dp)))
+                    .padding(horizontal = Spacing.s3),
+            contentAlignment = Alignment.Center,
+        ) {
+            StudioChipWords(text, on, usable)
+        }
     }
+}
+
+/** A "who sees it" chip's words (13 sp, PHASE-6 C). */
+@Composable
+private fun StudioChipWords(
+    text: String,
+    on: Boolean,
+    usable: Boolean,
+) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        color =
+            when {
+                on -> PantopusColors.appText
+                usable -> Color.White
+                else -> Color.White.copy(alpha = 0.4f)
+            },
+    )
 }
 
 /**
@@ -821,7 +911,7 @@ private fun StudioBarLine(
     Text(
         text = text,
         color = PantopusColors.studioPillSecondary,
-        fontSize = 13.sp,
+        fontSize = 12.sp,
         modifier = Modifier.testTag("moments.studio.$tag"),
     )
 }
@@ -831,7 +921,7 @@ private fun StudioBarLine(
 internal fun StudioMadeUpNote() {
     Text(
         text = "Under a made-up name it shows over its area, or at a public place, to people nearby.",
-        fontSize = 13.sp,
+        fontSize = 12.sp,
         color = PantopusColors.appTextSecondary,
         modifier = Modifier.padding(horizontal = Spacing.s5).padding(top = 2.dp).testTag("moments.studio.madeUpNote"),
     )
@@ -861,7 +951,7 @@ private fun StudioHomeLine(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         PantopusIconImage(icon = PantopusIcon.Home, contentDescription = null, size = 16.dp, strokeWidth = 2.2f, tint = Color.White)
-        Text(text = line, color = PantopusColors.studioPillSecondary, fontSize = 13.sp)
+        Text(text = line, color = PantopusColors.studioPillSecondary, fontSize = 12.sp)
     }
 }
 
@@ -891,20 +981,25 @@ private val MomentsComposeUiState.studioPlaceLine: String
             else -> postPlaceLabel
         }
 
-/** "Fades in 24 hours" over the place's name ("Shares at 6:40 pm" with Share later picked): opens the drawer. */
+/** One line of details, "Lacamas Lake · 24 hours · Everyone nearby" ("Shares at 6:40 pm" with Share later): opens the drawer. */
 @Composable
 private fun StudioWhenPill(
     state: MomentsComposeUiState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val first = state.studioPostPill() ?: state.sharesAt?.let(SkyWords::sharesAt) ?: fadesIn(state.hours)
-    // With Share later picked, how long it shows moves to the second line (LEAD 00:40): "24 hours · Lacamas Lake".
-    val second = if (state.sharesAt != null) "${hoursWord(state.hours)} · ${state.studioPlaceLine}" else state.studioPlaceLine
+    val howLong = state.studioPostPill() ?: state.sharesAt?.let(SkyWords::sharesAt) ?: hoursWord(state.hours)
+    val who =
+        when {
+            state.madeUp -> MADE_UP_NAME
+            state.noLocationOn || state.audience == "connections" -> "Friends"
+            else -> "Everyone nearby"
+        }
+    val line = "${state.studioPlaceLine} · $howLong · $who"
     Row(
         modifier =
             modifier
-                .height(56.dp)
+                .height(44.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(PantopusColors.studioPillFill)
                 .border(1.dp, PantopusColors.studioPillOutline, RoundedCornerShape(18.dp))
@@ -912,31 +1007,23 @@ private fun StudioWhenPill(
                 .padding(horizontal = 14.dp)
                 .testTag("moments.studio.pill")
                 .clearAndSetSemantics {
-                    contentDescription = "$first, $second. Where, how long and when"
+                    contentDescription = "$line. Where, how long and who sees it"
                     role = Role.Button
                 },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        PantopusIconImage(icon = PantopusIcon.Clock, contentDescription = null, size = 22.dp, strokeWidth = 2.2f, tint = Color.White)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = first,
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = second,
-                color = PantopusColors.studioPillSecondary,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        PantopusIconImage(icon = PantopusIcon.ChevronDown, contentDescription = null, size = 20.dp, strokeWidth = 2.2f, tint = Color.White)
+        PantopusIconImage(icon = PantopusIcon.Clock, contentDescription = null, size = 18.dp, strokeWidth = 2.2f, tint = Color.White)
+        Text(
+            text = line,
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        PantopusIconImage(icon = PantopusIcon.ChevronDown, contentDescription = null, size = 18.dp, strokeWidth = 2.2f, tint = Color.White)
     }
 }
 
@@ -960,12 +1047,12 @@ private fun StudioPost(
     Row(
         modifier =
             Modifier
-                .height(56.dp)
+                .height(44.dp)
                 .alpha(if (enabled || state.posting) 1f else 0.5f)
                 .clip(RoundedCornerShape(28.dp))
                 .background(PantopusColors.primary600)
                 .clickable(enabled = enabled, role = Role.Button, onClick = onPost)
-                .padding(horizontal = 22.dp)
+                .padding(horizontal = 18.dp)
                 .testTag("moments.studio.post")
                 .clearAndSetSemantics {
                     contentDescription =
@@ -979,7 +1066,7 @@ private fun StudioPost(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(text = label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         if (!state.posting) {
             PantopusIconImage(
                 icon = PantopusIcon.ArrowRight,
@@ -996,6 +1083,47 @@ private fun StudioPost(
 private val NO_LOOK_PICTURE: StateFlow<Bitmap?> = MutableStateFlow(null)
 
 /** "Fades in 24 hours" (founder's word for a Moment's time: it fades when its hours are up). */
-private fun fadesIn(hours: Int): String = "Fades in ${hoursWord(hours)}"
 
 private fun hoursWord(hours: Int): String = if (hours == 1) "1 hour" else "$hours hours"
+
+/** The sheet's grabber (PHASE-6 F3): a short bar at the top that says it can be dragged. */
+@Composable
+private fun StudioGrabber() {
+    Box(modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp), contentAlignment = Alignment.Center) {
+        Box(
+            modifier =
+                Modifier
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(PantopusColors.studioPillSecondary)
+                    .clearAndSetSemantics {},
+        )
+    }
+}
+
+/** How far a drag must go to open or close the details sheet. */
+private const val SHEET_DRAG_DP = 24
+
+/**
+ * The details sheet follows the finger's direction (PHASE-6 F3): a drag [up] (or down) past 24 dp, or a quick flick that
+ * way, calls [onDone] once the finger lifts. Taps inside keep their own buttons.
+ */
+private fun Modifier.studioSheetDrag(
+    up: Boolean,
+    onDone: () -> Unit,
+): Modifier =
+    pointerInput(up) {
+        var travel = 0f
+        detectVerticalDragGestures(
+            onDragStart = { travel = 0f },
+            onVerticalDrag = { change, dy ->
+                travel += dy
+                change.consume()
+            },
+            onDragEnd = {
+                // Up by the bar opens the details, down by their top closes them.
+                val toward = if (up) -travel else travel
+                if (toward > SHEET_DRAG_DP.dp.toPx()) onDone()
+            },
+        )
+    }

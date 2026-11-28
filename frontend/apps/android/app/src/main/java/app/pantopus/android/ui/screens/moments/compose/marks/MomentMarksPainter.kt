@@ -309,6 +309,28 @@ object MomentMarksPainter {
     }
 
     /**
+     * "Pulse, reinvented"'s Studio on its canvas (PHASE-6 I): [label] anywhere on a picture [width] × [height] px, never
+     * pushed back toward the middle, with at least [keepX] × [keepY] px of its box (the upright box around it when it's
+     * turned) still on the picture, and its letters between the smallest the picture check reads and the largest. Today's
+     * editor keeps [keptIn].
+     */
+    fun keptAnywhere(
+        label: MomentLabel,
+        width: Int,
+        height: Int,
+        keepX: Float,
+        keepY: Float,
+    ): MomentLabel {
+        val sized = label.copy(size = label.size.coerceIn(MomentMarkRules.smallestLetters(width, height), MomentMarkRules.LARGEST_LETTERS))
+        val box = turnedBounds(layout(sized, width.toFloat(), height.toFloat()).box, sized.turn)
+        val halfX = box.width() / width / 2
+        val halfY = box.height() / height / 2
+        val onX = minOf(keepX / width, 2 * halfX)
+        val onY = minOf(keepY / height, 2 * halfY)
+        return sized.copy(x = sized.x.coerceIn(onX - halfX, 1f - onX + halfX), y = sized.y.coerceIn(onY - halfY, 1f - onY + halfY))
+    }
+
+    /**
      * [label] turned can be held where a label may go on a picture [width] × [height] px: once kept ([keptIn]), the upright
      * box around it fits there. A twist that can't fit isn't applied (step R3).
      */
