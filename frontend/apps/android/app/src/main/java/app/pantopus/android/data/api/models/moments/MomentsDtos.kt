@@ -198,6 +198,8 @@ data class MomentDto(
     val pinboard: app.pantopus.android.data.api.models.reinvented.MomentPinboardStateDto? = null,
     /** "Pulse, reinvented" (CONTRACT 8g): how it opens later, for a reader whose switch is on; else null. */
     val seal: app.pantopus.android.data.api.models.reinvented.MomentSealStateDto? = null,
+    /** "Pulse, reinvented" (CONTRACT 10b): a photo's motion clip, for a reader whose switch is on; else null. */
+    val motion: MomentMotionDto? = null,
 )
 
 /**

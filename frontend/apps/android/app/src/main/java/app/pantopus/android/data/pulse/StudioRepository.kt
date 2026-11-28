@@ -13,8 +13,11 @@ import app.pantopus.android.data.api.models.moments.MomentStampsPreviewDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.StudioApi
+import app.pantopus.android.data.moments.MomentMotionClip
 import app.pantopus.android.data.moments.serverCode
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import javax.inject.Inject
@@ -82,6 +85,25 @@ class StudioRepository
             safeApiCall { api.guess(momentId, MomentGuessBody(latitude, longitude)) }.also { answer ->
                 if ((answer as? NetworkResult.Failure)?.error?.serverCode == SWITCH_OFF) feature.refusedOff()
             }
+
+        /**
+         * A motion photo's clip beside its Moment's photo (CONTRACT 10b): true once the server keeps it. A clip the picture
+         * check refuses (`422 MOTION_REFUSED`) or one past the limits is not kept; the photo stays a still.
+         */
+        suspend fun uploadMotion(
+            momentId: String,
+            clip: MomentMotionClip,
+        ): Boolean {
+            val file = MultipartBody.Part.createFormData("file", clip.file.name, clip.file.asRequestBody(MP4))
+            val frames = clip.frames.map { MultipartBody.Part.createFormData("frames", it.name, it.asRequestBody(JPEG)) }
+            return when (val answer = safeApiCall { api.uploadMotion(momentId, file, frames) }) {
+                is NetworkResult.Success -> true
+                is NetworkResult.Failure -> {
+                    if (answer.error.serverCode == SWITCH_OFF) feature.refusedOff()
+                    false
+                }
+            }
+        }
 
         /** The author takes one dot off their Moment (CONTRACT 7c): true once the server has it gone. */
         suspend fun removeDot(
@@ -166,6 +188,8 @@ class StudioRepository
 
         companion object {
             private val JSON = "application/json; charset=utf-8".toMediaType()
+            private val MP4 = "video/mp4".toMediaType()
+            private val JPEG = "image/jpeg".toMediaType()
 
             /** The server's answer to a Studio-only request from a person whose switch is off (CONTRACT 1). */
             const val SWITCH_OFF = "PULSE_REINVENTED_OFF"

@@ -403,6 +403,8 @@ private fun StudioPlacedStamp(
     val stamps by rememberUpdatedState(all)
     val onFrame by rememberUpdatedState(frame)
     val inside by rememberUpdatedState(safe)
+    // The whole stage's reach (PHASE-6 F): a stamp may go anywhere on the canvas, not held to the part every phone shows.
+    val reachNow by rememberUpdatedState(LocalStudioReach.current)
     val isPicked by rememberUpdatedState(picked)
     var measured by remember { mutableStateOf(IntSize.Zero) }
     val remove = {
@@ -415,13 +417,16 @@ private fun StudioPlacedStamp(
             Modifier
                 .stampPlaced(placement, frame)
                 .onSizeChanged { measured = it }
+                .studioItemDrag()
                 .then(
                     if (!enabled) {
                         Modifier
                     } else {
                         Modifier.stampGestures(placement.kind, onTap = { onPick(if (isPicked) null else latest.kind) }) { pan, zoom, turn ->
                             val now = latest
-                            val moved = now.moved(pan.x, pan.y, zoom, turn, measured, onFrame, inside)
+                            val moved =
+                                reachNow?.let { now.movedFree(pan.x, pan.y, zoom, turn, measured, onFrame, it) }
+                                    ?: now.moved(pan.x, pan.y, zoom, turn, measured, onFrame, inside)
                             onStamps(stamps.map { if (it.kind == now.kind) moved else it })
                             onPick(now.kind)
                         }
@@ -498,6 +503,33 @@ private fun Modifier.pickedFrame(): Modifier =
             style = Stroke(width = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))),
         )
     }
+
+/**
+ * On the whole stage (PHASE-6 F): a stamp moved by [panX], [panY] (screen pixels), sized by [zoom] (0.25 to 4) and
+ * turned by [turn] degrees, anywhere on the canvas ([reach]) with 24 dp of its own box ([measured]) still on it (K2);
+ * nothing pulls it back toward the middle.
+ */
+private fun MomentStampPlacement.movedFree(
+    panX: Float,
+    panY: Float,
+    zoom: Float,
+    turn: Float,
+    measured: IntSize,
+    frame: Rect,
+    reach: StudioReach,
+): MomentStampPlacement {
+    val sized = (scale * zoom).coerceIn(0.25, 4.0)
+    val grown = sized / scale
+    var degrees = rotation + turn
+    while (degrees > 180) degrees -= 360
+    while (degrees < -180) degrees += 360
+    return copy(
+        x = reach.x(x + panX / max(frame.width, 1f), measured.width * grown / 2 / max(frame.width, 1f)),
+        y = reach.y(y + panY / max(frame.height, 1f), measured.height * grown / 2 / max(frame.height, 1f)),
+        scale = sized,
+        rotation = degrees,
+    )
+}
 
 /**
  * A stamp moved by [panX], [panY] (screen pixels), sized by [zoom] (0.25 to 4) and turned by [turn] degrees, kept

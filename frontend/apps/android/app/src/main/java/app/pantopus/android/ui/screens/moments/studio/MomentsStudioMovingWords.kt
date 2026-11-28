@@ -41,6 +41,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -170,20 +172,34 @@ internal fun StudioPlayLayer(
         val box = constraints.maxWidth.toFloat()
         val frame = stampFrame(picture, box, constraints.maxHeight.toFloat())
         val unit = minOf(frame.width, box) / LocalDensity.current.density / 402f
+        // The whole stage's reach (PHASE-6 F): items may go anywhere on the canvas.
+        val reach = LocalStudioReach.current
+        // Each item's own size on the screen (a card's before its scale), so 24 dp of it stays on the canvas (K2).
+        val sizes = remember { mutableStateMapOf<String, IntSize>() }
         shown.forEach { item ->
+            val factor = if (item.movingWords) 1f else (item.scale.toFloat() * unit).coerceIn(0.4f, 2.5f)
             // Touches are read on the screen, before a card's own size and turn, so a drag follows the finger.
             val touched =
                 Modifier
                     .centredAt(frame.left + item.x.toFloat() * frame.width, frame.top + item.y.toFloat() * frame.height)
+                    .onSizeChanged { sizes[item.id] = it }
+                    .studioItemDrag()
                     .pointerInput(item.id, enabled) {
                         if (!enabled) return@pointerInput
                         detectTapGestures { onOpen(item.id) }
-                    }.pointerInput(item.id, enabled, frame) {
+                    }.pointerInput(item.id, enabled, frame, reach) {
                         if (!enabled) return@pointerInput
                         detectTransformGestures { _, pan, zoom, turn ->
                             onItems(
                                 current.map {
-                                    if (it.id != item.id) it else it.moved(pan.x / frame.width, pan.y / frame.height, zoom, turn)
+                                    if (it.id != item.id) {
+                                        it
+                                    } else {
+                                        val size = sizes[item.id] ?: IntSize.Zero
+                                        val grown = factor * zoom / 2
+                                        val half = (size.width * grown / frame.width) to (size.height * grown / frame.height)
+                                        it.moved(pan.x / frame.width, pan.y / frame.height, zoom, turn, reach, half)
+                                    }
                                 },
                             )
                         }
@@ -198,9 +214,8 @@ internal fun StudioPlayLayer(
                     mine = true,
                     modifier =
                         touched.graphicsLayer {
-                            val size = (item.scale.toFloat() * unit).coerceIn(0.4f, 2.5f)
-                            scaleX = size
-                            scaleY = size
+                            scaleX = factor
+                            scaleY = factor
                             rotationZ = item.rotation.toFloat()
                         },
                 )
@@ -215,13 +230,17 @@ private fun MomentPlayItemDto.moved(
     dy: Float,
     zoom: Float,
     turn: Float,
+    // The whole stage's reach (PHASE-6 F): anywhere on the canvas, with 24 dp of the item ([half] each way, shares of
+    // the frame) on it (K2); else as before, inside the picture.
+    reach: StudioReach?,
+    half: Pair<Float, Float>,
 ): MomentPlayItemDto {
     var rotationNow = rotation + turn
     if (rotationNow > 180) rotationNow -= 360
     if (rotationNow < -180) rotationNow += 360
     return copy(
-        x = (x + dx).coerceIn(0.05, 0.95),
-        y = (y + dy).coerceIn(0.05, 0.95),
+        x = reach?.x(x + dx, half.first.toDouble()) ?: (x + dx).coerceIn(0.05, 0.95),
+        y = reach?.y(y + dy, half.second.toDouble()) ?: (y + dy).coerceIn(0.05, 0.95),
         scale = (scale * zoom).coerceIn(0.25, 4.0),
         rotation = rotationNow,
     )
