@@ -308,6 +308,11 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
   useEffect(() => {
     persistSidebarCollapsed(collapsed);
   }, [collapsed]);
+  const wasPulse = useRef(false);
+  useEffect(() => {
+    if (wasPulse.current && !reinventedPulse && !document.querySelector('aside:hover')) sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: false });
+    wasPulse.current = reinventedPulse;
+  }, [reinventedPulse]);
 
   // ── Close mobile drawer on route change ───────────────────
   useEffect(() => {
