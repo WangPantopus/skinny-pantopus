@@ -827,7 +827,7 @@
 }
 .rp-dial-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
 }
 .rp-dial-choices {
@@ -866,7 +866,7 @@
   gap: 2px;
 }
 .rp-dial-words strong {
-  font-size: 16px;
+  font-size: 14px;
 }
 .rp-dial-words span {
   color: var(--rp-muted);
@@ -946,7 +946,7 @@
 .rp-items {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -957,7 +957,7 @@
   gap: 10px;
   margin: 4px 0 12px;
   color: var(--rp-muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 .rp-band::before,
@@ -974,11 +974,11 @@
   margin: 28px 0 8px;
   color: var(--rp-muted);
   text-align: center;
-  font-size: 14px;
+  font-size: 12px;
 }
 .rp-muted {
   color: var(--rp-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 .rp-center {
   text-align: center;
@@ -1007,8 +1007,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
-  padding: 0 16px;
+  position: relative;
+  min-height: 32px;
+  padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: var(--rp-brand);
@@ -1047,7 +1048,7 @@
   border-radius: 12px;
   background: #1d2733;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* ── A Moment that fades: borderless, full width, its time left ── */
@@ -1108,8 +1109,8 @@
 .rp-moment-who .mo-face {
   --mo-paper: #0f1a24;
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
 }
 .rp-moment-who-words {
   display: grid;
@@ -1122,7 +1123,7 @@
   white-space: nowrap;
 }
 .rp-moment-who-words strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 .rp-moment-who-words span {
   color: #ffffffcc;
@@ -1135,11 +1136,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: #ffffffeb;
   color: #17212b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 .rp-live-dot {
@@ -1151,11 +1152,11 @@
 .rp-moment-foot {
   display: grid;
   gap: 10px;
-  padding: 12px 14px 14px;
+  padding: 10px 12px 12px;
 }
 .rp-moment-caption {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -1169,10 +1170,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  position: relative;
+  padding: 4px 10px;
   border: 1px solid #ffffff38;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 .rp-signal-mine {
@@ -1184,13 +1186,22 @@
   align-items: center;
   gap: 4px;
   margin-left: auto;
-  padding: 6px 10px;
+  position: relative;
+  padding: 4px 8px;
   border: 0;
   border-radius: 999px;
   background: none;
   color: #7dd3fc;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+}
+
+/* Small controls inside the rows keep a 44 px touch target (PHASE-6 C): the drawing is smaller than the hit area. */
+.rp-button::before,
+.rp-place-button::before {
+  content: '';
+  position: absolute;
+  inset: -8px -2px;
 }
 
 /* ── A post that stays: today's card under its status line ── */
@@ -1202,11 +1213,11 @@
   margin: 0 4px 8px;
 }
 .rp-status {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 8px;
   background: #e0f2fe;
   color: #075985;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 .rp-status[data-tone='done'] {
@@ -1242,7 +1253,7 @@
 .rp-alive-title {
   margin: 4px 12px 8px;
   color: var(--rp-muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -1262,8 +1273,8 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  width: 128px;
-  height: 168px;
+  width: 112px;
+  height: 148px;
   overflow: hidden;
   padding: 10px;
   border: 0;
@@ -1294,7 +1305,7 @@
   display: grid;
   place-items: center;
   padding: 14px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   text-align: center;
   overflow-wrap: anywhere;
@@ -1324,7 +1335,7 @@
   white-space: nowrap;
 }
 .rp-alive-foot strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 .rp-alive-foot span {
   color: #ffffffd9;
@@ -1517,7 +1528,7 @@
 }
 .rp-explore-head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 800;
 }
 .rp-explore-head p {
@@ -1744,7 +1755,7 @@
 }
 .rp-filter-sheet h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
 }
 .rp-filter-sheet h3 {
   margin: 0 0 8px;
@@ -1770,16 +1781,22 @@
 .rp-filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px 8px;
 }
 .rp-filter-chips button {
-  min-height: 36px;
-  padding: 0 14px;
+  position: relative;
+  min-height: 28px;
+  padding: 0 12px;
   border: 1px solid var(--rp-line);
   border-radius: 999px;
   background: var(--rp-paper);
   color: var(--rp-ink);
-  font-size: 14px;
+  font-size: 13px;
+}
+.rp-filter-chips button::before {
+  content: '';
+  position: absolute;
+  inset: -8px -2px;
 }
 .rp-filter-chips button[aria-pressed='true'] {
   border-color: var(--rp-ink);
