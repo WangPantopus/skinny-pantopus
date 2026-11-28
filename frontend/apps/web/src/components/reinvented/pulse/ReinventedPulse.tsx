@@ -865,7 +865,17 @@ export default function ReinventedPulse() {
   );
 
   return (
-    <div ref={board} className="rp-board" data-wide={wide || undefined}>
+    <div
+      ref={board}
+      className="rp-board"
+      data-wide={wide || undefined}
+      // PHASE-6 G: in the viewer opened from here, a mouse swipe across the picture is the viewer's swipe, not the browser
+      // dragging the image away (the drag cancelled the swipe's pointer). Today's viewer file is untouched: its drag
+      // events reach this board through React, a portal included.
+      onDragStart={(e) => {
+        if ((e.target as HTMLElement).closest?.('.mo-watch-media')) e.preventDefault();
+      }}
+    >
       <div className="rp-map-layer" aria-hidden={(!wide && rest === 'full') || undefined}>
         <PulseMap
           pins={pins}
