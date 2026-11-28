@@ -277,6 +277,9 @@ function pickACardDesign(design) {
 // A card to someone not on Pantopus comes when they open the email (`now`), sealed until Christmas or not.
 const PERSON_ARRIVALS = ['next_morning', 'sealed_christmas', 'christmas_morning'];
 const EMAIL_ARRIVALS = ['now', 'sealed_christmas'];
+// A person's choices while the card round of November 28, 2026 is on (GET /cards arrivals.person_all): Right away
+// too, second, after the morning mail. Apps from before it read PERSON_ARRIVALS and never see it.
+const PERSON_ARRIVALS_ALL = ['next_morning', 'now', 'sealed_christmas', 'christmas_morning'];
 // Every choice a card by email has for apps that word them all (founder, November 15): the three a person has, its email
 // going at the sender's 7 a.m. (the person's time zone isn't known), and Right away. Older apps get EMAIL_ARRIVALS.
 const EMAIL_ARRIVALS_ALL = ['next_morning', 'sealed_christmas', 'christmas_morning', 'now'];
@@ -389,11 +392,11 @@ function isByLink(mail) {
 }
 
 /** What a send asked for, as one digest: the same request ID with other content asks for another card. */
-function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null, media = null, travel = false }) {
-  // A signed card's strokes count too, and a card's own photo and voice (their ids and the photo's description), and
-  // whether it travels (card_travel); a card without them has the digest it always had.
+function requestDigest({ design, message, arrival, toUserId, toEmail, signature = null, media = null, travel = false, toName = null }) {
+  // A signed card's strokes count too, and a card's own photo and voice (their ids and the photo's description),
+  // whether it travels (card_travel), and the name on a link's envelope; a card without them has the digest it always had.
   const parts = [design, message, arrival, toUserId || null, toEmail || null, ...(signature ? [signature] : []),
-    ...(media ? [{ media }] : []), ...(travel ? [{ travel: true }] : [])];
+    ...(media ? [{ media }] : []), ...(travel ? [{ travel: true }] : []), ...(toName ? [{ to_name: toName }] : [])];
   return crypto.createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 }
 
@@ -485,7 +488,10 @@ function arrivalsFor({ byEmail, all = false, timeZone, now = new Date(), nextRou
   const christmas = christmasMorning(timeZone).getTime();
   if (byEmail && all) return now.getTime() < christmas ? EMAIL_ARRIVALS_ALL : ['next_morning', 'now'];
   if (byEmail) return now.getTime() < christmas ? EMAIL_ARRIVALS : ['now'];
-  return nextRound(timeZone, now).getTime() < christmas ? PERSON_ARRIVALS : ['next_morning'];
+  const beforeChristmas = nextRound(timeZone, now).getTime() < christmas;
+  // `all` for a person (the card round): Right away as well, for as long as cards are sent.
+  if (all) return beforeChristmas ? PERSON_ARRIVALS_ALL : ['next_morning', 'now'];
+  return beforeChristmas ? PERSON_ARRIVALS : ['next_morning'];
 }
 
 /**
@@ -493,6 +499,8 @@ function arrivalsFor({ byEmail, all = false, timeZone, now = new Date(), nextRou
  * the next 7 a.m. in their time zone). Answers ISO strings; `opens_at` is null unless it's sealed.
  */
 function personDelivery({ arrival, timeZone, now = new Date(), nextRound }) {
+  // Right away (the card round): it is in their mailbox now, so there is no pickup to take it back before.
+  if (arrival === 'now') return { delivered_at: now.toISOString(), sealed_until: null, take_back_until: null };
   const pickup = nextRound(timeZone, now);
   const christmas = christmasMorning(timeZone);
   if (arrival === 'christmas_morning') {
@@ -516,6 +524,15 @@ function emailDelivery({ arrival, timeZone, now = new Date(), nextRound }) {
   if (arrival === 'christmas_morning') return { send_at: christmasMorning(timeZone).toISOString(), sealed_until: null };
   return { send_at: now.toISOString(),
     sealed_until: arrival === 'sealed_christmas' ? christmasMorning(timeZone).toISOString() : null };
+}
+
+// The name a sender writes on a link's envelope ("Mom", "The Patel family"; the card round): spaces folded and
+// trimmed, at most TO_NAME_LIMIT letters. { name } ('' for none) or { refusal: 'CARD_TO_NAME_TOO_LONG' }.
+const TO_NAME_LIMIT = 40;
+function cleanToName(raw) {
+  // eslint-disable-next-line no-control-regex
+  const name = typeof raw === 'string' ? raw.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  return [...name].length > TO_NAME_LIMIT ? { refusal: 'CARD_TO_NAME_TOO_LONG' } : { name };
 }
 
 /** When a card by email's email is set to go, while it waits for that time (services/cardEmail), else null. */
@@ -834,7 +851,7 @@ async function sentLine(userId, now = new Date()) {
 module.exports = {
   REPLY_TAG, REPLY_SUBJECT, isReply, replyRowId, replyDigest, replyView, uuidOf,
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, OPENING, DESIGNS, pickACardDesign, PERSON_ARRIVALS, EMAIL_ARRIVALS,
-  EMAIL_ARRIVALS_ALL,
+  EMAIL_ARRIVALS_ALL, PERSON_ARRIVALS_ALL, TO_NAME_LIMIT, cleanToName,
   SIGNATURE_BOX, SIGNATURE_MAX_BYTES, cleanSignature, signatureOf, mediaOf, mediaView,
   designById, isCard, isByLink, cardLinkToken, cardEmailToken, EMAIL_TRIES, emailTrouble, emailPicture, emailWent, emailSendAt, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
   daysBetween, arrivalsFor,

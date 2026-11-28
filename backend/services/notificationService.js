@@ -1414,6 +1414,11 @@ async function notifyMailDelivered({
   amount,
   vendorName,
   special = false,
+  // For a caller that keeps the notice once per piece and sends its push itself (services/cardNotice): the notice's
+  // key, `sendPush: false`, and what it keeps on the row beside the piece's id.
+  idempotencyKey = undefined,
+  sendPush = true,
+  metadata: more = null,
 }) {
   // Determine the intent — prefer the compose flow's mailIntent,
   // fall back to mapping backend mail_type to an intent
@@ -1439,8 +1444,31 @@ async function notifyMailDelivered({
       mail_id: mailId,
       mail_intent: intent,
       sender_name: senderName,
+      ...(more || {}),
     },
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+    ...(sendPush ? {} : { sendPush: false }),
   });
+}
+
+/**
+ * The push of a notification row that was stored with `sendPush: false`, for the caller that held it (quiet hours;
+ * services/cardNotice): the checks and the alert createNotification makes, from the stored row. The marks a held
+ * push keeps on the row (push_deferred_until, push_sent_at, push_skipped) stay out of what the phone gets. Answers
+ * whether a push was asked for. Throws when it can't be sent.
+ */
+async function pushStoredNotification(row) {
+  const [pushEnabled, typeEnabled] = await Promise.all([isPushEnabled(row.user_id), isTypeEnabled(row.user_id, row.type)]);
+  if (!pushEnabled || !typeEnabled) return false;
+  if (!(await readableNotifications([row])).length) return false;
+  emitDesktopAlert(row);
+  const { push_deferred_until: _until, push_sent_at: _sent, push_skipped: _skipped, ...metadata } = row.metadata || {};
+  await pushService.sendToUser(row.user_id, {
+    title: row.title,
+    body: row.body || '',
+    data: { notificationId: row.id, type: row.type, link: row.link || null, ...metadata, recipient_user_id: row.user_id },
+  });
+  return true;
 }
 
 /**
@@ -1660,6 +1688,7 @@ module.exports = {
   init,
   createNotification,
   publishStoredNotification,
+  pushStoredNotification,
   emitDesktopAlert,
   isPushEnabled,
   deliverStoredGigNotification,

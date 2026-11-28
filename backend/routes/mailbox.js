@@ -32,6 +32,7 @@ const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const { isBlocked } = require('../services/blockService');
+const cardNotice = require('../services/cardNotice');
 const { skipForLaunchCut, areLaunchFeaturesEnabled, cardImprovementsOn, cardGuestOpenEnabled, cardMediaFreeLimit } = require('../utils/featureFlags');
 // Other people are named the way neighbors see them: by their Local Profile (a business by the business).
 const { loadChatPeople } = require('../services/chatPeople');
@@ -423,6 +424,8 @@ function isCardEscrowSealed(mail, now = new Date()) {
 // A real recipient name to write on a guest envelope (never a masked email address).
 function guestEnvelopeName(card) {
   const raw = typeof card?.to_name === 'string' ? card.to_name.trim() : '';
+  // A link went to no address: its name is the one its sender wrote on the envelope, whatever it holds.
+  if (card?.by_link) return raw || null;
   if (!raw || raw.includes('@') || raw.includes('***')) return null;
   return raw;
 }
@@ -1779,6 +1782,9 @@ const sendCardSchema = Joi.object({
     user_id: Joi.string().uuid(),
     email: Joi.string().email().max(320),
     link: Joi.boolean().valid(true),
+    // The name on a link's envelope ("Mom"; the card round, cardImprovementsOn): optional, read only with `link`,
+    // checked by checkCard (holidayCards.cleanToName, 40 letters). Ignored while the round is off.
+    name: Joi.string().allow('', null).max(400),
   }).xor('user_id', 'email', 'link').required(),
   // One per card draft, sent again with every retry of it: a repeat of the send answers with the card it stored
   // (services/holidayCards requestRowId). Apps from before it send none and are answered as before.
@@ -1876,8 +1882,12 @@ async function removeCardObject(objectId) {
 // repeated (a double tap, a lost answer retried, Android's own resend) the database refuses a second card. A card is
 // answered as sent only once settleCard has decided it is the day's card; every repeat answers from what is stored.
 
-const CARD_REQUEST_SELECT = 'id, sender_user_id, created_at, delivered_at, escrow_status, escrow_expires_at, object_id, mail_extracted';
+// recipient_user_id and sender_display: who a right-away card's notice goes to and names (announceRightAwayCard).
+const CARD_REQUEST_SELECT = 'id, sender_user_id, recipient_user_id, sender_display, created_at, delivered_at, escrow_status, escrow_expires_at, object_id, mail_extracted';
 const cardNote = (message) => String(message || '').replace(/\r\n?/g, '\n').trim();
+// The name a send asks to have on its link's envelope: { name } ('' for none, for a card that isn't by link, and
+// while the card round is off), or { refusal } when it is too long (holidayCards.cleanToName).
+const linkEnvelopeName = (to) => (cardImprovementsOn() && to?.link === true ? holidayCards.cleanToName(to.name) : { name: '' });
 const cardRequestDigest = (body) => holidayCards.requestDigest({
   design: String(body.design), message: cardNote(body.message), arrival: body.arrival,
   // A retry of a signed card must sign the same; a refused signature digests as none (the send refuses it anyway).
@@ -1889,6 +1899,8 @@ const cardRequestDigest = (body) => holidayCards.requestDigest({
   media: cardMedia.digestMedia(body),
   // A card that travels (card_travel); one that doesn't keeps the digest it always had.
   travel: body.travel === true && cardTravel.travelOn(),
+  // The name on a link's envelope (the card round); a card without one keeps the digest it always had.
+  toName: linkEnvelopeName(body.to).name || null,
 });
 // A card by link's own link. Throws when the server has no secret to make it with (nothing is stored then).
 const cardLinkOf = (mailId) => {
@@ -2077,6 +2089,9 @@ async function checkCard(senderId, body, now) {
   if (body.to.link === true && !cardTableOn()) {
     return refuseCard(400, 'Sending a card by link isn’t open yet. Send it to a name or an email.', 'CARD_LINK_OFF');
   }
+  if (linkEnvelopeName(body.to).refusal) {
+    return refuseCard(400, `Keep the name on the envelope to ${holidayCards.TO_NAME_LIMIT} letters.`, 'CARD_TO_NAME_TOO_LONG');
+  }
   const from = await checkCardSender(senderId, body, now);
   if (from.refusal) return from;
   const ownRowId = body.request_id ? holidayCards.requestRowId(senderId, String(body.request_id).toLowerCase()) : null;
@@ -2167,6 +2182,22 @@ const cardSameMorning = (name, arrival) => refuseCard(429, arrival === 'christma
   : `You’ve already sent ${name || 'this person'} a card for that morning. You can send another after 7 a.m. where they live.`,
 'CARD_SAME_MORNING');
 
+// Right away (the card round): one such card from a sender to the same person in a day where that person lives. The
+// card carries that day (mail_extracted.card.instant_day, the server's alone), whoever has it now and whether or not
+// they deleted it. `ownRowId` as in cardForSameMorning. The database decides the same rule again as it stores the
+// card (admit_one_card_per_morning, migration 20261128130000), for sends that arrive at once.
+async function cardRightAwayThatDay(senderId, toUserId, day, ownRowId = null) {
+  let query = supabaseAdmin.from('Mail').select('id')
+    .eq('sender_user_id', senderId).eq('recipient_user_id', toUserId)
+    .contains('tags', [holidayCards.CARD_TAG]).eq('mail_extracted->card->>instant_day', day);
+  if (ownRowId) query = query.neq('id', ownRowId);
+  const { data, error } = await query.limit(1);
+  if (error) throw new Error(error.message);
+  return Boolean(data?.length);
+}
+const cardSameDay = (name) => refuseCard(429,
+  `You’ve already sent ${name || 'this person'} a card right away today. This one can go with their morning mail.`, 'CARD_SAME_DAY');
+
 // What checkCardSender found of the sender's free photo or voice cards, carried to storeCard (absent: none to have).
 const freeMediaOf = (from) => (from.freeMedia ? { freeMedia: from.freeMedia } : {});
 
@@ -2192,13 +2223,22 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
     const refusal = await personRefusal(senderId, toUserId);
     if (refusal) return { refusal };
     const recipientZone = (await mailDelivery.personTimeZone(toUserId)) || mailDelivery.FALLBACK_TIME_ZONE;
-    const open = holidayCards.arrivalsFor({ byEmail: false, timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
+    // While the card round is on a person can also get a card right away (`now`); off, it isn't one of their choices.
+    const open = holidayCards.arrivalsFor({ byEmail: false, ...(cardImprovementsOn() ? { all: true } : {}),
+      timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
     if (!open.includes(arrival)) return arrivalClosed();
+    const rightAway = arrival === 'now';
     const timing = holidayCards.personDelivery({ arrival, timeZone: recipientZone, now, nextRound: mailDelivery.nextRound });
     const people = await loadChatPeople([senderId, toUserId]);
+    if (rightAway) {
+      // One right-away card from a sender to the same person in a day where they live, refused here, before anything
+      // is stored or a stamp is spent.
+      const day = mailDelivery.localDate(now, recipientZone);
+      if (await cardRightAwayThatDay(senderId, toUserId, day, ownRowId)) return cardSameDay(people.get(String(toUserId))?.displayName);
+      card.instant_day = day;
     // One card from a sender to the same person for one morning, refused here, before anything is stored or a stamp is
     // spent: with digital stamps, nothing else kept one sender's 50 cards in 24 hours from all going to one mailbox.
-    if (await cardForSameMorning(senderId, toUserId, timing.delivered_at, ownRowId)) {
+    } else if (await cardForSameMorning(senderId, toUserId, timing.delivered_at, ownRowId)) {
       return cardSameMorning(people.get(String(toUserId))?.displayName, arrival);
     }
     Object.assign(card, { sealed_until: timing.sealed_until, take_back_until: timing.take_back_until,
@@ -2206,7 +2246,8 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
       to_name: people.get(String(toUserId))?.displayName || null });
     return { design, message, signature, media, mediaFiles, ...freeMediaOf(from), arrival, senderZone, toUserId, toEmail: null, card, zone: recipientZone,
       senderDisplay: people.get(String(senderId))?.displayName || 'Someone',
-      delivery: { delivered_at: timing.delivered_at, special_delivery: false }, escrowExpiresAt: null };
+      // Right away it is a special delivery: in their box now, with its own notice (services/cardNotice).
+      delivery: { delivered_at: timing.delivered_at, special_delivery: rightAway }, escrowExpiresAt: null };
   }
 
   if (!byLink && toEmail === normalizeEscrowContact(sender.email || '')) {
@@ -2240,7 +2281,11 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
   // email it goes now, at the sender's next 7 a.m. or at 7 a.m. on Christmas morning (holidayCards.emailDelivery), and
   // waits its 90 days from then.
   const timing = holidayCards.emailDelivery({ arrival, timeZone: senderZone, now, nextRound: mailDelivery.nextRound });
-  Object.assign(card, byLink ? { by_link: true } : { to_name: maskContact(toEmail) }, { sealed_until: timing.sealed_until });
+  // By link, the name its sender wrote on the envelope, if any (the card round): theirs to see in Sent, and on the
+  // link's own page and table. Never on a public card page or a journey page.
+  const envelopeName = byLink ? linkEnvelopeName(body.to).name : '';
+  Object.assign(card, byLink ? { by_link: true, ...(envelopeName ? { to_name: envelopeName } : {}) } : { to_name: maskContact(toEmail) },
+    { sealed_until: timing.sealed_until });
   const emailSendAt = byLink ? null : timing.send_at;
   const waitsFrom = emailSendAt ? Math.max(now.getTime(), Date.parse(emailSendAt)) : now.getTime();
   return { design, message, signature, media, mediaFiles, ...freeMediaOf(from), arrival, senderZone, toUserId: null, toEmail, card, zone: senderZone,
@@ -2312,7 +2357,10 @@ router.get('/cards', verifyToken, async (req, res) => {
       ...(cardShelvesOn() ? { shelves: true } : {}),
       // By email, `email` is the two choices older apps word; `email_all` the four (an email at your next 7 a.m. or on
       // Christmas morning, next_round_at and christmas_morning_at below), for apps that word them.
-      arrivals: { person: arrivals(false), email: arrivals(true), email_all: arrivals(true, true) },
+      // `person_all` (the card round): a person's choices with Right away among them, for apps that word it; `person`
+      // stays what apps from before the round read.
+      arrivals: { person: arrivals(false), email: arrivals(true), email_all: arrivals(true, true),
+        ...(improved ? { person_all: arrivals(false, true) } : {}) },
       next_round_at: mailDelivery.nextRound(timeZone, now).toISOString(),
       christmas_morning_at: holidayCards.christmasMorning(timeZone).toISOString(),
       time_zone: timeZone,
@@ -2325,7 +2373,10 @@ router.get('/cards', verifyToken, async (req, res) => {
       // "Let it travel" (launch key card_travel): the switch is on to begin with (D5), the sender's town ("Boise, ID", or
       // null: the apps ask "Where does it start?" once, D4) and how many people one person may pass a card to (D1).
       // Absent while the key is off: the apps show no switch.
-      ...(travelTown ? { travel: { on: true, town: await travelTown, places: cardTravel.PLACES } } : {}),
+      // While the card round is on, `default_on: false`: an app that reads `improved` starts the switch off (founder,
+      // November 28); absent, it starts on, as before.
+      ...(travelTown ? { travel: { on: true, town: await travelTown, places: cardTravel.PLACES,
+        ...(improved ? { default_on: false } : {}) } } : {}),
     });
   } catch (err) {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });
@@ -2631,8 +2682,13 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
     if (refusal) return res.status(refusal.status).json(refusal.body);
     const now = new Date();
     const timeZone = (await zoneRead) || mailDelivery.FALLBACK_TIME_ZONE;
+    const improved = cardImprovementsOn();
     return res.json({
+      // The card round: the answer says so, and `arrivals_all` has Right away among their choices (GET /cards
+      // arrivals.person_all, by their clock).
+      ...(improved ? { improved: true } : {}),
       arrivals: holidayCards.arrivalsFor({ byEmail: false, timeZone, now, nextRound: mailDelivery.nextRound }),
+      ...(improved ? { arrivals_all: holidayCards.arrivalsFor({ byEmail: false, all: true, timeZone, now, nextRound: mailDelivery.nextRound }) } : {}),
       next_round_on: mailDelivery.localDate(mailDelivery.nextRound(timeZone, now), timeZone),
     });
   } catch (err) {
@@ -2731,6 +2787,14 @@ function recordCardSent(mailId, { senderId, via, listSize, travels, postage }) {
     }
     await recordFunnelEvent('card_sent', { userId: senderId, meta: { via, list_size: listSize || 1, stamp, travels } });
   })().catch((err) => logger.warn('Card sent not counted', { error: err.message }));
+}
+
+// A card that went right away to a person (mail_extracted.card.instant_day) is announced once (services/cardNotice):
+// as it is stored, and again on any repeat of its send, which is safe (the notice is kept once per card) and covers a
+// send that stored the card and stopped before telling them. Never awaited: the answer doesn't wait for it.
+function announceRightAwayCard(mail) {
+  if (!mail?.mail_extracted?.card?.instant_day || !mail.recipient_user_id || mail.escrow_status) return;
+  void cardNotice.announceRightAway({ mailId: mail.id, recipientUserId: mail.recipient_user_id, senderName: mail.sender_display });
 }
 
 /**
@@ -2868,6 +2932,8 @@ async function storeCardOnce({ senderId, checked, requestId, rowId, digest, now,
       if (answered) return answered;
       // Another send to the same person for the same morning was stored first (the database's rule).
       if (insertError?.message === 'CARD_SAME_MORNING') return cardSameMorning(card.to_name, arrival).refusal;
+      // ...or another right-away card to them today (the same rule, by day).
+      if (insertError?.message === 'CARD_SAME_DAY') return cardSameDay(card.to_name).refusal;
       logger.error('Card not stored', { senderId, error: insertError?.message || null });
       return cardUnavailable();
     }
@@ -2921,6 +2987,9 @@ async function storeCardOnce({ senderId, checked, requestId, rowId, digest, now,
     })();
   }
 
+  // Right away: its one notice, who it is from and nothing of the note, after the answer is decided.
+  announceRightAwayCard(mail);
+
   const onList = listSize ? { listSize } : {};
   const withMedia = media ? { withPhoto: Boolean(media.photo), withVoice: Boolean(media.voice), withLive: Boolean(media.live) } : {};
   const travelling = card.travel ? { travelHop: card.travel.hop } : {};
@@ -2963,7 +3032,10 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     // A card this send's request ID stored answers it, unless it lost the day's card to another draft (null: send).
     const earlier = rowId ? await cardOfRequest(rowId, senderId) : null;
     const repeated = earlier ? await repeatAnswer(earlier, digest, now) : null;
-    if (repeated) return reply(res, repeated);
+    if (repeated) {
+      if (repeated.status === 200) announceRightAwayCard(earlier);
+      return reply(res, repeated);
+    }
 
     const checked = await checkCard(senderId, req.body, now);
     if (checked.refusal) return reply(res, checked.refusal);
@@ -2987,6 +3059,8 @@ async function cardLook(senderId, checked, now) {
     const { senderName, senderVerified } = await claimPagePerson(senderId, senderDisplay);
     linkPage = { sender_name: senderName, sender_verified: senderVerified, sealed, sent_to: byLink ? '' : maskContact(toEmail),
       sent_on: now.toISOString(), front: cardLinkFront({ ...card, arrival }, sealed), ...(byLink ? { by_link: true } : {}),
+      // The name on a link's envelope, as its page will show it (the card round).
+      ...(cardImprovementsOn() && guestEnvelopeName(card) ? { to_name: guestEnvelopeName(card) } : {}),
       // Whether they can open it before signing up (the card round; absent while it is off).
       ...(cardImprovementsOn() ? { guest_open: cardTableOn() && cardGuestOpenEnabled() } : {}) };
   }
