@@ -95,9 +95,9 @@ internal fun ReinventedPulseHeader(
                 onHeight = onHeight,
                 onAtlas = onAtlas,
             )
-            if (!atlas && height != ReinventedHeight.Map && state.chips.size > 1 && state.reach != ReinventedPulseViewModel.EXPLORE) {
-                ChipsRow(state, onPickChip)
-            }
+            // The place's chips under the top line until the Filters sheet takes them; none over the map alone or in My Atlas.
+            val chipsHere = state.chips.size > 1 && state.reach != ReinventedPulseViewModel.EXPLORE
+            if (!atlas && height != ReinventedHeight.Map && chipsHere) ChipsRow(state, onPickChip)
             return@Column
         }
         Row(
