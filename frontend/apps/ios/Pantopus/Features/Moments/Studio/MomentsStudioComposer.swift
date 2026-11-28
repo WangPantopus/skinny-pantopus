@@ -145,7 +145,8 @@ struct MomentsStudioComposer: View {
                 model.marking.studio?.post = MomentsStudioPostDraft()
             }
         }
-        .onChange(of: model.waiting.count) { _, _ in model.studioStamps = [] }
+        // On to the next picked together (its place in "2 of 3" moves); a waiting one left out or made next keeps them.
+        .onChange(of: model.pickedPosition) { _, _ in model.studioStamps = [] }
         .onChange(of: model.wantsCamera, initial: true) { _, wants in
             if wants {
                 Task { await model.camera.start() }

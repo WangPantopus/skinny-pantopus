@@ -146,6 +146,10 @@ struct MomentsStudioBar: View {
                 .frame(width: 36, height: 5)
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
+            // Several picked together (PHASE-5 A5): the one on the screen ringed, the ones waiting after it.
+            if model.studioShowsSeveral {
+                MomentsStudioSeveralRow(model: model, onNoneLeft: onPosted)
+            }
             HStack(spacing: Spacing.s2) {
                 pill
                 postButton
