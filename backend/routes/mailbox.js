@@ -1766,6 +1766,9 @@ router.get('/campaigns', verifyToken, async (req, res) => {
 
 const CARD_ARRIVALS = [...new Set([...holidayCards.PERSON_ARRIVALS, ...holidayCards.EMAIL_ARRIVALS])];
 const CARD_SIGNATURE_FIELD = Joi.object().unknown(true).allow(null);
+// A photo card's front (the card round, Wave 4): its frame and the sender's line under the photo. Only its shape is
+// checked here; checkCardSender checks the rest (holidayCards.cleanFront). Read only with the photo card's design.
+const CARD_FRONT_FIELD = Joi.object({ frame: Joi.string().max(40), caption: Joi.string().allow('', null).max(400) }).allow(null);
 const CARD_MEDIA_FIELDS = {
   photo: Joi.string().uuid().allow(null),
   photo_alt: Joi.string().allow('', null).max(800),
@@ -1797,6 +1800,7 @@ const sendCardSchema = Joi.object({
   ...CARD_MEDIA_FIELDS,
   // "Let it travel" (launch key card_travel): the card starts a journey. While the key is off it's an ordinary card.
   travel: Joi.boolean(),
+  front: CARD_FRONT_FIELD,
 }).with('photo', 'request_id').with('voice', 'request_id').with('photo_live', 'request_id');
 
 // A list (POST /cards/batch and its look): the same picture, note and choice of arrival for up to 20 people or
@@ -1826,6 +1830,7 @@ const cardListSchema = Joi.object({
   ...CARD_MEDIA_FIELDS,
   // "Let it travel" (card_travel): each card of the list starts a journey of its own.
   travel: Joi.boolean(),
+  front: CARD_FRONT_FIELD,
 });
 
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
@@ -1885,6 +1890,11 @@ async function removeCardObject(objectId) {
 // recipient_user_id and sender_display: who a right-away card's notice goes to and names (announceRightAwayCard).
 const CARD_REQUEST_SELECT = 'id, sender_user_id, recipient_user_id, sender_display, created_at, delivered_at, escrow_status, escrow_expires_at, object_id, mail_extracted';
 const cardNote = (message) => String(message || '').replace(/\r\n?/g, '\n').trim();
+// A send for the photo card (holidayCards.PHOTO_CARD), which is one only while the card round is on: its front as
+// asked, { front } or { refusal } (holidayCards.cleanFront). { front: null } for every other card.
+const isPhotoCardSend = (body) => cardImprovementsOn() && holidayCards.isPhotoCardDesign(body.design);
+const photoCardFront = (body) => (isPhotoCardSend(body) ? holidayCards.cleanFront(body.front) : { front: null });
+
 // The name a send asks to have on its link's envelope: { name } ('' for none, for a card that isn't by link, and
 // while the card round is off), or { refusal } when it is too long (holidayCards.cleanToName).
 const linkEnvelopeName = (to) => (cardImprovementsOn() && to?.link === true ? holidayCards.cleanToName(to.name) : { name: '' });
@@ -1901,6 +1911,8 @@ const cardRequestDigest = (body) => holidayCards.requestDigest({
   travel: body.travel === true && cardTravel.travelOn(),
   // The name on a link's envelope (the card round); a card without one keeps the digest it always had.
   toName: linkEnvelopeName(body.to).name || null,
+  // A photo card's frame and line (the card round); every other card keeps the digest it always had.
+  front: photoCardFront(body).front || null,
 });
 // A card by link's own link. Throws when the server has no secret to make it with (nothing is stored then).
 const cardLinkOf = (mailId) => {
@@ -2102,8 +2114,26 @@ async function checkCard(senderId, body, now) {
 // a day. Answers { refusal }, or { design, message, sender, senderZone, signature } for checkCardRecipient.
 async function checkCardSender(senderId, body, now, { listRowIds = null } = {}) {
   const refuse = refuseCard;
-  const design = holidayCards.designById(body.design);
+  // The photo card is a design only while the card round is on; off, it is unknown like any other id.
+  const photoCard = isPhotoCardSend(body);
+  const design = photoCard ? holidayCards.PHOTO_CARD : holidayCards.designById(body.design);
   if (!design) return refuse(400, 'Pick one of the Christmas cards.', 'CARD_DESIGN_UNKNOWN');
+  // A photo card: its photo is the front, in one of three frames, with a line of the sender's own. It takes a still
+  // photo, never travels, and nothing else has a front of its own.
+  let front = null;
+  if (photoCard) {
+    if (!body.photo) return refuse(400, 'Add the photo for your photo card.', 'CARD_FRONT_NEEDS_PHOTO');
+    if (body.photo_live) return refuse(400, 'A photo card takes a still photo. Choose the photo without its Live Photo.', 'CARD_FRONT_NO_LIVE');
+    if (body.travel === true) return refuse(400, 'A photo card doesn’t travel. Turn that off to send it.', 'CARD_FRONT_NO_TRAVEL');
+    const asked = photoCardFront(body);
+    if (asked.refusal === 'CARD_FRONT_CAPTION_TOO_LONG') {
+      return refuse(400, `Keep the line under your photo to ${holidayCards.photoCardControls().caption_limit} letters.`, asked.refusal);
+    }
+    if (asked.refusal) return refuse(400, 'Choose a style for your photo card.', asked.refusal);
+    front = asked.front;
+  } else if (cardImprovementsOn() && body.front) {
+    return refuse(400, 'Only a photo card has a front of its own. Make a photo card, or pick this card again.', 'CARD_FRONT_NOT_PHOTO_CARD');
+  }
   const message = cardNote(body.message);
   if (!message) return refuse(400, 'Write a few words on the back of the card.', 'CARD_MESSAGE_EMPTY');
   if ([...message].length > holidayCards.MESSAGE_LIMIT) {
@@ -2126,6 +2156,10 @@ async function checkCardSender(senderId, body, now, { listRowIds = null } = {}) 
   } catch (mediaErr) {
     if (mediaErr.refusal) return refuse(mediaErr.status, mediaErr.message, mediaErr.code);
     throw mediaErr;
+  }
+  // A photo card's photo was cropped on the device to one of the card's shapes; one that wasn't is refused.
+  if (photoCard && !holidayCards.photoCardShape(media.media?.photo?.width, media.media?.photo?.height)) {
+    return refuse(400, 'Crop the photo again: it doesn’t fit the card.', 'CARD_FRONT_SHAPE');
   }
   // ...and they go only on a card sent with a bought stamp, so one must be left (Look it over and every send ask again).
   // The database decides once more as it stores the card, so a send racing another can't spend a free one on it.
@@ -2161,6 +2195,7 @@ async function checkCardSender(senderId, body, now, { listRowIds = null } = {}) 
   }
   return { design, message, sender, senderZone, signature: signed.signature, media: media.media, mediaFiles: media.files,
     ...(freeMedia ? { freeMedia } : {}),
+    ...(front ? { front } : {}),
     ...(travelFrom ? { travelFrom } : {}) };
 }
 
@@ -2198,8 +2233,10 @@ async function cardRightAwayThatDay(senderId, toUserId, day, ownRowId = null) {
 const cardSameDay = (name) => refuseCard(429,
   `You’ve already sent ${name || 'this person'} a card right away today. This one can go with their morning mail.`, 'CARD_SAME_DAY');
 
-// What checkCardSender found of the sender's free photo or voice cards, carried to storeCard (absent: none to have).
-const freeMediaOf = (from) => (from.freeMedia ? { freeMedia: from.freeMedia } : {});
+// What checkCardSender found of the sender's free photo or voice cards, carried to storeCard (absent: none to have),
+const freeMediaOf = (from) => ({ ...(from.freeMedia ? { freeMedia: from.freeMedia } : {}),
+  // ...and a photo card's front, which storeCard puts in the card's private copy.
+  ...(from.front ? { front: from.front } : {}) });
 
 // The checks of who it goes to: the person (or the address), when it can arrive by their clock, and the email limits,
 // counting `earlierAddresses` (those before it on the same list) as sent. `from` is what checkCardSender answered.
@@ -2296,6 +2333,47 @@ async function checkCardRecipient(senderId, body, now, from, { earlierAddresses 
 }
 
 /**
+ * The welcome strip's card (GET /cards `welcome`; the card round, Wave 4.1), or null: for an account under 14 days old
+ * (as GET /cards/waiting) where sending is open, that has opened a Christmas card in its own mailbox and has sent
+ * nothing yet (no card that wasn't taken back, no reply to one). { card_id, from_first_name, can_write_back }: the
+ * newest such card, the first word of its sender's name as the Mailbox names them, and whether a reply to it can be
+ * written now. An account older than that costs one read. Throws on a read failure (the caller leaves the strip out).
+ */
+async function cardWelcome(userId, { now, timeZone }) {
+  if (!holidayCards.seasonOpen(timeZone, now)) return null;
+  const { data: account, error: accountError } = await supabaseAdmin.from('User').select('created_at').eq('id', userId).maybeSingle();
+  if (accountError) throw new Error(accountError.message);
+  const joined = Date.parse(account?.created_at);
+  if (!Number.isFinite(joined) || now.getTime() - joined > CARD_WAITING_JOINED_MS) return null;
+  const [sent, opened] = await Promise.all([
+    supabaseAdmin.from('Mail').select('id').eq('sender_user_id', userId)
+      .or(`tags.cs.{${holidayCards.CARD_TAG}},tags.cs.{${holidayCards.REPLY_TAG}}`)
+      .or('escrow_status.is.null,escrow_status.neq.withdrawn').limit(1),
+    onlyDelivered(supabaseAdmin.from('Mail')
+      .select(`${REPLY_ROW_SELECT}, sender_entity_id, sender_business_name, opened_at, viewed`)
+      .eq('recipient_user_id', userId).eq('drawer', 'personal').contains('tags', [holidayCards.CARD_TAG])
+      .or('opened_at.not.is.null,viewed.eq.true').eq('archived', false).is('deleted_at', null), now)
+      .order('delivered_at', { ascending: false }).order('id', { ascending: false }).limit(5),
+  ]);
+  if (sent.error || opened.error) throw new Error((sent.error || opened.error).message);
+  if (sent.data?.length) return null;
+  const card = (opened.data || []).find((row) => holidayCards.isCard(row));
+  if (!card) return null;
+  const named = await nameMailSender(card, userId);
+  // Whether "Write back" can be offered: replies are on, none is written yet, and the card can be answered now.
+  let canWriteBack = false;
+  if (repliesOn()) {
+    try {
+      canWriteBack = !(await mailRow(holidayCards.replyRowId(card.id))) && !(await replyOpenRefusal(card, userId, now));
+    } catch (err) {
+      logger.warn('Card welcome: reply not checked', { userId, error: err.message });
+    }
+  }
+  return { card_id: card.id, from_first_name: String(named?.sender_display || '').trim().split(/\s+/)[0] || 'Someone',
+    can_write_back: canWriteBack };
+}
+
+/**
  * GET /api/mailbox/cards
  * What the Send a Christmas card screens need: the season's pictures (their ids, captions, paper and heights; the
  * website serves the pictures themselves) and the collections "Pick a card" shows them in, whether sending is open, the
@@ -2322,9 +2400,15 @@ router.get('/cards', verifyToken, async (req, res) => {
     // The card round (cardImprovementsOn): the answer says so, and with it how many photo or voice cards are still free.
     const improved = cardImprovementsOn();
     const freeMediaRead = improved && controls.photo.usable ? freeMediaAllowance(senderId).catch(() => null) : null;
+    // The welcome strip under the mantel (Wave 4.1), for a new account that opened a card and has sent none.
+    const welcomeRead = improved ? cardWelcome(senderId, { now, timeZone }).catch((err) => {
+      logger.warn('Card welcome not read', { userId: senderId, error: err.message });
+      return null;
+    }) : null;
     const stamps = await stampsRead;
     const saved = await savedRead;
     const freeMedia = await freeMediaRead;
+    const welcome = await welcomeRead;
     return res.json({
       // The apps draw the round's experience only from an answer that says so (absent while it is off).
       ...(improved ? { improved: true } : {}),
@@ -2347,6 +2431,12 @@ router.get('/cards', verifyToken, async (req, res) => {
           ...(freeMedia ? { free_allowance: { limit: freeMedia.limit, remaining: freeMedia.remaining } } : {}),
           ...(freeMedia?.remaining > 0 ? {} : { bought_stamp: await boughtStampControls(senderId, postage, stamps) }) }
         : controls,
+      // The photo card (the card round, Wave 4.2), while a photo can be added at all: its design id (it is never among
+      // `designs`), frames, the longest line under the photo and the shapes a photo is cropped to. Absent: no pill.
+      ...(improved && controls.photo.usable ? { photo_card: holidayCards.photoCardControls() } : {}),
+      // "{first name}’s card is on your mantel" (Wave 4.1): the card, whose it is, whether they can write back to it,
+      // and the stamps they can send with (null when the balance can't be read). Absent: no strip.
+      ...(welcome ? { welcome: { ...welcome, stamps: stamps ? stamps.available : null } } : {}),
       // A long passage's verse isn't printed under its card on "Pick a card" (holidayCards.pickACardDesign).
       designs: holidayCards.DESIGNS.map(holidayCards.pickACardDesign),
       // Each with its short name, public name, opening card and (Christmas with Jesus Christ) parts: older apps ignore them.
@@ -2870,7 +2960,9 @@ async function storeCardOnce({ senderId, checked, requestId, rowId, digest, now,
       recipient: toUserId
         ? { mode: 'user', userId: toUserId, deliveryTargetType: 'user', deliveryTargetId: toUserId }
         : { mode: 'contact' },
-      body: { content: message, payload: { card, ...(signature ? { signature } : {}), ...(media ? { media } : {}) } },
+      // A photo card's frame and line too (holidayCards.frontOf): the sender's own words, so here and never in the row.
+      body: { content: message, payload: { card, ...(signature ? { signature } : {}), ...(media ? { media } : {}),
+        ...(checked.front ? { front: checked.front } : {}) } },
       createdAt: now.toISOString(),
     } });
   } catch (objectErr) {
@@ -3073,7 +3165,8 @@ async function cardLook(senderId, checked, now) {
       // Their own signature, photo and voice show here as their own note does, sealed or not, never covered; the photo
       // and voice open through GET /cards/media/:fileId.
       card: { ...holidayCards.cardView({ mail_extracted: { card } }, now), signature: signature || null,
-        ...holidayCards.mediaView({ card_media: media || null, card_photo_covered: false }, false),
+        ...holidayCards.mediaView({ card_media: media ? { ...media, ...(checked.front ? { front: checked.front } : {}) } : null,
+          card_photo_covered: false }, false),
         // A card that travels (card_travel): its first postmark, the town it starts in, as the envelope will carry it.
         ...(card.travel ? { travel: cardTravel.previewView(card.travel) } : {}) },
     },
@@ -3159,7 +3252,7 @@ async function inGroups(items, size, fn) {
  */
 async function checkCardList(senderId, body, now) {
   // Each card carries the list's photo and voice (the card round), so its request ID stands for a card with them.
-  const listMedia = cardImprovementsOn() ? Object.fromEntries(['photo', 'photo_alt', 'photo_live', 'voice']
+  const listMedia = cardImprovementsOn() ? Object.fromEntries(['photo', 'photo_alt', 'photo_live', 'voice', 'front']
     .filter((field) => body[field]).map((field) => [field, body[field]])) : {};
   const items = body.recipients.map(({ to, request_id: id }) => {
     const single = { design: body.design, message: body.message,
@@ -4489,6 +4582,8 @@ router.get('/:id', verifyToken, async (req, res) => {
             mail.card_signature = holidayCards.signatureOf(objectData.payload);
             mail.card_media = holidayCards.mediaOf(objectData.payload);
             if (mail.card_media?.photo) mail.card_photo_covered = await cardMedia.photoCovered(userId, mail.sender_user_id);
+            // Whether they joined for this card (the card round, Wave 4.1): the apps then hold their other notices.
+            if (await holidayCards.joinedFor(mail, userId)) mail.card_joined_for = true;
           }
           if ((!mail.attachments || mail.attachments.length === 0) && Array.isArray(objectAttachments)) {
             mail.attachments = objectAttachments;
