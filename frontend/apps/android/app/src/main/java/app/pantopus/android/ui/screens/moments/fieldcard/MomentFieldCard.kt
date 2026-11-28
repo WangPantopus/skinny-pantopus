@@ -431,6 +431,13 @@ private fun CardField(
     )
 }
 
+/** The reader's own field guide opened from elsewhere (a field guide card found by the Atlas search). */
+@Composable
+fun MomentsFieldGuideSheet(
+    onDismiss: () -> Unit,
+    viewModel: MomentFieldCardViewModel = hiltViewModel(),
+) = FieldGuideSheet(viewModel, onDismiss)
+
 /** The reader's own field guide: what they collected, newest first; "Let it go" on each. Private to them. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
