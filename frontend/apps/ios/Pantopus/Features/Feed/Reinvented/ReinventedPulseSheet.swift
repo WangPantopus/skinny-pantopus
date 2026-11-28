@@ -33,6 +33,11 @@ struct ReinventedPulseSheet<Content: View, Add: View>: View {
         64
     }
 
+    /// The floating "+"'s height.
+    static var addSize: CGFloat {
+        58
+    }
+
     var body: some View {
         let top = shownTop
         VStack(spacing: Spacing.s0) {
@@ -53,9 +58,11 @@ struct ReinventedPulseSheet<Content: View, Add: View>: View {
         )
         .overlay(alignment: .topTrailing) {
             if top > fullTop + 40 {
+                // Its bottom 12 pt above the sheet's top edge (PHASE-6 A4); an alignment guide is not followed in an
+                // overlay's conditional content, so it is moved up by its own height.
                 add(false)
                     .padding(.trailing, Spacing.s4)
-                    .alignmentGuide(.top) { dimensions in dimensions[.bottom] + Spacing.s3 }
+                    .offset(y: -(Self.addSize + Spacing.s3))
                     .transition(.opacity)
             }
         }
