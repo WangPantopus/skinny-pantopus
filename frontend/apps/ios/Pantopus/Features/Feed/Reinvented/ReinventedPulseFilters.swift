@@ -37,6 +37,8 @@ final class ReinventedPulseFilterStore {
     private(set) var since: String?
     /// The kept When (the map's time row).
     private(set) var time = "live"
+    /// How often this person turned each kind on (PHASE-5 B's quick kinds, LEAD-8 10:2x): kept on this phone, per person.
+    @ObservationIgnored private var kindTaps: [String: Int] = [:]
     @ObservationIgnored private var account: String?
 
     /// The When of the sheet: the map's time row's four that the list follows too.
@@ -66,6 +68,25 @@ final class ReinventedPulseFilterStore {
         }
         filters = kept
         time = keptTime ?? "live"
+        kindTaps = (defaults.dictionary(forKey: Self.tapsKey(viewer)) as? [String: Int]) ?? [:]
+    }
+
+    /// The kinds, most used first (the person's own taps), the brief's order among equals and until there is a count.
+    var kindsByUse: [String] {
+        let order = ReinventedPulseFilters.kinds
+        return order.sorted { first, second in
+            let firstTaps = kindTaps[first] ?? 0
+            let secondTaps = kindTaps[second] ?? 0
+            if firstTaps != secondTaps { return firstTaps > secondTaps }
+            return (order.firstIndex(of: first) ?? 0) < (order.firstIndex(of: second) ?? 0)
+        }
+    }
+
+    /// A kind turned on in the Filters card: counted for the order next time.
+    func tapped(kind: String) {
+        guard let account else { return }
+        kindTaps[kind, default: 0] += 1
+        UserDefaults.standard.set(kindTaps, forKey: Self.tapsKey(account))
     }
 
     func set(_ filters: ReinventedPulseFilters) {
@@ -141,6 +162,10 @@ final class ReinventedPulseFilterStore {
         "pantopus.pulse.filters.\(account)"
     }
 
+    private static func tapsKey(_ account: String) -> String {
+        "pantopus.pulse.kindTaps.\(account)"
+    }
+
     private static func visitKey(_ account: String) -> String {
         "pantopus.pulse.visit.\(account)"
     }
@@ -159,18 +184,21 @@ struct ReinventedPulseFiltersSheet: View {
     private let store = ReinventedPulseFilterStore.shared
     @State private var picked = ReinventedPulseFilters.none
     @State private var time = "live"
+    @State private var whatOrder = ReinventedPulseFilters.kinds
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
                     group("What") {
+                        // Most used first (the order is taken when the card opens, so nothing moves under the finger).
                         chips(
                             "what",
-                            ReinventedPulseFilters.kinds,
+                            whatOrder,
                             title: ReinventedPulseFilterStore.kindTitle,
                             on: picked.kinds.contains
                         ) { kind in
+                            if !picked.kinds.contains(kind) { store.tapped(kind: kind) }
                             picked.kinds = flip(picked.kinds, kind)
                         }
                     }
@@ -234,6 +262,7 @@ struct ReinventedPulseFiltersSheet: View {
             }
         }
         .onAppear {
+            whatOrder = store.kindsByUse
             picked = store.filters
             // The sheet's When has four; This week and All time (from the time strip) read as Now here until changed.
             time = map.time
