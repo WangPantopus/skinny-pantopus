@@ -13,13 +13,17 @@
 
 import SwiftUI
 
-struct ReinventedPulseSheet<Content: View, Add: View>: View {
+struct ReinventedPulseSheet<Content: View, Add: View, Accessory: View>: View {
     @Binding var rest: ReinventedPulseView.Height
     /// The height the sheet moves in (the tab's, above the tab bar) and where its top stops at full.
     let height: CGFloat
     let fullTop: CGFloat
     /// The header's one line: "23 here · Live".
     let line: String
+    /// Dimmed while the list's new read is out (PHASE-6 H: never an old number shown as new).
+    var lineDimmed = false
+    /// Small, right-aligned in the header: "No place" (PHASE-6 A3).
+    let accessory: Accessory
     /// The list, or My Atlas.
     let content: Content
     /// The "+" (the Studio), floating over the sheet's top edge, or in the header at full.
@@ -82,6 +86,8 @@ struct ReinventedPulseSheet<Content: View, Add: View>: View {
                 Text(line)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .opacity(lineDimmed ? 0.45 : 1)
+                    .animation(.easeOut(duration: 0.15), value: lineDimmed)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Spacing.s4)
@@ -102,6 +108,10 @@ struct ReinventedPulseSheet<Content: View, Add: View>: View {
             }
             .accessibilityAction { tap() }
             .accessibilityIdentifier("reinventedPulse.handle")
+            // Its own control, beside the line: not part of the handle.
+            .overlay(alignment: .bottomTrailing) {
+                accessory.padding(.trailing, atFull ? 0 : Spacing.s3)
+            }
             if atFull {
                 add(true)
                     .padding(.trailing, Spacing.s3)
@@ -165,10 +175,15 @@ struct ReinventedPulseSheet<Content: View, Add: View>: View {
     }
 
     private func restTop(_ height: ReinventedPulseView.Height) -> CGFloat {
-        switch height {
+        Self.top(of: height, in: self.height, fullTop: fullTop)
+    }
+
+    /// Where the sheet's top rests, in a height: what the map shows ends there (PHASE-6 B).
+    static func top(of rest: ReinventedPulseView.Height, in height: CGFloat, fullTop: CGFloat) -> CGFloat {
+        switch rest {
         case .full: fullTop
-        case .half: max(fullTop, self.height * 0.55)
-        case .peek: max(fullTop, self.height - Self.peekHeight)
+        case .half: max(fullTop, height * 0.55)
+        case .peek: max(fullTop, height - peekHeight)
         }
     }
 

@@ -56,6 +56,18 @@ struct ReinventedPulseList: View {
     }
 
     private var list: some View {
+        ScrollViewReader { proxy in
+            scroll
+                // A pin tapped on the map (PHASE-6 B): the list goes to its row.
+                .onChange(of: model.scrollTarget) { _, target in
+                    guard let target else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(target, anchor: .top) }
+                    model.scrollTarget = nil
+                }
+        }
+    }
+
+    private var scroll: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.s3) {
                 if let strip, !strip.isEmpty, model.reach != "explore" {
@@ -76,45 +88,13 @@ struct ReinventedPulseList: View {
                     emptyNote
                 }
                 ForEach(model.rows) { row in
-                    switch row {
-                    case let .band(band):
-                        bandLine(band)
-                    case let .heading(words):
-                        heading(words)
-                    case let .moment(moment, why, kept):
-                        if kept {
-                            keptCard(moment)
-                        } else {
-                            ReinventedMomentRow(moment: moment) { onOpenMoment(moment) }
-                        }
-                        if let why { whyLine(why) }
-                    case let .post(card, why):
-                        postCard(card)
-                        if let why { whyLine(why) }
-                    }
+                    rowView(row).id(row.id)
                 }
-                if model.hasMore, let pause = model.pause {
-                    // Explore pauses: more only when asked.
-                    Button(pause) { Task { await model.loadMore() } }
-                        .font(.system(size: 15, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.s4)
-                        .accessibilityIdentifier("reinventedPulse.keepExploring")
-                } else if model.hasMore {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, Spacing.s4)
-                        .task { await model.loadMore() }
-                } else if let end = model.end, !(model.reach == "explore" && model.isEmpty) {
-                    Text(end)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .frame(maxWidth: .infinity)
-                        .multilineTextAlignment(.center)
-                        .padding(.vertical, Spacing.s5)
-                        .accessibilityIdentifier("reinventedPulse.end")
-                }
+                more
             }
+            // An older area's rows while the new one's read is out (PHASE-6 B): dimmed, never emptied.
+            .opacity(model.stale ? 0.6 : 1)
+            .animation(.easeOut(duration: 0.2), value: model.stale)
             .padding(.bottom, 120)
         }
         .refreshable {
@@ -130,6 +110,53 @@ struct ReinventedPulseList: View {
             }
         }
         .accessibilityIdentifier("reinventedPulse.list")
+    }
+
+    private func rowView(_ row: ReinventedPulseModel.Row) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            switch row {
+            case let .band(band):
+                bandLine(band)
+            case let .heading(words):
+                heading(words)
+            case let .moment(moment, why, kept):
+                if kept {
+                    keptCard(moment)
+                } else {
+                    ReinventedMomentRow(moment: moment) { onOpenMoment(moment) }
+                }
+                if let why { whyLine(why) }
+            case let .post(card, why):
+                postCard(card)
+                if let why { whyLine(why) }
+            }
+        }
+    }
+
+    @ViewBuilder private var more: some View {
+        if model.hasMore, let pause = model.pause {
+            // Explore pauses: more only when asked.
+            Button(pause) { Task { await model.loadMore() } }
+                .font(.system(size: 15, weight: .bold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.s4)
+                .accessibilityIdentifier("reinventedPulse.keepExploring")
+        } else if model.hasMore {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.s4)
+                // Once per page: a row that stays on screen after a page came (or after the area's first page came back)
+                // reads the next one, instead of spinning.
+                .task(id: model.nextPage) { await model.loadMore() }
+        } else if let end = model.end, !(model.reach == "explore" && model.isEmpty) {
+            Text(end)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .padding(.vertical, Spacing.s5)
+                .accessibilityIdentifier("reinventedPulse.end")
+        }
     }
 
     /// A Moment its author kept: a post that stays, in the bordered look, under "Kept · stays".
