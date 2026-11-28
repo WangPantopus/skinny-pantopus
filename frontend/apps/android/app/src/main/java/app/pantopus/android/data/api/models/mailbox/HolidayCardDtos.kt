@@ -72,6 +72,11 @@ data class HolidayCardTravelRules(
     val on: Boolean = true,
     val town: String? = null,
     val places: Int = 2,
+    /**
+     * Where the switch starts while the card improvements are on (Wave 3.4): false, off to begin with. Absent: on, as
+     * [on] always started it.
+     */
+    @Json(name = "default_on") val defaultOn: Boolean? = null,
 )
 
 /** A town from `GET /api/mailbox/cards/towns` (the Census lists the server carries): its id, name, state and label. */
@@ -340,6 +345,11 @@ data class HolidayCardArrivals(
      * Absent from an older server: [email] then.
      */
     @Json(name = "email_all") val emailAll: List<String>? = null,
+    /**
+     * To a person, with "Right away" too, while the card improvements are on (Wave 3.3): `next_morning`, `now`, and
+     * before Christmas morning `sealed_christmas` and `christmas_morning`. Absent: [person].
+     */
+    @Json(name = "person_all") val personAll: List<String>? = null,
 )
 
 /**
@@ -364,6 +374,8 @@ data class HolidayCardWaiting(
 data class HolidayCardArrivalsFor(
     /** The arrivals open to them now. */
     val arrivals: List<String> = emptyList(),
+    /** [arrivals] with "Right away" too, while the card improvements are on (Wave 3.3); absent: [arrivals]. */
+    @Json(name = "arrivals_all") val arrivalsAll: List<String>? = null,
     /** The day of their next 7 a.m. mail where they live ("2026-10-31"). */
     @Json(name = "next_round_on") val nextRoundOn: String? = null,
 )
@@ -467,6 +479,8 @@ data class HolidayCardRecipient(
     val email: String? = null,
     /** By a link: the first person to open it keeps the card (launch key `card_table`). */
     val link: Boolean? = null,
+    /** By a link, the name written on its envelope ("Mom"; Wave 3.2, only while the card improvements are on). */
+    val name: String? = null,
 )
 
 /**

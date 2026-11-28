@@ -828,6 +828,7 @@ internal fun ShelvesBar(
     chosen: String?,
     onLarge: (String?) -> Unit,
     onNext: () -> Unit,
+    nextLabel: String = WRITE_ON_THIS_CARD,
 ) {
     val picked = cards.designOf(chosen)
     val reduceMotion = rememberReduceMotion()
@@ -837,6 +838,6 @@ internal fun ShelvesBar(
         exit = if (reduceMotion) ExitTransition.None else shrinkVertically(shrinkTowards = Alignment.Top) + slideOutVertically { it },
     ) {
         // A card stays chosen once it is; the bar only leaves with the step.
-        if (picked != null) PickBarBody(picked, onLarge = onLarge, onNext = onNext)
+        if (picked != null) PickBarBody(picked, onLarge = onLarge, onNext = onNext, nextLabel = nextLabel)
     }
 }

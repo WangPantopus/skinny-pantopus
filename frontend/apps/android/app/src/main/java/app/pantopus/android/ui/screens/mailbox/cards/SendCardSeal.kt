@@ -47,14 +47,14 @@ internal fun SealByHand(
     var card by remember { mutableStateOf<CardOnTable?>(null) }
     if (card == null) card = sealingCard(cards, form, fromName)
     val onTable = card ?: return
-    val to = form.to
-    val several = (to as? CardRecipient.Several)?.entries?.size ?: 1
+    // "Quick seal" once this phone has sealed a card by hand, with the card improvements (Wave 3.5).
+    val quickSeal = remember { cards.improved && CardSealedOnce.read(context) }
     // Each refusal is told once: the seal lifts and the screen's own words say why.
     var asked by remember { mutableStateOf(false) }
     var refusals by remember { mutableIntStateOf(0) }
     val calls =
         remember(onTable.id) {
-            CardTableSendingCalls(toFirst = to?.let(::firstOf), several = several) {
+            sendingCalls(cards, form, quickSeal, onRitualEnded = { CardSealedOnce.mark(context) }) {
                 asked = true
                 onSeal()
             }
@@ -98,6 +98,28 @@ internal fun SealByHand(
     )
 }
 
+/**
+ * Who the table's sending moment is for ("For Hazel.", or with the card improvements a link's name on its envelope, Wave
+ * 3.2), how many cards go, and what Quick seal and the seal do.
+ */
+private fun sendingCalls(
+    cards: HolidayCardsResponse,
+    form: SendCardForm,
+    quickSeal: Boolean,
+    onRitualEnded: () -> Unit,
+    onSeal: () -> Unit,
+): CardTableSendingCalls {
+    val to = form.to
+    val linkName = envelopeName(form.linkName).takeIf { cards.improved && to is CardRecipient.Link }
+    return CardTableSendingCalls(
+        toFirst = linkName ?: to?.let(::firstOf),
+        several = (to as? CardRecipient.Several)?.entries?.size ?: 1,
+        quickSeal = quickSeal,
+        onRitualEnded = onRitualEnded,
+        onSeal = onSeal,
+    )
+}
+
 /** Step 5's quiet buttons: by link, Copy link and Share ([onLink]); else Take it back while it can be. */
 private fun goneActions(
     form: SendCardForm,
@@ -128,7 +150,8 @@ private fun sealingCard(
         when (to) {
             is CardRecipient.Person -> to.name
             is CardRecipient.Email -> to.email
-            CardRecipient.Link -> null
+            // The name on its envelope, with the card improvements (Wave 3.2).
+            CardRecipient.Link -> envelopeName(form.linkName).takeIf { cards.improved }
             is CardRecipient.Several -> to.entries.firstOrNull()?.label
         }
     val from = preview.piece.senderDisplay.trim().ifEmpty { fromName }

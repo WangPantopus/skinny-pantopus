@@ -103,12 +103,14 @@ internal fun CardRack(
     onSeen: (String) -> Unit,
     onClose: (String) -> Unit,
     onWrite: (String) -> Unit,
+    /** The button's words: "Write on this card", or "Choose who it’s for" with Pick a card first (Wave 3.1). */
+    writeLabel: String = WRITE_ON,
 ) {
     if (designs.isEmpty()) return
     val pager = rememberPagerState(initialPage = designs.indexOfFirst { it.id == start }.coerceAtLeast(0)) { designs.size }
     val shown = { designs[pager.currentPage.coerceIn(0, designs.lastIndex)].id }
     FullScreenWindow(onDismissRequest = { onClose(shown()) }) {
-        RackContent(designs, pager, collection, year, onSeen, onClose = { onClose(shown()) }, onWrite = { onWrite(shown()) })
+        RackContent(designs, pager, collection, year, onSeen, onClose = { onClose(shown()) }, onWrite = { onWrite(shown()) }, writeLabel)
     }
 }
 
@@ -121,6 +123,7 @@ private fun RackContent(
     onSeen: (String) -> Unit,
     onClose: () -> Unit,
     onWrite: () -> Unit,
+    writeLabel: String = WRITE_ON,
 ) {
     val context = LocalContext.current
     val art = rememberCardTableArt()
@@ -205,7 +208,7 @@ private fun RackContent(
             versesShown,
             Modifier.padding(top = textTop).height(wordsRoom),
         )
-        RackActions(bottom, swipes = designs.size > 1, onWrite)
+        RackActions(bottom, swipes = designs.size > 1, onWrite, writeLabel)
         RackTop(top, collection, pager, designs.size, onClose)
     }
 }
@@ -420,6 +423,7 @@ private fun RackActions(
     bottom: Dp,
     swipes: Boolean,
     onWrite: () -> Unit,
+    writeLabel: String = WRITE_ON,
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Column(
@@ -441,7 +445,7 @@ private fun RackActions(
                         .testTag("cardRackWrite"),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(WRITE_ON, style = rackWriteStyle)
+                Text(writeLabel, style = rackWriteStyle)
             }
             Text(
                 if (swipes) SWIPE_HINT else "",

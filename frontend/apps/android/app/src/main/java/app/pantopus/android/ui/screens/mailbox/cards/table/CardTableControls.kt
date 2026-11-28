@@ -548,6 +548,14 @@ private fun HintSlot(
     printButton: Boolean,
 ) {
     val verse = state.card.verse != null
+    // "Quick seal" under the first button once this phone has sealed a card by hand (Wave 3.5).
+    val moment = state.sending
+    if (moment != null && moment.offersQuickSeal) {
+        Box(modifier = Modifier.heightIn(min = 44.dp), contentAlignment = Alignment.Center) {
+            HintLink(QUICK_SEAL, "cardTableQuickSeal") { moment.primary(quick = true) }
+        }
+        return
+    }
     if (state.sending != null || !(verse || state.printable)) {
         Text(state.hint, style = tableHintStyle, modifier = Modifier.heightIn(min = 16.dp).testTag("cardTableHint"))
         return
@@ -589,6 +597,9 @@ private fun HintLink(
 }
 
 internal const val READ_THE_VERSE = "Read the verse"
+
+/** The sealing table's quiet link after the first card sealed by hand on this phone (Wave 3.5). */
+internal const val QUICK_SEAL = "Quick seal"
 
 /** The note in plain type on the bookmark (plan Part 2). */
 internal const val READ_IT_IN_PRINT = "Read it in print"
