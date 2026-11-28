@@ -71,6 +71,7 @@ fun MomentDotDto.kindWords(): String =
         MomentDotKinds.RATING -> "A rating"
         MomentDotKinds.LINK -> "A link"
         MomentDotKinds.WHISPER -> "A whisper"
+        MomentDotKinds.THING -> "A thing to name"
         else -> "A dot"
     }
 
@@ -85,6 +86,7 @@ fun MomentDotMarker(
             MomentDotKinds.RATING -> PantopusIcon.Star
             MomentDotKinds.LINK -> PantopusIcon.Link
             MomentDotKinds.WHISPER -> PantopusIcon.Mic
+            MomentDotKinds.THING -> PantopusIcon.Search
             else -> PantopusIcon.MessageSquare
         }
     Box(
@@ -156,6 +158,7 @@ fun MomentDotsLayer(
             val cx = frame.left + dot.x.toFloat() * frame.width
             val cy = frame.top + dot.y.toFloat() * frame.height
             DotCard(
+                moment = moment.id,
                 dot = dot,
                 mine = mine,
                 at = IntOffset(cx.roundToInt(), cy.roundToInt()),
@@ -178,6 +181,7 @@ fun MomentDotsLayer(
 /** What a dot holds, beside it: below it in the top half of the picture, above it in the bottom half. */
 @Composable
 private fun DotCard(
+    moment: String,
     dot: MomentDotDto,
     mine: Boolean,
     at: IntOffset,
@@ -223,6 +227,7 @@ private fun DotCard(
                 CardButton("Opens $host", tag = "moments.viewer.dotLink") { dot.url?.let { runCatching { uri.openUri(it.trim()) } } }
             }
             MomentDotKinds.WHISPER -> app.pantopus.android.ui.screens.moments.viewer.sound.MomentWhisperPlay(dot)
+            MomentDotKinds.THING -> app.pantopus.android.ui.screens.moments.fieldcard.MomentFieldCard(moment, dot)
         }
         if (mine) {
             CardButton(if (removing) "Removing…" else "Remove this dot", tag = "moments.viewer.dotRemove") {

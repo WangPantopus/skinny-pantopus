@@ -99,6 +99,7 @@ private val MomentDotDto.ready: Boolean
         when (kind) {
             MomentDotKinds.LINK -> httpsLink(url) != null
             MomentDotKinds.WHISPER -> app.pantopus.android.data.moments.sound.MomentsStudioSounds.whispers.value.containsKey(id)
+            MomentDotKinds.THING -> true
             else -> drawable
         }
 
@@ -106,9 +107,10 @@ private val MomentDotDto.ready: Boolean
 private fun MomentDotDto.trimmed(): MomentDotDto =
     copy(
         text = text?.trim(),
-        label = label?.trim(),
+        label = label?.trim()?.ifEmpty { null },
         url = if (kind == MomentDotKinds.LINK) httpsLink(url) else null,
         title = title?.trim()?.ifEmpty { null },
+        box = if (kind == MomentDotKinds.THING) app.pantopus.android.ui.screens.moments.fieldcard.thingBox(this) else null,
     )
 
 /** A new dot of [kind], near the middle of the picture, a little apart from those already there. */
@@ -118,7 +120,14 @@ private fun newDot(
 ): MomentDotDto {
     val n = (dots.mapNotNull { it.id.removePrefix("dot-").toIntOrNull() }.maxOrNull() ?: 0) + 1
     val step = (dots.size % 4) * 0.06
-    return MomentDotDto(id = "dot-$n", kind = kind, x = 0.42 + step, y = 0.42 + step, stars = 5.takeIf { kind == MomentDotKinds.RATING })
+    return MomentDotDto(
+        id = "dot-$n",
+        kind = kind,
+        x = 0.42 + step,
+        y = 0.42 + step,
+        stars = 5.takeIf { kind == MomentDotKinds.RATING },
+        box = app.pantopus.android.ui.screens.moments.fieldcard.newThingBox().takeIf { kind == MomentDotKinds.THING },
+    )
 }
 
 /** The Studio's dots over the picture of [picture] px filling the screen: drag one to move it, tap it to open it. */
@@ -138,6 +147,9 @@ internal fun StudioDotLayer(
         dots.forEach { dot ->
             val cx = frame.left + dot.x.toFloat() * frame.width
             val cy = frame.top + dot.y.toFloat() * frame.height
+            if (dot.kind == MomentDotKinds.THING) {
+                app.pantopus.android.ui.screens.moments.fieldcard.StudioThingOutline(dot, frame.left, frame.top, frame.width, frame.height)
+            }
             MomentDotMarker(
                 kind = dot.kind,
                 modifier =
@@ -254,6 +266,8 @@ private fun IlluminateBody(
             onPick(null)
         }
     }
+    // "A thing to name" (CONTRACT 7d): a photo of its own, while the author keeps Pantopus AI on.
+    val offersThings = app.pantopus.android.ui.screens.moments.fieldcard.studioOffersThings()
     if (dots.size < MomentDotDto.MOST) {
         Text("Add a dot", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -262,7 +276,8 @@ private fun IlluminateBody(
                 MomentDotKinds.RATING to "A rating",
                 MomentDotKinds.LINK to "A link",
                 MomentDotKinds.WHISPER to "A whisper",
-            ).filterNot { madeUp && (it.first == MomentDotKinds.LINK || it.first == MomentDotKinds.WHISPER) }
+                (MomentDotKinds.THING to "A thing to name").takeIf { offersThings },
+            ).filterNotNull().filterNot { madeUp && (it.first == MomentDotKinds.LINK || it.first == MomentDotKinds.WHISPER) }
                 .forEach { (kind, words) ->
                     Pill(words, tag = "moments.studio.dot.add.$kind") {
                         val dot = newDot(kind, dots)
@@ -335,6 +350,7 @@ private fun DotEditor(
                     },
                 )
             }
+        MomentDotKinds.THING -> app.pantopus.android.ui.screens.moments.fieldcard.MomentsStudioThingEditor(dot, onChange)
         MomentDotKinds.WHISPER ->
             if (madeUp) {
                 Hint("A made-up name can't carry sound: a voice tells who you are. This one stays off.")

@@ -19,7 +19,7 @@ object MomentDotKinds {
     const val WHISPER = "whisper"
 
     /** Made in the Studio and drawn in the viewer by this app. */
-    val MADE = listOf(NOTE, RATING, LINK, WHISPER)
+    val MADE = listOf(NOTE, RATING, LINK, WHISPER, THING)
 }
 
 /** One dot as the author places it (`x`, `y`: its place on the picture, 0 to 1 from the top left) and as a reader reads it. */
@@ -42,6 +42,10 @@ data class MomentDotDto(
     /** A whisper's three seconds (CONTRACT 7e): a short signed link and its length, null until its sound is up. */
     @Json(name = "audio_url") val audioUrl: String? = null,
     @Json(name = "duration_ms") val durationMs: Long? = null,
+    /** A thing's outline on the picture (CONTRACT 7c), what its field card looks at. */
+    val box: MomentPlayBoxDto? = null,
+    /** A thing's kept field card (CONTRACT 7d), null until someone opened it. */
+    val card: app.pantopus.android.data.moments.fieldcard.MomentFieldCardDto? = null,
 ) {
     companion object {
         /** Up to eight dots on one picture (CONTRACT 7c). */
@@ -62,6 +66,7 @@ val MomentDotDto.drawable: Boolean
                 MomentDotKinds.RATING -> !label.isNullOrBlank() && stars in 1..5
                 MomentDotKinds.LINK -> linkHost != null
                 MomentDotKinds.WHISPER -> !audioUrl.isNullOrBlank()
+                MomentDotKinds.THING -> true
                 else -> false
             }
 
