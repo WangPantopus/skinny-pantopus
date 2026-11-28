@@ -354,11 +354,13 @@ fun MomentStampsOverlay(
     modifier: Modifier = Modifier,
 ) {
     // "Pulse, reinvented"'s layers over the picture, bottom to top: moving words (CONTRACT 7k) and a swatch's try-on
-    // (7g) on the photo, the stamps, the fog a reader wipes (7g), then the cards a reader answers (7b, 7g).
+    // (7g) on the photo, the stamps, the fog a reader wipes (7g), the swatch's chips once the fog is wiped, then the cards
+    // a reader answers (7b, 7g).
     MomentMovingWordsLayer(moment, modifier)
     MomentSwatchLayer(moment, modifier)
     MomentStampsOnly(moment, modifier)
     MomentFogLayer(moment, modifier)
+    MomentSwatchChipsLayer(moment, modifier)
     MomentPlayLayer(moment, modifier)
 }
 
