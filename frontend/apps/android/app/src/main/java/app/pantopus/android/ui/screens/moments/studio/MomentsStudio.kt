@@ -321,19 +321,6 @@ internal fun MomentsStudioStep(
                 onHomeNoteShown = gate::homeNoteShown,
                 postAs = postAs,
                 refused = refused,
-                onAudience = { key ->
-                    refused = null
-                    penNames.choose(PenNameVoice.Own)
-                    onAudience(key)
-                },
-                onMadeUp = {
-                    refused =
-                        when {
-                            state.noLocationLocked -> MADE_UP_NEEDS_PLACE
-                            else -> postAs?.refusal?.ifBlank { MADE_UP_NOT_HERE }
-                        }
-                    if (refused == null) penNames.choose(PenNameVoice.MadeUp)
-                },
                 onOpenDrawer = { drawer = true },
                 onPost = onPost,
             )
@@ -358,7 +345,27 @@ internal fun MomentsStudioStep(
             exit = slideOutVertically { it },
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            MomentsPostSheet(
+            // See the picture first (PHASE-5 A): who sees it is the drawer's first row; the bar keeps one line and Post.
+            Column(modifier = Modifier.statusBarsPadding().padding(top = 64.dp)) {
+                StudioWhoSeesIt(
+                    state = state,
+                    postAs = postAs,
+                    refused = refused,
+                    onAudience = { key ->
+                        refused = null
+                        penNames.choose(PenNameVoice.Own)
+                        onAudience(key)
+                    },
+                    onMadeUp = {
+                        refused =
+                            when {
+                                state.noLocationLocked -> MADE_UP_NEEDS_PLACE
+                                else -> postAs?.refusal?.ifBlank { MADE_UP_NOT_HERE }
+                            }
+                        if (refused == null) penNames.choose(PenNameVoice.MadeUp)
+                    },
+                )
+                MomentsPostSheet(
                 state = state,
                 avatarUrl = avatarUrl,
                 onShowArea = onShowArea,
@@ -366,7 +373,7 @@ internal fun MomentsStudioStep(
                 onAudience = onAudience,
                 onCaption = onCaption,
                 onPost = onPost,
-                modifier = Modifier.statusBarsPadding().padding(top = 64.dp).testTag("moments.studio.drawer"),
+                modifier = Modifier.testTag("moments.studio.drawer"),
                 onPlace = onPlace,
                 onFindPlace = onFindPlace,
                 onNoLocation = onNoLocation,
@@ -376,6 +383,7 @@ internal fun MomentsStudioStep(
                 onOpenMap = { fullMap = true },
                 studio = true,
             )
+            }
         }
         StudioStampTray(
             visible = tray,
@@ -670,7 +678,10 @@ internal fun StudioCaption(
     )
 }
 
-/** The bar at the bottom (board B2): who sees it, then the pill (how long and where) and Post. */
+/**
+ * The bar at the bottom (board B2, PHASE-5 A): one line of details (where, how long, who sees it), which opens the
+ * drawer, and Post. Nothing of the details covers the picture until asked.
+ */
 @Composable
 private fun StudioBar(
     state: MomentsComposeUiState,
@@ -678,13 +689,9 @@ private fun StudioBar(
     onHomeNoteShown: () -> Unit,
     postAs: PenNamePostAsUi?,
     refused: String?,
-    onAudience: (String) -> Unit,
-    onMadeUp: () -> Unit,
     onOpenDrawer: () -> Unit,
     onPost: () -> Unit,
 ) {
-    // "Don't show where": no pin, connections only (as today's Post sheet).
-    val unplaced = state.noLocationOn
     Column(
         modifier =
             Modifier
@@ -696,6 +703,35 @@ private fun StudioBar(
                 .testTag("moments.studio.bar"),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        StudioBarRest(state = state, homeNoteDue = homeNoteDue, onHomeNoteShown = onHomeNoteShown, postAs = postAs, refused = refused) {
+            StudioWhenPill(state = state, onClick = onOpenDrawer, modifier = Modifier.weight(1f))
+            StudioPost(state = state, onPost = onPost)
+        }
+    }
+}
+
+/** Who sees it, the drawer's first row (PHASE-5 A): Nearby, Friends, and the made-up name once `/me` has answered. */
+@Composable
+private fun StudioWhoSeesIt(
+    state: MomentsComposeUiState,
+    postAs: PenNamePostAsUi?,
+    refused: String?,
+    onAudience: (String) -> Unit,
+    onMadeUp: () -> Unit,
+) {
+    // "Don't show where": no pin, connections only (as today's Post sheet).
+    val unplaced = state.noLocationOn
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(PantopusColors.studioBar)
+                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4, bottom = Spacing.s3)
+                .testTag("moments.studio.whoSees"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Text(text = "Who sees it", color = PantopusColors.studioPillSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Row(
             modifier = Modifier.semantics { contentDescription = "Who sees it" },
             horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -717,10 +753,7 @@ private fun StudioBar(
                 StudioChip(text = MADE_UP_NAME, on = state.madeUp, usable = !state.posting, tag = "madeUp", onClick = onMadeUp)
             }
         }
-        StudioBarRest(state = state, homeNoteDue = homeNoteDue, onHomeNoteShown = onHomeNoteShown, postAs = postAs, refused = refused) {
-            StudioWhenPill(state = state, onClick = onOpenDrawer, modifier = Modifier.weight(1f))
-            StudioPost(state = state, onPost = onPost)
-        }
+        refused?.let { Text(text = it, color = Color.White, fontSize = 13.sp) }
     }
 }
 
@@ -867,16 +900,21 @@ private val MomentsComposeUiState.studioPlaceLine: String
             else -> postPlaceLabel
         }
 
-/** "Fades in 24 hours" over the place's name ("Shares at 6:40 pm" with Share later picked): opens the drawer. */
+/** One line of details, "Lacamas Lake · 24 hours · Everyone nearby" ("Shares at 6:40 pm" with Share later): opens the drawer. */
 @Composable
 private fun StudioWhenPill(
     state: MomentsComposeUiState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val first = state.studioPostPill() ?: state.sharesAt?.let(SkyWords::sharesAt) ?: fadesIn(state.hours)
-    // With Share later picked, how long it shows moves to the second line (LEAD 00:40): "24 hours · Lacamas Lake".
-    val second = if (state.sharesAt != null) "${hoursWord(state.hours)} · ${state.studioPlaceLine}" else state.studioPlaceLine
+    val howLong = state.studioPostPill() ?: state.sharesAt?.let(SkyWords::sharesAt) ?: hoursWord(state.hours)
+    val who =
+        when {
+            state.madeUp -> MADE_UP_NAME
+            state.noLocationOn || state.audience == "connections" -> "Friends"
+            else -> "Everyone nearby"
+        }
+    val line = "${state.studioPlaceLine} · $howLong · $who"
     Row(
         modifier =
             modifier
@@ -888,30 +926,22 @@ private fun StudioWhenPill(
                 .padding(horizontal = 14.dp)
                 .testTag("moments.studio.pill")
                 .clearAndSetSemantics {
-                    contentDescription = "$first, $second. Where, how long and when"
+                    contentDescription = "$line. Where, how long and who sees it"
                     role = Role.Button
                 },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         PantopusIconImage(icon = PantopusIcon.Clock, contentDescription = null, size = 22.dp, strokeWidth = 2.2f, tint = Color.White)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = first,
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = second,
-                color = PantopusColors.studioPillSecondary,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Text(
+            text = line,
+            color = Color.White,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
         PantopusIconImage(icon = PantopusIcon.ChevronDown, contentDescription = null, size = 20.dp, strokeWidth = 2.2f, tint = Color.White)
     }
 }
@@ -972,6 +1002,5 @@ private fun StudioPost(
 private val NO_LOOK_PICTURE: StateFlow<Bitmap?> = MutableStateFlow(null)
 
 /** "Fades in 24 hours" (founder's word for a Moment's time: it fades when its hours are up). */
-private fun fadesIn(hours: Int): String = "Fades in ${hoursWord(hours)}"
 
 private fun hoursWord(hours: Int): String = if (hours == 1) "1 hour" else "$hours hours"
