@@ -353,12 +353,26 @@ fun MomentStampsOverlay(
     moment: MomentDto,
     modifier: Modifier = Modifier,
 ) {
+    // "Pulse, reinvented"'s layers over the picture, bottom to top: moving words (CONTRACT 7k) and a swatch's try-on
+    // (7g) on the photo, the stamps, the fog a reader wipes (7g), the swatch's chips once the fog is wiped, then the cards
+    // a reader answers (7b, 7g).
+    MomentMovingWordsLayer(moment, modifier)
+    MomentSwatchLayer(moment, modifier)
+    MomentStampsOnly(moment, modifier)
+    MomentFogLayer(moment, modifier)
+    MomentSwatchChipsLayer(moment, modifier)
+    MomentPlayLayer(moment, modifier)
+}
+
+@Composable
+private fun MomentStampsOnly(
+    moment: MomentDto,
+    modifier: Modifier,
+) {
     val stamps =
         remember(moment.id, moment.stamps) {
             moment.stamps.orEmpty().mapNotNull { stamp -> stamp.placement?.let { it to stamp.value } }.distinctBy { it.first.kind }
         }
-    // Moving words (CONTRACT 7k) sit on the photo under its stamps.
-    MomentMovingWordsLayer(moment, modifier)
     if (stamps.isEmpty()) return
     val liveUntil = remember(moment.liveUntil) { moment.liveUntil?.let { runCatching { Instant.parse(it) }.getOrNull() } }
     val wet by produceState(moment.takenHere && liveUntil?.isAfter(Instant.now()) == true, moment.id, liveUntil) {

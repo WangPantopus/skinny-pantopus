@@ -187,3 +187,51 @@ data class MomentPlayItemDto(
 /** A Moment's before and after item, when it has one: its picture is the two photos side by side. */
 val MomentDto.beforeAfter: MomentPlayItemDto?
     get() = play?.firstOrNull { it.kind == MomentPlayKinds.BEFORE_AFTER }?.takeIf { kind == "photo" }
+
+/** A reader's answer to one item (`PUT /api/reinvented/play/:id/:item`, CONTRACT 7b): only the kind's own fields go out. */
+@JsonClass(generateAdapter = true)
+data class MomentPlayAnswerBody(
+    val choice: Int? = null,
+    val value: Double? = null,
+    val x: Double? = null,
+    val y: Double? = null,
+    val note: String? = null,
+    val text: String? = null,
+)
+
+/** The answer to a `PUT`: the item again, with this reader's answer and what they may now see. */
+@JsonClass(generateAdapter = true)
+data class MomentPlayAnswerResponse(
+    val item: MomentPlayItemDto? = null,
+)
+
+/** The kinds a reader answers, and limits the Studio keeps to (CONTRACT 7b). */
+object MomentPlayLimits {
+    val ANSWERED =
+        setOf(MomentPlayKinds.POLL, MomentPlayKinds.SLIDER, MomentPlayKinds.BOARD, MomentPlayKinds.QUESTION, MomentPlayKinds.GUESS)
+    const val QUESTION_LETTERS = 100
+    const val OPTION_LETTERS = 40
+    const val TITLE_LETTERS = 60
+    const val END_LETTERS = 24
+    const val MOST_OPTIONS = 4
+
+    /** A countdown ends at most 30 days ahead. */
+    const val COUNTDOWN_DAYS = 30L
+}
+
+/** One answer in the author's list (CONTRACT 7b, the author's side): a question box's words or a board's note. */
+@JsonClass(generateAdapter = true)
+data class MomentPlayAnswerRowDto(
+    val id: String = "",
+    val text: String? = null,
+    val note: String? = null,
+    val at: String? = null,
+    val person: MomentAuthorDto? = null,
+)
+
+/** `GET /api/reinvented/play/:id/:item/answers`: newest first, 50 a page. */
+@JsonClass(generateAdapter = true)
+data class MomentPlayAnswersPageDto(
+    val answers: List<MomentPlayAnswerRowDto> = emptyList(),
+    @Json(name = "next_cursor") val nextCursor: String? = null,
+)
