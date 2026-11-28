@@ -52,9 +52,9 @@ import app.pantopus.android.ui.screens.feed.living.LivingWindowsRow
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCard
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.reinvented.after.EyesOnNearSection
-import app.pantopus.android.ui.screens.feed.reinvented.after.RelicsNearSection
 import app.pantopus.android.ui.screens.feed.reinvented.after.PulsePassItOn
 import app.pantopus.android.ui.screens.feed.reinvented.after.PulseTravelLine
+import app.pantopus.android.ui.screens.feed.reinvented.after.RelicsNearSection
 import app.pantopus.android.ui.screens.moments.components.MomentCardBackground
 import app.pantopus.android.ui.screens.moments.components.MomentImages
 import app.pantopus.android.ui.screens.moments.components.momentCardGradient
