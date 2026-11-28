@@ -1,29 +1,21 @@
 @file:Suppress("MagicNumber")
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package app.pantopus.android.ui.screens.feed.reinvented
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
@@ -32,7 +24,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,8 +32,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -76,15 +65,18 @@ import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 
-/** The three heights the list rests at over the map (PHASE-1 §2 piece 2). */
+/**
+ * The three rests of the list over the map (PHASE-1 §2 piece 2; on a phone the sheet's rests since PHASE-6 A3). On a
+ * wide window: both side by side, the list alone, the map alone.
+ */
 enum class ReinventedHeight {
-    /** The map across the top third, the list below: how Pulse opens. */
+    /** The sheet at half, the map above it: how Pulse opens. */
     Middle,
 
-    /** The list, full screen, for reading. */
+    /** The sheet full, up to under the top line, for reading. */
     List,
 
-    /** The map, full screen. */
+    /** The sheet at peek (its header only): the map. */
     Map,
 }
 
@@ -330,7 +322,8 @@ private fun ReinventedListPane(
  * wide window (a tablet, an open foldable) the list beside the map ([ReinventedSideBySide]).
  */
 @Composable
-@Suppress("LongParameterList") // What the layout shows, its height, and where each part's taps go.
+// What the layout shows, its height, and where each part's taps go; the phone's and the wide window's parts, built once.
+@Suppress("LongParameterList", "LongMethod")
 private fun ReinventedPulseLayout(
     height: ReinventedHeight,
     onHeight: (ReinventedHeight) -> Unit,
@@ -363,6 +356,11 @@ private fun ReinventedPulseLayout(
     ) {
         val wide = reinventedSideBySide(maxWidth)
         val open = { item: ReinventedMapItem -> openPin(item, atlas, actions, onOpenMoment, onOpenRing) }
+        // + opens a Studio with nothing of phase 3 chosen (a Retake's frame opens it through TogetherStudioOpener).
+        val onAdd = {
+            TogetherStudio.reset()
+            actions.onCompose()
+        }
         val parts =
             ReinventedLayoutParts(
                 header = { modifier ->
@@ -411,60 +409,53 @@ private fun ReinventedPulseLayout(
                         val at = Modifier.align(Alignment.TopStart).padding(top = guessTop + Spacing.s2, start = Spacing.s4)
                         ReinventedGuessSpotsChip(mapState, at)
                     }
-                    ReinventedPeekDeck(deck = mapState.deck, onFocus = mapModel::focus, onOpen = open, modifier = deck)
+                    // On a phone the sheet's peek line stands where the deck was (PHASE-6 A): the deck is the wide map's.
+                    deck?.let { ReinventedPeekDeck(deck = mapState.deck, onFocus = mapModel::focus, onOpen = open, modifier = it) }
                 },
-                // + opens a Studio with nothing of phase 3 chosen (a Retake's frame opens it through TogetherStudioOpener).
-                add = { modifier ->
-                    AddButton({
-                        TogetherStudio.reset()
-                        actions.onCompose()
-                    }, modifier)
-                },
+                add = { modifier -> AddButton(onAdd, modifier) },
+                onAdd = onAdd,
                 list = list,
             )
-        if (wide) ReinventedSideBySide(height, parts) else ReinventedOverMap(height, onHeight, maxHeight, parts)
+        if (wide) {
+            ReinventedSideBySide(height, parts)
+        } else {
+            ReinventedOverMap(height, onHeight, maxHeight, reinventedSheetLine(mapState.items.size, mapState.time, atlas.on), parts)
+        }
     }
 }
 
-/** On a phone: the map behind, the list over it at its height, the header over both, and +. */
+/**
+ * On a phone (PHASE-6 A): the map is the screen, the header over it, and the list a sheet over the map at three rests
+ * ([ReinventedSheet]), moved only by its header. + rides over the sheet up to half and sits in its header at full.
+ */
 @Composable
 private fun BoxScope.ReinventedOverMap(
     height: ReinventedHeight,
     onHeight: (ReinventedHeight) -> Unit,
     full: Dp,
+    line: String,
     parts: ReinventedLayoutParts,
 ) {
     val density = LocalDensity.current
     var headerPx by remember { mutableIntStateOf(0) }
     val header = with(density) { headerPx.toDp() }
-    val rest = restOf(height, header, full)
-    var draggedPx by remember { mutableFloatStateOf(0f) }
-    val target = (rest + with(density) { draggedPx.toDp() }).coerceIn(header, full - PEEK)
-    val top by animateDpAsState(
-        target,
-        if (draggedPx != 0f) spring(stiffness = 10_000f) else spring(dampingRatio = 0.85f),
-        label = "panel",
-    )
-    parts.map(if (height == ReinventedHeight.Map) PEEK else full - rest)
-    Panel(
-        top = top,
+    val sheet = rememberReinventedSheet(height, onHeight, header, full)
+    val settled = sheet.settledValue
+    // The map keeps its middle above the part the sheet covers once it rests (never re-laid while it moves).
+    val covered =
+        with(density) { full - reinventedSheetTop(settled, header.toPx(), full.toPx(), REINVENTED_SHEET_PEEK.toPx()).toDp() }
+    parts.map(covered)
+    ReinventedSheet(
+        sheet = sheet,
+        top = header,
         full = full,
-        height = height,
-        onDrag = { draggedPx += it },
-        onSettle = {
-            val now = rest + with(density) { draggedPx.toDp() }
-            draggedPx = 0f
-            onHeight(ReinventedHeight.entries.minBy { (restOf(it, header, full) - now).value.let { d -> if (d < 0) -d else d } })
-        },
-        onTapHandle = { onHeight(if (height == ReinventedHeight.Middle) ReinventedHeight.List else ReinventedHeight.Middle) },
+        line = line,
+        headerEnd = { if (settled == ReinventedHeight.List) ReinventedSheetHeaderAdd(parts.onAdd) },
         list = parts.list,
     )
     parts.header(Modifier.onSizeChanged { headerPx = it.height })
-    if (height == ReinventedHeight.Map) {
-        parts.mapExtras(this, header, Modifier.align(Alignment.BottomCenter).padding(bottom = PEEK + Spacing.s2))
-    } else {
-        parts.add(Modifier.align(Alignment.BottomEnd))
-    }
+    if (settled == ReinventedHeight.Map) parts.mapExtras(this, header, null)
+    ReinventedSheetAdd(sheet, header, full, ADD_SIZE + Spacing.s4, parts.add)
 }
 
 /** + : the Studio, as the Moments tab's + opens it. */
@@ -480,71 +471,13 @@ private fun AddButton(
         modifier =
             modifier
                 .padding(end = Spacing.s4, bottom = Spacing.s4)
-                .size(58.dp)
+                .size(ADD_SIZE)
                 .testTag("reinventedPulse.add")
                 .semantics { contentDescription = "Add a Moment" },
     ) {
         PantopusIconImage(icon = PantopusIcon.Plus, contentDescription = null, size = 26.dp, strokeWidth = 2.6f, tint = Color.White)
     }
 }
-
-/** The list's sheet, its top at [top]: a handle to pull it, and the list. Square-cornered and flat at the List height. */
-@Composable
-@Suppress("LongParameterList") // Where it rests, the handle's three gestures, and the list inside.
-private fun Panel(
-    top: Dp,
-    full: Dp,
-    height: ReinventedHeight,
-    onDrag: (Float) -> Unit,
-    onSettle: () -> Unit,
-    onTapHandle: () -> Unit,
-    list: @Composable (Modifier) -> Unit,
-) {
-    val corner = if (height == ReinventedHeight.List) 0.dp else 22.dp
-    val shape = RoundedCornerShape(topStart = corner, topEnd = corner)
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height((full - top).coerceAtLeast(0.dp))
-                .offset(y = top)
-                .shadow(if (height == ReinventedHeight.List) 0.dp else 8.dp, shape)
-                .clip(shape)
-                .background(PantopusColors.appBg),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(HANDLE)
-                    .draggable(rememberDraggableState(onDrag), Orientation.Vertical, onDragStopped = { onSettle() })
-                    .semantics {
-                        contentDescription = if (height == ReinventedHeight.Map) "Show the list" else "List height"
-                        onClick(label = "Change the list's height") {
-                            onTapHandle()
-                            true
-                        }
-                    }.testTag("reinventedPulse.handle"),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(Modifier.size(width = 40.dp, height = 5.dp).clip(CircleShape).background(PantopusColors.appBorder))
-        }
-        // The list takes the rest of the sheet, so its last rows stay above the screen's bottom however high it rests.
-        list(Modifier.fillMaxWidth().weight(1f))
-    }
-}
-
-/** Where the sheet's top rests for a height: under the header, a third of the way down, or near the bottom. */
-private fun restOf(
-    height: ReinventedHeight,
-    header: Dp,
-    full: Dp,
-): Dp =
-    when (height) {
-        ReinventedHeight.List -> header
-        ReinventedHeight.Middle -> header + full / 3
-        ReinventedHeight.Map -> full - PEEK
-    }
 
 /** A pin in My Atlas opens its kept Moment there; elsewhere as [openMapItem]. */
 private fun openPin(
@@ -572,7 +505,6 @@ private fun openMapItem(
     }
 }
 
-private val PEEK = 64.dp
-private val HANDLE = 22.dp
+private val ADD_SIZE = 58.dp
 private const val MINUTE_MS = 60_000L
 private const val FLY_MS = 600
