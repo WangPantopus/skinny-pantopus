@@ -4,11 +4,11 @@
 // with their weather, plans starting soon, and a ring for each person you know with a live Moment
 // (GET /api/reinvented/strip, coord/CONTRACT.md §6c). Convergences join in phase 3.
 
-import { useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Ring } from '@pantopus/api/endpoints/moments';
 import { MomentFace } from '@/components/moments/MomentFace';
 import { colors } from '@/components/moments/momentState';
 import { startsIn, type ListMoment, type MapTicket, type StripData } from './listApi';
+import { useMouseDragScroll } from './mouseDragScroll';
 
 interface Props {
   strip: StripData;
@@ -64,53 +64,8 @@ function PersonRing({ ring, onOpen }: { ring: Ring; onOpen(): void }) {
   );
 }
 
-/**
- * A mouse drags the strip sideways as a finger does (LEAD-7's look, 08:39: a sideways wheel and a finger scrolled it, a mouse
- * drag did nothing). Only a clearly sideways drag of a mouse; a tap stays the card's own, and the click that ends a drag opens
- * nothing. A finger and a pen keep the browser's own scrolling.
- */
-function useMouseDragScroll() {
-  const row = useRef<HTMLDivElement>(null);
-  const dragged = useRef(false);
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const el = row.current;
-    if (e.pointerType !== 'mouse' || e.button !== 0 || !el || el.scrollWidth <= el.clientWidth) return;
-    const id = e.pointerId,
-      x0 = e.clientX,
-      y0 = e.clientY,
-      left0 = el.scrollLeft;
-    let on = false;
-    dragged.current = false;
-    const move = (ev: PointerEvent) => {
-      if (ev.pointerId !== id) return;
-      const dx = ev.clientX - x0;
-      if (!on && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(ev.clientY - y0)) on = dragged.current = true;
-      if (on) {
-        ev.preventDefault();
-        el.scrollLeft = left0 - dx;
-      }
-    };
-    const end = (ev: PointerEvent) => {
-      if (ev.pointerId !== id) return;
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', end);
-      window.removeEventListener('pointercancel', end);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
-  };
-  const onClickCapture = (e: ReactMouseEvent) => {
-    if (!dragged.current) return;
-    dragged.current = false;
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  return { ref: row, onPointerDown, onClickCapture };
-}
-
 export default function AliveStrip({ strip, bandLabel, now, onMoments, onPlan }: Props) {
-  const { ref: rowRef, onPointerDown, onClickCapture } = useMouseDragScroll();
+  const { ref: rowRef, onPointerDown, onClickCapture } = useMouseDragScroll<HTMLDivElement>();
   const live = strip.live_here || [];
   const plans = strip.plans_soon || [];
   const people = strip.people || [];
