@@ -187,6 +187,8 @@ private struct MomentsStudioPlacedPlay: View {
                     .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white, lineWidth: picked ? 2 : 0))
             }
         }
+        // The card is drawn as readers see it, with its own touches off (`preview`): the whole item takes the finger.
+        .contentShape(Rectangle())
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = CGSize(width: $0.width * 0.86, height: $0.height * 0.86) }
         .scaleEffect(0.86)
         .position(
