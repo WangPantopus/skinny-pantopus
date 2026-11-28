@@ -297,6 +297,7 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
   // map that fills the window like the Moments map. The feed page reads the switch itself; this shares its answer.
   const reinventedPulse = useReinventedOn(pathname === '/app/feed') && pathname === '/app/feed';
   const isMapWorkspace = isMomentsPage || pathname === '/app/plans' || reinventedPulse;
+  const pulseOwnsTop = reinventedPulse && isMobile;
   const fillsWindow = isMapWorkspace || (isMobile && isConversation(pathname));
   // The map workspaces use the space left by the actual tab bar, including its safe area.
   const mobileTabPadding =
@@ -308,6 +309,7 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
   useEffect(() => {
     persistSidebarCollapsed(collapsed);
   }, [collapsed]);
+  useEffect(() => { if (!pulseOwnsTop) return undefined; const open = () => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: true }); window.addEventListener('pantopus:open-menu', open); return () => window.removeEventListener('pantopus:open-menu', open); }, [pulseOwnsTop]);
   const wasPulse = useRef(false);
   useEffect(() => {
     if (wasPulse.current && !reinventedPulse) sidebarDispatch({ type: 'SET_HOVER_EXPANDED', value: Boolean(document.querySelector('aside:hover')) && (isTablet || (isDesktop && collapsed)) });
@@ -507,7 +509,7 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
        *  pushed the bell, messages and avatar off a phone's screen. There its buttons, spacing and
        *  wordmark keep their normal size (px, and max-lg: on the parts desktop shares).
        *  While a bell's panel is open the bar stacks above the + button (z-50), which covered it. */}
-      <header className={`fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 has-[[data-notification-panel]]:z-[60] flex items-center px-4${offsetSlides ? ' transition-[left] duration-200 ease-in-out' : ''}`} style={topBarStyle}>
+      <header className={`fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 has-[[data-notification-panel]]:z-[60] flex items-center px-4${offsetSlides ? ' transition-[left] duration-200 ease-in-out' : ''}${pulseOwnsTop ? ' hidden' : ''}`} style={topBarStyle}>
         {/* Mobile: hamburger + brand */}
         {isMobile && (
           <>
@@ -730,7 +732,7 @@ function AppShellInner({ children, publicPage = false }: { children: React.React
           above it (its top edge 144 px up), pb-40 lets the last row scroll clear.
           z-0 makes this a stacking context, so nothing inside rises above the header, tab bar or floating
           buttons. A dialog that stays in here sets data-covers-shell, which suspends that while it's open. */}
-      <main key="content" className={`pt-14 ${fillsWindow ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-screen'}${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0 has-[[data-covers-shell]]:z-auto${mobileTabPadding}`} style={contentStyle}>
+      <main key="content" className={`${pulseOwnsTop ? '' : 'pt-14 '}${fillsWindow ? 'flex h-dvh flex-col overflow-hidden' : 'min-h-screen'}${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0 has-[[data-covers-shell]]:z-auto${mobileTabPadding}`} style={contentStyle}>
         {offlineNotice}
         {children}
       </main>

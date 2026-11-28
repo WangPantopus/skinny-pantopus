@@ -11,10 +11,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { ChevronDown, LocateFixed, Plus, Search, X } from 'lucide-react';
+import { BookOpen, ChevronDown, LocateFixed, Map as MapGlyph, Menu, Plus, Search, UserRoundSearch, X } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/api';
 import { useMe } from '@/lib/me';
+import NotificationBell from '@/components/NotificationBell';
+import MessagesGlyph from '@/components/MessagesGlyph';
+import { useBadges } from '@/contexts/BadgeContext';
 import { useMyHomeCenter } from '@/lib/myHomes';
 import { reactedPostPatch, serverReactionPatch } from '@/components/feed/PostReactions';
 import { studioViewer } from '../viewer/studioViewer';
@@ -123,6 +126,18 @@ export default function ReinventedPulse() {
   const mapView = useRef<(() => MapView | null) | null>(null);
   const [folded, setFolded] = useState(false);
   const [lensOpen, setLensOpen] = useState(false);
+  // Under 768 px wide the app's own top bar steps aside on the new Pulse (AppShell's pulseOwnsTop, the same width), so this
+  // line holds what the design gives it there: the side menu first, then the bell (today's side menu has no way to the
+  // notifications) and Messages last. The place pill then shows the town only (J: the top covers 52 px, not 108).
+  const [phoneTop, setPhoneTop] = useState(false);
+  useEffect(() => {
+    const narrow = window.matchMedia('(max-width: 767px)');
+    const read = () => setPhoneTop(narrow.matches);
+    read();
+    narrow.addEventListener('change', read);
+    return () => narrow.removeEventListener('change', read);
+  }, []);
+  const { unreadMessages } = useBadges();
   const [point, setPoint] = useState<Point | null>(null);
   const [locating, setLocating] = useState<'idle' | 'busy' | 'refused'>('idle');
   const [viewing, setViewing] = useState<{ id: string; ids: string[] } | null>(null);
@@ -897,7 +912,18 @@ export default function ReinventedPulse() {
   };
 
   const topLine = (
-    <div className="rp-top" onPointerDown={onTopDown} onClickCapture={onTopClick}>
+    <div className="rp-top" data-phone={phoneTop || undefined} onPointerDown={onTopDown} onClickCapture={onTopClick}>
+      {phoneTop && (
+        <button
+          type="button"
+          className="rp-lens"
+          aria-label="Menu"
+          title="Menu"
+          onClick={() => window.dispatchEvent(new Event('pantopus:open-menu'))}
+        >
+          <Menu size={18} aria-hidden />
+        </button>
+      )}
       <div className="rp-scope-wrap">
         <button
           type="button"
@@ -911,8 +937,10 @@ export default function ReinventedPulse() {
         >
           <span className="rp-scope-dot" data-reach={reach} aria-hidden />
           <strong>{placeName}</strong>
-          <span className="rp-scope-reach">{reach === 'around' && miles < 25 ? `${REACH_NAMES.around} · ${miles} mi` : REACH_NAMES[reach]}</span>
-          <ChevronDown size={14} aria-hidden />
+          {!phoneTop && (
+            <span className="rp-scope-reach">{reach === 'around' && miles < 25 ? `${REACH_NAMES.around} · ${miles} mi` : REACH_NAMES[reach]}</span>
+          )}
+          <ChevronDown size={phoneTop ? 12 : 14} aria-hidden />
         </button>
         {scopeOpen && (
           <ReachDial
@@ -934,12 +962,28 @@ export default function ReinventedPulse() {
         )}
       </div>
 
+      {/* At a phone's width the line also holds the menu, the bell and Messages: Map | Atlas draws as two small icons there so
+          the place pill keeps the town's name readable (LEAD-7's look, 08:39). */}
       <div className="rp-switch" role="group" aria-label="Map or Atlas">
-        <button type="button" aria-pressed={view === 'pulse'} data-lit={view === 'pulse' || undefined} onClick={() => toView('pulse')}>
-          Map
+        <button
+          type="button"
+          aria-pressed={view === 'pulse'}
+          aria-label={phoneTop ? 'Map' : undefined}
+          title={phoneTop ? 'Map' : undefined}
+          data-lit={view === 'pulse' || undefined}
+          onClick={() => toView('pulse')}
+        >
+          {phoneTop ? <MapGlyph size={16} aria-hidden /> : 'Map'}
         </button>
-        <button type="button" aria-pressed={view === 'atlas'} data-lit={view === 'atlas' || undefined} onClick={() => toView('atlas')}>
-          Atlas
+        <button
+          type="button"
+          aria-pressed={view === 'atlas'}
+          aria-label={phoneTop ? 'Atlas' : undefined}
+          title={phoneTop ? 'Atlas' : undefined}
+          data-lit={view === 'atlas' || undefined}
+          onClick={() => toView('atlas')}
+        >
+          {phoneTop ? <BookOpen size={16} aria-hidden /> : 'Atlas'}
         </button>
       </div>
 
@@ -963,7 +1007,35 @@ export default function ReinventedPulse() {
         // The lens is one field: the words typed ask the map ("Ask the map: …"); the pins that match light up.
         <div className="rp-lens-card">
           <AskTheMap box={box} time={time} data={map.data} lit={lit} shown={lit ? pins.filter((p) => lit.pins.has(p.key)).length : 0} onLit={setLit} />
+          {phoneTop && (
+            // The app's own Search (people and places) stepped aside with its top bar: it is reached from the lens here.
+            <button type="button" className="rp-lens-more" onClick={() => router.push('/app/discover')}>
+              <UserRoundSearch size={16} aria-hidden />
+              Search people and places
+            </button>
+          )}
         </div>
+      )}
+      {phoneTop && (
+        <span className="rp-bell">
+          <NotificationBell mode="all" />
+        </span>
+      )}
+      {phoneTop && (
+        <button
+          type="button"
+          className="rp-lens rp-messages"
+          aria-label={unreadMessages ? `Messages, ${unreadMessages} unread` : 'Messages'}
+          title="Messages"
+          onClick={() => router.push('/app/chat')}
+        >
+          <MessagesGlyph unread={unreadMessages > 0} className="w-[18px] h-[18px]" />
+          {unreadMessages > 0 && (
+            <span className="rp-rail-dot" aria-hidden>
+              {unreadMessages > 99 ? '99+' : unreadMessages}
+            </span>
+          )}
+        </button>
       )}
     </div>
   );
