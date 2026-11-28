@@ -31,7 +31,7 @@ struct ReinventedPulseList: View {
                 VStack(spacing: Spacing.s3) {
                     ForEach(0..<3, id: \.self) { _ in FeedSkeletonCard(withTitle: true) }
                 }
-                .padding(.horizontal, Spacing.s4)
+                .padding(.horizontal, Spacing.s3)
             }
             .accessibilityLabel("Loading Pulse")
         case let .failed(message):
@@ -166,7 +166,7 @@ struct ReinventedPulseList: View {
             Text(moment.together.retake?.tag ?? moment.together.convergence?.tag ?? moment.together.pinboard?.tag ?? "Kept · stays")
                 .pulseFont(12.5, weight: .bold)
                 .foregroundStyle(Theme.Color.primaryTint)
-                .padding(.horizontal, Spacing.s4)
+                .padding(.horizontal, Spacing.s3)
                 .padding(.top, Spacing.s3)
             ReinventedMomentRow(moment: moment, kept: true) { onOpenMoment(moment) }
                 .padding(.bottom, Spacing.s3)
@@ -182,7 +182,7 @@ struct ReinventedPulseList: View {
         Text(words)
             .pulseFont(17, weight: .bold)
             .foregroundStyle(Theme.Color.appText)
-            .padding(.horizontal, Spacing.s4)
+            .padding(.horizontal, Spacing.s3)
             .padding(.top, Spacing.s2)
             .accessibilityAddTraits(.isHeader)
     }
@@ -195,7 +195,7 @@ struct ReinventedPulseList: View {
                 .pulseFont(12.5, weight: .medium)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
-        .padding(.horizontal, Spacing.s4)
+        .padding(.horizontal, Spacing.s3)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Why you're seeing this: \(why)")
     }
@@ -248,7 +248,7 @@ struct ReinventedPulseList: View {
                 .fixedSize()
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)
         }
-        .padding(.horizontal, Spacing.s4)
+        .padding(.horizontal, Spacing.s3)
         .padding(.top, Spacing.s2)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -266,7 +266,7 @@ struct ReinventedPulseList: View {
                 Text(status)
                     .pulseFont(12.5, weight: .bold)
                     .foregroundStyle(Theme.Color.primaryTint)
-                    .padding(.horizontal, Spacing.s4)
+                    .padding(.horizontal, Spacing.s3)
                     .padding(.top, Spacing.s3)
                     .accessibilityIdentifier("reinventedPulse.status.\(postId)")
             }
@@ -274,7 +274,7 @@ struct ReinventedPulseList: View {
                 Text(line)
                     .pulseFont(12.5, weight: .semibold)
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                    .padding(.horizontal, Spacing.s4)
+                    .padding(.horizontal, Spacing.s3)
                     .padding(.top, Spacing.s1)
                     .accessibilityIdentifier("reinventedPulse.travel.\(postId)")
             }
@@ -356,7 +356,7 @@ struct ReinventedMomentRow: View {
                         .pulseFont(15, weight: .medium)
                         .foregroundStyle(Theme.Color.appText)
                         .lineLimit(2)
-                        .padding(.horizontal, Spacing.s4)
+                        .padding(.horizontal, Spacing.s3)
                 }
             }
             .contentShape(Rectangle())

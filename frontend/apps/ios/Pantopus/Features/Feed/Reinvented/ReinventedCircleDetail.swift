@@ -116,7 +116,7 @@ struct ReinventedCircleDetail: View {
             ReinventedCircleHeading("Who's in it")
             ForEach(circle.members, id: \.person.id) { member in
                 HStack(spacing: Spacing.s3) {
-                    MomentAvatar(author: member.person, size: 34)
+                    MomentAvatar(author: member.person, size: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(member.person.name)
                             .pulseFont(15, weight: .semibold)
