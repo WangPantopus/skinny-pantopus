@@ -25,7 +25,8 @@ import CardShareSheet from '../cards/CardShareSheet';
 import CardTable from '../cards/CardTable';
 import { askTakeBack, takeBackMessage } from '../cards/takeBack';
 import { cardMood, firstNameOf, shortDay, WAX } from '../cards/cardArt';
-import CardPrint from '../cards/CardPrint';
+import CardPrint, { useCardMediaUrl } from '../cards/CardPrint';
+import { PhotoFrontContext, type PhotoFront } from '../cards/PhotoCardFront';
 import CardGreeting from '../cards/CardGreeting';
 import CardLinkActions from '../cards/CardLinkActions';
 import { linkOpened, sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, sentTravelLine, trailLabel, trailWhen } from './sentWords';
@@ -74,6 +75,9 @@ export default function SentPieceView({ id }: { id: string }) {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [onTable, setOnTable] = useState(false);
   const [sharing, setSharing] = useState(false);
+  // A photo card's photo (Wave 4.2), for its front: from the sender's own route, never covered for them.
+  const frontFile = piece?.card?.front && piece.card.photo ? piece.card.photo.file_id : null;
+  const { url: frontUrl } = useCardMediaUrl(frontFile ? { sent: id, fileId: frontFile } : null);
   const backToSent = () => router.push('/app/mailbox/sent');
   // Write back (mail-cards-experience Part 3): the joined pair opens from Sent for both people, the card's sender (once its
   // reply has come) and the reply's writer.
@@ -127,6 +131,11 @@ export default function SentPieceView({ id }: { id: string }) {
   const name = piece.to_name || 'them';
   const first = sentFirst(piece);
   const card = piece.card;
+  // A photo card (Wave 4.2): its photo, in its frame, is the card's front here, and isn't shown again beside it.
+  const photoFront: PhotoFront | null = card.design && card.front && card.photo ? {
+    design: card.design, frame: card.front.frame, caption: card.front.caption, alt: card.photo.alt,
+    aspect: card.photo.width && card.photo.height ? card.photo.width / card.photo.height : null, src: frontUrl,
+  } : null;
   const front = card.design ? (
     <CardFront design={card.design} caption={card.caption} paper={card.paper ?? '#f7eee0'} year={card.year ?? new Date(piece.sent_at).getFullYear()} mailedOn={piece.envelope.postmarked_on ?? piece.sent_at} className={shadow} />
   ) : null;
@@ -164,7 +173,7 @@ export default function SentPieceView({ id }: { id: string }) {
       {/* The same full-screen moment they have. Your own note is shown, so it opens as it did for them, seal or none. */}
       {onTable && card.design ? (
         <CardTable
-          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null, photo: card.photo ?? null, voice: card.voice ?? null }}
+          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false, verse: card.verse ?? null, signature: card.signature ?? null, photo: card.photo ?? null, voice: card.voice ?? null, front: card.front ?? null }}
           mediaFrom={(fileId) => ({ sent: piece.id, fileId })}
           note={piece.note}
           fromName={piece.envelope.from}
@@ -172,7 +181,7 @@ export default function SentPieceView({ id }: { id: string }) {
           mailedOn={piece.envelope.postmarked_on || piece.sent_at}
           closeLabel="Back to your card"
           paused={sharing}
-          onShare={() => setSharing(true)}
+          onShare={card.front ? undefined : () => setSharing(true)}
           onClose={() => setOnTable(false)}
         />
       ) : null}
@@ -288,11 +297,13 @@ export default function SentPieceView({ id }: { id: string }) {
               <h3 className={label}>The card you sent</h3>
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
                 <div className={`mx-auto w-full md:max-w-none ${launchFeatures.cardTable ? '' : 'max-w-[300px]'}`}>
-                  {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
-                  {card.photo || card.voice ? (
+                  <PhotoFrontContext.Provider value={photoFront}>
+                    {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
+                  </PhotoFrontContext.Provider>
+                  {(card.photo && !photoFront) || card.voice ? (
                     // Their own photo and voice greeting (memories plan steps 4 and 7), never covered: from their own card's route.
                     <div className={`-mt-3 flex items-start gap-[4%] px-[4%] ${card.photo ? 'justify-between' : 'justify-end'}`}>
-                      {card.photo ? (
+                      {card.photo && !photoFront ? (
                         <div className="w-[48%] [container-type:inline-size]" data-testid="mailSentPhoto">
                           <CardPrint
                             source={{ sent: piece.id, fileId: card.photo.file_id }}
@@ -329,14 +340,17 @@ export default function SentPieceView({ id }: { id: string }) {
                       >
                         See it the way they did
                       </button>
-                      <button
-                        type="button"
-                        data-testid="mailSentShare"
-                        onClick={() => setSharing(true)}
-                        className={`${button} border border-[#d6cbb6] bg-[#fffdf8] px-5 text-[15px] text-[#374151] hover:bg-[#f5efe3] focus-visible:ring-[#8b1d1d]`}
-                      >
-                        Share
-                      </button>
+                      {/* A photo card (Wave 4.2) has no share picture or video. */}
+                      {card.front ? null : (
+                        <button
+                          type="button"
+                          data-testid="mailSentShare"
+                          onClick={() => setSharing(true)}
+                          className={`${button} border border-[#d6cbb6] bg-[#fffdf8] px-5 text-[15px] text-[#374151] hover:bg-[#f5efe3] focus-visible:ring-[#8b1d1d]`}
+                        >
+                          Share
+                        </button>
+                      )}
                       {!isReply && pair?.reply ? (
                         <button
                           type="button"

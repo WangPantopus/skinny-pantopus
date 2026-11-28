@@ -938,6 +938,8 @@ export async function sendHolidayCard(data: {
    * characters; left out for none.
    */
   to: { user_id: string } | { email: string } | { link: true; name?: string };
+  /** A photo card (Wave 4.2, design `photo_card.design`): `photo` is its front, in this frame, with this caption. */
+  front?: { frame: CardFrame; caption?: string };
   /**
    * One per card draft, sent again with every look and retry of it: a repeat of a send answers with the card it
    * stored (200), CARD_TAKEN_BACK once that card was taken back, or CARD_REQUEST_SENT (with `card`) when the draft
@@ -1014,6 +1016,8 @@ export interface HolidayCardList {
   photo_alt?: string;
   photo_live?: string;
   voice?: string;
+  /** A photo card (Wave 4.2): as on one card. */
+  front?: { frame: CardFrame; caption?: string };
   /** Each address keeps the list's choice (send it when the server offers `arrivals.email_all`). */
   emails_keep_arrival?: boolean;
   /** "Let it travel" (server key card_travel): each card starts a journey of its own. */
@@ -1101,6 +1105,8 @@ export interface SentPiece {
   /** The envelope as it reaches them: no postmark until the carrier has it. */
   envelope: { from: string; postmarked_on: string | null };
   card: { design: string | null; number: number | null; caption: string | null; paper: string | null; year: number | null;
+    /** A photo card's front (Wave 4.2; the detail read only): its `photo` in this frame. */
+    front?: { frame: CardFrame; caption: string | null } | null;
     /** The picture's height in px at 960 px wide. */
     height?: number | null;
     /** Its public page, and the colour of the cloth it lies on (launch key card_table). */

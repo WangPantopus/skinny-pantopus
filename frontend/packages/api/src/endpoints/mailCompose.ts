@@ -71,6 +71,8 @@ export interface GuestOpenCardResponse {
     photo?: CardPhoto | null;
     voice?: CardVoice | null;
     travel?: Pick<CardTravel, 'postmarks' | 'miles' | 'towns'> | null;
+    /** A photo card's front (Wave 4.2): its `photo` in this frame. */
+    front?: { frame: 'heirloom' | 'midnight' | 'arch'; caption: string | null } | null;
   };
   journey: string | null;
   by_link: boolean;

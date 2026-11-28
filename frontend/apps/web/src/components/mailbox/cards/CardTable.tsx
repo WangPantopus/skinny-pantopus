@@ -9,7 +9,7 @@
 // nothing about the server: reading it marks nothing.
 // ============================================================
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import TravelPostmarks, { travelCameLine } from './TravelPostmarks';
 import travelStyles from './CardTravel.module.css';
@@ -17,7 +17,8 @@ import { cardMood, cardStampFile, cardTrimmedPicture, daysUntil, firstNameOf, po
 import { cardPen } from './cardFont';
 import { playCardSound, preloadCardSounds } from './cardSounds';
 import type { CardPhoto, CardSignature, CardVoice, CardTravel } from '@pantopus/api';
-import CardPrint, { type PrintSource } from './CardPrint';
+import CardPrint, { useCardMediaUrl, type PrintSource } from './CardPrint';
+import { PhotoFrontContext, type PhotoFront } from './PhotoCardFront';
 import CardGreeting, { spokenLength } from './CardGreeting';
 import { PaperBack, PaperFront, PaperLeaf, useNoteLeaves } from './CardPaper';
 import { CardTableEngine, type TableState } from './cardTableEngine';
@@ -71,6 +72,8 @@ export type TableCard = {
   voice?: CardVoice | null;
   /** A card that travels (server key card_travel): the postmarks of the towns on the way, and how far it came. */
   travel?: Pick<CardTravel, 'postmarks' | 'miles' | 'towns'> | null;
+  /** A photo card (Wave 4.2): its `photo` is its front, in this frame. Null while sealed. */
+  front?: { frame: 'heirloom' | 'midnight' | 'arch'; caption: string | null } | null;
 };
 
 /** A line in the ⋯ menu, or a quiet button under the card. A quiet button may also carry its short words (used when two
@@ -287,8 +290,25 @@ export default function CardTable({
   // and it stays once fetched (turning back or enlarging doesn't fetch it again).
   const [mediaSeen, setMediaSeen] = useState(false);
   const isLetter = Boolean(letter);
+  // A photo card (Wave 4.2): the photo is the card's front, in its frame, veiled first while it's covered; it isn't laid
+  // on the table a second time. Without a way to read it here (the sealing table), the page's own front (its context).
+  const frontPhoto = !isLetter && !card.sealed && card.front && card.photo ? card.photo : null;
+  const [frontUncovered, setFrontUncovered] = useState(false);
+  const frontSource = frontPhoto && mediaFrom && (!frontPhoto.covered || frontUncovered) ? mediaFrom(frontPhoto.file_id) : null;
+  const { url: frontUrl } = useCardMediaUrl(frontSource);
+  const pageFront = useContext(PhotoFrontContext);
+  const frontCoverRef = useRef<(() => void) | null>(null);
+  const tableFront: PhotoFront | null = frontPhoto && card.front && mediaFrom ? {
+    design: card.design,
+    frame: card.front.frame,
+    caption: card.front.caption,
+    aspect: frontPhoto.width && frontPhoto.height ? frontPhoto.width / frontPhoto.height : null,
+    src: frontUrl,
+    alt: frontPhoto.alt,
+    covered: frontPhoto.covered && !frontUncovered ? { name: firstNameOf(fromName), onUncover: () => setFrontUncovered(true) } : null,
+  } : pageFront;
   // The card's own photo and voice greeting lie on the table beside it once it's turned over (wave 4 drawings 3 and 4).
-  const photo = !isLetter && !card.sealed && !sendMoment && mediaFrom ? card.photo ?? null : null;
+  const photo = !isLetter && !card.sealed && !sendMoment && mediaFrom && !frontPhoto ? card.photo ?? null : null;
   const voice = !isLetter && !card.sealed && !sendMoment && mediaFrom ? card.voice ?? null : null;
   const hasMedia = Boolean(photo || voice);
   // A long note runs onto a second leaf on a table that can be turned (Part 9); the sealing moment keeps one side.
@@ -338,6 +358,8 @@ export default function CardTable({
         onTableTap: () => setControlsHidden((hidden) => !hidden),
         // The joined pair: a tap on the card, with the reply in front, brings the card to the front instead of turning it.
         onCardTap: () => {
+          // A photo card's covered front (Wave 4.2): a tap on its picture side shows the photo instead of turning it.
+          if (frontCoverRef.current) { frontCoverRef.current(); return true; }
           if (!replyRef.current || !replyFrontRef.current) return false;
           setReplyFront(false);
           return true;
@@ -543,6 +565,7 @@ export default function CardTable({
   if (!mounted) return null;
 
   const { step, backUp, turnedOnce, envTurnedOnce, heldOnce, send } = ui;
+  frontCoverRef.current = tableFront?.covered && step === 'out' && !backUp ? tableFront.covered.onUncover : null;
   // Sealing it, the card isn't sealed to the sender: only its envelope says so once it's addressed.
   const sealed = card.sealed && !sendMoment;
   let words = '';
@@ -706,6 +729,7 @@ export default function CardTable({
                 </>
               ) : (<>
               {card.design ? (
+                <PhotoFrontContext.Provider value={tableFront}>
                 <PaperFront
                   design={card.design}
                   caption={card.caption}
@@ -717,6 +741,7 @@ export default function CardTable({
                 >
                   <SidePieces side="Front" />
                 </PaperFront>
+                </PhotoFrontContext.Provider>
               ) : (
                 <div className={styles.side} style={{ position: 'absolute', inset: 0, background: card.paper }}>
                   <SidePieces side="Front" />

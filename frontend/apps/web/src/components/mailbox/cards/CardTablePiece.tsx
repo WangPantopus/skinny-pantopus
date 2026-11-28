@@ -307,7 +307,7 @@ export default function CardTablePiece({
     items.push({ label: 'Shred', onSelect: () => { void shred(); } });
     if (!card.sealed && !replyPiece) items.push({ label: 'Open it again', onSelect: () => setReplay((n) => n + 1) });
     // "Share this card" is never in the quiet row on a reader's card: its corner button and this line (Part 3, Fix 1).
-    if (!card.sealed && !replyPiece) items.push({ label: 'Share this card', onSelect: () => setSheet('share') });
+    if (!card.sealed && !replyPiece && !card.front) items.push({ label: 'Share this card', onSelect: () => setSheet('share') });
     if (sendBack) items.push({ label: sendBack.label, onSelect: sendBack.onSelect });
     if (piece.sender_user_id) {
       // As drawn for card memories (wave 4 drawing 6): the card itself is reported, and the person is named.
@@ -348,7 +348,8 @@ export default function CardTablePiece({
       writeBack={passedAll ? null : writeBack}
       reply={reply}
       nextCard={nextCard}
-      onShare={replyPiece ? undefined : () => setSheet('share')}
+      // A photo card (Wave 4.2) has no public page, share picture or share video.
+      onShare={replyPiece || card.front ? undefined : () => setSheet('share')}
       onClose={onClose}
       overlay={(
         <>
