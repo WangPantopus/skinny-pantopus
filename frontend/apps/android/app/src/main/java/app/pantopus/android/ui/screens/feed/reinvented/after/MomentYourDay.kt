@@ -54,6 +54,7 @@ import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.moments.MomentMedia
 import app.pantopus.android.data.moments.MomentMediaFile
 import app.pantopus.android.data.moments.MomentsPosting
+import app.pantopus.android.data.moments.serverCode
 import app.pantopus.android.data.pulse.TogetherRepository
 import app.pantopus.android.ui.screens.compose.placepicker.MediaLocationExtractor
 import app.pantopus.android.ui.theme.PantopusColors
@@ -197,9 +198,15 @@ class MomentYourDayViewModel
             viewModelScope.launch {
                 val refused = mutableListOf<YourDayPhoto>()
                 var why: String? = null
-                chosen.forEachIndexed { at, photo ->
+                for ((at, photo) in chosen.withIndex()) {
                     _ui.update { it.copy(sharing = "Sharing ${at + 1} of ${chosen.size}…", problem = null) }
                     val failed = post(photo, start.audience)
+                    if (failed == SWITCHED_OFF) {
+                        // The switch went off for this person: nothing more is sent (the screens go back to today's).
+                        refused += chosen.drop(at)
+                        why = why ?: FAILED
+                        break
+                    }
                     if (failed != null) {
                         refused += photo
                         why = why ?: failed
@@ -253,7 +260,8 @@ class MomentYourDayViewModel
                     posting.start(made.data, MomentMediaFile.Photo(ready), photo.latitude, photo.longitude)
                     null
                 }
-                is NetworkResult.Failure -> made.error.displayMessage(FAILED)
+                is NetworkResult.Failure ->
+                    if (made.error.serverCode == OFF_CODE) SWITCHED_OFF else made.error.displayMessage(FAILED)
             }
         }
 
@@ -275,6 +283,8 @@ class MomentYourDayViewModel
             const val MOST = 12
             const val HOURS = 24
             const val FAILED = "Couldn’t share it. Try again."
+            private const val OFF_CODE = "PULSE_REINVENTED_OFF"
+            private const val SWITCHED_OFF = "switched off"
         }
     }
 
