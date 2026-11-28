@@ -1362,11 +1362,12 @@ export default function ReinventedPulse() {
               </ol>
               <div ref={sentinel} className="rp-sentinel" />
               {isFetchingNextPage && <p className="rp-muted rp-center">Loading more…</p>}
-              {/* The end of the reach's list asks "Keep exploring?" (CONTRACT 6a): the question is the way to Explore (round 7). */}
+              {/* The end of the list, the reach's ("… Keep exploring?", CONTRACT 6a) or the map's ("That's everything on the map
+                  here."), offers the way to Explore (round 7, g7). */}
               {!hasNextPage && last?.end && (
                 <p className="rp-end">
                   {last.end.replace(/\s*Keep exploring\?$/, '')}
-                  {/Keep exploring\?$/.test(last.end) && (
+                  {reach !== 'explore' && (
                     <>
                       {' '}
                       <button
