@@ -585,9 +585,13 @@ private fun ReinventedPulseLayout(
         } else {
             val followState by followModel.state.collectAsStateWithLifecycle()
             val noPlace by filtersModel.noPlace.collectAsStateWithLifecycle()
+            // Before the first answer for this area the line names only the time: never "Nothing here yet" before a read.
             val line =
-                followState.takeIf { followOn }?.let { reinventedFollowLine(it, mapState.time) }
-                    ?: reinventedSheetLine(mapState.items.size, mapState.time, atlas.on)
+                if (followOn) {
+                    reinventedFollowLine(followState, mapState.time) ?: reinventedWhenWords(mapState.time)
+                } else {
+                    reinventedSheetLine(mapState.items.size, mapState.time, atlas.on)
+                }
             val sheetEnd: @Composable RowScope.(ReinventedHeight) -> Unit = { settled ->
                 // PHASE-6 H: after a failed or slow read the last rows stay and the header offers to try again.
                 if (followOn && followState.failed) ReinventedFollowRetry(followModel::refresh)
