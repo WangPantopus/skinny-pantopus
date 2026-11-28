@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -375,6 +377,7 @@ internal fun MomentsStudioStep(
                             }
                         if (refused == null) penNames.choose(PenNameVoice.MadeUp)
                     },
+                    onClose = { drawer = false },
                 )
                 MomentsPostSheet(
                     state = state,
@@ -725,10 +728,13 @@ private fun StudioBar(
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(PantopusColors.studioBar)
                 .navigationBarsPadding()
-                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4, bottom = Spacing.s3)
+                // A real sheet (PHASE-6 F3): dragging the bar up opens the details.
+                .studioSheetDrag(up = true, onDone = onOpenDrawer)
+                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2, bottom = Spacing.s3)
                 .testTag("moments.studio.bar"),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        StudioGrabber()
         StudioBarRest(state = state, homeNoteDue = homeNoteDue, onHomeNoteShown = onHomeNoteShown, postAs = postAs, refused = refused) {
             StudioWhenPill(state = state, onClick = onOpenDrawer, modifier = Modifier.weight(1f))
             StudioPost(state = state, onPost = onPost)
@@ -744,6 +750,7 @@ private fun StudioWhoSeesIt(
     refused: String?,
     onAudience: (String) -> Unit,
     onMadeUp: () -> Unit,
+    onClose: () -> Unit,
 ) {
     // "Don't show where": no pin, connections only (as today's Post sheet).
     val unplaced = state.noLocationOn
@@ -753,10 +760,13 @@ private fun StudioWhoSeesIt(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(PantopusColors.studioBar)
-                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s4, bottom = Spacing.s3)
+                // The sheet's top: dragging it down closes the details (PHASE-6 F3).
+                .studioSheetDrag(up = false, onDone = onClose)
+                .padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2, bottom = Spacing.s3)
                 .testTag("moments.studio.whoSees"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
+        StudioGrabber()
         Text(text = "Who sees it", color = PantopusColors.studioPillSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Row(
             modifier = Modifier.semantics { contentDescription = "Who sees it" },
@@ -1030,3 +1040,45 @@ private val NO_LOOK_PICTURE: StateFlow<Bitmap?> = MutableStateFlow(null)
 /** "Fades in 24 hours" (founder's word for a Moment's time: it fades when its hours are up). */
 
 private fun hoursWord(hours: Int): String = if (hours == 1) "1 hour" else "$hours hours"
+
+/** The sheet's grabber (PHASE-6 F3): a short bar at the top that says it can be dragged. */
+@Composable
+private fun StudioGrabber() {
+    Box(modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp), contentAlignment = Alignment.Center) {
+        Box(
+            modifier =
+                Modifier
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(PantopusColors.studioPillSecondary)
+                    .clearAndSetSemantics {},
+        )
+    }
+}
+
+/** How far a drag must go to open or close the details sheet. */
+private const val SHEET_DRAG_DP = 24
+
+/**
+ * The details sheet follows the finger's direction (PHASE-6 F3): a drag [up] (or down) past 24 dp, or a quick flick that
+ * way, calls [onDone] once the finger lifts. Taps inside keep their own buttons.
+ */
+private fun Modifier.studioSheetDrag(
+    up: Boolean,
+    onDone: () -> Unit,
+): Modifier =
+    pointerInput(up) {
+        var travel = 0f
+        detectVerticalDragGestures(
+            onDragStart = { travel = 0f },
+            onVerticalDrag = { change, dy ->
+                travel += dy
+                change.consume()
+            },
+            onDragEnd = {
+                // Up by the bar opens the details, down by their top closes them.
+                val toward = if (up) -travel else travel
+                if (toward > SHEET_DRAG_DP.dp.toPx()) onDone()
+            },
+        )
+    }
