@@ -7,7 +7,7 @@
 // moved only by its header (PulseSheet). At 700 px wide or more the sheet is a floating panel at the left of the map. One
 // request draws the first screen (GET /api/reinvented/list, coord/CONTRACT.md §6a).
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
@@ -590,27 +590,59 @@ export default function ReinventedPulse() {
   };
 
   // A pull down on the top line drops the Filters sheet (the gesture the founder asked for). A tap on its buttons stays theirs.
-  const pull = useRef<{ id: number; y: number; x: number; done: boolean } | null>(null);
+  // The press is followed on the window from the moment it lands, so a mouse that leaves the 44 px line still pulls (LEAD-7's
+  // look, 04:50); the click that ends a pull is not a tap on the button it started on.
   const canFilter = view === 'pulse' && reach !== 'explore';
+  const endPull = useRef<(() => void) | null>(null);
+  const pulled = useRef(false);
+  useEffect(() => () => endPull.current?.(), []);
   const onTopDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!canFilter || (e.pointerType === 'mouse' && e.button !== 0)) return;
     // The reach dial and the lens's card open from the top line: a drag inside them is theirs.
     if ((e.target as HTMLElement).closest('.rp-dial, .rp-lens-card')) return;
-    pull.current = { id: e.pointerId, y: e.clientY, x: e.clientX, done: false };
+    endPull.current?.();
+    const id = e.pointerId, y0 = e.clientY, x0 = e.clientX;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      const dy = ev.clientY - y0, dx = Math.abs(ev.clientX - x0);
+      if (dy > PULL_PX && dy > dx * 1.5) {
+        stop();
+        pulled.current = true;
+        window.setTimeout(() => (pulled.current = false), 300);
+        setScopeOpen(false);
+        setLensOpen(false);
+        setFiltersOpen(true);
+      }
+    };
+    const end = (ev: PointerEvent) => ev.pointerId === id && stop();
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      endPull.current = null;
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    endPull.current = stop;
   };
-  const onTopMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const g = pull.current;
-    if (!g || g.id !== e.pointerId || g.done) return;
-    const dy = e.clientY - g.y, dx = Math.abs(e.clientX - g.x);
-    if (dy > PULL_PX && dy > dx * 1.5) {
-      g.done = true;
-      setScopeOpen(false);
-      setLensOpen(false);
-      setFiltersOpen(true);
-    }
-  };
-  const onTopEnd = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (pull.current?.id === e.pointerId) pull.current = null;
+  // Escape, or a press anywhere outside the top line, closes the lens's card (PHASE-6 G: Escape closes the topmost card).
+  useEffect(() => {
+    if (!lensOpen) return undefined;
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && setLensOpen(false);
+    const away = (e: PointerEvent) => !(e.target as HTMLElement).closest?.('.rp-top') && setLensOpen(false);
+    window.addEventListener('keydown', key);
+    document.addEventListener('pointerdown', away, true);
+    return () => {
+      window.removeEventListener('keydown', key);
+      document.removeEventListener('pointerdown', away, true);
+    };
+  }, [lensOpen]);
+  const onTopClick = (e: ReactMouseEvent) => {
+    if (!pulled.current) return;
+    pulled.current = false;
+    e.stopPropagation();
+    e.preventDefault();
   };
 
   const placeName =
@@ -641,7 +673,7 @@ export default function ReinventedPulse() {
   };
 
   const topLine = (
-    <div className="rp-top" onPointerDown={onTopDown} onPointerMove={onTopMove} onPointerUp={onTopEnd} onPointerCancel={onTopEnd}>
+    <div className="rp-top" onPointerDown={onTopDown} onClickCapture={onTopClick}>
       <div className="rp-scope-wrap">
         <button
           type="button"

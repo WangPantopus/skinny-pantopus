@@ -110,20 +110,46 @@ export default function PulseSheet({ rest, onRest, wide, folded, onFold, topInse
 
   // ── The header is the handle ──
   const swallow = useRef(false);
+  // The press is the sheet's from the moment it lands on the header: its moves and its release are followed on the window,
+  // so a mouse whose first move leaves the header still drags the sheet (LEAD-7's look, 04:50). Followed on the window
+  // rather than by pointer capture so a tap on one of the header's buttons stays that button's click.
+  const follow = useRef<(() => void) | null>(null);
+  useEffect(() => () => follow.current?.(), []);
   const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (wide || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    follow.current?.();
     drag.current = { id: e.pointerId, y0: e.clientY, d0: offsets()[restRef.current], moved: false, trail: [{ y: e.clientY, t: e.timeStamp }] };
+    const move = (ev: PointerEvent) => onMove(ev);
+    const up = (ev: PointerEvent) => {
+      stop();
+      onUp(ev);
+    };
+    const cancel = (ev: PointerEvent) => {
+      stop();
+      onCancel(ev);
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      follow.current = null;
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    follow.current = stop;
   };
-  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onMove = (e: PointerEvent) => {
     const g = drag.current;
     if (!g || g.id !== e.pointerId) return;
     const dy = e.clientY - g.y0;
     if (!g.moved) {
       if (Math.abs(dy) < SLOP_PX) return;
-      g.moved = true;
       // From here the drag is the sheet's, even if it started on one of the header's buttons.
-      e.currentTarget.setPointerCapture(e.pointerId);
+      g.moved = true;
     }
+    // A mouse drag never selects the page's text.
+    if (e.pointerType === 'mouse') window.getSelection()?.removeAllRanges();
     const o = offsets();
     // Past full or below peek it gives a little, then stops.
     let d = g.d0 + dy;
@@ -133,7 +159,7 @@ export default function PulseSheet({ rest, onRest, wide, folded, onFold, topInse
     g.trail.push({ y: e.clientY, t: e.timeStamp });
     if (g.trail.length > 6) g.trail.shift();
   };
-  const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onUp = (e: PointerEvent) => {
     const g = drag.current;
     if (!g || g.id !== e.pointerId) return;
     drag.current = null;
@@ -153,7 +179,7 @@ export default function PulseSheet({ rest, onRest, wide, folded, onFold, topInse
     if (to === restRef.current) settle();
     else onRest(to);
   };
-  const onCancel = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onCancel = (e: PointerEvent) => {
     if (drag.current?.id !== e.pointerId) return;
     drag.current = null;
     settle();
@@ -194,9 +220,6 @@ export default function PulseSheet({ rest, onRest, wide, folded, onFold, topInse
       <div
         className="rp-sheet-head"
         onPointerDown={onDown}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerCancel={onCancel}
         onClickCapture={onClickCapture}
         onClick={onHeaderClick}
       >

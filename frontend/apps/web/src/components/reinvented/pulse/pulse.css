@@ -166,6 +166,13 @@
   backdrop-filter: blur(14px) saturate(1.4);
   box-shadow: var(--rp-float);
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* The cards that open from the line keep their own text and touches. */
+.rp-top :is(.rp-dial, .rp-lens-card) {
+  user-select: text;
+  -webkit-user-select: text;
 }
 .rp-top .rp-scope-wrap {
   flex: 0 1 auto;
@@ -202,7 +209,6 @@
 .rp-switch button::before,
 .rp-lens::before,
 .rp-rail-button::before,
-.rp-filter-pill button::before,
 .rp-create::before {
   content: '';
   position: absolute;
@@ -212,9 +218,6 @@
 .rp-rail-button::before {
   inset: -4px;
   border-radius: 50%;
-}
-.rp-filter-pill button::before {
-  inset: -10px;
 }
 .rp-create::before {
   inset: -2px;
@@ -290,8 +293,10 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  /* A 44 px box to the finger, reaching past the 28 px pill (LEAD-7's look, 04:50). */
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px -10px;
   padding: 0;
   border: 0;
   border-radius: 50%;
